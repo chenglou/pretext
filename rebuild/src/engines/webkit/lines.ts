@@ -1990,7 +1990,9 @@ export function textIndent(p: WebKitPrepared, start: WebKitLineStart): number {
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
 // chose, then leadingInlineItemPositionForNextLine (IFU:278-298). It decides where the line breaks and what the next line
 // starts from; the line's fragments, display boxes and gaps are read from the decided line on request.
-export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot): WebKitFillResult {
+// `endIndex` is research/capability-check's (unmerged): the builders' layout range ends at that item instead of the last
+// one, so a wide slot closes the line there. The builders already take their range's end as data (rangeEnd).
+export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, endIndex: number = p.items.length): WebKitFillResult {
   if (slot.left < 0 || slot.right < 0) throw new Error(`a line slot's insets are float widths and can't be negative (${slot.left}, ${slot.right})`)
   const hasFloats = start.hasFloats || slot.left > 0 || slot.right > 0
   const builder = hasFloats ? 'line-builder' : p.builder
@@ -2018,7 +2020,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
       // RangeBasedLineBuilder (RangeBasedLineBuilder.cpp:70-124) runs the simple builder inside the span.
       const rangeBased = builder === 'range-based'
       const rangeStart = rangeBased && start.isFirstFormattedLine ? start.itemIndex + 1 : start.itemIndex
-      const rangeEnd = rangeBased ? items.length - 1 : items.length
+      const rangeEnd = rangeBased ? Math.min(endIndex, items.length - 1) : endIndex
       b = { L, rangeStart, rangeEnd, partialLeadingTextItem: partialLeading(start.itemIndex), wrapOpportunityList: [], line: newLine([]), spanningInlineBoxes: [], isFirstFormattedLine: start.isFirstFormattedLine }
       const single = items[0]
       if (rangeBased && items.every(item => item.kind === 'inline-box-start' || item.kind === 'inline-box-end')) {
@@ -2061,7 +2063,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
     }
     case 'line-builder': {
       const spanning = lineSpanningInlineBoxes(p, start.itemIndex)
-      b = { L, rangeStart: start.itemIndex, rangeEnd: items.length, partialLeadingTextItem: partialLeading(start.itemIndex), wrapOpportunityList: [], line: newLine(spanning), spanningInlineBoxes: spanning, isFirstFormattedLine: start.isFirstFormattedLine }
+      b = { L, rangeStart: start.itemIndex, rangeEnd: endIndex, partialLeadingTextItem: partialLeading(start.itemIndex), wrapOpportunityList: [], line: newLine(spanning), spanningInlineBoxes: spanning, isFirstFormattedLine: start.isFirstFormattedLine }
       const placed = placeInlineAndFloatContent(b, { index: start.itemIndex, offset: start.offset })
       lineContentEnd = placed.end
       overflowLogicalWidth = placed.overflowLogicalWidth

@@ -822,6 +822,24 @@ function reflowLine(p: GeckoPrepared, start: GeckoLineStart, band: Band, inspect
   return reflowPass(p, start, band, pass.ll.lastOpt, inspect)
 }
 
+// The break position of source offset `end` as reflowText counts it: the text frame holding it, the content start of that
+// frame's continuation on this line, and the offset from where the frame's measuring starts, after the white space a line
+// start skips.
+function breakPositionAt(p: GeckoPrepared, start: GeckoLineStart, end: number): BreakPosition {
+  let item = -1
+  let first = -1
+  for (let k = start.frame; k < p.items.length && p.items[k]!.at < end; k++) {
+    if (p.items[k]!.kind !== 'text') continue
+    if (first < 0) first = k
+    item = k
+  }
+  const f = p.frames[(p.items[item] as { frame: number }).frame]!
+  const contentStart = item === start.frame ? start.contentOffset : f.start
+  let measured = contentStart
+  if (item === first && !p.runStyles[f.run]!.whiteSpaceIsSignificant) while (measured < end && isTrimmableChar(p.text, measured, f.end, f.is8bit)) measured++
+  return { item, contentStart, offset: end - measured }
+}
+
 // A block with frames has at least one line; a paragraph whose text nodes all lack frames and has no elements has none.
 export function firstGeckoLine(p: GeckoPrepared): GeckoLineStart | null {
   return p.items.length === 0 ? null : { engine: 'gecko', frame: 0, contentOffset: 0, isFirstLine: true }
@@ -852,10 +870,12 @@ export type GeckoFillResult = FillResultOf<GeckoLineStart, GeckoFilledLine, Geck
 
 // Fills one line from `start` in `slot`: the passes alone, which decide where the line breaks. The line's source range,
 // the next line's start and whether the line has a box come from the last pass's status, without placing the frames.
-export function fillLine(p: GeckoPrepared, start: GeckoLineStart, slot: LineSlot): GeckoFillResult {
+// `end` is research/capability-check's (unmerged): a source offset inside a text frame the line reaches, or at its end,
+// where one pass is forced to break, the way the block's own redo forces a saved break position (reflowPass's `force`).
+export function fillLine(p: GeckoPrepared, start: GeckoLineStart, slot: LineSlot, end: number | null = null): GeckoFillResult {
   const band = bandOf(p, slot)
   const inspect: GeckoLineInspect | null = p.inspect === null ? null : { gaps: [], consulted: [] }
-  const pass = reflowLine(p, start, band, inspect)
+  const pass = end === null ? reflowLine(p, start, band, inspect) : reflowPass(p, start, band, breakPositionAt(p, start, end), inspect)
   // The next band lays the same line out again.
   if (pass.kind === 'below-floats') return { kind: 'below-floats', line: { engine: 'gecko', kind: 'below-floats', gaps: inspect === null ? null : inspect.gaps }, next: start }
   const next = pass.status.next

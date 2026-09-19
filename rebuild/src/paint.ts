@@ -394,7 +394,7 @@ type Token =
 
 type NodeSpec =
   | { what: 'hyphen'; fragment: Extract<Fragment, { kind: 'hyphen' }> }
-  | { what: 'atomic'; atomic: AtomicInline }
+  | { what: 'atomic'; atomic: AtomicInline; element: number }
   | { what: 'wbr' | 'br' | 'soft-wrap-box' }
 
 
@@ -1080,7 +1080,7 @@ function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPr
         if (indexed.node.kind !== 'atomic') throw new Error(`fragment names element ${fragment.element}, a ${indexed.node.kind}, as atomic`)
         reach(indexed.parent, indexed.open)
         endPiece()
-        tokens.push({ t: 'node', level: fragment.level, node: { what: 'atomic', atomic: indexed.node } })
+        tokens.push({ t: 'node', level: fragment.level, node: { what: 'atomic', atomic: indexed.node, element: fragment.element } })
         break
       }
       case 'box-start': {
@@ -1254,7 +1254,9 @@ export function painterLimits<Facts>(paragraph: Paragraph, lines: readonly Paint
 
 // One block per line with a line box. `refusedRows` are the rows of the slot list the engine refused because the line
 // moved below their floats, which take no line (fillLine's below-floats).
-export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>[], refusedRows: readonly number[], rules: PaintRules<Facts>, doc: Document): HTMLDivElement[] {
+// `onElement` is research/capability-check's (unmerged): called with each painted span and atomic box and the element index
+// the application's tree gives it, so an application can attach what the library doesn't model (an href, a chip's content).
+export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>[], refusedRows: readonly number[], rules: PaintRules<Facts>, doc: Document, onElement: ((element: number, node: HTMLElement) => void) | null = null): HTMLDivElement[] {
   const c = contextOf(paragraph, lines, rules)
   const { index, base } = c
   const out: HTMLDivElement[] = []
@@ -1353,6 +1355,7 @@ export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLin
             // The paragraph's spans have its direction, which decides the side of their edges; inside an override span
             // they would inherit the override's.
             if (reorders) span.style.direction = paragraph.direction
+            if (onElement !== null) onElement(token.element, span)
             parent.append(span)
             build(i + 1, end - 1, depth, span, false)
             break
@@ -1376,7 +1379,12 @@ export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLin
           case 'node':
             switch (token.node.what) {
               case 'hyphen': parent.append(hyphenSpan(doc, rules.hyphenSpan, token.node.fragment)); break
-              case 'atomic': parent.append(atomicBox(doc, token.node.atomic)); break
+              case 'atomic': {
+                const box = atomicBox(doc, token.node.atomic)
+                if (onElement !== null) onElement(token.node.element, box)
+                parent.append(box)
+                break
+              }
               case 'soft-wrap-box': parent.append(softWrapBox(doc)); break
               case 'wbr':
               case 'br': parent.append(doc.createElement(token.node.what)); break

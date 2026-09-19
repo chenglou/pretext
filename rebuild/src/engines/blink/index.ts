@@ -18,7 +18,7 @@ import { hanKerningCandidates, hanKerningMayApply, measureHanKerningFontData } f
 import { geometryOf } from './inspect.js'
 import { fontFactsOfText } from './ligatures.js'
 import { LineBreaker, type LineInfo } from './line-breaker.js'
-import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
+import { lineSourceRange, piecesOf, trailingSpacesOf, type BlinkPaintFacts } from './pieces.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import { isSegmentEdge, measureGroups, styleContexts, type Shaper } from './shape.js'
@@ -231,4 +231,36 @@ export function inspectLine(p: BlinkPrepared, line: BlinkFilledLine | BlinkRefus
     case 'line': return { geometry: geometryOf({ p, gaps }, line.info, line.start), gaps }
     case 'below-floats': return { geometry: null, gaps }
   }
+}
+
+// ---- research/capability-check: two tiny exports that prove a point, unmerged ----
+
+// The width a line's alignment uses, in CSS px (DESIGN.md §2.6): LineInfo::Width less the hanging spaces, raw LayoutUnits
+// of zoomed px. It measures only what the hang needs, as linePieces does for `overflows`.
+export function lineWidth(p: BlinkPrepared, line: BlinkFilledLine): number {
+  return (line.info.width - trailingSpacesOf({ p, gaps: null }, line.info).width) / 64 / p.layoutZoom
+}
+
+// A break token made from a source offset: the first item that isn't wholly before the offset's place in text_content, as
+// MoveToNextOf leaves it, under the style ComputeCurrentStyle gives there.
+export function lineStartAt(p: BlinkPrepared, source: number): BlinkLineStart | null {
+  if (source === 0) return firstLine(p)
+  let t = p.text.length
+  for (let s = source; s < p.sourceLength; s++) if (p.contentOffsets[s]! >= 0) { t = p.contentOffsets[s]!; break }
+  let itemIndex = 0
+  while (itemIndex < p.items.length && p.items[itemIndex]!.end <= t && p.items[itemIndex]!.start < t) itemIndex++
+  if (itemIndex === p.items.length) return null
+  let style = 0
+  const at = p.items[itemIndex]!
+  if (at.type === 'text' || at.type === 'close-tag') style = at.style
+  else {
+    for (let i = itemIndex - 1; i >= 0; i--) {
+      const item = p.items[i]!
+      if (item.type === 'text' || item.type === 'open-tag') { style = item.style; break }
+      if (item.type === 'close-tag') { style = p.styles[item.style]!.parent; break }
+    }
+  }
+  const before = itemIndex > 0 ? p.items[itemIndex - 1]! : null
+  const afterForcedBreak = before !== null && before.type === 'control' && before.control === 'forced-break' && before.end === t
+  return { engine: 'blink', itemIndex, textOffset: t, style, afterForcedBreak, isPastFirstFormattedLine: true, afterLeadingFloats: true }
 }

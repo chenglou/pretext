@@ -157,3 +157,29 @@ function buildGaps(env: Environment): Gap[] {
   const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${env.build}; the port follows ${pinned}`
   return [{ gap: 'engine-build', run: null, detail }]
 }
+
+// ---- research/capability-check: two tiny exports that prove a point, unmerged ----
+
+// The width a line's alignment uses, in CSS px, from the engine's own unit (DESIGN.md §2.6).
+export function lineWidth(prepared: Prepared, line: FilledLine): number {
+  switch (prepared.engine) {
+    case 'blink':
+      if (line.engine !== 'blink') throw lineMismatch(prepared.engine, line.engine)
+      return blink.lineWidth(prepared.state, line)
+    case 'webkit':
+      if (line.engine !== 'webkit') throw lineMismatch(prepared.engine, line.engine)
+      return webkit.lineWidth(prepared.state, line)
+    case 'gecko':
+      if (line.engine !== 'gecko') throw lineMismatch(prepared.engine, line.engine)
+      return gecko.lineWidth(prepared.state, line)
+  }
+}
+
+// A line start made from a source offset, or null past the content.
+export function lineStartAt(prepared: Prepared, source: number): LineStart | null {
+  switch (prepared.engine) {
+    case 'blink': return blink.lineStartAt(prepared.state, source)
+    case 'webkit': return webkit.lineStartAt(prepared.state, source)
+    case 'gecko': return gecko.lineStartAt(prepared.state, source)
+  }
+}

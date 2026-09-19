@@ -13,8 +13,34 @@
 //   its placed frames with their positions and characters (specs/gecko-lines.md §5-§6).
 // - gaps.ts: every gap, with the measuring only a gap needs. A plain paragraph computes none of it.
 // The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
+import type { GeckoLineStart } from './geometry.js'
+import type { GeckoFilledLine } from './lines.js'
+import { placeLine } from './placement.js'
+import type { GeckoPrepared } from './types.js'
+
 export { prepareGecko as prepare } from './prepare.js'
 export { fillLine, firstGeckoLine as firstLine, type GeckoFillResult, type GeckoFilledLine, type GeckoRefusedSlot } from './lines.js'
 export { linePieces, type GeckoPaintFacts } from './pieces.js'
 export { inspectLine } from './inspect.js'
 export { paragraphGaps } from './gaps.js'
+
+// ---- research/capability-check: two tiny exports that prove a point, unmerged ----
+
+// The width a line's alignment uses, in CSS px (DESIGN.md §2.6): the line's inline size after trimming less the hang, app
+// units. Placing the line trims it, which a fill leaves undone.
+export function lineWidth(p: GeckoPrepared, line: GeckoFilledLine): number {
+  const placed = placeLine(p, line)
+  return (placed.lineISize - placed.hang) / 60
+}
+
+// A line start made from a source offset: the last item at or before it, a text frame's continuation from that offset. An
+// offset alone can't say which side of an element that holds no text the start is on (DESIGN.md §2.7): this takes the first
+// item at the offset, past a <br>, which always ends the line before.
+export function lineStartAt(p: GeckoPrepared, source: number): GeckoLineStart | null {
+  let frame = -1
+  for (let k = 0; k < p.items.length; k++) if (p.items[k]!.at <= source) frame = k
+  while (frame > 0 && p.items[frame]!.at === source && p.items[frame - 1]!.at === source) frame--
+  while (frame >= 0 && frame < p.items.length - 1 && p.items[frame]!.kind === 'br' && p.items[frame]!.at === source) frame++
+  if (frame < 0 || source >= p.text.length) return null
+  return { engine: 'gecko', frame, contentOffset: source, isFirstLine: source === 0 }
+}
