@@ -47,6 +47,17 @@ may read the DOM freely; this is research, not the library.
   `text-rendering: optimizeLegibility`, and no context first). Each returns checks and is meaningful only alone in a fresh
   browser process (`--only`); its header has the loop, and rebuild/lab/README.md "Measure first" the verdicts.
 
+- `gecko-element-cost.ts`: what a detached `<canvas>` element costs in Firefox as a measuring surface beside
+  `new OffscreenCanvas(1, 1)` (the question of 2026-09-19, CHARTER.md decision 2 of 2026-09-18). Measurement only, raw
+  values, no `checks`: making contexts, each assignment, the first `measureText` and the steady state on the chat bench's
+  words, 10,000 chat messages' worth of contexts and calls, whether `ctx.font` or `measureText` flushes a dirty page (with a
+  connected canvas as the control that does), a `FontFace` that isn't loaded, DOM widths beside each kind at another
+  `layout.css.devPixelsPerPx`, and pauses while dropped contexts are freed. Its header has the commands; the timing sets
+  run alone on the machine with `{ "privacy.reduceTimerPrecision": false }`, which gives `performance.now()` 20 µs steps.
+  `gecko-element-cost-rss.ts` wraps one `M` probe and samples the launched Firefox's resident size with `ps` beside the
+  page's marks. It names no browser on its command line, so pass `--browser=firefox` to the lock, or the lock takes the
+  whole machine. No page can ask Firefox for a collection: the `M2` probes bring one on with 32 MiB buffers.
+
 ## Running
 
 Every command that drives a browser runs under the shared browser lock, one browser per locked job. `runner.ts`
