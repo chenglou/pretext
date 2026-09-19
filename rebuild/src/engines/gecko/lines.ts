@@ -95,7 +95,7 @@ export function rangeAdvance(p: GeckoPrepared, prov: Provider, a: number, b: num
 // (the ligature range, gfxTextRun.cpp:989-1000, :1139-1159). So a position inside a group that lies within the range
 // counts the whole group (policy c-5ba3b0da55cb63ad: after alef, 16px Geeza Pro's lam lam heh scans as 669 au at once and
 // goes to the next line; fresh c-ca72eae85de1aead: a span holding lam alone scans it as its 280 au share of lam-alef).
-function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number, a: number, b: number, consulted: number[] | null, rough = false): number {
+function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number, a: number, b: number, consulted: number[] | null, rough = false, startRead: number | null = null): number {
   if (b <= a) return 0
   // On a plain paragraph the scan's own candidates are read without the questions only a chosen edge needs (`rough`;
   // advance.ts roughAdvanceBefore), and an earlier candidate is read as the scan read it then, so the running width's terms
@@ -103,7 +103,7 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
   const tb = scanOffset(p, prov, from, to, b)
   const end = consulted === null && rough ? roughAdvanceBefore(p, prov.run, tb) : glyphBefore(p, prov.run, tb, consulted)
   const ta = scanOffset(p, prov, from, to, a)
-  const start = consulted === null && a !== from ? roughAdvanceBefore(p, prov.run, ta) : glyphBefore(p, prov.run, ta, consulted)
+  const start = startRead !== null ? startRead : consulted === null && a !== from ? roughAdvanceBefore(p, prov.run, ta) : glyphBefore(p, prov.run, ta, consulted)
   return end - start + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
 }
 
@@ -197,6 +197,9 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
   let breakPriority = priorityIn
   let width = 0
   let pending = aStart
+  // What the scan read at `pending` on a plain paragraph, kept here: the offset's record can become whole before the next
+  // candidate reads it as its start (a ligature group's start, advance.ts inWordAdvance). null at the scan's start.
+  let pendingRead: number | null = null
   let trimmableChars = 0
   let trimStart = aStart
   let lastBreak = -1
@@ -219,7 +222,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
-        let pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true)
+        let pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true, pendingRead)
         const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted, true) : 0
         // A candidate read without the questions that place what crosses it (advance.ts roughAdvanceBefore) is within
         // advanceSlack of its whole advance. Where that reaches either fit test below, the whole advance is asked for.
@@ -227,7 +230,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
         if (slack > 0 && (Math.abs(width + pendingAdvance - trimmableAdvance - aWidth) <= slack ||
           (atHyphenationBreak && Math.abs(width + pendingAdvance + hyphenWidth - trimmableAdvance - aWidth) <= slack))) {
           advanceBefore(p, run, scanOffset(p, prov, aStart, end, i))
-          pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true)
+          pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true, pendingRead)
         }
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
@@ -239,6 +242,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
         }
         width += pendingAdvance
         pending = i
+        if (consulted === null) pendingRead = roughAdvanceBefore(p, run, scanOffset(p, prov, aStart, end, i))
         if (width - trimmableAdvance > aWidth) {
           aborted = true
           break
@@ -260,7 +264,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
     }
   }
   const scanEnd = aborted ? pending : end
-  if (!aborted) width += scanAdvance(p, prov, aStart, end, pending, end, consulted)
+  if (!aborted) width += scanAdvance(p, prov, aStart, end, pending, end, consulted, false, pendingRead)
   let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, scanEnd, consulted) : 0
   let charsFit: number
   let usedHyphenation = false
