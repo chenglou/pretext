@@ -44,9 +44,17 @@ const ZWJ = 0x200d
 
 type Font = { size: number; seed: number }
 
+// A font is read from its shorthand once: measureText asks for it on every call, and a quarter of the sweep's time was
+// the two regular expressions and the hash.
+const fonts = new Map<string, Font>()
 function fontOf(shorthand: string): Font {
-  const size = Number(/(\d+(?:\.\d+)?)px/.exec(shorthand)?.[1] ?? 10)
-  return { size, seed: hashOf(shorthand.replace(/(\d+(?:\.\d+)?)px/, '')) }
+  let font = fonts.get(shorthand)
+  if (font === undefined) {
+    const size = Number(/(\d+(?:\.\d+)?)px/.exec(shorthand)?.[1] ?? 10)
+    font = { size, seed: hashOf(shorthand.replace(/(\d+(?:\.\d+)?)px/, '')) }
+    fonts.set(shorthand, font)
+  }
+  return font
 }
 
 // What a code point is to the stand-in, read from the Unicode properties once per code point.
