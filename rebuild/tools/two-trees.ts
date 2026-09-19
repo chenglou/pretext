@@ -34,8 +34,8 @@ const PAGES: Record<TierBrowser, { userAgent: string; env: PredictEnv }> = {
   'webkit-host': { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27', env: { browser: 'webkit-host', build: '22625.1.29.11.27', languages: { engine: 'webkit', preferredLanguages: ['zh-CN', 'zh-Hans'], icuDefaultLocale: 'en_US_POSIX' } } },
 }
 
-type Prediction = LayoutPrediction | LinesPrediction | { error: string }
-type Predictor = {
+export type Prediction = LayoutPrediction | LinesPrediction | { error: string }
+export type Predictor = {
   predict: (c: Case, env: PredictEnv) => Prediction
   paint?: (c: Case, prediction: LayoutPrediction, host: HTMLElement) => HTMLElement[] | null
   limits?: (prediction: LayoutPrediction) => PainterLimits
@@ -85,7 +85,18 @@ function rowLayout(layout: LayoutPrediction['layout']): unknown {
   return rest
 }
 
-const rangesOf = (prediction: LayoutPrediction | LinesPrediction): Array<[number, number]> => ('layout' in prediction ? prediction.layout.lines : prediction.lines).map(line => [line.start, line.end])
+// A prediction as line ranges: a plain predictor's lines, and of a layout the lines that have a line box, which are the
+// lines a plain predictor lists (lab/compare-rows.ts lineRanges).
+function rangesOf(prediction: LayoutPrediction | LinesPrediction): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  if ('layout' in prediction) {
+    const lines = prediction.layout.lines
+    for (let l = 0; l < lines.length; l++) if (lines[l]!.hasLineBox) out.push([lines[l]!.start, lines[l]!.end])
+  } else {
+    for (let l = 0; l < prediction.lines.length; l++) out.push([prediction.lines[l]!.start, prediction.lines[l]!.end])
+  }
+  return out
+}
 
 function attempt<T>(run: () => T): T | { error: string } {
   try {
@@ -102,7 +113,7 @@ function painting(predictor: Predictor, c: Case, prediction: LayoutPrediction): 
   return attempt(() => recordedPainting(paint(c, prediction, new RecordingDocument().createElement('div') as unknown as HTMLElement)))
 }
 
-function compare(c: Case, a: Predictor, b: Predictor, before: Prediction, after: Prediction): Pick<Difference, 'part' | 'first'> | null {
+export function compare(c: Case, a: Predictor, b: Predictor, before: Prediction, after: Prediction): Pick<Difference, 'part' | 'first'> | null {
   if ('error' in before || 'error' in after) {
     const first = firstDifference(before, after, '')
     return first === null ? null : { part: 'prediction', first }
