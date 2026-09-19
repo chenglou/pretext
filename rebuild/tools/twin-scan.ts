@@ -28,8 +28,9 @@ import { installStandInCanvas } from './stand-in-canvas.ts'
 
 const REPO = resolve(import.meta.dir, '../..')
 const SHAPE = 'rebuild/src/engines/blink/shape.ts'
-const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)'
-const TAP = '  ;(globalThis as { twinScan?: Array<[number, string, boolean]> }).twinScan?.push([context, cs.s, cs.twoByte])'
+const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)'
+// The port holds its contexts by reference; a context's place in the paragraph's list names it here.
+const TAP = '  ;(globalThis as { twinScan?: Array<[number, string, boolean]> }).twinScan?.push([p.canvases.indexOf(context), cs.s, cs.twoByte])'
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
 const ENV: PredictEnv = { browser: 'chrome', build: '153.0.8010.50', languages: { engine: 'blink', uiLanguage: 'zh-CN' } }
 

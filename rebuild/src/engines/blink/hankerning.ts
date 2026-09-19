@@ -4,12 +4,12 @@
 // measured string alone, so those context trims, and the line-end trim ShapingLineBreaker asks for with
 // `han_kerning_end`, are added here. The trim of one character is 2 × W(c) − W(cc): in `cc` HanKerning halts exactly
 // one of the two (ShouldKern for opens, ShouldKernLast for closes).
-import { measureTextBounds } from '../../measure/canvas.js'
+import { bounds } from '../../measure/canvas.js'
 import {
   HAN_CLOSE, HAN_CLOSE_NARROW, HAN_CLOSE_QUOTE, HAN_COLON, HAN_DOT, HAN_MIDDLE, HAN_OPEN, HAN_OPEN_NARROW, HAN_OPEN_QUOTE, HAN_OTHER,
   HAN_SEMICOLON, hanKerningCharType,
 } from './props.js'
-import { raw16Of, type Shaper } from './shape.js'
+import { raw16Of } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 export type HanKerningFontData = {
@@ -55,15 +55,14 @@ function typeFromBounds(halfEm: number, left: number, right: number): number {
 
 // HanKerning::FontData (han_kerning.cc:417-535) from Canvas: `halt` through the pair trim of 「「, glyph bounds from
 // measureText's ink box. Measured in prepare for every style with a shaping group HanKerning may apply to.
-export function measureHanKerningFontData(sh: Shaper, style: number): void {
-  const { p, m } = sh
+export function measureHanKerningFontData(p: BlinkPrepared, style: number): void {
   if (p.hanKerning[style] !== null) return
   const context = p.contexts[style]!.hyphen
-  const data: HanKerningFontData = { hasHalt: trim16(sh, style, 0x300c) > 0, typeForDot: HAN_OTHER, typeForColon: HAN_OTHER, typeForSemicolon: HAN_OTHER, quoteFullwidth: false }
+  const data: HanKerningFontData = { hasHalt: trim16(p, style, 0x300c) > 0, typeForDot: HAN_OTHER, typeForColon: HAN_OTHER, typeForSemicolon: HAN_OTHER, quoteFullwidth: false }
   if (data.hasHalt) {
     const chars = [0x3001, 0x3002, 0xff0c, 0xff0e, 0xff1a, 0xff1b, 0x201c, 0x2018, 0x201d, 0x2019]
     const glyphs = chars.map(c => {
-      const b = measureTextBounds(m, context, String.fromCharCode(c))
+      const b = bounds(context, String.fromCharCode(c))
       return { advance: b.width, type: typeFromBounds(b.width / 2, -b.left, b.right) }
     })
     // A group has one type only when its glyphs share the advance and the type (han_kerning.cc:75-110).
@@ -109,8 +108,8 @@ export function shouldKernLast(type: number, lastType: number): boolean {
 }
 
 // The 16.16 amount `halt` removes from character c in this style's font.
-export function trim16(sh: Shaper, style: number, c: number): number {
-  const contexts = sh.p.contexts[style]!
+export function trim16(p: BlinkPrepared, style: number, c: number): number {
+  const contexts = p.contexts[style]!
   const one = String.fromCharCode(c)
-  return 2 * raw16Of(sh, contexts, contexts.hyphen, one) - raw16Of(sh, contexts, contexts.hyphen, one + one)
+  return 2 * raw16Of(contexts, contexts.hyphen, one) - raw16Of(contexts, contexts.hyphen, one + one)
 }

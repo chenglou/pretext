@@ -274,7 +274,7 @@ function joinsNextLine(p: BlinkPrepared, next: BlinkLineStart | null): boolean {
 export function piecesOf(p: BlinkPrepared, info: LineInfo, start: BlinkLineStart): LinePieces<BlinkPaintFacts> {
   const next = info.token
   const range = lineSourceRange(p, start, next)
-  const hangWidth = trailingSpacesOf({ p, m: p.measurer, gaps: null }, info).width
+  const hangWidth = trailingSpacesOf({ p, gaps: null }, info).width
   return {
     fragments: fragmentsOf(p, info, start.textOffset, next === null ? p.text.length : next.textOffset, range.start, range.end),
     joinsNextLine: joinsNextLine(p, next), indented: info.textIndent !== 0, align: usedTextAlign(p.paragraph.textAlign, info),

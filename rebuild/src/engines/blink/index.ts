@@ -6,7 +6,7 @@
 // the gaps (gaps.ts). The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import { createMeasurer } from '../../measure/canvas.js'
+import type { Context } from '../../measure/canvas.js'
 import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, TextAlign } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
@@ -121,7 +121,7 @@ function needsAccurateEndPosition(align: TextAlign): boolean {
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps; a plain paragraph gives lines and pieces alone
 // (types.ts BlinkPrepared.inspect).
 export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean): BlinkPrepared {
-  const measurer = createMeasurer()
+  const canvases: Context[] = []
   const zoom = env.devicePixelRatio
   const index = indexContent(paragraph)
   const { styles, settings, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, zoom)
@@ -154,7 +154,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
   }
   const contexts = []
-  for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(measurer, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
+  for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(canvases, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
   const gaps: GapSink = inspect ? [] : null
@@ -171,9 +171,9 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     canvasSplitsWords: styles.map(() => undefined),
     hanKerning: styles.map(() => null),
     textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign),
-    measurer, inspect: gaps === null ? null : { gaps },
+    canvases, inspect: gaps === null ? null : { gaps },
   }
-  const sh: Shaper = { p, m: measurer, gaps }
+  const sh: Shaper = { p, gaps }
   shapingGroups(p)
   markContinuations(p)
   for (let g = 0; g < p.groups.length; g++) p.groupOfUnit.fill(g, p.groups[g]!.start, p.groups[g]!.end)
@@ -182,7 +182,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   p.fontRun = fontFacts.fontRun
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
-    if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(sh, group.style)
+    if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)
   }
   measureGroups(sh)
   preparedContent(gaps, p)
@@ -209,7 +209,7 @@ export type BlinkFillResult = FillResultOf<BlinkLineStart, BlinkFilledLine, Blin
 // fragment or item is made here.
 export function fillLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkFillResult {
   const gaps: GapSink = p.inspect === null ? null : []
-  const info = new LineBreaker({ p, m: p.measurer, gaps }, start, slot).nextLine()
+  const info = new LineBreaker({ p, gaps }, start, slot).nextLine()
   // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
   // opportunity (inline_layout_algorithm.cc:1341-1367), which lays the same line out again.
   if (info.hasOverflow && info.availableWidth !== lengthLU(slot.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
@@ -228,7 +228,7 @@ export function linePieces(p: BlinkPrepared, line: BlinkFilledLine): LinePieces<
 export function inspectLine(p: BlinkPrepared, line: BlinkFilledLine | BlinkRefusedSlot): LineInspectionOf<BlinkLineGeometry> {
   const gaps = lineGaps(p, line)
   switch (line.kind) {
-    case 'line': return { geometry: geometryOf({ p, m: p.measurer, gaps }, line.info, line.start), gaps }
+    case 'line': return { geometry: geometryOf({ p, gaps }, line.info, line.start), gaps }
     case 'below-floats': return { geometry: null, gaps }
   }
 }

@@ -27,7 +27,13 @@ import type { BlinkInspect, BlinkPrepared } from './types.js'
 // Where gaps go while a paragraph is prepared or a line is filled and inspected; null on a paragraph prepared plain.
 export type GapSink = Gap[] | null
 
-// One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge.
+// One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge, into the first entry
+// they meet. A list's grouping therefore follows the raises, the repeated ones too: a range raised again can meet an
+// earlier entry that grew in between and widen it, where the entry holding the range stays as it is when nothing raises it
+// again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps (shape.ts
+// measure16), so on an inspected paragraph a measurement made again is part of the lists the rows hold: a value handed on
+// in its place can regroup ranges (clusters' prefixes carried through inspect.ts shapeOf did in 3 of 67,065 recorded
+// cases, positions kept through one binary search in 1; research/ARCHITECTURE-PLAN-2.md X2).
 function addGap(gaps: Gap[], gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
   for (let i = 0; i < gaps.length; i++) {
     const g = gaps[i]!
@@ -223,12 +229,11 @@ function scriptContext(gaps: Gap[], p: BlinkPrepared, cs: CanvasString, scripts:
 // paragraph's: only a character without a script of its own can, and an 8-bit string is a Latin range shaped as Latin on
 // both sides. `scripts` are the ones the measurement itself read, for the letter spacing (shape.ts measure16); without
 // letter spacing only this condition reads them.
-export function measuredRange(sink: GapSink, sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, cs: CanvasString, scripts: Uint8Array | null): void {
+export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: number, to: number, callStart: number, callEnd: number, cs: CanvasString, scripts: Uint8Array | null): void {
   if (sink === null) return
-  const p = sh.p
   callEdge(sink, p, g, from, callStart, callEnd)
   callEdge(sink, p, g, to, callStart, callEnd)
-  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(sh, p.groups[g]!.style, cs.s) : null)
+  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s) : null)
   if (canvasScripts !== null) scriptContext(sink, p, cs, canvasScripts)
 }
 
@@ -311,13 +316,13 @@ export function floatSum(sink: GapSink, p: BlinkPrepared, total16: number, slack
 // width decides whether the break fits. Where mapsHyphen isn't given and U+002D measures differently in the run's
 // context, that decision rests on the default, so the line being filled reports hyphen-glyph. `raw16` is the hyphen's
 // measured width.
-export function hyphenGlyph(sink: GapSink, sh: Shaper, style: number, raw16: number): void {
+export function hyphenGlyph(sink: GapSink, p: BlinkPrepared, style: number, raw16: number): void {
   if (sink === null) return
-  const st = sh.p.styles[style]!
+  const st = p.styles[style]!
   // U+002D is a one-byte string. Its contexts are made whatever the fact says, as they have been since one-byte strings got
   // contexts of their own: the recorded questions of an inspected paragraph count its contexts (tests/replay.ts).
-  const oneByte = contextsOf(sh, style, false)
-  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(sh, oneByte, oneByte.hyphen, '-')) {
+  const oneByte = contextsOf(p, style, false)
+  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
     addGap(sink, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the declaration gives no mapsHyphen fact for: Blink draws U+2010 when the primary font maps it and U+002D otherwise, and the two measure differently here (computed_style.cc:1804-1820)')
   }
 }
@@ -759,7 +764,7 @@ export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkL
   if (line.gaps === null) throw new Error('inspectLine reads a line filled from an inspected paragraph, and this one was filled plain')
   const gaps: Gap[] = []
   for (let i = 0; i < line.gaps.length; i++) gaps.push({ ...line.gaps[i]! })
-  const sh: Shaper = { p, m: p.measurer, gaps }
+  const sh: Shaper = { p, gaps }
   lineEdgeGaps(gaps, sh, paragraph, line.info, line.start)
   itemEdgeGaps(gaps, sh, line.info)
   return gaps

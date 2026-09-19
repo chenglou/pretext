@@ -22,7 +22,7 @@
 // joined forms on one-letter lines, Geeza Pro doesn't). Canvas can't tell the two apart, so the font declaration says
 // which (FontFacts.joining); when it doesn't, the edge is measured as an AAT font gives it and the layout reports
 // joining-technology there.
-import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
@@ -90,7 +90,7 @@ function cssSizeScale(size: number, zoom: number): number {
 // clean renderer). The scaled advances are stand-ins: Blink truncates each glyph's advance to 1/65536 px at its own size
 // (skia_text_metrics.cc:207-211), which the layout reports as optical-size (gaps.ts preparedContent). Other fonts are measured
 // at the zoomed size (specs/blink-lines.md §2.3).
-export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, partition: string): StyleContexts {
+export function styleContexts(canvases: Context[], style: BlinkStyle, zoom: number, partition: string): StyleContexts {
   const cssSize = style.measuresAtCssSize
   const scale = cssSize ? cssSizeScale(style.font.size, zoom) : 1
   // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (effectiveFontSize).
@@ -106,21 +106,20 @@ export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, part
   // which cancels in a pair adjustment's differences (edgeGap in gaps.ts).
   const noLigatures = `${NO_LIGATURES_SPACING_PX}px`
   return {
-    ltr: measureContext(m, { ...base, letterSpacing, direction: 'ltr' }),
-    rtl: measureContext(m, { ...base, letterSpacing, direction: 'rtl' }),
-    ltrNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'ltr' }),
-    rtlNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'rtl' }),
+    ltr: contextFor(canvases, { ...base, letterSpacing, direction: 'ltr' }),
+    rtl: contextFor(canvases, { ...base, letterSpacing, direction: 'rtl' }),
+    ltrNoLigatures: contextFor(canvases, { ...base, letterSpacing: noLigatures, direction: 'ltr' }),
+    rtlNoLigatures: contextFor(canvases, { ...base, letterSpacing: noLigatures, direction: 'rtl' }),
     // The hyphen is shaped alone without spacing (hyphen_result.cc:12-16).
-    hyphen: measureContext(m, { ...base, letterSpacing: '0px', direction: 'ltr' }),
+    hyphen: contextFor(canvases, { ...base, letterSpacing: '0px', direction: 'ltr' }),
     scale,
   }
 }
 
-// What measuring needs: the prepared paragraph, the layout's measurer, and where gaps go (gaps.ts GapSink: the paragraph's
-// in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
+// What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
+// GapSink: the paragraph's in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
 export type Shaper = {
   p: BlinkPrepared
-  m: Measurer
   gaps: GapSink
 }
 
@@ -134,17 +133,16 @@ export type Shaper = {
 // alone, and Canvas cuts no words from them (they hold no U+0020, TAB, U+FFFC or CJK character: text_content is Latin-1
 // but for atomic inlines, where a shaping group ends), so every two-byte string and word holds a unit above U+00FF.
 // rule blink/measure/contexts-per-storage
-export function contextsOf(sh: Shaper, style: number, twoByte: boolean): StyleContexts {
-  const p = sh.p
+export function contextsOf(p: BlinkPrepared, style: number, twoByte: boolean): StyleContexts {
   if (twoByte || !p.segmented) return p.contexts[style]!
-  return p.oneByteContexts[style] ??= styleContexts(sh.m, p.styles[style]!, p.layoutZoom, '8bit')
+  return p.oneByteContexts[style] ??= styleContexts(p.canvases, p.styles[style]!, p.layoutZoom, '8bit')
 }
 
 // W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
 // times the style's scale: 16.16 units of the zoomed px. Whole where the scale is 1 or 2; under another scale the
 // fractions are exact, so sums and differences of measured totals are too.
-export function raw16Of(sh: Shaper, contexts: StyleContexts, context: number, s: string): number {
-  return Math.round(measureText(sh.m, context, s) * 65536) * contexts.scale
+export function raw16Of(contexts: StyleContexts, context: Context, s: string): number {
+  return Math.round(canvasWidth(context, s) * 65536) * contexts.scale
 }
 
 const NO_LIGATURES_SPACING_PX = 0.015625
@@ -373,13 +371,12 @@ function canvasWordEnd(s: string, start: number): number {
 // Arabic run, which takes none on it (ShapeResultSpacing::ComputeSpacing, shape_result_spacing.cc:103-139). The two
 // contexts differ by 1/64 px of letter spacing, so the widths differ by that or by nothing. The direction is the contexts'
 // LTR; the three characters are one RTL bidi run in either (U+3000 is WS between two AL).
-function canvasSplitsWords(sh: Shaper, style: number): boolean {
-  const p = sh.p
+function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
   const known = p.canvasSplitsWords[style]
   if (known !== undefined) return known
   const contexts = p.contexts[style]!
   const probe = '\u0628\u3000\u0628'
-  const splits = measureText(sh.m, contexts.ltrNoLigatures, probe) - measureText(sh.m, contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
+  const splits = canvasWidth(contexts.ltrNoLigatures, probe) - canvasWidth(contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
   p.canvasSplitsWords[style] = splits
   return splits
 }
@@ -389,14 +386,14 @@ function canvasSplitsWords(sh: Shaper, style: number): boolean {
 // every word unless the font can't be shaped word by word (:372-398). So U+3000 between Arabic letters is Common in Canvas,
 // where the paragraph keeps it in the Arabic run (probe critic-r2 blink-u3000: 10px of letter spacing adds 10px per U+3000
 // in Canvas and nothing in the DOM).
-export function canvasScriptsPerUnit(sh: Shaper, style: number, s: string): Uint8Array {
+export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string): Uint8Array {
   let splitPoint = false
   for (let i = 0; i < s.length && !splitPoint;) {
     const cp = s.codePointAt(i)!
     if (cp >= 0x2c7 && (isCanvasWordDelimiter(cp) || isCjkIdeographOrSymbol(cp))) splitPoint = true
     i += cp > 0xffff ? 2 : 1
   }
-  if (!splitPoint || !canvasSplitsWords(sh, style)) return scriptsPerUnit(s)
+  if (!splitPoint || !canvasSplitsWords(p, style)) return scriptsPerUnit(s)
   const scripts = new Uint8Array(s.length)
   for (let start = 0; start < s.length;) {
     const end = canvasWordEnd(s, start)
@@ -417,8 +414,7 @@ export function canvasScriptsPerUnit(sh: Shaper, style: number, s: string): Uint
 // script-context with it. With a letter in the range RunSegmenter gives Latin either way, and white space alone is no
 // script's (gaps.ts hasScriptNeutral).
 // rule blink/measure/spaces-stay-in-neutral-latin-range
-function spacesStay(sh: Shaper, style: number, from: number, to: number): boolean {
-  const p = sh.p
+function spacesStay(p: BlinkPrepared, style: number, from: number, to: number): boolean {
   if (p.scripts[from] !== USCRIPT_LATIN) return false
   let space = false
   let other = false
@@ -429,7 +425,7 @@ function spacesStay(sh: Shaper, style: number, from: number, to: number): boolea
     else if (!isCommonOrInheritedScript(c)) return false
     else if (!isWhiteSpace(c)) other = true
   }
-  return space && other && !canvasSplitsWords(sh, style)
+  return space && other && !canvasSplitsWords(p, style)
 }
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,
@@ -448,24 +444,23 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
     }
   }
   const group = p.groups[g]!
-  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(sh, group.style, from, to))
-  const contexts = contextsOf(sh, group.style, cs.twoByte)
+  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(p, group.style, from, to))
+  const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
-  const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)
+  const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
-  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(sh, group.style, cs.s) : null
-  measuredRange(sh.gaps, sh, g, from, to, callStart, callEnd, cs, scripts)
+  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
+  measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts)
   if (ls16 === 0) return w + adjust
-  return w + adjust + letterSpacingDifference16(sh, cs, scripts, ls16)
+  return w + adjust + letterSpacingDifference16(p, cs, scripts, ls16)
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
-function letterSpacingDifference16(sh: Shaper, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
-  const p = sh.p
+function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
   let adjust = 0
   for (let u = 0; u < cs.units.length; u++) {
     const t = cs.units[u]!
@@ -613,7 +608,8 @@ export function pairAdjustNoLigatures16(sh: Shaper, g: number, k: number, lo: nu
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number): number {
+// `whole` is the measured total of [from, to), which the caller has or measures.
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
   let a = from
@@ -624,7 +620,6 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   while (nearB < to && allDefaultIgnorable(p, k, nearB)) nearB = clusterEndAfter(p, nearB, hi)
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
-  let whole = measure16(sh, g, a, b, lo, hi)
   while (whole >= EXACT16 && (a < nearA || b > nearB)) {
     if (a < nearA && (k - a >= b - k || b <= nearB)) {
       let next = clusterStartAtOrBefore(p, a + ((k - a + 1) >> 1), lo)
@@ -646,12 +641,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
 export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi)
+  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   let i = 0
   while (i + 1 < cuts.length && cuts[i + 1]! <= k) i++
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
-  return windowAdjust16(sh, g, k, from, cuts[i + 1] ?? group.end, lo, hi)
+  const to = cuts[i + 1] ?? group.end
+  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -673,11 +669,12 @@ export function positionAdjust16(sh: Shaper, g: number, k: number, lo: number, h
   return pairAdjust16(sh, g, k, lo, hi)
 }
 
-// Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to).
-function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number): boolean {
+// Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
+// whose measured total is `whole`.
+function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number): boolean {
   const p = sh.p
   const group = p.groups[g]!
-  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end) === 0 &&
+  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end, whole) === 0 &&
     pairAdjust16(sh, g, k, group.start, group.end) === 0
 }
 
@@ -687,11 +684,16 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
 // adjustment adds that (blink-gaps §3.2, §3.6 L4). A cut inside a word can split a syllable whose clusters the pair test
 // sees one at a time (Myanmar medials and stacked consonants). The cut is the offset nearest the middle beside a space
 // that passes the safe test, else any offset that passes it, else the nearest cluster boundary, reported as
-// unsafe-to-break.
-function addCuts(sh: Shaper, g: number, a: number, b: number, cuts: number[]): void {
+// unsafe-to-break. Every piece's end goes to `cuts` and its measured total to `totals`, in order.
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[]): void {
   const p = sh.p
   const group = p.groups[g]!
-  if (measure16(sh, g, a, b, group.start, group.end) < EXACT16) return
+  const whole = measure16(sh, g, a, b, group.start, group.end)
+  if (whole < EXACT16) {
+    cuts.push(b)
+    totals.push(whole)
+    return
+  }
   const mid = a + ((b - a) >> 1)
   let spaceCut = -1
   let safeCut = -1
@@ -703,13 +705,15 @@ function addCuts(sh: Shaper, g: number, a: number, b: number, cuts: number[]): v
       if (boundary < 0) boundary = c
       const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
       if (!besideSpace && safeCut >= 0) continue
-      if (!passesSafeTest(sh, g, c, a, b)) continue
+      if (!passesSafeTest(sh, g, c, a, b, whole)) continue
       if (besideSpace) spaceCut = c
       else safeCut = c
     }
   }
   if (boundary < 0) {
     uncutCluster(sh.gaps, p, g, a, b)
+    cuts.push(b)
+    totals.push(whole)
     return
   }
   let k = spaceCut >= 0 ? spaceCut : safeCut
@@ -717,9 +721,8 @@ function addCuts(sh: Shaper, g: number, a: number, b: number, cuts: number[]): v
     k = boundary
     unsafeCut(sh.gaps, p, g, k)
   }
-  addCuts(sh, g, a, k, cuts)
-  cuts.push(k)
-  addCuts(sh, g, k, b, cuts)
+  addPieces(sh, g, a, k, cuts, totals)
+  addPieces(sh, g, k, b, cuts, totals)
 }
 
 // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
@@ -731,12 +734,10 @@ export function measureGroups(sh: Shaper): void {
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
     const cuts = [group.start]
-    addCuts(sh, g, group.start, group.end, cuts)
-    cuts.push(group.end)
+    const totals: number[] = []
+    addPieces(sh, g, group.start, group.end, cuts, totals)
     const prefix = [0]
-    for (let i = 1; i < cuts.length; i++) {
-      prefix.push(prefix[i - 1]! + measure16(sh, g, cuts[i - 1]!, cuts[i]!, group.start, group.end))
-    }
+    for (let i = 0; i < totals.length; i++) prefix.push(prefix[i]! + totals[i]!)
     group.cuts = cuts
     group.prefixAtCut = prefix
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window).
@@ -854,7 +855,7 @@ function hanKerningStartTrim16(sh: Shaper, g: number, a: number, b: number, isLi
   const c = p.text.charCodeAt(a)
   if (!shouldKern(resolvedCharType(data, c), resolvedCharType(data, p.text.charCodeAt(a - 1)))) return 0
   hanKerningTrim(sh.gaps, p, style, a)
-  return trim16(sh, style, c)
+  return trim16(p, style, c)
 }
 
 // The end context (han_kerning.cc:264-300): the last character halts when ShouldKernLast holds with the one after.
@@ -867,7 +868,7 @@ function hanKerningEndTrim16(sh: Shaper, g: number, a: number, b: number): numbe
   const c = p.text.charCodeAt(b - 1)
   if (!shouldKernLast(resolvedCharType(data, p.text.charCodeAt(b)), resolvedCharType(data, c))) return 0
   hanKerningTrim(sh.gaps, p, style, b - 1)
-  return trim16(sh, style, c)
+  return trim16(p, style, c)
 }
 
 // A ShapeResult for one item: a text item's cut of its group, or the tab run CreateForTabulationCharacters builds.
@@ -1031,19 +1032,16 @@ export function sliceEdge(p: BlinkPrepared, k: number, lo: number, hi: number): 
   return e
 }
 
-function rangeSlicePrefix16(sh: Shaper, sr: ShapeResult, k: number): number {
-  return prefix16(sh, sr, sr.kind === 'group' ? sliceEdge(sh.p, k, sr.start, sr.end) : k)
-}
-
-function callSlicePrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
-  return callPrefix16(sh, call, sliceEdge(sh.p, k, call.start, call.end))
+// The advance sum before slice edge k in the shaping call a part's glyphs come from: the item's result or a reshape.
+function slicePrefix16(sh: Shaper, part: Part, k: number): number {
+  switch (part.kind) {
+    case 'range': return prefix16(sh, part.sr, part.sr.kind === 'group' ? sliceEdge(sh.p, k, part.sr.start, part.sr.end) : k)
+    case 'reshape': return callPrefix16(sh, part.call, sliceEdge(sh.p, k, part.call.start, part.call.end))
+  }
 }
 
 export function partWidth16(sh: Shaper, part: Part): number {
-  switch (part.kind) {
-    case 'range': return rangeSlicePrefix16(sh, part.sr, part.end) - rangeSlicePrefix16(sh, part.sr, part.start)
-    case 'reshape': return callSlicePrefix16(sh, part.call, part.end) - callSlicePrefix16(sh, part.call, part.start)
-  }
+  return slicePrefix16(sh, part, part.end) - slicePrefix16(sh, part, part.start)
 }
 
 function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, charIndexOffset: number, numCharacters: number): View {
@@ -1059,11 +1057,18 @@ function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, c
 // by the next listed family was one LayoutUnit narrower natively than the ceiling of the exact total (c-98ab54a5eeff7b16).
 function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
   const p = sh.p
+  // The advance sums before every part's two edges, measured once for the total and for the sum.
+  const start16: number[] = []
+  const end16: number[] = []
   let total16 = 0
-  for (let i = 0; i < parts.length; i++) total16 += partWidth16(sh, parts[i]!)
+  for (let i = 0; i < parts.length; i++) {
+    end16.push(slicePrefix16(sh, parts[i]!, parts[i]!.end))
+    start16.push(slicePrefix16(sh, parts[i]!, parts[i]!.start))
+    total16 += end16[i]! - start16[i]!
+  }
   if (total16 < EXACT16) {
     let width = 0
-    for (let i = 0; i < parts.length; i++) width = f32(width + widthOf16(partWidth16(sh, parts[i]!)))
+    for (let i = 0; i < parts.length; i++) width = f32(width + widthOf16(end16[i]! - start16[i]!))
     return width
   }
   let width = 0
@@ -1079,8 +1084,9 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
   const unknownRuns: UnknownRun[] = []
   let bits = 0
   for (let n = 0; n < parts.length; n++) {
-    const part = parts[rtl ? parts.length - 1 - n : n]!
-    if (part.kind === 'range' && part.sr.kind !== 'group') { width = f32(width + widthOf16(partWidth16(sh, part))); continue }
+    const index = rtl ? parts.length - 1 - n : n
+    const part = parts[index]!
+    if (part.kind === 'range' && part.sr.kind !== 'group') { width = f32(width + widthOf16(end16[index]! - start16[index]!)); continue }
     const lo = part.kind === 'reshape' ? part.call.start : part.sr.start
     const hi = part.kind === 'reshape' ? part.call.end : part.sr.end
     const a = sliceEdge(p, part.start, lo, hi)
@@ -1096,9 +1102,17 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
       if (isSegmentEdge(p, k) || p.fontRun[k] !== p.fontRun[k - 1]) edges.push(k)
     }
     edges.push(b)
+    // The advance sum before every run edge: the part's own two are measured, the ones between in the runs' visual order.
+    const at16 = new Array<number>(edges.length)
+    at16[0] = start16[index]!
+    at16[edges.length - 1] = end16[index]!
+    for (let r = 1; r + 1 < edges.length; r++) {
+      const e = rtl ? edges.length - 1 - r : r
+      at16[e] = prefix(edges[e]!)
+    }
     for (let r = 0; r + 1 < edges.length; r++) {
       const e = rtl ? edges.length - 2 - r : r
-      const run16 = prefix(edges[e + 1]!) - prefix(edges[e]!)
+      const run16 = at16[e + 1]! - at16[e]!
       width = f32(width + widthOf16(run16))
       exact16 += run16
       bits |= run16
@@ -1207,12 +1221,7 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
       sum += partWidth16(sh, part)
       continue
     }
-    if (start < k) {
-      switch (part.kind) {
-        case 'range': sum += rangeSlicePrefix16(sh, part.sr, k) - rangeSlicePrefix16(sh, part.sr, part.start); break
-        case 'reshape': sum += callSlicePrefix16(sh, part.call, k) - callSlicePrefix16(sh, part.call, part.start); break
-      }
-    }
+    if (start < k) sum += slicePrefix16(sh, part, k) - slicePrefix16(sh, part, part.start)
     break
   }
   return sum
@@ -1220,10 +1229,7 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
 
 // The advance sum of a part's glyphs before text_content offset k of the text they were shaped from.
 export function partPrefix16(sh: Shaper, part: Part, k: number): number {
-  switch (part.kind) {
-    case 'range': return rangeSlicePrefix16(sh, part.sr, k) - rangeSlicePrefix16(sh, part.sr, part.start)
-    case 'reshape': return callSlicePrefix16(sh, part.call, k) - callSlicePrefix16(sh, part.call, part.start)
-  }
+  return slicePrefix16(sh, part, k) - slicePrefix16(sh, part, part.start)
 }
 
 // Where Blink's caret code starts graphemes among the characters of a view's part: flags per character of the part, or
@@ -1276,7 +1282,7 @@ export function reshapeHanKerningEnd(sh: Shaper, g: number, start: number, end: 
       switch (resolvedCharType(data, c)) {
         case HAN_OPEN: case HAN_CLOSE:
           hanKerningTrim(sh.gaps, p, style, end - 1)
-          endTrim16 = trim16(sh, style, c)
+          endTrim16 = trim16(p, style, c)
           break
         default:
           hanKerningEndUnknown(sh.gaps, p, style, end - 1)
@@ -1309,9 +1315,9 @@ export function hyphenText(style: BlinkStyle): string {
 export function shapeHyphen(sh: Shaper, style: number): { text: string; inlineSize: number } {
   const text = hyphenText(sh.p.styles[style]!)
   // U+2010 is a two-byte string and U+002D a one-byte one, as the paragraph's own hyphen strings are.
-  const contexts = contextsOf(sh, style, text !== '-')
-  const raw16 = raw16Of(sh, contexts, contexts.hyphen, text)
-  hyphenGlyph(sh.gaps, sh, style, raw16)
+  const contexts = contextsOf(sh.p, style, text !== '-')
+  const raw16 = raw16Of(contexts, contexts.hyphen, text)
+  hyphenGlyph(sh.gaps, sh.p, style, raw16)
   return { text, inlineSize: Math.max(0, luCeil(widthOf16(raw16))) }
 }
 
@@ -1325,8 +1331,8 @@ export function tabShapeResult(sh: Shaper, start: number, end: number, rtl: bool
   // The item's tab-size (style.GetTabSize(), line_breaker.cc:2968) with the block's font and spacing (FontForTab under
   // TabSizeAncestor, inline_node.cc:2130-2140).
   const block = p.styles[0]!
-  const contexts = contextsOf(sh, 0, false)
-  const space = widthOf16(raw16Of(sh, contexts, contexts.hyphen, ' '))
+  const contexts = contextsOf(p, 0, false)
+  const space = widthOf16(raw16Of(contexts, contexts.hyphen, ' '))
   const ls = f32(block.letterSpacing * p.layoutZoom)
   const ws = f32(block.wordSpacing * p.layoutZoom)
   // TabWidthInternal: TabSize::GetPixelSize with TabSizeWithSpacing (stable, runtime_enabled_features.json5:6172), and the
