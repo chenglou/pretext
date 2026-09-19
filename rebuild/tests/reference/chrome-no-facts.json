@@ -4,10 +4,10 @@
   "browser": "chrome",
   "config": "no-facts",
   "inputsSha256": "b3b041bfc9969e9c1d5a72a2b27bd5d76b4156cf892ba6c305bbd3185f60403c",
-  "commit": "c7f3c3dc5a56e7f2ac5dda532d468e63a7c3a0ee",
+  "commit": "25fbdd6ba452d413337a6aceaa6818abb5363e90",
   "dirty": [],
-  "createdAt": "2026-09-19T13:54:10.308Z",
-  "reason": "X3, the model clean-up with Blink's three row-changing jobs (research/ARCHITECTURE-PLAN-2.md; the orchestrator's log of 2026-09-19): gap lists are handed out canonical (473 rows without facts and 303 with differ byte-wise from the previous reference; 67,065 of 67,065 cases equal after canonicalizing both, rerun on the merged tree); a painted line in an RTL block is segmented by script, so the painter limit script-at-line-start is named on 470 more lines and 31 fewer in 460 cases, with no painted DOM change; the unused one-byte hyphen contexts are gone (context count falls in 3,745 cases); X2's two data flows are back (repeats only). Recorded again at c7f3c3d in both orders: 8 painter status transitions per configuration, all from a failure to a failure covered by limit:script-at-line-start, 0 from a pass, exact values unchanged, gates lost 0; the plain predictor's run equals the usual run on all 67,065 cases.",
+  "createdAt": "2026-09-19T16:25:33.064Z",
+  "reason": "The re-architecture's last deletions (the memoized measuring API and the log left rebuild/src/measure): every prediction and every question is the same in tier 1; files under src/measure changed, so the string storage rule sent Chrome's cases to tier 2, where Chrome ran forward in both configurations with 0 transitions, exact values unchanged and the gates lost 0. The reference moves to the merge commit so that tier 1 exits 0 again.",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -49,6 +49,12 @@
       "commit": "0163d4cda8bdd2a865381742919d6e534f96bbe3",
       "createdAt": "2026-09-19T09:22:53.155Z",
       "reason": "X2, the memo goes (research/ARCHITECTURE-PLAN-2.md): no port keeps measured strings any more, so a question asked again is a real ask. Every prediction equals the previous reference's (tier 1: repeats only in every changed case, 0 dropped, 0 other, 0 new questions). Recorded again at the merge commit 0163d4c in both orders: 0 status transitions and 0 exact-value changes against the previous ledgers in both configurations, gates lost 0; the plain predictor's run differs from the usual one only in cases the ledger marks history-dependent.",
+      "cases": 67065
+    },
+    {
+      "commit": "c7f3c3dc5a56e7f2ac5dda532d468e63a7c3a0ee",
+      "createdAt": "2026-09-19T13:54:10.308Z",
+      "reason": "X3, the model clean-up with Blink's three row-changing jobs (research/ARCHITECTURE-PLAN-2.md; the orchestrator's log of 2026-09-19): gap lists are handed out canonical (473 rows without facts and 303 with differ byte-wise from the previous reference; 67,065 of 67,065 cases equal after canonicalizing both, rerun on the merged tree); a painted line in an RTL block is segmented by script, so the painter limit script-at-line-start is named on 470 more lines and 31 fewer in 460 cases, with no painted DOM change; the unused one-byte hyphen contexts are gone (context count falls in 3,745 cases); X2's two data flows are back (repeats only). Recorded again at c7f3c3d in both orders: 8 painter status transitions per configuration, all from a failure to a failure covered by limit:script-at-line-start, 0 from a pass, exact values unchanged, gates lost 0; the plain predictor's run equals the usual run on all 67,065 cases.",
       "cases": 67065
     }
   ],
