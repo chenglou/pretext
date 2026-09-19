@@ -12,6 +12,82 @@ Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's g
 its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
 section describes the detached canvas element it measured on then.
 
+## Re-architecture X3, 2026-09-19: the model clean-up
+
+research/ARCHITECTURE-PLAN-2.md §6 and §8 step 2. No rule, citation, gap condition or probe order moved, and neither a
+prediction nor a Canvas question: tier 1 is the same on every case of both Firefox references, the question sequences
+included. What changed is the shape of the port's data.
+
+- **A leaf is a record** (`types.ts` `GeckoLeaf`: its source range, the span holding it, its style, font, language, storage
+  width and spacing). It replaces the prepared paragraph's five parallel arrays (`runStarts`, `runStyles`, `runParents`,
+  `runLangs`, `letterSpacingAu`) and the seven `prepare.ts` kept beside them. A frame no longer copies its node's `is8bit`,
+  and a text run no longer copies `pairKerning`, `joining` and the script lookups of its font: they are read from
+  `run.font`.
+- **A unit holds what measuring found inside it** (`GeckoUnit.inWord`, null until an offset inside the unit asks: the
+  ligature group count and the per-offset records). X2 kept the records in an array over the whole transformed text and
+  the count on the unit. It is still the one part of a prepared paragraph written after preparation, and that is its
+  right lifetime: the records are facts of the unit's text in its text run, which no width and no line changes, a fill, a
+  placement, an inspection and another width read the same ones, and they go with the paragraph. A plain paragraph of
+  words that no line cuts allocates none. Units of equal text could later share one record (the candidate X2 left for
+  after profiling); nothing here looks a record up by string.
+- **A text run is cut into shaping units once.** `splitAndInitTextRun`, the port of gfxFont::SplitAndInitTextRun that sets
+  the glyph flags, gives the units it cuts, and the measuring step reads them. It scanned the text a second time with the
+  same boundary test written again, and the script runs were itemized twice.
+- **Maps and Sets that an index or a field does are gone**: in `prepare.ts` the boundary leaves, the bidi paragraph of an
+  element, the piece of a run, the two split marks, the ancestors of a span and the script run limits; in `lines.ts` a
+  frame's tabs and its stand-in tabs, now one ordered list (`Tab`), shared and empty where a run has no tab; in `pieces.ts`
+  the trimmed and hanging offsets and the placed frame of an item, now two tests on the frame and a moving index; in
+  `inspect.ts` the geometry and the relative position of a placed frame (a tree of boxes pairs them) and the
+  justification spacing (an array from the frame's measured start); in `gaps.ts` the in-word report (a sorted list) and
+  `emergencyUnconfirmed` (a list in text order, read once for a line such a break decides). One Map is left,
+  `inspect.ts`'s continuation chains by span element, which is Gecko's own structure there (nsContinuationStates).
+  `likely.ts` and `advance.ts` keep their static tables of language and script tags.
+- **Reflow's and placement's frame records are apart.** A pass leaves `Reflowed` frames (`lines.ts`), and `placeLine`
+  makes `Placed` ones with what trimming and justification write (`placement.ts`); reflow no longer initializes fields it
+  never writes, and the decided line holds nothing placement could write. nsLineLayout::GetTrimFrom and
+  nsLineLayout::GetHangFrom share their walk to the line's last text frame.
+- **Smaller things.** What tab widths read is one nullable record (`GeckoPrepared.tabs`) where two fields were null
+  together. `Measured.lastBreak` and `lineEndT` are `number | null`, not −1 and −2. An item reaches reflow narrowed by
+  its kind, and the element an item names is read through `spanAt` and `objectAt`, which throw on the wrong kind, where 18
+  casts stood. `SpanData.inset` (text-wrap: balance's, always 0), five fields of `FrameResult`, three of the placed span,
+  `GeckoTextRun.is8bit` and knip's two findings (`primaryFamilyOf`, `isEmojiModifier`) are gone. One search finds the frame
+  or the leaf at a source offset (`holderOfSource`); a line's collapsed text and the paragraph's U+FFFD and figure space
+  scans no longer search the leaves from the first for every character.
+- Type-only import cycles are left between `gaps.ts`, `lines.ts`, `placement.ts` and `prepare.ts`; no function-level cycle
+  exists. `types.ts` no longer imports from `advance.ts`.
+
+Non-test lines 5,848 → 5,850 (without comment and blank lines 4,494 → 4,447): `types.ts` 235 → 299 (the leaf, the in-word
+records from `advance.ts`, the element accessors), `advance.ts` 585 → 560, `prepare.ts` 1,199 → 1,180, `lines.ts` 875 → 864,
+`inspect.ts` 257 → 249, `fonts.ts` 198 → 191, `pieces.ts` 151 → 147, `placement.ts` 296 → 300, `props.ts` 141 → 148.
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 813 pass (2 new Gecko tests: leaves without frames and empty leaves as collapsed fragments, which the start commit gives too; a unit's in-word record and a plain line start) |
+| tier 1, all six references | exit 0: every case the same, 0 questions changed (Firefox 7,304,418 and 7,378,381 asked, as at X2) |
+| `tests/function-set.ts plain`, `pure`, `sweep` | exit 0 in both configurations; the plain path asks 3,478,614 and 3,511,689 questions, as at X2; 11,418 (11,422) cases first ask in another order, as before |
+| citations, painter differential | 0 lost; 63,771 of 63,771 painted byte-equal in both configurations |
+| `tools/two-trees.ts` against the start commit, stand-in Canvas, widths 40, 97, 150 and 333px | 270,960 layouts of 33,870 cases (the smoke, development, family and held-out sets without the suite samples, both configurations): every layout, painter limit and painting the same, and the same number of questions |
+| tier 2, pinned Firefox 156.0, both orders, both configurations (`.artifacts/tests/runs/ra-x3-gecko`) | exit 0 twice: 0 status transitions, 0 cases less exact, differing predicted values 301 and 744, rect counts 134 and 102 and limited values 162,069 and 132,448 as in the reference, gate lost 0 |
+| plain predictor in pinned Firefox, `compare-sets.ts --prediction=line-ranges` | 63,651 of 63,771 cases equal the usual run; the other 120 are the 120 of X2's plain run, case for case (`suite-sample` part 2, one process, `gecko/process-font-fallback-state`; line ranges moved in 14, all among the 115 the reference ledger marks history-dependent; the 5 it doesn't mark are X2's five `suite/measurement` cases) |
+
+Tier 2 and the plain run were at ebced98, the giants at 669b651 and 9c7808b. The source commits after ebced98 change two
+comments and take back a copy of the paragraph's gap list that `src/index.ts` makes anyway, nothing a row can show
+(tier 1 is the same at each). This run's usual rows equal X2's on all 63,771 cases,
+native observation and prediction (`compare-sets.ts --prediction=without-measure`).
+
+**Canvas questions per paragraph** are X2's on both paths: 114.5 / 115.7 on the lab path and 54.5 / 55.1 on the plain path
+(without facts / with), ask ratios 1.66 / 1.67 and 1.41 / 1.42. The giants ask what they asked at X2 (351,890, 862,223 and
+843,386 questions a case on the lab path).
+
+**Time.** The giants (9 cases, exclusive lock, headline configuration), this tree and an export of the start commit in
+turn: the lab path's prediction 13,129 and 12,678 ms against 13,074 and 12,838 ms, the plain path's 3,392 ms against
+3,473 ms; layouts equal to the start commit's, to X2's and to the frozen giants rows on all 9, line ranges equal on the
+plain path. A first pair of lab runs gave 10,213 ms against 6,281 ms with the lab's own native and observation steps,
+which no tree changed, 1.6 and 2.1 times slower in the same run: the machine, not the tree (the start commit's run came
+first after a three-minute wait for the lock, and X2 measured the same library at 15,344 ms). Tier 2's browser jobs took
+225 s and 226 s for both orders (X2: 215 s and 124 s, by load), and the forward rows' prediction time sums to 85.7 s
+against 87.2 s for X2's both-orders run.
+
 ## Re-architecture X2, 2026-09-19: the memo goes
 
 research/ARCHITECTURE-PLAN-2.md §5.3, §6 and §8 step 2. No rule, citation, gap condition or probe order moved, and no

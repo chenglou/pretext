@@ -7,34 +7,38 @@ import type { LineInspectionOf } from '../../model.js'
 import { advanceBefore } from './advance.js'
 import { lineGaps } from './gaps.js'
 import type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry } from './geometry.js'
-import { computeJustification, rangeAdvance, spacingIn, type Band, type FrameResult, type GeckoFilledLine, type GeckoRefusedSlot, type Placed, type PlacedSpan, type PlacedText, type Provider, type SpanData } from './lines.js'
+import { computeJustification, rangeAdvance, spacingIn, type Band, type FrameResult, type GeckoFilledLine, type GeckoRefusedSlot, type Provider } from './lines.js'
 import { lineEndT } from './pieces.js'
-import { consume, placeLine, textFramesOf, type ApplicationState, type PlacedLine } from './placement.js'
+import { consume, placeLine, textFramesOf, type ApplicationState, type Placed, type PlacedLeaf, type PlacedLine, type PlacedSpan, type PlacedSpanData, type PlacedText } from './placement.js'
 import { isTrimmableChar } from './prepare.js'
-import type { GeckoElement, GeckoPrepared } from './types.js'
+import { objectAt, spanAt, type GeckoPrepared } from './types.js'
 
 // Per source unit from the frame's measured start: what GetAdvanceWidth adds for it (gfxTextRun.cpp:1214-1256,
 // nsTextFrame.cpp:4089-4295): a cluster's glyph advance on its first character, the spacing after a character on that
-// character, a tab's width on the tab. Skipped characters add nothing.
-function characters(p: GeckoPrepared, r: FrameResult, prov: Provider, justification: Map<number, number> | null): { characters: GeckoCharacter[]; standInAtEnd: boolean } {
+// character, a tab's width on the tab. Skipped characters add nothing. `justification` is justificationSpacing's.
+function characters(p: GeckoPrepared, r: FrameResult, prov: Provider, justification: number[] | null): { characters: GeckoCharacter[]; standInAtEnd: boolean } {
   const out: GeckoCharacter[] = []
   let before = advanceBefore(p, prov.run, prov.startT)
   // Every position after a stand-in tab sums its width (computeTabs).
   let afterStandInTab = false
+  // The frame's next tab at or after the character: both run in text order.
+  let tab = 0
   for (let s = r.offset; s < r.contentStart + r.contentLength; s++) {
     const t = p.sourceT[s]!
     if (t === -1) {
       out.push({ skipped: true, clusterStart: false, unitStart: false, advance: 0, standInBefore: false })
       continue
     }
+    while (tab < prov.tabs.length && prov.tabs[tab]!.t < t) tab++
+    const here = tab < prov.tabs.length && prov.tabs[tab]!.t === t ? prov.tabs[tab]! : null
     const after = advanceBefore(p, prov.run, t + 1)
     out.push({
       skipped: false, clusterStart: p.clusterStart[t] === 1, unitStart: p.units[p.unitOf[t]!]!.tStart === t,
-      advance: after.au - before.au + spacingIn(p, prov, t, t + 1) + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
+      advance: after.au - before.au + spacingIn(p, prov, t, t + 1) + (here === null ? 0 : here.width) + (justification === null ? 0 : justification[t - prov.startT] ?? 0),
       standInBefore: before.standIn !== null || afterStandInTab,
     })
     before = after
-    if (prov.tabStandIn.has(t)) afterStandInTab = true
+    if (here !== null && here.standIn !== null) afterStandInTab = true
   }
   return { characters: out, standInAtEnd: before.standIn !== null || afterStandInTab }
 }
@@ -65,16 +69,17 @@ function visualOrder(levels: number[]): number[] {
 }
 
 // PropertyProvider::SetupJustificationSpacing after reflow (nsTextFrame.cpp:4503-4560): the frame's extra width over its
-// natural width, spread over its justifiable characters' gaps, keyed by transformed index.
-function justificationSpacing(p: GeckoPrepared, pf: PlacedText): Map<number, number> | null {
+// natural width, spread over its justifiable characters' gaps: per transformed character from the frame's measured start,
+// as far as its trimmed content goes.
+function justificationSpacing(p: GeckoPrepared, pf: PlacedText): number[] | null {
   const r = pf.r
   if (p.paragraph.textAlign !== 'justify' || r.prov === null) return null
   const f = p.frames[r.frame]!
-  const style = p.runStyles[f.run]!
+  const leaf = p.leaves[f.run]!
   // GetTrimmedOffsets with default flags: the end is trimmed on a frame at the end of the line (:3287-3330).
   let end = r.contentStart + r.contentLength
-  if (!style.whiteSpaceIsSignificant && pf.endOfLine) while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, f.is8bit)) end--
-  const { info, assignments, arrayStart } = computeJustification(p, r.frame, r.offset, end)
+  if (!leaf.style.whiteSpaceIsSignificant && pf.endOfLine) while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, leaf.is8bit)) end--
+  const { info, assignments } = computeJustification(p, r.frame, r.offset, end)
   const totalGaps = info.inner * 2 + pf.assign.start + pf.assign.end
   if (totalGaps === 0 || assignments.length === 0) return null
   let natural = rangeAdvance(p, r.prov, Math.min(p.nextT[r.offset]!, f.tEnd), Math.min(p.nextT[end]!, f.tEnd), null)
@@ -84,14 +89,16 @@ function justificationSpacing(p: GeckoPrepared, pf: PlacedText): Map<number, num
   assignments[0]!.start = pf.assign.start
   assignments[assignments.length - 1]!.end = pf.assign.end
   const state: ApplicationState = { count: totalGaps, handled: 0, available: totalSpacing, consumed: 0 }
-  const out = new Map<number, number>()
-  for (let i = 0; i < assignments.length; i++) {
-    const before = consume(state, assignments[i]!.start)
-    const after = consume(state, assignments[i]!.end)
-    if (before + after !== 0) out.set(arrayStart + i, before + after)
-  }
+  const out: number[] = []
+  for (let i = 0; i < assignments.length; i++) out.push(consume(state, assignments[i]!.start) + consume(state, assignments[i]!.end))
   return out
 }
+
+// A placed frame with the geometry made for it, and a span's with its children's: what ReorderFrames walks. `relative` is
+// the frame's left edge from its container's.
+type Box =
+  | { kind: 'span'; placed: PlacedSpan; geometry: Extract<GeckoFrameGeometry, { kind: 'inline' }>; children: Box[]; relative: number }
+  | { kind: 'leaf'; placed: PlacedText | PlacedLeaf; geometry: GeckoFrameGeometry; relative: number }
 
 // The placed line's frames in logical order, an inline frame before the frames of its children, with their boxes, and a text
 // frame's characters.
@@ -102,63 +109,54 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
   // line's frames from psd->mIStart + mTextIndent + dx (:3646-3652; nsBidiPresUtils.cpp:1494-1533). x is the physical left edge
   // from the content box.
   const frames: GeckoFrameGeometry[] = []
-  const geometryOf = new Map<Placed, GeckoFrameGeometry>()
-  // Each span's frames on this line in logical order: the part of its continuation chain IsFirstOrLast counts.
-  const spansOf = new Map<number, PlacedSpan[]>()
-  const collect = (psd: SpanData, origin: number): void => {
+  // By span element: its frames on this line, the part of its continuation chain IsFirstOrLast counts, in logical order,
+  // and how many of them the repositioning hasn't met yet. Gecko keeps the same by frame (nsContinuationStates).
+  const chains = new Map<number, { spans: PlacedSpan[]; unplaced: number }>()
+  const collect = (psd: PlacedSpanData, origin: number): Box[] => {
+    const boxes: Box[] = []
     for (let k = 0; k < psd.frames.length; k++) {
       const pf = psd.frames[k]!
       const logical = origin + pf.iStart
+      let geometry: GeckoFrameGeometry
       switch (pf.kind) {
         case 'text': {
           const r = pf.r
           const f = p.frames[r.frame]!
-          const geometry: GeckoFrameGeometry = {
+          geometry = {
             kind: 'text', run: f.run, contentStart: r.contentStart, contentEnd: r.contentStart + r.contentLength, measuredStart: r.offset,
             level: f.level, x: logical, width: pf.iSize, hasHeight: r.nonEmpty, usedHyphen: r.usedHyphenation,
             ...(r.prov === null ? { characters: [], standInAtEnd: false } : characters(p, r, r.prov, justificationSpacing(p, pf))),
             advancesStandIn: r.prov === null ? null : r.prov.run.advancesStandIn,
           }
-          frames.push(geometry)
-          geometryOf.set(pf, geometry)
           break
         }
         case 'span': {
-          const geometry: Extract<GeckoFrameGeometry, { kind: 'inline' }> = { kind: 'inline', element: pf.element, x: logical, width: pf.iSize, hasStartEdge: pf.hasStartEdge, hasEndEdge: pf.hasEndEdge }
-          frames.push(geometry)
-          geometryOf.set(pf, geometry)
-          const list = spansOf.get(pf.element)
-          if (list === undefined) spansOf.set(pf.element, [pf])
-          else list.push(pf)
-          collect(pf.span, logical)
-          break
+          const inline: Extract<GeckoFrameGeometry, { kind: 'inline' }> = { kind: 'inline', element: pf.element, x: logical, width: pf.iSize, hasStartEdge: pf.hasStartEdge, hasEndEdge: pf.hasEndEdge }
+          frames.push(inline)
+          const chain = chains.get(pf.element)
+          if (chain === undefined) chains.set(pf.element, { spans: [pf], unplaced: 1 })
+          else { chain.spans.push(pf); chain.unplaced++ }
+          boxes.push({ kind: 'span', placed: pf, geometry: inline, children: collect(pf.span, logical), relative: 0 })
+          continue
         }
-        case 'atomic': {
-          const level = (p.elements[pf.element] as Extract<GeckoElement, { kind: 'atomic' }>).level
-          const geometry: GeckoFrameGeometry = { kind: 'atomic', element: pf.element, level, x: logical, width: pf.iSize }
-          frames.push(geometry)
-          geometryOf.set(pf, geometry)
+        case 'atomic':
+          geometry = { kind: 'atomic', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: pf.iSize }
           break
-        }
-        case 'br': {
-          const geometry: GeckoFrameGeometry = { kind: 'br', element: pf.element, x: logical, width: 0 }
-          frames.push(geometry)
-          geometryOf.set(pf, geometry)
+        case 'br':
+          geometry = { kind: 'br', element: pf.element, x: logical, width: 0 }
           break
-        }
-        case 'wbr': {
+        case 'wbr':
           // A WBRFrame is 0 × 0 where it was placed; Firefox reports that box through getClientRects (feature family rows,
           // round 1: `c-00370d538345f01b` reports x 3558 au, width 0, height 0 after a 3558 au frame).
-          const level = (p.elements[pf.element] as Extract<GeckoElement, { kind: 'br' | 'wbr' }>).level
-          const geometry: GeckoFrameGeometry = { kind: 'wbr', element: pf.element, level, x: logical, width: 0 }
-          frames.push(geometry)
-          geometryOf.set(pf, geometry)
+          geometry = { kind: 'wbr', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: 0 }
           break
-        }
       }
+      frames.push(geometry)
+      boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
     }
+    return boxes
   }
-  collect(root, 0)
+  const boxes = collect(root, 0)
   if (!p.bidi) {
     for (let k = 0; k < frames.length; k++) frames[k]!.x += dx
   } else {
@@ -172,23 +170,20 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
       switch (pf.kind) {
         case 'text': return p.frames[pf.r.frame]!.level
         case 'span': return pf.span.frames.length > 0 ? levelOf(pf.span.frames[0]!) : paragraphLevel
-        default: return (p.elements[pf.element] as Extract<GeckoElement, { kind: 'atomic' | 'br' | 'wbr' }>).level
+        default: return objectAt(p.elements, pf.element).level
       }
     }
-    const relative = new Map<Placed, number>()
-    const remaining = new Map<number, number>()
-    spansOf.forEach((list, element) => remaining.set(element, list.length))
-    const place = (pf: Placed, isEven: boolean, startOrEnd: number, containerReverse: boolean, containerWidth: number): number => {
-      let icoord = pf.iSize
-      let marginStart = pf.kind === 'atomic' ? pf.startMargin : 0
-      let marginEnd = pf.kind === 'atomic' ? pf.endMargin : 0
-      if (pf.kind === 'span') {
-        const el = p.elements[pf.element] as Extract<GeckoElement, { kind: 'span' }>
-        const list = spansOf.get(pf.element)!
-        const left = remaining.get(pf.element)!
-        remaining.set(pf.element, left - 1)
-        const isFirst = left === list.length && !list[0]!.hasPrevContinuation
-        const isLast = left === 1 && !list[list.length - 1]!.hasNextContinuation
+    const place = (box: Box, isEven: boolean, startOrEnd: number, containerReverse: boolean, containerWidth: number): number => {
+      let icoord = box.placed.iSize
+      let marginStart = box.placed.kind === 'atomic' ? box.placed.startMargin : 0
+      let marginEnd = box.placed.kind === 'atomic' ? box.placed.endMargin : 0
+      if (box.kind === 'span') {
+        const pf = box.placed
+        const el = spanAt(p.elements, pf.element)
+        const chain = chains.get(pf.element)!
+        const isFirst = chain.unplaced === chain.spans.length && chain.spans[0]!.hasStartEdge
+        const isLast = chain.unplaced === 1 && chain.spans[chain.spans.length - 1]!.hasEndEdge
+        chain.unplaced--
         const startBP = isFirst ? el.edges.startBorderPadding : 0
         const endBP = isLast ? el.edges.endBorderPadding : 0
         marginStart = isFirst ? el.edges.startMargin : 0
@@ -197,16 +192,15 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
         const width = pf.iSize - (pf.hasStartEdge ? el.edges.startBorderPadding : 0) - (pf.hasEndEdge ? el.edges.endBorderPadding : 0) + startBP + endBP
         const reverseDir = isEven === rtl
         icoord = reverseDir ? endBP : startBP
-        for (let k = 0; k < pf.span.frames.length; k++) icoord += place(pf.span.frames[k]!, isEven, icoord, reverseDir, width)
+        for (let k = 0; k < box.children.length; k++) icoord += place(box.children[k]!, isEven, icoord, reverseDir, width)
         icoord += reverseDir ? startBP : endBP
-        const geometry = geometryOf.get(pf) as Extract<GeckoFrameGeometry, { kind: 'inline' }>
-        geometry.width = icoord
-        geometry.hasStartEdge = isFirst
-        geometry.hasEndEdge = isLast
+        box.geometry.width = icoord
+        box.geometry.hasStartEdge = isFirst
+        box.geometry.hasEndEdge = isLast
       }
       const frameStartOrEnd = startOrEnd + (containerReverse ? marginEnd : marginStart)
       const iStartInContainer = containerReverse ? containerWidth - frameStartOrEnd - icoord : frameStartOrEnd
-      relative.set(pf, rtl ? containerWidth - iStartInContainer - icoord : iStartInContainer)
+      box.relative = rtl ? containerWidth - iStartInContainer - icoord : iStartInContainer
       return icoord + marginStart + marginEnd
     }
     const levels = root.frames.map(levelOf)
@@ -214,18 +208,16 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
     let acc = root.iStart + (indented ? p.textIndentAu : 0) + dx
     for (let v = 0; v < order.length; v++) {
       const index = rtl ? order[order.length - 1 - v]! : order[v]!
-      acc += place(root.frames[index]!, (levels[index]! & 1) === 0, acc, false, band.containerWidth)
+      acc += place(boxes[index]!, (levels[index]! & 1) === 0, acc, false, band.containerWidth)
     }
-    const settle = (psd: SpanData, origin: number): void => {
-      for (let k = 0; k < psd.frames.length; k++) {
-        const pf = psd.frames[k]!
-        const x = origin + relative.get(pf)!
-        const geometry = geometryOf.get(pf)
-        if (geometry !== undefined) geometry.x = x
-        if (pf.kind === 'span') settle(pf.span, x)
+    const settle = (list: Box[], origin: number): void => {
+      for (let k = 0; k < list.length; k++) {
+        const box = list[k]!
+        box.geometry.x = origin + box.relative
+        if (box.kind === 'span') settle(box.children, box.geometry.x)
       }
     }
-    settle(root, 0)
+    settle(boxes, 0)
   }
   return frames
 }

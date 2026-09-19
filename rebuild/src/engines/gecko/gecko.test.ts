@@ -996,3 +996,23 @@ describe('what measuring found is kept per offset, and nothing by string (resear
     expect(l.measure.calls.filter(c => c.text === 'efgh').length).toBe(1)
   })
 })
+
+describe('the model clean-up (research/ARCHITECTURE-PLAN-2.md §8, X3)', () => {
+  test('text nodes without frames are collapsed fragments of their own leaves, and an empty leaf makes none', () => {
+    // The block's first and last children are white space alone and get no frame; two empty text nodes sit beside the span.
+    const l = layout(paragraph([run(' '), run(''), run('ab', 'span'), run(''), run(' ')], 500))
+    expect(l.lines.length).toBe(1)
+    expect(l.lines[0]!.fragments.map(f => f.kind === 'collapsed' || f.kind === 'text' ? [f.kind, f.run, f.start, f.end] : [f.kind])).toEqual([
+      ['collapsed', 0, 0, 1], ['box-start'], ['text', 2, 1, 3], ['box-end'], ['collapsed', 4, 3, 4],
+    ])
+  })
+
+  test('a unit holds nothing of its inside until a line asks, and a line start is plain data', () => {
+    const prepared = prepareGecko(paragraph([run('abcdefgh ijkl')], 40, { overflowWrap: 'anywhere' }), env, false)
+    expect(prepared.units.map(u => u.inWord)).toEqual([null, null, null])
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
+    expect(prepared.units[0]!.inWord).not.toBeNull()
+    expect(prepared.units[2]!.inWord).toBeNull()
+    expect(filled.next).toEqual(JSON.parse(JSON.stringify(filled.next)))
+  })
+})

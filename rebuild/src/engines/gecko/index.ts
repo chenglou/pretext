@@ -3,10 +3,11 @@
 //   and unit advances (specs/gecko-text.md, specs/gecko-canvas.md §2-§3).
 // - linebreak.ts: nsLineBreaker and the ICU4X line iterator (specs/gecko-text.md §8-§10); likely.ts: the language test.
 // - fonts.ts: family lists, the text-run font equality and the font facts.
+// - types.ts: the prepared paragraph: leaves, frames, items, elements, text runs, shaping units and the arrays per
+//   transformed code unit.
 // - measure.ts: the Canvas au of a range of transformed text in the script the paragraph gives it; advance.ts: the glyph
-//   advance before an offset inside a shaping unit, and why Canvas can't confirm it where it can't, kept per offset on the
-//   prepared paragraph. Every Canvas question goes to a context the paragraph holds (measure/canvas.ts); nothing is looked
-//   up by string.
+//   advance before an offset inside a shaping unit, and why Canvas can't confirm it where it can't, kept per offset by the
+//   unit. Every Canvas question goes to a context the paragraph holds (measure/canvas.ts); nothing is looked up by string.
 // - lines.ts: a fill, the line loop over per-span line data with one redo in the band a slot gives, and the decided line it
 //   leaves (specs/gecko-lines.md §4).
 // - placement.ts: trimming, hanging, alignment and justification of a decided line; pieces.ts: its fragments; inspect.ts:
