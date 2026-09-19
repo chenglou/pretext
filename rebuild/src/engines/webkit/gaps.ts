@@ -15,7 +15,7 @@ import type { FontDecl, Gap, GapName } from '../../model.js'
 import { canBreakBefore, dictionaryRangesStartingWithMark, hasDictionaryCharacter, inBetweenRangeStartingWithMark } from './breaks.js'
 import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation, type FamilyName } from './fonts.js'
-import { advancesWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, lessMeasuredSpace, measuredEnd, mergedGlyphs } from './measure.js'
+import { advancesWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isComplexCodePath, isPiecedControl, lessMeasuredSpace, measuredEnd, mergedGlyphs } from './measure.js'
 import { preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitBoxInspect, WebKitFilledLine, WebKitInspect, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
 
@@ -283,14 +283,20 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
     // VT, FF and CR (measure.ts, "VT, FF and CR"): the stand-in is the DOM's sum unless Canvas shows a pair adjustment around
     // the control, or text follows a CR in the measured string. The complex text controller gives VT and FF .notdef's advance
     // and CR none (ComplexTextController.cpp:773-782): its kerning around VT and FF wasn't probed, so they report there.
+    // The path is the measured string's, in the DOM and in Canvas (measure.ts "The font code path"): a string without a
+    // complex path character is WidthIterator's in a complex path box too.
     let controlsExact: boolean | null = null
+    let simplePath: boolean | null = null
     for (let i = from; i < to; i++) {
       const c = text.charCodeAt(i)
-      if (c === 0x0b || c === 0x0c || (c === 0x0d && box.simpleFontCodePath)) {
-        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(box.spacedContext, measured)
-        if (!controlsExact) add('control-character-width', box, i, i + 1, box.simpleFontCodePath
-          ? 'Core Text kerns the letter before VT, FF or CR as before a space and keeps an adjustment on CR itself; Canvas shapes another string, so the width is pieced together outside the DOM\'s float32 order'
-          : 'VT, FF and CR on the complex path are measured as U+0001 and U+0000, which Core Text shapes otherwise than the control')
+      if (isPiecedControl(c)) {
+        simplePath ??= box.simpleFontCodePath || !isComplexCodePath(measured)
+        if (c !== 0x0d || simplePath) {
+          controlsExact ??= simplePath && controlsMeasureExactly(box.spacedContext, measured)
+          if (!controlsExact) add('control-character-width', box, i, i + 1, simplePath
+            ? 'Core Text kerns the letter before VT, FF or CR as before a space and keeps an adjustment on CR itself; Canvas shapes another string, so the width is pieced together outside the DOM\'s float32 order'
+            : 'VT, FF and CR on the complex path are measured as U+0001 and U+0000, which Core Text shapes otherwise than the control')
+        }
       }
       // FontCascade::tabWidth counts stops from the primary font's spaceWidth() (FontCascadeInlines.h:76-94), taken from Canvas
       // W(' '), and letter spacing after a TAB follows WidthIterator; neither is probed (webkit audit E3).

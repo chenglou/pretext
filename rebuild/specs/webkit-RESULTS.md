@@ -7,6 +7,106 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-19: correctness round 5 (main's true passes)
+
+research/MAIN-FACTS-ANALYSIS.md traced the cases main passes and the port fails to WebKit's source. What landed from it,
+one fix a commit; the prototypes it names (branch `x-mainfacts-webkit`) were made before X3 and were ported by meaning.
+
+- **The font code path is the measured string's** (a ported rule; `measure.ts` "The font code path"). FontCascade::width
+  chooses the simple or the complex path from the TextRun it is handed (FontCascade.cpp:304-309, :708-730), TextUtil::width
+  hands it the measured range alone (TextUtil.cpp:84-89), and Canvas measures through the same function. `mergedGlyphs`
+  asked the box, so a box with a combining mark or an Arabic letter anywhere separated no ligature pair: `ffi` after
+  U+2060 U+0301 kept its ligature at -4px of letter spacing, about 8px too wide (suite `c-19d718b564ee2744`, 9 lines for the
+  DOM's 4). It now asks the string. `isComplexCodePath` moved from `content.ts` to `measure.ts` for it. The box's path stays
+  what WebKit reads the box's for: simplified measuring, breakWord, firstUserPerceivedCharacterLength and the runs shaped
+  across inline boxes. Cost: nothing without letter spacing, and nothing in a simple path box; in a letter-spaced complex
+  path box, a measured string that holds no complex path character and has a merged pair asks the separated string's two
+  totals (the count context and the plain one) and measures the separated string where it measured the unseparated one.
+  Tier 1: 2 of 63,987 cases ask a question the record lacks in each configuration (`c-1d3594196ff8bfae`,
+  `c-65b6a6b017410209`, both `heldout-suite-sample`), every other case is the same, 0 predictions changed.
+
+- **`control-character-width` reads the measured string's path too** (the same ported rule, in `gaps.ts`; no line moves).
+  The condition asked the box: in a complex path box VT and FF always reported, with the complex text controller's prose,
+  and a CR never did. A string of such a box without a complex path character is WidthIterator's, in the DOM and in
+  Canvas, so it now reports as in a simple path box: nothing where Canvas shows no pair adjustment around the control,
+  and always for a CR followed by more of the string. Tier 1, both configurations: 154 cases change, in their gaps alone
+  (94 lines lose the gap, 58 keep it only through the whole item a carried width comes from, 1 line gains it for a CR,
+  1 line's first gap becomes the `page-history` that followed it); 148 of them pass every metric with exact values, 1
+  passes with widths unobserved, 5 are history-dependent. It costs the plain path nothing: a plain paragraph computes no
+  gap.
+- **A box's space is a number measured as the box is made** (`WebKitBox.spaceWidth`, content.ts makeBox; X2's open item).
+  It was set where handleTextContent measures it and null for boxes whose white space is deferred (a reordered paragraph,
+  or preserved white space with a TAB), which then asked Canvas at every read: the space a text item is measured with,
+  and every white-space item, about three questions a word. Now every box asks `W(' ')` in its context once, after
+  makeBox's own questions, and nothing asks it again. A box that isn't deferred asks what it asked (handleTextContent
+  measured the space whether or not the box holds one); a deferred box that never read its space asks one question it
+  didn't. No width changes: the same string in the same context. The first ask moves, so tier 1 can't call it: without
+  facts 34,363 cases are the same, 22,604 ask the same or fewer questions in another order with the same prediction
+  (9,174 repeats only, 13,430 other questions), 7,020 ask a space the record lacks, 0 predictions changed (with facts
+  34,363, 22,580 and 7,044). On the 56,967 headline cases that replay, the plain path asks 2,117,070 questions where it
+  asked 2,295,968 (37.16 a paragraph for 40.30).
+
+Not landed, on purpose:
+
+- **Latin pairs separated inside a string the complex path measures** (the study's second prototype, 027969e on
+  `x-mainfacts-webkit`; 7 more of main's true passes). It is a measuring heuristic, and this round lands ported rules and
+  Canvas-measured facts only. What WebKit's source gives: U+200C rides in the font run of the letter before it
+  (collectComplexTextRuns walks grapheme clusters and takes the base character's font, ComplexTextController.cpp:351-460,
+  FontCascade.cpp:1748-1757), and after shaping its advance is set to 0 and its glyph deleted, so it takes no letter spacing
+  (ComplexTextController.cpp:755-761, :792-796). What it doesn't give: what Core Text does to the two letters around a
+  U+200C inside one run (whether only the optional ligature goes, what happens to their kerning and contextual forms);
+  on the simple path WebKit's own WidthIterator ends the shaping call there (WidthIterator.cpp:318-323), on the complex
+  path the whole run goes to Core Text, which is closed. The prototype's test for which pairs to separate (both clusters
+  alone are simple path text without a letter of a cursive script) is no condition of the engine's: it was tightened
+  after a Tamil conjunct showed up in tier 1. And it is measurably inexact: the study's probe M3 has it up to 1.9px off
+  in the two Shantell fonts, where the pair adjustment it knowingly leaves out is at most 0.29px, cause untraced.
+- **A features-off family** (the same font declared again with liga, clig, dlig and hlig off, which the application would
+  supply): the only thing that passes the 233 Shantell-threshold and Arabic cases, a new kind of fact that changes the
+  measuring contexts. Not built; recorded for DESIGN.md with the WebKit bug behind it (rebuild/platform-bugs entry 6).
+- The 21 "punctuation after another script" and "zero-width line" cases of the main-only list are page history: 21 of 21
+  pass line count, breaks and widths alone in a fresh process at this round's last library too
+  (`.artifacts/session/cr5-webkit/group2-alone-head`). No code.
+
+The gate, from a67121a (the later commits change comments and documents: the lab's bundle is `93745d47db16…` before and
+after them). Runs are under `.artifacts/tests/runs/cr5-webkit/`, the list, the giants and the bench smokes under
+`.artifacts/session/cr5-webkit/`.
+
+- Tier 0: the six TypeScript projects are clean; `bun test rebuild` 825 pass.
+- Tier 1: Chrome's and Firefox's four references exit 0. webkit-host exits 1 on the 154 gap changes above, and nothing
+  else changed: without facts 34,363 cases are the same, 22,450 ask the same or fewer questions in another order (9,117
+  repeats only, 13,333 other questions), 7,020 ask a question the record lacks (a box's space that no read asked for; the
+  first fix's two cases are among them, and ask their separated strings as well); with facts 34,363, 22,426 (9,119 and 13,307) and 7,044. Function-set plain
+  and pure pass on every case that replays (56,967 and 56,943). The citation ledger loses nothing. The painter
+  differential paints 56,813 and 56,789 cases the same and none otherwise (exit 3 for the cases tier 1 sends to the
+  browser).
+- Tier 2, both orders, both configurations: 3 transitions in each, none from a pass: three painter rows go from `fail
+  covered by control-character-width+limit:carried-width` (one with `page-history`) to the same without
+  `control-character-width` (`c-d80b28ba3ee48b63`, `c-ff71ff586fd13b9e`, `c-67c8850783f0bf73`). Exact values: 0 cases
+  worse, 0 predicted values differ, rect counts 197 as before. Gate: lost 0.
+- The plain predictor's browser run against the usual one (`compare-sets.ts --prediction=line-ranges`): 63,987 cases, 0
+  line ranges differ, the same 3 native observations differ as at X1, X2 and X3 (`c-1ca0bab9ded7a4c6`,
+  `c-53283654e67b8035`, `c-7cc5e3e26ff7c30d`, history-dependent in the ledger), exit 3.
+- The main-only list of research/MAIN-PASSES-REFRESH.md (2,056 cases), both configurations alike: 306 failing cases
+  become 285, 21 pass that didn't (17 `suite/mixed`, 4 `suite/cluster-v2-new`; 11 of them true passes of main, the same
+  21 as the first prototype's), 0 lost, line count failures 135 to 118. Main's true passes that still fail: 263 to 252 by
+  the refresh's counting; 251 to 240 once the 21 history cases are set aside. Every failing case is covered.
+- The plain path's Canvas questions a paragraph, from the plain predictor's own browser runs (its rows count measureText
+  calls; the X3 run's total equals the offline check's, 2,516,180). Headline configuration, all 63,987 cases: 39.32
+  before, 36.51 after (2,336,048 calls): 47,510 cases ask what they asked, 9,174 ask fewer (187,772 in all, up to 7,611
+  in one paragraph) and 7,303 ask more (7,640 in all: 7,119 of them one question, a box's space that nothing read; the
+  most is 22, `c-1d3594196ff8bfae`, a first-fix case, then 9, `c-65b6a6b017410209`, the other). With the lab's facts, through
+  a scratch plain predictor that supplies them: 21.65 before (the offline check's 1,385,178), 18.83 after (1,205,040),
+  the same 47,510, 9,174 and 7,303 cases, and its line ranges equal the usual facts run's on all 63,987. Offline, on the
+  cases that replay: 40.30 to 37.16 without facts (56,967 cases) and 22.70 to 19.56 with them (56,943). The lab's path,
+  from the tier 2 forward rows' own counts: 88.79 to 85.90 without facts (5,496,506 calls) and 59.86 to 56.98 with them
+  (3,646,278).
+- The nine giants through the plain predictor, predict only: 707,622 calls before, 295,170 after. Each of the eight
+  reordered ones asks 37,088 to 94,962 fewer (59,263 to 22,175 for a 106,857-unit paragraph: about three questions a word
+  become one); the left-to-right one asks the same 50,934. Line counts equal.
+- The bench's 200-message chat smoke in webkit-host, plain path: the mix 38.15 measureText calls a message before, 36.79
+  after (inspected 52.43 and 51.07); its Arabic messages 45.75 and 23.08; every other kind and the Latin set (31.39) ask
+  the same.
+
 ## 2026-09-19: re-architecture X3 (the model clean-up)
 
 research/ARCHITECTURE-PLAN-2.md §8 step 2, X3. No rule, citation, gap condition, merge rule, probe order or measured string
@@ -25,7 +125,8 @@ path and on the plain path. Runs and scratch tools are under `.artifacts/tests/r
   `runTexts`, `WebKitBox.hasStrongDirectionality` (a local of prepare), `firstNamedGeneric` (gaps alone read it) and
   `wordSpacing` (the box's style holds the same number), `expansionShares` (no caller; the observation port has its own) and
   `dictionaryRangeStartsWithMark`.
-- **Imports run one way**: types, data and breaks, measure, gaps, then content with items and lines, output, history, index.
+- **Imports run one way**: types, data and breaks, measure, gaps, then items and lines, output, history, content, index
+  (content prepares the history worlds, so it imports `history.ts`; corrected 2026-09-19, this line had content before them).
   `gaps.ts` keeps every condition, its prose and its merge rule and imports neither the fill nor the content stage; the item
   builder is `items.ts`; the break position cache's history worlds, and a decided line laid out in them, are `history.ts`,
   which raises `page-history` through `gaps.ts`; `index.ts` composes `inspectLine` from the two. The plan's §6 put the worlds

@@ -1,7 +1,8 @@
 // WebKit widths from Canvas totals: TextUtil::width with the following-space rule, singleSpaceWidth, tab stops, word
 // spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
 // (specs/webkit-lines.md §3.3, §8.1; specs/webkit-canvas.md §(e); specs/webkit-gaps.md §2, §5). Every width is float32.
-// Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer.
+// Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer; the one width a
+// box keeps is its single space, measured as the box is made (WebKitBox.spaceWidth).
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { inRanges, webkitGraphemeRules } from './data.js'
@@ -24,6 +25,121 @@ export function canvasString(text: string): string {
     from = i + 1
   }
   return from === 0 ? text : out + text.slice(from)
+}
+
+// ---- The font code path ----
+// rule webkit/measure/code-path-per-measured-string
+//
+// FontCascade::width chooses the simple or the complex path from the TextRun it is handed (codePath(run),
+// FontCascade.cpp:304-309; :708-730 scans the run's own characters), and TextUtil::width hands it the measured range alone
+// (TextUtil.cpp:84-89). Canvas measures through the same function, so a string of a box's text takes the same path in both.
+// The box's path, RenderText::canUseSimpleFontCodePath over its whole text (WebKitBox.simpleFontCodePath), is what simplified
+// measuring, breakWord, firstUserPerceivedCharacterLength and the runs shaped across inline boxes read
+// (LayoutIntegrationBoxTreeUpdater.cpp:260-264, TextUtil.cpp:253, :585, InlineLineBuilder.cpp:896), and no width does.
+//
+// Supplementary blocks isEmojiGroupCandidate accepts (WTF/wtf/text/CharacterProperties.h:34-55): Miscellaneous Symbols and
+// Pictographs, Emoticons, Transport and Map Symbols, Supplemental Symbols and Pictographs, Symbols and Pictographs
+// Extended-A. Only supplementary code points reach it.
+function isEmojiGroupCandidate(c: number): boolean {
+  return (c >= 0x1f300 && c <= 0x1f64f) || (c >= 0x1f680 && c <= 0x1f6ff) || (c >= 0x1f900 && c <= 0x1f9ff) || (c >= 0x1fa70 && c <= 0x1faff)
+}
+
+// FontCascade::characterRangeCodePath (FontCascade.cpp:733-960): true when it returns Complex.
+export function isComplexCodePath(text: string): boolean {
+  let previousIsEmojiGroupCandidate = false
+  const size = text.length
+  for (let i = 0; i < size; i++) {
+    const c = text.charCodeAt(i)
+    if (c === 0x200d && previousIsEmojiGroupCandidate) return true
+    previousIsEmojiGroupCandidate = false
+    if (c < 0x2e5) continue
+    if (c <= 0x2e9) return true
+    if (c < 0x300) continue
+    if (c <= 0x36f) return true
+    if (c < 0x591 || c === 0x5be) continue
+    if (c <= 0x5cf) return true
+    if (c < 0x600) continue
+    if (c <= 0x109f) return true
+    if (c < 0x1100) continue
+    if (c <= 0x11ff) return true
+    if (c < 0x135d) continue
+    if (c <= 0x135f) return true
+    if (c < 0x1700) continue
+    if (c <= 0x18af) return true
+    if (c < 0x1900) continue
+    if (c <= 0x194f) return true
+    if (c < 0x1980) continue
+    if (c <= 0x19df) return true
+    if (c < 0x1a00) continue
+    if (c <= 0x1cff) return true
+    if (c < 0x1dc0) continue
+    if (c <= 0x1dff) return true
+    if (c <= 0x2000) continue
+    if (c < 0x20d0) continue
+    if (c <= 0x20ff) return true
+    if (c < 0x26f9) continue
+    if (c < 0x26fa) return true
+    if (c < 0x2cef) continue
+    if (c <= 0x2cf1) return true
+    if (c < 0x302a) continue
+    if (c <= 0x302f) return true
+    if (c < 0x3099) continue
+    if (c < 0x309d) return true
+    if (c < 0xa67c) continue
+    if (c <= 0xa67d) return true
+    if (c < 0xa6f0) continue
+    if (c <= 0xa6f1) return true
+    if (c < 0xa800) continue
+    if (c <= 0xabff) return true
+    if (c < 0xd7b0) continue
+    if (c <= 0xd7ff) return true
+    if (c <= 0xdbff) {
+      if (i + 1 === size) continue
+      const next = text.charCodeAt(++i)
+      if ((next & 0xfc00) !== 0xdc00) continue
+      const s = ((c - 0xd800) << 10) + next - 0xdc00 + 0x10000
+      if (s < 0x10a00) continue
+      if (s < 0x10a60) return true
+      if (s < 0x11000) continue
+      if (s < 0x110d0) return true
+      if (s < 0x11100) continue
+      if (s < 0x111e0) return true
+      if (s < 0x11200) continue
+      if (s < 0x11250) return true
+      if (s < 0x112b0) continue
+      if (s < 0x11380) return true
+      if (s < 0x11400) continue
+      if (s < 0x114e0) return true
+      if (s < 0x11580) continue
+      if (s < 0x11660) return true
+      if (s < 0x11680) continue
+      if (s < 0x116d0) return true
+      if (s < 0x11700) continue
+      if (s < 0x11cc0) return true
+      if (s < 0x16b00) continue
+      if (s < 0x16b90) return true
+      if (s < 0x1e900) continue
+      if (s < 0x1e960) return true
+      if (s < 0x1f1e6) continue
+      if (s <= 0x1f1ff) return true
+      if (s >= 0x1f3fb && s <= 0x1f3ff) return true
+      if (isEmojiGroupCandidate(s)) {
+        previousIsEmojiGroupCandidate = true
+        continue
+      }
+      if (s < 0xe0000) continue
+      if (s < 0xe0080) return true
+      if (s < 0xe0100) continue
+      if (s <= 0xe01ef) return true
+      continue
+    }
+    // :961-969, variation selectors and combining half marks.
+    if (c < 0xfe00) continue
+    if (c <= 0xfe0f) return true
+    if (c < 0xfe20) continue
+    if (c <= 0xfe2f) return true
+  }
+  return false
 }
 
 // ---- Letter spacing and ligatures ----
@@ -73,7 +189,10 @@ function glyphCountIsExact(spacedTotal: number, length: number): boolean {
 // test). The separated string is the DOM's glyphs less what shaping does across each separated pair with those features
 // off: a pair adjustment between the two letters (probe R1: ProbeShantell 700 `fi` is 0.288px wider in the DOM, Amiri's is
 // equal). On the complex path U+200C would break joining, and a required ligature such as lam-alef merges in the DOM too
-// (probe R1), so nothing is separated there.
+// (probe R1), so nothing is separated there. The path is the measured string's ("The font code path"): `office` after a
+// combining mark or an Arabic letter of the same box is measured on the simple path once the range starts past them, so its
+// pairs are separated (suite c-19d718b564ee2744: `ffi` after U+2060 U+0301 at -4px of letter spacing is about 8px too wide
+// with its ligature, 9 lines for the DOM's 4).
 // Where the listed families' facts say which font draws every character of the string and none of them is an input of a
 // liga, clig, dlig or hlig lookup there (ListedFontFacts.spacingInputs), letter-spacing changes nothing in the string:
 // whatever merges, merges in the DOM too (Geeza Pro's lam-alef and Allah ligatures are morx ligatures the DOM keeps).
@@ -123,7 +242,9 @@ export function mergedGlyphs(box: WebKitBox, text: string): MergedGlyphs {
     separated += s.slice(starts[k]!, starts[k + 1]!) + (isMerged ? '\u200c' : '')
   }
   separated += s.slice(starts[counts.length - 1]!)
-  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(box, separated) < alone) return { merged: true, pairs, separated: null, counted: true }
+  // A simple path box holds no character of the complex path, so none of its strings does.
+  const simplePath = box.simpleFontCodePath || !isComplexCodePath(s)
+  if (!simplePath || pairs.length === 0 || spacedGlyphCount(box, separated) < alone) return { merged: true, pairs, separated: null, counted: true }
   return { merged: true, pairs, separated, counted: true }
 }
 
@@ -198,9 +319,9 @@ function measureDomString(box: WebKitBox, context: Context, text: string): numbe
 
 // TextUtil::singleSpaceWidth (TextUtil.cpp:54-60): widthOfSpaceString, a TextRun of one space, which gets letter spacing
 // and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing. The box
-// keeps it where its items were built with it (WebKitBox.spaceWidth).
+// keeps it (WebKitBox.spaceWidth).
 export function singleSpaceWidth(box: WebKitBox): number {
-  return box.spaceWidth ?? canvasWidth(box.context, ' ')
+  return box.spaceWidth
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from

@@ -8,8 +8,9 @@
 // - output.ts: what is read from a decided line: the pieces a painter takes, and the geometry with the display boxes.
 // - gaps.ts: every gap's condition, prose and merge rule, and the box facts an inspected paragraph keeps for them
 //   (DESIGN.md §5); history.ts: its history worlds, and a decided line laid out in them.
-// Imports run one way: types, data and breaks, measure, gaps, then content with items and lines, output, history, and this
-// file. The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
+// Imports run one way: types, data and breaks, measure, gaps, then items and lines, output, history, content (which collects
+// the history worlds as it prepares), and this file. The exports are the function set index.ts dispatches to
+// (DESIGN.md §2.9).
 import type { LineInspectionOf } from '../../model.js'
 import { lineGaps } from './gaps.js'
 import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'

@@ -323,6 +323,27 @@ describe('letter spacing and ligatures (measure.ts mergedGlyphs; probe webkit-ro
     expect(unspaced.gaps).not.toContain('letter-spacing-ligatures')
   })
 
+  test('the code path is the measured string\'s: a pair after a combining mark of the same box is still measured apart', () => {
+    // The mark sends the box's whole text to the complex path, but `office` is measured as a range of its own, which
+    // FontCascade::width puts on the simple path (FontCascade.cpp:304-309, :708-730; TextUtil.cpp:84-89).
+    ligatures = { fi: 10 }
+    const text = `a${String.fromCharCode(0x301)} office`
+    const { lines } = layout(paragraph([[text, 'text']], { letterSpacing: 1 }))
+    ligatures = {}
+    // `a` and the mark 18, the space 5, then six glyphs with 1px each.
+    expect(lines[0]!.geometry.contentWidth).toBe(77)
+    expect(lines[0]!.gaps.filter(g => g.gap === 'letter-spacing-ligatures').map(g => g.at)).toEqual([{ start: 5, end: 7 }])
+  })
+
+  test('a pair in a string that holds a complex path character is left as Canvas shapes it', () => {
+    ligatures = { fi: 10 }
+    const { lines } = layout(paragraph([[`fia${String.fromCharCode(0x301)}`, 'text']], { letterSpacing: 1 }))
+    ligatures = {}
+    // `fi` stays one glyph: three glyphs with 1px each over 10 + 8 + 8, and the gap on the whole string.
+    expect(lines[0]!.geometry.contentWidth).toBe(29)
+    expect(lines[0]!.gaps.filter(g => g.gap === 'letter-spacing-ligatures').map(g => g.at)).toEqual([{ start: 0, end: 4 }])
+  })
+
   test('glyphs that merge inside a grapheme cluster are not ligatures the DOM turns off', () => {
     // A base with its mark is one glyph here, alone and in the string.
     ligatures = { 'a\u0301': 8 }
@@ -428,6 +449,17 @@ describe('VT, FF and CR (measure.ts; probe webkit-round3 R5)', () => {
   test('text after a CR in the measured string reports: the adjustment on CR itself is not observable', () => {
     expect(layout(paragraph([['ab\rcd', 'text']])).gaps).toContain('control-character-width')
     expect(layout(paragraph([['ab\r', 'text']])).gaps).not.toContain('control-character-width')
+  })
+
+  test('the code path is the measured string\'s: a control in a string without a complex path character reports as on the simple path', () => {
+    // The mark sends the box's whole text to the complex path; `ab` FF `cd` and `ab` CR `cd` are measured as strings of their
+    // own, which FontCascade::width puts on the simple path (FontCascade.cpp:304-309, :708-730; TextUtil.cpp:84-89).
+    const mark = String.fromCharCode(0x301)
+    expect(layout(paragraph([[`a${mark} ab\fcd`, 'text']])).gaps).not.toContain('control-character-width')
+    expect(layout(paragraph([[`a${mark} ab\rcd`, 'text']])).gaps).toContain('control-character-width')
+    // A string that holds the mark is the complex text controller's: VT and FF report, and a CR has no advance there.
+    expect(layout(paragraph([[`a${mark}b\fcd`, 'text']])).gaps).toContain('control-character-width')
+    expect(layout(paragraph([[`a${mark}b\rcd`, 'text']])).gaps).not.toContain('control-character-width')
   })
 })
 
