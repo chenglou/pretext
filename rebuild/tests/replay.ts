@@ -101,6 +101,7 @@ import { createPortMeasure } from '../lab/port-measure.ts'
 import type { CaseMeasurements, RecordedCall } from '../lab/record.ts'
 import { readLines } from '../lab/rows.ts'
 import type { BrowserBuild, BrowserKind, Case, LabRow, LayoutPrediction, LinesPrediction, PainterLimits, ParagraphLayout, ProcessLanguages, RecordedLayout } from '../lab/types.ts'
+import { withCore } from './cores.ts'
 import { readLedger, type LedgerEntry, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, selectSets, type Config, type SetProtocol, type TierBrowser } from './sets.ts'
 
@@ -466,9 +467,10 @@ export function shardGroups<T extends { set: string; shard: { cases: number } }>
   return groups
 }
 
-// One bun child per group, `width` at a time. The groups with the most recorded calls a case go first: the long
-// paragraphs, so the last groups to finish are small. `command` gives bun's arguments for a group, which the child reads
-// from the file it is given (readShardGroup).
+// One bun child per group, `width` at a time, each on a core of its own when gates.ts shares the cores out (cores.ts).
+// The groups with the most recorded calls a case go first: the long paragraphs, so the last groups to finish are small.
+// `command` gives bun's arguments for a group, which the child reads from the file it is given (readShardGroup).
+export const isLong = (group: ReadonlyArray<{ shard: { cases: number } }>): boolean => group[0]!.shard.cases < LONG_CASES
 export const callsPerCase = (group: ReadonlyArray<{ shard: { cases: number; calls: number } }>): number => group.reduce((sum, job) => sum + job.shard.calls, 0) / group.reduce((sum, job) => sum + job.shard.cases, 0)
 export async function runShardGroups(jobs: readonly ShardJob[], size: number, width: number, command: (groupFile: string) => string[]): Promise<void> {
   const groups = shardGroups(jobs, size)
@@ -478,7 +480,7 @@ export async function runShardGroups(jobs: readonly ShardJob[], size: number, wi
     const group = groups[i]!
     const file = join(dirname(group[0]!.result), `group-${i}.json`)
     writeFileSync(file, JSON.stringify(group))
-    if (await bun(command(file)) !== 0) failures.push(`${group[0]!.set} shards ${group.map(job => job.index).join(', ')}`)
+    if (await withCore(isLong(group), () => bun(command(file))) !== 0) failures.push(`${group[0]!.set} shards ${group.map(job => job.index).join(', ')}`)
   })
   if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
 }

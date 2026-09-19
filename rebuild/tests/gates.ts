@@ -15,7 +15,7 @@
 // under the other two engines' folders, and the full form always runs them all.
 //
 // The table has a row per gate: its exit code, what the code means in words and which kind of step accepts it, the key
-// counts of its report, and its wall time. A gate's output goes to rebuild/tests/.check/gates/<gate>.log, and the rows go
+// counts of its report, and the time from the start of the run to the gate's result. A gate's output goes to rebuild/tests/.check/gates/<gate>.log, and the rows go
 // to rebuild/tests/.check/gates/gates.json. A report is read only when the gate wrote it during this run, so a gate that
 // fails before its report never shows an earlier run's counts.
 //
@@ -31,15 +31,16 @@
 // Tier 1's own exit 3 is fine for a pure refactoring when no case dropped a question: questions asked more or less often
 // (repeats only), or Chrome's string storage rule alone (replay.ts). Those cases still go to tier 2, and the row says so.
 //
-// Cores: the gates share --cores (default: all but two). A gate of one process takes one; a gate that replays shards
-// takes what is free when it starts as its --jobs, and starts only when a third of the cores are free, so two or three
-// replays run side by side and no core waits while a gate is left.
+// Cores: every gate starts at once, and the gates share --cores (default: all but two) one child process at a time
+// (cores.ts): a process of tier 0 takes a core, and a gate that replays shards asks for one before each child it starts.
+// A group of long paragraphs gets the next free core, whichever gate asks; after those the gates go in the table's
+// order. So the longest groups start first, the first rows' results come first, and no core waits while a gate has work.
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
 // missing or doesn't fit. The errors it prints and its exit code are those of `bunx tsc --noEmit -p <project>`.
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { cpus } from 'node:os'
+import { cpus, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
 
@@ -55,10 +56,10 @@ export type Verdict = { counts: string; meaning: string; as: number }
 type Gate = {
   name: string
   // One process a part, each the arguments after `bun`; the gate's exit code is its parts' largest. A sharded gate has
-  // one part, which gets --jobs=<cores> added.
+  // one part, which asks for its children's cores itself (cores.ts) and gets --jobs added.
   parts: string[][]
   sharded: boolean
-  // The most cores a sharded gate can use; absent when it can use them all.
+  // The most children a sharded gate runs at once; absent when it can use every core.
   atMost?: number
   // The report the gate writes, or null when its log is all there is.
   report: string | null
@@ -227,64 +228,79 @@ function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
 
 // ---- Running them ----
 
-// Starts processes in the gates' order while cores are free. A part of a single-process gate takes one core; a sharded
-// gate takes every free core as its --jobs, and waits until a third of the cores are free. A gate's parts write one log.
+// Who waits for a core: a group of long paragraphs (0) before the rest (1), then the gates in the table's order, then
+// first come, first served.
+export type Waiter = { long: number; holder: number; grant: () => void }
+export function nextWaiter(waiting: readonly Waiter[]): number {
+  let best = 0
+  for (let i = 1; i < waiting.length; i++) {
+    if (waiting[i]!.long < waiting[best]!.long || (waiting[i]!.long === waiting[best]!.long && waiting[i]!.holder < waiting[best]!.holder)) best = i
+  }
+  return best
+}
+
+// Starts every gate at once. The cores go round through `waiting`: a part of a single-process gate waits here, and a
+// sharded gate's children wait through the socket (cores.ts), where a connection is a core until it closes.
 async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
-  const rows: Row[] = []
-  const waiting: Array<{ gate: number; part: number }> = []
-  for (let g = 0; g < gates.length; g++) for (let k = 0; k < gates[g]!.parts.length; k++) waiting.push({ gate: g, part: k })
-  const state = gates.map(gate => ({ left: gate.parts.length, exit: 0, started: 0, fd: -1, log: join(OUT, `${gate.name.replaceAll(/[^a-z0-9]+/gi, '-')}.log`) }))
+  const waiting: Waiter[] = []
   let free = cores
-  const finish = (g: number): void => {
-    const gate = gates[g]!
-    const s = state[g]!
-    closeSync(s.fd)
+  const grant = (): void => {
+    while (free > 0 && waiting.length > 0) {
+      free--
+      waiting.splice(nextWaiter(waiting), 1)[0]!.grant()
+    }
+  }
+  const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
+  const server = Bun.listen<{ waiter: Waiter | null; granted: boolean }>({
+    unix: socketPath,
+    socket: {
+      open(socket) { socket.data = { waiter: null, granted: false } },
+      data(socket, bytes) {
+        const [long, holder] = bytes.toString().trim().split(' ').map(Number)
+        socket.data.waiter = { long: long!, holder: holder!, grant: () => { socket.data.granted = true; socket.write('1') } }
+        waiting.push(socket.data.waiter)
+        grant()
+      },
+      close(socket) {
+        if (socket.data.granted) free++
+        else if (socket.data.waiter !== null) waiting.splice(waiting.indexOf(socket.data.waiter), 1)
+        grant()
+      },
+    },
+  })
+  const runGate = async (gate: Gate, g: number): Promise<Row> => {
+    const log = join(OUT, `${gate.name.replaceAll(/[^a-z0-9]+/gi, '-')}.log`)
+    const fd = openSync(log, 'w')
+    const started = Date.now()
+    const env = { ...process.env, PRETEXT_GATES_CORES: socketPath, PRETEXT_GATES_HOLDER: String(g) }
+    const codes = await Promise.all(gate.parts.map(async part => {
+      if (gate.sharded) return await Bun.spawn(['bun', ...part, `--jobs=${Math.min(cores, gate.atMost ?? cores)}`], { cwd: REPO, env, stdin: 'ignore', stdout: fd, stderr: fd }).exited
+      await new Promise<void>(granted => {
+        waiting.push({ long: 0, holder: g, grant: granted })
+        grant()
+      })
+      const code = await Bun.spawn(['bun', ...part], { cwd: REPO, stdin: 'ignore', stdout: fd, stderr: fd }).exited
+      free++
+      grant()
+      return code
+    }))
+    closeSync(fd)
     // Only the report this run wrote: an earlier run's would show counts of another tree.
     const written = gate.report === null ? undefined : statSync(gate.report, { throwIfNoEntry: false })
-    const report = written !== undefined && written.mtimeMs >= s.started ? JSON.parse(readFileSync(gate.report!, 'utf8')) as unknown : null
-    const verdict = gate.read(s.exit, report, readFileSync(s.log, 'utf8'))
-    const row: Row = { gate: gate.name, exit: s.exit, as: verdict.as, meaning: verdict.meaning, counts: verdict.counts, wallSeconds: Math.round((Date.now() - s.started) / 100) / 10, log: relative(REPO, s.log) }
-    rows[g] = row
+    const report = written !== undefined && written.mtimeMs >= started ? JSON.parse(readFileSync(gate.report!, 'utf8')) as unknown : null
+    const exit = Math.max(...codes)
+    const verdict = gate.read(exit, report, readFileSync(log, 'utf8'))
+    const row: Row = { gate: gate.name, exit, as: verdict.as, meaning: verdict.meaning, counts: verdict.counts, wallSeconds: Math.round((Date.now() - started) / 100) / 10, log: relative(REPO, log) }
     console.error(`[gates] ${row.gate}: exit ${row.exit}, ${row.wallSeconds} s${row.as === 0 ? '' : `: ${row.meaning}`}`)
+    return row
   }
-  await new Promise<void>(done => {
-    let left = gates.length
-    const start = (): void => {
-      for (let k = 0; k < waiting.length;) {
-        const { gate: g, part } = waiting[k]!
-        const gate = gates[g]!
-        if (free < 1 || (gate.sharded && free < Math.min(gate.atMost ?? cores, Math.ceil(cores / 3)))) {
-          k++
-          continue
-        }
-        waiting.splice(k, 1)
-        const takes = gate.sharded ? Math.min(free, gate.atMost ?? free) : 1
-        free -= takes
-        const s = state[g]!
-        if (s.fd < 0) {
-          s.fd = openSync(s.log, 'w')
-          s.started = Date.now()
-        }
-        const proc = Bun.spawn(['bun', ...gate.parts[part]!, ...(gate.sharded ? [`--jobs=${takes}`] : [])], { cwd: REPO, stdin: 'ignore', stdout: s.fd, stderr: s.fd })
-        void proc.exited.then(code => {
-          free += takes
-          s.exit = Math.max(s.exit, code)
-          if (--s.left === 0) {
-            finish(g)
-            left--
-          }
-          if (left === 0) done()
-          else start()
-        })
-      }
-    }
-    start()
-  })
+  const rows = await Promise.all(gates.map(runGate))
+  server.stop()
   return rows
 }
 
 function printTable(rows: readonly Row[]): void {
-  const header = ['gate', 'exit', 'fine for a pure refactoring', 'wall', 'counts', 'what the exit code means']
+  const header = ['gate', 'exit', 'fine for a pure refactoring', 'done after', 'counts', 'what the exit code means']
   const lines = rows.map(row => [row.gate, String(row.exit), row.as === 0 ? 'yes' : `NO (counts as ${row.as})`, `${row.wallSeconds} s`, row.counts, row.meaning])
   const widths = header.map((name, i) => Math.max(name.length, ...lines.map(line => line[i]!.length)))
   const format = (cells: readonly string[]): string => cells.map((cell, i) => (i === cells.length - 1 ? cell : cell.padEnd(widths[i]!))).join('  ')

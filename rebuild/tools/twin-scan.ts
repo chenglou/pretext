@@ -28,6 +28,7 @@ import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PredictEnv } from '../lab/predictor-core.ts'
 import type { Case } from '../lab/types.ts'
+import { withCore } from '../tests/cores.ts'
 import { PREDICTORS } from '../tests/sets.ts'
 import { installStandInCanvas } from './stand-in-canvas.ts'
 
@@ -90,8 +91,8 @@ else {
   for (let w = 0; w < Math.min(jobs, files.length); w++) workers.push((async () => {
     while (next < order.length) {
       const i = order[next++]!
-      const proc = Bun.spawn(['bun', import.meta.path, `--cases=${files[i]!}`, `--scratch=${scratch}`, `--out=${join(scratch, `report-${i}.json`)}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
-      if (await proc.exited !== 0) failed.push(files[i]!)
+      const code = await withCore(false, () => Bun.spawn(['bun', import.meta.path, `--cases=${files[i]!}`, `--scratch=${scratch}`, `--out=${join(scratch, `report-${i}.json`)}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited)
+      if (code !== 0) failed.push(files[i]!)
     }
   })())
   await Promise.all(workers)

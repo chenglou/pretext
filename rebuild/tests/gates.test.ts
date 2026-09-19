@@ -1,7 +1,7 @@
 // What gates.ts makes of each gate's exit code and report. These run no gate.
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { citationsVerdict, functionSetVerdict, painterVerdict, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse } from './gates.ts'
+import { citationsVerdict, functionSetVerdict, nextWaiter, painterVerdict, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse } from './gates.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -68,6 +68,13 @@ describe('the other gates', () => {
     expect([3, 0, 4].reduce(worse, 0)).toBe(4)
     expect([0, 3, 0].reduce(worse, 0)).toBe(3)
   })
+})
+
+test('the next core goes to a group of long paragraphs, then by the table\'s order, then first come, first served', () => {
+  const waiter = (long: number, holder: number) => ({ long, holder, grant: () => {} })
+  expect(nextWaiter([waiter(1, 7), waiter(1, 8), waiter(1, 7)])).toBe(0)
+  expect(nextWaiter([waiter(1, 8), waiter(1, 7), waiter(1, 7)])).toBe(1)
+  expect(nextWaiter([waiter(1, 7), waiter(0, 12), waiter(0, 9)])).toBe(2)
 })
 
 test('gates.ts refuses an unknown engine or argument before it runs anything', () => {

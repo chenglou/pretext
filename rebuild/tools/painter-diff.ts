@@ -30,7 +30,8 @@ import { basename, join, relative, resolve } from 'node:path'
 import { installReplay, NewQuestion } from '../lab/measurements.ts'
 import type { Predictor } from '../lab/predictor-core.ts'
 import type { LayoutPrediction } from '../lab/types.ts'
-import { GROUP_SHARDS, callsPerCase, firstDifference, shardGroups, type InputCase, type ReferenceCase } from '../tests/replay.ts'
+import { withCore } from '../tests/cores.ts'
+import { GROUP_SHARDS, callsPerCase, firstDifference, isLong, shardGroups, type InputCase, type ReferenceCase } from '../tests/replay.ts'
 import { CONFIGS, PREDICTORS, TIER_BROWSERS, selectSets, type Config, type TierBrowser } from '../tests/sets.ts'
 import { RecordingDocument, UnmodelledDom, recordedPainting } from './recording-document.ts'
 
@@ -241,8 +242,8 @@ async function check(browser: TierBrowser, config: Config): Promise<number> {
   await pool(order, Math.max(1, Number(options.get('jobs') ?? Math.max(1, cpus().length - 2))), async i => {
     const groupFile = join(scratch, `group-${i}.json`)
     writeFileSync(groupFile, JSON.stringify(groups[i]))
-    const proc = Bun.spawn(['bun', import.meta.path, 'work', `--group=${groupFile}`, `--working=${working}`, `--frozen=${frozen}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
-    if (await proc.exited !== 0) failures.push(...groups[i]!.map(job => job.inputs))
+    const code = await withCore(isLong(groups[i]!), () => Bun.spawn(['bun', import.meta.path, 'work', `--group=${groupFile}`, `--working=${working}`, `--frozen=${frozen}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited)
+    if (code !== 0) failures.push(...groups[i]!.map(job => job.inputs))
   })
   if (failures.length > 0) fail(`the differential failed on ${failures.sort().join(', ')}`)
   const pin = JSON.parse(readFileSync(PIN_PATH, 'utf8')) as Pin
