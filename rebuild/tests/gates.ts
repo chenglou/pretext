@@ -27,7 +27,8 @@
 //   5  rebuild/src/index.ts doesn't export the function set, so its checks ran on nothing;
 //   4  tier 1: no prediction changed, but a case asks other questions or a new one. No step accepts it;
 //   3  tier 1: no prediction changed, and cases dropped questions, which only a step that names what it drops accepts;
-//      or the painter differential left cases unpainted, which tier 1 settles first.
+//      or the painter differential left cases unpainted, or a function-set check skipped cases, which tier 1 settles
+//      first.
 // Tier 1's own exit 3 is fine for a pure refactoring when no case dropped a question: questions asked more or less often
 // (repeats only), or Chrome's string storage rule alone (replay.ts). Those cases still go to tier 2, and the row says so.
 //
@@ -99,7 +100,10 @@ export function functionSetVerdict(check: string, code: number, report: Function
   const c = report.counts
   const counts = `${c.cases} cases: ${c.passed} pass, ${c.problems} fail, ${c.skipped} skipped${check === 'plain' ? `; ${report.otherOrder} first ask in another order (not a failure)` : ''}`
   switch (code) {
-    case 0: return { counts, meaning: 'every case passes', as: 0 }
+    case 0:
+      // The check exits 0 on skipped cases: the lab's path threw, or asks a question the record lacks.
+      if (c.skipped > 0) return { counts, meaning: 'every case that ran passes, but cases were skipped because the lab\'s path gave no layout: tier 1 settles those first', as: 3 }
+      return { counts, meaning: 'every case passes', as: 0 }
     case 1: return { counts, meaning: 'a case fails. No step accepts it', as: 1 }
     default: return { counts, meaning: TOOL_FAILED, as: 2 }
   }

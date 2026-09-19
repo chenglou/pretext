@@ -33,6 +33,7 @@ describe('the other gates', () => {
   test('the function set: 5 means nothing was checked', () => {
     expect(functionSetVerdict('plain', 0, functionSet, '')).toMatchObject({ as: 0, counts: expect.stringContaining('3 first ask in another order') })
     expect(functionSetVerdict('pure', 1, { ...functionSet, counts: { cases: 10, passed: 9, problems: 1, skipped: 0 } }, '').as).toBe(1)
+    expect(functionSetVerdict('pure', 0, { ...functionSet, counts: { cases: 10, passed: 8, problems: 0, skipped: 2 } }, '')).toMatchObject({ as: 3, meaning: expect.stringContaining('skipped') })
     expect(functionSetVerdict('sweep', 5, null, 'skipped').as).toBe(5)
     expect(functionSetVerdict('sweep', 2, null, 'it threw').as).toBe(2)
   })
