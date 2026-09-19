@@ -57,6 +57,12 @@ may read the DOM freely; this is research, not the library.
   `gecko-element-cost-rss.ts` wraps one `M` probe and samples the launched Firefox's resident size with `ps` beside the
   page's marks. It names no browser on its command line, so pass `--browser=firefox` to the lock, or the lock takes the
   whole machine. No page can ask Firefox for a collection: the `M2` probes bring one on with 32 MiB buffers.
+- `gecko-element-cost-check.ts`: a second look at the same question, with what the first file didn't try. A change to
+  the page's style sheets before a canvas call (`K1`, `K1b`: an element's `measureText` brings the page's style sheet data
+  up to date, an OffscreenCanvas's doesn't), many font declarations taking turns (`K2`), 36,000 live contexts, what a
+  frame costs with them and the pauses while they are freed (`K3`, one kind per browser process), the freeing pause at
+  10,000, 20,000 and 40,000 contexts (`K4`), the chat bench's shape of work on a page whose style or layout is dirty
+  (`K5`), and the first `measureText` of kept contexts after their web font loads (`K6`). Same prefs, same lock rules.
 
 ## Running
 
