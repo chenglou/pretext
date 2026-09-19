@@ -450,6 +450,17 @@ describe('VT, FF and CR (measure.ts; probe webkit-round3 R5)', () => {
     expect(layout(paragraph([['ab\rcd', 'text']])).gaps).toContain('control-character-width')
     expect(layout(paragraph([['ab\r', 'text']])).gaps).not.toContain('control-character-width')
   })
+
+  test('the code path is the measured string\'s: a control in a string without a complex path character reports as on the simple path', () => {
+    // The mark sends the box's whole text to the complex path; `ab` FF `cd` and `ab` CR `cd` are measured as strings of their
+    // own, which FontCascade::width puts on the simple path (FontCascade.cpp:304-309, :708-730; TextUtil.cpp:84-89).
+    const mark = String.fromCharCode(0x301)
+    expect(layout(paragraph([[`a${mark} ab\fcd`, 'text']])).gaps).not.toContain('control-character-width')
+    expect(layout(paragraph([[`a${mark} ab\rcd`, 'text']])).gaps).toContain('control-character-width')
+    // A string that holds the mark is the complex text controller's: VT and FF report, and a CR has no advance there.
+    expect(layout(paragraph([[`a${mark}b\fcd`, 'text']])).gaps).toContain('control-character-width')
+    expect(layout(paragraph([[`a${mark}b\rcd`, 'text']])).gaps).not.toContain('control-character-width')
+  })
 })
 
 describe('simplified measuring (probes webkit-round3 R1 and R2)', () => {

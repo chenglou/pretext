@@ -25,6 +25,15 @@ one fix a commit; the prototypes it names (branch `x-mainfacts-webkit`) were mad
   Tier 1: 2 of 63,987 cases ask a question the record lacks in each configuration (`c-1d3594196ff8bfae`,
   `c-65b6a6b017410209`, both `heldout-suite-sample`), every other case is the same, 0 predictions changed.
 
+- **`control-character-width` reads the measured string's path too** (the same ported rule, in `gaps.ts`; no line moves).
+  The condition asked the box: in a complex path box VT and FF always reported, with the complex text controller's prose,
+  and a CR never did. A string of such a box without a complex path character is WidthIterator's, in the DOM and in
+  Canvas, so it now reports as in a simple path box: nothing where Canvas shows no pair adjustment around the control,
+  and always for a CR followed by more of the string. Tier 1, both configurations: 154 cases change, in their gaps alone
+  (94 lines lose the gap, 58 keep it only through the whole item a carried width comes from, 1 line gains it for a CR,
+  1 line's first gap becomes the `page-history` that followed it); 148 of them pass every metric with exact values, 1
+  passes with widths unobserved, 5 are history-dependent. It costs the plain path nothing: a plain paragraph computes no
+  gap.
 - **A box's space is a number measured as the box is made** (`WebKitBox.spaceWidth`, content.ts makeBox; X2's open item).
   It was set where handleTextContent measures it and null for boxes whose white space is deferred (a reordered paragraph,
   or preserved white space with a TAB), which then asked Canvas at every read: the space a text item is measured with,
