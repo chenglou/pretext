@@ -1,20 +1,21 @@
 # Bench
 
-Compares the cost of the rebuild (`rebuild/src`, through the lab's `layoutParagraph`, `lab/predictor-core.ts`) and main (`src/`, `prepare` / `layout`) in each
-installed browser, on inputs both can express. Performance comes after correctness here (`rebuild/CHARTER.md`), so these
-are recorded costs, not targets.
+Compares the cost of the rebuild (`rebuild/src`, through the function set of `rebuild/src/index.ts`, DESIGN.md §2.9) and
+main (`src/`, `prepare` / `layout`) in each installed browser, on inputs both can express. Performance comes after
+correctness here (`rebuild/CHARTER.md`), so these are recorded costs, not targets.
 
-**`page.ts` doesn't run today.** It builds flat paragraphs of `runs` and reads lines the way the library did before the
-inline-tree model (DESIGN.md §1.1, §2.9): `bunx tsc -p rebuild/bench/tsconfig.json` reports it, and a run throws at its
-first row. It is left as it is on purpose; the re-architecture ports it to the paragraph tree and line slots when it
-settles the measurer's lifetime, which is what the bench's numbers depend on. The driver, the cases, the statistics and
-the report (`run.ts`, `cases.ts`, `stats.ts`, `report.ts`, `bench.test.ts`) work, and `run.ts` launches the pinned browsers.
+**`page.ts` runs again.** The re-architecture's S3 rewrote its rebuild side over the function set, with the paragraph tree
+and the width in the line slot; `bunx tsc -p rebuild/bench/tsconfig.json` is clean, and a background smoke in pinned
+Chrome ran ten rows end to end on 2026-09-18, with the three modes below giving the same line ranges in every row
+(`.artifacts/bench/ra1-s3-smoke`; harness validation only). No real run has been made with it: profiling comes after the
+re-architecture, and the numbers depend on what each port still computes for every line (below). `run.ts` finds the lock
+it runs under among the wrapper's slots; until S3 it looked for the single lock the wrapper had before, and refused.
 
 - `run.ts`: the driver. It reads the browser build from the app bundle, bundles `page.ts` with both libraries, serves it
   cross-origin isolated, opens one browser session, collects rows and writes `<out>/<browser>-bench.json` and
   `<out>/<browser>-bench.md`.
 - `page.ts`: the browser page. It times every row with the variants of both libraries interleaved in one document, then
-  counts measureText calls.
+  counts measureText calls and the Canvas contexts made.
 - `cases.ts`: the inputs and chat-like messages, built deterministically from `corpora/`.
 - `protocol.ts`: shapes shared by the driver, the page and the report.
 - `stats.ts`: median, p95, MAD.
@@ -96,6 +97,18 @@ the script's source starting and ending at a boundary; a fifth of the mixed mess
 A repetition is one whole operation of a variant. Rows time variants of both libraries on the same inputs in the same
 document.
 
+The rebuild runs in three modes, from the least a caller reads of a line to the most:
+
+- `count`: a paragraph prepared plain, every line filled (`fillLine`), nothing more read. It is what a height takes.
+- `pieces`: the same, and every line's pieces (`linePieces`), what a painter takes.
+- `inspect`: a paragraph prepared for inspection, and per line `fillLine`, `inspectLine`, then `linePieces`, then the
+  paragraph's gaps: the lab's path (`rebuild/lab/predictor-core.ts`).
+
+Until a port computes its gaps and the geometry only the lab reads on request, it computes them while it fills every
+line, so the three modes cost about the same today; the difference between them is what the re-architecture's later
+steps are measured by. The counting pass checks that the three modes give the same line ranges for every paragraph and
+width of a row, and the report flags a row where they don't.
+
 **cold**, one paragraph at 320 px, fresh measurement state:
 
 - `main prepare+layout`: `clearCache()`, `prepare()`, `layout()`.
@@ -103,27 +116,28 @@ document.
   `Intl.Segmenter` objects `clearCache()` drops. The difference is main's segmenter creation.
 - `main prepareWithSegments+layoutWithLines`: `clearCache()`, then the line-materializing API, closer to what the rebuild
   returns.
-- `rebuild layoutParagraph`: `layoutParagraph()`, which creates a fresh measurer with new OffscreenCanvas contexts. Compared
-  with `main prepare+layout`.
+- `rebuild prepare+fill, <mode>`: `prepare()`, which makes new OffscreenCanvas contexts, then every line. `count` is
+  compared with `main prepare+layout`, `pieces` with `main prepareWithSegments+layoutWithLines`.
 
 **sweep**, the same paragraph at 20 widths (160 to 730 px by 30):
 
 - `main prepare+layout×20`: `clearCache()`, `prepare()` once, `layout()` at each width.
 - `main layout×20`: `layout()` at each width on a handle prepared outside the timing.
-- `rebuild layoutParagraph×20`: what the public API allows, a full `layoutParagraph()` per width.
-- `rebuild internal prepare+nextLine×20`: the engine's own `prepare()` once with a fresh measurer, then the
-  `firstLine` / `nextLine` loop of `rebuild/src/index.ts` at each width with the same measurer. Its memo carries across
-  widths.
-- `rebuild internal prepare`: the engine's `prepare()` alone, so the line loop's cost is the difference.
+- `rebuild prepare+fill×20, <mode>`: `prepare()` once, then every line at each width: one prepared paragraph serves any
+  width (the width is the slot's). What the paragraph measured for one width answers for the next where they ask the same.
+  `count` is compared with `main prepare+layout×20`.
+- `rebuild fill×20, count`: every line at each width of a plain paragraph prepared outside the timing, which has met every
+  width by the first sample. Compared with `main layout×20`.
+- `rebuild prepare`: `prepare()` of a plain paragraph alone, so the line loop's cost is the difference.
 
 **many**, 1,000 messages at 320 px:
 
 - `main prepare+layout×1000`: `clearCache()` once, then `prepare()` and `layout()` per message, so main's caches warm up
   across messages.
-- `rebuild layoutParagraph×1000`: `layoutParagraph()` per message. The library keeps no measurement cache across calls.
-- `rebuild internal shared measurer×1000`: an experiment, not the library's behavior: one measurer across all messages, so
-  Canvas contexts and the memo carry across them. Chrome caches shaped words per canvas, so this can change results; the
-  counting pass compares its line ranges with `layoutParagraph()`'s and the report flags a difference.
+- `rebuild prepare+fill×1000, <mode>`: `prepare()` and every line per message. The library keeps nothing across
+  paragraphs: every message makes its own Canvas contexts and runs the runtime font checks again. `count` is compared with
+  `main prepare+layout×1000`. The earlier experiment with one measurer across all messages is gone with the measurer
+  parameter; contexts shared across paragraphs wait for profiling (research/ARCHITECTURE-PLAN-2.md §10).
 
 ## Method
 
@@ -146,9 +160,10 @@ document.
   `--enable-precise-memory-info`), a sample across which the heap shrank is counted as a heap drop. For every browser,
   samples above `median + max(5 × MAD, median / 2)` are counted as outliers. Interleaving spreads one variant's garbage
   across both libraries' samples.
-- **measureText calls**: after every row of a document is timed, the page wraps `measureText` on the OffscreenCanvas and
-  Canvas 2D prototypes and runs each variant once more, recording calls, the rebuild's measure log (contexts and calls) and
-  the lines produced. Wrapping only after all timing keeps the wrappers out of every timed repetition.
+- **measureText calls and contexts**: after every row of a document is timed, the page wraps `measureText` on the
+  OffscreenCanvas and Canvas 2D prototypes and `getContext` on the two canvas classes, and runs each variant once more,
+  recording calls, contexts made and the lines produced (main's line count, the rebuild's line boxes). Wrapping only after
+  all timing keeps the wrappers out of every timed repetition.
 - **Environment**: the report records the build from the app bundle and the OS build, CPU and memory, `pmset -g batt` and
   power mode, the load average and top processes at start and end, the browser lock's owner, other browser automation
   running, the page's user agent, DPR, viewport, visibility and focus per row, `HEAD`, `git status` of the library
@@ -159,9 +174,10 @@ document.
 ## What differs between the libraries
 
 - Main keeps one measurement context for the page across `clearCache()`, so Chrome's per-canvas shaped-word cache stays
-  warm. The rebuild creates new OffscreenCanvas contexts in every `layoutParagraph()` call.
-- Main's `layout()` returns a line count. The rebuild returns every line with fragments, engine geometry and gaps, and
-  logs every measureText call with its text and width.
+  warm. The rebuild creates new OffscreenCanvas contexts in every `prepare()` call.
+- Main's `layout()` returns a line count. The rebuild's `count` mode returns as little, but each port still builds every
+  line's fragments, engine geometry and gaps while it fills it, and logs the measureText calls of its own recipes with
+  their text and width.
 - Main's cold variants also re-create its segmenters. The rebuild creates `Intl.Segmenter` objects inside its WebKit and
   Gecko break code per call, and keeps its lazily decoded tables for the page's lifetime.
 - Main reads an emoji correction from a DOM span when a text may hold emoji. It's in the mixed rows' timing, as it is for

@@ -1,7 +1,7 @@
 // Browser side of the bench. run.ts serves this bundle inside a document whose <html lang> is the context's language. The
 // page fetches its context's plan, times every row with the two libraries interleaved, posts each row, then counts
-// measureText calls for every variant (the counting wrappers go on only after all timing in this document) and asks for
-// the next context.
+// measureText calls and Canvas contexts for every variant (the counting wrappers go on only after all timing in this
+// document) and asks for the next context.
 //
 // Only fetch promises and MessageChannel tasks drive the loop (no timers), so background timer throttling can't stall it.
 import { clearCache, layout, layoutWithLines, prepare as mainPrepare, prepareWithSegments } from '../../src/layout.ts'

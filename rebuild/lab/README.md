@@ -10,7 +10,13 @@ doesn't depend on the old library in `src/`.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page. It and `baselines/no-facts-predictor.ts`
   (no supplied font facts) are made from `predictor-core.ts`, the one lab file that imports library logic
   (`rebuild/tests/independence.test.ts`). It holds the slot loop (`layoutParagraph`) that makes a row's layout from the
-  library's lines, one slot at a time.
+  library's function set, one slot at a time: per line `fillLine`, `inspectLine`, then `linePieces` on a paragraph prepared
+  for inspection, every slot at the case paragraph's width (DESIGN.md §2.9). It writes what the library doesn't carry: a
+  line's slot as its two insets, and `measure`, its own count of the contexts a layout makes and its `measureText` calls,
+  taken on the page's Canvas classes with every argument passed through untouched. Two more predictors come from it
+  (`baselines/`): `plain-predictor.ts` returns line ranges from a paragraph prepared plain, the path an application runs,
+  and `other-widths-first-predictor.ts` fills every prepared paragraph at half and at one and a half times the case's width
+  before the case's own ("Prediction hook").
 - `port-measure.ts`: how an observation port measures live, shared by the page and the offline replay.
 - `rows.ts`: reading row files, plain or compressed (`<name>-rows.ndjson` or `.zst`); every tool that reads rows goes through
   it, and `rows.test.ts` checks that none reads them its own way.
@@ -32,7 +38,9 @@ doesn't depend on the old library in `src/`.
   itself use it: a pinned browser against the installed one, a recorded run against a plain one, installed Safari against
   webkit-host, the usual protocol against measure first. `--report` lists every differing case: for a native observation
   what the scorer compares (line count, every rect's x, width and native line) or that only values outside it differ, for a
-  prediction and painted lines the first differing field. `rebuild/tests/compare-sets.ts` runs it over two tier 2 folders.
+  prediction and painted lines the first differing field. `--prediction=line-ranges` compares predictions as line ranges
+  alone and `--prediction=without-measure` without their counts of Canvas work ("Prediction hook").
+  `rebuild/tests/compare-sets.ts` runs it over two tier 2 folders.
 - `languages.ts`: the browser-process languages each browser launches with, and the given facts the driver derives for
   the library (see "Browser-process languages"); `languages.test.ts` its rules.
 - `score.ts`: the offline scorer.
@@ -222,6 +230,22 @@ doesn't depend on the old library in `src/`.
   frozen** at 6b21b68 ("The correctness line"), from one set of recordings, `.artifacts/tests/runs/line-20260918`. Tools and
   logs: `.artifacts/ceiling-20260917/freeze-line` (`tools/tier2.sh`, `giants.sh`, `gates.sh`, `carry-attributions.py`,
   `adopt.py`, `check-adopted.sh`, `pack.sh`, `tier2-check.sh`, `headline.py`, `known-tail-additions.py`).
+
+## Landed in the re-architecture's shared layer (S3, 2026-09-18)
+
+- **The width is the slot's** (`src/model.ts` `LineSlot`), and the adapter makes a row from the library's function set
+  (`predictor-core.ts`; "Prediction hook"). The row's format didn't move: a line keeps its slot's two insets, and tier 1 is
+  the same on every case of the six references.
+- **`measure` is the adapter's own count** of contexts and `measureText` calls, and `memoHits` is 0: the library's call
+  log no longer holds every call (the runtime font checks ask Canvas without it), so the page doesn't read it and the
+  recorder doesn't join it (`record.ts`: `declared` and `library` are gone from new records; nothing read them).
+- **The observation ports take the width** the paragraph was laid out at (`observe/contract.ts`), which the library's
+  paragraph no longer holds; a `LayoutPrediction` carries it.
+- **`replay.ts pack` finds a run's parts under `--runs`**, wherever the run was recorded from, and reads them before it
+  empties the folder it packs into: a run recorded from another checkout used to fail with "holds no measurement record"
+  after `--force` had emptied `inputs/`.
+- **`compare-rows.ts --prediction=without-measure`** and the two predictors it and `line-ranges` serve
+  (`baselines/plain-predictor.ts`, `baselines/other-widths-first-predictor.ts`).
 
 ## Test tiers
 
@@ -548,11 +572,14 @@ such a pair).
   nothing, as its Canvas rounds to app units), word spacing, an ink box; it fills at half, three quarters and one and a half
   times the case's width and then at the case's own, plain and inspected. The three ports lay the hand-written smoke
   cases out on it in tier 0 (`stand-in-canvas.test.ts`). *Proved* with a toy function set recorded and replayed in tier 0
-  (`function-set.test.ts`: 9 planted sets, each caught by name, the clean one silent), and end to end over today's
-  library through a scratch module that makes the set from `prepareParagraph` and `layoutLine`: the three checks pass on
+  (`function-set.test.ts`: 9 planted sets, each caught by name, the clean one silent), and end to end over the line's
+  library through a scratch module that made the set from `prepareParagraph` and `layoutLine`: the three checks passed on
   the 80,403 headline cases of the smoke and development sets in the three browsers' inputs (the sweep asks the stand-in
   123 M questions), and five plants (other `align` on plain, `inspectLine` answering on plain, `linePieces` writing into a
   fragment, `inspectLine` flipping `indented`, a prepared paragraph kept from the first width) fail every case they touch.
+  Since the re-architecture's S3 `rebuild/src/index.ts` exports the set, and the three checks pass on every case of the six
+  references (389,646 cases each; the sweep asks the stand-in 263 M questions in all). The plain path asks what the lab's
+  path asks until a port computes its gaps on request.
 - **Changed questions.** Planted in a scratch clone: the memo off gives 66,079 Chrome, 54,659 Firefox and 61,068
   webkit-host headline cases repeats only, exit 3; WebKit's history worlds without their discarded gap work give 214
   dropped only and 18 other questions (a question the world asked first is now first asked later), exit 4; the font checks'
@@ -816,9 +843,10 @@ case:
   painted.
 - `contexts`: per context, the settings the caller assigned, as it spelled them (`assigned`), the settings the context
   reports (`settings`; null where the browser's context lacks the attribute, as WebKit's lacks `lang`, `fontKerning` and
-  `textRendering`), its font box, its number in the document, and `declared`: the settings the library declared for it, with
-  the `partition` no context attribute shows, joined through the library's own call log. `library.agrees` says whether that
-  log and the predict phase hold the same strings and widths in the same order.
+  `textRendering`), its font box and its number in the document. Records from before the re-architecture's S3 also hold
+  `declared`, the settings the library declared for the context with the `partition` no context attribute shows, and
+  `library.agrees`, both joined through the library's own call log, which nothing read; the library's log no longer holds
+  every call (DESIGN.md §4.6), so the recorder stopped joining it.
 - `segmentations`: every dictionary segmentation asked of the browser (`Intl.Segmenter.segment`, `Intl.v8BreakIterator`),
   since a layout of Thai text can't be repeated without them. The other page facts a layout reads (user agent, DPR,
   `<html lang>`) are in the row's `env`.
@@ -942,13 +970,23 @@ host): HTMLElement[] | null` and `limits(prediction): PainterLimits`, the librar
 `makePredictor(fontFactsFor)` from `predictor-core.ts`; `baselines/no-facts-predictor.ts` is the same with
 `UNKNOWN_FONT_FACTS` for every font, without the font table in its bundle. A `LayoutPrediction` is the library's input, the case paragraph with the font facts the
 predictor gives and the process languages the driver gave, and the `ParagraphLayout` it computed with `build` as
-`GivenFacts.build`. The page records an `EnginePrediction`: the layout without its Canvas call log, `measure` with the
-counts of contexts, calls and memo hits, and `observation`, the rects the observation port expects, or the error it
-threw. `paint` paints the same layout.
+`GivenFacts.build`, beside the width every slot got. The page records an `EnginePrediction`: the layout, `measure` with
+the adapter's counts of contexts and calls (`memoHits` was the library's count of the lookups its memo answered, which the
+lab no longer sees: the field keeps the row's shape and is 0), and `observation`, the rects the observation port expects,
+or the error it threw. `paint` paints the same layout, with the width back in every line's slot.
 
-A predictor swapped in with `--predictor` may return line ranges alone, `{ lines: [{ start, end, width }], measureLog? }`
-(`baselines/main-predictor.ts` does). The page records those as they are and doesn't paint. Rows recorded before the
-observation ports, 2026-09-16 and earlier, carry that shape too.
+A predictor swapped in with `--predictor` may return line ranges alone, `{ lines: [{ start, end, width? }], measureLog? }`
+(`baselines/main-predictor.ts` does, and `baselines/plain-predictor.ts`, whose lines have no width). The page records those
+as they are and doesn't paint. Rows recorded before the observation ports, 2026-09-16 and earlier, carry that shape too.
+
+Two predictors hold the library's other paths against the usual run in a browser (`browser-sets.ts --predictor=<file>`,
+then `rebuild/tests/compare-sets.ts <its run> <the usual run>`):
+- `baselines/plain-predictor.ts`, with `--prediction=line-ranges`: the line ranges of a paragraph prepared plain must be the
+  inspected run's, and native observations that differ are read one by one, as history effects of a smaller set of Canvas
+  questions.
+- `baselines/other-widths-first-predictor.ts`, with `--prediction=without-measure`: one prepared paragraph serves any width,
+  and Chrome keeps the first shaping of a word per canvas, so the layouts after two other widths must be the usual run's;
+  only the counts of Canvas work differ.
 
 ## Font facts
 
