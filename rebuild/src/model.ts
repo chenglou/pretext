@@ -297,70 +297,54 @@ export type Fragment =
   // A <wbr> consumed on this line. Not painted.
   | { kind: 'wbr'; element: number }
 
-// A line as an engine returns it, with the engine's own start state and geometry (engines/<engine>/geometry.ts).
-export type LineOf<Start, Geometry> = {
-  // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
-  // are placed by fragments.
-  start: number
-  end: number
+// ---- Output: the function set (each engine's index.ts gives it, index.ts dispatches; DESIGN.md §2.9) ----
+
+// What filling one slot decides: the line the engine places there, or its decision to move the line box down past the
+// floats narrowing the slot, because the line's first content doesn't fit beside them (CSS 2.1 §9.5). `line` is the
+// engine's own record of the decided line or of the refusal, which linePieces and inspectLine read and nothing writes.
+//
+// A refused slot takes no line. Blink continues with the next layout opportunity (inline_layout_algorithm.cc:1336-1367);
+// WebKit wraps the candidate and moves the next line top below the float (InlineLineBuilder.cpp:1452-1457,
+// InlineFormattingUtils.cpp:54-103); Gecko redoes the line in the next band (LineReflowStatus::RedoNextBand,
+// nsBlockFrame.cpp:5289-5299, :5549-5555). A slot without insets never gives below-floats. The gaps the decision rests on
+// come from inspectLine. `next` is the start the next slot lays out: the same one, unless building the refused line
+// changed the engine's state, as WebKit's first build places the slot floats, which later builds find in the formatting
+// context (InlineLineBuilder.cpp:478, :1394-1396).
+export type FillResultOf<Start, Line, Refused> =
+  | {
+    kind: 'line'
+    line: Line
+    // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no
+    // text are placed by fragments. A filled line says where it breaks without its pieces.
+    start: number
+    end: number
+    // The state the next line starts from (engines/<engine>/geometry.ts); null after the paragraph's last line.
+    next: Start | null
+    // Whether the engine gives the line a line box that holds content: false for Blink's empty lines
+    // (LineInfo::ShouldCreateLineBox, line_breaker.cc:945-975), WebKit lines without contentful inline content
+    // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). A span's box edge,
+    // an atomic inline or a <br> makes content. Such a line is still a line of the engine and is returned; it paints
+    // nothing, takes no block size and no slot, and the lab and the painter skip it.
+    hasLineBox: boolean
+  }
+  | { kind: 'below-floats'; line: Refused; next: Start }
+
+// What a painter takes of a decided line, beside its slot and whether it has a line box.
+export type LinePieces<Facts> = {
   fragments: Fragment[]
-  // Whether the engine gives the line a line box that holds content: false for Blink's empty lines
-  // (LineInfo::ShouldCreateLineBox, line_breaker.cc:945-975), WebKit lines without contentful inline content
-  // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). A span's box edge,
-  // an atomic inline or a <br> makes content. Such a line is still a line of the engine and is returned; it paints
-  // nothing, takes no block size, and the lab and the painter skip it.
-  hasLineBox: boolean
   // The paragraph's shaping joined the letters on both sides of this line's end: Blink reshaped the edge with HarfBuzz
   // context under an OpenType joining font (FontFacts.joining), Gecko broke inside one shaped word. The painter puts
   // U+200D on both sides of the edge (specs/painter.md R7). Always false in WebKit, which never shapes across a line
   // edge (specs/painter.md §3.2 c).
   joinsNextLine: boolean
-  // The slot the line was laid out in.
-  slot: LineSlot
   // The engine applied the paragraph's text-indent to this line.
   indented: boolean
   // The alignment the engine used for this line: text-align, or start for the last line and a line ending at a forced
   // break under justify (TextAlign).
   align: TextAlign
-  geometry: Geometry
-  // Gaps that depend on this line's breaks (DESIGN.md §2.8).
-  gaps: Gap[]
-  // null after the paragraph's last line.
-  next: Start | null
-}
-
-// What an engine returns for one slot: the line it places there, or its decision to move the line box down past the
-// floats narrowing the slot, because the line's first content doesn't fit beside them (CSS 2.1 §9.5). Blink continues
-// with the next layout opportunity (inline_layout_algorithm.cc:1336-1367); WebKit wraps the candidate and moves the next
-// line top below the float (InlineLineBuilder.cpp:1452-1457, InlineFormattingUtils.cpp:54-103); Gecko redoes the line in
-// the next band (LineReflowStatus::RedoNextBand, nsBlockFrame.cpp:5289-5299, :5549-5555). A slot without insets never
-// gives below-floats. `gaps` are the gaps the decision rests on. `next`, when given, is the start the next slot lays out
-// instead of the same one, because building the refused line changed the engine's state: WebKit's first build places the
-// slot floats, which later builds find in the formatting context (InlineLineBuilder.cpp:478, :1394-1396).
-export type LineResultOf<Start, Geometry> =
-  | { kind: 'line'; line: LineOf<Start, Geometry> }
-  | { kind: 'below-floats'; gaps: Gap[]; next?: Start }
-
-// ---- Output: the function set (each engine's index.ts gives it, index.ts dispatches; DESIGN.md §2.9) ----
-
-// What filling one slot decides. `line` is the engine's own record of the decided line, which linePieces and inspectLine
-// read and nothing writes. A filled line says where it breaks without them: [start, end) is the source range it consumed
-// (LineOf), `next` the state the next line starts from, null after the last line, and `hasLineBox` whether it takes a slot
-// (LineOf). A refused slot (LineResultOf's below-floats) takes no line: `line` records the refusal, and `next` is the start
-// the next slot lays out, the same one unless building the refused line changed the engine's state.
-export type FillResultOf<Start, Line, Refused> =
-  | { kind: 'line'; line: Line; start: number; end: number; next: Start | null; hasLineBox: boolean }
-  | { kind: 'below-floats'; line: Refused; next: Start }
-
-// What a painter takes of a decided line, beside its slot and whether it has a line box: the shared fields of LineOf, and
-// what the engine's painting rules read of its own geometry.
-export type LinePieces<Facts> = {
-  fragments: Fragment[]
-  joinsNextLine: boolean
-  indented: boolean
-  align: TextAlign
   // The line's content reaches past its band by the engine's own widths, hanging white space left out.
   overflows: boolean
+  // What the engine's painting rules read of its own line beside the pieces.
   facts: Facts
 }
 

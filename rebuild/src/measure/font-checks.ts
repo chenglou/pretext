@@ -75,7 +75,7 @@
 // own (`partition`), so no engine measurement shares a Blink word cache with them.
 //
 // The checks measure in the engine's own kind of context (FontChecks.textRendering): in Blink `textRendering =
-// 'optimizeLegibility'`, as engines/blink/shape.ts styleContexts does. Blink's font cache keys a platform font by the
+// 'optimizeLegibility'`, as engines/blink/contexts.ts styleContexts does. Blink's font cache keys a platform font by the
 // family, the effective (zoomed) size floored to 1/100 px and FontDescription's options, among them text-rendering, and not
 // by the specified size (FontDescription::CacheKey, font_description.cc:308-331), while opsz is set from the specified size
 // of whichever text made the font, for any font with the axis ("Do not use font size here, but specified size in order to

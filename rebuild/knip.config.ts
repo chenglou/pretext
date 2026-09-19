@@ -1,9 +1,9 @@
 import type { KnipConfig } from 'knip'
 
 // Knip over rebuild/, from the repository root: bunx knip --config rebuild/knip.config.ts
-// Test files are ignored so their imports don't count as usage, which flags test helpers (lab/row-fixtures.ts,
-// engines/webkit/test-paragraph.ts) and exports only tests read; dead code inside tests isn't looked for. `project` keeps
-// it to rebuild/; knip.config.ts at the root covers the main library.
+// Test files are ignored so their imports don't count as usage, which flags the test helpers (lab/row-fixtures.ts,
+// src/test-lines.ts, engines/webkit/test-paragraph.ts, tests/fake-browser.ts) and exports only tests read; dead code inside
+// tests isn't looked for. `project` keeps it to rebuild/; knip.config.ts at the root covers the main library.
 const config: KnipConfig = {
   entry: [
     'rebuild/src/index.ts',
@@ -11,7 +11,9 @@ const config: KnipConfig = {
     'rebuild/tools/*.ts',
     'rebuild/lab/{run,score,gate,fresh,sharded,measurements,compare-rows,triage}.ts',
     'rebuild/lab/cases/{generate,giants,parts,seal,twins}.ts',
-    'rebuild/tests/{browser-sets,coverage,derive,facts,gate,import-rules,ledger,replay}.ts',
+    'rebuild/tests/{browser-sets,compare-sets,coverage,coverage-map,derive,facts,function-set,gate,import-rules,known-tail,ledger,replay}.ts',
+    // Run by path under `bun test --coverage` (tests/coverage-map.ts).
+    'rebuild/tests/coverage-map.shard.ts',
     'rebuild/bench/{run,report}.ts',
     'rebuild/platform-bugs/verify.ts',
     'rebuild/probes/{runner,blink-verdicts,gecko-verdicts,webkit-verdicts-crosscheck}.ts',

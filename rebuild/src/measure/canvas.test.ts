@@ -1,8 +1,8 @@
-// The measurer hands Canvas the string its caller built and never uses that string as a key. bun can't see a string's
-// storage, so the test watches the keys: any Map, Set or property lookup of the measured string would show as a key with
-// its characters. In Chrome the same is pinned by storage (probes/blink-storage.ts S5).
+// measure/canvas.ts hands Canvas the string its caller built and never uses that string as a key. bun can't see a string's
+// storage, so the test watches the keys: any Map or Set lookup of the measured string would show as a key with its
+// characters. In Chrome the same is pinned by storage (probes/blink-storage.ts S5).
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { bounds, contextFor, createMeasurer, measureContext, measureText, width, type CanvasSettings, type Context } from './canvas.js'
+import { bounds, contextFor, width, type CanvasSettings, type Context } from './canvas.js'
 
 const SETTINGS: CanvasSettings = { font: '16px x', lang: 'en', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto', textRendering: 'auto', direction: 'ltr', partition: '' }
 
@@ -44,33 +44,6 @@ function keysDuring(run: () => void): string[] {
   return keys
 }
 
-describe('measureText', () => {
-  test('never looks the measured string up: no key holds its characters alone', () => {
-    const m = createMeasurer()
-    const context = measureContext(m, SETTINGS)
-    const text = '((((((((((((('
-    const keys = keysDuring(() => {
-      expect(measureText(m, context, text)).toBe(130)
-      expect(measureText(m, context, text)).toBe(130)
-    })
-    expect(asked).toEqual([text])
-    expect(keys.length).toBeGreaterThan(0)
-    expect(keys.includes(text)).toBe(false)
-    expect(m.log.memoHits).toBe(1)
-    expect(m.log.calls).toEqual([{ context, text, width: 130 }])
-  })
-
-  test('the memo keeps texts apart, also a text that spells the key of another', () => {
-    const m = createMeasurer()
-    const context = measureContext(m, SETTINGS)
-    expect(measureText(m, context, 'a')).toBe(10)
-    expect(measureText(m, context, '|a')).toBe(20)
-    expect(measureText(m, context, '||a')).toBe(30)
-    expect(measureText(m, context, 'a')).toBe(10)
-    expect(asked).toEqual(['a', '|a', '||a'])
-  })
-})
-
 describe('contextFor, width and bounds', () => {
   test('always ask Canvas and use no key', () => {
     const contexts: Context[] = []
@@ -93,17 +66,5 @@ describe('contextFor, width and bounds', () => {
     for (let i = 0; i < names.length; i++) expect(contextFor(contexts, { ...SETTINGS, [names[i]!]: 'rtl' })).not.toBe(first)
     expect(contexts.length).toBe(names.length + 1)
     expect(contextFor(contexts, { ...SETTINGS })).toBe(first)
-  })
-
-  test('the index API names the same contexts, whichever way one was made', () => {
-    const m = createMeasurer()
-    const held = contextFor(m.contexts, SETTINGS)
-    const rtl = { ...SETTINGS, direction: 'rtl' as const }
-    expect(measureContext(m, rtl)).toBe(1)
-    expect(measureContext(m, SETTINGS)).toBe(0)
-    expect(m.contexts[0]).toBe(held)
-    expect(measureText(m, 0, 'ab')).toBe(20)
-    expect(m.log.contexts).toEqual([SETTINGS, rtl])
-    expect(contextFor(m.contexts, rtl)).toBe(m.contexts[1]!)
   })
 })

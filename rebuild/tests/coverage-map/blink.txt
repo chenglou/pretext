@@ -1,95 +1,84 @@
 The blink port and the shared files: measured lines that the replay of the recorded sets never ran.
-bun rebuild/tests/coverage-map.ts --browser=chrome; chrome no-facts and facts, 133370 replayed cases in 14 sets; library 48be30e1a1a4.
-910 of 6798 measured lines in 79 ranges over 32 files. A line ran when any part of it did; lines without code aren't measured.
+bun rebuild/tests/coverage-map.ts --browser=chrome; chrome no-facts and facts, 134130 replayed cases in 15 sets; library a059ef2cd636.
+899 of 6430 measured lines in 72 ranges over 36 files. A line ran when any part of it did; lines without code aren't measured.
 Tier 1 says nothing of these lines: in a rewrite they move verbatim, or get a browser run. Columns: lines, the function the range starts in, its first line.
 
 rebuild/src/breaks/icu4x.ts: 99 of 99 measured lines
   38-162                                   export const BREAK = 253
 
-rebuild/src/breaks/rbbi.ts: 3 of 170 measured lines
-  169-171     ruleStatus                   ruleStatus(): number {
-
-rebuild/src/breaks/tables.ts: 3 of 26 measured lines
-  25          webkitBreakRules             export function webkitBreakRules(table: WebKitBreakTable): BreakRules {
-  35          webkitLinePairs              export function webkitLinePairs(): Uint8Array {
-  45          geckoLineRules               export function geckoLineRules(): Icu4xRuleData {
-
 rebuild/src/content.ts: 4 of 45 measured lines
   95-98       langUnder                    export function langUnder<Font>(paragraph: ParagraphOf<Font>, index: ContentIndex<Font>, parent: num
 
-rebuild/src/engines/blink/breaks.ts: 6 of 207 measured lines
-  45-50       hasDictionaryCharacters      export function hasDictionaryCharacters(text: string, from: number, to: number, table: BlinkBreakTab
+rebuild/src/engines/blink/breaks.ts: 6 of 203 measured lines
+  46-51       hasDictionaryCharacters      export function hasDictionaryCharacters(text: string, from: number, to: number, table: BlinkBreakTab
 
-rebuild/src/engines/blink/emoji.ts: 3 of 83 measured lines
-  85-87       token                        let j = i + 1
+rebuild/src/engines/blink/emoji.ts: 3 of 86 measured lines
+  86-88       token                        let j = i + 1
 
-rebuild/src/engines/blink/gaps.ts: 3 of 27 measured lines
-  14-15       addGap                       if (g.at === undefined) return
-  46          sourceOffsetAt               return { start: p.sourceLength, end: p.sourceLength }
+rebuild/src/engines/blink/gaps.ts: 17 of 426 measured lines
+  44-45       addGap                       if (g.at === undefined) return
+  86          sourceOffsetAt               return { start: p.index.text.length, end: p.index.text.length }
+  252-253     uncutCluster                 export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void
+  333-335     hyphenGlyph                  const oneByte = contextsOf(p, style, false)
+  456         contentGaps                  addGap(gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without th
+  472         preparedContent              for (const at of ranges()) addGap(sink, 'ui-language', style.run, 'content without a locale, or ko w
+  524-526     canonicalGaps                } else {
+  758-761     lineEdgeGaps                 const end = head.call.end
 
-rebuild/src/engines/blink/index.ts: 18 of 947 measured lines
-  98          markContinuations            continuation = true
-  109         languageOf                   function languageOf(tag: string): string {
-  174         contentGaps                  addGap(p.gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without 
-  187         prepareGaps                  for (const at of ranges()) addGap(p.gaps, 'ui-language', style.run, 'content without a locale, or ko
-  212         sourceStartOf                return p.sourceLength
-  440-443     lineEdgeGaps                 const end = head.call.end
-  755-757     shapeOf                      if (clusters.length > 0) clusters[clusters.length - 1]!.advance += partWidth16(sh, part)
-  872-873     countItem                    const [before, after] = checkOpportunity(p, state, 0xfffc)
-  930-933     countText16                  function countText16(p: BlinkPrepared, state: JustifyState, text: string, add: (n: number) => void):
+rebuild/src/engines/blink/index.ts: 1 of 136 measured lines
+  100         markContinuations            continuation = true
 
-rebuild/src/engines/blink/shape.ts: 9 of 862 measured lines
-  158-159     isDefaultIgnorableHarfBuzz   case 0x0e: return cp >= 0xe0000 && cp <= 0xe0fff
-  755-756     addCuts                      addGap(sh.gaps, 'float32-precision', p.styles[group.style]!.run, 'a grapheme cluster of 256 zoomed p
-  1305-1306   viewPrefix16                 if (part.start < part.end && (k > start || k >= last)) sum += partWidth16(sh, part)
-  1348        partGraphemeStarts           for (let j = 0; j < part.length; j++) if (!(j > 0 && window.charCodeAt(j - 1) === 0x0d && window.cha
-  1471        reshapeHanKerningEnd         default:
-  1506        shapeHyphen                  addGap(sh.gaps, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the de
+rebuild/src/engines/blink/inspect.ts: 9 of 433 measured lines
+  80-82       shapeOf                      if (clusters.length > 0) clusters[clusters.length - 1]!.advance += partWidth16(sh, part)
+  209-210     countItem                    const [before, after] = checkOpportunity(p, state, 0xfffc)
+  265-268     countText16                  function countText16(p: BlinkPrepared, state: JustifyState, text: string, add: (n: number) => void):
 
-rebuild/src/engines/engine.ts: 4 of 6 measured lines
-  29-32       constructor                  constructor(engine: EngineName, feature: string, detail: string) {
+rebuild/src/engines/blink/shape.ts: 11 of 725 measured lines
+  115-116     isDefaultIgnorableHarfBuzz   case 0x0e: return cp >= 0xe0000 && cp <= 0xe0fff
+  638-641     addPieces                    uncutCluster(sh.gaps, p, g, a, b)
+  684         scriptDirection              case 30: case 32: case 60: case 76:
+  1161-1162   viewPrefix16                 if (part.start < part.end && (k > start || k >= last)) sum += partWidth16(sh, part)
+  1191        partGraphemeStarts           for (let j = 0; j < part.length; j++) if (!(j > 0 && window.charCodeAt(j - 1) === 0x0d && window.cha
+  1238        reshapeHanKerningEnd         default:
 
-rebuild/src/env.ts: 20 of 45 measured lines
-  121         engineFromUserAgent          if (/\bVersion\/[\d.]+ .*Safari\//.test(ua)) return { kind: 'supported', engine: 'webkit' }
-  128-132     detectEngine                 export function detectEngine(): DetectedEngine {
-  155-170     detectEnvironment            case 'webkit':
+rebuild/src/env.ts: 25 of 53 measured lines
+  124-132     engineFromUserAgent          if (/\bVersion\/[\d.]+ .*Safari\//.test(ua)) return { kind: 'supported', engine: 'webkit' }
+  140-144     detectEngine                 export function detectEngine(): DetectedEngine {
+  167-182     detectEnvironment            case 'webkit':
 
-rebuild/src/index.ts: 25 of 77 measured lines
-  48          prepareParagraph             case 'webkit': return { engine: 'webkit', env, paragraph, state: webkitEngine.prepare(paragraph, env
-  54-62       firstLineStart               export function firstLineStart(prepared: PreparedParagraph): LineStart | null {
-  68-77       layoutLine                   export function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResul
-  86          paragraphGaps                case 'webkit': return buildGaps(prepared.env).concat(webkitEngine.gaps(prepared.state))
-  102-108     layoutParagraph              case 'webkit': {
-  117-118     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
+rebuild/src/index.ts: 41 of 69 measured lines
+  72          prepare                      case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webk
+  78-90       firstLine                    export function firstLine(prepared: Prepared): LineStart | null {
+  99-108      fillLine                     export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult {
+  114-123     linePieces                   export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
+  130-139     inspectLine                  export function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection {
+  149-150     paragraphGaps                case 'webkit': return buildGaps(prepared.state.env).concat(webkit.paragraphGaps(prepared.state))
+  158-159     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
 
-rebuild/src/measure/canvas-checks.ts: 26 of 29 measured lines
-  35-38       canvasNeeds                  function canvasNeeds(engine: EngineName): CanvasNeeds {
-  57-81       missingCanvasSupport         export function missingCanvasSupport(engine: EngineName): string[] {
+rebuild/src/measure/canvas-checks.ts: 26 of 26 measured lines
+  32-65                                    const CHECK_FONT = '16px serif'
 
-rebuild/src/measure/font-checks.ts: 5 of 136 measured lines
-  198-202     fixedPitch                   function fixedPitch(p: Probe, primary: string): boolean | null {
+rebuild/src/measure/font-checks.ts: 5 of 132 measured lines
+  208-212     fixedPitch                   function fixedPitch(p: Probe, primary: string): boolean | null {
 
-rebuild/src/paint.ts: 244 of 750 measured lines
-  102-110     overflow                     case 'webkit': { const g = layout.lines[l]!.geometry; return g.contentWidth - g.hangingWidth - g.lin
-  120-205     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
-  221-224     textNode                     function textNode(doc: Document, engine: EngineName, text: string, wideLeaf: boolean): Text {
-  676         planLine                     case 'webkit':
-  718-750     planLine                     const fragment = line.fragments[lastPainted]!
-  790-798     planLine                     } else {
-  838-839     planLine                     const next = line.fragments[f]!
-  875-896     planLine                     case 'webkit': {
-  932-936     planLine                     } else {
-  1024-1027   paintedText                  let out = ''
-  1050-1056   lineTokens                   enterLeaf(fragment.run, paintedLevels[f - 1]!)
-  1105-1111   lineTokens                   case 'wbr': {
-  1179        unitEnd                      throw new Error('the painter left an element open')
-  1259-1392   paintLines                   export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivEle
+rebuild/src/paint.ts: 219 of 703 measured lines
+  189-192     setFont                      function setFont(style: CSSStyleDeclaration, font: CssFont): void {
+  202-276     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
+  293-296     textNode                     function textNode(doc: Document, keepsLeafStorage: boolean, text: string, wideLeaf: boolean): Text {
+  456         contextOf                    case 'limit-only': scripts = { form: 'limit-only', before: scriptBeforeLines(lines) }; break
+  768-800     planLine                     const fragment = pieces.fragments[lastPainted]!
+  845-855     planLine                     case 'limit-only': {
+  897-898     planLine                     const next = pieces.fragments[f]!
+  1021-1024   paintedText                  let out = ''
+  1047-1053   lineTokens                   enterLeaf(fragment.run, paintedLevels[f - 1]!)
+  1101-1107   lineTokens                   case 'wbr': {
+  1175        unitEnd                      throw new Error('the painter left an element open')
+  1257-1390   paintLines                   export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>[], refusedR
 
-rebuild/src/unicode/bidi.ts: 5 of 38 measured lines
-  58-62       bidiDataFor                  case 'webkit':
+rebuild/src/test-lines.ts: no replay loads it
 
-rebuild/src/unicode/grapheme.ts: 2 of 17 measured lines
-  34-35       graphemeBoundaries           case 'icu4x':
+rebuild/src/unicode/grapheme.ts: 2 of 11 measured lines
+  20-21       graphemeBoundaries           case 'icu4x':
 
 rebuild/src/unicode/ubidi.ts: 66 of 615 measured lines
   87-88       paraLevelAt                  let i = 0

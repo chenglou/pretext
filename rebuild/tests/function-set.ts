@@ -12,8 +12,8 @@
 //   makes no more contexts; inspectLine throws on a plain paragraph. It reports the plain path's questions asked and
 //   distinct, their ratio, and the cases whose first asks come in another order than the lab's. The order isn't a failure
 //   here as it is in tier 1: the lab's path asks inspection's questions between two fills, and a later fill asks some of
-//   them again, where the memo answers; a plain path first asks those when that fill needs them, after questions the
-//   lab's path asked later, so no path that asks less can keep the lab's order (all three ports' X1, 2026-09-18). What a
+//   them again, a repeat there; a plain path first asks those when that fill needs them, after questions the lab's path
+//   asked later, so no path that asks less can keep the lab's order (all three ports' X1, 2026-09-18). What a
 //   canvas makes of the plain path's order no offline check can say: the plain predictor's browser run does
 //   (browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts, compared with compare-sets.ts
 //   --prediction=line-ranges), and it belongs to every milestone that changes the plain path's questions.

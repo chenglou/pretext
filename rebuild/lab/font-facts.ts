@@ -92,10 +92,6 @@ for (const name of Object.keys(data.fixtures)) fixturesByKey.set(name.toLowerCas
 type Family = { name: string; generic: boolean; quoted: boolean }
 
 // A CSS font-family list: comma-separated quoted strings or runs of identifiers joined by single spaces.
-export function parseFamilyList(list: string): Array<{ name: string; generic: boolean }> {
-  return parseFamilies(list).map(f => ({ name: f.name, generic: f.generic }))
-}
-
 function parseFamilies(list: string): Family[] {
   const out: Family[] = []
   const parts = list.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,]+/g) ?? []

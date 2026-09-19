@@ -6,8 +6,8 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { paragraphGaps, prepare } from '../../index.js'
-import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineOf, type Paragraph } from '../../model.js'
-import { everyLine, type Insets, type Sized } from '../../test-lines.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type Paragraph } from '../../model.js'
+import { everyLine, type Insets, type Sized, type TestLine } from '../../test-lines.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
 import type { GeckoLineGeometry, GeckoLineStart, GeckoTextFrame } from './geometry.js'
 import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps as geckoParagraphGaps } from './index.js'
@@ -15,7 +15,7 @@ import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
 
 // A line as the tests read it: what everyLine gathers of a decided line (test-lines.ts).
-type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
+type GeckoLine = TestLine<GeckoLineStart, GeckoLineGeometry>
 
 // The stand-in's widths in au at apd 60. Any code point is 576 au at 16px, scaled with the size, with these exceptions,
 // each modelled on an installed-Firefox measurement:

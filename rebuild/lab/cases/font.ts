@@ -131,7 +131,3 @@ export function parseFontShorthand(css: string): FontDecl {
   if (rest.trim() === '') fail('missing font family')
   return { family: canonicalFontFamily(rest), size, weight: weight ?? 400, style: style ?? 'normal' }
 }
-
-export function formatFontShorthand(font: FontDecl): string {
-  return `${font.style === 'italic' ? 'italic ' : ''}${font.weight} ${font.size}px ${font.family}`
-}

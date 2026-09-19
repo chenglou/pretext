@@ -1,137 +1,123 @@
 The webkit port and the shared files: measured lines that the replay of the recorded sets never ran.
-bun rebuild/tests/coverage-map.ts --browser=webkit-host; webkit-host no-facts and facts, 127974 replayed cases in 13 sets; library 48be30e1a1a4.
-1221 of 6538 measured lines in 113 ranges over 33 files. A line ran when any part of it did; lines without code aren't measured.
+bun rebuild/tests/coverage-map.ts --browser=webkit-host; webkit-host no-facts and facts, 127974 replayed cases in 13 sets; library a059ef2cd636.
+1177 of 6394 measured lines in 97 ranges over 37 files. A line ran when any part of it did; lines without code aren't measured.
 Tier 1 says nothing of these lines: in a rewrite they move verbatim, or get a browser run. Columns: lines, the function the range starts in, its first line.
 
 rebuild/src/breaks/icu4x.ts: 99 of 99 measured lines
   38-162                                   export const BREAK = 253
 
-rebuild/src/breaks/rbbi.ts: 3 of 170 measured lines
-  169-171     ruleStatus                   ruleStatus(): number {
-
-rebuild/src/breaks/tables.ts: 3 of 26 measured lines
-  20          blinkBreakRules              export function blinkBreakRules(table: BlinkBreakTable): BreakRules {
-  30          blinkLinePairs               export function blinkLinePairs(): Uint8Array {
-  45          geckoLineRules               export function geckoLineRules(): Icu4xRuleData {
-
-rebuild/src/engines/engine.ts: 4 of 6 measured lines
-  29-32       constructor                  constructor(engine: EngineName, feature: string, detail: string) {
-
-rebuild/src/engines/webkit/breaks.ts: 19 of 270 measured lines
+rebuild/src/engines/webkit/breaks.ts: 18 of 268 measured lines
   81-82       tooShortForTwoWords          case 'unhandled':
   123         addDictionaryBoundaries      case 'unavailable':
-  131         dictionaryRangeStartsWithMark export function dictionaryRangeStartsWithMark(rules: BreakRules, text: string): boolean {
-  146-150     hasDictionaryCharacter       export function hasDictionaryCharacter(rules: BreakRules, text: string, from: number, to: number): b
-  229-233     classify                     case 0x0100 / 0x80:
-  238         classify                     if (c === 0x37e) return kWeird
-  243-245     classify                     case 0x0480 / 0x80:
-  277         classify                     default:
+  141-145     hasDictionaryCharacter       export function hasDictionaryCharacter(rules: BreakRules, text: string, from: number, to: number): b
+  224-228     classify                     case 0x0100 / 0x80:
+  233         classify                     if (c === 0x37e) return kWeird
+  238-240     classify                     case 0x0480 / 0x80:
+  272         classify                     default:
 
-rebuild/src/engines/webkit/content.ts: 16 of 724 measured lines
-  152-156     isComplexCodePath            if (s < 0xe0000) continue
-  271-272     makeBox                      if (firstNamedGeneric < 0) firstNamedGeneric = listed.length
-  436         computeBidiLevels            break
-  446         computeBidiLevels            break
-  470         computeBidiLevels            const level = levels[position]!
-  486         computeBidiLevels            const leftLength = end - offset
-  500         computeBidiLevels            const hasContent: boolean[] = []
-  512-513     computeBidiLevels            item.level = OPAQUE_BIDI_LEVEL
-  547         familyDraws                  if (cp === 0xad || cp === 0x200b || cp === 0x200c || cp === 0x200d || cp === 0x200e || cp === 0x200f
-  1071        isEligibleForRangeInlineLayout for (let i = 0; i < items.length; i++) {
+rebuild/src/engines/webkit/content.ts: 7 of 330 measured lines
+  142-146     isComplexCodePath            if (s < 0xe0000) continue
+  251-252     makeBox                      firstNamedGeneric ??= families.length
 
-rebuild/src/engines/webkit/data.ts: 3 of 113 measured lines
-  57          dictionaryScript             return null
-  109         hasDelimiterData             key = key.slice(0, cut)
-  197         computedLocale               return 'zh-hans'
+rebuild/src/engines/webkit/data.ts: 3 of 130 measured lines
+  86          dictionaryScript             return null
+  138         hasDelimiterData             key = key.slice(0, cut)
+  235         computedLocale               return 'zh-hans'
 
-rebuild/src/engines/webkit/expansion.ts: 37 of 127 measured lines
-  80-81       expansionOpportunityCount    count--
-  117         applyTextAlignJustify        runIsAfterExpansion = false
-  150-187     expansionShares              export function expansionShares(text: string, rtl: boolean, behavior: ExpansionBehavior): number[] {
+rebuild/src/engines/webkit/expansion.ts: 8 of 107 measured lines
+  79-80       expansionOpportunityCount    count--
+  112-117     applyTextAlignJustify        case 'atomic':
 
-rebuild/src/engines/webkit/lines.ts: 71 of 1938 measured lines
-  78-79       itemStyle                    case 'text':
-  84-87       itemStyle                    case 'atomic':
-  95          lineHyphenWidth              L.gaps.push({ gap: 'hyphen-glyph', run: box.run, detail: `whether ${box.primaryFamily} maps U+2010 i
-  402         appendAtomicInlineBox        line.runs.push(boxRun('atomic', item.element, f32(lastRunLogicalRight(line) + e.marginStart), f32(ma
-  634         hasLeadingTextContent        return false
-  644         firstTextRunIndex            return null
-  667         isNonContentRunsOnly         return true
-  720-739     lastValidBreakingPosition    function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number): number | null {
-  790-794     tryBreakingTextRun           return null
-  903         processOverflowingContent    if (c.logicalWidth <= f32(st.availableWidth + st.trimmableOrHangingWidth)) return result('keep', fal
-  979         overflowWidthAsLeadingForNextLine return null
-  1028        measuredItemWidth            return itemWidth(L.p, L.m, item, item.start, item.start + 1, left)
-  1044        revertToTrailingItem         return count
-  1056        revertToLastNonOverflowingItem return 0
-  1090        handleOverflowingTextContent case 'revert-to-last-wrap-opportunity':
-  1165-1166   isAtSoftWrapOpportunityOrContentEnd const prevBox = L.p.boxes[item.box]!
-  1355        hasTrailingSoftWrapOpportunity case 'inline-box-start':
-  1364        hasTrailingSoftWrapOpportunity return true
-  1444        collectShapeRanges           type Entry = { type: 'content' | 'break' | 'keep'; index: number }
-  1601-1605   shapePartialLineCandidate    applyShapingOnRunRange(L, c, [i, endPosition])
-  2086-2091   bidiDisplayBoxes             const saved = line.hasNonDefaultBidiLevelRun
-  2107        bidiDisplayBoxes             type Node = { box: number; element: number; children: number[] }
-  2247        boxOfRun                     throw new Error(`run ${run} has no text box`)
-  2357        lineFragments                case 'collapsed':
-  2567-2568   itemGaps                     for (let i = from; i < to; i++) {
-  2572-2576   itemGaps                     for (let i = from; i < to; i++) {
-  2621        itemGaps                     add('dictionary-breaks-unavailable', box, from, to, 'Thai, Lao, Khmer or Myanmar text gets no dictio
-  2692        worldLineStart               if (first.start === own.start) return { ...start, itemIndex: index }
-  2773-2779   buildLine                    for (let i = 0; i < items.length; i++) {
-  2834        buildLine                    next = { index: Math.min(lineContentEnd.index + 1, itemsEnd.index), offset: 0 }
+rebuild/src/engines/webkit/gaps.ts: 9 of 208 measured lines
+  184         hyphenWidthRead              sink.push({ gap: 'hyphen-glyph', run: box.run, detail: `whether ${box.primaryFamily} maps U+2010 isn
+  338-339     itemGaps                     for (let i = from; i < to; i++) {
+  343-347     itemGaps                     for (let i = from; i < to; i++) {
+  393         itemGaps                     add('dictionary-breaks-unavailable', box, from, to, 'Thai, Lao, Khmer or Myanmar text gets no dictio
 
-rebuild/src/engines/webkit/measure.ts: 2 of 263 measured lines
-  223         hyphenGlyphsDiffer           export function hyphenGlyphsDiffer(m: Measurer, box: WebKitBox): boolean {
-  465         firstUserPerceivedCharacterLength return itemLength
+rebuild/src/engines/webkit/history.ts: 2 of 265 measured lines
+  322         comparedLine                 case 'below-floats': return { kind: 'below-floats' }
+  381         worldLineStart               if (first.start === own.start) return { ...start, itemIndex: index }
+
+rebuild/src/engines/webkit/items.ts: 2 of 186 measured lines
+  226-227     computeBidiLevels            case 'word-break-opportunity':
+
+rebuild/src/engines/webkit/lines.ts: 53 of 1304 measured lines
+  81-82       itemStyle                    case 'text':
+  87-90       itemStyle                    case 'atomic':
+  151-152     isContentfulOrHasDecorationRun case 'text':
+  351         appendAtomicInlineBox        line.runs.push(elementRun(item, f32(lastRunLogicalRight(line) + e.marginStart), f32(marginBoxWidth -
+  580         hasLeadingTextContent        return false
+  590         firstTextRunIndex            return null
+  613         isNonContentRunsOnly         return true
+  656-675     lastValidBreakingPosition    function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number): number | null {
+  726-730     tryBreakingTextRun           return null
+  839         processOverflowingContent    if (c.logicalWidth <= f32(st.availableWidth + st.trimmableOrHangingWidth)) return result('keep', fal
+  914         overflowWidthAsLeadingForNextLine return null
+  967         measuredItemWidth            return itemWidth(L.p, item, item.start, item.start + 1, left)
+  982         revertToTrailingItem         return count
+  994         revertToLastNonOverflowingItem return 0
+  1026        handleOverflowingTextContent case 'revert-to-last-wrap-opportunity':
+  1101-1102   isAtSoftWrapOpportunityOrContentEnd const prevBox = L.p.boxes[item.box]!
+  1279        hasTrailingSoftWrapOpportunity case 'inline-box-start':
+  1288        hasTrailingSoftWrapOpportunity return true
+  1363        collectShapeRanges           type Entry = { type: 'content' | 'break' | 'keep'; index: number }
+  1517-1521   shapePartialLineCandidate    applyShapingOnRunRange(L, c, [i, endPosition])
+  1678-1679   isContentfulItem             case 'word-break-opportunity':
+  1878-1880   placeInlineBoxesOnly         function placeInlineBoxesOnly(p: WebKitPrepared, start: WebKitLineStart): Placed {
+  1960        fillLine                     next = { index: Math.min(lineContentEnd.index + 1, itemsEnd), offset: 0 }
+
+rebuild/src/engines/webkit/measure.ts: 1 of 241 measured lines
+  440         firstUserPerceivedCharacterLength return itemLength
+
+rebuild/src/engines/webkit/output.ts: 8 of 376 measured lines
+  186-188     displayBoxes                 const out = nonBidiDisplayBoxes(p, filled, lineLeft, alignmentOffset, hasContentfulInFlowContent)
+  222-223     nonBidiDisplayBoxes          open.push(null)
+  286-287     bidiDisplayBoxes             type InlineBox = Extract<WebKitDisplayBox, { kind: 'inline-box' }>
+  523         lineFragments                case 'collapsed':
 
 rebuild/src/engines/webkit/test-paragraph.ts: no replay loads it
 
-rebuild/src/env.ts: 19 of 45 measured lines
-  128-132     detectEngine                 export function detectEngine(): DetectedEngine {
-  146-152     detectEnvironment            case 'blink':
-  164-170     detectEnvironment            case 'gecko':
+rebuild/src/env.ts: 24 of 53 measured lines
+  125-132     engineFromUserAgent          return { kind: 'unsupported', userAgent: ua, reason: 'unknown browser' }
+  140-144     detectEngine                 export function detectEngine(): DetectedEngine {
+  158-164     detectEnvironment            case 'blink':
+  176-182     detectEnvironment            case 'gecko':
 
-rebuild/src/index.ts: 23 of 77 measured lines
-  54-62       firstLineStart               export function firstLineStart(prepared: PreparedParagraph): LineStart | null {
-  68-77       layoutLine                   export function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResul
-  98-100      layoutParagraph              case 'blink': {
-  106-108     layoutParagraph              case 'gecko': {
-  117-118     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
+rebuild/src/index.ts: 39 of 69 measured lines
+  78-90       firstLine                    export function firstLine(prepared: Prepared): LineStart | null {
+  99-108      fillLine                     export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult {
+  114-123     linePieces                   export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
+  130-139     inspectLine                  export function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection {
+  150         paragraphGaps                case 'gecko': return buildGaps(prepared.state.env).concat(gecko.paragraphGaps(prepared.state))
+  158-159     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
 
-rebuild/src/measure/canvas-checks.ts: 26 of 29 measured lines
-  35-38       canvasNeeds                  function canvasNeeds(engine: EngineName): CanvasNeeds {
-  57-81       missingCanvasSupport         export function missingCanvasSupport(engine: EngineName): string[] {
+rebuild/src/measure/canvas-checks.ts: 26 of 26 measured lines
+  32-65                                    const CHECK_FONT = '16px serif'
 
-rebuild/src/measure/canvas.ts: 3 of 36 measured lines
-  69-71       measureTextBounds            export function measureTextBounds(m: Measurer, context: number, text: string): { width: number; left
+rebuild/src/measure/canvas.ts: 2 of 21 measured lines
+  74-75       bounds                       export function bounds(context: Context, text: string): { width: number; left: number; right: number
 
-rebuild/src/measure/font-checks.ts: 17 of 132 measured lines
-  209-242     effectiveSize                function effectiveSize(size: number): number {
+rebuild/src/measure/font-checks.ts: 15 of 129 measured lines
+  219-245     effectiveSize                function effectiveSize(size: number): number {
 
-rebuild/src/paint.ts: 458 of 744 measured lines
-  103-110     overflow                     case 'gecko': { const g = layout.lines[l]!.geometry; return g.width - g.hang - g.availableWidth }
-  120-205     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
-  221-224     textNode                     function textNode(doc: Document, engine: EngineName, text: string, wideLeaf: boolean): Text {
-  349         blinkScriptsOf               function blinkScriptsOf(text: string): Uint8Array {
-  368-379     contextOf                    let text = ''
-  422         shapesAcross                 function shapesAcross(c: Context, run: number, around: string): boolean {
-  490-499     planLine                     let lastPiece = -1
-  665-670     planLine                     const fragment = line.fragments[f]!
-  696-701     hangingForm                  const hangingForm = (run: number): 'own-node' | 'same-node' | 'own-group' => {
-  718-750     planLine                     const fragment = line.fragments[lastPainted]!
-  768-788     planLine                     const from = c.blinkScripts.lineStarts[l]!
-  898-939     planLine                     case 'blink':
-  957-1236    lineTokens                   function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: boolean): { tokens: To
-  1251        painterLimits                limits.push({ limit: 'controls-between-pieces', detail: "two pieces of one direction sit in differen
-  1259-1392   paintLines                   export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivEle
+rebuild/src/paint.ts: 447 of 697 measured lines
+  83-192      scriptOf                     function scriptOf(character: string): string {
+  202-276     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
+  293-296     textNode                     function textNode(doc: Document, keepsLeafStorage: boolean, text: string, wideLeaf: boolean): Text {
+  422-432     scriptBeforeLines            function scriptBeforeLines<Facts>(lines: readonly PaintLine<Facts>[]): (string | null)[] {
+  441-454     contextOf                    case 'arabic-letter-mark': {
+  557-566     planLine                     let lastPiece = -1
+  737-744     planLine                     case 'last-character-box':
+  768-800     planLine                     const fragment = pieces.fragments[lastPainted]!
+  818-855     planLine                     case 'arabic-letter-mark': {
+  954-1232    lineTokens                   function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPreviousLine: boolean)
+  1247        painterLimits                limits.push({ limit: rules.controlsBetweenPieces.limit, detail: rules.controlsBetweenPieces.detail }
+  1257-1390   paintLines                   export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>[], refusedR
 
-rebuild/src/unicode/bidi.ts: 4 of 38 measured lines
-  55-56       bidiDataFor                  case 'blink':
-  61-62       bidiDataFor                  case 'gecko':
+rebuild/src/test-lines.ts: no replay loads it
 
-rebuild/src/unicode/grapheme.ts: 2 of 17 measured lines
-  34-35       graphemeBoundaries           case 'icu4x':
+rebuild/src/unicode/grapheme.ts: 2 of 11 measured lines
+  20-21       graphemeBoundaries           case 'icu4x':
 
 rebuild/src/unicode/ubidi.ts: 47 of 614 measured lines
   87-88       paraLevelAt                  let i = 0

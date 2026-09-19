@@ -33,14 +33,20 @@ Canvas what it can):
   lines, in both orders and both configurations. Measuring before the first native layout moves nothing in Chrome and
   webkit-host, and 121 emoji cases in Firefox through the process's font fallback state.
 - **Cost:** Canvas calls per paragraph are unchanged from round 3 with the lab's facts in Chrome and Firefox; with no
-  supplied facts the runtime font checks add 4% to 25% in Chrome and 23% to 120% in webkit-host while a measurer lives one
-  paragraph. Recorded only.
+  supplied facts the runtime font checks add 4% to 25% in Chrome and 23% to 120% in webkit-host while they run per
+  paragraph. Recorded only, at the line; "The re-architecture" below has what the library asks now.
 - **The line is frozen** (2026-09-18, after research/ROUND4-CRITIC.md): its two fixes landed (the runtime font checks measure
   in the engine's own kind of context, so in Blink they no longer share the font cache key of the page's own text; the
   ledger carries an exact-value status per case, so tier 2 sees a predicted value going wrong where every metric still
   passes), everything was recorded again on the committed tree and equals the evaluation's recordings on every status,
   prediction, native observation and painted line, the seeds are adopted, and six references are frozen at 6b21b68: tier 1
   replays all 388,886 cases exactly ("The correctness line, frozen" below).
+- **Re-architected since** (2026-09-18 and 19, "The re-architecture" below): the library is three engine ports behind
+  one function set and a shared layer that names no engine; a paragraph is prepared plain, for an application, or
+  inspected, for the lab; nothing stores a measured value by its string, and nothing in the library counts or logs its
+  Canvas calls. No prediction moved that isn't accounted for row by row, and every ported rule, citation and gap condition
+  came through. The first benchmark of the result says where the profiling phase starts: 10,000 chat messages from
+  scratch take 9.59 s in Chrome, 2.63 s in Firefox and 11.7 s in webkit-host (research/PROFILING-START.md).
 - **Findings for main** are in rebuild/TAKE-BACK.md, including 2 required checks main now fails in Safari 27.
 
 Terms:
@@ -108,6 +114,86 @@ signature, the half-width ideographic full stop). One of them got a cause: WebKi
 fresh rich pre-wrap cases are not an observation rule but the engine's inline box width, which on a bidi line is
 `InlineRect::setRight`'s float32 result from the line box's width (`FloatRect::shiftMaxXEdgeTo`, reproduced to the bit on two
 cases); it is a library change in two paths, so it stays in the tail, traced.
+
+## The re-architecture (2026-09-18 and 19)
+
+After the freeze the library was rebuilt for simplicity, by research/ARCHITECTURE-PLAN-2.md and the maintainer's
+engineering guide: data modeled first, one source of truth, derived data computed and gone, few lifetimes, differences by
+engine modeled in one place. Correctness was not to move, and performance and the public API come after. DESIGN.md
+describes the result; this is what happened and what it measured.
+
+- **What changed.**
+  - *The function set.* Every port gives `prepare`, `firstLine`, `fillLine`, `linePieces`, `inspectLine` and
+    `paragraphGaps` over its own types, and `src/index.ts` is the one dispatch. The width belongs to the line slot, so one
+    prepared paragraph serves any width. `fillLine` decides a line and builds nothing else; pieces and geometry are made
+    when they are read, by pure functions. The row's format, the slot loop and the observation contract are the lab's.
+  - *Plain and inspected.* Gaps, limits and the lab's geometry are output on request. A plain paragraph computes none of
+    them and asks Canvas nothing that only they read. Each port keeps every gap condition in one `gaps.ts`.
+  - *No store of measured values.* The string memo, which was the ports' data flow, the call log, Gecko's six
+    module-level memos and the measurer are gone. A port holds its Canvas contexts and keeps what it needs twice as a
+    local, a handed-on value or a field; `measure/canvas.ts` is contexts, `width` and `bounds`.
+  - *No engine names in shared code* outside `src/index.ts` and `src/env.ts`: each engine gives its break rules,
+    grapheme rules, bidi data, runtime checks and painting rules as data, and the painter takes what `linePieces` gives.
+  - *The ports' models*: typed records and tagged unions where there were parallel arrays and sentinels, no Map or Set
+    that an algorithm doesn't need, no per-line scan of the whole paragraph, boundaries pulled as a line asks.
+- **How it was held.** Tier 1 after every move (389,646 recorded cases, every prediction and every Canvas question), with
+  changed questions classed as repeats only, dropped only or other; the function set's checks (plain equals inspected,
+  purity, a width sweep on a stand-in Canvas); a citation and prose ledger over `rebuild/src`; a painter differential
+  against a frozen bundle; tier 2 in the pinned browsers in both orders and both configurations at each step's end, the
+  plain predictor's browser run for question order, and the giants for time (TESTS.md, "Tiers"; lab/README.md, "Checks
+  for the re-architecture").
+- **What moved in recorded rows**, all in Chrome and all accounted: Blink's gap lists are handed out in a canonical form,
+  which differs byte for byte in 473 rows without facts and 303 with them and is equal on 67,065 of 67,065 cases once
+  both sides are made canonical; a painted line in an RTL block is segmented by script, which moves the painter limit
+  `script-at-line-start` in 461 rows and no painted DOM (2 open painter rows became covered); an inspected paragraph makes
+  no unused one-byte hyphen contexts. Before those, the Blink string storage fix, found while preparing the memo's removal,
+  changed on purpose the paragraphs that ask Canvas the same characters as a one-byte and as a two-byte string (the
+  `twins` set; research/BLINK-STRING-STORAGE.md). Firefox's and webkit-host's rows never moved. Chrome's references were
+  frozen again at each of those points, and no ledger transition was from a pass.
+- **The last step** deleted what nothing used any more (the index API with its memo and log, `measure/log.ts`, the dead
+  line types, Knip's findings outside the ports, a stale facts script): tier 1 the same on all 389,646 cases with 0
+  questions changed, Chrome's tier 2 forward in both configurations with 0 transitions (tier 1's string storage rule sends
+  Chrome there whenever `src/measure` changes), the plain and pure checks, the citation ledger and the painter
+  differential clean. The final evaluation on fresh sets comes after the correctness round that ran beside this step.
+
+| Non-test lines of `rebuild/src`, generated data left out | At the correctness line | After the re-architecture |
+|---|---:|---:|
+| Shared layer | 5,066 | 4,595 |
+| of it `measure/` | 518 | 489 |
+| of it `model.ts` | 726 | 390 |
+| of it `paint.ts` | 1,395 | 1,393 |
+| Blink | 6,470 | 7,195 |
+| WebKit | 5,699 | 6,033 |
+| Gecko | 5,233 | 5,850 |
+| Test support | 40 | 106 |
+| All | 22,508 | 23,779 |
+
+The line count went up by 1,271 while the state that cut across stages went away: the ports are mostly ported logic with
+its citations, and typed records with their comments cost about what the removed structures saved (DESIGN.md §3).
+
+| Canvas questions a paragraph, no facts / lab facts | Correctness line | Plain path real (X1) | Memo gone (X2) | Now |
+|---|---|---|---|---|
+| Blink, lab path | 100 | 99.97 / 91.91 | 1,016.8 / 1,055.7 | 736.2 / 775.6 |
+| Blink, plain path | the lab path | 61.18 / 48.49 | 250.7 / 240.8 | 234.3 / 224.3 |
+| WebKit, lab path | 32 | 31.81 / 19.18 | 88.79 / 59.86 | 88.79 / 59.86 |
+| WebKit, plain path | the lab path | 26.14 / 12.38 | 39.32 / 21.65 | 39.32 / 21.65 |
+| Gecko, lab path | 74 | 74.2 / 74.5 | 114.5 / 115.7 | 114.5 / 115.7 |
+| Gecko, plain path | the lab path | 40.7 / 40.8 | 54.5 / 55.1 | 54.5 / 55.1 |
+
+Distinct questions never rose; what the memo's removal added is the same question asked again (DESIGN.md §4.7 has where,
+and the two stores that would answer most of it). In the lab that costs little in Chrome, whose per-canvas cache answers
+a repeat, and it tripped the time tripwire once, on Firefox's giants along the inspected path (15.3 s of prediction against
+4.2 s; their plain path 1.28×), which was accepted.
+
+**What an application pays today**, from the chat benchmark's first real pass (research/BENCH-NIGHT.md, 2026-09-19, no
+supplied facts, the library at the X3 merge): 10,000 chat messages from scratch take 9.59 s in Chrome (4.16 s for plain
+ASCII), 2.63 s in Firefox (0.61 s) and 11.7 s in webkit-host (8.83 s), against main's cold prepare at 0.72 s, 0.30 s and
+1.53 s; the same 10,000 kept and laid out at three new widths take 4.04 s, 0.70 s and 0.21 s. Chrome spends 43% of the
+time making Canvas contexts (11 a message) and 31% in the runtime font checks; webkit-host spends 98% inside `measureText`
+at 41 calls a message, each about three times as dear as main's, because 5.4 new contexts a message each pay for
+resolving their font; Firefox spends 88% in the fill, carried by CJK and Arabic messages. The maintainer's bar is about
+2 s after the performance work, or the stateless ideal is dropped. research/PROFILING-START.md has where that work
+starts: the measurer's lifetime first, by measured share.
 
 ## Round 4 evaluation, 2026-09-18
 
@@ -285,7 +371,7 @@ lineCount / breaks / widths / painter pass rates, prediction failures, and how t
 | WebKit | round 4, no facts | 72.2 | 48.8 | 42.4 | 29.1 | 25.3 | 20.7 |
 
 - Blink and Gecko with facts are where round 3 left them. The headline configuration costs Blink 5 to 20 more calls a
-  paragraph (the font checks, once per declaration while a measurer lives one paragraph) and Gecko nothing (it is asked
+  paragraph (the font checks, once per declaration of a paragraph, since they run per paragraph) and Gecko nothing (it is asked
   nothing). WebKit's suite sample halved in round 4a (`canvas-language` narrowed) while its small sets rose by 6 to 11 calls
   with facts (the Canvas family per text box and the port's stand-ins), and the checks add 8 to 24 more without facts.
 - Canvas contexts per paragraph, no facts / facts: Blink 11 to 31 / 4 to 14, Gecko 3 to 12 both, WebKit 7 to 16 / 1.5 to 6.
@@ -409,18 +495,19 @@ no-facts giants.
 
 ### 1.1 Architecture
 
-The library takes a paragraph and an environment. The paragraph is a tree of inline content (DESIGN.md §1.1): text leaves, spans with their own font, letter and word spacing, `lang`, wrapping styles, box edges and `vertical-align`, atomic inlines, `<br>` and `<wbr>`, plus the block's width, `text-indent`, `text-align`, direction and `lang`, and optionally an available width per line (line slots). The environment is the engine, the DPR, the page language and the UI languages.
+The library takes a paragraph and an environment. The paragraph is a tree of inline content (DESIGN.md §1.1): text leaves, spans with their own font, letter and word spacing, `lang`, wrapping styles, box edges and `vertical-align`, atomic inlines, `<br>` and `<wbr>`, plus the block's `text-indent`, `text-align`, direction and `lang`. The width isn't the paragraph's: each line is filled in a slot, the block's content-box width with what floats take off each side (line slots, DESIGN.md §2.9). The environment is the engine, its build, the DPR, the page language and the browser process's languages.
 
-It returns:
+It returns, per slot (DESIGN.md §2.1):
 
-- lines as source offsets, with widths in CSS px and in the engine's own unit;
-- each line's pieces: text, trimmed, collapsed, hanging, hyphen or forced break, each with its bidi level;
-- the Canvas call log;
-- the named gaps.
+- the decided line: its source range, the state the next line starts from, and whether it has a line box, or the engine's decision to move the line below the slot's floats;
+- on request, the line's pieces: text, trimmed, collapsed, hanging, hyphen or forced break, each with its bidi level, the elements the line holds, the used alignment, and whether the content overflows its band;
+- on request, from a paragraph prepared for inspection: the line's geometry in the engine's own unit (Blink items in LayoutUnits, WebKit display boxes in float32 px, Gecko frames in app units) and the named gaps its breaks decide, and the paragraph's gaps.
 
-`paintLines()` turns the lines into one div per line, which the browser draws without re-wrapping.
+No width in CSS px is returned yet, and the library keeps no count or log of its Canvas calls; the lab counts them.
 
-The three engines differ at every stage (DESIGN.md §3), so there is no shared content model and no shared line loop. `layoutParagraph()` holds the only switch over engines. Each engine owns its whole pipeline, ported from its own source:
+`paintLines()` turns the lines' pieces into one div per line, which the browser draws without re-wrapping.
+
+The three engines differ at every stage (DESIGN.md §3), so there is no shared content model and no shared line loop. `src/index.ts` holds the only switch over engines, a dispatch over the function set every port gives (§1.2); outside it and `src/env.ts` no shared file names an engine. Each engine owns its whole pipeline, ported from its own source:
 
 - **Blink**: builds text_content and resolves bidi with ICU `ubidi`. It groups text for shaping and breaks with Chrome 153's own tables, restarting ICU at every line start. Widths are LayoutUnits, the ceiling of float32 sums at the zoomed size. Line filling ports ShapeLine's reshapes at unsafe-to-break offsets, Han kerning, the re-break at width − 1px, and whole-line retries.
 - **WebKit**: builds items per text box. It runs `BreakablePositions` verbatim, then libicucore 78.1's tables with Apple's quote overrides. Widths are float32 CSS px. It ports three line builders, InlineContentBreaker and `breakWord`, including the width a split word carries to the next line without measuring it again.
@@ -433,7 +520,7 @@ What's shared:
 - `unicode/ubidi.ts`: an exact port of ICU 78.2 `ubidi`, for Blink and WebKit. It differs from icu4c 78.3 and libicucore on 0 of 770,241 BidiTest runs, 183,379 BidiCharacterTest lines and 405,000 fuzz strings. The crate resolver disagreed with ICU on 130,661 of 300,000 fuzz strings;
 - `unicode/unicode-bidi.ts`: the crate port, for Gecko;
 - grapheme clusters with each engine's data;
-- `measure/`: OffscreenCanvas contexts identified by their settings, which a prepared paragraph holds (the ports keep no memo and no call log since the re-architecture's X2; DESIGN.md §4.6, §4.7); the runtime font checks, which answer a font fact the caller left null where a Canvas check is sound (`font-checks.ts`); and the Canvas checks of engine detection (`canvas-checks.ts`);
+- `measure/`: OffscreenCanvas contexts identified by their settings, which a prepared paragraph holds, with `width` and `bounds`, which always ask Canvas (nothing stores a measured value by its string, and there is no memo and no call log; DESIGN.md §4.6, §4.7); the runtime font checks, which answer a font fact the caller left null where a Canvas check is sound (`font-checks.ts`); and the Canvas checks of engine detection (`canvas-checks.ts`);
 - `paint.ts`, which names no engine: each engine's painting rules are a `PaintRules` value in `engines/<engine>/paint-rules.ts`;
 - the generators, which check sha256 hashes of pinned engine data.
 
@@ -441,29 +528,34 @@ Thai, Lao, Khmer and Myanmar breaks come from the running browser's own segmente
 
 The painter draws each line as a block at the paragraph's width, with the paragraph's wrapping styles and one node per run slice. It keeps trimmed and hanging white space, draws the hyphen as its own span, puts U+200D at joined line edges, and uses nested bidi-override spans.
 
-The lab (`rebuild/lab/`) drives the browsers in background windows under the lock. It derives native lines from Range rects alone and scores the four metrics.
+The lab (`rebuild/lab/`) drives the browsers in background windows under the lock. It makes a row's layout from the function set, one slot at a time, on a paragraph prepared for inspection (`lab/predictor-core.ts`), derives native lines from Range rects alone and scores the four metrics.
 
 ### 1.2 API shape
 
 ```ts
 detectEngine(): { kind: 'supported'; engine } | { kind: 'unsupported'; userAgent; reason }   // once per page: user agent, and what the engine's recipes assume of Canvas
 detectEnvironment(given: GivenFacts): { kind: 'supported'; env } | { kind: 'unsupported'; … }  // DPR, <html lang>, segmenters; again when they change
-layoutParagraph(paragraph, env, slots?): { engine; env; lines; belowFloats; measure: MeasureLog; gaps: Gap[] }
-prepareParagraph(paragraph, env) → firstLineStart(prepared) → layoutLine(prepared, start, slot)   // one line slot at a time
+prepare(paragraph, env, inspect: boolean): Prepared          // width-free; asks Canvas for the font facts left null, then the engine prepares
+firstLine(prepared): LineStart | null
+fillLine(prepared, start, slot: { width; left; right }):     // one line in one slot; start is firstLine's or a fill result's next
+  | { kind: 'line'; line; start; end; next: LineStart | null; hasLineBox }
+  | { kind: 'below-floats'; line; next: LineStart }
+linePieces(prepared, line): { fragments; joinsNextLine; indented; align; overflows; facts }   // what a painter takes; pure
+inspectLine(prepared, line): { geometry; gaps }              // inspected paragraphs only; pure; a refused slot has gaps alone
+paragraphGaps(prepared): Gap[]                               // inspected paragraphs only
 paintLines(paragraph, lines, refusedRows, rules, document): HTMLElement[]        painterLimits(paragraph, lines, rules): PainterLimit[][]      // lines: { pieces: linePieces' result; slot; hasLineBox }[]; rules: the engine's PaintRules
-Line = { start; end; fragments; hasLineBox; joinsNextLine; slot; indented; align; gaps; next: LineStart | null;
-         geometry: the engine's own (Blink items in LayoutUnits, WebKit display boxes in float32 px, Gecko frames in app units) }
 Gap = { gap: GapName; run: number | null; detail: string; at?: { start; end } }   // on the paragraph and on each line
 ```
 
-Each engine implements `prepare`, `firstLine`, `nextLine(prepared, start, slot, measurer)` and `gaps`. A `LineStart` is valid
-only for the slot that produced it. There is no prepare-once, lay-out-at-many-widths API, and nothing is kept across
-paragraphs: a measurer lives one paragraph. API shape is an open question for after the freeze (CHARTER.md, decision 3).
-
-Note, 2026-09-19: but for the painter's line, this section describes the library at the correctness line. Since the
-re-architecture `src/index.ts` exports a function set instead (`prepare`, `firstLine`, `fillLine`, `linePieces`,
-`inspectLine`, `paragraphGaps`; DESIGN.md §2.9, §3): one prepared paragraph serves any width, `layoutParagraph` is the
-lab's, and a prepared paragraph holds its own Canvas contexts, with no measurer, memo or call log.
+This is the ports' function set as `src/index.ts` dispatches it (DESIGN.md §2.9, §3), not a designed public API. One
+prepared paragraph serves any width and any slot, a line start is small plain data that serves any slot of the next line,
+and a line's break is found without building its pieces. Nothing is kept across paragraphs: a prepared paragraph makes
+its own Canvas contexts and the runtime font checks run per `prepare`, which is the first thing the profiling phase looks
+at (research/PROFILING-START.md). `layoutParagraph`, which walks the slots and makes a row, is the lab's. The shape of the
+public API is an open question for after profiling (CHARTER.md, decision 3): a stateless call over an invisible store and
+carried handles both stay possible, and research/CAPABILITY-CHECK.md lists what the function set already lets an
+application do and the three cheapest additions (a line's width in CSS px, identity on the painter's DOM, contexts that
+outlive a paragraph).
 
 ## 2. Numbers
 

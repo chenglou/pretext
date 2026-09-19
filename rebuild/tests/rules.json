@@ -6047,7 +6047,7 @@
    "engine": "shared",
    "area": "measure",
    "kind": "recipe",
-   "statement": "every layout gets a fresh Measurer, so Chrome's per-canvas shape cache order starts from nothing",
+   "statement": "every layout gets a fresh Measurer, so Chrome's per-canvas shape cache order starts from nothing [removed: no function takes a measurer since the re-architecture's X2, and the Measurer went with its last step; a prepared paragraph makes and keeps its own contexts]",
    "source": "specs/blink-canvas.md §1.7; DESIGN.md §4.6",
    "probes": [
     "blink-canvas H7: confirmed",
@@ -6056,8 +6056,10 @@
    ],
    "tests": [],
    "audit": null,
-   "status": "current",
-   "replacedBy": [],
+   "status": "removed",
+   "replacedBy": [
+    "shared/measure/contexts-per-prepared-paragraph"
+   ],
    "declaredBy": "catalogue 2026-09-16"
   },
   {
@@ -6097,15 +6099,17 @@
    "engine": "shared",
    "area": "measure",
    "kind": "recipe",
-   "statement": "repeated (context, text) measurements return the memoized width, which equals the same bits in all three engines",
+   "statement": "repeated (context, text) measurements return the memoized width, which equals the same bits in all three engines [removed: the memo went with the re-architecture (research/ARCHITECTURE-PLAN-2.md decision 4); the fact it rested on stays a rule]",
    "source": "DESIGN.md §4.6",
    "probes": [
     "webkit-canvas H16: confirmed (100 identical results)"
    ],
    "tests": [],
    "audit": null,
-   "status": "current",
-   "replacedBy": [],
+   "status": "removed",
+   "replacedBy": [
+    "shared/measure/asking-again-answers-the-same"
+   ],
    "declaredBy": "catalogue 2026-09-16"
   },
   {
@@ -8216,6 +8220,43 @@
    "replacedBy": []
   },
   {
+   "id": "shared/measure/contexts-per-prepared-paragraph",
+   "engine": "shared",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "every prepared paragraph makes its own Canvas contexts (contextFor over the list it keeps) and holds them as long as it lives, for every line filled from it at any width; the runtime font checks make theirs per call under a partition of their own; so Chrome's per-canvas shape cache starts from nothing for each paragraph, and no paragraph's measuring sees another's",
+   "source": "specs/blink-canvas.md §1.7; DESIGN.md §4.2, §4.6",
+   "probes": [
+    "blink-canvas H7: confirmed",
+    "blink-canvas H8: confirmed",
+    "blink-canvas H9: confirmed"
+   ],
+   "tests": [],
+   "declaredBy": "shared owner (re-architecture step 4)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "shared/measure/asking-again-answers-the-same",
+   "engine": "shared",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "measuring the same text again in the same context returns the same bits in all three engines (Blink returns its cached node for the whole string; WebKit and Gecko shape the same way), so width and bounds always ask Canvas, nothing stores an answer, and a question asked again can cost a call and never change a result",
+   "source": "DESIGN.md §4.6; specs/blink-canvas.md §1.7",
+   "probes": [
+    "webkit-canvas H16: confirmed (100 identical results)",
+    "blink-storage S5: confirmed"
+   ],
+   "tests": [
+    "src/measure/canvas.test.ts :: always ask Canvas and use no key"
+   ],
+   "declaredBy": "shared owner (re-architecture step 4)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
    "id": "webkit/measure/font-check-fixed-pitch",
    "engine": "webkit",
    "area": "measure",
@@ -9089,7 +9130,7 @@
    "engine": "blink",
    "area": "measure",
    "kind": "recipe",
-   "statement": "the string a port hands to measureText reaches Canvas as the port built it: the measurer never uses it as a Map, Set or property key, since V8 internalizes a key, stores an internalized string in one byte when its units fit and turns the looked-up string into a reference to it, which made canvasString's two-byte slice a one-byte string that Canvas shapes as one Latin segment; the memo's key is a concatenation, another string object",
+   "statement": "the string a port hands to measureText reaches Canvas as the port built it: measure/canvas.ts never uses it as a Map, Set or property key, since V8 internalizes a key, stores an internalized string in one byte when its units fit and turns the looked-up string into a reference to it, which made canvasString's two-byte slice a one-byte string that Canvas shapes as one Latin segment; width and bounds hand it to measureText as it is, and nothing stores an answer by its string",
    "source": "v8 6b96683d builtins-collections-gen.cc:2590-2604, string-table.cc:398-427, factory.cc:1239-1257, :1293-1300, string.cc:164-166, api.cc:5937-5939; to_blink_string.cc:216-227; harfbuzz_shaper.cc:1072-1101",
    "probes": [
     "blink-storage S1: confirmed",
@@ -9097,7 +9138,7 @@
     "blink-storage S5: confirmed"
    ],
    "tests": [
-    "src/measure/canvas.test.ts :: never looks the measured string up: no key holds its characters alone"
+    "src/measure/canvas.test.ts :: always ask Canvas and use no key"
    ],
    "declaredBy": "string storage fix (specs/blink-RESULTS.md \"String storage\")",
    "audit": null,
@@ -9516,10 +9557,10 @@
   "gecko/gap/bitmap-emoji-size": "642178fec8586064",
   "gecko/gap/ui-language": "ee5a4424f21c9761",
   "gecko/gap/dictionary-breaks-unavailable": "e7a3bddcc14e6c43",
-  "shared/measure/fresh-measurer-per-layout": "da72858087761da5",
+  "shared/measure/fresh-measurer-per-layout": "99cc16114875bf01",
   "shared/measure/context-per-settings": "bb8b85da24e4ed28",
   "shared/measure/lang-before-font": "02bf61791e2106c7",
-  "shared/measure/memo-per-layout": "70351188eaadd77e",
+  "shared/measure/memo-per-layout": "898790e25bd6ff2f",
   "shared/measure/font-string": "ad8e608665570c9f",
   "shared/bidi/icu-ubidi": "83e2530e83f1d215",
   "shared/bidi/unicode-bidi-crate": "410a182fbb5e5db8",
@@ -9660,6 +9701,8 @@
   "shared/measure/font-check-two-fallbacks": "cbebf514fd9e23b2",
   "shared/measure/font-check-primary-family": "0cc8665f9486fbdf",
   "shared/measure/font-check-hyphen-glyph": "c5982ddb06c527b1",
+  "shared/measure/contexts-per-prepared-paragraph": "9ff7e30091a2e9a7",
+  "shared/measure/asking-again-answers-the-same": "8abaea680294fa40",
   "webkit/measure/font-check-fixed-pitch": "80b7e6b4e68eb0a3",
   "blink/measure/font-check-linear-sizes": "7fa36fddb2d5495d",
   "blink/measure/font-check-joining-context": "0c7ec8d1d139aa06",
@@ -9712,7 +9755,7 @@
   "blink/output/box-fragment-edges": "23e662c11e9f7f70",
   "blink/output/end-offset-for-justify": "72714947a9cdeee7",
   "webkit/output/first-and-last-display-box": "f48c4f0b11cc5689",
-  "blink/measure/string-reaches-canvas-as-built": "3bf60df5bff3afea",
+  "blink/measure/string-reaches-canvas-as-built": "5aeb1e819f22a9aa",
   "blink/measure/contexts-per-storage": "2ee9fa98354d304c",
   "blink/measure/spaces-stay-in-neutral-latin-range": "926ef39f88f66cae"
  }

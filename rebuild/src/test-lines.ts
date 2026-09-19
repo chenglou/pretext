@@ -1,11 +1,26 @@
 // Test support: every line of a prepared paragraph through one engine's function set, walked as the lab's adapter walks
-// it (lab/predictor-core.ts fillLines), with each line in the shape the ports' tests read (model.ts LineOf). No library
-// file imports it.
-import type { FillResultOf, Gap, LineInspectionOf, LineOf, LinePieces, LineSlot, Paragraph } from './model.js'
+// it (lab/predictor-core.ts fillLines), with each line in the shape the ports' tests read (TestLine). No library file
+// imports it.
+import type { FillResultOf, Fragment, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, TextAlign } from './model.js'
 
 // A test's paragraph with the width every slot of its layout gets, and a slot's two insets.
 export type Sized = Paragraph & { width: number }
 export type Insets = { left: number; right: number }
+
+// A line as the ports' tests read it: what the fill result, the pieces and the inspection say of it, and its slot.
+export type TestLine<Start, Geometry> = {
+  start: number
+  end: number
+  fragments: Fragment[]
+  hasLineBox: boolean
+  joinsNextLine: boolean
+  slot: LineSlot
+  indented: boolean
+  align: TextAlign
+  geometry: Geometry
+  gaps: Gap[]
+  next: Start | null
+}
 
 // One engine's function set over an inspected paragraph.
 export type EngineLines<Start, Line, Refused, Geometry> = {
@@ -19,8 +34,8 @@ export type EngineLines<Start, Line, Refused, Geometry> = {
 // line without a line box takes no slot.
 export function everyLine<Start, Line, Refused, Geometry>(
   engine: EngineLines<Start, Line, Refused, Geometry>, width: number, insets: readonly Insets[],
-): { lines: LineOf<Start, Geometry>[]; belowFloats: { row: number; gaps: Gap[] }[] } {
-  const lines: LineOf<Start, Geometry>[] = []
+): { lines: TestLine<Start, Geometry>[]; belowFloats: { row: number; gaps: Gap[] }[] } {
+  const lines: TestLine<Start, Geometry>[] = []
   const belowFloats: { row: number; gaps: Gap[] }[] = []
   let row = 0
   for (let start = engine.first; start !== null;) {

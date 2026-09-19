@@ -768,6 +768,20 @@ Owner: shared.
   - The other-widths-first predictor runs in Chrome.
 - T3.
 - The ledger shows 0 transitions against the original frozen reference.
+- Note, 2026-09-19, after step 4's deletions and documents:
+  - The code had moved ahead of this list. `lab/record.ts` lost the library log and the record's `declared` field at S3,
+    and step 0 took `memoHits` out of the replay's questions; what was left of the library log in `tests/replay.ts` was
+    its reading of reference format 1, which held the memo hits and which no frozen reference is any more.
+  - Deleted: the index API with its memo and log, `measure/log.ts`, `LineOf` and `LineResultOf` in `model.ts` (their
+    comments and citations are on `FillResultOf` and `LinePieces`; the ports' test helper has its own line type), two
+    exports only their tests read and an unused lab type (knip), and `tests/seed-facts-20260916.sh`. Knip found nothing
+    in the ports. Tier 1: the same on all 389,646 cases, 0 questions changed; exit 3 for Chrome by the string storage rule
+    alone, and Chrome's tier 2 forward in both configurations showed 0 transitions.
+  - Not in the step, by the orchestrator's decision: the measurer's lifetime (contexts and font-check answers held by an
+    object the caller makes once), which §9 already left out and §10 lists; it is the first item of the profiling phase,
+    by the benchmark's measured shares (research/PROFILING-START.md). And the final proof (T2 in both orders with the
+    plain and other-widths-first predictors, T3), which the orchestrator runs once this step and the correctness round
+    beside it are both merged.
 
 ## 9. Not in this phase
 
