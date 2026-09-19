@@ -1,6 +1,7 @@
-// WebKit widths from Canvas totals: TextUtil::width with the following-space rule, singleSpaceWidth, the hyphen, tab
-// stops, word spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
+// WebKit widths from Canvas totals: TextUtil::width with the following-space rule, singleSpaceWidth, tab stops, word
+// spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
 // (specs/webkit-lines.md §3.3, §8.1; specs/webkit-canvas.md §(e); specs/webkit-gaps.md §2, §5). Every width is float32.
+// Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer.
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { webkitGraphemeRules } from './data.js'
@@ -47,13 +48,17 @@ export function canvasString(text: string): string {
 // bound takes twice the string's length.
 const LETTER_SPACING_PROBE = 64
 
-function spacedGlyphCount(box: WebKitBox, s: string): number {
-  return Math.round((canvasWidth(box.countContext, s) - canvasWidth(box.plainContext, s)) / LETTER_SPACING_PROBE)
+// A string's spacing-bearing glyphs, from its total in the count context and its total without spacing.
+function glyphCount(spacedTotal: number, plainTotal: number): number {
+  return Math.round((spacedTotal - plainTotal) / LETTER_SPACING_PROBE)
 }
 
-function glyphCountIsExact(box: WebKitBox, s: string): boolean {
-  const total = canvasWidth(box.countContext, s)
-  return !(total > 0) || 3 * 2 * s.length * 2 ** (Math.floor(Math.log2(total)) - 23) < LETTER_SPACING_PROBE / 2
+function spacedGlyphCount(box: WebKitBox, s: string): number {
+  return glyphCount(canvasWidth(box.countContext, s), canvasWidth(box.plainContext, s))
+}
+
+function glyphCountIsExact(spacedTotal: number, length: number): boolean {
+  return !(spacedTotal > 0) || 3 * 2 * length * 2 ** (Math.floor(Math.log2(spacedTotal)) - 23) < LETTER_SPACING_PROBE / 2
 }
 
 // What Canvas shows of merged glyphs in a string a letter-spaced box measures. The features the DOM turns off join separate
@@ -110,7 +115,9 @@ export function mergedGlyphs(box: WebKitBox, text: string): MergedGlyphs {
   if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
   if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
   const s = canvasString(text)
-  if (!glyphCountIsExact(box, s)) return { merged: true, pairs: [], separated: null, counted: false }
+  // The string's total in the count context says whether the string can be counted, and then counts it.
+  const spacedTotal = canvasWidth(box.countContext, s)
+  if (!glyphCountIsExact(spacedTotal, s.length)) return { merged: true, pairs: [], separated: null, counted: false }
   const starts = graphemeBoundaries(s, webkitGraphemeRules)
   const counts: number[] = []
   let alone = 0
@@ -119,7 +126,7 @@ export function mergedGlyphs(box: WebKitBox, text: string): MergedGlyphs {
     counts.push(count)
     alone += count
   }
-  if (spacedGlyphCount(box, s) >= alone) return NOTHING_MERGED
+  if (glyphCount(spacedTotal, canvasWidth(box.plainContext, s)) >= alone) return NOTHING_MERGED
   const pairs: Array<[number, number]> = []
   let separated = ''
   for (let k = 0; k + 1 < counts.length; k++) {
@@ -161,10 +168,13 @@ export function controlIsAdjusted(context: Context, text: string, index: number)
   const before = index > 0 && !isPiecedControl(text.charCodeAt(index - 1)) ? text[index - 1]! : ''
   const after = index + 1 < text.length && !isPiecedControl(text.charCodeAt(index + 1)) ? text[index + 1]! : ''
   const standIn = text.charCodeAt(index) === 0x0d ? String.fromCharCode(0) : String.fromCharCode(1)
+  // The space is asked whatever stands around the control, as it has been since the rows were recorded.
   const space = canvasWidth(context, ' ')
-  if (before !== '' && canvasWidth(context, `${before} `) !== f32(canvasWidth(context, before) + space)) return true
-  if (before !== '' && after !== '' && canvasWidth(context, before + standIn + after) !== f32(f32(canvasWidth(context, before) + canvasWidth(context, standIn)) + canvasWidth(context, after))) return true
-  return false
+  if (before === '') return false
+  const beforeSpace = canvasWidth(context, `${before} `)
+  const beforeAlone = canvasWidth(context, before)
+  if (beforeSpace !== f32(beforeAlone + space)) return true
+  return after !== '' && canvasWidth(context, before + standIn + after) !== f32(f32(beforeAlone + canvasWidth(context, standIn)) + canvasWidth(context, after))
 }
 
 // The Canvas width of a range the DOM measures: in a letter-spaced box the separated string where Canvas shows merged pairs,
@@ -202,11 +212,6 @@ function measureDomString(box: WebKitBox, context: Context, text: string): numbe
 // and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing.
 export function singleSpaceWidth(box: WebKitBox): number {
   return canvasWidth(box.context, ' ')
-}
-
-// TextUtil::hyphenWidth (TextUtil.cpp:621-624): the hyphen string measured through the cascade.
-export function hyphenWidth(box: WebKitBox): number {
-  return Math.max(0, canvasWidth(box.context, box.hyphen))
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from

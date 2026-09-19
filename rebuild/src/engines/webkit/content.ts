@@ -283,10 +283,13 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number, bidi: 
   if (simplifiedMeasuring && fixedPitch) {
     const coverageContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
     unverified = unverifiedCoverage(p, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })
+    // Each code point of the text is tested once, where it first stands.
+    const tested = new Set<number>()
     for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
-      if (cp < 0x20) continue
+      if (cp < 0x20 || tested.has(cp)) continue
+      tested.add(cp)
       const s = String.fromCodePoint(cp)
       const covered = canvasWidth(coverageContext, s)
       simplifiedMeasuring = covered === canvasWidth(plainContext, s)

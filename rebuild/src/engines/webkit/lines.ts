@@ -14,7 +14,7 @@ import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } fro
 import { breakTestBetweenBoxes, emergencyBreakIn8BitText, hyphenWidthRead, shapedAcrossInlineBoxes, type GapSink } from './gaps.js'
 import type { WebKitLineStart } from './geometry.js'
 import { joinsAcross } from './joining.js'
-import { boxWidth, breakWord, canvasString, firstUserPerceivedCharacterLength, forwardOneCodePoint, hyphenWidth, itemWidth } from './measure.js'
+import { boxWidth, breakWord, canvasString, firstUserPerceivedCharacterLength, forwardOneCodePoint, itemWidth } from './measure.js'
 import { endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, trailingWhitespaceHangs } from './style.js'
 import type { WebKitBox, WebKitBoxEdges, WebKitItem, WebKitLineBuilder, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
@@ -83,10 +83,13 @@ function itemStyle(p: WebKitPrepared, item: WebKitItem): WebKitStyle {
   }
 }
 
-// TextUtil::hyphenWidth, read while filling a line (gap hyphen-glyph).
+// TextUtil::hyphenWidth (TextUtil.cpp:621-624), read while filling a line: the hyphen string measured through the cascade.
+// gaps.ts gets the total, which it holds the other hyphen's against (gap hyphen-glyph).
 function lineHyphenWidth(L: Layout, boxIndex: number): number {
-  hyphenWidthRead(L.gaps, L.p, boxIndex)
-  return hyphenWidth(L.p.boxes[boxIndex]!)
+  const box = L.p.boxes[boxIndex]!
+  const total = canvasWidth(box.context, box.hyphen)
+  hyphenWidthRead(L.gaps, L.p, boxIndex, total)
+  return Math.max(0, total)
 }
 
 // ---- Line (IL, InlineLine.h) ----

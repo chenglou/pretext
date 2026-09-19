@@ -44,8 +44,8 @@ export function paragraphGaps(p: WebKitPrepared): Gap[] {
 
 // makeBox's primary-font coverage test can't vouch for a code point that measures as wide as LastResort's own box: a fallback
 // glyph of that advance looks covered (research/CHARTER-CRITIC.md item 1). Lines measuring such a code point report
-// font-fallback. The test hands each code point it finds covered over with its width, and LastResort alone is measured beside
-// it.
+// font-fallback. The test hands each code point it finds covered over once, with its width, and LastResort alone is measured
+// beside it.
 export type UnverifiedCoverage = { lastResortContext: Context; codePoints: number[] }
 
 export function unverifiedCoverage(p: WebKitPrepared, lastResort: CanvasSettings): UnverifiedCoverage | null {
@@ -54,7 +54,7 @@ export function unverifiedCoverage(p: WebKitPrepared, lastResort: CanvasSettings
 
 export function coveredLikeLastResort(unverified: UnverifiedCoverage | null, cp: number, s: string, covered: number): void {
   if (unverified === null) return
-  if (covered === canvasWidth(unverified.lastResortContext, s) && !unverified.codePoints.includes(cp)) unverified.codePoints.push(cp)
+  if (covered === canvasWidth(unverified.lastResortContext, s)) unverified.codePoints.push(cp)
 }
 
 // The box makeBox made, in box order: what its font facts leave unknown and the coverage above. inspectParagraph adds what the
@@ -474,19 +474,15 @@ function collectHistoryWorlds(p: WebKitPrepared, inspect: WebKitInspect, bidi: B
 
 // ---- While a line is filled ----
 
-// TextUtil::hyphenWidth, read while filling a line (lines.ts lineHyphenWidth). Where FontFacts.mapsHyphen isn't given and U+2010
-// and U+002D measure differently, the fact decides this line's fit, so the line reports hyphen-glyph. Merge rule: by gap and run.
-export function hyphenWidthRead(sink: GapSink, p: WebKitPrepared, boxIndex: number): void {
+// TextUtil::hyphenWidth, read while filling a line (lines.ts lineHyphenWidth), which measured the box's hyphen string as
+// `hyphenTotal`. Where FontFacts.mapsHyphen isn't given the string is U+2010, and where U+002D measures differently in the
+// box's context the fact decides this line's fit, so the line reports hyphen-glyph. Merge rule: by gap and run.
+export function hyphenWidthRead(sink: GapSink, p: WebKitPrepared, boxIndex: number, hyphenTotal: number): void {
   if (sink === null) return
   const box = p.boxes[boxIndex]!
-  if (inspectOf(p, 'a line\'s filling').boxes[boxIndex]!.hyphenUnknown && hyphenGlyphsDiffer(box) && !sink.some(g => g.gap === 'hyphen-glyph' && g.run === box.run)) {
+  if (inspectOf(p, 'a line\'s filling').boxes[boxIndex]!.hyphenUnknown && hyphenTotal !== canvasWidth(box.context, '-') && !sink.some(g => g.gap === 'hyphen-glyph' && g.run === box.run)) {
     sink.push({ gap: 'hyphen-glyph', run: box.run, detail: `whether ${box.primaryFamily} maps U+2010 isn't given; laid out with U+2010, which measures differently from "-" here` })
   }
-}
-
-// Whether U+2010 and U+002D measure differently in the box's context: where FontFacts.mapsHyphen decides a width.
-function hyphenGlyphsDiffer(box: WebKitBox): boolean {
-  return canvasWidth(box.context, '‐') !== canvasWidth(box.context, '-')
 }
 
 
