@@ -72,6 +72,14 @@ function stubAu(font: string, text: string, lang: string): number {
       au += Math.floor(((c === 'T' ? 576.4 : 576.8) - (kerned ? 22.5 : 0)) * size / 16 + 0.5)
       continue
     }
+    // Mongolian letters, which a fallback font draws: 40 au narrower on each side they join, next to another of them or
+    // to U+200D. U+200D at the start of the string is in the first font and joins nothing (gfxTextRun.cpp:3609-3613,
+    // :3320-3325; probe gecko-mainfacts M2).
+    if (c >= '\u1820' && c <= '\u1842') {
+      const mongolian = (x: string | undefined) => x !== undefined && x >= '\u1820' && x <= '\u1842'
+      au += Math.round(576 * size / 16) - (mongolian(cps[i - 1]) || (cps[i - 1] === '\u200d' && i > 1) ? 40 : 0) - (mongolian(cps[i + 1]) || cps[i + 1] === '\u200d' ? 40 : 0)
+      continue
+    }
     // Lam with alef madda is one glyph of 1001 au: the alef adds 425 au after a lam.
     if (c === 'آ' && cps[i - 1] === 'ل') {
       au += Math.round(425 * size / 16)
@@ -803,6 +811,22 @@ describe('ceiling round 2', () => {
     expect(l.lines.map(line => line.geometry.width)).toEqual([554, 554])
     expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
     expect(l.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
+  })
+
+  test('sides that add up only with the suffix measured behind its own first letter: the prefix side stands in (gfxTextRun.cpp:3609-3613, :3320-3325; probe gecko-mainfacts M2)', () => {
+    // Two joined Mongolian letters are 536 au each. W(letter U+200D) is 536, and W(U+200D letter) the unjoined 576 of the
+    // letter alone, so the old stand-in gave 496 and 576.
+    const l = layout(paragraph([run('\u1820\u1821')], 2, { overflowWrap: 'anywhere' }))
+    expect(l.lines.map(line => line.geometry.width)).toEqual([536, 536])
+    expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.detail.includes("the prefix's side stands in"))).toEqual([true])
+    expect(l.measure.calls.map(c => c.text)).toContain('\u1821\u200c\u200d\u1821')
+    // Beh before hah takes a contextual form no U+200D gives: the sides don't add up either way, and the stand-in stays.
+    const beh = layout(paragraph([run('\u0628\u062d')], 2, { overflowWrap: 'anywhere' }))
+    expect(beh.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.detail.includes("the prefix's side stands in"))).toEqual([false])
+    // Two behs join with forms U+200D gives: the sides add up, nothing more is asked and nothing stands in.
+    const added = layout(paragraph([run('\u0628\u0628')], 2, { overflowWrap: 'anywhere' }))
+    expect(added.measure.calls.some(c => c.text.includes('\u200c'))).toBe(false)
+    expect(allGaps(added).map(g => g.gap)).not.toContain('in-word-prefix')
   })
 
   test('ligature candidates in a row: the ligatures fact divides them, and without it the row stands in as one group (hb-ot-layout.cc:1917-1945)', () => {

@@ -391,6 +391,7 @@ function inWordDetail(r: InWordReason): string {
       let sides: string
       switch (r.sides) {
         case 'joined': sides = `letters join across it, and W(prefix U+200D) + W(U+200D suffix) = ${r.au} au`; break
+        case 'joined-prefix': sides = `letters join across it, the sides add up only with the suffix measured behind its own first letter, U+200C and U+200D (U+200D at a string's start takes the first font and shapes apart from a letter another font draws, gfxTextRun.cpp:3609-3613, :3320-3325), so the prefix's side stands in, and W(prefix U+200D) + W(U+200D suffix) = ${r.au} au`; break
         case 'apart': sides = `W(prefix) + W(suffix) = ${r.au} au`; break
         case 'cluster': sides = `W(cluster before it and suffix) − W(suffix) − W(cluster) = ${r.au} au`; break
       }

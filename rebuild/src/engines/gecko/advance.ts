@@ -76,6 +76,7 @@ function entryAt(unit: GeckoUnit, t: number): InWordEntry {
 }
 
 const ZWJ = '\u200d'
+const ZWNJ = '\u200c'
 
 // W(suffix) of the unit from cluster start t, with nothing put before it. Two advances measure it: the one before t, where no
 // letters join across t, and the one before the next cluster, which measures it with its own cluster in front (inWordAdvance,
@@ -215,6 +216,25 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
       return { au: unit.startAdvance + unit.canvasAu - suffixAu - after + corrections, standIn: null }
     }
   }
+  // U+200D at the start of a Canvas string takes the font group's first valid font: ComputeRanges starts from it as the
+  // previous font, and a join control keeps the previous font (gfxTextRun.cpp:3609-3613, :3311-3318). The letter after a
+  // join causer takes that font only where it has the letter (:3320-3325), so a letter another font draws is a font range
+  // of its own, shaped without the U+200D, in the form it has at a word's start, which the unit doesn't give it. A join
+  // control after a letter keeps the letter's font, whatever draws it, so the prefix's side is measured as the unit shapes
+  // it. Where the sides don't add up, the suffix is measured once more behind its own first letter, U+200C and U+200D,
+  // less that letter and U+200C: one font range, the letter unjoined, the suffix joined. Where the sides add up that way,
+  // the prefix's side is the value. It stays a stand-in: probe gecko-mainfacts M2 (Mongolian, Syriac and Phags-pa words
+  // under nine listed fonts that lack them, each cut under one or two languages) has W(U+200D suffix) = W(suffix) at all
+  // 26 cuts; of the 24 whose sides don't add up 18 add up this way, the prefix's side is the DOM's advance at 16 of them
+  // and 3 au off at 2, and W(unit) − W(U+200D suffix) is the DOM's at none; Arabic under Georgia, 7 of 7. Two questions
+  // a joined offset whose sides don't add up.
+  if (joiner !== '' && across !== 0 && !reversed && !leftOver) {
+    const first = (p.tUnits[t]! & 0xfc00) === 0xd800 && t + 1 < unit.tEnd ? 2 : 1
+    let letter = ''
+    for (let k = t; k < t + first; k++) letter += String.fromCharCode(p.tUnits[k]!)
+    const behindLetter = rangeAu(run.context, run, p.tUnits, t, unit.tEnd, letter + ZWNJ + ZWJ, '') - rangeAu(run.context, run, p.tUnits, t, t + first, '', ZWNJ)
+    if (prefixAu + behindLetter === unit.canvasAu) sides = 'joined-prefix'
+  }
   const standIn: InWordReason | null = leftOver ? { kind: 'between-ligatures', at: p.tSource[t]! }
     : across !== 0 ? { kind: 'sides', at: p.tSource[t]!, sides, au: sides === 'cluster' ? across : prefixAu + suffixAu, unitAu: unit.canvasAu } : null
   // The value, exact where nothing crosses t and a stand-in otherwise, takes what crosses t as a pair adjustment:
@@ -227,7 +247,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   //   710 + 710 against 780 + 780 and 1420).
   // - GPOS puts all of it on the first glyph, W(unit) − W(suffix), and so does the default where the fact isn't given.
   let au: number
-  if (reversed) au = prefixAu
+  if (reversed || sides === 'joined-prefix') au = prefixAu
   else if (pairKerningAt(run, t) === 'split' && joiner === '') au = prefixAu + (across >> 1)
   else au = unit.canvasAu - suffixAu
   return { au: unit.startAdvance + au + corrections, standIn }

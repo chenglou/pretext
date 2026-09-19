@@ -220,8 +220,9 @@ export type InWordReason =
   | { kind: 'between-ligatures'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
   // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
-  // cluster before the offset and the suffix gain from each other.
-  | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
+  // cluster before the offset and the suffix gain from each other. 'joined-prefix': the sides add up once the suffix is
+  // measured behind its own first letter, and the prefix's side is the value.
+  | { kind: 'sides'; at: number; sides: 'joined' | 'joined-prefix' | 'apart' | 'cluster'; au: number; unitAu: number }
 
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0
