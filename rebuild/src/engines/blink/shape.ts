@@ -33,7 +33,7 @@ import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, s
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
-  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
+  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
@@ -127,10 +127,13 @@ function treatAsZeroWidthSpace(c: number): boolean {
   return c === 0x0c || c === 0x0d || c === 0xfffc || c === 0x200c || c === 0x200d || isDefaultIgnorable(c)
 }
 
-function allDefaultIgnorable(p: BlinkPrepared, from: number, to: number): boolean {
+// Whether [from, to) holds no glyph that every lookup stops at: only default-ignorable characters, which every lookup
+// skips (may_skip, hb-ot-layout-gsubgpos.hh:558-571 at harfbuzz dfdc088c), and marks, which a lookup skips where its flag
+// says IgnoreMarks (check_glyph_property, :554-555) and the kern and kerx pair machine always does (hb-kern.hh:58).
+function holdsNoBase(p: BlinkPrepared, from: number, to: number): boolean {
   for (let i = from; i < to;) {
     const cp = p.text.codePointAt(i)!
-    if (!isDefaultIgnorableHarfBuzz(cp)) return false
+    if (!isDefaultIgnorableHarfBuzz(cp) && !isMark(cp)) return false
     i += cp > 0xffff ? 2 : 1
   }
   return true
@@ -513,15 +516,20 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 // the ignorable's HarfBuzz cluster (hb_form_clusters, hb-ot-shape.cc:578-586), and measured alone Canvas shapes it as a
 // broken cluster the paragraph never has (c-01763358db8471a3: a kasra after SHY gave its neighbour a -2 px adjustment).
 // HarfBuzz's lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a side that holds only
-// default-ignorable characters (U+200B between two letters) reaches to the next cluster.
+// default-ignorable characters (U+200B between two letters) reaches to the next cluster. So does a side that holds only
+// such characters and marks (holdsNoBase): SHY and a kasra between two beh are one cluster of no advance, and natively the
+// letters adjust each other across it as they do across the kasra alone. In Noto Nastaliq Urdu the first beh is 170
+// LayoutUnits narrower before the second, which a window that ends at the kasra measured as 0, so the whole difference
+// fell on the last letter, the space of a wrapped line start at SHY was clamped at 0 and the kasra got a line of its own
+// (c-3b9588a5730c17d8; probe blink-cr5 Z). Canvas says what the two sides change; which glyph carries it is pairBefore16's.
 // `noLigatures` measures it through the no-ligature contexts: the adjustment without liga, clig and calt.
 export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number, noLigatures: boolean = false): number {
   const p = sh.p
   if (k <= lo || k >= hi) return 0
   let a = clusterStartAtOrBefore(p, k - 1, lo)
-  while (a > lo && allDefaultIgnorable(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
+  while (a > lo && holdsNoBase(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
   let b = clusterEndAfter(p, k, hi)
-  while (b < hi && allDefaultIgnorable(p, k, b)) b = clusterEndAfter(p, b, hi)
+  while (b < hi && holdsNoBase(p, k, b)) b = clusterEndAfter(p, b, hi)
   return measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
 }
 
@@ -539,9 +547,9 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   let a = from
   let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
-  while (nearA > from && allDefaultIgnorable(p, nearA, k)) nearA = clusterStartAtOrBefore(p, nearA - 1, lo)
+  while (nearA > from && holdsNoBase(p, nearA, k)) nearA = clusterStartAtOrBefore(p, nearA - 1, lo)
   let nearB = clusterEndAfter(p, k, hi)
-  while (nearB < to && allDefaultIgnorable(p, k, nearB)) nearB = clusterEndAfter(p, nearB, hi)
+  while (nearB < to && holdsNoBase(p, k, nearB)) nearB = clusterEndAfter(p, nearB, hi)
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
   while (whole >= EXACT16 && (a < nearA || b > nearB)) {
