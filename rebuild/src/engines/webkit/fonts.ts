@@ -19,6 +19,7 @@
 // with default emoji presentation (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:440-447;
 // FontCascade::resolveEmojiPolicy, FontCascadeCoreText.cpp:473-523), so such a character still reports canvas-language
 // (lines.ts).
+import { inRanges } from './data.js'
 import { webkitEmojiPresentationRanges, webkitGenericFamilies, webkitGenericFamilyNames } from './generated/fonts.js'
 
 const CORE_TEXT_GENERICS = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
@@ -74,14 +75,5 @@ export function namedFamily(name: string): FamilyName {
 }
 
 export function hasEmojiPresentation(cp: number): boolean {
-  const ranges = webkitEmojiPresentationRanges
-  let low = 0
-  let high = ranges.length / 2 - 1
-  while (low <= high) {
-    const middle = (low + high) >> 1
-    if (cp < ranges[2 * middle]!) high = middle - 1
-    else if (cp > ranges[2 * middle + 1]!) low = middle + 1
-    else return true
-  }
-  return false
+  return inRanges(webkitEmojiPresentationRanges, cp)
 }

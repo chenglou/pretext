@@ -23,11 +23,9 @@ import {
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
 
-// What filling one line reads and keeps. `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's
-// filling decides, on an inspected paragraph (gaps.ts GapSink). `measuredEnd` is the item index past the last item the builder
-// read a width or a break opportunity of: the line's content and the candidate content that ended the line. `shapedCarry` says
-// the width carried to the next line comes from a candidate shaped across inline boxes.
-type Layout = { p: WebKitPrepared; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink; measuredEnd: number; shapedCarry: boolean }
+// What filling one line reads. `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's filling
+// decides, on an inspected paragraph (gaps.ts GapSink).
+type Layout = { p: WebKitPrepared; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
 type LineBreakItem = SoftLineBreakItem | HardLineBreakItem
@@ -928,6 +926,9 @@ function lineStatus(line: Line, availableWidth: number, lineHasContent: boolean,
 
 // ---- TextOnlySimpleLineBuilder (TOS) ----
 
+// A line builder's state. `measuredEnd` is the item index past the last item the builder read a width or a break opportunity
+// of: the line's content and the candidate content that ended the line. `shapedCarry` says the width carried to the next line
+// comes from a candidate shaped across inline boxes.
 type Builder = {
   L: Layout
   rangeStart: number
@@ -936,6 +937,8 @@ type Builder = {
   wrapOpportunityList: ContentItem[]
   line: Line
   spanningInlineBoxes: number[]
+  measuredEnd: number
+  shapedCarry: boolean
 }
 
 type SimpleResult = { isEndOfLine: boolean; committedCount: number; overflowingContentLength: number; overflowLogicalWidth: number | null; isRevert: boolean }
@@ -1107,12 +1110,12 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
   if (b.partialLeadingTextItem !== null) {
     candidateEnd++
     nextIndex++
-    L.measuredEnd = Math.max(L.measuredEnd, nextIndex)
+    b.measuredEnd = Math.max(b.measuredEnd, nextIndex)
     if (isAtSoftWrapOpportunityOrContentEnd(b.partialLeadingTextItem)) isEndOfLine = process()
   }
   while (!isEndOfLine && nextIndex < b.rangeEnd) {
     const item = items[nextIndex++]!
-    L.measuredEnd = Math.max(L.measuredEnd, nextIndex)
+    b.measuredEnd = Math.max(b.measuredEnd, nextIndex)
     if (item.kind === 'text') {
       candidateWidth = f32(candidateWidth + measuredItemWidth(L, item, f32(lastRunLogicalRight(b.line) + candidateWidth)))
       candidateEnd++
@@ -1146,7 +1149,7 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
       trailingLineBreakIndex = nextIndex
     }
     nextIndex++
-    L.measuredEnd = Math.max(L.measuredEnd, nextIndex)
+    b.measuredEnd = Math.max(b.measuredEnd, nextIndex)
     isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreakIndex !== null
   }
   if (trailingLineBreakIndex !== null && candidateEnd === b.rangeStart) {
@@ -1301,7 +1304,7 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
   const L = b.L
   const items = L.p.items
   const candidate: Candidate = { content: newContent(), trailingLineBreak: null, trailingWordBreakOpportunity: null, hasTrailingSoftWrapOpportunity: false }
-  L.measuredEnd = Math.max(L.measuredEnd, endIndex)
+  b.measuredEnd = Math.max(b.measuredEnd, endIndex)
   let right = currentLogicalRight
   let index = startIndex
   if (index === b.rangeStart && b.partialLeadingTextItem !== null) {
@@ -1622,7 +1625,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
         b.wrapOpportunityList.pop()
         return lineBuilderResult(true, rebuildLineWithInlineContent(b, b.wrapOpportunityList[b.wrapOpportunityList.length - 1]!), true)
       }
-      b.L.shapedCarry = candidate.content.hasShapedContent
+      b.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, 0, false, 0, overflowWidthAsLeadingForNextLine(runs, r))
     }
     case 'wrap-with-hyphen':
@@ -1640,7 +1643,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
       const committed = t.trailingRunIndex + 1
       if (t.partialRun === null) return lineBuilderResult(true, committed)
       const item = runs[t.trailingRunIndex]!.item as WebKitTextItem
-      b.L.shapedCarry = candidate.content.hasShapedContent
+      b.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, committed, false, item.end - item.start - t.partialRun.length, overflowWidthAsLeadingForNextLine(runs, r))
     }
   }
@@ -1860,8 +1863,8 @@ export function textIndent(p: WebKitPrepared, start: WebKitLineStart): number {
 }
 
 // What a builder placed: the closed line, where its content ends, the width the rest of a split item carries to the next
-// line, and what the alignment reads (IFU:198-276).
-type Placed = { line: Line; end: Position; overflowLogicalWidth: number | null; isLastLineOrLineEndsWithForcedLineBreak: boolean }
+// line and whether that comes from shaping across inline boxes, what the alignment reads (IFU:198-276), and how far it read.
+type Placed = { line: Line; end: Position; overflowLogicalWidth: number | null; carriedFromShaping: boolean; isLastLineOrLineEndsWithForcedLineBreak: boolean; measuredEnd: number }
 
 // The rest of the item the line before split. InlineTextItem::right (InlineTextItem.cpp:65-71) keeps the carried width as the
 // stored width.
@@ -1873,10 +1876,10 @@ function partialLeadingTextItem(p: WebKitPrepared, start: WebKitLineStart): WebK
 
 // hasInlineBoxesOnly (RangeBasedLineBuilder.cpp:51-78): one line of the inline box runs, no content, eligible spans have no
 // decoration.
-function placeInlineBoxesOnly(p: WebKitPrepared): Placed {
+function placeInlineBoxesOnly(p: WebKitPrepared, start: WebKitLineStart): Placed {
   const line = newLine([])
   for (let i = 0; i < p.items.length; i++) line.runs.push(elementRun(p.items[i] as InlineBoxItem, 0, 0))
-  return { line, end: { index: p.items.length, offset: 0 }, overflowLogicalWidth: null, isLastLineOrLineEndsWithForcedLineBreak: true }
+  return { line, end: { index: p.items.length, offset: 0 }, overflowLogicalWidth: null, carriedFromShaping: false, isLastLineOrLineEndsWithForcedLineBreak: true, measuredEnd: start.itemIndex }
 }
 
 // TextOnlySimpleLineBuilder over the whole item list, or inside the span of RangeBasedLineBuilder
@@ -1886,13 +1889,12 @@ function placeWithSimpleBuilder(L: Layout, start: WebKitLineStart, rangeBased: b
   const itemsEnd: Position = { index: items.length, offset: 0 }
   const rangeStart = rangeBased && start.isFirstFormattedLine ? start.itemIndex + 1 : start.itemIndex
   const rangeEnd = rangeBased ? items.length - 1 : items.length
-  const b: Builder = { L, rangeStart, rangeEnd, partialLeadingTextItem: partialLeadingTextItem(L.p, start), wrapOpportunityList: [], line: newLine([]), spanningInlineBoxes: [] }
+  const b: Builder = { L, rangeStart, rangeEnd, partialLeadingTextItem: partialLeadingTextItem(L.p, start), wrapOpportunityList: [], line: newLine([]), spanningInlineBoxes: [], measuredEnd: start.itemIndex, shapedCarry: false }
   const single = items[0]
   if (!rangeBased && items.length === 1 && single !== undefined && single.kind === 'text' && single.end - single.start <= 1 && !single.isWhitespace) {
     // placeSingleCharacterContentIfApplicable (TOS:164-196): one line, the stored width, no fit test.
-    L.measuredEnd = 1
     appendTextFast(L, b.line, single, single.width ?? 0)
-    return { line: b.line, end: itemsEnd, overflowLogicalWidth: null, isLastLineOrLineEndsWithForcedLineBreak: true }
+    return { line: b.line, end: itemsEnd, overflowLogicalWidth: null, carriedFromShaping: false, isLastLineOrLineEndsWithForcedLineBreak: true, measuredEnd: 1 }
   }
   const placed = L.p.style.wrap ? placeInlineTextContent(b) : placeNonWrappingInlineTextContent(b)
   const reachesRangeEnd = placed.end.index === rangeEnd && placed.end.offset === 0
@@ -1906,20 +1908,21 @@ function placeWithSimpleBuilder(L: Layout, start: WebKitLineStart, rangeBased: b
   }
   // TOS:113-117: the placed content reaches the range end, or the line ends with a line break.
   return {
-    line: b.line, end: rangeBased && reachesRangeEnd ? itemsEnd : placed.end, overflowLogicalWidth: placed.overflowLogicalWidth,
-    isLastLineOrLineEndsWithForcedLineBreak: reachesRangeEnd || isLineBreakRun(b.line.runs[b.line.runs.length - 1]),
+    line: b.line, end: rangeBased && reachesRangeEnd ? itemsEnd : placed.end, overflowLogicalWidth: placed.overflowLogicalWidth, carriedFromShaping: false,
+    isLastLineOrLineEndsWithForcedLineBreak: reachesRangeEnd || isLineBreakRun(b.line.runs[b.line.runs.length - 1]), measuredEnd: b.measuredEnd,
   }
 }
 
 function placeWithLineBuilder(L: Layout, start: WebKitLineStart): Placed {
   const items = L.p.items
   const spanning = lineSpanningInlineBoxes(L.p, start.itemIndex)
-  const b: Builder = { L, rangeStart: start.itemIndex, rangeEnd: items.length, partialLeadingTextItem: partialLeadingTextItem(L.p, start), wrapOpportunityList: [], line: newLine(spanning), spanningInlineBoxes: spanning }
+  const b: Builder = { L, rangeStart: start.itemIndex, rangeEnd: items.length, partialLeadingTextItem: partialLeadingTextItem(L.p, start), wrapOpportunityList: [], line: newLine(spanning), spanningInlineBoxes: spanning, measuredEnd: start.itemIndex, shapedCarry: false }
   const placed = placeInlineAndFloatContent(b, { index: start.itemIndex, offset: start.offset })
   // ILB:355-362: the last line with inline content, the end of the layout range, or a trailing forced line break.
   return {
-    line: b.line, end: placed.end, overflowLogicalWidth: placed.overflowLogicalWidth,
+    line: b.line, end: placed.end, overflowLogicalWidth: placed.overflowLogicalWidth, carriedFromShaping: placed.overflowLogicalWidth !== null && b.shapedCarry,
     isLastLineOrLineEndsWithForcedLineBreak: placed.isLastInlineContent || (placed.end.index === items.length && placed.end.offset === 0) || isLineBreakRun(b.line.runs[b.line.runs.length - 1]),
+    measuredEnd: b.measuredEnd,
   }
 }
 
@@ -1935,10 +1938,10 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
   const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? textIndent(p, start) : 0, placesSlotFloats)
-  const L: Layout = { p, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [], measuredEnd: start.itemIndex, shapedCarry: false }
+  const L: Layout = { p, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [] }
   let placed: Placed
   switch (builder) {
-    case 'inline-boxes-only': placed = placeInlineBoxesOnly(p); break
+    case 'inline-boxes-only': placed = placeInlineBoxesOnly(p, start); break
     case 'text-only-simple': placed = placeWithSimpleBuilder(L, start, false); break
     case 'range-based': placed = placeWithSimpleBuilder(L, start, true); break
     case 'line-builder': placed = placeWithLineBuilder(L, start); break
@@ -1949,7 +1952,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   const placedNothing = lineContentEnd.index === start.itemIndex && lineContentEnd.offset === start.offset
   if (placedNothing && L.constrainedByFloat && !(lineContentEnd.index === itemsEnd && lineContentEnd.offset === 0)) {
     // The refused build placed the slot floats, so the next build finds them in the formatting context.
-    return { kind: 'below-floats', line: { engine: 'webkit', kind: 'below-floats', from: start, slot, measuredEnd: L.measuredEnd, gaps: L.gaps }, next: { ...start, hasFloats: true } }
+    return { kind: 'below-floats', line: { engine: 'webkit', kind: 'below-floats', from: start, slot, measuredEnd: placed.measuredEnd, gaps: L.gaps }, next: { ...start, hasFloats: true } }
   }
   let next: Position = lineContentEnd
   if (start.previousLine !== null) {
@@ -1966,12 +1969,12 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   const hasContentfulInFlowContent = lineHasVisuallyNonEmptyContent(p, line)
   return {
     kind: 'line',
-    line: { engine: 'webkit', kind: 'line', from: start, slot, builder, rect, line, start: lineStart, end: lineEnd, isLastLineOrLineEndsWithForcedLineBreak: placed.isLastLineOrLineEndsWithForcedLineBreak, measuredEnd: L.measuredEnd, gaps: L.gaps },
+    line: { engine: 'webkit', kind: 'line', from: start, slot, builder, rect, line, start: lineStart, end: lineEnd, isLastLineOrLineEndsWithForcedLineBreak: placed.isLastLineOrLineEndsWithForcedLineBreak, measuredEnd: placed.measuredEnd, gaps: L.gaps },
     start: lineStart,
     end: lineEnd,
     next: isEnd ? null : {
       engine: 'webkit', itemIndex: next.index, offset: next.offset,
-      previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: isLineBreakRun(line.runs[line.runs.length - 1]), carriedFromShaping: overflowLogicalWidth !== null && L.shapedCarry },
+      previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: isLineBreakRun(line.runs[line.runs.length - 1]), carriedFromShaping: placed.carriedFromShaping },
       isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
       hasFloats,
     },

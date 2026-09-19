@@ -4,7 +4,7 @@
 // Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer.
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
-import { webkitGraphemeRules } from './data.js'
+import { inRanges, webkitGraphemeRules } from './data.js'
 import { collapsesWhiteSpace, preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitTextItem } from './types.js'
 
@@ -95,18 +95,6 @@ function spacingCanChangeShaping(box: WebKitBox, s: string): boolean | null {
       drawn = true
     }
     if (!drawn) return null
-  }
-  return false
-}
-
-function inRanges(ranges: readonly number[], cp: number): boolean {
-  let low = 0
-  let high = ranges.length / 2 - 1
-  while (low <= high) {
-    const middle = (low + high) >> 1
-    if (cp < ranges[2 * middle]!) high = middle - 1
-    else if (cp > ranges[2 * middle + 1]!) low = middle + 1
-    else return true
   }
   return false
 }
