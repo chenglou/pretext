@@ -81,12 +81,14 @@ export type InWordEntry = {
   row: Row | null
   // The advance before the offset (advanceBefore).
   advance: InWordAdvance | null
+  // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
+  suffixAu: number | null
 }
 
 function entryAt(p: GeckoPrepared, t: number): InWordEntry {
   const known = p.inWord[t] ?? null
   if (known !== null) return known
-  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null }
+  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
   p.inWord[t] = entry
   return entry
 }
@@ -100,6 +102,15 @@ export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): I
   const entry = entryAt(p, t)
   if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
   return entry.advance
+}
+
+// W(suffix) of the unit from cluster start t, with nothing put before it. Two advances measure it: the one before t, where no
+// letters join across t, and the one before the next cluster, which measures it with its own cluster in front (inWordAdvance,
+// `withCluster`). Whichever comes first asks Canvas, and the other reads it here.
+function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): number {
+  const entry = entryAt(p, t)
+  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.context, run, p.tUnits, t, unit.tEnd)
+  return entry.suffixAu
 }
 
 function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): InWordAdvance {
@@ -193,7 +204,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   const leftOver = row !== null && row.unconfirmed
   const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
   const reversed = shapedReversed(p, run, unit, t)
-  const suffixAu = rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
+  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
@@ -215,10 +226,10 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // Where the cluster before t has no joining forms, it shapes alone as it does after its own neighbour, and put in front
     // of the suffix it shows the same thing: what the two gain from each other is W(cluster and suffix) − W(suffix) −
     // W(cluster). That asks Canvas for one long string per offset instead of two, and the offset before it has asked for
-    // the other already (a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
+    // the other already (suffixAlone; a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
     // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
     // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
-    const withCluster = a === unit.tStart ? unit.canvasAu : rangeAu(run.context, run, p.tUnits, a, unit.tEnd)
+    const withCluster = a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
     across = withCluster - suffixAu - rangeAu(run.context, run, p.tUnits, a, t)
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'

@@ -1027,6 +1027,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // script run limit.
     const scriptLimits = new Set<number>()
     for (let k = 0; k < run.scriptRuns.length; k++) scriptLimits.add(run.scriptRuns[k]!.limit)
+    // The width of U+0020 in the run's context, which every boundary space of the run takes: asked at the first one.
+    let spaceAu: number | null = null
     // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
     const spaces = gaps.spaceTest(sink, context, firstRun, tUnits, tSource, b.tStart)
     for (let t = b.tStart; t < b.tEnd;) {
@@ -1036,7 +1038,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       const invalid = !boundary && (b.is8bit ? isInvalidChar8(ch) : isInvalidChar16(ch))
       let unit: GeckoUnit
       if (boundary) {
-        let w = au(ch === 0x20 ? ' ' : ' ')
+        spaceAu ??= au(' ')
+        let w = spaceAu
         // A character after U+200D takes the font of the character before it where that font has it (FindFontForChar,
         // gfxTextRun.cpp:3319-3325), and a boundary space is the space glyph of its own font run (gfxTextRun.cpp:1590-1622).
         // So after a word that ends in U+200D the space is the word's last font's: the word with the space after it, less
@@ -1098,19 +1101,24 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             // color glyphs (gfxTextRun.cpp:3541-3546); a cluster extender takes the previous character's font (:3181-3194).
             const presentation = emojiPresentation(first)
             if (presentation === 'text-only') continue
-            const atCssSize = au(cluster)
+            // One measureText gives the cluster's width and its ink box, in the run's font list and in "Apple Color Emoji" alone.
+            const own = bounds(context, cluster)
+            const inEmoji = bounds(emojiFontContext(font.size), cluster)
+            const atCssSize = Math.round(own.width * CANVAS_AU_PER_PX)
+            // The cluster's Canvas au at the device size where Apple Color Emoji draws it, null where another font does.
             // The ink box too: a text font whose widths happen to equal Apple Color Emoji's at both sizes still draws another
             // glyph. Probe gecko-port F11 (.artifacts/probes/gecko/round2b): U+1F600 in Arial, Menlo, "Apple Symbols" and
             // "Times New Roman" measures as in "Apple Color Emoji" alone, box [60, 1020] au, and U+263A in Arial doesn't (980 au,
             // box [−131.25, 848.91]).
-            const sameBox = (a: { left: number; right: number }, b: { left: number; right: number }) => a.left === b.left && a.right === b.right
-            const inEmojiFont = atCssSize === auIn(emojiFontContext(font.size), cluster) &&
-              auIn(deviceContext, cluster) === auIn(emojiFontContext(devSize), cluster) &&
-              sameBox(bounds(context, cluster), bounds(emojiFontContext(font.size), cluster))
+            let deviceAu60: number | null = null
+            if (atCssSize === Math.round(inEmoji.width * CANVAS_AU_PER_PX)) {
+              const atDeviceSize = auIn(deviceContext, cluster)
+              if (atDeviceSize === auIn(emojiFontContext(devSize), cluster) && own.left === inEmoji.left && own.right === inEmoji.right) deviceAu60 = atDeviceSize
+            }
             const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
             const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
             gaps.textPresentationSearch(sink, firstRun, font, first, presentation, next, clusterAt)
-            if (!inEmojiFont) {
+            if (deviceAu60 === null) {
               gaps.pinnedEmojiFont(sink, firstRun, first, presentation, next, atCssSize, clusterAt)
               continue
             }
@@ -1118,7 +1126,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             gaps.deviceSizeOffGrid(sink, firstRun, apd, devSize, clusterAt)
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
-            const deviceAu60 = auIn(deviceContext, cluster)
             let dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
             if ((deviceAu60 * apd) % 60 !== 0) {
               // Canvas's au at the device size rounds once at apd 60, and the DOM rounds at the page's apd. Under a bold font
