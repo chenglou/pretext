@@ -518,11 +518,10 @@ lab's adapter makes from the library's function set, one slot at a time (`lab/pr
 Per slot the library returns a fill result (`FillResultOf`, `src/model.ts`): what filling the slot decided, and the engine's
 own record of the decided line. Two functions read that record and nothing writes it: `linePieces` gives what a painter
 takes (`LinePieces<Facts>`), and `inspectLine`, on a paragraph prepared for inspection, the engine's geometry and the gaps
-the line's breaks decide (`LineInspectionOf`). A row's line is the three together, with the two insets of its slot. Until a
-port keeps a record of its own, the record holds what its `nextLine` returns, a `LineOf` of `src/model.ts` with every one
-of those fields, computed while the line is filled. Each engine's geometry (§2.3-§2.5) and the state its next line starts
-from (§2.7) are types of its own, in `src/engines/<engine>/geometry.ts`: types only, and the one engine file the lab
-imports, since a row keeps both whole.
+the line's breaks decide (`LineInspectionOf`). A row's line is the three together, with the two insets of its slot. Each
+port keeps a record of its own (§2.9): pieces and geometry are made when they are read, not while the line is filled.
+Each engine's geometry (§2.3-§2.5) and the state its next line starts from (§2.7) are types of its own, in
+`src/engines/<engine>/geometry.ts`: types only, and the one engine file the lab imports, since a row keeps both whole.
 
 ```ts
 // src/model.ts: what the function set returns (§2.9)
@@ -895,8 +894,8 @@ from the pushed frame).
   alone can't say whether a start at an atomic inline comes before it or after it. Gecko's redo lives inside one line:
   when a frame overflows after an earlier break position was recorded, the block lays the whole line out again, once,
   with that break forced (specs/gecko-lines.md §4.1, §4.7). `aa b<span style="color:red">bbbbb</span>` in 16px Courier
-  New at 57.6px places `aa b` and overflows on `bbbbb`; the redo breaks before `b`, giving `aa` / `bbbbbb`. `nextLine`
-  returns only the final pass.
+  New at 57.6px places `aa b` and overflows on `bbbbb`; the redo breaks before `b`, giving `aa` / `bbbbbb`. `fillLine`
+  keeps only the final pass's frames; an inspected line keeps the gaps of both passes (§2.8).
 
 ### 2.8 Gaps and the measure log
 
@@ -910,18 +909,35 @@ where it may be wrong.
   `inspectLine`. Filling a line never changes the prepared paragraph, so a prepared paragraph can serve lines in other
   slots, and at other widths, without mixing their gaps (DESIGN-REVIEW.md §3.5).
 - Gaps are read from a paragraph prepared for inspection (`prepare(paragraph, env, true)`), which the lab always does.
-  `inspectLine` and `paragraphGaps` throw on a paragraph prepared plain. Until each port computes its gaps on request, a
-  plain paragraph computes them all the same and gives the same lines from the same Canvas questions
-  (`tests/function-set.ts plain`).
+  `inspectLine` and `paragraphGaps` throw on a paragraph prepared plain. Every port computes its gaps on request (since
+  the re-architecture's X1): a plain paragraph computes no gap and asks Canvas nothing that only a gap or an inspected
+  value reads. It gives the inspected paragraph's fill results and pieces on every recorded case, from fewer Canvas
+  questions, each one the lab's path asks too; where a later fill needs a question that inspection asked first, the plain
+  path first asks it later (`tests/function-set.ts plain`; TESTS.md, "The function set's checks"). Questions a paragraph,
+  plain against inspected: Blink 61.18 against 99.97 without facts and 48.49 against 91.91 with the lab's facts; WebKit
+  26.14 against 31.81 and 12.38 against 19.18; Gecko 40.7 against 74.2 and 40.8 against 74.5 (the X1 sections of
+  specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md).
+- Each port keeps every gap condition in one file, `engines/<engine>/gaps.ts`. A function that raises a gap takes a sink
+  first (`GapSink`: `Gap[]`, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
+  done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
+  `inspectLine` starts from a copy of it. What else only gaps read is in `prepared.inspect`, null on a plain paragraph;
+  nothing else says which of the two a paragraph is.
 - WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,
   the content that ended the line included, with `at` naming them; its paragraph keeps only `page-zoom` (added in ceiling
-  round 2).
+  round 2). The filling itself raises the four conditions a break decision shows (`hyphen-glyph`, the 8-bit emergency
+  break's `string-storage`, `dictionary-breaks-stand-in` between boxes, `rtl-shaping-across-inline-boxes`); `lineGaps`
+  (`engines/webkit/gaps.ts`) adds the conditions of every character the filling measured, then `page-history` from the
+  line as each history world fills it. The box facts only gaps read and the history worlds are in `prepared.inspect`.
 - Blink reports the conditions of the content in `layout.gaps` with `at`, computed in `prepare` from the content alone
   (control characters Canvas replaces, U+FFFC, graphemes whose Canvas strings shape under another script, default
   ignorables left out of 8-bit strings, shaping-group edges inside graphemes, joining edges at group edges), and adds each
   one that concerns the content a line's break decision measured past its end, up to the next break opportunity, to that
   line's gaps. Edge conditions (reshapes, pair adjustments at a chosen edge, positions inside graphemes) stay line gaps
-  with `at` naming the offset (added in ceiling round 2).
+  with `at` naming the offset (added in ceiling round 2). A plain paragraph also computes no limit, glyph cluster or offset
+  mapping: `engines/blink/limits.ts` holds the limits, and only `gaps.ts` and `inspect.ts` call it.
+- Gecko's decided line keeps what its fill raised and the in-word stand-in offsets its break scans consulted, across both
+  passes of a redo; `inspectLine` reports from them. What a plain paragraph doesn't ask: the characters of placed frames,
+  the space-in-shaping windows, a letter-spaced unit's group count at 2px, the positions a stand-in tab rests on.
 
 `measure` is the adapter's count of the layout's Canvas work (§4.6).
 
@@ -954,9 +970,24 @@ reads. `linePieces` and `inspectLine` are pure functions of their arguments: the
 (`tests/function-set.ts pure`). A line start, `firstLine`'s or a fill result's `next`, is small plain data that names
 positions in the prepared paragraph's lists and holds nothing of it (§2.7), and a line's pieces are made for that line:
 two properties to keep, since a line start made from a source offset, and output an application may hold on to, rest on
-them (research/INCREMENTAL-API-READING.md §4). Each port's functions are today over its `nextLine`, which computes
-pieces, geometry and gaps while it fills a line, plain or inspected; a port's own decided line replaces that, function by
-function, without the set changing.
+them (research/INCREMENTAL-API-READING.md §4).
+
+Since the re-architecture's X1 each port's functions are its own, over its own decided line. `fillLine` decides where the
+line breaks and gives the source range. It makes no fragment, no Blink item and no WebKit display box, and it doesn't
+trim or align Gecko's line. `linePieces` and `inspectLine` read the decided line and write nothing:
+
+- Blink's decided line is `LineBreaker::NextLine`'s `LineInfo` with the line start and, inspected, the gaps its filling
+  raised; a refused slot keeps the same record, its gaps read from the line that overflowed. `fillLine` (`index.ts`) gives
+  the source range from the two line starts. `linePieces` is `pieces.ts`; `inspectLine` is `gaps.ts` `lineGaps`, then
+  `inspect.ts`. Justification's sizes are data handed from `justificationOf` to `itemsOf`; before X1 they were written
+  into the item results.
+- WebKit's decided line is the closed `Line` with the start and the slot it was filled from and in, the builder, the line
+  rect, the source range and, inspected, the gaps its filling raised. `fillLine` is in `lines.ts`, `linePieces` and
+  `lineGeometry` in `output.ts`, and `inspectLine` is `gaps.ts` `lineGaps`, then `lineGeometry`.
+- Gecko's decided line is the start, the band, the last pass's spans as reflow left them, the next position and, inspected,
+  the gaps the passes raised with the in-word stand-in offsets they consulted. `fillLine` (`lines.ts`) runs the passes
+  alone. `placement.ts` trims, aligns and justifies on its own copy of the spans; `pieces.ts` and `inspect.ts` read the
+  placed copy, and `inspect.ts` alone measures the characters and then calls `gaps.ts` `lineGaps`.
 
 The insets are the margin-box widths of the floats beside the line, and each engine turns them into its own line offsets
 with its own arithmetic, which is why a slot isn't one available width: Blink truncates the content width and each float's
@@ -1205,10 +1236,20 @@ never measures wastes calls. Engine-true output adds one kind of measurement: th
 |---|---|---|---|
 | Blink | every shaping group's words | [start, first safe) at a wrapped line start; [last safe, break) at a line end that isn't at a space, or at any line end where `NeedsAccurateEndPosition` holds; tab widths at their position; the hyphen, once per result | prefix widths at the cluster boundaries of the line's text and tab items |
 | WebKit | stored widths of word pieces and single spaces | `breakWord` prefixes from the item start (a bisection over O(log n) prefixes); widths deferred by bidi splits; preserved white space containing TAB; the hyphen string | nothing: boxes are sums of item widths |
-| Gecko | every shaping unit's advance; the space | tab stops from the containing block's space width; the hyphen run | per-character advances inside the line's frames, `W(unit) − W(suffix)` at cluster starts |
+| Gecko | every shaping unit's advance; the space | tab stops from the containing block's space width; the hyphen run | per-character advances inside the line's frames, `W(unit) − W(suffix)` at cluster starts, and the justification spacing |
 
 The third column is what the charter's tentpole 8 asks to record: its calls are in the log and cost a Canvas call per
-cluster boundary of placed text in Blink and Gecko.
+cluster boundary of placed text in Blink and Gecko. It belongs to the inspected path: `inspectLine` alone asks it, on an
+inspected paragraph. `linePieces` asks little: in Blink the prefix before hanging spaces inside an item, for `overflows`;
+in Gecko the trimmed white space's advance where it lies inside a shaping unit (U+1680); in WebKit nothing.
+
+An inspected paragraph also measures for gaps alone, in every column, and a plain one asks none of it (§2.8 has the
+counts). Blink: the script work at letter spacing 0, the position bounds around a break candidate, the limit a wrapped
+line start's clamp rests on with the line laid out the other way, a fit test's rounding slack, the hyphen's U+002D, the
+float sum's per-cluster advances and every no-ligature window. WebKit: LastResort beside the coverage test, the item
+widths of the history worlds, per line the conditions' own tests, and every line again in each history world that changes
+an item it read. Gecko: the space-in-shaping windows, a letter-spaced unit's group count at 2px, the positions a stand-in
+tab rests on and the in-word report's positions.
 
 ### 4.6 Contexts, the memo and the call log
 
@@ -1242,6 +1283,11 @@ declaration, which waits for profiling. The Canvas checks of engine detection (�
 
 "Handled" means the recipe gives the DOM's value. A named gap is reported in `layout.gaps` or `line.gaps` (§2.8) under
 the stated condition. A given fact never reports a gap; its null default does.
+
+In each port every condition with its test, its prose and its order, Blink's and WebKit's merge rules (Gecko merges
+nothing), and the measuring only a gap needs are in `engines/<engine>/gaps.ts`, and nothing else in the port builds a gap
+(§2.8). Gecko's stand-in reasons are tagged unions (`advance.ts` `InWordReason`, `gaps.ts` `TabReason`) that carry the
+numbers the prose prints, and `gaps.ts` prints them.
 
 | Gap | Engines | What differs | Handling | Predictions can be wrong when |
 |---|---|---|---|---|
@@ -1759,8 +1805,8 @@ rebuild/
     index.ts        prepare, firstLine, fillLine, linePieces, inspectLine, paragraphGaps: the dispatch over the engines'
                     function sets (§2.9), the engine-build gap                                                        architect
     model.ts        input tree, font facts, line slots, fragments, gaps, what the function set returns (FillResultOf,
-                    LinePieces, LineInspectionOf), LineOf and LineResultOf while the ports' nextLine returns them;
-                    names no engine                                                                                   architect
+                    LinePieces, LineInspectionOf), LineOf, the shape the ports' tests read a line in (test-lines.ts), and
+                    LineResultOf, which no port returns since X1; names no engine                                     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
     paint.ts        paintLines()                                                                                      architect
@@ -1771,9 +1817,14 @@ rebuild/
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
     breaks/         rbbi.ts, icu4x.ts, pair-table.ts, rbbi.test.ts                                                    architect
     engines/
-      blink/        index.ts, types.ts; the port's files and tests                                                   Blink owner
-      webkit/       index.ts, types.ts                                                                                WebKit owner
-      gecko/        index.ts, types.ts                                                                                Gecko owner
+      blink/        index.ts (prepare, the decided line and the function set), types.ts, line-breaker.ts (what fills a
+                    line), shape.ts (widths from Canvas), pieces.ts (linePieces), inspect.ts and limits.ts (what
+                    inspectLine computes), gaps.ts (every gap condition); the port's other files and tests            Blink owner
+      webkit/       index.ts, types.ts, content.ts (prepare), breaks.ts, measure.ts, lines.ts (filling and the decided
+                    line), output.ts (pieces and geometry from a decided line), gaps.ts (every gap; the box facts and
+                    history worlds of an inspected paragraph); the port's other files and tests                       WebKit owner
+      gecko/        index.ts, types.ts, prepare.ts, measure.ts, advance.ts, lines.ts (a fill and the decided line),
+                    placement.ts, pieces.ts, inspect.ts, gaps.ts; the port's other files and tests                    Gecko owner
                     and in each: index.ts exports the function set; geometry.ts (the line geometry and line start the rows keep: types only, the one
                     engine file the lab imports), data.ts (its break rules, grapheme rules and BidiData), checks.ts
                     (what it asks of measure/canvas-checks.ts and measure/font-checks.ts), generated/

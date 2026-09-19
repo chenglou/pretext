@@ -39,9 +39,30 @@ a run's parts under `--runs`, whichever checkout recorded it, and reads them bef
 **The function set's checks** (since the re-architecture's S3, when `rebuild/src/index.ts` began to export the set of
 DESIGN.md §2.9; lab README "Test tiers"): `bun rebuild/tests/function-set.ts plain|pure|sweep --browser=all --config=all`
 holds the library to itself over every recorded case. *Plain*: a paragraph prepared plain gives the inspected one's fill
-results and pieces and asks Canvas nothing else. *Pure*: `linePieces` and `inspectLine` give the same result twice and in
-either order. *Sweep*: one prepared paragraph filled at four widths on a stand-in Canvas equals a paragraph prepared for
-each width alone. All three pass on the six references (389,646 cases in all), in about 1.5, 2 and 10 minutes.
+results and pieces, asks no question the lab's path didn't and makes no more contexts. *Pure*: `linePieces` and
+`inspectLine` give the same result twice and in either order. *Sweep*: one prepared paragraph filled at four widths on a
+stand-in Canvas equals a paragraph prepared for each width alone. All three pass on the six references (389,646 cases in
+all), in about 1.5, 2 and 10 minutes.
+
+Since the re-architecture's X1 the plain path is real in all three ports. Questions a paragraph, plain against the lab's
+path: Chrome 61.18 against 99.97 without facts and 48.49 against 91.91 with them; webkit-host 26.14 against 31.81 and
+12.38 against 19.18; Firefox 40.7 against 74.2 and 40.8 against 74.5. The plain check changed with it (2026-09-18; the
+header of `rebuild/tests/function-set.ts`). It fails on results that differ, on a question the lab's path didn't ask and
+on more contexts. It no longer fails on order: a case whose first asks come in another order than the lab's passes and is
+counted (at the X1 merge Chrome 26,035 without facts and 21,826 with, Firefox 11,418 and 11,422, webkit-host 1,174 and
+1,218). No path that asks less can keep the lab path's order. The lab's path asks inspection's questions between two
+fills, so a later fill's repeat of one is a memo hit there and a first ask on the plain path, after questions the lab's
+path asked later.
+
+What covers question order is the plain predictor's browser run (`browser-sets.ts
+--predictor=rebuild/lab/baselines/plain-predictor.ts`, compared with `compare-sets.ts --prediction=line-ranges`). It is
+part of every milestone that changes the plain path's questions. At X1:
+
+- Chrome, all 67,065 no-facts cases: line ranges equal, 0 native differences.
+- Firefox, 63,771 cases: 63,657 equal. The other 114 are in one browser process and all already history-dependent in the
+  ledger; a rerun of that set gave 0 differences on 19,888 cases.
+- webkit-host, the development sets, 26,472 rows: 0 line ranges differ; 2 native observations differ, both already
+  history-dependent in the ledger. The held-out sets are being run now.
 
 Terms:
 
