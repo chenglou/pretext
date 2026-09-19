@@ -17,7 +17,7 @@ export type GeckoCharacter = {
   // justification spacing and tab width after it (gfxTextRun.cpp:1214-1256, nsTextFrame.cpp:4089-4295).
   advance: number
   // The position before the unit is a stand-in: it lies inside a shaping unit, whose glyph records come from one shaping
-  // of the whole unit, and Canvas couldn't confirm it (`in-word-prefix`; engines/gecko/lines.ts advanceBefore). The
+  // of the whole unit, and Canvas couldn't confirm it (`in-word-prefix`; engines/gecko/advance.ts advanceBefore). The
   // advances on both sides of such a position are stand-ins; their sum isn't. false when skipped.
   standInBefore: boolean
 }
@@ -89,7 +89,7 @@ export type GeckoLineGeometry = {
 // frame (the item's `at` otherwise), and whether no earlier line of the block had content, so text-indent still applies:
 // BlockReflowState::AdvanceToNextLine counts only lines whose line layout wasn't empty (BlockReflowState.h:251-257), and
 // BeginLineReflow indents line number 0 (nsLineLayout.cpp:178-201). No measured remainder carries over; a line's single redo
-// with a forced break happens inside nextLine (specs/gecko-lines.md §4.1, §4.7).
+// with a forced break happens inside fillLine (specs/gecko-lines.md §4.1, §4.7).
 export type GeckoLineStart = {
   engine: 'gecko'
   frame: number

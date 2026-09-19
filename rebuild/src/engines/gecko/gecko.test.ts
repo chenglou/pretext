@@ -7,14 +7,16 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { paragraphGaps, prepare } from '../../index.js'
 import type { Measurer } from '../../measure/canvas.js'
-import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type Paragraph } from '../../model.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineOf, type Paragraph } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
-import type { GeckoTextFrame } from './geometry.js'
-import { fillLine, firstLine, inspectLine, linePieces } from './index.js'
+import type { GeckoLineGeometry, GeckoLineStart, GeckoTextFrame } from './geometry.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps as geckoParagraphGaps } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
-import type { GeckoLine } from './types.js'
+
+// A line as the tests read it: what everyLine gathers of a decided line (test-lines.ts).
+type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 
 // The stand-in's widths in au at apd 60. Any code point is 576 au at 16px, scaled with the size, with these exceptions,
 // each modelled on an installed-Firefox measurement:
@@ -379,14 +381,14 @@ describe('gecko engine output', () => {
   test('in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes', () => {
     const p = paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' })
     const prepared = prepareGecko(p, env, true)
-    const before = prepared.gaps.length
+    const before = geckoParagraphGaps(prepared).length
     const slot = { width: p.width, left: 0, right: 0 }
     const first = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
     const again = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
     expect(first.map(g => g.gap)).toContain('in-word-prefix')
     expect(again).not.toBe(first)
     expect(again.map(g => g.gap)).toEqual(first.map(g => g.gap))
-    expect(prepared.gaps.length).toBe(before)
+    expect(geckoParagraphGaps(prepared).length).toBe(before)
     expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
   })
   test('letters joined across an in-word offset: both sides are measured with U+200D, and the prefix is exact where they add up', () => {
@@ -500,7 +502,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
     const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, true)
     expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
-    expect(long.gaps.map(g => g.gap)).toEqual([])
+    expect(geckoParagraphGaps(long).map(g => g.gap)).toEqual([])
   })
 
   test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {
@@ -886,5 +888,62 @@ describe('round 4c', () => {
     // The same spaces before a soft wrap do hang: the text moves to the line's end.
     const wrapped = layout(paragraph([run('aa bb    cc')], 57.6, { textAlign: 'end', whiteSpace: 'pre-wrap' }))
     expect(wrapped.lines.map(line => [line.start, line.geometry.width, line.geometry.hang, line.geometry.alignOffset])).toEqual([[0, 3456, 576, 576], [9, 1152, 0, 2304]])
+  })
+})
+
+describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)', () => {
+  // Every line of a paragraph as an application reads it: the fill result and the pieces.
+  function plainWalk(p: Sized, inspect: boolean): { lines: unknown[]; calls: number } {
+    const prepared = prepareGecko(p, env, inspect)
+    const lines: unknown[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+      lines.push({ start: filled.start, end: filled.end, next: filled.next, hasLineBox: filled.hasLineBox, pieces: linePieces(prepared, filled.line) })
+      start = filled.next
+    }
+    return { lines, calls: prepared.measurer.log.calls.length }
+  }
+
+  test('a plain paragraph gives the inspected one\'s lines and pieces, and asks Canvas less', () => {
+    // Breaks inside words (in-word positions), a letter-spaced span (the ligature group count) and several words (the
+    // space-in-shaping window): what only gaps and the characters ask goes.
+    const p = paragraph([run('AVAVAV aaaa bbbb '), run('cccc dddd', 'span', { letterSpacing: 1 })], 40, { overflowWrap: 'anywhere' })
+    const plain = plainWalk(p, false)
+    const inspected = plainWalk(p, true)
+    expect(plain.lines).toEqual(inspected.lines)
+    expect(plain.lines.length).toBeGreaterThan(3)
+    expect(plain.calls).toBeLessThan(inspected.calls)
+  })
+
+  test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
+    const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false)
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
+    expect(prepared.inspect).toBeNull()
+    expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
+    expect(() => geckoParagraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('linePieces and inspectLine don\'t write the decided line: justified, trimmed and read twice in either order', () => {
+    const p = paragraph([run('aa bb cc dd ee ff')], 60, { textAlign: 'justify' })
+    const prepared = prepareGecko(p, env, true)
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+    const before = JSON.stringify(filled.line.root, (key, value: unknown) => key === 'parent' || key === 'run' ? undefined : value)
+    const pieces = linePieces(prepared, filled.line)
+    const inspection = inspectLine(prepared, filled.line)
+    expect(linePieces(prepared, filled.line)).toEqual(pieces)
+    expect(inspectLine(prepared, filled.line)).toEqual(inspection)
+    expect(inspection.geometry!.width).toBe(3600)
+    expect(JSON.stringify(filled.line.root, (key, value: unknown) => key === 'parent' || key === 'run' ? undefined : value)).toBe(before)
+  })
+
+  test('a redo\'s dropped pass still tells the line what it consulted past its end', () => {
+    // `aa A` and a span `VAVAV` at 50px: the first pass places `aa A`, whose end is a stand-in (`AV` kerns across offset 4),
+    // then the span overflows without a break inside, and the redo forces the break after the space. Only the dropped pass
+    // consulted offset 4, the first stand-in past the line's end.
+    const l = layout(paragraph([run('aa A'), run('VAVAV', 'span')], 50))
+    expect(l.lines.map(line => [line.start, line.end])).toEqual([[0, 3], [3, 9]])
+    expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.at)).toEqual([{ start: 4, end: 4 }])
   })
 })

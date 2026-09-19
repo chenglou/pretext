@@ -1,0 +1,297 @@
+// Placing a decided line for Gecko (Firefox 156.0): nsLineLayout::TrimTrailingWhiteSpaceIn, then TextAlignLine with the
+// hang of a wrapped line and justification (ComputeFrameJustification, ApplyFrameJustification). specs/gecko-lines.md §5.
+// Gecko writes all of it into the frames' line data. A decided line isn't written after its fill (lines.ts), so placeLine
+// works on its own copy of the line's spans and returns it: the line's pieces and its inspection each place the line for
+// themselves, and nothing placed is kept on the line.
+import type { Measurer } from '../../measure/canvas.js'
+import type { TextAlign } from '../../model.js'
+import { NO_JUSTIFICATION, rangeAdvance, type GeckoFilledLine, type Justification, type Placed, type PlacedLeaf, type PlacedText, type SpanData } from './lines.js'
+import { isTrimmableChar } from './prepare.js'
+import type { GeckoElement, GeckoPrepared } from './types.js'
+
+// The spans of a line with their frames' line data, for placement to write. A frame's reflow result is shared: nothing
+// writes it.
+function copyOf(psd: SpanData, parent: SpanData | null): SpanData {
+  const copy: SpanData = { ...psd, frames: [], parent }
+  for (let k = 0; k < psd.frames.length; k++) {
+    const pf = psd.frames[k]!
+    switch (pf.kind) {
+      case 'text': copy.frames.push({ ...pf, justification: { ...pf.justification }, assign: { ...pf.assign } }); break
+      case 'span': copy.frames.push({ ...pf, span: copyOf(pf.span, copy) }); break
+      case 'atomic': case 'br': case 'wbr': copy.frames.push({ ...pf, assign: { ...pf.assign } }); break
+    }
+  }
+  return copy
+}
+
+// nsLineLayout::TrimTrailingWhiteSpaceIn (nsLineLayout.cpp:2851-2985) over one span: from the last frame back, a child span
+// is searched first, a frame that isn't text and isn't skipped when trimming (anything but a <br>) ends the search, and a
+// text frame not already trimmed at its break loses the floored advance of its trailing IsTrimmableSpace characters,
+// unclamped (nsTextFrame.cpp:11540-11628). Frames after a trimmed one slide back.
+function trimTrailingWhiteSpaceIn(p: GeckoPrepared, m: Measurer, psd: SpanData): { handled: boolean; delta: number } {
+  for (let k = psd.frames.length - 1; k >= 0; k--) {
+    const pf = psd.frames[k]!
+    let delta = 0
+    let handled = false
+    if (pf.kind === 'span') {
+      const inner = trimTrailingWhiteSpaceIn(p, m, pf.span)
+      if (!inner.handled) continue
+      delta = inner.delta
+      handled = true
+    } else if (pf.kind !== 'text') {
+      if (pf.kind === 'br') continue
+      return { handled: true, delta: 0 }
+    } else {
+      const r = pf.r
+      const f = p.frames[r.frame]!
+      const contentEnd = r.contentStart + r.contentLength
+      pf.endOfLine = true
+      let changed = false
+      if (!p.runStyles[f.run]!.whiteSpaceIsSignificant && !r.trimmedTrailingWhitespace && r.prov !== null) {
+        let end = contentEnd
+        while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, f.is8bit)) end--
+        pf.trimmedEnd = end
+        const tA = Math.min(p.nextT[end]!, f.tEnd)
+        const tB = Math.min(p.nextT[contentEnd]!, f.tEnd)
+        if (tA < tB) {
+          delta = Math.floor(rangeAdvance(p, m, r.prov, tA, tB, null))
+          changed = true
+        }
+      }
+      handled = r.nonEmpty || changed
+    }
+    if (delta !== 0) {
+      if (pf.kind === 'text') {
+        // JustificationInfo::CancelOpportunityForTrimmedSpace (JustificationUtils.h).
+        if (pf.justification.inner > 0) pf.justification.inner--
+        else pf.justification = { ...pf.justification, startJustifiable: false, endJustifiable: false }
+      }
+      pf.iSize -= delta
+      psd.iCoord -= delta
+      for (let j = k + 1; j < psd.frames.length; j++) psd.frames[j]!.iStart -= delta
+    }
+    if (handled) return { handled: true, delta }
+  }
+  return { handled: false, delta: 0 }
+}
+
+// nsLineLayout::GetTrimFrom (nsLineLayout.cpp:3452-3478): the last text frame's TrimmableWS, its advance negated when its
+// text run's direction is against the line's.
+function trimFrom(p: GeckoPrepared, psd: SpanData, lineIsRtl: boolean): { advance: number; count: number } {
+  for (let k = psd.frames.length - 1; k >= 0; k--) {
+    const pf = psd.frames[k]!
+    if (pf.kind === 'span') return trimFrom(p, pf.span, lineIsRtl)
+    if (pf.kind === 'text') {
+      const ws = pf.r.trimmableWS
+      if (ws === null) return { advance: 0, count: 0 }
+      return { advance: ((p.frames[pf.r.frame]!.level & 1) === 1) !== lineIsRtl ? -ws.advance : ws.advance, count: ws.count }
+    }
+    if (pf.kind !== 'br') return { advance: 0, count: 0 }
+  }
+  return { advance: 0, count: 0 }
+}
+
+// nsLineLayout::GetHangFrom (nsLineLayout.cpp:3416-3450): the hangable white space of the line's last text frame, negated
+// when its text run's direction is against the line's; frames skipped when trimming (<br>) are passed over.
+function hangFrom(p: GeckoPrepared, psd: SpanData, lineIsRtl: boolean): number {
+  for (let k = psd.frames.length - 1; k >= 0; k--) {
+    const pf = psd.frames[k]!
+    if (pf.kind === 'span') return hangFrom(p, pf.span, lineIsRtl)
+    if (pf.kind === 'text') {
+      const result = pf.r.hangableISize
+      if (result === 0) return 0
+      return ((p.frames[pf.r.frame]!.level & 1) === 1) !== lineIsRtl ? -result : result
+    }
+    if (pf.kind !== 'br') return 0
+  }
+  return 0
+}
+
+// nsLineLayout::PerFrameData::ParticipatesInJustification (nsLineLayout.cpp:2993-3004): not empty, not skipped when trimming
+// (<br>), and not a white-space-only text node's frame at the end of the line.
+function participatesInJustification(p: GeckoPrepared, pf: Placed): boolean {
+  switch (pf.kind) {
+    case 'br': return false
+    case 'span': return pf.span.hasNonemptyContent || !(p.elements[pf.element] as Extract<GeckoElement, { kind: 'span' }>).selfEmpty
+    case 'atomic': case 'wbr': return true
+    case 'text': {
+      if (!pf.r.nonEmpty) return false
+      if (!pf.endOfLine) return true
+      // TextIsOnlyWhitespace of the node (CharacterData.cpp:486-510).
+      const run = p.frames[pf.r.frame]!.run
+      for (let s = p.runStarts[run]!; s < p.runStarts[run + 1]!; s++) {
+        const u = p.text.charCodeAt(s)
+        if (u !== 0x20 && u !== 0x09 && u !== 0x0a && u !== 0x0d) return true
+      }
+      return false
+    }
+  }
+}
+
+type ComputationState = { last: PlacedText | PlacedLeaf | null }
+const justificationOf = (pf: PlacedText | PlacedLeaf): Justification => pf.kind === 'text' ? pf.justification : NO_JUSTIFICATION
+
+// nsLineLayout::AssignInterframeJustificationGaps (nsLineLayout.cpp:3031-3080), without ruby.
+function assignInterframeGaps(pf: PlacedText | PlacedLeaf, state: ComputationState): number {
+  const prev = state.last!
+  const info = justificationOf(pf)
+  const prevInfo = justificationOf(prev)
+  if (!info.startJustifiable && !prevInfo.endJustifiable) return 0
+  if (!info.startJustifiable) {
+    prev.assign.end = 2
+    pf.assign.start = 0
+  } else if (!prevInfo.endJustifiable) {
+    prev.assign.end = 0
+    pf.assign.start = 2
+  } else {
+    prev.assign.end = 1
+    pf.assign.start = 1
+  }
+  return 1
+}
+
+// nsLineLayout::ComputeFrameJustification (nsLineLayout.cpp:3084-3150): the span's inner opportunities into `inner`, and
+// the opportunities before its first participant returned.
+function computeFrameJustification(p: GeckoPrepared, psd: SpanData, state: ComputationState, inner: { count: number }): number {
+  let firstChild = true
+  let outer = 0
+  for (let k = 0; k < psd.frames.length; k++) {
+    const pf = psd.frames[k]!
+    if (!participatesInJustification(p, pf)) continue
+    let extra = 0
+    if (pf.kind === 'span') {
+      const spanInner = { count: 0 }
+      extra = computeFrameJustification(p, pf.span, state, spanInner)
+      inner.count += spanInner.count
+    } else {
+      if (pf.kind === 'text') inner.count += pf.justification.inner
+      if (state.last !== null) extra = assignInterframeGaps(pf, state)
+      state.last = pf
+    }
+    if (firstChild) {
+      outer = extra
+      firstChild = false
+    } else {
+      inner.count += extra
+    }
+  }
+  return outer
+}
+
+// JustificationApplicationState (JustificationUtils.h).
+export type ApplicationState = { count: number; handled: number; available: number; consumed: number }
+export function consume(state: ApplicationState, gaps: number): number {
+  state.handled += gaps
+  const allocated = Math.trunc((state.available * state.handled) / state.count)
+  const delta = allocated - state.consumed
+  state.consumed = allocated
+  return delta
+}
+
+// nsLineLayout::ApplyFrameJustification (nsLineLayout.cpp:3220-3275), without annotations: each participant takes its gaps'
+// share of the remaining width, frames after it move, and a leaf that isn't text takes its gaps as margins.
+function applyFrameJustification(p: GeckoPrepared, psd: SpanData, state: ApplicationState): number {
+  let deltaICoord = 0
+  const justifiable = state.count > 0 && state.available > 0
+  for (let k = 0; k < psd.frames.length; k++) {
+    const pf = psd.frames[k]!
+    let dw = 0
+    if (participatesInJustification(p, pf)) {
+      if (pf.kind === 'text') {
+        if (justifiable) dw = consume(state, pf.justification.inner * 2 + pf.assign.start + pf.assign.end)
+        else pf.assign = { start: 0, end: 0 }
+      } else if (pf.kind === 'span') {
+        dw = applyFrameJustification(p, pf.span, state)
+      }
+    }
+    pf.iSize += dw
+    let gapsAtEnd = 0
+    if (pf.kind !== 'text' && pf.kind !== 'span' && pf.assign.start + pf.assign.end > 0) {
+      deltaICoord += consume(state, pf.assign.start)
+      gapsAtEnd = consume(state, pf.assign.end)
+      dw += gapsAtEnd
+    }
+    pf.iStart += deltaICoord
+    deltaICoord += dw
+  }
+  return deltaICoord
+}
+
+// A decided line placed: its spans after trimming and alignment, and what TextAlignLine computed on the way.
+export type PlacedLine = {
+  root: SpanData
+  // The engine applied the paragraph's text-indent to the line.
+  indented: boolean
+  // The alignment TextAlignLine used: text-align, or start for the last line and a line ending in <br> under justify.
+  align: TextAlign
+  // psd->mICoord from the root span's start after trimming, and what justification added to it.
+  lineISize: number
+  expansion: number
+  // GetHangFrom, or GetTrimFrom's advance under justify; 0 on a line that isn't wrapped.
+  hang: number
+  // The inline offset alignment gives the line's frames.
+  dx: number
+}
+
+// The text frames of a line's spans in logical order.
+export function textFramesOf(psd: SpanData, out: PlacedText[] = []): PlacedText[] {
+  for (let k = 0; k < psd.frames.length; k++) {
+    const pf = psd.frames[k]!
+    if (pf.kind === 'text') out.push(pf)
+    else if (pf.kind === 'span') textFramesOf(pf.span, out)
+  }
+  return out
+}
+
+export function placeLine(p: GeckoPrepared, line: GeckoFilledLine): PlacedLine {
+  const root = copyOf(line.root, null)
+  trimTrailingWhiteSpaceIn(p, p.measurer, root)
+  const rtl = p.paragraph.direction === 'rtl'
+  const indented = line.start.isFirstLine && p.textIndentAu !== 0
+
+  // TextAlignLine (nsLineLayout.cpp:3482-3670): the remaining inline size and, on a wrapped line, the hang.
+  const availISize = root.iEnd - root.iStart
+  const lineISize = root.iCoord - root.iStart
+  const remaining = availISize - lineISize
+  // TextAlignForLastLine: text-align-last auto gives the last line and a line ending in <br> start under justify
+  // (nsBlockFrame.cpp:5966-5976). On a wrapped line justify reads GetTrimFrom's white space, other alignments the hang
+  // (:3505-3516).
+  const isLastLine = line.next.item >= p.items.length
+  const align: TextAlign = p.paragraph.textAlign === 'justify' && (line.lineEndsInBR || isLastLine) ? 'start' : p.paragraph.textAlign
+  let hang = 0
+  let trimCount = 0
+  if (line.lineWrapped) {
+    if (align === 'justify') {
+      const trim = trimFrom(p, root, rtl)
+      hang = trim.advance
+      trimCount = trim.count
+    } else {
+      hang = hangFrom(p, root, rtl)
+    }
+  }
+  let dx = 0
+  let expansion = 0
+  if (remaining > 0 || hang !== 0) {
+    switch (align) {
+      case 'justify': {
+        const inner = { count: 0 }
+        computeFrameJustification(p, root, { last: null }, inner)
+        const opportunities = inner.count - (hang !== 0 ? trimCount : 0)
+        if (opportunities > 0) {
+          const available = remaining + Math.abs(hang)
+          expansion = applyFrameJustification(p, root, { count: opportunities * 2, handled: 0, available, consumed: 0 })
+          if (hang < 0) dx = hang - Math.trunc((trimCount * available) / opportunities)
+          break
+        }
+        if (hang < 0) dx = hang
+        break
+      }
+      case 'start': if (hang < 0) dx = hang; break
+      case 'left': dx = rtl ? remaining + Math.max(hang, 0) : hang < 0 ? hang : 0; break
+      case 'right': dx = !rtl ? remaining + Math.max(hang, 0) : hang < 0 ? hang : 0; break
+      case 'end': dx = remaining + Math.max(hang, 0); break
+      case 'center': dx = Math.trunc((remaining + hang) / 2); break
+    }
+  }
+  return { root, indented, align, lineISize, expansion, hang, dx }
+}

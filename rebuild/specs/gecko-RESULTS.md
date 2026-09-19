@@ -12,6 +12,70 @@ Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's g
 its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
 section describes the detached canvas element it measured on then.
 
+## Re-architecture X1, 2026-09-18: gaps get their home, and a paragraph is plain or inspected
+
+research/ARCHITECTURE-PLAN-2.md §5.2, §6 and §8 step 2. No rule, citation, gap condition or probe order moved: tier 1 is
+the same on every case of both Firefox references, the question sequences included. What changed is where things are and
+when they are computed.
+
+- **A paragraph is prepared plain or inspected** (`GeckoPrepared.inspect`, a record or null; nothing else says which). A
+  plain paragraph computes no gap and asks Canvas nothing that only a gap or an inspected value needs. An inspected one
+  gives the gaps and the geometry it gave before, from the same Canvas questions in the same order.
+- **`gaps.ts` holds every gap**: each condition's test, its prose and its order, and the measuring only a gap reads (the
+  space-in-shaping windows, the ligature group count of a letter-spaced unit at 2px, the positions a stand-in tab rests
+  on). The rest of the port calls it where a condition can show, with a sink that is null on a plain paragraph. Lists
+  aren't merged, as before: both passes of a redo can raise the same `font-fallback`.
+- **A value Canvas can't confirm carries a reason, not prose.** `advanceBefore` returns `{ au, standIn }` with `standIn` a
+  tagged union holding the numbers the prose prints (`advance.ts` `InWordReason`), and a stand-in tab a `TabReason`;
+  `gaps.ts` prints them, byte for byte as before.
+- **A fill is the passes alone** (`lines.ts` `fillLine`): it gives the line's source range, the next line's start and
+  whether the line has a box from the last pass's status, without placing frames or building fragments. The decided line
+  holds the start, the band, the last pass's spans as reflow left them, where the content after the line starts, and, on
+  an inspected paragraph, what the passes raised and the in-word stand-in offsets their break scans consulted, as
+  transformed offsets, across both passes of a redo (the line's report names the first one past its end, which only the
+  dropped pass may have consulted). `gaps | null` left every measuring signature; the measuring functions of a pass take
+  the list of consulted offsets, and measuring after the fill passes null.
+- **`linePieces` and `inspectLine` are pure.** `placement.ts` places a decided line (TrimTrailingWhiteSpaceIn,
+  TextAlignLine with the hang and justification) on its own copy of the line's spans, because Gecko's functions write the
+  frames' line data and nothing writes a decided line after its fill. `pieces.ts` makes the fragments, `joinsNextLine` and
+  `overflows` from the placed copy; `inspect.ts` makes the frames with their positions (ReorderFrames) and, only there, the
+  characters and the justification spacing per character, then the line's gaps. The characters are measured before the
+  in-word report, as before.
+- Files: `measure.ts` (the script itemizer, the script context and `rangeAu`, out of `prepare.ts`), `advance.ts` (the glyph
+  advance before an offset inside a shaping unit, out of `lines.ts`), `gaps.ts`, `placement.ts`, `pieces.ts`, `inspect.ts`.
+  `nextGeckoLine` and `lineOutput` are gone. The six module-level memos and the measurer stay until X2.
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 797 pass (4 new Gecko tests: plain equals inspected with fewer Canvas calls, the two throws, purity under justify, a redo's dropped pass) |
+| tier 1, 63,771 cases, either configuration | every case the same, 0 questions changed, exit 0 |
+| `tests/function-set.ts pure`, `sweep` | every case passes in both configurations |
+| `tests/function-set.ts plain` | every case's fills and pieces equal the inspected paragraph's, none asks a question its record lacks or one the inspected path didn't ask; 11,418 cases (11,422 with facts) first ask a question later than the inspected path does, which the check counts as a failure (below) |
+| Canvas questions per paragraph | inspected 74.2 (74.5 with facts), as before; plain 40.7 (40.8), 45% fewer: the characters of every frame, the space-in-shaping windows and the 2px group counts go |
+| citations | 0 lost; one loss accepted by name (`in-word-prefix` named at one site for a stand-in tab instead of two) |
+| tier 2, pinned Firefox 156.0, forward, both configurations (`.artifacts/tests/runs/ra-x1-gecko`) | 0 status transitions, 0 cases less exact, differing predicted values 301 and 744 as in the reference, gate lost 0 |
+| plain predictor in the browser, all 63,771 no-facts cases | see below |
+
+**The order of first asks.** A question is a context and a string, and strings recur in a paragraph: a cluster alone, a
+ligature pair, a word at 2px of letter spacing. On the inspected path the characters of line 1 ask `i` at the first `i`
+inside a word; on the plain path the first fill that breaks beside an `i` asks it, lines later, after questions the
+inspected path asked later. So the plain path's questions are a subset of the inspected path's, but not in its order of
+first asks, and no plain path that asks less can be. In Firefox the order of two different strings doesn't change an answer
+(words are cached per font, and every character of the paragraph was shaped once by `prepare` before any fill), and the
+browser run is the proof the plan asks for.
+
+**The plain predictor in pinned Firefox** (`compare-sets.ts --prediction=line-ranges`, runs under
+`.artifacts/tests/runs/ra-x1-gecko`). Over all 63,771 no-facts cases, `firefox-no-facts-plain` against `firefox-no-facts`:
+63,657 cases give the inspected run's line ranges and native observation. The other 114 are all in one part, one browser
+process (`suite-sample` part 2), all history-dependent in the reference ledger already
+(`gecko/process-font-fallback-state`: a fallback character is 16px wide in one process and 17px in the other), and in 14 of
+them the line ranges moved with the native lines. It was that one process and not the plain path: `suite-sample` run again
+with both predictors (`control-suite-sample-plain`, `control-suite-sample-usual`) gives 0 differing native observations and
+0 differing line ranges on its 19,888 cases, part 2 included, and the second usual run equals the first on part 2's 4,981
+rows where the first plain run differs from both in the same 114. Two inspected runs differ the same way by themselves:
+this step's against S3's, which ask Canvas the same questions, in 86 cases of one other part (`heldout-suite-sample`
+part 0), history-dependent ones too. Nothing goes to the ledger: every case that moved is history-dependent there.
+
 ## Round 4c, 2026-09-18: two port rules from the rich pre-wrap exploration
 
 research/PREWRAP-RICH.md found two rules the port lacked; both also reach flat paragraphs. Each was read again in the pinned
