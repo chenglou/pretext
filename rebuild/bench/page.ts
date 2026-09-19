@@ -18,10 +18,10 @@ import * as webkit from '../src/engines/webkit/index.ts'
 import {
   detectEnvironment, fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
 } from '../src/index.ts'
-import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
+import { newMeasurer, withLearnedFontFacts, type Measurer } from '../src/measure/font-checks.ts'
 import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
 import type {
-  BrowserKind, ChatHeadline, ChatHeadlineResize, ChatKind, ChatMessage, ChatPhases, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, Library,
+  BrowserKind, ChatHeadline, ChatHeadlineResize, ChatKind, ChatMessage, ChatPhases, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, Kept, Library,
   PageEnvironment, PageSnapshot, PhaseTotals, RowCount, RowPost, RowSpec, RowTiming, VariantCount, VariantResult,
 } from './protocol.ts'
 import { median, summarize } from './stats.ts'
@@ -144,6 +144,7 @@ function givenFacts(engine: EngineName, build: string): GivenFacts {
 // gaps, which is the lab's path (rebuild/lab/predictor-core.ts).
 type Mode = 'count' | 'pieces' | 'inspect'
 const MODES: readonly Mode[] = ['count', 'pieces', 'inspect']
+const KEPT: readonly Kept[] = ['both', 'checks', 'contexts']
 
 // Every line at `width`; returns the line boxes. `ranges` takes every line's source range.
 function fillAll(prepared: Prepared, width: number, mode: Mode, ranges: number[] | null): number {
@@ -317,20 +318,28 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
 
 // index.ts prepare() in its two halves, so the bench can time them apart and run the second alone: the runtime font checks
 // (measure/font-checks.ts), then the engine's own prepare on the paragraph with the facts Canvas answered.
-function withFontChecks(paragraph: Paragraph, env: Environment): Paragraph {
+function withFontChecks(paragraph: Paragraph, env: Environment, measurer: Measurer): Paragraph {
   switch (env.engine) {
-    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env))
-    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks)
-    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks)
+    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env), measurer)
+    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, measurer)
+    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks, measurer)
   }
 }
 
-function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean): Prepared {
+function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean, measurer: Measurer): Prepared {
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, inspect) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, inspect) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, inspect) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, inspect, measurer.contexts) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, inspect, measurer.contexts) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, inspect, measurer.contexts) }
   }
+}
+
+// prepare() with a page's measurer for one of its halves or for both (protocol.ts Kept); the other half gets the call's own,
+// as a prepare() that is given no measurer does. 'both' is prepare(paragraph, env, false, page).
+function prepareKeeping(paragraph: Paragraph, env: Environment, kept: Kept, page: Measurer): Prepared {
+  const own = newMeasurer()
+  const checked = withFontChecks(paragraph, env, kept === 'contexts' ? own : page)
+  return prepareChecked(checked, env, false, kept === 'checks' ? own : page)
 }
 
 // A message as main takes it: a plain message is a string for prepare(), a message with a code span is the items of the
@@ -401,11 +410,21 @@ function scratchChat(inputs: ChatInputs, env: Environment, mode: Mode): number {
   return lineBoxes
 }
 
-// Every message prepared plain and filled at the first width, all of them kept: what an app holds before a resize.
-function prepareAllChat(inputs: ChatInputs, env: Environment): Prepared[] {
+// The same in count mode with a measurer made here, as a page that lays its messages out from nothing makes one first: the
+// contexts and the checks' answers are paid for once inside the timing, and nothing of an earlier repetition is left.
+function scratchChatKeeping(inputs: ChatInputs, env: Environment, kept: Kept): number {
+  const page = newMeasurer()
+  let lineBoxes = 0
+  for (let i = 0; i < inputs.paragraphs.length; i++) lineBoxes += fillAll(prepareKeeping(inputs.paragraphs[i]!, env, kept, page), inputs.chat.width, 'count', null)
+  return lineBoxes
+}
+
+// Every message prepared plain and filled at the first width, all of them kept: what an app holds before a resize. With
+// `page`, every message is prepared with that one measurer; without, each with its own.
+function prepareAllChat(inputs: ChatInputs, env: Environment, page: Measurer | undefined): Prepared[] {
   const prepared: Prepared[] = []
   for (let i = 0; i < inputs.paragraphs.length; i++) {
-    prepared.push(prepare(inputs.paragraphs[i]!, env, false))
+    prepared.push(prepare(inputs.paragraphs[i]!, env, false, page))
     sink += fillAll(prepared[i]!, inputs.chat.width, 'count', null)
   }
   return prepared
@@ -431,10 +450,17 @@ function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
   // The font checks run here, once a paragraph, outside every timing; what they answer depends on the declaration and on
   // whether the text holds a soft hyphen or joining letters, so a resolver that outlives a paragraph gives the same facts.
   const checked: Paragraph[] = []
-  for (let i = 0; i < n; i++) checked.push(withFontChecks(inputs.paragraphs[i]!, env))
+  for (let i = 0; i < n; i++) checked.push(withFontChecks(inputs.paragraphs[i]!, env, newMeasurer()))
   let fresh: Prepared[] = []
-  const met = prepareAllChat(inputs, env)
+  const met = prepareAllChat(inputs, env, undefined)
   sink += resizeChat(met, resizeWidths)
+  const metKeeping = prepareAllChat(inputs, env, newMeasurer())
+  sink += resizeChat(metKeeping, resizeWidths)
+  const keeping = (kept: Kept, what: string): Variant => ({
+    name: `rebuild scratch, count, page keeps ${kept}`, library: 'rebuild', baseline: 'rebuild scratch, count', layouts: n, setup: null,
+    desc: `the same in count mode with one measurer for the ${n} messages, made inside the timing: ${what}`,
+    run: () => scratchChatKeeping(inputs, env, kept),
+  })
   return [
     {
       name: 'main cold', library: 'main', baseline: null, layouts: n, setup: null,
@@ -458,20 +484,34 @@ function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
       desc: 'the same, on paragraphs whose font facts were asked of Canvas outside the timing: the engine\'s prepare() alone, then every line; count mode',
       run: () => {
         let lineBoxes = 0
-        for (let i = 0; i < n; i++) lineBoxes += fillAll(prepareChecked(checked[i]!, env, false), width, 'count', null)
+        for (let i = 0; i < n; i++) lineBoxes += fillAll(prepareChecked(checked[i]!, env, false, newMeasurer()), width, 'count', null)
         return lineBoxes
       },
     },
+    keeping('both', 'prepare() is handed it, so contexts and font-check answers are made once per declaration'),
+    keeping('checks', 'the font checks alone get it, and the engine makes every paragraph\'s contexts anew'),
+    keeping('contexts', 'the engine\'s contexts alone come from it, and the font checks run for every paragraph'),
     {
       name: `rebuild first resize×${w}, count`, library: 'rebuild', baseline: `main resize×${w}`, layouts: n * w,
       desc: `every line at ${resizeWidths.join(', ')}px of plain paragraphs that were prepared and filled at ${width}px before each repetition, outside its timing, so every width is new to them`,
-      setup: () => { fresh = prepareAllChat(inputs, env) },
+      setup: () => { fresh = prepareAllChat(inputs, env, undefined) },
+      run: () => resizeChat(fresh, resizeWidths),
+    },
+    {
+      name: `rebuild first resize×${w}, count, page keeps both`, library: 'rebuild', baseline: `rebuild first resize×${w}, count`, layouts: n * w,
+      desc: 'the same on paragraphs prepared with one measurer, so the messages share their Canvas contexts',
+      setup: () => { fresh = prepareAllChat(inputs, env, newMeasurer()) },
       run: () => resizeChat(fresh, resizeWidths),
     },
     {
       name: `rebuild resize×${w} again, count`, library: 'rebuild', baseline: `main resize×${w}`, layouts: n * w, setup: null,
       desc: `every line at ${resizeWidths.join(', ')}px of plain paragraphs prepared once outside the timing that have been filled at every one of these widths before`,
       run: () => resizeChat(met, resizeWidths),
+    },
+    {
+      name: `rebuild resize×${w} again, count, page keeps both`, library: 'rebuild', baseline: `rebuild resize×${w} again, count`, layouts: n * w, setup: null,
+      desc: 'the same on paragraphs prepared with one measurer, so the messages share their Canvas contexts',
+      run: () => resizeChat(metKeeping, resizeWidths),
     },
   ]
 }
@@ -586,22 +626,29 @@ async function chatHeadline(c: Context, chat: ChatPlan): Promise<void> {
   const lineHeight = c.plan.style.lineHeight
   for (let s = 0; s < chat.sets.length; s++) {
     const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
-    const result: ChatHeadline = { set: chat.sets[s]!.id, messages: chat.headline, rebuildScratchMs: [], mainColdMs: [], lines: { rebuild: 0, main: 0 } }
+    const result: ChatHeadline = { set: chat.sets[s]!.id, messages: chat.headline, rebuildScratchMs: [], rebuildKeepingMs: [], mainColdMs: [], lines: { rebuild: 0, rebuildKeeping: 0, main: 0 } }
     for (let pass = 0; pass < chat.headlinePasses; pass++) {
       document.title = `bench headline ${result.set} ${pass + 1}/${chat.headlinePasses}`
-      for (let turn = 0; turn < 2; turn++) {
+      // The three take turns, in forward order on even passes and in reverse on odd ones.
+      for (let turn = 0; turn < 3; turn++) {
         const start = performance.now()
-        if ((turn === 0) === (pass % 2 === 0)) {
-          result.lines.rebuild = scratchChat(inputs, c.env, 'count')
-          result.rebuildScratchMs.push(performance.now() - start)
-        } else {
-          result.lines.main = mainColdChat(inputs, font, lineHeight)
-          result.mainColdMs.push(performance.now() - start)
+        switch (pass % 2 === 0 ? turn : 2 - turn) {
+          case 0:
+            result.lines.rebuild = scratchChat(inputs, c.env, 'count')
+            result.rebuildScratchMs.push(performance.now() - start)
+            break
+          case 1:
+            result.lines.rebuildKeeping = scratchChatKeeping(inputs, c.env, 'both')
+            result.rebuildKeepingMs.push(performance.now() - start)
+            break
+          default:
+            result.lines.main = mainColdChat(inputs, font, lineHeight)
+            result.mainColdMs.push(performance.now() - start)
         }
         await yieldTask()
       }
     }
-    sink += result.lines.rebuild + result.lines.main
+    sink += result.lines.rebuild + result.lines.rebuildKeeping + result.lines.main
     await post<{ kind: 'ok' }>('/api/chat', { runId, context: c.plan.index, part: { kind: 'headline', result } } satisfies ChatPost)
   }
 }
@@ -614,8 +661,17 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
   for (let s = 0; s < chat.sets.length; s++) {
     const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
     document.title = `bench headline resize ${chat.sets[s]!.id}`
+    // With a page's measurer first: its paragraphs hold a few contexts between them, and they are dropped before the
+    // paragraphs that each hold their own are made.
     let start = performance.now()
-    const prepared = prepareAllChat(inputs, c.env)
+    let prepared = prepareAllChat(inputs, c.env, newMeasurer())
+    const rebuildKeepingPrepareAndFillMs = performance.now() - start
+    start = performance.now()
+    sink += resizeChat(prepared, chat.resizeWidths)
+    const rebuildKeepingResizeMs = performance.now() - start
+    await yieldTask()
+    start = performance.now()
+    prepared = prepareAllChat(inputs, c.env, undefined)
     const rebuildPrepareAndFillMs = performance.now() - start
     start = performance.now()
     sink += resizeChat(prepared, chat.resizeWidths)
@@ -633,7 +689,8 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
     for (let k = 0; k < chat.resizeWidths.length; k++) for (let i = 0; i < handles.length; i++) sink += mainLinesChat(handles[i]!, chat.resizeWidths[k]!, lineHeight)
     const mainResizeMs = performance.now() - start
     const result: ChatHeadlineResize = {
-      set: chat.sets[s]!.id, messages: chat.headline, widths: chat.resizeWidths, rebuildPrepareAndFillMs, rebuildResizeMs, mainPrepareAndLayoutMs, mainResizeMs,
+      set: chat.sets[s]!.id, messages: chat.headline, widths: chat.resizeWidths, rebuildPrepareAndFillMs, rebuildResizeMs, rebuildKeepingPrepareAndFillMs,
+      rebuildKeepingResizeMs, mainPrepareAndLayoutMs, mainResizeMs,
     }
     await post<{ kind: 'ok' }>('/api/chat', { runId, context: c.plan.index, part: { kind: 'headline-resize', result } } satisfies ChatPost)
   }
@@ -749,7 +806,20 @@ function checkedRanges(inputs: ChatInputs, env: Environment): number[] {
   const ranges: number[] = []
   const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
   for (let i = 0; i < inputs.paragraphs.length; i++) {
-    const prepared = prepareChecked(withFontChecks(inputs.paragraphs[i]!, env), env, false)
+    const own = newMeasurer()
+    const prepared = prepareChecked(withFontChecks(inputs.paragraphs[i]!, env, own), env, false, own)
+    for (let w = 0; w < widths.length; w++) fillAll(prepared, widths[w]!, 'count', ranges)
+  }
+  return ranges
+}
+
+// The same ranges from paragraphs prepared with one measurer, in each form of protocol.ts Kept.
+function keepingRanges(inputs: ChatInputs, env: Environment, kept: Kept): number[] {
+  const ranges: number[] = []
+  const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
+  const page = newMeasurer()
+  for (let i = 0; i < inputs.paragraphs.length; i++) {
+    const prepared = prepareKeeping(inputs.paragraphs[i]!, env, kept, page)
     for (let w = 0; w < widths.length; w++) fillAll(prepared, widths[w]!, 'count', ranges)
   }
   return ranges
@@ -776,7 +846,11 @@ function countRow(row: RowSpec, c: Context): RowCount {
   const counted = rebuildRanges(row, c, 'count')
   let same = true
   for (let m = 1; m < MODES.length && same; m++) same = sameNumbers(rebuildRanges(row, c, MODES[m]!), counted)
-  if (same && row.kind === 'chat') same = sameNumbers(checkedRanges(chatInputs(c, row.set, c.plan.chat!.timed), c.env), counted)
+  if (same && row.kind === 'chat') {
+    const inputs = chatInputs(c, row.set, c.plan.chat!.timed)
+    same = sameNumbers(checkedRanges(inputs, c.env), counted)
+    for (let k = 0; k < KEPT.length && same; k++) same = sameNumbers(keepingRanges(inputs, c.env, KEPT[k]!), counted)
+  }
   return { id: row.id, variants: counts, rebuildModesSameLines: same }
 }
 
@@ -806,7 +880,8 @@ function medianTotals(passes: readonly PhaseTotals[]): PhaseTotals {
 
 type KindTotals = ChatPhases['byKind'][number]
 
-function chatPhases(c: Context, chat: ChatPlan, setIndex: number): ChatPhases {
+// `keeping`: every pass makes one measurer for its messages (prepare() handed a page's); otherwise every message its own.
+function chatPhases(c: Context, chat: ChatPlan, setIndex: number, keeping: boolean): ChatPhases {
   const inputs = chatInputs(c, chat.sets[setIndex]!.id, chat.timed)
   const env = c.env
   const checks: PhaseTotals[] = []
@@ -818,16 +893,18 @@ function chatPhases(c: Context, chat: ChatPlan, setIndex: number): ChatPhases {
     const prep = noTotals()
     const fill = noTotals()
     const byKind = new Map<ChatKind, KindTotals>()
+    const page = newMeasurer()
     for (let i = 0; i < inputs.paragraphs.length; i++) {
       const callsBefore = canvasWork.measureTextCalls
       const contextsBefore = canvasWork.contexts
       let work = { ...canvasWork }
       let start = performance.now()
-      const checked = withFontChecks(inputs.paragraphs[i]!, env)
+      const measurer = keeping ? page : newMeasurer()
+      const checked = withFontChecks(inputs.paragraphs[i]!, env, measurer)
       const checksMs = addPhase(check, start, work)
       work = { ...canvasWork }
       start = performance.now()
-      const prepared = prepareChecked(checked, env, false)
+      const prepared = prepareChecked(checked, env, false, measurer)
       const prepareMs = addPhase(prep, start, work)
       work = { ...canvasWork }
       start = performance.now()
@@ -867,7 +944,7 @@ function chatPhases(c: Context, chat: ChatPlan, setIndex: number): ChatPhases {
   for (let i = 0; i < nowCalls; i++) sink += performance.now() > 0 ? 1 : 0
   const nowMs = (performance.now() - nowStart) / nowCalls
   return {
-    set: chat.sets[setIndex]!.id, messages: inputs.paragraphs.length, passes: chat.phasePasses, checks: medianTotals(checks), prepare: medianTotals(prepares),
+    set: chat.sets[setIndex]!.id, keeping, messages: inputs.paragraphs.length, passes: chat.phasePasses, checks: medianTotals(checks), prepare: medianTotals(prepares),
     fill: medianTotals(fills), byKind, nowMs,
   }
 }
@@ -912,7 +989,8 @@ async function main(): Promise<void> {
   if (plan.chat !== null) {
     for (let s = 0; s < plan.chat.sets.length; s++) {
       document.title = `bench ${plan.index + 1}/${plan.count}: phases ${plan.chat.sets[s]!.id}`
-      await post<{ kind: 'ok' }>('/api/chat', { runId, context: plan.index, part: { kind: 'phases', result: chatPhases(c, plan.chat, s) } } satisfies ChatPost)
+      await post<{ kind: 'ok' }>('/api/chat', { runId, context: plan.index, part: { kind: 'phases', result: chatPhases(c, plan.chat, s, false) } } satisfies ChatPost)
+      await post<{ kind: 'ok' }>('/api/chat', { runId, context: plan.index, part: { kind: 'phases', result: chatPhases(c, plan.chat, s, true) } } satisfies ChatPost)
     }
   }
   unwrapCanvas()
