@@ -182,7 +182,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   p.fontRun = fontFacts.fontRun
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
-    if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(sh, group.style)
+    if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)
   }
   measureGroups(sh)
   preparedContent(gaps, p)
