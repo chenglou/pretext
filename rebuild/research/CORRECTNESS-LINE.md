@@ -132,7 +132,7 @@ Several existing items were edited:
 - **Coverage.**
   - One Mac at DPR 2.
   - Giants are in no tier.
-  - Installed Safari was not re-run.
+  - Installed Safari was not re-run for the freeze. It was run the same evening (2026-09-18, `research/SAFARI-CHECK.md`): one forward pass over webkit-host's 13 tier 2 sets, 63,987 of 63,987 cases equal to the host's rows, observation against observation. Reverse order and giants weren't run in Safari.
 - **Instability.**
   - Firefox's history-dependent set was stable today but not on the critic's fresh set.
   - Chrome's hang signature is wider than the set-aside rule; no tier job stalled today.

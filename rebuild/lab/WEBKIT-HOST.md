@@ -83,6 +83,10 @@ compares the native derivation (`score.ts`'s `nativeView` and `nativeDifference`
   other documents in one Safari invocation, but in a fresh process in the host (specs/probes-safari.md "Installed
   Safari 27.0").
 
+### The correctness line's tier 2 sets (2026-09-18)
+
+Installed Safari 27.0 ran one forward pass over the 17 case files behind webkit-host's 13 tier 2 sets, which hold the case families added after 2026-09-16 (inline boxes, atomic inlines, `br` and `wbr`, text indent and align, line slots, rich pre-wrap, the spacing families). All 63,987 cases equal the host's rows: native observation, prediction and painted lines. Reverse order and giants weren't run. Details and the commands: `rebuild/research/SAFARI-CHECK.md`.
+
 ## What differs
 
 ### Environment
