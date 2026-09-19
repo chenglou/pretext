@@ -275,13 +275,15 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out. The 1567 an earlier probe saw came from
 // the brackets resolving to the following Latin run's script, which script-context names.
 //
+// `keepSpaces`: U+0020 stays U+0020, so a Latin-1-only string stays 8-bit (measure16 spacesStay).
+//
 // `domScript` is the script the paragraph shapes [from, to) with (measure16 splits ranges at script edges). A Latin range
 // stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
 export type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
 
-export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number): CanvasString {
+export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false): CanvasString {
   let codes: number[] = []
   let units: number[] = []
   if (zwjBefore) { codes.push(0x200d); units.push(-1) }
@@ -292,7 +294,7 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
     switch (c) {
       case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff:
         substituted.push(codes.length); codes.push(0x2060); break
-      case 0x20: codes.push(0x2028); wide = true; break
+      case 0x20: if (keepSpaces) codes.push(0x20); else { codes.push(0x2028); wide = true } break
       case 0x0b: case 0x0c: codes.push(0x0001); break
       default: codes.push(c); if (c > 0xff) wide = true
     }
@@ -416,6 +418,27 @@ export function canvasScriptsPerUnit(sh: Shaper, style: number, s: string): Uint
   return scripts
 }
 
+// Whether a range is measured with its spaces as U+0020 in an 8-bit string instead of U+2028 in a 16-bit one: a range the
+// paragraph shapes as Latin that holds a space and no character with a script of its own, in a font Canvas shapes whole.
+// U+2028 makes the string 16-bit, RunSegmenter then resolves every character of such a range as Common over the string
+// alone (script_run_iterator.cc), and a font with other lookups for Common and Latin shapes it otherwise than the
+// paragraph's Latin segment does (script-context). Where Canvas doesn't cut the font's text into words, the 8-bit string
+// with its spaces is one item shaped as one Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077): the
+// paragraph's own characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would
+// cut the string there (plain_text_node.cc:387-399). With a letter in the range RunSegmenter gives Latin either way.
+function spacesStay(sh: Shaper, style: number, from: number, to: number): boolean {
+  const p = sh.p
+  if (p.scripts[from] !== USCRIPT_LATIN) return false
+  let space = false
+  for (let i = from; i < to; i++) {
+    const c = p.text.charCodeAt(i)
+    if (c > 0xff || c === 0xad) return false
+    if (c === 0x20) space = true
+    else if (!isCommonOrInheritedScript(c)) return false
+  }
+  return space && !canvasSplitsWords(sh, style)
+}
+
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,
 // callEnd), in its context, with JS word spacing and the letter spacing Canvas gives other characters than the DOM does.
 export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): number {
@@ -432,7 +455,7 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
     }
   }
   const group = p.groups[g]!
-  const cs = canvasString(p, from, to, joinedAtEdge(sh, g, from, callStart, callEnd), joinedAtEdge(sh, g, to, callStart, callEnd), p.scripts[from]!)
+  const cs = canvasString(p, from, to, joinedAtEdge(sh, g, from, callStart, callEnd), joinedAtEdge(sh, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(sh, group.style, from, to))
   const contexts = contextsOf(sh, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)
