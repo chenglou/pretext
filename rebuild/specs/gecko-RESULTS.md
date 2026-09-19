@@ -45,10 +45,17 @@ for the analysis, M4 and M5 this round; `.artifacts/session/cr5-gecko-20260919/p
 - **A plain paragraph's break scan leaves those questions out until they matter** (`advance.ts` `roughAdvanceBefore`,
   `advanceSlack`; `lines.ts` `breakAndMeasureText`). Both recipes only move what crosses a cut to one side of it, so the
   advance without them is within that amount, plus 2 au, of the whole one. The scan reads its candidates that way, asks
-  for the whole advance where the bound reaches a fit test, and a line's and a frame's own edges always take it. An
-  inspected paragraph reads everything whole, since its gaps need to know what was told. `overflow-wrap: break-word`
-  makes every cluster of a line's first word a candidate, so without this ordinary chat text paid 30.8 questions a
-  message more (the bench's 200-message smoke, mix: 110.67 → 141.49); with it 110.67 → 110.67.
+  for the whole advance where the bound reaches a fit test, and a line's and a frame's own edges always take it. The
+  bound holds only once the scan keeps what it read at its last candidate in a local (`pendingRead` in
+  `breakAndMeasureText`) and reads that as the next candidate's start: a cut's record can become whole in between, as
+  the start of a ligature group does when a cut inside the group asks for the group's two ends (`inWordAdvance`), and
+  the running width then takes that cut once without the questions, as an end, and once with them, as a start, so the
+  two don't cancel. The round's critic found it (fixed in 3d0a5b3, test `engines/gecko/lazy-scan.test.ts`): before the
+  fix a constructed paragraph, a ligature group that reaches past the frame's end and starts at a kerned cut the scan
+  read without the questions, had other lines than the inspected one at 22 of 901 widths. An inspected paragraph reads
+  everything whole, since its gaps need to know what was told. `overflow-wrap: break-word` makes every cluster of a
+  line's first word a candidate, so without this ordinary chat text paid 30.8 questions a message more (the bench's
+  200-message smoke, mix: 110.67 → 141.49); with it 110.67 → 110.67.
 - **A boundary U+00A0 is measured as itself.** The DOM shapes it as a word of its own, the character U+00A0
   (gfxFont.cpp:3834-3861), with the space glyph only where the font has none (gfxHarfBuzzShaper.cpp:113-118). The first
   port did; a4f23b8 rewrote the literal into U+0020. Probe M4, 249 styles of 83 families: W(U+00A0) isn't W(U+0020) in
