@@ -39,7 +39,8 @@
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
-// missing or doesn't fit. The errors it prints and its exit code are those of `bunx tsc --noEmit -p <project>`.
+// missing or doesn't fit. It prints the errors `bunx tsc --noEmit -p <project>` prints and exits 0 when that does; with
+// errors tsc exits 2 when it found them in this run and 1 when it kept them from the last one.
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
