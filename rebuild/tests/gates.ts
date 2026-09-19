@@ -58,6 +58,8 @@ type Gate = {
   // one part, which gets --jobs=<cores> added.
   parts: string[][]
   sharded: boolean
+  // The most cores a sharded gate can use; absent when it can use them all.
+  atMost?: number
   // The report the gate writes, or null when its log is all there is.
   report: string | null
   read: (code: number, report: unknown, log: string) => Verdict
@@ -196,7 +198,8 @@ function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
     if (engines.includes('blink')) {
       const twins = join(OUT, 'twin-scan.json')
       const cases = SETS.filter(set => set.browsers.includes('chrome')).flatMap(set => partFiles(set, 'chrome'))
-      gates.push({ name: 'twin scan', sharded: false, report: twins, parts: [['rebuild/tools/twin-scan.ts', `--cases=${cases.join(',')}`, `--out=${twins}`]], read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log) })
+      // A process a case file: 19 files, and the four largest hold half the cases.
+      gates.push({ name: 'twin scan', sharded: true, atMost: 4, report: twins, parts: [['rebuild/tools/twin-scan.ts', `--cases=${cases.join(',')}`, `--out=${twins}`]], read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log) })
     }
   }
   const each = (add: (browser: TierBrowser, config: Config, check: string) => void): void => {
@@ -250,12 +253,12 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
       for (let k = 0; k < waiting.length;) {
         const { gate: g, part } = waiting[k]!
         const gate = gates[g]!
-        if (free < 1 || (gate.sharded && free < Math.ceil(cores / 3))) {
+        if (free < 1 || (gate.sharded && free < Math.min(gate.atMost ?? cores, Math.ceil(cores / 3)))) {
           k++
           continue
         }
         waiting.splice(k, 1)
-        const takes = gate.sharded ? free : 1
+        const takes = gate.sharded ? Math.min(free, gate.atMost ?? free) : 1
         free -= takes
         const s = state[g]!
         if (s.fd < 0) {
