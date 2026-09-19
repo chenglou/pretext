@@ -57,6 +57,7 @@ row, and anything that answers from stored positions has to measure again under 
 | plain predictor, forward, all 67,065 no-facts cases | line ranges equal the usual run's in every case; 0 native observations differ |
 | other widths first, forward, all 67,065 no-facts cases | layouts equal the usual run's in every case: 0 native observations, predictions or painted lines differ |
 | `function-set.ts plain`, `pure` | 67,065 of 67,065 in both configurations; 26,035 and 21,826 cases first ask in another order than the lab's path, as before |
+| a question asked again, in the browser | the development sets recorded forward (`browser-sets.ts --record`; 26,913 records): 29.6 M `measureText` calls while predicting, 3.31 M distinct questions, 2.17 M of them asked again in 26.3 M repeated asks, and 0 answered with another width or ink box than the first time |
 | citations | 0 lost |
 | twin scan (`twins`, `runs`, `ws`, `policy`, `rich-prewrap`: 6,919 cases) | 333 ask a two-byte slice, 0 ask one context both storages; with one set of contexts planted, 166 of the 380 `twins` do, as at the correctness line |
 | probe `blink-storage` | 6 of 6 probes, 85 of 85 checks, every value as in X1's run; S5 notes Canvas's answers on the page: the 16bit context gives 285.79 and the 8bit one 159.12, in both orders |
