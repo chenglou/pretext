@@ -1,27 +1,40 @@
 // Browser side of the bench. run.ts serves this bundle inside a document whose <html lang> is the context's language. The
-// page fetches its context's plan, times every row with the two libraries interleaved, posts each row, then counts
-// measureText calls and Canvas contexts for every variant (the counting wrappers go on only after all timing in this
-// document) and asks for the next context.
+// page fetches its context's plan, times every row with the two libraries interleaved, posts each row, runs the chat
+// context's headline passes, then counts measureText calls and Canvas contexts for every variant and splits the rebuild's
+// from-scratch time by phase, and asks for the next context. The counting and timing wrappers go on only after the timed
+// rows and passes of the document, and come off before the one timed part that runs after them (chatHeadlineResize).
 //
 // Only fetch promises and MessageChannel tasks drive the loop (no timers), so background timer throttling can't stall it.
-import { clearCache, layout, layoutWithLines, prepare as mainPrepare, prepareWithSegments } from '../../src/layout.ts'
+import { clearCache, layout, layoutWithLines, prepare as mainPrepare, prepareWithSegments, type PreparedText } from '../../src/layout.ts'
 import { clearMeasurementCaches } from '../../src/measurement.ts'
+import { measureRichInlineStats, prepareRichInline, type PreparedRichInline, type RichInlineItem } from '../../src/rich-inline.ts'
 import { fontFactsFor } from '../lab/font-facts.ts'
+import { blinkFontChecks } from '../src/engines/blink/checks.ts'
+import * as blink from '../src/engines/blink/index.ts'
+import { geckoFontChecks } from '../src/engines/gecko/checks.ts'
+import * as gecko from '../src/engines/gecko/index.ts'
+import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
+import * as webkit from '../src/engines/webkit/index.ts'
 import {
   detectEnvironment, fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
 } from '../src/index.ts'
-import type { FontDecl, Paragraph } from '../src/model.ts'
+import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
+import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
 import type {
-  BrowserKind, ContextDonePost, ContextPlan, Library, PageEnvironment, PageSnapshot, RowCount, RowPost, RowSpec, RowTiming,
-  VariantCount, VariantResult,
+  BrowserKind, ChatHeadline, ChatHeadlineResize, ChatKind, ChatMessage, ChatPhases, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, Library,
+  PageEnvironment, PageSnapshot, PhaseTotals, RowCount, RowPost, RowSpec, RowTiming, VariantCount, VariantResult,
 } from './protocol.ts'
-import { summarize } from './stats.ts'
+import { median, summarize } from './stats.ts'
 
 type Variant = {
   name: string
   library: Library
   desc: string
   baseline: string | null
+  // Paragraph layouts one repetition makes, where the report divides by them, else null (protocol.ts VariantResult).
+  layouts: number | null
+  // Runs before every repetition, outside its timing; null where a repetition needs nothing made for it.
+  setup: (() => void) | null
   // One repetition. Returns the lines it produced.
   run: () => number
 }
@@ -90,6 +103,19 @@ function timerResolution(): { ms: number; steps: number } {
     if (now > deadline) break
   }
   return { ms: min, steps }
+}
+
+// A fixed piece of integer arithmetic, in ms (protocol.ts PageEnvironment.spinMs).
+function spin(): number {
+  const start = performance.now()
+  let x = 1
+  for (let i = 0; i < 20_000_000; i++) {
+    x ^= x << 13
+    x ^= x >>> 17
+    x ^= x << 5
+  }
+  sink += x & 1
+  return performance.now() - start
 }
 
 function engineOf(browser: BrowserKind): EngineName {
@@ -162,11 +188,11 @@ function paragraphOf(c: Context, text: string): Paragraph {
 
 // What each of the rebuild's modes is compared with in the table: main's line count for `count`, main's materialized
 // lines for `pieces` where a row has them, nothing for the lab's path.
-function rebuildVariants(label: string, what: string, baselines: Record<Mode, string | null>, run: (mode: Mode) => number): Variant[] {
+function rebuildVariants(label: string, what: string, baselines: Record<Mode, string | null>, layouts: number | null, run: (mode: Mode) => number): Variant[] {
   const out: Variant[] = []
   for (let i = 0; i < MODES.length; i++) {
     const mode = MODES[i]!
-    out.push({ name: `rebuild ${label}, ${mode}`, library: 'rebuild', baseline: baselines[mode], desc: `${what}; ${mode} mode`, run: () => run(mode) })
+    out.push({ name: `rebuild ${label}, ${mode}`, library: 'rebuild', baseline: baselines[mode], layouts, setup: null, desc: `${what}; ${mode} mode`, run: () => run(mode) })
   }
   return out
 }
@@ -183,14 +209,14 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
       const widths = [width]
       return [
         {
-          name: 'main prepare+layout', library: 'main', baseline: null, desc: 'clearCache(); prepare(); layout()',
+          name: 'main prepare+layout', library: 'main', baseline: null, layouts: null, setup: null, desc: 'clearCache(); prepare(); layout()',
           run: () => {
             clearCache()
             return layout(mainPrepare(text, font), width, lineHeight).lineCount
           },
         },
         {
-          name: 'main prepare+layout, segmenters kept', library: 'main', baseline: null,
+          name: 'main prepare+layout, segmenters kept', library: 'main', baseline: null, layouts: null, setup: null,
           desc: 'clearMeasurementCaches(), which keeps the Intl.Segmenter objects clearCache() drops; prepare(); layout()',
           run: () => {
             clearMeasurementCaches()
@@ -198,7 +224,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           },
         },
         {
-          name: 'main prepareWithSegments+layoutWithLines', library: 'main', baseline: null, desc: 'clearCache(); prepareWithSegments(); layoutWithLines()',
+          name: 'main prepareWithSegments+layoutWithLines', library: 'main', baseline: null, layouts: null, setup: null, desc: 'clearCache(); prepareWithSegments(); layoutWithLines()',
           run: () => {
             clearCache()
             return layoutWithLines(prepareWithSegments(text, font), width, lineHeight).lines.length
@@ -206,7 +232,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
         },
         ...rebuildVariants('prepare+fill', 'prepare(), which makes new Canvas contexts, then every line', {
           count: 'main prepare+layout', pieces: 'main prepareWithSegments+layoutWithLines', inspect: null,
-        }, mode => prepareAndFill(paragraph, env, widths, mode, null)),
+        }, null, mode => prepareAndFill(paragraph, env, widths, mode, null)),
       ]
     }
     case 'sweep': {
@@ -219,7 +245,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
       const n = widths.length
       return [
         {
-          name: `main prepare+layout×${n}`, library: 'main', baseline: null, desc: `clearCache(); prepare() once; layout() at ${n} widths`,
+          name: `main prepare+layout×${n}`, library: 'main', baseline: null, layouts: null, setup: null, desc: `clearCache(); prepare() once; layout() at ${n} widths`,
           run: () => {
             clearCache()
             const fresh = mainPrepare(text, font)
@@ -229,7 +255,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           },
         },
         {
-          name: `main layout×${n}`, library: 'main', baseline: null, desc: `layout() at ${n} widths on a handle prepared outside the timing`,
+          name: `main layout×${n}`, library: 'main', baseline: null, layouts: null, setup: null, desc: `layout() at ${n} widths on a handle prepared outside the timing`,
           run: () => {
             let lines = 0
             for (let i = 0; i < n; i++) lines += layout(handle, widths[i]!, lineHeight).lineCount
@@ -238,9 +264,9 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
         },
         ...rebuildVariants(`prepare+fill×${n}`, `prepare() once, then every line at ${n} widths`, {
           count: `main prepare+layout×${n}`, pieces: null, inspect: null,
-        }, mode => prepareAndFill(paragraph, env, widths, mode, null)),
+        }, null, mode => prepareAndFill(paragraph, env, widths, mode, null)),
         {
-          name: `rebuild fill×${n}, count`, library: 'rebuild', baseline: `main layout×${n}`,
+          name: `rebuild fill×${n}, count`, library: 'rebuild', baseline: `main layout×${n}`, layouts: null, setup: null,
           desc: `every line at ${n} widths of a plain paragraph prepared outside the timing, which has met every width by the first sample`,
           run: () => {
             let lineBoxes = 0
@@ -249,7 +275,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           },
         },
         {
-          name: 'rebuild prepare', library: 'rebuild', baseline: null, desc: 'prepare() of a plain paragraph alone',
+          name: 'rebuild prepare', library: 'rebuild', baseline: null, layouts: null, setup: null, desc: 'prepare() of a plain paragraph alone',
           run: () => {
             prepare(paragraph, env, false)
             return 0
@@ -266,7 +292,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
       const widths = [width]
       return [
         {
-          name: `main prepare+layout×${n}`, library: 'main', baseline: null, desc: `clearCache() once; prepare() and layout() for each of ${n} messages`,
+          name: `main prepare+layout×${n}`, library: 'main', baseline: null, layouts: null, setup: null, desc: `clearCache() once; prepare() and layout() for each of ${n} messages`,
           run: () => {
             clearCache()
             let lines = 0
@@ -276,22 +302,196 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
         },
         ...rebuildVariants(`prepare+fill×${n}`, `prepare() and every line for each of ${n} messages; the library keeps nothing across paragraphs`, {
           count: `main prepare+layout×${n}`, pieces: null, inspect: null,
-        }, mode => {
+        }, null, mode => {
           let lineBoxes = 0
           for (let i = 0; i < n; i++) lineBoxes += prepareAndFill(paragraphs[i]!, env, widths, mode, null)
           return lineBoxes
         }),
       ]
     }
+    case 'chat': return chatVariants(c, chatInputs(c, row.set, c.plan.chat!.timed))
   }
+}
+
+// ---- Chat (README.md, "Chat") ----
+
+// index.ts prepare() in its two halves, so the bench can time them apart and run the second alone: the runtime font checks
+// (measure/font-checks.ts), then the engine's own prepare on the paragraph with the facts Canvas answered.
+function withFontChecks(paragraph: Paragraph, env: Environment): Paragraph {
+  switch (env.engine) {
+    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env))
+    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks)
+    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks)
+  }
+}
+
+function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean): Prepared {
+  switch (env.engine) {
+    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, inspect) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, inspect) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, inspect) }
+  }
+}
+
+// A message as main takes it: a plain message is a string for prepare(), a message with a code span is the items of the
+// rich-inline helper, the span's padding as extraWidth.
+type MainInput = { rich: false; text: string } | { rich: true; items: RichInlineItem[] }
+type MainHandle = { rich: false; prepared: PreparedText } | { rich: true; prepared: PreparedRichInline }
+
+// The first `count` messages of a set as both libraries take them, built outside every timing. No font facts are
+// supplied: every declaration carries UNKNOWN_FONT_FACTS, so the rebuild's prepare() asks Canvas what it can.
+type ChatInputs = { chat: ChatPlan; kinds: ChatKind[]; units: number[]; paragraphs: Paragraph[]; main: MainInput[] }
+
+function chatInputs(c: Context, setId: string, count: number): ChatInputs {
+  const chat = c.plan.chat!
+  const messages: ChatMessage[] = chat.sets.find(set => set.id === setId)!.messages
+  const s = c.plan.style
+  const font: FontDecl = { ...s.font, facts: UNKNOWN_FONT_FACTS }
+  const codeFont: FontDecl = { ...chat.codeFont, facts: UNKNOWN_FONT_FACTS }
+  const text = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8 } as const
+  const edge: BoxEdge = { margin: 0, border: 0, padding: chat.codePadding }
+  const inputs: ChatInputs = { chat, kinds: [], units: [], paragraphs: [], main: [] }
+  for (let i = 0; i < count; i++) {
+    const parts = messages[i]!.parts
+    const content: InlineNode[] = []
+    const items: RichInlineItem[] = []
+    let whole = ''
+    let rich = false
+    for (let k = 0; k < parts.length; k++) {
+      const part = parts[k]!
+      whole += part.text
+      if (part.code) {
+        rich = true
+        content.push({ ...text, kind: 'span', font: codeFont, lang: null, inlineStart: edge, inlineEnd: edge, verticalAlign: 'baseline', children: [{ kind: 'text', text: part.text }] })
+        items.push({ text: part.text, font: chat.codeMainFont, extraWidth: 2 * chat.codePadding })
+      } else {
+        content.push({ kind: 'text', text: part.text })
+        items.push({ text: part.text, font: s.mainFont })
+      }
+    }
+    inputs.kinds.push(messages[i]!.kind)
+    inputs.units.push(whole.length)
+    inputs.paragraphs.push({ ...text, font, content, lineHeight: s.lineHeight, direction: s.direction, lang: s.lang, textIndent: 0, textAlign: 'start' })
+    inputs.main.push(rich ? { rich: true, items } : { rich: false, text: whole })
+  }
+  return inputs
+}
+
+function mainPrepareChat(input: MainInput, font: string): MainHandle {
+  return input.rich ? { rich: true, prepared: prepareRichInline(input.items) } : { rich: false, prepared: mainPrepare(input.text, font) }
+}
+
+function mainLinesChat(handle: MainHandle, width: number, lineHeight: number): number {
+  return handle.rich ? measureRichInlineStats(handle.prepared, width).lineCount : layout(handle.prepared, width, lineHeight).lineCount
+}
+
+// main's cold batch, as pages/benchmark.ts times it: clearCache() once, then every message, so main's caches fill across
+// the batch.
+function mainColdChat(inputs: ChatInputs, font: string, lineHeight: number): number {
+  clearCache()
+  let lines = 0
+  for (let i = 0; i < inputs.main.length; i++) lines += mainLinesChat(mainPrepareChat(inputs.main[i]!, font), inputs.chat.width, lineHeight)
+  return lines
+}
+
+function scratchChat(inputs: ChatInputs, env: Environment, mode: Mode): number {
+  const widths = [inputs.chat.width]
+  let lineBoxes = 0
+  for (let i = 0; i < inputs.paragraphs.length; i++) lineBoxes += prepareAndFill(inputs.paragraphs[i]!, env, widths, mode, null)
+  return lineBoxes
+}
+
+// Every message prepared plain and filled at the first width, all of them kept: what an app holds before a resize.
+function prepareAllChat(inputs: ChatInputs, env: Environment): Prepared[] {
+  const prepared: Prepared[] = []
+  for (let i = 0; i < inputs.paragraphs.length; i++) {
+    prepared.push(prepare(inputs.paragraphs[i]!, env, false))
+    sink += fillAll(prepared[i]!, inputs.chat.width, 'count', null)
+  }
+  return prepared
+}
+
+function resizeChat(prepared: readonly Prepared[], widths: readonly number[]): number {
+  let lineBoxes = 0
+  for (let w = 0; w < widths.length; w++) for (let i = 0; i < prepared.length; i++) lineBoxes += fillAll(prepared[i]!, widths[w]!, 'count', null)
+  return lineBoxes
+}
+
+function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
+  const env = c.env
+  const font = c.plan.style.mainFont
+  const lineHeight = c.plan.style.lineHeight
+  const n = inputs.paragraphs.length
+  const width = inputs.chat.width
+  const resizeWidths = inputs.chat.resizeWidths
+  const w = resizeWidths.length
+  clearCache()
+  const handles: MainHandle[] = []
+  for (let i = 0; i < n; i++) handles.push(mainPrepareChat(inputs.main[i]!, font))
+  // The font checks run here, once a paragraph, outside every timing; what they answer depends on the declaration and on
+  // whether the text holds a soft hyphen or joining letters, so a resolver that outlives a paragraph gives the same facts.
+  const checked: Paragraph[] = []
+  for (let i = 0; i < n; i++) checked.push(withFontChecks(inputs.paragraphs[i]!, env))
+  let fresh: Prepared[] = []
+  const met = prepareAllChat(inputs, env)
+  sink += resizeChat(met, resizeWidths)
+  return [
+    {
+      name: 'main cold', library: 'main', baseline: null, layouts: n, setup: null,
+      desc: `clearCache() once; for each of ${n} messages prepare() and layout() at ${width}px, or prepareRichInline() and measureRichInlineStats() where the message has a code span`,
+      run: () => mainColdChat(inputs, font, lineHeight),
+    },
+    {
+      name: `main resize×${w}`, library: 'main', baseline: null, layouts: n * w, setup: null,
+      desc: `layout() or measureRichInlineStats() at ${resizeWidths.join(', ')}px on handles prepared outside the timing`,
+      run: () => {
+        let lines = 0
+        for (let k = 0; k < w; k++) for (let i = 0; i < n; i++) lines += mainLinesChat(handles[i]!, resizeWidths[k]!, lineHeight)
+        return lines
+      },
+    },
+    ...rebuildVariants('scratch', `for each of ${n} messages prepare(), with its font checks and new Canvas contexts, then every line at ${width}px; nothing kept across messages`, {
+      count: 'main cold', pieces: null, inspect: null,
+    }, n, mode => scratchChat(inputs, env, mode)),
+    {
+      name: 'rebuild scratch, count, checks lifted', library: 'rebuild', baseline: 'rebuild scratch, count', layouts: n, setup: null,
+      desc: 'the same, on paragraphs whose font facts were asked of Canvas outside the timing: the engine\'s prepare() alone, then every line; count mode',
+      run: () => {
+        let lineBoxes = 0
+        for (let i = 0; i < n; i++) lineBoxes += fillAll(prepareChecked(checked[i]!, env, false), width, 'count', null)
+        return lineBoxes
+      },
+    },
+    {
+      name: `rebuild first resize×${w}, count`, library: 'rebuild', baseline: `main resize×${w}`, layouts: n * w,
+      desc: `every line at ${resizeWidths.join(', ')}px of plain paragraphs that were prepared and filled at ${width}px before each repetition, outside its timing, so every width is new to them`,
+      setup: () => { fresh = prepareAllChat(inputs, env) },
+      run: () => resizeChat(fresh, resizeWidths),
+    },
+    {
+      name: `rebuild resize×${w} again, count`, library: 'rebuild', baseline: `main resize×${w}`, layouts: n * w, setup: null,
+      desc: `every line at ${resizeWidths.join(', ')}px of plain paragraphs prepared once outside the timing that have been filled at every one of these widths before`,
+      run: () => resizeChat(met, resizeWidths),
+    },
+  ]
 }
 
 // ---- Sampling ----
 
 function runReps(variant: Variant, reps: number): number {
-  const start = performance.now()
-  for (let r = 0; r < reps; r++) sink += variant.run()
-  return performance.now() - start
+  if (variant.setup === null) {
+    const start = performance.now()
+    for (let r = 0; r < reps; r++) sink += variant.run()
+    return performance.now() - start
+  }
+  let elapsed = 0
+  for (let r = 0; r < reps; r++) {
+    variant.setup()
+    const start = performance.now()
+    sink += variant.run()
+    elapsed += performance.now() - start
+  }
+  return elapsed
 }
 
 // Repetitions per sample: doubled, or scaled from the last elapsed time, until a sample spans minSampleMs.
@@ -349,41 +549,180 @@ async function timeRow(row: RowSpec, rowIndex: number, c: Context, timerMs: numb
     const variant = variants[i]!
     const heapDrops = heapApi ? drops[i]! : null
     results.push({
-      variant: variant.name, library: variant.library, desc: variant.desc, baseline: variant.baseline, firstMs: firstMs.get(variant.name)!,
+      variant: variant.name, library: variant.library, desc: variant.desc, baseline: variant.baseline, layouts: variant.layouts, firstMs: firstMs.get(variant.name)!,
       samplesMs: samples[i]!, heapDrops, stats: summarize(samples[i]!, reps[i]!, heapDrops),
     })
   }
   let units = 0
-  if (row.kind === 'many') for (let i = 0; i < row.messages.length; i++) units += row.messages[i]!.length
-  else units = row.text.length
+  let messages: number | null = null
+  let widths: number[]
+  switch (row.kind) {
+    case 'cold': units = row.text.length; widths = [row.width]; break
+    case 'sweep': units = row.text.length; widths = row.widths; break
+    case 'many':
+      for (let i = 0; i < row.messages.length; i++) units += row.messages[i]!.length
+      messages = row.messages.length
+      widths = [row.width]
+      break
+    case 'chat': {
+      const chat = c.plan.chat!
+      const set = chat.sets.find(entry => entry.id === row.set)!.messages
+      for (let i = 0; i < chat.timed; i++) for (let k = 0; k < set[i]!.parts.length; k++) units += set[i]!.parts[k]!.text.length
+      messages = chat.timed
+      widths = [chat.width, ...chat.resizeWidths]
+      break
+    }
+  }
   return {
-    id: row.id, kind: row.kind, size: row.kind === 'many' ? null : row.size, units, messages: row.kind === 'many' ? row.messages.length : null,
-    widths: row.kind === 'sweep' ? row.widths : [row.width], firstLibrary, minSampleMs, elapsedMs: performance.now() - t0, start, end: snapshot(),
-    variants: results,
+    id: row.id, kind: row.kind, size: row.kind === 'cold' || row.kind === 'sweep' ? row.size : null, units, messages, widths, firstLibrary, minSampleMs,
+    elapsedMs: performance.now() - t0, start, end: snapshot(), variants: results,
   }
 }
 
-// ---- Counting ----
+// ---- Headline: the whole chat set, once a pass (protocol.ts ChatHeadline) ----
 
-let measureTextCalls = 0
-let contextsMade = 0
+async function chatHeadline(c: Context, chat: ChatPlan): Promise<void> {
+  const font = c.plan.style.mainFont
+  const lineHeight = c.plan.style.lineHeight
+  for (let s = 0; s < chat.sets.length; s++) {
+    const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
+    const result: ChatHeadline = { set: chat.sets[s]!.id, messages: chat.headline, rebuildScratchMs: [], mainColdMs: [], lines: { rebuild: 0, main: 0 } }
+    for (let pass = 0; pass < chat.headlinePasses; pass++) {
+      document.title = `bench headline ${result.set} ${pass + 1}/${chat.headlinePasses}`
+      for (let turn = 0; turn < 2; turn++) {
+        const start = performance.now()
+        if ((turn === 0) === (pass % 2 === 0)) {
+          result.lines.rebuild = scratchChat(inputs, c.env, 'count')
+          result.rebuildScratchMs.push(performance.now() - start)
+        } else {
+          result.lines.main = mainColdChat(inputs, font, lineHeight)
+          result.mainColdMs.push(performance.now() - start)
+        }
+        await yieldTask()
+      }
+    }
+    sink += result.lines.rebuild + result.lines.main
+    await post<{ kind: 'ok' }>('/api/chat', { runId, context: c.plan.index, part: { kind: 'headline', result } } satisfies ChatPost)
+  }
+}
 
-function countMeasureText(proto: { measureText(text: string): TextMetrics } | undefined): void {
-  if (proto === undefined) return
+// The resize case on the headline set (protocol.ts ChatHeadlineResize). It holds every prepared paragraph of a set at once,
+// with their Canvas contexts, so it runs last in its document: a page that can't hold them has posted everything else.
+async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
+  const font = c.plan.style.mainFont
+  const lineHeight = c.plan.style.lineHeight
+  for (let s = 0; s < chat.sets.length; s++) {
+    const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
+    document.title = `bench headline resize ${chat.sets[s]!.id}`
+    let start = performance.now()
+    const prepared = prepareAllChat(inputs, c.env)
+    const rebuildPrepareAndFillMs = performance.now() - start
+    start = performance.now()
+    sink += resizeChat(prepared, chat.resizeWidths)
+    const rebuildResizeMs = performance.now() - start
+    await yieldTask()
+    start = performance.now()
+    clearCache()
+    const handles: MainHandle[] = []
+    for (let i = 0; i < inputs.main.length; i++) {
+      handles.push(mainPrepareChat(inputs.main[i]!, font))
+      sink += mainLinesChat(handles[i]!, chat.width, lineHeight)
+    }
+    const mainPrepareAndLayoutMs = performance.now() - start
+    start = performance.now()
+    for (let k = 0; k < chat.resizeWidths.length; k++) for (let i = 0; i < handles.length; i++) sink += mainLinesChat(handles[i]!, chat.resizeWidths[k]!, lineHeight)
+    const mainResizeMs = performance.now() - start
+    const result: ChatHeadlineResize = {
+      set: chat.sets[s]!.id, messages: chat.headline, widths: chat.resizeWidths, rebuildPrepareAndFillMs, rebuildResizeMs, mainPrepareAndLayoutMs, mainResizeMs,
+    }
+    await post<{ kind: 'ok' }>('/api/chat', { runId, context: c.plan.index, part: { kind: 'headline-resize', result } } satisfies ChatPost)
+  }
+}
+
+// ---- Counting, and the time inside Canvas ----
+
+// What the wrappers below have seen: measureText calls with the time inside them, and contexts made (getContext calls)
+// with the time making them: the OffscreenCanvas constructor, getContext and every assignment to a context's text
+// attributes (the font string is parsed and resolved in the assignment).
+const canvasWork = { measureTextCalls: 0, measureTextMs: 0, contexts: 0, contextMs: 0 }
+
+type Restore = () => void
+
+function wrapMeasureText(proto: { measureText(text: string): TextMetrics } | undefined): Restore {
+  if (proto === undefined) return () => {}
   const original = proto.measureText
   proto.measureText = function (this: unknown, text: string): TextMetrics {
-    measureTextCalls++
-    return original.call(this, text)
+    canvasWork.measureTextCalls++
+    const start = performance.now()
+    const metrics = original.call(this, text)
+    canvasWork.measureTextMs += performance.now() - start
+    return metrics
   }
+  return () => { proto.measureText = original }
 }
 
-function countContexts(proto: { getContext: (...rest: never[]) => unknown } | undefined): void {
-  if (proto === undefined) return
+function wrapGetContext(proto: { getContext: (...rest: never[]) => unknown } | undefined): Restore {
+  if (proto === undefined) return () => {}
   const original = proto.getContext as (this: unknown, ...rest: unknown[]) => unknown
   ;(proto as { getContext: unknown }).getContext = function (this: unknown, ...rest: unknown[]): unknown {
-    contextsMade++
-    return original.apply(this, rest)
+    canvasWork.contexts++
+    const start = performance.now()
+    const context = original.apply(this, rest)
+    canvasWork.contextMs += performance.now() - start
+    return context
   }
+  return () => { (proto as { getContext: unknown }).getContext = original }
+}
+
+const TEXT_ATTRIBUTES = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction']
+
+function wrapTextAttributes(proto: object | undefined): Restore {
+  if (proto === undefined) return () => {}
+  const restores: Restore[] = []
+  for (let i = 0; i < TEXT_ATTRIBUTES.length; i++) {
+    const name = TEXT_ATTRIBUTES[i]!
+    const descriptor = Object.getOwnPropertyDescriptor(proto, name)
+    // WebKit's context has no lang, fontKerning or textRendering (engines/webkit/checks.ts).
+    if (descriptor === undefined || descriptor.set === undefined) continue
+    const original = descriptor.set
+    Object.defineProperty(proto, name, {
+      ...descriptor,
+      set(this: unknown, value: unknown): void {
+        const start = performance.now()
+        original.call(this, value)
+        canvasWork.contextMs += performance.now() - start
+      },
+    })
+    restores.push(() => { Object.defineProperty(proto, name, descriptor) })
+  }
+  return () => { for (let i = 0; i < restores.length; i++) restores[i]!() }
+}
+
+function wrapOffscreenCanvasConstructor(): Restore {
+  if (typeof OffscreenCanvas === 'undefined') return () => {}
+  const original = OffscreenCanvas
+  class TimedOffscreenCanvas extends original {
+    constructor(width: number, height: number) {
+      const start = performance.now()
+      super(width, height)
+      canvasWork.contextMs += performance.now() - start
+    }
+  }
+  const scope = globalThis as { OffscreenCanvas: typeof OffscreenCanvas }
+  scope.OffscreenCanvas = TimedOffscreenCanvas
+  return () => { scope.OffscreenCanvas = original }
+}
+
+// Puts the counting and timing wrappers on both context classes and both canvas classes; the result takes them off.
+function wrapCanvas(): Restore {
+  const offscreenContext = typeof OffscreenCanvasRenderingContext2D === 'undefined' ? undefined : OffscreenCanvasRenderingContext2D.prototype
+  const canvasContext = typeof CanvasRenderingContext2D === 'undefined' ? undefined : CanvasRenderingContext2D.prototype
+  const restores = [
+    wrapMeasureText(offscreenContext), wrapMeasureText(canvasContext), wrapTextAttributes(offscreenContext), wrapTextAttributes(canvasContext),
+    wrapGetContext(typeof OffscreenCanvas === 'undefined' ? undefined : OffscreenCanvas.prototype),
+    wrapGetContext(typeof HTMLCanvasElement === 'undefined' ? undefined : HTMLCanvasElement.prototype), wrapOffscreenCanvasConstructor(),
+  ]
+  return () => { for (let i = 0; i < restores.length; i++) restores[i]!() }
 }
 
 // The rebuild's line ranges of the row in one mode: every paragraph, every width.
@@ -395,8 +734,31 @@ function rebuildRanges(row: RowSpec, c: Context, mode: Mode): number[] {
     case 'many':
       for (let i = 0; i < row.messages.length; i++) prepareAndFill(paragraphOf(c, row.messages[i]!), c.env, [row.width], mode, ranges)
       break
+    case 'chat': {
+      const inputs = chatInputs(c, row.set, c.plan.chat!.timed)
+      const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
+      for (let i = 0; i < inputs.paragraphs.length; i++) prepareAndFill(inputs.paragraphs[i]!, c.env, widths, mode, ranges)
+      break
+    }
   }
   return ranges
+}
+
+// The same ranges from the two halves of prepare() run apart, as the 'checks lifted' variant and the phase pass run them.
+function checkedRanges(inputs: ChatInputs, env: Environment): number[] {
+  const ranges: number[] = []
+  const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
+  for (let i = 0; i < inputs.paragraphs.length; i++) {
+    const prepared = prepareChecked(withFontChecks(inputs.paragraphs[i]!, env), env, false)
+    for (let w = 0; w < widths.length; w++) fillAll(prepared, widths[w]!, 'count', ranges)
+  }
+  return ranges
+}
+
+function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }
 
 function countRow(row: RowSpec, c: Context): RowCount {
@@ -404,19 +766,110 @@ function countRow(row: RowSpec, c: Context): RowCount {
   const counts: VariantCount[] = []
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i]!
-    measureTextCalls = 0
-    contextsMade = 0
+    variant.setup?.()
+    canvasWork.measureTextCalls = 0
+    canvasWork.contexts = 0
     const lines = variant.run()
-    counts.push({ variant: variant.name, measureTextCalls, contexts: contextsMade, lines })
+    counts.push({ variant: variant.name, measureTextCalls: canvasWork.measureTextCalls, contexts: canvasWork.contexts, lines })
     sink += lines
   }
   const counted = rebuildRanges(row, c, 'count')
   let same = true
-  for (let m = 1; m < MODES.length && same; m++) {
-    const ranges = rebuildRanges(row, c, MODES[m]!)
-    same = ranges.length === counted.length && ranges.every((value, i) => value === counted[i])
-  }
+  for (let m = 1; m < MODES.length && same; m++) same = sameNumbers(rebuildRanges(row, c, MODES[m]!), counted)
+  if (same && row.kind === 'chat') same = sameNumbers(checkedRanges(chatInputs(c, row.set, c.plan.chat!.timed), c.env), counted)
   return { id: row.id, variants: counts, rebuildModesSameLines: same }
+}
+
+// ---- Phases: where the rebuild's from-scratch time goes (protocol.ts ChatPhases) ----
+
+function noTotals(): PhaseTotals {
+  return { ms: 0, measureTextMs: 0, measureTextCalls: 0, contextMs: 0, contexts: 0 }
+}
+
+// Adds what ran since `start` and `work` were taken to `totals`, and returns the time of it.
+function addPhase(totals: PhaseTotals, start: number, work: typeof canvasWork): number {
+  const ms = performance.now() - start
+  totals.ms += ms
+  totals.measureTextMs += canvasWork.measureTextMs - work.measureTextMs
+  totals.measureTextCalls += canvasWork.measureTextCalls - work.measureTextCalls
+  totals.contextMs += canvasWork.contextMs - work.contextMs
+  totals.contexts += canvasWork.contexts - work.contexts
+  return ms
+}
+
+function medianTotals(passes: readonly PhaseTotals[]): PhaseTotals {
+  return {
+    ms: median(passes.map(pass => pass.ms)), measureTextMs: median(passes.map(pass => pass.measureTextMs)), measureTextCalls: median(passes.map(pass => pass.measureTextCalls)),
+    contextMs: median(passes.map(pass => pass.contextMs)), contexts: median(passes.map(pass => pass.contexts)),
+  }
+}
+
+type KindTotals = ChatPhases['byKind'][number]
+
+function chatPhases(c: Context, chat: ChatPlan, setIndex: number): ChatPhases {
+  const inputs = chatInputs(c, chat.sets[setIndex]!.id, chat.timed)
+  const env = c.env
+  const checks: PhaseTotals[] = []
+  const prepares: PhaseTotals[] = []
+  const fills: PhaseTotals[] = []
+  const kinds: Map<ChatKind, KindTotals>[] = []
+  for (let pass = 0; pass < chat.phasePasses; pass++) {
+    const check = noTotals()
+    const prep = noTotals()
+    const fill = noTotals()
+    const byKind = new Map<ChatKind, KindTotals>()
+    for (let i = 0; i < inputs.paragraphs.length; i++) {
+      const callsBefore = canvasWork.measureTextCalls
+      const contextsBefore = canvasWork.contexts
+      let work = { ...canvasWork }
+      let start = performance.now()
+      const checked = withFontChecks(inputs.paragraphs[i]!, env)
+      const checksMs = addPhase(check, start, work)
+      work = { ...canvasWork }
+      start = performance.now()
+      const prepared = prepareChecked(checked, env, false)
+      const prepareMs = addPhase(prep, start, work)
+      work = { ...canvasWork }
+      start = performance.now()
+      sink += fillAll(prepared, inputs.chat.width, 'count', null)
+      const fillMs = addPhase(fill, start, work)
+      const kind = inputs.kinds[i]!
+      let entry = byKind.get(kind)
+      if (entry === undefined) {
+        entry = { kind, messages: 0, units: 0, checksMs: 0, prepareMs: 0, fillMs: 0, measureTextCalls: 0, contexts: 0 }
+        byKind.set(kind, entry)
+      }
+      entry.messages++
+      entry.units += inputs.units[i]!
+      entry.checksMs += checksMs
+      entry.prepareMs += prepareMs
+      entry.fillMs += fillMs
+      entry.measureTextCalls += canvasWork.measureTextCalls - callsBefore
+      entry.contexts += canvasWork.contexts - contextsBefore
+    }
+    checks.push(check)
+    prepares.push(prep)
+    fills.push(fill)
+    kinds.push(byKind)
+  }
+  const byKind: KindTotals[] = []
+  const kindsMet = [...kinds[0]!.keys()]
+  for (let k = 0; k < kindsMet.length; k++) {
+    const kind = kindsMet[k]!
+    const passes = kinds.map(pass => pass.get(kind)!)
+    byKind.push({
+      kind, messages: passes[0]!.messages, units: passes[0]!.units, checksMs: median(passes.map(pass => pass.checksMs)), prepareMs: median(passes.map(pass => pass.prepareMs)),
+      fillMs: median(passes.map(pass => pass.fillMs)), measureTextCalls: passes[0]!.measureTextCalls, contexts: passes[0]!.contexts,
+    })
+  }
+  const nowCalls = 200_000
+  const nowStart = performance.now()
+  for (let i = 0; i < nowCalls; i++) sink += performance.now() > 0 ? 1 : 0
+  const nowMs = (performance.now() - nowStart) / nowCalls
+  return {
+    set: chat.sets[setIndex]!.id, messages: inputs.paragraphs.length, passes: chat.phasePasses, checks: medianTotals(checks), prepare: medianTotals(prepares),
+    fill: medianTotals(fills), byKind, nowMs,
+  }
 }
 
 // ---- Main ----
@@ -431,10 +884,12 @@ async function main(): Promise<void> {
   if (detected.kind === 'unsupported') throw new Error(`Unsupported browser: ${detected.reason} (${detected.userAgent})`)
   const c: Context = { plan, env: detected.env, font: { ...plan.style.font, facts: fontFactsFor(plan.style.font, engine, []) } }
   const timer = timerResolution()
+  // Once untimed, so both timed runs of the loop are of compiled code.
+  spin()
   const environment: PageEnvironment = {
     userAgent: navigator.userAgent, pageLang: document.documentElement.lang, crossOriginIsolated: window.crossOriginIsolated,
     timerResolutionMs: timer.ms, timerSteps: timer.steps, heapApi: heapBytes() !== null, hardwareConcurrency: navigator.hardwareConcurrency,
-    screen: { width: screen.width, height: screen.height },
+    screen: { width: screen.width, height: screen.height }, spinMs: { start: spin(), end: 0 },
   }
   for (let i = 0; i < plan.rows.length; i++) {
     const row = plan.rows[i]!
@@ -442,14 +897,27 @@ async function main(): Promise<void> {
     const timing = await timeRow(row, i, c, timer.ms)
     await post<{ kind: 'ok' }>('/api/row', { runId, context: plan.index, row: timing } satisfies RowPost)
   }
-  // Counting wrappers go on after every timed repetition in this document and stay until it unloads.
-  countMeasureText(typeof OffscreenCanvasRenderingContext2D === 'undefined' ? undefined : OffscreenCanvasRenderingContext2D.prototype)
-  countMeasureText(typeof CanvasRenderingContext2D === 'undefined' ? undefined : CanvasRenderingContext2D.prototype)
-  countContexts(typeof OffscreenCanvas === 'undefined' ? undefined : OffscreenCanvas.prototype)
-  countContexts(typeof HTMLCanvasElement === 'undefined' ? undefined : HTMLCanvasElement.prototype)
+  if (plan.chat !== null && plan.chat.headline > 0) await chatHeadline(c, plan.chat)
+  environment.spinMs.end = spin()
+  // The wrappers go on after every timed row and headline pass of this document. They come off again before the chat
+  // context's last timed part, which runs after them because it is the one most likely to end the page.
+  const unwrapCanvas = wrapCanvas()
   const counts: RowCount[] = []
-  for (let i = 0; i < plan.rows.length; i++) counts.push(countRow(plan.rows[i]!, c))
-  const reply = await post<{ kind: 'navigate'; url: string } | { kind: 'done' }>('/api/context-done', { runId, context: plan.index, environment, counts } satisfies ContextDonePost)
+  for (let i = 0; i < plan.rows.length; i++) {
+    document.title = `bench ${plan.index + 1}/${plan.count}: counting ${plan.rows[i]!.id}`
+    counts.push(countRow(plan.rows[i]!, c))
+    await yieldTask()
+  }
+  await post<{ kind: 'ok' }>('/api/counts', { runId, context: plan.index, counts } satisfies CountsPost)
+  if (plan.chat !== null) {
+    for (let s = 0; s < plan.chat.sets.length; s++) {
+      document.title = `bench ${plan.index + 1}/${plan.count}: phases ${plan.chat.sets[s]!.id}`
+      await post<{ kind: 'ok' }>('/api/chat', { runId, context: plan.index, part: { kind: 'phases', result: chatPhases(c, plan.chat, s) } } satisfies ChatPost)
+    }
+  }
+  unwrapCanvas()
+  if (plan.chat !== null && plan.chat.headline > 0) await chatHeadlineResize(c, plan.chat)
+  const reply = await post<{ kind: 'navigate'; url: string } | { kind: 'done' }>('/api/context-done', { runId, context: plan.index, environment } satisfies ContextDonePost)
   if (reply.kind === 'navigate') {
     location.replace(reply.url)
     return

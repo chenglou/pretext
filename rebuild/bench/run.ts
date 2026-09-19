@@ -6,11 +6,12 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { loadavg } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from '../lab/browser-build.ts'
-import { buildContexts, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
-import type { BrowserKind, ContextDonePost, ContextPlan, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
-import { formatMs, renderMarkdown, type BenchReport, type ContextReport, type LockState, type MachineSnapshot } from './report.ts'
+import { buildContexts, describeChat, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
+import type { BrowserKind, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
+import { formatMs, renderMarkdown, type BenchReport, type ChatReport, type ContextReport, type LockState, type MachineSnapshot } from './report.ts'
 
 const BENCH_DIR = import.meta.dir
 const REPO = resolve(BENCH_DIR, '../..')
@@ -37,10 +38,12 @@ function message(error: unknown): string {
 // ---- Arguments ----
 
 const USAGE = 'Usage: bun rebuild/bench/run.ts --browser=chrome|firefox|safari|webkit-host [--foreground] [--smoke] [--out=<dir>] '
-  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many] [--samples=N] '
-  + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--stall-ms=N] [--allow-battery] [--allow-no-lock]'
+  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--samples=N] '
+  + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--headline=N] [--headline-passes=N] [--phase-passes=N] '
+  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--allow-battery] [--allow-no-lock]'
 const FLAGS = ['foreground', 'smoke', 'allow-battery', 'allow-no-lock']
-const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'stall-ms']
+const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
+  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms']
 const flags = new Set<string>()
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -91,6 +94,15 @@ const settings: Settings = {
 }
 if (settings.minSamples > settings.samples) fail('--min-samples must not exceed --samples')
 const messageCount = positiveInteger('messages', smoke ? 200 : 1000)
+// The chat context's headline passes: this many messages from scratch, once a pass. Off unless asked for (README.md, "Chat").
+const headline = args.get('headline') === '0' ? 0 : positiveInteger('headline', 0)
+const headlinePasses = positiveInteger('headline-passes', 3)
+const phasePasses = positiveInteger('phase-passes', smoke ? 1 : 3)
+// --quiet-load=N: before anything is launched, wait until the 1-minute load average is under N, at most --quiet-wait-min
+// minutes, then run whatever the load is; the report says how long it waited and whether the load got there. The browser
+// lock keeps other browser jobs away, not other work, and an unattended run has nobody to pick its moment.
+const quietLoad = args.has('quiet-load') ? positiveInteger('quiet-load', 1) : null
+const quietWaitMin = positiveInteger('quiet-wait-min', 15)
 const stallMs = positiveInteger('stall-ms', 20 * 60_000)
 const runId = randomUUID()
 const startedAt = new Date()
@@ -182,19 +194,38 @@ function treeHash(dir: string): string {
 }
 
 const build = readBuild(browser)
-const machineStart = machineSnapshot()
 const lockStart = readLock()
 if (!lockStart.ours && !flags.has('allow-no-lock')) fail(`Run under python3 .artifacts/session/with-browser-lock.py; the lock owner is ${JSON.stringify(lockStart.owner)} (use --allow-no-lock to override)`)
+let quietWait: BenchReport['machine']['quietWait'] = null
+if (quietLoad !== null) {
+  const waitStart = Date.now()
+  if (loadavg()[0]! >= quietLoad) console.log(`[bench] load average ${loadavg()[0]!.toFixed(1)}; waiting up to ${quietWaitMin} min for it to go under ${quietLoad}`)
+  while (loadavg()[0]! >= quietLoad && Date.now() - waitStart < quietWaitMin * 60_000) await Bun.sleep(10_000)
+  quietWait = { below: quietLoad, waitedMs: Date.now() - waitStart, reached: loadavg()[0]! < quietLoad }
+}
+const machineStart = machineSnapshot()
 if (foreground && !machineStart.power.includes("'AC Power'") && !flags.has('allow-battery')) fail(`Foreground benchmarks need AC power: ${machineStart.power.split('\n')[0]}`)
 if (foreground && machineStart.otherJobs.length > 0) console.warn(`[bench] other browser jobs are running: ${machineStart.otherJobs.join('; ')}`)
 if (foreground) console.warn(`[bench] load average ${machineStart.loadAverage}; the page must stay visible and focused until the report is written`)
 
 // ---- Plan ----
 
-const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount })
+const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount, chat: { timed: messageCount, headline, headlinePasses, phasePasses } })
 if (contexts.length === 0) fail('No rows selected')
 const totalRows = contexts.reduce((sum, context) => sum + context.rows.length, 0)
-const reports: ContextReport[] = contexts.map(context => ({ script: context.style.script, style: context.style, environment: null, rows: [] }))
+
+// The chat plan without its messages, with what each set holds.
+function chatReport(chat: ChatPlan): ChatReport {
+  const { sets, ...rest } = chat
+  return {
+    ...rest, headlines: [], headlineResizes: [], phases: [],
+    sets: sets.map(set => ({ id: set.id, timed: describeChat(set.messages.slice(0, chat.timed)), headline: chat.headline > 0 ? describeChat(set.messages.slice(0, chat.headline)) : null })),
+  }
+}
+
+const reports: ContextReport[] = contexts.map(context => ({
+  script: context.style.script, style: context.style, environment: null, rows: [], chat: context.chat === null ? null : chatReport(context.chat),
+}))
 const errors: string[] = []
 const violations: string[] = []
 let rowsDone = 0
@@ -209,7 +240,7 @@ function stopRun(error: Error): void {
 
 function plan(index: number): ContextPlan {
   const context = contexts[index]!
-  return { runId, index, count: contexts.length, browser, engineBuild: build.engine, style: context.style, settings, rows: context.rows }
+  return { runId, index, count: contexts.length, browser, engineBuild: build.engine, style: context.style, settings, rows: context.rows, chat: context.chat }
 }
 
 // A string's storage width (8-bit or 16-bit) follows its provenance, and the rebuild's WebKit and Blink ports have rules
@@ -287,19 +318,52 @@ async function handle(request: Request): Promise<Response> {
       console.log(progressLine(body))
       return Response.json({ kind: 'ok' })
     }
+    case '/api/chat': {
+      const body = await request.json() as ChatPost
+      const chat = reports[body.context]?.chat ?? null
+      if (body.runId !== runId || chat === null) return new Response('Inactive run', { status: 409 })
+      const part = body.part
+      switch (part.kind) {
+        case 'headline':
+          chat.headlines.push(part.result)
+          console.log(`[bench] ${browser} headline ${part.result.set}, ${part.result.messages} messages from scratch: rebuild ${part.result.rebuildScratchMs.map(formatMs).join(', ')}; main ${part.result.mainColdMs.map(formatMs).join(', ')}`)
+          break
+        case 'headline-resize':
+          chat.headlineResizes.push(part.result)
+          console.log(`[bench] ${browser} headline resize ${part.result.set}, ${part.result.messages} messages at ${part.result.widths.length} widths: rebuild ${formatMs(part.result.rebuildResizeMs)}; main ${formatMs(part.result.mainResizeMs)}`)
+          break
+        case 'phases':
+          chat.phases.push(part.result)
+          console.log(`[bench] ${browser} phases ${part.result.set}: font checks ${formatMs(part.result.checks.ms)}, engine prepare ${formatMs(part.result.prepare.ms)}, fill ${formatMs(part.result.fill.ms)} over ${part.result.messages} messages`)
+          break
+      }
+      return Response.json({ kind: 'ok' })
+    }
+    case '/api/counts': {
+      const body = await request.json() as CountsPost
+      if (body.runId !== runId || reports[body.context] === undefined) return new Response('Inactive run', { status: 409 })
+      for (let i = 0; i < body.counts.length; i++) {
+        const count = body.counts[i]!
+        const row = reports[body.context]!.rows.find(entry => entry.id === count.id)
+        if (row === undefined) errors.push(`Counts for unknown row ${count.id}`)
+        else row.counts = count
+      }
+      return Response.json({ kind: 'ok' })
+    }
     case '/api/context-done': {
       const body = await request.json() as ContextDonePost
       if (body.runId !== runId || reports[body.context] === undefined) return new Response('Inactive run', { status: 409 })
       const report = reports[body.context]!
       report.environment = body.environment
       if (!userAgentMatches(browser, build, body.environment.userAgent)) errors.push(`User agent ${body.environment.userAgent} doesn't name the build read before launch (${JSON.stringify(build)})`)
-      for (let i = 0; i < body.counts.length; i++) {
-        const count = body.counts[i]!
-        const row = report.rows.find(entry => entry.id === count.id)
-        if (row === undefined) errors.push(`Counts for unknown row ${count.id}`)
-        else row.counts = count
-      }
+      for (let i = 0; i < report.rows.length; i++) if (report.rows[i]!.counts === null) errors.push(`No counts for row ${report.rows[i]!.id}`)
       if (report.rows.length !== contexts[body.context]!.rows.length) errors.push(`Context ${report.script} posted ${report.rows.length} rows; expected ${contexts[body.context]!.rows.length}`)
+      const chat = report.chat ?? null
+      if (chat !== null) {
+        const headlines = chat.headline > 0 ? chat.sets.length : 0
+        if (chat.headlines.length !== headlines || chat.headlineResizes.length !== headlines) errors.push(`Chat posted ${chat.headlines.length} headlines and ${chat.headlineResizes.length} headline resizes; expected ${headlines} of each`)
+        if (chat.phases.length !== chat.sets.length) errors.push(`Chat posted phases for ${chat.phases.length} sets; expected ${chat.sets.length}`)
+      }
       const next = body.context + 1
       if (next < contexts.length) return Response.json({ kind: 'navigate', url: pageUrl(baseUrl, next) })
       settle?.resolve()
@@ -582,7 +646,7 @@ try {
   server?.stop(true)
   const finishedAt = new Date()
   const report: BenchReport = {
-    schema: 'rebuild-bench-1',
+    schema: 'rebuild-bench-2',
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
     mode: foreground ? 'foreground' : 'background',
@@ -595,8 +659,8 @@ try {
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
-    settings: { ...settings, scripts, sizes, scenarios, messages: messageCount },
-    machine: { cpu: sh('sysctl', ['-n', 'machdep.cpu.brand_string']), memoryBytes: Number(sh('sysctl', ['-n', 'hw.memsize'])), start: machineStart, end: machineSnapshot() },
+    settings: { ...settings, scripts, sizes, scenarios, messages: messageCount, headline, headlinePasses, phasePasses },
+    machine: { cpu: sh('sysctl', ['-n', 'machdep.cpu.brand_string']), memoryBytes: Number(sh('sysctl', ['-n', 'hw.memsize'])), start: machineStart, end: machineSnapshot(), quietWait },
     lock: { start: lockStart, end: readLock() },
     source: {
       head: sh('git', ['-C', REPO, 'rev-parse', 'HEAD']),
