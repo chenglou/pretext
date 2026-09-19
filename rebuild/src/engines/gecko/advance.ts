@@ -2,12 +2,12 @@
 // start it is the units' running sum, and inside a unit it is measured from the two sides of the offset, with the ligature
 // groups, pair adjustments and joining forms Canvas can show, and the reason where Canvas can't confirm it
 // (gfxTextRun::GetAdvanceWidth, gfxTextRun.cpp:1214-1256; ComputeLigatureData :238-322). specs/gecko-canvas.md §3.
-import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
+import { bounds, contextFor, width } from '../../measure/canvas.js'
 import { listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
-import type { GeckoPrepared, GeckoTextRun } from './types.js'
+import type { GeckoPrepared, GeckoTextRun, GeckoUnit } from './types.js'
 
 // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
 // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
@@ -18,8 +18,8 @@ import type { GeckoPrepared, GeckoTextRun } from './types.js'
 // the recipe gives 249 and 186. Necessary, not sufficient: a ligature that moves neither the pair's width nor its box, or
 // one that begins more than a cluster before t, doesn't show. A run with letter spacing has ligatures off in the DOM too
 // (nsLayoutUtils.cpp:6901-6904).
-function ligatureAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): boolean {
-  const settings = m.log.contexts[run.context]!
+function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
+  const settings = run.context.settings
   if (settings.letterSpacing !== '0px') return false
   let a = t - 1
   while (a > unit.tStart && p.clusterStart[a] === 0) a--
@@ -27,20 +27,10 @@ function ligatureAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: 
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
   let pair = ''
   for (let k = a; k < b; k++) pair += String.fromCharCode(p.tUnits[k]!)
-  // The answer depends only on the context and the string, and a line consults an offset several times (the scan, the
-  // measured edges, the redo): answer each once per measurer.
-  let memo = ligatureMemo.get(m)
-  if (memo === undefined) ligatureMemo.set(m, memo = new Map())
-  const key = `${run.context} ${pair}`
-  const known = memo.get(key)
-  if (known !== undefined) return known
-  const on = measureTextBounds(m, run.context, pair)
-  const off = measureTextBounds(m, measureContext(m, { ...settings, letterSpacing: '0.001px' }), pair)
-  const differs = on.width !== off.width || on.left !== off.left || on.right !== off.right
-  memo.set(key, differs)
-  return differs
+  const on = bounds(run.context, pair)
+  const off = bounds(contextFor(p.contexts, { ...settings, letterSpacing: '0.001px' }), pair)
+  return on.width !== off.width || on.left !== off.left || on.right !== off.right
 }
-const ligatureMemo = new WeakMap<Measurer, Map<string, boolean>>()
 
 // The glyph advance of text run characters before t, the sum of the DOM's glyph records (gfxTextRun::GetAdvanceWidth,
 // gfxTextRun.cpp:1214-1256), and why it is a stand-in where Canvas can't confirm it (null where it can). The records come
@@ -78,21 +68,52 @@ export type InWordReason =
   // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
   // cluster before the offset and the suffix gain from each other.
   | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
-const inWordMemo = new WeakMap<GeckoPrepared, Map<number, InWordAdvance>>()
+
+// What measuring found about one transformed offset of a shaping unit (GeckoPrepared.inWord), each part null until something
+// asks for it. A line consults an offset several times (the scan, the measured edges, the redo, its placement and its
+// inspection), and the next line and another width consult it again: it is measured once, and kept here.
+export type InWordEntry = {
+  // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), and whether it shows a group that
+  // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
+  ligature: boolean | null
+  group: boolean | null
+  // The row of ligature candidates that starts here (rowAround).
+  row: Row | null
+  // The advance before the offset (advanceBefore).
+  advance: InWordAdvance | null
+  // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
+  suffixAu: number | null
+}
+
+function entryAt(p: GeckoPrepared, t: number): InWordEntry {
+  const known = p.inWord[t] ?? null
+  if (known !== null) return known
+  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
+  p.inWord[t] = entry
+  return entry
+}
+
 const ZWJ = '\u200d'
 
-export function advanceBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number): InWordAdvance {
+export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): InWordAdvance {
   if (t >= run.tEnd) return { au: run.totalAdvance, standIn: null }
   const unit = p.units[p.unitOf[t]!]!
   if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
-  let memo = inWordMemo.get(p)
-  if (memo === undefined) inWordMemo.set(p, memo = new Map())
-  let value = memo.get(t)
-  if (value === undefined) memo.set(t, value = inWordAdvance(p, m, run, unit, t))
-  return value
+  const entry = entryAt(p, t)
+  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
+  return entry.advance
 }
 
-function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number; canvasAu: number; startAdvance: number }, t: number): InWordAdvance {
+// W(suffix) of the unit from cluster start t, with nothing put before it. Two advances measure it: the one before t, where no
+// letters join across t, and the one before the next cluster, which measures it with its own cluster in front (inWordAdvance,
+// `withCluster`). Whichever comes first asks Canvas, and the other reads it here.
+function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): number {
+  const entry = entryAt(p, t)
+  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.context, run, p.tUnits, t, unit.tEnd)
+  return entry.suffixAu
+}
+
+function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): InWordAdvance {
   if (p.clusterStart[t] === 0) {
     // Inside a grapheme cluster: a soft hyphen breaks there (GetHyphenationBreaks), and a text node can start there.
     // HarfBuzz keeps a mark in a cluster of its own unless the font merges it (HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS,
@@ -121,7 +142,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     // says so here.
     let end = t + 1
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
-    const inner = advanceBefore(p, m, run, end)
+    const inner = advanceBefore(p, run, end)
     const previous = (p.tUnits[t - 1]! & 0xfc00) === 0xdc00 && t - 2 >= unit.tStart ? t - 2 : t - 1
     const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.joining !== 'opentype'
     return { au: inner.au, standIn: { kind: 'inside-cluster', at: p.tSource[t]!, betweenMarks } }
@@ -133,7 +154,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // in the unit. 20px "Myanmar MN": U+1038 alone is 982 au, a 649 au dotted circle and the 333 au the DOM gives it after
   // U+1004 U+102B (probe gecko-port F23). The value is the prefix's width, which ends before the mark, and a stand-in.
   if (generalCategory(codePointAtT(p, t))[0] === 'M') {
-    const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
+    const prefixAu = rangeAu(run.context, run, p.tUnits, unit.tStart, t)
     return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'mark-starts-cluster', at: p.tSource[t]! } }
   }
   const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
@@ -141,7 +162,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // characters as a group of their own when it measures the unit alone and as part of the space before them when a script
   // context stands in front (rangeAu), so its ligature groups can't be counted, and its positions stay stand-ins.
   if (p.clusterStart[unit.tStart] === 0) {
-    const inner = rangeAu(m, run, p.tUnits, t, unit.tEnd, joiner, '')
+    const inner = rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
     return { au: unit.startAdvance + unit.canvasAu - inner + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'unit-starts-inside-cluster', at: p.tSource[t]! } }
   }
   // A ligature group over t: the DOM gives a range edge inside it the group's advance in equal shares per started cluster,
@@ -149,10 +170,10 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // shows one at each offset on the way (groupSpans), and its advance is what lies between its two ends, which are offsets
   // like any other. Probe gecko-port F17: lam and alef in 16px Geeza Pro are 280 and 281 au of a 561 au group, lam lam heh
   // 223 au each of 669, U+0E24 U+0E32 in 20px Thonburi 663 each; F9: `f` 217 and `i` 218 au of "Helvetica Neue"'s 435 au `fi`.
-  const group = groupAround(p, m, run, unit, t)
+  const group = groupAround(p, run, unit, t)
   if (group !== null) {
-    const from = advanceBefore(p, m, run, group.start)
-    const to = advanceBefore(p, m, run, group.end)
+    const from = advanceBefore(p, run, group.start)
+    const to = advanceBefore(p, run, group.end)
     let clusters = 0
     let before = 0
     for (let k = group.start; k < group.end; k++) {
@@ -179,11 +200,11 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     }
   }
   // A ligature candidate that ends a part of a row of them (rowAround), and the facts don't say so.
-  const row = rowAround(p, m, run, unit, t)
+  const row = rowAround(p, run, unit, t)
   const leftOver = row !== null && row.unconfirmed
   const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
   const reversed = shapedReversed(p, run, unit, t)
-  const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd, joiner, '')
+  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
@@ -193,30 +214,30 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   const before = joiningType(codePointAtT(p, a))
   // The glyph before t is a ligature where a group ends at t, and it is the ligature that the suffix's first glyph kerns with.
   if (a > unit.tStart) {
-    const ending = groupAround(p, m, run, unit, a)
+    const ending = groupAround(p, run, unit, a)
     if (ending !== null && ending.end === t) a = ending.start
   }
   if (joiner !== '' || reversed || before === 'R' || before === 'D' || before === 'L' || before === 'C') {
     // The two sides as the unit shapes them: with U+200D at the cut between joined letters.
-    prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t, '', joiner)
+    prefixAu = rangeAu(run.context, run, p.tUnits, unit.tStart, t, '', joiner)
     across = unit.canvasAu - prefixAu - suffixAu
     sides = joiner !== '' ? 'joined' : 'apart'
   } else {
     // Where the cluster before t has no joining forms, it shapes alone as it does after its own neighbour, and put in front
     // of the suffix it shows the same thing: what the two gain from each other is W(cluster and suffix) − W(suffix) −
     // W(cluster). That asks Canvas for one long string per offset instead of two, and the offset before it has asked for
-    // the other already (a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
+    // the other already (suffixAlone; a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
     // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
     // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
-    const withCluster = a === unit.tStart ? unit.canvasAu : rangeAu(m, run, p.tUnits, a, unit.tEnd)
-    across = withCluster - suffixAu - rangeAu(m, run, p.tUnits, a, t)
+    const withCluster = a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
+    across = withCluster - suffixAu - rangeAu(run.context, run, p.tUnits, a, t)
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
   if (across !== 0 && joiner === '' && !reversed && !leftOver) {
     // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
     // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
-    const after = pairKernedShare(p, m, run, unit, a, t, across)
+    const after = pairKernedShare(p, run, unit, a, t, across)
     if (after !== null) {
       return { au: unit.startAdvance + unit.canvasAu - suffixAu - after + corrections, standIn: null }
     }
@@ -234,7 +255,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // - GPOS puts all of it on the first glyph, W(unit) − W(suffix), and so does the default where the fact isn't given.
   let au: number
   if (reversed) au = prefixAu
-  else if (pairKerningAt(m, run, t) === 'split' && joiner === '') au = prefixAu + (across >> 1)
+  else if (pairKerningAt(run, t) === 'split' && joiner === '') au = prefixAu + (across >> 1)
   else au = unit.canvasAu - suffixAu
   return { au: unit.startAdvance + au + corrections, standIn }
 }
@@ -266,28 +287,28 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
 // `b` is 563 au after the fallback font's U+3000 and 534 au alone). So both clusters, and the one after them, whose
 // adjustment with the second enters z, must be printable ASCII, which the preferred fonts of every language group cover
 // before the previous font is tried (:3533-3552).
-function pairKernedShare(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, a: number, t: number, R: number): number | null {
-  const pairKerning = pairKerningAt(m, run, t)
+function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a: number, t: number, R: number): number | null {
+  const pairKerning = pairKerningAt(run, t)
   if (pairKerning === null) return null
   let b = t + 1
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
   let b1 = b
   if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
   for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return null
-  const alone = rangeAu(m, run, p.tUnits, a, b) - rangeAu(m, run, p.tUnits, a, t) - rangeAu(m, run, p.tUnits, t, b)
+  const alone = rangeAu(run.context, run, p.tUnits, a, b) - rangeAu(run.context, run, p.tUnits, a, t) - rangeAu(run.context, run, p.tUnits, t, b)
   if (pairKerning === 'first-advance') return alone === R ? 0 : null
   if (Math.abs(alone - R) > 2) return null
   if (R % 2 === 0) return R / 2
   // An odd adjustment: the fractions, from the run's context at 2^k times its font size. gfxFont clamps a font's size at
   // 2000px (gfxFont.cpp:4956-4960).
-  const settings = m.log.contexts[run.context]!
+  const settings = run.context.settings
   const size = /(\d+(?:\.\d+)?)px/.exec(settings.font)
   if (size === null || !(Number(size[1]) > 0)) return null
   let k = 0
   while (Number(size[1]) * 2 ** (k + 1) <= 2000) k++
   const scale = 2 ** k
-  const large = { ...run, context: measureContext(m, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) }) }
-  const w = (from: number, to: number): number => rangeAu(m, large, p.tUnits, from, to) / scale
+  const large = contextFor(p.contexts, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) })
+  const w = (from: number, to: number): number => rangeAu(large, run, p.tUnits, from, to) / scale
   const kern = (from: number, mid: number, to: number): number => w(from, to) - w(from, mid) - w(mid, to)
   const half = kern(a, t, b) / 2
   const y = w(a, t)
@@ -313,12 +334,12 @@ function pairKernedShare(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit:
 // (ResolveScriptForLang, gfxTextRun.cpp:2581-2640, :2755-2756, :2799-2806; gfxHarfBuzzShaper.h:83-94). So the fact counts
 // in a Latin run, and in a Greek or Cyrillic run, which the default shaper shapes as it does Latin (hb_ot_shaper_categorize,
 // hb-ot-shaper.hh), where the scriptLookups fact says the script selects Latin's lookups.
-function pairKerningAt(m: Measurer, run: GeckoTextRun, t: number): 'first-advance' | 'split' | null {
+function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' | null {
   let k = 0
   while (run.scriptRuns[k]!.limit <= t) k++
   let script = run.scriptRuns[k]!.script
   if (script === 'Zyyy' || script === 'Zinh') {
-    const locale = tryParseLocale(m.log.contexts[run.context]!.lang)
+    const locale = tryParseLocale(run.context.settings.lang)
     const likely = locale === null ? '' : addLikelySubtags(locale.language, locale.script, locale.region).script
     script = likely === '' ? 'Latn' : likely
   }
@@ -335,19 +356,20 @@ function pairKerningAt(m: Measurer, run: GeckoTextRun, t: number): 'first-advanc
 
 // Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required
 // shaping forms (groupAcross).
-function groupSpans(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): boolean {
-  let memo = spansMemo.get(p)
-  if (memo === undefined) spansMemo.set(p, memo = new Map())
-  let spans = memo.get(t)
-  if (spans === undefined) {
-    // Not in a unit that starts inside a cluster, whose groups Canvas can't count (inWordAdvance).
-    spans = p.clusterStart[unit.tStart] === 1 &&
-      (ligatureAcross(p, m, run, unit, t) || groupAcross(p, m, run, unit, t, joinsAcross(p, unit, t) ? ZWJ : ''))
-    memo.set(t, spans)
-  }
-  return spans
+function groupSpans(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
+  // Not in a unit that starts inside a cluster, whose groups Canvas can't count (inWordAdvance).
+  if (p.clusterStart[unit.tStart] === 0) return false
+  const entry = entryAt(p, t)
+  if (entry.ligature === null) entry.ligature = ligatureAcross(p, run, unit, t)
+  return entry.ligature || groupAcrossAt(p, run, unit, t)
 }
-const spansMemo = new WeakMap<GeckoPrepared, Map<number, boolean>>()
+
+// groupAcross at cluster boundary t, with U+200D at the cut where letters join across it.
+function groupAcrossAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
+  const entry = entryAt(p, t)
+  if (entry.group === null) entry.group = groupAcross(p, run, unit, t, joinsAcross(p, unit, t) ? ZWJ : '')
+  return entry.group
+}
 
 // The row of ligature candidates over cluster boundary t, or null: it runs from the nearest cluster boundary before t that
 // Canvas shows no group over, or the unit's start, to the nearest such boundary after t, or the unit's end. `edges` are the
@@ -360,47 +382,43 @@ const spansMemo = new WeakMap<GeckoPrepared, Map<number, boolean>>()
 // c-545b8fb978408502), where `ff` alone tests as a ligature at both boundaries, and its `ffi` is one ligature of three.
 // The ligatures fact settles it (listedParts). Without it the row stands in as one group, unconfirmed.
 type Row = { edges: number[]; unconfirmed: boolean }
-function rowAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): Row | null {
-  if (!groupSpans(p, m, run, unit, t)) return null
+function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): Row | null {
+  if (!groupSpans(p, run, unit, t)) return null
   let start = t
   do {
     start--
     while (start > unit.tStart && p.clusterStart[start] === 0) start--
-  } while (start > unit.tStart && groupSpans(p, m, run, unit, start))
+  } while (start > unit.tStart && groupSpans(p, run, unit, start))
   let end = t
   do {
     end++
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
-  } while (end < unit.tEnd && groupSpans(p, m, run, unit, end))
-  let memo = rowMemo.get(p)
-  if (memo === undefined) rowMemo.set(p, memo = new Map())
-  let row = memo.get(start)
-  if (row !== undefined) return row
+  } while (end < unit.tEnd && groupSpans(p, run, unit, end))
+  const first = entryAt(p, start)
+  if (first.row !== null) return first.row
   let boundaries = 0
   let optional = false
   const required: number[] = []
   for (let b = start + 1; b < end; b++) {
     if (p.clusterStart[b] === 0) continue
     boundaries++
-    if (groupAcross(p, m, run, unit, b, joinsAcross(p, unit, b) ? ZWJ : '')) required.push(b)
+    if (groupAcrossAt(p, run, unit, b)) required.push(b)
     else optional = true
   }
-  if (boundaries < 2 || !optional) row = { edges: [start, end], unconfirmed: false }
+  if (boundaries < 2 || !optional) first.row = { edges: [start, end], unconfirmed: false }
   else {
-    const edges = listedParts(p, m, run, start, end)
+    const edges = listedParts(p, run, start, end)
     // A group that required forms made, which the unit's own shaping showed, can't end inside the facts' parts.
     let agrees = edges !== null
     for (let k = 0; agrees && k < required.length; k++) agrees = !edges!.includes(required[k]!)
-    row = agrees ? { edges: edges!, unconfirmed: false } : { edges: [start, end], unconfirmed: true }
+    first.row = agrees ? { edges: edges!, unconfirmed: false } : { edges: [start, end], unconfirmed: true }
   }
-  memo.set(start, row)
-  return row
+  return first.row
 }
-const rowMemo = new WeakMap<GeckoPrepared, Map<number, Row>>()
 
 // The ligature group over cluster boundary t, or null where no group spans it.
-export function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): { start: number; end: number; unconfirmed: boolean } | null {
-  const row = rowAround(p, m, run, unit, t)
+export function groupAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+  const row = rowAround(p, run, unit, t)
   if (row === null) return null
   for (let k = 0; k + 1 < row.edges.length; k++) {
     if (row.edges[k]! < t && t < row.edges[k + 1]!) return { start: row.edges[k]!, end: row.edges[k + 1]!, unconfirmed: row.unconfirmed }
@@ -417,7 +435,7 @@ export function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, un
 // showed no ligature, and the language selects no language system the fact left untried: a font without any, or English,
 // whose tag 'ENG ' (hb-ot-tag-table.hh:54; Gecko gives HarfBuzz the style language, gfxHarfBuzzShaper.cpp:1470-1481) the
 // fact doesn't list.
-function listedParts(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, start: number, end: number): number[] | null {
+function listedParts(p: GeckoPrepared, run: GeckoTextRun, start: number, end: number): number[] | null {
   const fonts = run.font.facts.fonts
   if (fonts === undefined) return null
   const clusters: string[] = []
@@ -438,7 +456,7 @@ function listedParts(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, start: nu
   const facts = fonts[listed]!.ligatures
   if (facts === null || !facts.complete) return null
   if (facts.languageSystems.length > 0) {
-    const lang = m.log.contexts[run.context]!.lang.toLowerCase()
+    const lang = run.context.settings.lang.toLowerCase()
     if (lang !== 'en' && !lang.startsWith('en-')) return null
     for (let k = 0; k < facts.languageSystems.length; k++) if (facts.languageSystems[k]!.split('/')[2] === 'ENG ') return null
   }
@@ -495,27 +513,24 @@ function rowContinues(p: GeckoPrepared, pattern: { positions: readonly (readonly
 // show equal shares under required shaping (lam-alef in Geeza Pro, Arial, Times New Roman and Courier New, Geeza Pro's
 // lam-meem and lam lam heh, U+0E24 U+0E32 in Thonburi); Arial's optional Allah ligature measures 761 au with ligatures and
 // 957 without.
-function groupAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number, joiner: string): boolean {
-  const settings = m.log.contexts[run.context]!
-  const spaced = { ...run, context: measureContext(m, { ...settings, letterSpacing: '2px' }) }
-  const off = { ...run, context: measureContext(m, { ...settings, letterSpacing: '0.001px' }) }
+function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, joiner: string): boolean {
+  const settings = run.context.settings
+  const spaced = contextFor(p.contexts, { ...settings, letterSpacing: '2px' })
+  const off = contextFor(p.contexts, { ...settings, letterSpacing: '0.001px' })
   const groups = (tStart: number, tEnd: number, before: string, after: string): number =>
-    (rangeAu(m, spaced, p.tUnits, tStart, tEnd, before, after) - rangeAu(m, off, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
-  let memo = groupMemo.get(p)
-  if (memo === undefined) groupMemo.set(p, memo = new Map())
-  let counts = memo.get(unit.tStart)
-  if (counts === undefined) {
+    (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
+  // The unit's own count is the same at every offset, so the unit keeps it.
+  if (unit.groups === null) {
     let clusters = 0
     for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
-    memo.set(unit.tStart, counts = { groups: groups(unit.tStart, unit.tEnd, '', ''), clusters })
+    unit.groups = { counted: groups(unit.tStart, unit.tEnd, '', ''), clusters }
   }
-  const inUnit = counts.groups
-  if (inUnit === counts.clusters) return false
+  const inUnit = unit.groups.counted
+  if (inUnit === unit.groups.clusters) return false
   // U+200D before the suffix is a cluster of its own, which the joiner measured alone counts too.
-  const joinerGroups = joiner === '' ? 0 : (Math.round(measureText(m, spaced.context, joiner) * CANVAS_AU_PER_PX) - Math.round(measureText(m, off.context, joiner) * CANVAS_AU_PER_PX)) / (2 * CANVAS_AU_PER_PX)
+  const joinerGroups = joiner === '' ? 0 : (Math.round(width(spaced, joiner) * CANVAS_AU_PER_PX) - Math.round(width(off, joiner) * CANVAS_AU_PER_PX)) / (2 * CANVAS_AU_PER_PX)
   return groups(unit.tStart, t, '', joiner) + groups(t, unit.tEnd, joiner, '') - joinerGroups !== inUnit
 }
-const groupMemo = new WeakMap<GeckoPrepared, Map<number, { groups: number; clusters: number }>>()
 
 // hb_script_get_horizontal_direction's right-to-left scripts (hb-common.cc, Chromium 152's HarfBuzz copy), by ISO 15924 tag;
 // Old Hungarian, Old Italic, Runic and Tifinagh are invalid there, which never reverses.
@@ -528,7 +543,7 @@ const BIDIRECTIONAL_SCRIPTS = new Set(['Hung', 'Ital', 'Runr', 'Tfng'])
 // script run's HarfBuzz script. Gecko shapes an unresolved Common or Inherited run as Latin (gfxHarfBuzzShaper.h:83-94). A
 // natively right-to-left run shaped left-to-right with a decimal digit or a regional indicator and no letter counts as
 // left-to-right (hb-ot-shape.cc:588-645).
-function shapedReversed(p: GeckoPrepared, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): boolean {
+function shapedReversed(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
   let k = 0
   while (run.scriptRuns[k]!.limit <= t) k++
   const script = run.scriptRuns[k]!.script
@@ -559,7 +574,7 @@ export function codePointAtT(p: GeckoPrepared, i: number): number {
 
 // A cursive connection across offset t inside a unit: the last non-transparent letter before t joins to its following
 // side and the first non-transparent letter from t joins to its preceding side (Joining_Type, ArabicShaping.txt).
-export function joinsAcross(p: GeckoPrepared, unit: { tStart: number; tEnd: number }, t: number): boolean {
+export function joinsAcross(p: GeckoPrepared, unit: GeckoUnit, t: number): boolean {
   let a = t - 1
   while (a > unit.tStart && joiningType(codePointAtT(p, a)) === 'T') a--
   let b = t

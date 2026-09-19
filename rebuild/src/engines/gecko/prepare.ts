@@ -3,7 +3,7 @@
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
 import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
-import { createMeasurer, measureContext, measureText, measureTextBounds } from '../../measure/canvas.js'
+import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
@@ -407,7 +407,7 @@ function borderAu(px: number, apd: number): number {
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps: its gaps go to `sink`, with the measuring only they
 // need (gaps.ts). A plain paragraph has no sink.
 export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean): GeckoPrepared {
-  const measurer = createMeasurer()
+  const contexts: Context[] = []
   const blockStyle = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
   const index = indexContent(paragraph)
@@ -1017,8 +1017,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
       direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '',
     }
-    const context = measureContext(measurer, settings)
-    const auIn = (ctx: number, s: string) => Math.round(measureText(measurer, ctx, s) * CANVAS_AU_PER_PX)
+    const context = contextFor(contexts, settings)
+    const auIn = (ctx: Context, s: string) => Math.round(width(ctx, s) * CANVAS_AU_PER_PX)
     const au = (s: string) => auIn(context, s)
     let advance = 0
     const run = { context, scriptRuns: textRunScripts(tUnits, b.tStart, b.tEnd, b.is8bit), tStart: b.tStart }
@@ -1026,8 +1026,10 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // script run limit.
     const scriptLimits = new Set<number>()
     for (let k = 0; k < run.scriptRuns.length; k++) scriptLimits.add(run.scriptRuns[k]!.limit)
+    // The width of U+0020 in the run's context, which every boundary space of the run takes: asked at the first one.
+    let spaceAu: number | null = null
     // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
-    const spaces = gaps.spaceTest(sink, measurer, context, firstRun, tUnits, tSource, b.tStart)
+    const spaces = gaps.spaceTest(sink, context, firstRun, tUnits, tSource, b.tStart)
     for (let t = b.tStart; t < b.tEnd;) {
       const ch = tUnits[t]!
       const next = t + 1 < b.tEnd ? tUnits[t + 1]! : 0x0a
@@ -1035,7 +1037,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       const invalid = !boundary && (b.is8bit ? isInvalidChar8(ch) : isInvalidChar16(ch))
       let unit: GeckoUnit
       if (boundary) {
-        let w = au(ch === 0x20 ? ' ' : ' ')
+        spaceAu ??= au(' ')
+        let w = spaceAu
         // A character after U+200D takes the font of the character before it where that font has it (FindFontForChar,
         // gfxTextRun.cpp:3319-3325), and a boundary space is the space glyph of its own font run (gfxTextRun.cpp:1590-1622).
         // So after a word that ends in U+200D the space is the word's last font's: the word with the space after it, less
@@ -1043,13 +1046,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         // font's, where Georgia's is 261 au).
         const last = units.length > 0 ? units[units.length - 1]! : null
         if (last !== null && last.kind === 'word' && last.tEnd === t && tUnits[t - 1] === 0x200d) {
-          w = rangeAu(measurer, run, tUnits, last.tStart, t + 1) - last.canvasAu
+          w = rangeAu(context, run, tUnits, last.tStart, t + 1) - last.canvasAu
         }
-        unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance }
+        unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance, groups: null }
         gaps.spaceMeasured(spaces, w)
       } else if (invalid) {
         gaps.invalidMet(spaces, t)
-        unit = { kind: 'invalid', tStart: t, tEnd: t + 1, canvasAu: 0, au: 0, startAdvance: advance }
+        unit = { kind: 'invalid', tStart: t, tEnd: t + 1, canvasAu: 0, au: 0, startAdvance: advance, groups: null }
       } else {
         let e = t + 1
         for (; e < b.tEnd; e++) {
@@ -1058,8 +1061,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           const nx = e + 1 < b.tEnd ? tUnits[e + 1]! : 0x0a
           if (((c === 0x20 || c === 0xa0) && (b.is8bit || !isClusterExtender(nx))) || (b.is8bit ? isInvalidChar8(c) : isInvalidChar16(c))) break
         }
-        const w = rangeAu(measurer, run, tUnits, t, e)
-        gaps.letterSpacedGroups(sink, measurer, run, settings, firstRun, letterSpacingAu[firstRun]!, tUnits, tSource, g.clusterStart, spacingPrefix, t, e, w)
+        const w = rangeAu(context, run, tUnits, t, e)
+        gaps.letterSpacedGroups(sink, contexts, run, firstRun, letterSpacingAu[firstRun]!, tUnits, tSource, g.clusterStart, spacingPrefix, t, e, w)
         let total = w
         if (!b.is8bit) {
           // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
@@ -1069,8 +1072,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           // gecko-port F2, F3). Canvas shows which: Apple Color Emoji draws the cluster when it measures the same in the
           // run's font list as in "Apple Color Emoji" alone, at the CSS size and at the device size (F3, 16px Arial:
           // fresh 1260 and 1920 au in both; pinned 1020 au in Arial and 1260 au in Apple Color Emoji, DOM 1020 au).
-          const deviceContext = measureContext(measurer, { ...settings, font: canvasFont(font, devSize) })
-          const emojiFontContext = (size: number) => measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
+          const deviceContext = contextFor(contexts, { ...settings, font: canvasFont(font, devSize) })
+          const emojiFontContext = (size: number) => contextFor(contexts, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
           let word = ''
           for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
           const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
@@ -1097,19 +1100,24 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             // color glyphs (gfxTextRun.cpp:3541-3546); a cluster extender takes the previous character's font (:3181-3194).
             const presentation = emojiPresentation(first)
             if (presentation === 'text-only') continue
-            const atCssSize = au(cluster)
+            // One measureText gives the cluster's width and its ink box, in the run's font list and in "Apple Color Emoji" alone.
+            const own = bounds(context, cluster)
+            const inEmoji = bounds(emojiFontContext(font.size), cluster)
+            const atCssSize = Math.round(own.width * CANVAS_AU_PER_PX)
+            // The cluster's Canvas au at the device size where Apple Color Emoji draws it, null where another font does.
             // The ink box too: a text font whose widths happen to equal Apple Color Emoji's at both sizes still draws another
             // glyph. Probe gecko-port F11 (.artifacts/probes/gecko/round2b): U+1F600 in Arial, Menlo, "Apple Symbols" and
             // "Times New Roman" measures as in "Apple Color Emoji" alone, box [60, 1020] au, and U+263A in Arial doesn't (980 au,
             // box [−131.25, 848.91]).
-            const sameBox = (a: { left: number; right: number }, b: { left: number; right: number }) => a.left === b.left && a.right === b.right
-            const inEmojiFont = atCssSize === auIn(emojiFontContext(font.size), cluster) &&
-              auIn(deviceContext, cluster) === auIn(emojiFontContext(devSize), cluster) &&
-              sameBox(measureTextBounds(measurer, context, cluster), measureTextBounds(measurer, emojiFontContext(font.size), cluster))
+            let deviceAu60: number | null = null
+            if (atCssSize === Math.round(inEmoji.width * CANVAS_AU_PER_PX)) {
+              const atDeviceSize = auIn(deviceContext, cluster)
+              if (atDeviceSize === auIn(emojiFontContext(devSize), cluster) && own.left === inEmoji.left && own.right === inEmoji.right) deviceAu60 = atDeviceSize
+            }
             const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
             const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
             gaps.textPresentationSearch(sink, firstRun, font, first, presentation, next, clusterAt)
-            if (!inEmojiFont) {
+            if (deviceAu60 === null) {
               gaps.pinnedEmojiFont(sink, firstRun, first, presentation, next, atCssSize, clusterAt)
               continue
             }
@@ -1117,7 +1125,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             gaps.deviceSizeOffGrid(sink, firstRun, apd, devSize, clusterAt)
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
-            const deviceAu60 = auIn(deviceContext, cluster)
             let dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
             if ((deviceAu60 * apd) % 60 !== 0) {
               // Canvas's au at the device size rounds once at apd 60, and the DOM rounds at the page's apd. Under a bold font
@@ -1129,7 +1136,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               // the weight 400 advance at the page's apd plus as many of the DOM's steps. Probe gecko-port F24: U+1F600 in
               // bold 20px Arial is 1226 au natively, 2400 au × 30 / 60 and NS_round(0.875 × 30) = 26, where the bold
               // Canvas advance of 2453 au gives 1227.
-              const regularAu60 = auIn(measureContext(measurer, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) }), cluster)
+              const regularAu60 = auIn(contextFor(contexts, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) }), cluster)
               const canvasStep = Math.floor(syntheticBoldOffset(quantize7(devSize)) * 60 + 0.5)
               const steps = (deviceAu60 - regularAu60) / canvasStep
               if (font.weight !== 400 && Number.isInteger(steps) && steps >= 1 && (regularAu60 * apd) % 60 === 0) {
@@ -1143,7 +1150,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             total += delta
           }
         }
-        unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance }
+        unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance, groups: null }
         gaps.wideUnit(sink, firstRun, w, tSource[t]!, tSource[e - 1]! + 1)
         gaps.wordMeasured(spaces, t, w)
       }
@@ -1168,12 +1175,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   let tabUnit = 0
   for (let r = 0; r < textRuns.length; r++) {
     if (!textRuns[r]!.hasTab) continue
-    const context = measureContext(measurer, {
+    const context = contextFor(contexts, {
       font: canvasFont(paragraph.font, paragraph.font.size), lang: paragraph.lang,
       letterSpacing: pxToAu(paragraph.letterSpacing) !== 0 ? '0.001px' : '0px', wordSpacing: '0px', fontKerning: 'auto',
       textRendering: 'auto', direction: 'ltr', partition: '',
     })
-    const space = Math.round(measureText(measurer, context, ' ') * CANVAS_AU_PER_PX)
+    const space = Math.round(width(context, ' ') * CANVAS_AU_PER_PX)
     tabUnit = space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing)
     break
   }
@@ -1186,7 +1193,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, measurer, inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<null>(T).fill(null), inspect: inspected,
   }
 }
 

@@ -3,7 +3,6 @@
 // §5-§6), and the gaps its breaks rest on (gaps.ts lineGaps). Only an inspected paragraph answers, and only here are the
 // characters measured: a line's fill and its pieces ask Canvas nothing for them. A pure function of the prepared paragraph
 // and the decided line.
-import type { Measurer } from '../../measure/canvas.js'
 import type { LineInspectionOf } from '../../model.js'
 import { advanceBefore } from './advance.js'
 import { lineGaps } from './gaps.js'
@@ -17,9 +16,9 @@ import type { GeckoElement, GeckoPrepared } from './types.js'
 // Per source unit from the frame's measured start: what GetAdvanceWidth adds for it (gfxTextRun.cpp:1214-1256,
 // nsTextFrame.cpp:4089-4295): a cluster's glyph advance on its first character, the spacing after a character on that
 // character, a tab's width on the tab. Skipped characters add nothing.
-function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provider, justification: Map<number, number> | null): { characters: GeckoCharacter[]; standInAtEnd: boolean } {
+function characters(p: GeckoPrepared, r: FrameResult, prov: Provider, justification: Map<number, number> | null): { characters: GeckoCharacter[]; standInAtEnd: boolean } {
   const out: GeckoCharacter[] = []
-  let before = advanceBefore(p, m, prov.run, prov.startT)
+  let before = advanceBefore(p, prov.run, prov.startT)
   // Every position after a stand-in tab sums its width (computeTabs).
   let afterStandInTab = false
   for (let s = r.offset; s < r.contentStart + r.contentLength; s++) {
@@ -28,10 +27,10 @@ function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provide
       out.push({ skipped: true, clusterStart: false, unitStart: false, advance: 0, standInBefore: false })
       continue
     }
-    const after = advanceBefore(p, m, prov.run, t + 1)
+    const after = advanceBefore(p, prov.run, t + 1)
     out.push({
       skipped: false, clusterStart: p.clusterStart[t] === 1, unitStart: p.units[p.unitOf[t]!]!.tStart === t,
-      advance: after.au - before.au + spacingIn(p, m, prov, t, t + 1) + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
+      advance: after.au - before.au + spacingIn(p, prov, t, t + 1) + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
       standInBefore: before.standIn !== null || afterStandInTab,
     })
     before = after
@@ -67,7 +66,7 @@ function visualOrder(levels: number[]): number[] {
 
 // PropertyProvider::SetupJustificationSpacing after reflow (nsTextFrame.cpp:4503-4560): the frame's extra width over its
 // natural width, spread over its justifiable characters' gaps, keyed by transformed index.
-function justificationSpacing(p: GeckoPrepared, m: Measurer, pf: PlacedText): Map<number, number> | null {
+function justificationSpacing(p: GeckoPrepared, pf: PlacedText): Map<number, number> | null {
   const r = pf.r
   if (p.paragraph.textAlign !== 'justify' || r.prov === null) return null
   const f = p.frames[r.frame]!
@@ -78,7 +77,7 @@ function justificationSpacing(p: GeckoPrepared, m: Measurer, pf: PlacedText): Ma
   const { info, assignments, arrayStart } = computeJustification(p, r.frame, r.offset, end)
   const totalGaps = info.inner * 2 + pf.assign.start + pf.assign.end
   if (totalGaps === 0 || assignments.length === 0) return null
-  let natural = rangeAdvance(p, m, r.prov, Math.min(p.nextT[r.offset]!, f.tEnd), Math.min(p.nextT[end]!, f.tEnd), null)
+  let natural = rangeAdvance(p, r.prov, Math.min(p.nextT[r.offset]!, f.tEnd), Math.min(p.nextT[end]!, f.tEnd), null)
   if (r.usedHyphenation) natural += p.textRuns[f.textRun]!.hyphenAu + r.prov.letterSpacingAu // GetHyphenWidth (:4388-4399)
   const totalSpacing = pf.iSize - natural
   if (totalSpacing <= 0) return null
@@ -96,7 +95,7 @@ function justificationSpacing(p: GeckoPrepared, m: Measurer, pf: PlacedText): Ma
 
 // The placed line's frames in logical order, an inline frame before the frames of its children, with their boxes, and a text
 // frame's characters.
-function frameGeometry(p: GeckoPrepared, m: Measurer, band: Band, placed: PlacedLine): GeckoFrameGeometry[] {
+function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoFrameGeometry[] {
   const { root, indented, dx } = placed
   const rtl = p.paragraph.direction === 'rtl'
   // Positions. Without bidi, frames keep their logical places plus dx (:3654-3668). With bidi, ReorderFrames repositions the
@@ -117,7 +116,7 @@ function frameGeometry(p: GeckoPrepared, m: Measurer, band: Band, placed: Placed
           const geometry: GeckoFrameGeometry = {
             kind: 'text', run: f.run, contentStart: r.contentStart, contentEnd: r.contentStart + r.contentLength, measuredStart: r.offset,
             level: f.level, x: logical, width: pf.iSize, hasHeight: r.nonEmpty, usedHyphen: r.usedHyphenation,
-            ...(r.prov === null ? { characters: [], standInAtEnd: false } : characters(p, m, r, r.prov, justificationSpacing(p, m, pf))),
+            ...(r.prov === null ? { characters: [], standInAtEnd: false } : characters(p, r, r.prov, justificationSpacing(p, pf))),
             advancesStandIn: r.prov === null ? null : r.prov.run.advancesStandIn,
           }
           frames.push(geometry)
@@ -244,14 +243,14 @@ export function inspectLine(p: GeckoPrepared, decided: GeckoFilledLine | GeckoRe
       if (decided.inspect === null) throw plain()
       const band = decided.band
       const placed = placeLine(p, decided)
-      const frames = frameGeometry(p, p.measurer, band, placed)
+      const frames = frameGeometry(p, band, placed)
       const texts = textFramesOf(placed.root)
       return {
         geometry: {
           appUnitsPerDevPixel: p.appUnitsPerDevPixel, lineLeft: band.left, availableWidth: band.iSize, impactedByFloats: band.impactedByFloats,
           textIndent: placed.indented ? p.textIndentAu : 0, width: placed.lineISize + placed.expansion, hang: placed.hang, alignOffset: placed.dx, frames,
         },
-        gaps: lineGaps(p, p.measurer, decided.start, decided.inspect, frames, texts, lineEndT(p, texts)),
+        gaps: lineGaps(p, decided.start, decided.inspect, frames, texts, lineEndT(p, texts)),
       }
     }
   }

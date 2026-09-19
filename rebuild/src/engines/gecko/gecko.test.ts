@@ -6,7 +6,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { paragraphGaps, prepare } from '../../index.js'
-import type { Measurer } from '../../measure/canvas.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineOf, type Paragraph } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
@@ -31,6 +30,10 @@ type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 //   takes a form 100 au narrower still, which no U+200D gives (a contextual form, as Amiri's meem before reh in probe
 //   gecko-port F15).
 const stub = { pinned: false }
+// What the stand-in was asked since the last reset: its contexts as the library set them, and every measureText string.
+type StubSettings = { font: string; lang: string; letterSpacing: string }
+type StubLog = { contexts: StubSettings[]; calls: { text: string }[] }
+let asked: StubLog = { contexts: [], calls: [] }
 function stubAu(font: string, text: string, lang: string): number {
   const size = Number(/([\d.]+)px/.exec(font)![1])
   const emojiFont = font.includes('Apple Color Emoji')
@@ -97,6 +100,7 @@ beforeAll(() => {
   class StubContext {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
+      asked.calls.push({ text: s })
       // Letter spacing goes after every ligature group (CanvasRenderingContext2D.cpp:4759-4790): a code point, with the
       // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here), and so
       // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17).
@@ -116,7 +120,11 @@ beforeAll(() => {
     }
   }
   ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
-    getContext() { return new StubContext() }
+    getContext() {
+      const context = new StubContext()
+      asked.contexts.push(context)
+      return context
+    }
   }
 })
 
@@ -154,17 +162,18 @@ function textFrames(l: GeckoLine): GeckoTextFrame[] {
   return l.geometry.frames.filter((f): f is GeckoTextFrame => f.kind === 'text')
 }
 
-type GeckoLayout = { lines: GeckoLine[]; belowFloats: { row: number; gaps: Gap[] }[]; measure: Measurer['log']; gaps: Gap[] }
+type GeckoLayout = { lines: GeckoLine[]; belowFloats: { row: number; gaps: Gap[] }[]; measure: StubLog; gaps: Gap[] }
 
 // The lab's line loop (lab/predictor-core.ts) over a paragraph prepared through src/index.ts, font checks included.
 function layout(p: Sized, e: GeckoEnvironment = env, insets: Insets[] = []): GeckoLayout {
+  const measure: StubLog = asked = { contexts: [], calls: [] }
   const prepared = prepare(p, e, true)
   if (prepared.engine !== 'gecko') throw new Error('expected a gecko paragraph')
   const state = prepared.state
   const { lines, belowFloats } = everyLine({
     first: firstLine(state), fill: (start, slot) => fillLine(state, start, slot), inspect: line => inspectLine(state, line), pieces: line => linePieces(state, line),
   }, p.width, insets)
-  return { lines, belowFloats, measure: state.measurer.log, gaps: paragraphGaps(prepared) }
+  return { lines, belowFloats, measure, gaps: paragraphGaps(prepared) }
 }
 
 // The first laid-out character of each line with a line box.
@@ -894,6 +903,7 @@ describe('round 4c', () => {
 describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)', () => {
   // Every line of a paragraph as an application reads it: the fill result and the pieces.
   function plainWalk(p: Sized, inspect: boolean): { lines: unknown[]; calls: number } {
+    const measure: StubLog = asked = { contexts: [], calls: [] }
     const prepared = prepareGecko(p, env, inspect)
     const lines: unknown[] = []
     for (let start = firstLine(prepared); start !== null;) {
@@ -902,7 +912,7 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
       lines.push({ start: filled.start, end: filled.end, next: filled.next, hasLineBox: filled.hasLineBox, pieces: linePieces(prepared, filled.line) })
       start = filled.next
     }
-    return { lines, calls: prepared.measurer.log.calls.length }
+    return { lines, calls: measure.calls.length }
   }
 
   test('a plain paragraph gives the inspected one\'s lines and pieces, and asks Canvas less', () => {
@@ -945,5 +955,44 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     const l = layout(paragraph([run('aa A'), run('VAVAV', 'span')], 50))
     expect(l.lines.map(line => [line.start, line.end])).toEqual([[0, 3], [3, 9]])
     expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.at)).toEqual([{ start: 4, end: 4 }])
+  })
+})
+
+describe('what measuring found is kept per offset, and nothing by string (research/ARCHITECTURE-PLAN-2.md §5.3)', () => {
+  // Every line of a paragraph at a width, as an application fills them.
+  function fillAll(prepared: ReturnType<typeof prepareGecko>, width: number): number[] {
+    const ends: number[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+      linePieces(prepared, filled.line)
+      ends.push(filled.end)
+      start = filled.next
+    }
+    return ends
+  }
+
+  test('an offset inside a unit is measured once: filling the paragraph again asks Canvas nothing', () => {
+    const p = paragraph([run('abcdefgh ijklmnop')], 40, { overflowWrap: 'anywhere' })
+    const measure: StubLog = asked = { contexts: [], calls: [] }
+    const prepared = prepareGecko(p, env, false)
+    const first = fillAll(prepared, 40)
+    const calls = measure.calls.length
+    expect(calls).toBeGreaterThan(0)
+    expect(fillAll(prepared, 40)).toEqual(first)
+    expect(measure.calls.length).toBe(calls)
+    // Another width consults the offsets its own breaks need: at 80px a word is a line, and the scan that finds so reads
+    // offsets the narrow lines asked.
+    expect(fillAll(prepared, 80).length).toBe(2)
+    expect(measure.calls.length).toBe(calls)
+  })
+
+  test('the suffix an offset measured is the next offset\'s, read and not asked again', () => {
+    // Offset 2 of `abcdefgh` measures W(`cdefgh`), and offset 3 measures its cluster `c` in front of its own suffix: the same
+    // string, which the offset's record hands over.
+    const l = layout(paragraph([run('abcdefgh')], 20, { overflowWrap: 'anywhere' }))
+    expect(l.lines.length).toBe(4)
+    expect(l.measure.calls.filter(c => c.text === 'cdefgh').length).toBe(1)
+    expect(l.measure.calls.filter(c => c.text === 'efgh').length).toBe(1)
   })
 })

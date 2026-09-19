@@ -9,7 +9,7 @@
 // Gecko's lists aren't merged: a condition that shows twice is listed twice, as when both passes of a redo meet the same
 // emergency break. Only the in-word report is sorted.
 import type { GeckoEnvironment } from '../../env.js'
-import { measureContext, measureText, type CanvasSettings, type Measurer } from '../../measure/canvas.js'
+import { contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName, TextStyle } from '../../model.js'
 import { advanceBefore, type InWordReason } from './advance.js'
@@ -100,8 +100,7 @@ export function wideUnit(sink: GapSink, run: number, w: number, start: number, e
 // window where today's unit loop stands when the window ends, so Canvas is asked in that order.
 export type SpaceTest = {
   sink: Gap[]
-  m: Measurer
-  context: number
+  context: Context
   run: number
   tUnits: Uint16Array
   tSource: Int32Array
@@ -114,16 +113,16 @@ export type SpaceTest = {
   spacesSinceWord: number
 }
 
-export function spaceTest(sink: GapSink, m: Measurer, context: number, run: number, tUnits: Uint16Array, tSource: Int32Array, tStart: number): SpaceTest | null {
+export function spaceTest(sink: GapSink, context: Context, run: number, tUnits: Uint16Array, tSource: Int32Array, tStart: number): SpaceTest | null {
   if (sink === null) return null
-  return { sink, m, context, run, tUnits, tSource, start: tStart, words: 0, spaces: 0, sum: 0, lastWordStart: tStart, lastWordSum: 0, spacesSinceWord: 0 }
+  return { sink, context, run, tUnits, tSource, start: tStart, words: 0, spaces: 0, sum: 0, lastWordStart: tStart, lastWordSum: 0, spacesSinceWord: 0 }
 }
 
 function testWindow(test: SpaceTest, end: number): void {
   if (test.words >= 2 && test.spaces >= 1 && test.sum < CANVAS_EXACT_AU) {
     let s = ''
     for (let t = test.start; t < end; t++) s += String.fromCharCode(test.tUnits[t]!)
-    const whole = Math.round(measureText(test.m, test.context, s) * CANVAS_AU_PER_PX)
+    const whole = Math.round(width(test.context, s) * CANVAS_AU_PER_PX)
     if (whole !== test.sum) {
       test.sink.push({ gap: 'space-in-shaping', run: test.run, detail: `the whole range measures ${whole} au, its units ${test.sum} au`, at: { start: test.tSource[test.start]!, end: test.tSource[end - 1]! + 1 } })
     }
@@ -182,7 +181,7 @@ export function runEnded(test: SpaceTest | null, end: number): void {
 // goes by the same two flags (CanvasRenderingContext2D.cpp:4759-4790): W at 2px less W at 0.001px, over 2px, counts the
 // unit's groups (probe gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer,
 // Canvas doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
-export function letterSpacedGroups(sink: GapSink, m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>, settings: CanvasSettings,
+export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>,
   leaf: number, letterSpacing: number, tUnits: Uint16Array, tSource: Int32Array, clusterStart: Uint8Array, spacingPrefix: Int32Array, t: number, e: number, w: number): void {
   if (sink === null || letterSpacing === 0) return
   let clusters = 0
@@ -192,7 +191,7 @@ export function letterSpacedGroups(sink: GapSink, m: Measurer, run: Pick<GeckoTe
     if (spacingPrefix[k + 1] !== spacingPrefix[k]) spaced = true
   }
   if (spaced) {
-    const wide = rangeAu(m, { ...run, context: measureContext(m, { ...settings, letterSpacing: '2px' }) }, tUnits, t, e)
+    const wide = rangeAu(contextFor(contexts, { ...run.context.settings, letterSpacing: '2px' }), run, tUnits, t, e)
     const groups = (wide - w) / (2 * CANVAS_AU_PER_PX)
     if (groups !== clusters) {
       sink.push({ gap: 'glyph-clusters', run: leaf, detail: `Canvas letter spacing counts ${groups} ligature groups in a unit of ${clusters} clusters, and the DOM spaces by ligature group starts (nsTextFrame.cpp:3860-3873)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })
@@ -345,12 +344,12 @@ export type TabReason =
 // The condition under which the inline position after the line's placed frames is a stand-in, or null: a text frame whose
 // Canvas widths all are (GeckoTextRun.advancesStandIn), whose measured start or end is an in-word stand-in, or that holds a
 // stand-in tab.
-export function placedStandIn(sink: GapSink, p: GeckoPrepared, m: Measurer, psd: SpanData): TabReason | null {
+export function placedStandIn(sink: GapSink, p: GeckoPrepared, psd: SpanData): TabReason | null {
   if (sink === null) return null
   for (let k = 0; k < psd.frames.length; k++) {
     const pf = psd.frames[k]!
     if (pf.kind === 'span') {
-      const inner = placedStandIn(sink, p, m, pf.span)
+      const inner = placedStandIn(sink, p, pf.span)
       if (inner !== null) return inner
     }
     if (pf.kind !== 'text' || pf.r.prov === null) continue
@@ -358,7 +357,7 @@ export function placedStandIn(sink: GapSink, p: GeckoPrepared, m: Measurer, psd:
     if (prov.run.advancesStandIn !== null) return { kind: 'earlier-frame', under: prov.run.advancesStandIn }
     const tab = prov.tabStandIn.values().next()
     if (tab.done !== true) return tab.value
-    const reason = advanceBefore(p, m, prov.run, prov.startT).standIn ?? advanceBefore(p, m, prov.run, pf.r.tEnd).standIn
+    const reason = advanceBefore(p, prov.run, prov.startT).standIn ?? advanceBefore(p, prov.run, pf.r.tEnd).standIn
     if (reason !== null) return { kind: 'in-word', reason }
   }
   return null
@@ -366,9 +365,9 @@ export function placedStandIn(sink: GapSink, p: GeckoPrepared, m: Measurer, psd:
 
 // A tab counts from `first`, the first cluster start the scan counts before it: `standIn` as it stands, or the stand-in
 // that position is.
-export function tabCountsFrom(sink: GapSink, standIn: TabReason | null, p: GeckoPrepared, m: Measurer, run: GeckoTextRun, first: number): TabReason | null {
+export function tabCountsFrom(sink: GapSink, standIn: TabReason | null, p: GeckoPrepared, run: GeckoTextRun, first: number): TabReason | null {
   if (sink === null || standIn !== null) return standIn
-  const reason = advanceBefore(p, m, run, first).standIn
+  const reason = advanceBefore(p, run, first).standIn
   return reason === null ? null : { kind: 'in-word', reason }
 }
 
@@ -416,7 +415,7 @@ function textRunAt(p: GeckoPrepared, t: number): GeckoTextRun | null {
 // The gaps of a decided line: those its fill raised, then the in-word report, then its stand-in tabs. `frames` is the
 // line's geometry (inspect.ts), `texts` its placed text frames in logical order, and `lastT` the transformed index after
 // its last kept character (pieces.ts lineEndT).
-export function lineGaps(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, raised: GeckoLineInspect, frames: GeckoFrameGeometry[], texts: PlacedText[], lastT: number): Gap[] {
+export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoLineInspect, frames: GeckoFrameGeometry[], texts: PlacedText[], lastT: number): Gap[] {
   const gaps = raised.gaps.slice()
   // in-word-prefix: the stand-in positions this line rests on. Its width is the advance between its two edges, and its break
   // is the last candidate that fit, which the first one that didn't ended (BreakAndMeasureText, gfxTextRun.cpp:1100-1180):
@@ -435,7 +434,7 @@ export function lineGaps(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, r
         // A position inside a cluster counts only where it is asked for by itself: a frame's edge, or one a skipped
         // character exposes. Elsewhere points snap to the cluster's start.
         if (p.clusterStart[t] === 0 && from !== to) continue
-        const standIn = advanceBefore(p, m, run, t).standIn
+        const standIn = advanceBefore(p, run, t).standIn
         if (standIn !== null) report.set(p.tSource[t]!, standIn)
       }
     }
@@ -469,7 +468,7 @@ export function lineGaps(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, r
       const t = raised.consulted[k]!
       if (p.tSource[t]! > endS && endS >= 0 && (pastT === -1 || t < pastT)) pastT = t
     }
-    if (pastT !== -1) report.set(p.tSource[pastT]!, advanceBefore(p, m, textRunAt(p, pastT)!, pastT).standIn!)
+    if (pastT !== -1) report.set(p.tSource[pastT]!, advanceBefore(p, textRunAt(p, pastT)!, pastT).standIn!)
     const offsets = [...report.keys()].sort((a, b) => a - b)
     for (let k = 0; k < offsets.length; k++) {
       const s = offsets[k]!

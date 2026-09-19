@@ -1,7 +1,7 @@
 // What the Gecko port asks Canvas for a range of transformed text (Firefox 156.0): the script runs gfxFontGroup::InitTextRun
 // shapes, the script context a piece of a shaping unit needs, and rangeAu, the one recipe every unit, prefix and suffix goes
 // through. specs/gecko-canvas.md §2-§3.
-import { measureText, type Measurer } from '../../measure/canvas.js'
+import { width, type Context } from '../../measure/canvas.js'
 import { AL, R, bidiClassOf } from '../../unicode/bidi.js'
 import { geckoBidiData } from './data.js'
 import { hasScript, isBidiControl, isBidiMirrored, isClosePunctuation, isClusterExtender, isOpenPunctuation, openingMirror, scriptOf } from './props.js'
@@ -186,7 +186,9 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // word boundary that nothing kerns across (gfxFont.cpp:3781-3866), and in the Canvas text run the space and the piece's
 // Common characters join the context's script run. Units, suffixes and prefixes all go through this one recipe.
 // `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (advance.ts).
-export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>, units: Uint16Array,
+// The Canvas context is the text run's own, or one made from its settings: another letter spacing, a larger size
+// (advance.ts, gaps.ts).
+export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' | 'tStart'>, units: Uint16Array,
   tStart: number, tEnd: number, before = '', after = ''): number {
   let piece = before
   for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
@@ -203,12 +205,12 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
   // font's `rtla` lookups (:339-340), which the port doesn't predict. Elsewhere the second character isn't free: a lone
   // mark shapes otherwise with U+200C after it (held-out c-0b2ac06557b89cf6: U+0301 alone at level 1 in 16px Georgia is
   // 480 au natively and alone in Canvas, and nothing with U+200C after it).
-  if (m.log.contexts[run.context]!.direction === 'rtl' && (piece.length === 1 || (piece.length === 2 && isSurrogatePair(piece.charCodeAt(0), piece.charCodeAt(1))))) {
+  if (context.settings.direction === 'rtl' && (piece.length === 1 || (piece.length === 2 && isSurrogatePair(piece.charCodeAt(0), piece.charCodeAt(1))))) {
     const cp = piece.codePointAt(0)!
     const bidiClass = bidiClassOf(geckoBidiData, cp)
     if (bidiClass !== R && bidiClass !== AL && isBidiMirrored(cp)) piece += '\u200c'
   }
-  const w = (s: string) => Math.round(measureText(m, run.context, s) * CANVAS_AU_PER_PX)
+  const w = (s: string) => Math.round(width(context, s) * CANVAS_AU_PER_PX)
   // gfxFontGroup::ComputeRanges matches fonts over the whole script run, carrying the previous character and its matched font
   // (gfxTextRun.cpp:3593-3875), and FindFontForChar reads them for a cluster extender and U+202F (:3181-3212). A piece that
   // starts with one right after an invalid character begins a shaping unit, so the text before it shapes apart
@@ -223,7 +225,7 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
     for (let k = from; k < tStart; k++) prefix += String.fromCharCode(units[k]!)
     return w(prefix + piece) - w(prefix)
   }
-  const context = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
-  if (context === null) return w(piece)
-  return context.before ? w(context.text + ' ' + piece) - w(context.text + ' ') : w(piece + ' ' + context.text) - w(' ' + context.text)
+  const script = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
+  if (script === null) return w(piece)
+  return script.before ? w(script.text + ' ' + piece) - w(script.text + ' ') : w(piece + ' ' + script.text) - w(' ' + script.text)
 }

@@ -3,7 +3,6 @@
 // Gecko writes all of it into the frames' line data. A decided line isn't written after its fill (lines.ts), so placeLine
 // works on its own copy of the line's spans and returns it: the line's pieces and its inspection each place the line for
 // themselves, and nothing placed is kept on the line.
-import type { Measurer } from '../../measure/canvas.js'
 import type { TextAlign } from '../../model.js'
 import { NO_JUSTIFICATION, rangeAdvance, type GeckoFilledLine, type Justification, type Placed, type PlacedLeaf, type PlacedText, type SpanData } from './lines.js'
 import { isTrimmableChar } from './prepare.js'
@@ -28,13 +27,13 @@ function copyOf(psd: SpanData, parent: SpanData | null): SpanData {
 // is searched first, a frame that isn't text and isn't skipped when trimming (anything but a <br>) ends the search, and a
 // text frame not already trimmed at its break loses the floored advance of its trailing IsTrimmableSpace characters,
 // unclamped (nsTextFrame.cpp:11540-11628). Frames after a trimmed one slide back.
-function trimTrailingWhiteSpaceIn(p: GeckoPrepared, m: Measurer, psd: SpanData): { handled: boolean; delta: number } {
+function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: SpanData): { handled: boolean; delta: number } {
   for (let k = psd.frames.length - 1; k >= 0; k--) {
     const pf = psd.frames[k]!
     let delta = 0
     let handled = false
     if (pf.kind === 'span') {
-      const inner = trimTrailingWhiteSpaceIn(p, m, pf.span)
+      const inner = trimTrailingWhiteSpaceIn(p, pf.span)
       if (!inner.handled) continue
       delta = inner.delta
       handled = true
@@ -54,7 +53,7 @@ function trimTrailingWhiteSpaceIn(p: GeckoPrepared, m: Measurer, psd: SpanData):
         const tA = Math.min(p.nextT[end]!, f.tEnd)
         const tB = Math.min(p.nextT[contentEnd]!, f.tEnd)
         if (tA < tB) {
-          delta = Math.floor(rangeAdvance(p, m, r.prov, tA, tB, null))
+          delta = Math.floor(rangeAdvance(p, r.prov, tA, tB, null))
           changed = true
         }
       }
@@ -245,7 +244,7 @@ export function textFramesOf(psd: SpanData, out: PlacedText[] = []): PlacedText[
 
 export function placeLine(p: GeckoPrepared, line: GeckoFilledLine): PlacedLine {
   const root = copyOf(line.root, null)
-  trimTrailingWhiteSpaceIn(p, p.measurer, root)
+  trimTrailingWhiteSpaceIn(p, root)
   const rtl = p.paragraph.direction === 'rtl'
   const indented = line.start.isFirstLine && p.textIndentAu !== 0
 
