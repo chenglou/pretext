@@ -97,7 +97,9 @@ after them). Runs are under `.artifacts/tests/runs/cr5-webkit/`, the list, the g
   most is 22, `c-1d3594196ff8bfae`, a first-fix case, then 9, `c-65b6a6b017410209`, the other). With the lab's facts, through
   a scratch plain predictor that supplies them: 21.65 before (the offline check's 1,385,178), 18.83 after (1,205,040),
   the same 47,510, 9,174 and 7,303 cases, and its line ranges equal the usual facts run's on all 63,987. Offline, on the
-  cases that replay: 40.30 to 37.16 without facts (56,967 cases) and 22.70 to 19.56 with them (56,943).
+  cases that replay: 40.30 to 37.16 without facts (56,967 cases) and 22.70 to 19.56 with them (56,943). The lab's path,
+  from the tier 2 forward rows' own counts: 88.79 to 85.90 without facts (5,496,506 calls) and 59.86 to 56.98 with them
+  (3,646,278).
 - The nine giants through the plain predictor, predict only: 707,622 calls before, 295,170 after. Each of the eight
   reordered ones asks 37,088 to 94,962 fewer (59,263 to 22,175 for a 106,857-unit paragraph: about three questions a word
   become one); the left-to-right one asks the same 50,934. Line counts equal.
