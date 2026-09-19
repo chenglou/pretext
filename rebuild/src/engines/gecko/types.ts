@@ -126,15 +126,32 @@ export type GeckoItem = { kind: 'text'; frame: number; at: number } | GeckoEdgeI
 // index. 'Zyyy' stands for Common resolved from the language.
 export type ScriptRun = { limit: number; script: string }
 
+// The Canvas contexts of text runs that measure alike: one record per distinct `own` context of the paragraph, so per font
+// declaration, language, direction and ligature state (prepare.ts step 7, measure.ts runContextsFor). Such text runs hold
+// the one record by reference, and a recipe reads its context from it. The contexts beside `own` are `own`'s settings with
+// one changed. Each is made where a recipe first asks in it (measure.ts, advance.ts largeContext) and is null until then:
+// made in `prepare`, they would be contexts that most paragraphs never ask. Like a unit's inWord they are written after
+// preparation, hold facts of the declaration that no width and no line changes, and go with the paragraph.
+export type RunContexts = {
+  // The first flow's font and language, ligatures off when its letter spacing isn't 0 au.
+  own: Context
+  // Letter spacing 0.001px: optional ligatures off and no app unit added (advance.ts ligatureAcross, groupAcross). It is
+  // `own` itself where the run has letter spacing.
+  noLigatures: Context | null
+  // Letter spacing 2px, which counts ligature groups (advance.ts groupAcross, gaps.ts letterSpacedGroups).
+  letterSpaced: Context | null
+  // The font at `scale` times its size, 2^k with the largest k under gfxFont's clamp of 2000px (advance.ts largeContext).
+  large: { context: Context; scale: number } | null
+}
+
 // A gfxTextRun: the transformed characters of consecutive frames that ContinueTextRunAcrossFrames joins
 // (nsTextFrame.cpp:2015-2174). [tStart, tEnd) index the paragraph's transformed arrays.
 export type GeckoTextRun = {
   tStart: number
   tEnd: number
   level: number
-  // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au. The contexts a
-  // recipe needs beside it are made from its settings (advance.ts, gaps.ts).
-  context: Context
+  // The contexts the run measures in, shared with the text runs that measure alike.
+  contexts: RunContexts
   // The first flow's font declaration, for its facts: about the listed families (advance.ts, ligature rows), which glyph of
   // a pair carries HarfBuzz's pair adjustment (FontFacts.pairKerning, advance.ts pairKerningAt), and whether HarfBuzz shapes
   // the font through GSUB and GPOS or through morx, kerx and kern state machines, where marks keep their advances
@@ -312,7 +329,8 @@ export type GeckoPrepared = {
   // for the document's BidiEnabled flag (gecko audit F3).
   bidi: boolean
   // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
-  // those the recipes make from them.
+  // those the recipes make from them. Only the making of a context reads the list; whoever measures holds its context by
+  // reference (RunContexts).
   contexts: Context[]
   // What Canvas told of each context's pair placement, one record per context that an offset at a kerned pair asked for
   // (advance.ts askedPlacement): empty until then. Like a unit's inWord it is written after preparation, holds facts of the
