@@ -30,7 +30,8 @@
 //   the engine refused on a gap (BelowFloats.gaps) moves every line after it;
 // - a paragraph gap concerns the lines its range meets, and every line without a range.
 // The width of a soft line break's box and of a <br>'s stays predicted: it is 0 by rule, wherever the box sits.
-import type { GapName, InlineNode, Paragraph, TextStyle, WebKitDisplayBox, WebKitTextBox } from '../../src/model.ts'
+import type { WebKitDisplayBox, WebKitTextBox } from '../../src/engines/webkit/geometry.ts'
+import type { GapName, InlineNode, Paragraph, TextStyle } from '../../src/model.ts'
 import type { WebKitLayout } from '../types.ts'
 import type { CanvasMeasure, CanvasSettings, Expected, ExpectedObservation, ExpectedRect, ObservationPort, UnobservableFact } from './contract.ts'
 

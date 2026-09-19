@@ -1,7 +1,7 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
-import type { AtomicInline, Gap, Paragraph, TextAlign, WebKitLineGeometry } from '../../model.js'
-import type { LineOf, LineResultOf } from '../engine.js'
+import type { AtomicInline, Gap, LineOf, LineResultOf, Paragraph, TextAlign } from '../../model.js'
+import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
 
 // Which line builder InlineFormattingContext::layout picks (specs/webkit-lines.md §2, InlineFormattingContext.cpp:170-184).
 export type WebKitLineBuilder = 'text-only-simple' | 'range-based' | 'line-builder'
@@ -195,28 +195,6 @@ export type WebKitPrepared = {
 // item indices to the world's item that holds the own item's start, and `changed` marks the own items the world splits,
 // merges or flags otherwise.
 export type WebKitHistoryWorld = { prepared: WebKitPrepared; box: number; itemIndex: number[]; changed: boolean[] }
-
-// InlineItemPosition plus the PreviousLine facts the next line reads (specs/webkit-lines.md §5, §8.2).
-export type WebKitLineStart = {
-  engine: 'webkit'
-  itemIndex: number
-  offset: number
-  // null on the first line, which has no PreviousLine.
-  previousLine: {
-    // trailingOverflowingContentWidth: the float32 width the rest of a split item keeps without being measured again
-    // (AbstractLineBuilder.cpp:54-98), or null when the rest is measured fresh.
-    carriedWidth: number | null
-    endsWithLineBreak: boolean
-    // The carried width comes from a run shaped across inline boxes (gap rtl-shaping-across-inline-boxes on this line too).
-    carriedFromShaping: boolean
-  } | null
-  // IsFirstFormattedLine: no earlier line had contentful in-flow content (InlineFormattingContext.cpp:313, :331-333).
-  isFirstFormattedLine: boolean
-  // The formatting context holds floats: some earlier build, a line or a refused slot, was laid out in a slot with insets
-  // and placed the slot floats. Floats make the content ineligible for the simple builders, so every line uses LineBuilder
-  // (TextOnlySimpleLineBuilder.cpp:494), and a build that finds them narrows its rect in initialize (lines.ts lineRect).
-  hasFloats: boolean
-}
 
 // The line nextLine fills, and what it returns for a slot.
 export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>

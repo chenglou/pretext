@@ -6,7 +6,8 @@
 // DOMRect::SetLayoutRect (dom/base/DOMRect.cpp:152-164) over the frames the engine placed. Types only from
 // rebuild/src/model.ts: no expected value comes from the library's logic, and the tree is walked here, not through
 // src/content.ts (DESIGN.md §8.1).
-import type { GapName, GeckoFrameGeometry, GeckoTextFrame, InlineNode, Paragraph } from '../../src/model.ts'
+import type { GeckoFrameGeometry, GeckoTextFrame } from '../../src/engines/gecko/geometry.ts'
+import type { GapName, InlineNode, Paragraph } from '../../src/model.ts'
 import type { GeckoLayout } from '../types.ts'
 import type { Expected, ExpectedObservation, ExpectedRect, ObservationPort, UnobservableFact } from './contract.ts'
 

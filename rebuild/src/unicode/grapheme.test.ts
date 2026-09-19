@@ -4,16 +4,18 @@ import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES } from '../../tools/gen-shared.ts'
 import { forEachLine } from '../../tools/lines.ts'
+import { blinkGraphemeRules } from '../engines/blink/data.js'
+import { geckoGraphemeRules } from '../engines/gecko/data.js'
+import { webkitGraphemeRules } from '../engines/webkit/data.js'
 import type { EngineName } from '../env.js'
-import { graphemeBoundaries, graphemeRulesFor } from './grapheme.js'
+import { graphemeBoundaries, type GraphemeRules } from './grapheme.js'
 
 const GRAPHEME_BREAK_TEST = resolve(BROWSER_ENGINES, 'chromium-152/src/third_party/icu/source/test/testdata/GraphemeBreakTest.txt')
 
-const engines: EngineName[] = ['blink', 'webkit', 'gecko']
+const engines: [EngineName, GraphemeRules][] = [['blink', blinkGraphemeRules], ['webkit', webkitGraphemeRules], ['gecko', geckoGraphemeRules]]
 for (let e = 0; e < engines.length; e++) {
-  const engine = engines[e]!
+  const [engine, rules] = engines[e]!
   test(`${engine} grapheme data passes GraphemeBreakTest-17.0.0`, async () => {
-    const rules = graphemeRulesFor(engine)
     let cases = 0
     const failures: string[] = []
     await forEachLine(GRAPHEME_BREAK_TEST, line => {

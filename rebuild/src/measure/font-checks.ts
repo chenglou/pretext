@@ -72,7 +72,7 @@
 // are shared between sizes, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their
 // contexts are their own (`partition`), so no engine measurement shares a Blink word cache with them.
 //
-// The checks measure in the engine's own kind of context (checkTextRendering): in Blink `textRendering =
+// The checks measure in the engine's own kind of context (FontChecks.textRendering): in Blink `textRendering =
 // 'optimizeLegibility'`, as engines/blink/shape.ts styleContexts does. Blink's font cache keys a platform font by the
 // family, the effective (zoomed) size floored to 1/100 px and FontDescription's options, among them text-rendering, and not
 // by the specified size (FontDescription::CacheKey, font_description.cc:308-331), while opsz is set from the specified size
@@ -92,7 +92,6 @@
 // from the font's own size (UnrealizedCoreTextFont.cpp:303-315), so the font a check makes is the font the page makes under
 // that key; a width its glyph geometry cache keeps is the computed value (FontCascade.cpp:319-352). Its Canvas has no
 // textRendering attribute, and the checks assign the default as the port's recipes do. Gecko is asked nothing.
-import type { EngineName, Environment } from '../env.js'
 import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
 import { measureContext, measureText, type Measurer } from './canvas.js'
 import { canvasFont } from './font.js'
@@ -158,18 +157,34 @@ function cssFamily(name: string): string {
   return GENERIC_KEYWORDS.includes(name.toLowerCase()) ? name : JSON.stringify(name)
 }
 
-type Probe = { m: Measurer; engine: EngineName; font: FontDecl; lang: string }
-
-// The text rendering of the engine's own measuring contexts (engines/blink/shape.ts styleContexts; WebKit's and Gecko's
-// recipes assign the default). In Blink it is part of the font cache key, which the header's last section reads.
-function checkTextRendering(engine: EngineName): CanvasTextRendering {
-  return engine === 'blink' ? 'optimizeLegibility' : 'auto'
+// What differs between the engines, as each port gives it (engines/<engine>/checks.ts): the facts it reads among those a
+// check answers, and the kind of context its recipes measure in.
+export type FontChecks = {
+  // Check 1 where the engine reads the primary family itself; false: asked only where another check of the engine's needs it.
+  primaryFamily: boolean
+  // Check 2, for a paragraph that holds a soft hyphen.
+  mapsHyphen: boolean
+  // Check 3.
+  monospace: boolean
+  // Check 4, asked at a layout zoom other than 1: the zoom the engine's DOM shapes at, and the families, lowercased, that
+  // the engine measures at the CSS size whatever Canvas shows. null where the engine doesn't read the fact off Canvas.
+  opticalSizeAxis: { zoom: number; cssSizeFamilies: readonly string[] } | null
+  // Check 5, for a paragraph with letters of a joining script.
+  joining: boolean
+  // Whether the engine's Canvas resolves a font under the context's language, the element's here as in the engine's own
+  // contexts; a context that has none gets ''.
+  contextTakesLang: boolean
+  // The text rendering of the engine's own measuring contexts. In Blink it is part of the font cache key, which the
+  // header's last section reads.
+  textRendering: CanvasTextRendering
 }
+
+type Probe = { m: Measurer; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
 
 function width(p: Probe, family: string, size: number, text: string): number {
   const context = measureContext(p.m, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
-    textRendering: checkTextRendering(p.engine), direction: 'ltr', partition: 'font-checks',
+    textRendering: p.textRendering, direction: 'ltr', partition: 'font-checks',
   })
   return measureText(p.m, context, text)
 }
@@ -210,19 +225,12 @@ function effectiveSize(size: number): number {
   return f32(Math.floor(f32(size * 100)) / 100)
 }
 
-// The families Blink gives the macOS system UI font, which it measures at the CSS size (model.ts opticalSizeAxis;
-// font_cache_mac.mm:289-292, :408).
-function isBlinkSystemFont(primary: string): boolean {
-  const name = primary.toLowerCase()
-  return name === 'system-ui' || name === 'blinkmacsystemfont'
-}
-
 // Check 4: false where the sample's total at the zoomed size is its CSS-size total scaled, within what Blink's integers
 // allow: each glyph's advance is truncated to 1/65536 px at its own size (SkiaScalarToHarfBuzzPosition,
 // skia_text_metrics.cc:207-211), so it differs from the scaled one by less than 1 + ratio units, HarfBuzz rounds each
 // position adjustment to a unit at each size, and a float32 total or advance is within 2^-23 of its value.
-function scalesLinearly(p: Probe, primary: string, zoom: number): false | null {
-  if (isBlinkSystemFont(primary) || draws(p, cssFamily(primary), LINEAR_SAMPLE) !== true) return null
+function scalesLinearly(p: Probe, primary: string, zoom: number, cssSizeFamilies: readonly string[]): false | null {
+  if (cssSizeFamilies.includes(primary.toLowerCase()) || draws(p, cssFamily(primary), LINEAR_SAMPLE) !== true) return null
   const cssSize = f32(p.font.size)
   const zoomedSize = f32(cssSize * f32(zoom))
   const ratio = effectiveSize(zoomedSize) / effectiveSize(cssSize)
@@ -265,19 +273,17 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 }
 
 // The facts of one declaration as the engine gets them: each supplied fact, else the check's answer where this engine
-// reads the fact and the paragraph's text can ask for it. Gecko is asked nothing: of the facts with a check it reads
-// primaryFamily alone, and only to word a gap's detail (engines/gecko/fonts.ts). Blink reads primaryFamily for the
-// opticalSizeAxis default, so it is asked there only with that check or for the hyphen.
-function learnedFacts(m: Measurer, engine: EngineName, zoom: number, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
+// reads the fact and the paragraph's text can ask for it (FontChecks; each port says why it reads what it reads).
+function learnedFacts(m: Measurer, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
-  if (engine === 'gecko') return given
-  const p: Probe = { m, engine, font, lang }
+  const p: Probe = { m, textRendering: checks.textRendering, font, lang }
   const key = (check: string, ...more: number[]): string => JSON.stringify([check, font.family, font.weight, font.style, lang, ...more])
-  const asksHyphen = given.mapsHyphen === null && needs.hyphen
-  const asksPitch = given.monospace === null && engine === 'webkit'
-  const asksScaling = given.opticalSizeAxis === null && engine === 'blink' && zoom !== 1
+  const scaling = checks.opticalSizeAxis
+  const asksHyphen = given.mapsHyphen === null && checks.mapsHyphen && needs.hyphen
+  const asksPitch = given.monospace === null && checks.monospace
+  const asksScaling = given.opticalSizeAxis === null && scaling !== null && scaling.zoom !== 1
   let primary = given.primaryFamily
-  if (primary === null && (engine === 'webkit' || asksHyphen || asksScaling)) primary = kept(m, key('primaryFamily'), () => primaryFamily(p))
+  if (primary === null && (checks.primaryFamily || asksHyphen || asksPitch || asksScaling)) primary = kept(m, key('primaryFamily'), () => primaryFamily(p))
   let mapsHyphen = given.mapsHyphen
   let monospace = given.monospace
   let opticalSizeAxis = given.opticalSizeAxis
@@ -286,9 +292,9 @@ function learnedFacts(m: Measurer, engine: EngineName, zoom: number, font: FontD
     const family = primary
     if (asksHyphen) mapsHyphen = kept(m, key('mapsHyphen'), () => draws(p, cssFamily(family), HYPHEN))
     if (asksPitch) monospace = kept(m, key('monospace'), () => fixedPitch(p, cssFamily(family)))
-    if (asksScaling) opticalSizeAxis = kept(m, key('opticalSizeAxis', font.size, zoom), () => scalesLinearly(p, family, zoom))
+    if (asksScaling) opticalSizeAxis = kept(m, key('opticalSizeAxis', font.size, scaling.zoom), () => scalesLinearly(p, family, scaling.zoom, scaling.cssSizeFamilies))
   }
-  if (joiningFact === null && needs.joining && engine === 'blink') joiningFact = kept(m, key('joining'), () => joining(p))
+  if (joiningFact === null && checks.joining && needs.joining) joiningFact = kept(m, key('joining'), () => joining(p))
   return { ...given, primaryFamily: primary, mapsHyphen, monospace, opticalSizeAxis, joining: joiningFact }
 }
 
@@ -306,12 +312,10 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
   return out
 }
 
-// The paragraph with every font declaration's null facts asked of Canvas. Blink resolves a Canvas font under the context's
-// language, the element's here as in the engine's own contexts; WebKit's context has none.
-export function withLearnedFontFacts(paragraph: Paragraph, env: Environment, m: Measurer): Paragraph {
+// The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
+export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, m: Measurer): Paragraph {
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
-  const zoom = env.engine === 'blink' ? env.devicePixelRatio : 1
-  const learn = (font: FontDecl, lang: string): FontDecl => ({ ...font, facts: learnedFacts(m, env.engine, zoom, font, env.engine === 'webkit' ? '' : lang, needs) })
+  const learn = (font: FontDecl, lang: string): FontDecl => ({ ...font, facts: learnedFacts(m, checks, font, checks.contextTakesLang ? lang : '', needs) })
   return { ...paragraph, font: learn(paragraph.font, paragraph.lang), content: withLearnedFactsIn(paragraph.content, paragraph.lang, learn) }
 }

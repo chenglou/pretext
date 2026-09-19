@@ -7,17 +7,18 @@
 // ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp,
 // LBB = InlineLineBoxBuilder.cpp.
 import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, GapName, LineSlot, TextAlign, WebKitDisplayBox } from '../../model.js'
+import type { Fragment, Gap, GapName, LineSlot, TextAlign } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
 import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation } from './fonts.js'
+import type { WebKitDisplayBox, WebKitLineStart } from './geometry.js'
 import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
 import { collapsesWhiteSpace, endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, tabsAllowed, trailingWhitespaceHangs } from './style.js'
-import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineResult, WebKitLineStart, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineResult, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38

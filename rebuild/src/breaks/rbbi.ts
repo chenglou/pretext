@@ -34,7 +34,6 @@ export type BreakRules = {
   rowWidth: number
   rows: Uint16Array
   lookAheadResultsSize: number
-  statusTable: Int32Array
   trieIndex: Uint16Array
   trieData: Uint16Array
   trieDataLength: number
@@ -65,8 +64,6 @@ export function parseBreakRules(bytes: Uint8Array): BreakRules {
   const catCount = view.getUint32(base + 12, true)
   const fTable = base + view.getUint32(base + 16, true)
   const trie = base + view.getUint32(base + 32, true)
-  const statusOffset = base + view.getUint32(base + 48, true)
-  const statusLength = view.getUint32(base + 52, true)
 
   // RBBIStateTable, rbbidata.h:134-148: five uint32 fields, then numStates rows. A row is fAccepting, fLookAhead,
   // fTagsIdx and fNextState[catCount], 8 or 16 bits each (rbbidata.h:98-125).
@@ -99,13 +96,7 @@ export function parseBreakRules(bytes: Uint8Array): BreakRules {
     ? copyU16(bytes, dataStart, trieDataLength)
     : Uint16Array.from(bytes.subarray(dataStart, dataStart + trieDataLength))
 
-  const statusTable = new Int32Array(statusLength / 4) // rbbidata.cpp:133-134
-  new Uint8Array(statusTable.buffer).set(bytes.subarray(statusOffset, statusOffset + statusLength))
-
-  return {
-    catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize, statusTable,
-    trieIndex, trieData, trieDataLength, trieHighStart,
-  }
+  return { catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize, trieIndex, trieData, trieDataLength, trieHighStart }
 }
 
 // UCPTRIE_FAST_GET with fastMax 0xffff (unicode/ucptrie.h:358, 601-620) and ucptrie_internalSmallIndex for a fast trie
@@ -144,7 +135,6 @@ export class RuleBreakIterator {
   readonly overrides: CategoryOverrides
   text = ''
   position = 0
-  ruleStatusIndex = 0
   dictionaryCharCount = 0
   staleLookAheadReads = 0
   private readonly lookAheadMatches: Int32Array
@@ -158,18 +148,10 @@ export class RuleBreakIterator {
     this.lookAheadCall = new Int32Array(rules.lookAheadResultsSize)
   }
 
-  // setText() then first(): the cache resets to boundary 0 with rule status index 0 (rbbi_cache.cpp:218-225).
+  // setText() then first(): the cache resets to boundary 0 (rbbi_cache.cpp:218-225).
   setText(text: string): void {
     this.text = text
     this.position = 0
-    this.ruleStatusIndex = 0
-  }
-
-  // getRuleStatus(), rbbi.cpp:1049-1058.
-  ruleStatus(): number {
-    const t = this.rules.statusTable
-    const i = this.ruleStatusIndex
-    return t[i + t[i]!]!
   }
 
   // handleNext(), rbbi.cpp:779-952. Returns the next boundary, or DONE at the end of the text.
@@ -186,7 +168,6 @@ export class RuleBreakIterator {
     const overrideCount = overrideChars.length
     const call = ++this.call
 
-    this.ruleStatusIndex = 0
     this.dictionaryCharCount = 0
     const initialPosition = this.position
     let result = initialPosition
@@ -228,12 +209,10 @@ export class RuleBreakIterator {
       const accepting = rows[row]! // rbbi.cpp:880-896
       if (accepting === ACCEPTING_UNCONDITIONAL) {
         if (mode !== START) result = pos
-        this.ruleStatusIndex = rows[row + 2]!
       } else if (accepting > ACCEPTING_UNCONDITIONAL) {
         const lookAheadResult = matches[accepting]!
         if (lookAheadResult >= 0) {
           if (this.lookAheadCall[accepting] !== call) this.staleLookAheadReads++
-          this.ruleStatusIndex = rows[row + 2]!
           this.position = lookAheadResult
           return lookAheadResult
         }
@@ -267,7 +246,6 @@ export class RuleBreakIterator {
       if ((text.charCodeAt(initialPosition) & 0xfc00) === 0xd800 && pos < length &&
         (text.charCodeAt(pos) & 0xfc00) === 0xdc00) pos++
       result = pos
-      this.ruleStatusIndex = 0
     }
     this.position = result // rbbi.cpp:945
     return result

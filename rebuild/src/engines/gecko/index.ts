@@ -7,13 +7,13 @@
 //   positions and the placed frames (specs/gecko-lines.md §4-§6).
 import type { GeckoEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { Gap, GeckoLineGeometry, LineSlot, Paragraph } from '../../model.js'
-import type { EngineImplementation } from '../engine.js'
+import type { Gap, LineSlot, Paragraph } from '../../model.js'
+import type { GeckoLineStart } from './geometry.js'
 import { firstGeckoLine, nextGeckoLine } from './lines.js'
 import { prepareGecko } from './prepare.js'
-import type { GeckoLineResult, GeckoLineStart, GeckoPrepared } from './types.js'
+import type { GeckoLineResult, GeckoPrepared } from './types.js'
 
-export const geckoEngine: EngineImplementation<GeckoEnvironment, GeckoPrepared, GeckoLineStart, GeckoLineGeometry> = {
+export const geckoEngine = {
   prepare(paragraph: Paragraph, env: GeckoEnvironment, measurer: Measurer): GeckoPrepared {
     return prepareGecko(paragraph, env, measurer)
   },

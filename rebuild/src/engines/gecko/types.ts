@@ -1,7 +1,7 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
-import type { FontDecl, Gap, GeckoLineGeometry, Paragraph, TextStyle } from '../../model.js'
-import type { LineOf, LineResultOf } from '../engine.js'
+import type { FontDecl, Gap, LineOf, LineResultOf, Paragraph, TextStyle } from '../../model.js'
+import type { GeckoLineGeometry, GeckoLineStart } from './geometry.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -197,18 +197,6 @@ export type GeckoPrepared = {
   // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
   // on the line (DESIGN.md §2.8).
   gaps: Gap[]
-}
-
-// Where the next line starts (DESIGN.md §2.7): the item the line's first frame comes from, the content offset inside a text
-// frame (the item's `at` otherwise), and whether no earlier line of the block had content, so text-indent still applies:
-// BlockReflowState::AdvanceToNextLine counts only lines whose line layout wasn't empty (BlockReflowState.h:251-257), and
-// BeginLineReflow indents line number 0 (nsLineLayout.cpp:178-201). No measured remainder carries over; a line's single redo
-// with a forced break happens inside nextLine (specs/gecko-lines.md §4.1, §4.7).
-export type GeckoLineStart = {
-  engine: 'gecko'
-  frame: number
-  contentOffset: number
-  isFirstLine: boolean
 }
 
 // The line nextLine fills, and what it returns for a slot.

@@ -18,7 +18,7 @@ doesn't depend on the old library in `src/`.
   built offline from the font files (see "Font facts"); `font-facts.test.ts` known fonts' facts.
 - `observe/`: the observation ports, one per engine, and the contract they implement, `contract.ts` (DESIGN.md §9). Each
   derives, from a layout, the Range rects its browser reports, by that engine's geometry code, and imports from the
-  library only types of `src/model.ts`.
+  library only types of `src/model.ts` and of its engine's `src/engines/<engine>/geometry.ts`.
 - `run.ts`: the driver. It reads the browser build from the app bundle, sets or reads the browser process's languages,
   serves the page, opens one background browser session and streams rows to NDJSON.
 - `browser-build.ts`: the apps the lab and the probe runner launch, the pinned copies of Chrome and Firefox among them, and
@@ -213,7 +213,7 @@ doesn't depend on the old library in `src/`.
 ## Landed at the correctness line (2026-09-18)
 
 - **The runtime font checks measure in the engine's own kind of context** (`src/measure/font-checks.ts`
-  `checkTextRendering`; "Measure first" has the probes): in Blink text-rendering `optimizeLegibility`, which keeps them off
+  `FontChecks.textRendering`, which each port gives in `src/engines/<engine>/checks.ts`; "Measure first" has the probes): in Blink text-rendering `optimizeLegibility`, which keeps them off
   the font cache key of the page's own text. Every no-facts Chrome and webkit-host record before it asks another question.
 - **The ledger's format 2 carries an exact-value status per case** beside the four metrics, and `transitions` and tier 2
   exit 1 when a case stops being exact ("The ledger"). A format 1 ledger is built again from its runs. Known-tail rules can
@@ -557,9 +557,10 @@ Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin famil
   them unevenly (`coverage-map.ts` `addLcov`). A planted branch and a planted function that nothing calls are listed.
 - **Independence** is a tier 0 test. The shared layer's rule (no import of `engines/`, no `'blink'`, `'webkit'` or `'gecko'`
   string, no identifier holding such a name; comments never count, the TypeScript parser drops them) holds outside
-  `SHARED_FILES_THAT_NAME_ENGINES`, which lists today's ten files with their counts of mentions; a count may only fall, an
-  entry that no longer matches fails too, S2 leaves `paint.ts` and step 3 empties the list. `src/index.ts` and `src/env.ts`
-  are the two shared files that may name engines, and test files are left out. Planted: a string and an identifier in
+  `SHARED_FILES_THAT_NAME_ENGINES`, which listed ten files with 175 mentions at the correctness line and lists `paint.ts`
+  alone since step 1's S2 (74 mentions: it took over the two data selections made for it, and imports the engines'
+  geometry types); a count may only fall, an entry that no longer matches fails too, and step 3 empties the list.
+  `src/index.ts` and `src/env.ts` are the two shared files that may name engines, and test files are left out. Planted: a string and an identifier in
   `content.ts`, an import of Blink's shaper into WebKit's style, an import of `src/index.ts` into `lab/rows.ts`; each named.
 - **Line ranges against layouts** is for X1's gate: `browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts
   --groups=development --out=<dir>` runs the sets with another predictor (scored, with no ledger, transitions or gate), and
@@ -1540,7 +1541,7 @@ in any browser or configuration, and a second measure-first run in Firefox equal
   font with an opsz axis check 4's zoomed-size context then shared the DOM text's key: after the DOM it got the DOM's
   font, the advances looked linear and the fact came out false, with no gap; before the DOM the DOM text took the check's
   font. No lab font has the axis, so that was read from the probes and the source (research/ROUND4-CRITIC.md "Fix first" 1),
-  not observed. The checks now measure as the engine's contexts do (`src/measure/font-checks.ts` `checkTextRendering`, with
+  not observed. The checks now measure as the engine's contexts do (`src/measure/font-checks.ts` `FontChecks.textRendering`, with
   the source reading in the header): probes `font-check-legibility` and `font-check-legibility-word` leave every DOM width on
   the clean rule, and
   the change moved no status, prediction or painted line on the tier sets (`rebuild/tests/known-tail.json`,

@@ -6,7 +6,7 @@
 // gives a cluster over an item edge to the item holding its first character (glyph_data_range.cc:56-90). Canvas totals show
 // none of it: Geeza Pro's lam-lam-heh ligature has the advance of its parts. Without the facts a position between two
 // characters of one shaping call is a stand-in (shape.ts positionLimit).
-import { blinkOtLanguageTags } from '../../breaks/generated/blink-break-tables.js'
+import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
 import { isMark } from './props.js'
 import { isSegmentEdge } from './shape.js'

@@ -1,17 +1,45 @@
-// WebKit's break data: BreakablePositions' pair table, libicucore 78.1's line tables with Apple ICU's quote overrides,
-// the punctuation General_Category set, the dictionary engines' scripts, and WebKit's locale-to-script table
-// (specs/webkit-text.md §4-§5, specs/webkit-canvas.md §2.5-§2.6, specs/webkit-gaps.md §4, §8).
-import { NO_OVERRIDES, getCategory, type BreakRules, type CategoryOverrides } from '../../breaks/rbbi.js'
-import { pairCanBreak, webkitBreakRules, webkitLinePairs } from '../../breaks/tables.js'
+// WebKit's break and bidi data: BreakablePositions' pair table, libicucore 78.1's line tables with Apple ICU's quote
+// overrides, its char.brk and bidi classes, the punctuation General_Category set, the dictionary engines' scripts, and
+// WebKit's locale-to-script table (specs/webkit-text.md §4-§5, specs/webkit-canvas.md §2.5-§2.6, specs/webkit-gaps.md §4,
+// §8). The tables are parsed when the module loads and kept for the life of the page: a parsed table depends only on its
+// generated module.
+import { decodeBase64 } from '../../breaks/icu4x.js'
+import { pairCanBreak } from '../../breaks/pair-table.js'
+import { NO_OVERRIDES, getCategory, parseBreakRules, type BreakRules, type CategoryOverrides } from '../../breaks/rbbi.js'
+import { libicucoreBidiClasses, type BidiData } from '../../unicode/bidi.js'
+import { unicode17BracketPairs } from '../../unicode/generated/bidi-data.js'
+import type { GraphemeRules } from '../../unicode/grapheme.js'
 import {
-  webkitDelimiters, webkitDictionaryMarkRanges, webkitDictionaryScriptRanges, webkitLineTables, webkitLocaleScripts, webkitPunctuationRanges,
-  webkitScriptNames,
-} from '../../breaks/generated/webkit-break-tables.js'
+  webkitBreakTableBase64, webkitDelimiters, webkitDictionaryMarkRanges, webkitDictionaryScriptRanges, webkitLinePairsBase64, webkitLineTables,
+  webkitLocaleScripts, webkitPunctuationRanges, webkitScriptNames, type WebKitBreakTable,
+} from './generated/break-tables.js'
 import type { LineBreakMode } from './types.js'
+
+function parsed(table: WebKitBreakTable): BreakRules {
+  return parseBreakRules(decodeBase64(webkitBreakTableBase64[table]))
+}
+
+// macOS 27 libicucore tables (ICU 78.1).
+const webkitBreakRules: Record<WebKitBreakTable, BreakRules> = {
+  line: parsed('line'), line_loose: parsed('line_loose'), line_normal: parsed('line_normal'), line_cj: parsed('line_cj'),
+  line_normal_cj: parsed('line_normal_cj'), line_loose_cj: parsed('line_loose_cj'), char: parsed('char'),
+}
+
+// WebKit's LineBreakTable::breakTable, in the layout breaks/pair-table.ts reads.
+const webkitLinePairs: Uint8Array = decodeBase64(webkitLinePairsBase64)
+
+// Extended grapheme cluster boundaries: libicucore 78.1 char.brk, opened by NonSharedCharacterBreakIterator
+// (specs/webkit-canvas.md §2.4). Its locale (the user's text-break locale) doesn't change the table on macOS 27 (both
+// configurations load fe6dbecf).
+export const webkitGraphemeRules: GraphemeRules = { kind: 'icu-rbbi', rules: webkitBreakRules.char }
+
+// ICU 78.2's Bidi_Class and Bidi_Paired_Bracket, Unicode 17, with Apple's own classes for private-use U+F7F0..U+F8FF,
+// which macOS 27's libicucore reports; for unicode/ubidi.ts.
+export const webkitBidiData: BidiData = { classes: libicucoreBidiClasses, brackets: unicode17BracketPairs }
 
 // LineBreakTable::unsafeLookup (BreakablePositions.h:111-116), both characters in U+0021..U+00FF.
 export function pairTableBreaks(before: number, after: number): boolean {
-  return pairCanBreak(webkitLinePairs(), before, after)
+  return pairCanBreak(webkitLinePairs, before, after)
 }
 
 function inRanges(r: readonly number[], c: number): boolean {
@@ -88,7 +116,7 @@ export function lineRules(locale: string, mode: LineBreakMode, icuDefaultLocale:
     case 'Normal': table = tables[2]; break
     case 'Strict': table = tables[3]; break
   }
-  const rules = webkitBreakRules(table)
+  const rules = webkitBreakRules[table]
   return { rules, overrides: quoteOverrides(rules, locale, icuDefaultLocale) }
 }
 

@@ -10,8 +10,8 @@ import { resolve } from 'node:path'
 import { DATA, sha256 } from '../../tools/gen-shared.ts'
 import { decodeBase64 } from './icu4x.js'
 import { NO_OVERRIDES, RuleBreakIterator, getCategory, parseBreakRules, ruleBoundaries, type BreakRules, type CategoryOverrides } from './rbbi.js'
-import { blinkBreakTableBase64, type BlinkBreakTable } from './generated/blink-break-tables.js'
-import { webkitBreakTableBase64, type WebKitBreakTable } from './generated/webkit-break-tables.js'
+import { blinkBreakTableBase64, type BlinkBreakTable } from '../engines/blink/generated/break-tables.js'
+import { webkitBreakTableBase64, type WebKitBreakTable } from '../engines/webkit/generated/break-tables.js'
 
 const APPLE = resolve(DATA, 'webkit/icu-macos27-libicucore')
 

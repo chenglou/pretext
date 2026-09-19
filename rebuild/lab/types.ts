@@ -8,10 +8,12 @@ export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'webkit-host'
 // The styled paragraph is defined once in rebuild/src/model.ts, as a tree of inline content (DESIGN.md §1.1). A case
 // describes the page, so its fonts are CSS fonts without the font facts the library also takes; predictor.ts adds those
 // (DESIGN.md §1.2), and they don't enter case ids.
+import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geometry.ts'
+import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
+import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
 import type {
-  BlinkLineGeometry, CssFont, Fragment, Gap, GeckoLineGeometry, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, LineStart,
-  Paragraph as LibraryParagraph, ParagraphOf, TextAlign, WebKitLineGeometry,
+  CssFont, Fragment, Gap, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, Paragraph as LibraryParagraph, ParagraphOf, TextAlign,
 } from '../src/model.ts'
 import type { CanvasSettings, ExpectedObservation } from './observe/contract.ts'
 export type FontDecl = CssFont
@@ -212,7 +214,7 @@ export type LinesPrediction = {
 
 // ---- The layout a row keeps (predictor-core.ts makes it from the library's lines, one slot at a time) ----
 
-// A line as a row keeps it: today every field of the line the engine returns (src/engines/engine.ts LineOf).
+// A line as a row keeps it: today every field of the line the engine returns (src/model.ts LineOf).
 export type LineOf<Start, Geometry> = {
   // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
   // are placed by fragments.
@@ -245,11 +247,11 @@ export type LineOf<Start, Geometry> = {
 }
 
 // An engine's line in a row. `next` is the engine's own line start (DESIGN.md §2.7), which the row stores whole.
-export type BlinkLine = LineOf<Extract<LineStart, { engine: 'blink' }>, BlinkLineGeometry>
-export type WebKitLine = LineOf<Extract<LineStart, { engine: 'webkit' }>, WebKitLineGeometry>
-export type GeckoLine = LineOf<Extract<LineStart, { engine: 'gecko' }>, GeckoLineGeometry>
+export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
+export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
+export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 
-// A slot the engine refused because it moved the line below the slot's floats (src/engines/engine.ts LineResultOf), with
+// A slot the engine refused because it moved the line below the slot's floats (src/model.ts LineResultOf), with
 // the row of the slot list it was, and the gaps the decision rests on.
 export type BelowFloats = { row: number; gaps: Gap[] }
 

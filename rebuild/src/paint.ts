@@ -52,13 +52,19 @@
 // Nothing sets a text width: the lab compares the painted rects with the rects the observation contract expects
 // (DESIGN.md §7, §9).
 import { indexContent, styleUnder } from './content.js'
+import { blinkBidiData, blinkGraphemeRules } from './engines/blink/data.js'
+import type { BlinkLineGeometry } from './engines/blink/geometry.js'
 import { USCRIPT_LATIN } from './engines/blink/props.js'
 import { scriptsPerUnit } from './engines/blink/script.js'
+import { geckoBidiData, geckoGraphemeRules } from './engines/gecko/data.js'
+import type { GeckoLineGeometry } from './engines/gecko/geometry.js'
+import { webkitBidiData, webkitGraphemeRules } from './engines/webkit/data.js'
+import type { WebKitLineGeometry } from './engines/webkit/geometry.js'
 import { resolveIcuBidi } from './unicode/ubidi.js'
 import type { EngineName } from './env.js'
-import type { AtomicInline, BlinkLineGeometry, BoxEdge, CssFont, FontDecl, Fragment, GeckoLineGeometry, LineSlot, Paragraph, TextAlign, TextStyle, WebKitLineGeometry } from './model.js'
-import { B, BN, FSI, LRE, LRI, LRO, PDF, PDI, RLE, RLI, RLO, S, WS, bidiClassOf, bidiDataFor, type BidiData } from './unicode/bidi.js'
-import { graphemeBoundaries, graphemeRulesFor, type GraphemeRules } from './unicode/grapheme.js'
+import type { AtomicInline, BoxEdge, CssFont, FontDecl, Fragment, LineSlot, Paragraph, TextAlign, TextStyle } from './model.js'
+import { B, BN, FSI, LRE, LRI, LRO, PDF, PDI, RLE, RLI, RLO, S, WS, bidiClassOf, type BidiData } from './unicode/bidi.js'
+import { graphemeBoundaries, type GraphemeRules } from './unicode/grapheme.js'
 
 // U+0020 and U+0009..U+000D, the white space of Blink's IsASCIISpace: a text node holding only these as a block's first
 // child gets no layout object in collapsing modes (Blink text.cc:319-364, the Blink port's layoutTextNeeded).
@@ -379,8 +385,15 @@ function contextOf(paragraph: Paragraph, layout: PaintableLayout): Context {
     lineStarts.push(text.length)
     blinkScripts = { text, lineStarts, scripts: blinkScriptsOf(text) }
   }
+  let bidi: BidiData
+  let graphemes: GraphemeRules
+  switch (layout.engine) {
+    case 'blink': bidi = blinkBidiData; graphemes = blinkGraphemeRules; break
+    case 'webkit': bidi = webkitBidiData; graphemes = webkitGraphemeRules; break
+    case 'gecko': bidi = geckoBidiData; graphemes = geckoGraphemeRules; break
+  }
   return {
-    paragraph, layout, index: indexContent(paragraph), bidi: bidiDataFor(layout.engine), graphemes: graphemeRulesFor(layout.engine),
+    paragraph, layout, index: indexContent(paragraph), bidi, graphemes,
     base: paragraph.direction === 'rtl' ? 1 : 0, collapses: paragraph.whiteSpace === 'normal' || paragraph.whiteSpace === 'nowrap', scriptBefore, blinkScripts,
   }
 }

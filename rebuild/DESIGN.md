@@ -276,7 +276,9 @@ read `FontFacts` as before): the primary family and U+2010 coverage by the two-f
 `F, monospace` and under `F, serif`), in Blink joining (U+0628 next to U+07FA, shaped in a call of its own with context)
 and `opticalSizeAxis: false` (advances scale between the CSS and the zoomed size), in WebKit `monospace` as a registered
 heuristic. A check runs only where the engine reads the fact and the paragraph's text can need it; a supplied fact is
-never checked; Gecko is asked nothing, since nothing it loses without facts is learnable. When a fact is still null, the
+never checked; Gecko is asked nothing, since nothing it loses without facts is learnable. The checks name no engine: each
+port says which facts it reads, the layout zoom, whether its context takes `lang` and its contexts' text rendering
+(`engines/<engine>/checks.ts` `FontChecks`), and `prepareParagraph` hands that to the checks. When a fact is still null, the
 engine uses a default that plain Canvas measurement gives, and reports the named gap wherever the fact decides a result.
 A given fact never produces a gap of its own.
 
@@ -436,8 +438,9 @@ can read: builds near the pinned ones predict as well as the pinned ones under `
 whose native layout is 98.3% the same as 156's, line counts fell from 99.8% to 89.2% because its context has no `lang` and
 keeps the Gecko port's 0.001px letter spacing as a fraction (research/VERSION-DRIFT.md). A missing context attribute
 doesn't fail: assigning it makes an ordinary property, and the recipe reads a width measured some other way. So each
-port's list is read from its recipes, naming only what a recipe sets to something other than the attribute's default, and
-checked in the running browser with two contexts and two `measureText` calls, with no browser or version names:
+port's list is read from its recipes (`engines/<engine>/checks.ts` `CanvasNeeds`), naming only what a recipe sets to
+something other than the attribute's default, and checked in the running browser with two contexts and two `measureText`
+calls, with no browser or version names:
 
 | Port | Context attributes | Ink box (`actualBoundingBoxLeft`, `Right`) | Ligature-free letter spacing |
 |---|---|---|---|
@@ -509,8 +512,10 @@ widths.
 
 The layout is the lab's: the row format its predictions keep (`lab/types.ts`), which the lab's adapter makes from the
 library's lines, one slot at a time (`lab/predictor-core.ts` `layoutParagraph`, §2.9). The library returns a line, or a
-refusal, per slot: `LineResultOf`, with the engine's `LineOf`, in `src/engines/engine.ts`. Today the row's line has every
-field of the engine's line, so the two `LineOf` are the same shape, and an engine's line must fit the row's.
+refusal, per slot: `LineResultOf`, with the engine's `LineOf`, in `src/model.ts`. Today the row's line has every
+field of the engine's line, so the two `LineOf` are the same shape, and an engine's line must fit the row's. Each
+engine's geometry (§2.3-§2.5) and the state its next line starts from (§2.7) are types of its own, in
+`src/engines/<engine>/geometry.ts`: types only, and the one engine file the lab imports, since a row keeps both whole.
 
 ```ts
 type ParagraphLayout =
@@ -680,7 +685,7 @@ type BlinkShapeRun = { textStart: number; textEnd: number; reshaped: { textStart
   `graphemeStarts` lets `CaretPositionForOffset` split a cluster's advance equally among its graphemes
   (`shape_result.cc:310-329`). Advances come from Canvas prefix widths at cluster boundaries, which is where the
   `in-word-prefix`, `unsafe-to-break` and `glyph-clusters` gaps apply.
-- **Stand-ins are marked** (ceiling rounds 3 and 4; `model.ts` has each condition). A cluster's `startLimit` names the
+- **Stand-ins are marked** (ceiling rounds 3 and 4; `engines/blink/geometry.ts` has each condition). A cluster's `startLimit` names the
   gap under which the advance sum before it is a Canvas stand-in (between letters HarfBuzz joins, inside a possible
   ligature, at a pair adjustment no fact places), and a text item's `sizeLimit` the same for its end, which moves the x of
   the items after it. The observation port reports a value as predicted only where the layout knows the item's x and
@@ -907,7 +912,6 @@ function prepareParagraph(paragraph: Paragraph, env: Environment): PreparedParag
 function firstLineStart(prepared: PreparedParagraph): LineStart | null
 function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResult
 function paragraphGaps(prepared: PreparedParagraph): Gap[]
-class UnportedFeature extends Error { engine: EngineName; feature: string }
 // lab/predictor-core.ts, over the engines' firstLine and nextLine:
 function layoutParagraph(paragraph: Paragraph, env: Environment, slots?: readonly LineSlot[]): ParagraphLayout
 ```
@@ -970,22 +974,22 @@ every later row. The painter paints each line with floats of its slot (§7).
 | Geometry returned | items from `LogicalLineBuilder`, positioned; clusters of placed text and tab items; the line's mapping units | display boxes from the closed `Line::Run` list, positioned | placed frames after `TrimTrailingWhiteSpaceIn` and `ReorderFrames`, with their characters |
 
 Every row differs, so there is no shared content model and no shared line loop. Each engine module owns its whole
-pipeline from `Paragraph` to lines. **The engine choice is one switch**, in `src/index.ts`, over `env.engine`. Where the
-engines differ only in data, the shared module has one switch that picks the data:
-`bidiDataFor(engine)` and `graphemeRulesFor(engine)`. Where their browsers run different algorithms, each algorithm is
-its own shared module, and each engine imports the one its browser runs: `breaks/rbbi.ts` or `breaks/icu4x.ts`,
-`unicode/ubidi.ts` or `unicode/unicode-bidi.ts`.
+pipeline from `Paragraph` to lines. **The engine choice is one switch**, in `src/index.ts`, over `env.engine`. No other
+shared file names an engine, outside comments: `src/env.ts`, whose shape is per engine, and `src/paint.ts` until its split
+are the exceptions (`tests/independence.test.ts`). Where the engines differ only in data, the shared module takes the
+data as a parameter and each engine gives its own: its `BidiData`, grapheme rules, break rules and pair table
+(`engines/<engine>/data.ts`, parsed when the module loads), and what it asks of the runtime checks
+(`engines/<engine>/checks.ts`: the Canvas its recipes assume, §1.4, and the font facts it reads, §1.2). Where their browsers
+run different algorithms, each algorithm is its own shared module, and each engine imports the one its browser runs:
+`breaks/rbbi.ts` or `breaks/icu4x.ts`, `unicode/ubidi.ts` or `unicode/unicode-bidi.ts`.
 
-`src/engines/engine.ts`:
+Each engine's `index.ts` exports one object of four functions, which `src/index.ts` and the lab's adapter call:
 
 ```ts
-type EngineImplementation<Env, Prepared, Start, Geometry> = {
-  prepare(paragraph: Paragraph, env: Env, measurer: Measurer): Prepared
-  firstLine(prepared: Prepared): Start | null
-  nextLine(prepared: Prepared, start: Start, slot: LineSlot, measurer: Measurer): LineResultOf<Start, Geometry>
-  gaps(prepared: Prepared): Gap[]
-}
-class UnportedFeature extends Error   // an input the port doesn't implement yet: a prediction error, never a silent guess
+prepare(paragraph: Paragraph, env: Env, measurer: Measurer): Prepared
+firstLine(prepared: Prepared): Start | null
+nextLine(prepared: Prepared, start: Start, slot: LineSlot, measurer: Measurer): LineResultOf<Start, Geometry>
+gaps(prepared: Prepared): Gap[]
 ```
 
 Shared, working and tested (§8.2):
@@ -995,7 +999,7 @@ Shared, working and tested (§8.2):
   dictionary-segment flag. Blink and WebKit use it for line and grapheme tables.
 - `src/breaks/icu4x.ts`: ICU4X's small code point trie and the rule iterator for Firefox's baked data. Gecko's line
   iterator adds LB9, word options, strictness and SA handling on top; that port belongs to the Gecko owner.
-- `src/breaks/tables.ts`: loads each generated table once.
+- `src/breaks/pair-table.ts`: the lookup in the Latin-1 pair table, whose form Blink's and WebKit's generated tables share.
 - `src/unicode/ubidi.ts`: ICU's `ubidi_setPara` with default options, ported from ICU 78.2's `ubidi.cpp`, for Blink and
   WebKit. It returns what they read: the direction (text that isn't mixed gets the paragraph level everywhere, and Blink
   then turns bidi off), the paragraphs, which end after every class-B character with CR LF counted once, and one level
@@ -1006,9 +1010,10 @@ Shared, working and tested (§8.2):
 - `src/unicode/unicode-bidi.ts`: the groundwork's port of `unicode-bidi` 0.3.15, for Gecko: one paragraph with no split
   at class B, full levels for text with no RTL content, removed characters at the previous character's level, and the
   crate's quirk that `iter_backwards_from` walks earlier level runs forwards.
-- `src/unicode/bidi.ts`: the Bidi_Class tables and bracket pairs per engine, `bidiDataFor(engine)`.
-- `src/unicode/grapheme.ts`: extended grapheme clusters with Chrome's `char.brk`, libicucore's `char.brk` or Firefox's
-  ICU4X data.
+- `src/unicode/bidi.ts`: the Bidi_Class tables, named by where they come from (Unicode 17, libicucore), and the class
+  lookup. An engine pairs a class table with a bracket table as its `BidiData`.
+- `src/unicode/grapheme.ts`: extended grapheme clusters over an engine's rules: Chrome's `char.brk`, libicucore's
+  `char.brk` or Firefox's ICU4X data.
 - `src/measure/`: contexts, font strings, the call log (§4).
 - `src/paint.ts` (§7).
 
@@ -1211,12 +1216,15 @@ Generators read pinned engine data, check every input's sha256 against a recorde
 
 | Command | Source | Module | Size |
 |---|---|---|---|
-| `bun rebuild/tools/gen-blink-data.ts` | `data/blink`, checked against `manifest.json`: `line`, `line_normal`, `line_normal_cj`, `line_loose`, `line_loose_cj` and `char` from Chrome 153's `icudtl.dat`, and the generated `kFastLineBreakTable` | `src/breaks/generated/blink-break-tables.ts` | 531 KB |
-| `bun rebuild/tools/gen-webkit-data.ts` | `data/webkit`, checked against `FILES.tsv`: the six line tables and `char` libicucore loads, and `BreakablePositions.cpp`'s pair table | `src/breaks/generated/webkit-break-tables.ts` | 629 KB |
-| `bun rebuild/tools/gen-gecko-data.ts` | `firefox-156.0/intl/icu_segmenter_data/data`, checked against `data/gecko/segmenter-data-sha256.json`: line and grapheme rule data | `src/breaks/generated/gecko-break-data.ts` | 41 KB |
+| `bun rebuild/tools/gen-blink-data.ts` | `data/blink`, checked against `manifest.json`: `line`, `line_normal`, `line_normal_cj`, `line_loose`, `line_loose_cj` and `char` from Chrome 153's `icudtl.dat`, and the generated `kFastLineBreakTable` | `src/engines/blink/generated/break-tables.ts` | 531 KB |
+| `bun rebuild/tools/gen-webkit-data.ts` | `data/webkit`, checked against `FILES.tsv`: the six line tables and `char` libicucore loads, and `BreakablePositions.cpp`'s pair table | `src/engines/webkit/generated/break-tables.ts` | 629 KB |
+| `bun rebuild/tools/gen-gecko-data.ts` | `firefox-156.0/intl/icu_segmenter_data/data`, checked against `data/gecko/segmenter-data-sha256.json`: line and grapheme rule data | `src/engines/gecko/generated/break-data.ts` | 41 KB |
 | `bun rebuild/tools/gen-unicode-data.ts` | ICU 78.2 `ppucd.txt` (Chromium ICU pin, sha256 recorded in `tools/ppucd.ts`), libicucore's private-use classes (recorded in the generator, checked by `bidi.test.ts`) and `unicode-bidi` 0.3.15's `tables.rs` | `src/unicode/generated/bidi-data.ts` | 14 KB |
 
-Tables are base64 in the module, decoded and parsed once per table on first use (`src/breaks/tables.ts`). Not shipped:
+Data only one engine reads sits under that engine; the bidi data, which the engines share, stays shared and is named by
+where it comes from (Unicode 17, libicucore 78.1, `unicode-bidi` 15). Tables are base64 in the module, and each engine
+decodes and parses its own when its data module loads (`src/engines/<engine>/data.ts`): every table of the three engines
+in about 3 ms under bun, kept for the life of the page. Not shipped:
 the phrase tables and `jaml` model (the input model has no `word-break: auto-phrase`), ICU's dictionaries (`cjdict` is
 2 MB) and Firefox's LSTM models (874 KB), because §6.3 takes SA breaks from the running browser. Compacting tables
 (dropping the reverse table and rule source, which `rbbi.ts` never reads) is later performance work.
@@ -1668,32 +1676,37 @@ rebuild/
     gen-shared.ts lines.ts ppucd.ts          generator helpers                         architect
     gen-unicode-data.ts                      → src/unicode/generated/bidi-data.ts       architect
     icu-bidi-oracle.c icu-bidi-oracle.ts     ICU's own ubidi, for the bidi tests        architect
-    gen-blink-data.ts                        → src/breaks/generated/blink-break-tables.ts   Blink owner
-    gen-webkit-data.ts                       → src/breaks/generated/webkit-break-tables.ts  WebKit owner
-    gen-gecko-data.ts                        → src/breaks/generated/gecko-break-data.ts, src/engines/gecko/generated/   Gecko owner
+    gen-blink-data.ts                        → src/engines/blink/generated/break-tables.ts  Blink owner
+    gen-webkit-data.ts                       → src/engines/webkit/generated/break-tables.ts WebKit owner
+    gen-gecko-data.ts                        → src/engines/gecko/generated/{break-data,props,likely-subtags}.ts         Gecko owner
     gen-webkit-fonts.ts gen-webkit-joining.ts  → src/engines/webkit/generated/{fonts,joining}.ts                        WebKit owner
     webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
     index.ts        prepareParagraph, firstLineStart, layoutLine, paragraphGaps: the one switch over engines, the engine-build gap   architect
-    model.ts        input tree, font facts, line slots, fragments, gaps, per-engine geometry                          architect
+    model.ts        input tree, font facts, line slots, fragments, gaps, LineOf and LineResultOf; names no engine     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
     paint.ts        paintLines()                                                                                      architect
     measure/        canvas.ts (contexts, memo), font.ts (font strings), log.ts, font-checks.ts (font facts asked of
                     Canvas, §1.2), canvas-checks.ts (what the recipes assume of Canvas, §1.4)                        architect
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
-    breaks/         rbbi.ts, icu4x.ts, tables.ts, rbbi.test.ts, generated/                                            architect
+    breaks/         rbbi.ts, icu4x.ts, pair-table.ts, rbbi.test.ts                                                    architect
     engines/
-      engine.ts     EngineImplementation<Env, Prepared, Start, Geometry>, LineOf, LineResultOf, UnportedFeature      architect
       blink/        index.ts, types.ts; the port's files and tests                                                   Blink owner
       webkit/       index.ts, types.ts                                                                                WebKit owner
       gecko/        index.ts, types.ts                                                                                Gecko owner
+                    and in each: geometry.ts (the line geometry and line start the rows keep: types only, the one
+                    engine file the lab imports), data.ts (its break rules, grapheme rules and BidiData), checks.ts
+                    (what it asks of measure/canvas-checks.ts and measure/font-checks.ts), generated/
 ```
+
+Outside comments, no file of `src` but `index.ts`, `env.ts` and the engines' own names an engine; `paint.ts` is the
+one exception left, until its split (`tests/independence.test.ts`).
 
 An engine owner edits only their engine directory, their generator and its generated module. A change a port needs in
 a shared file (a model field, a new gap name, a shared helper fix) goes in the owner's report, and the architect makes
-it. `rebuild/lab/observe/` may import types from `src/model.ts` only, never engine logic, so no expected observation
-comes from the library (TEST-ARCHITECTURE.md §0 rule 1); the layout it reads and the contract it implements are the
+it. `rebuild/lab/observe/` may import types from `src/model.ts` and an engine's `geometry.ts` only, never engine logic,
+so no expected observation comes from the library (TEST-ARCHITECTURE.md §0 rule 1); the layout it reads and the contract it implements are the
 lab's own types (`lab/types.ts`, `lab/observe/contract.ts`). The ports walk the tree themselves; they don't import
 `src/content.ts`.
 

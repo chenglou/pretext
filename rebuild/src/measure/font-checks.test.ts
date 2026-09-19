@@ -1,11 +1,14 @@
 // The runtime font checks against a stand-in Canvas whose fonts are small tables: which characters a family draws and how
 // wide. The browsers' answers are rebuild/probes/font-checks.ts.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { blinkFontChecks } from '../engines/blink/checks.ts'
 import { joiningType } from '../engines/blink/props.ts'
+import { geckoFontChecks } from '../engines/gecko/checks.ts'
+import { webkitFontChecks } from '../engines/webkit/checks.ts'
 import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from '../env.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type Paragraph } from '../model.ts'
 import { createMeasurer, type Measurer } from './canvas.ts'
-import { withLearnedFontFacts } from './font-checks.ts'
+import { withLearnedFontFacts, type FontChecks } from './font-checks.ts'
 import { prepareParagraph } from '../index.ts'
 
 const BEH = '\u0628'
@@ -80,8 +83,17 @@ function paragraph(family: string, text: string, facts: FontFacts = UNKNOWN_FONT
   }
 }
 
+// What index.ts prepareParagraph hands the checks for an environment.
+function checksOf(env: Environment): FontChecks {
+  switch (env.engine) {
+    case 'blink': return blinkFontChecks(env)
+    case 'webkit': return webkitFontChecks
+    case 'gecko': return geckoFontChecks
+  }
+}
+
 function learn(family: string, text: string, env: Environment, facts?: FontFacts, m: Measurer = createMeasurer(), size?: number): FontFacts {
-  return withLearnedFontFacts(paragraph(family, text, facts, size), env, m).font.facts
+  return withLearnedFontFacts(paragraph(family, text, facts, size), checksOf(env), m).font.facts
 }
 
 describe('primaryFamily', () => {
@@ -250,7 +262,7 @@ describe('the store', () => {
     const p = paragraph('Prop', 'ab')
     const span = { ...p, kind: 'span' as const, font: { ...p.font, family: 'Mono' }, lang: 'ja', inlineStart: { margin: 0, border: 0, padding: 0 }, inlineEnd: { margin: 0, border: 0, padding: 0 }, verticalAlign: 'baseline' as const, children: [{ kind: 'text' as const, text: 'cd' }] }
     const m = createMeasurer()
-    const out = withLearnedFontFacts({ ...p, content: [span] }, blink(2), m)
+    const out = withLearnedFontFacts({ ...p, content: [span] }, blinkFontChecks(blink(2)), m)
     const learned = out.content[0]!
     expect(learned.kind === 'span' && learned.font.facts.primaryFamily).toBe('Mono')
     expect(m.log.contexts.some(c => c.lang === 'ja' && c.font.includes('Mono'))).toBe(true)

@@ -5,7 +5,7 @@
 import { decodeBase64 } from '../../breaks/icu4x.js'
 import {
   blinkCharPropsBase64, blinkCjkIdeographOrSymbolRanges, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
-} from '../../breaks/generated/blink-break-tables.js'
+} from './generated/break-tables.js'
 
 // ULineBreak values used by name (unicode/uchar.h:2487-2565).
 export const LB_AL = 2

@@ -9,12 +9,11 @@ import { clearMeasurementCaches } from '../../src/measurement.ts'
 import { fontFactsFor } from '../lab/font-facts.ts'
 import { layoutParagraph } from '../lab/predictor-core.ts'
 import { blinkEngine } from '../src/engines/blink/index.ts'
-import type { EngineImplementation } from '../src/engines/engine.ts'
 import { geckoEngine } from '../src/engines/gecko/index.ts'
 import { webkitEngine } from '../src/engines/webkit/index.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/index.ts'
 import { createMeasurer, type Measurer } from '../src/measure/canvas.ts'
-import type { FontDecl, Paragraph } from '../src/model.ts'
+import type { FontDecl, Gap, LineResultOf, LineSlot, Paragraph } from '../src/model.ts'
 import type {
   BrowserKind, ContextDonePost, ContextPlan, Library, PageEnvironment, PageSnapshot, RowCount, RowPost, RowSpec, RowTiming,
   VariantCount, VariantResult,
@@ -120,8 +119,16 @@ function givenFacts(engine: EngineName, build: string): GivenFacts {
 
 // ---- The rebuild's engine loop, as rebuild/lab/predictor-core.ts fillLines runs it, over several widths with one measurer ----
 
+// What the three engine objects share (src/engines/<engine>/index.ts).
+type EngineLoop<Env, Prepared, Start, Geometry> = {
+  prepare(paragraph: Paragraph, env: Env, measurer: Measurer): Prepared
+  firstLine(prepared: Prepared): Start | null
+  nextLine(prepared: Prepared, start: Start, slot: LineSlot, measurer: Measurer): LineResultOf<Start, Geometry>
+  gaps(prepared: Prepared): Gap[]
+}
+
 function prepareAndFill<Env, Prepared, Start, Geometry>(
-  engine: EngineImplementation<Env, Prepared, Start, Geometry>, paragraph: Paragraph, env: Env, widths: readonly number[], measurer: Measurer,
+  engine: EngineLoop<Env, Prepared, Start, Geometry>, paragraph: Paragraph, env: Env, widths: readonly number[], measurer: Measurer,
   ranges: number[] | null,
 ): number {
   const prepared = engine.prepare(paragraph, env, measurer)

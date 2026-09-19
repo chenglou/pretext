@@ -8,19 +8,21 @@ import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES } from '../../tools/gen-shared.ts'
 import { ICU_VERSIONS, buildIcuBidiOracle, runIcuBidiOracle, type IcuBuild } from '../../tools/icu-bidi-oracle.ts'
+import { blinkBidiData } from '../engines/blink/data.js'
+import { geckoBidiData } from '../engines/gecko/data.js'
+import { webkitBidiData } from '../engines/webkit/data.js'
 import type { EngineName } from '../env.js'
-import { bidiClassOf, bidiDataFor } from './bidi.js'
+import { bidiClassOf, type BidiData } from './bidi.js'
 
 const GROUNDWORK_GECKO_PROPS = resolve(BROWSER_ENGINES, 'pretext-emulation-20260915/runtime-parity/gecko/src/generated/gecko-props-data.ts')
 
-const ORACLES: [EngineName, IcuBuild][] = [['blink', 'icu4c-78'], ['webkit', 'libicucore']]
+const ORACLES: [EngineName, IcuBuild, BidiData][] = [['blink', 'icu4c-78', blinkBidiData], ['webkit', 'libicucore', webkitBidiData]]
 
 for (let o = 0; o < ORACLES.length; o++) {
-  const [engine, build] = ORACLES[o]!
+  const [engine, build, data] = ORACLES[o]!
   test(`${engine} Bidi_Class and paired brackets equal ${build}`, () => {
     const binary = buildIcuBidiOracle(build)
     expect(runIcuBidiOracle(binary, 'version', '').trim()).toBe(ICU_VERSIONS[build])
-    const data = bidiDataFor(engine)
     const differences: string[] = []
     const icuBrackets: number[] = []
     const lines = runIcuBidiOracle(binary, 'classes', '').split('\n')
@@ -57,7 +59,7 @@ test('icu_properties 2.1.2 Bidi_Class equals ICU 78.2 Bidi_Class', async () => {
     previousEnd = start + flat[i + 1]!
     classOf.fill(flat[i + 2]!, start, previousEnd + 1)
   }
-  const data = bidiDataFor('gecko')
+  const data = geckoBidiData
   const differences: string[] = []
   for (let cp = 0; cp <= 0x10ffff; cp++) {
     // The groundwork dump treats ASCII letters as L without a table lookup; the table holds the same values.
@@ -67,5 +69,5 @@ test('icu_properties 2.1.2 Bidi_Class equals ICU 78.2 Bidi_Class', async () => {
 }, 60000)
 
 test('unicode-bidi 0.3.15 bracket pairs equal Unicode 17 pairs', () => {
-  expect(bidiDataFor('gecko').brackets).toEqual(bidiDataFor('blink').brackets)
+  expect(geckoBidiData.brackets).toEqual(blinkBidiData.brackets)
 })

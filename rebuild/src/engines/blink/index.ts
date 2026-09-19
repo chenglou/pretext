@@ -6,12 +6,13 @@
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit, BlinkShapeRun, Fragment, Gap, LineSlot, Paragraph, TextAlign } from '../../model.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
-import type { EngineImplementation } from '../engine.js'
+import type { Fragment, Gap, LineSlot, Paragraph, TextAlign } from '../../model.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
+import { blinkGraphemeRules } from './data.js'
 import { emojiPriorities } from './emoji.js'
+import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkLineStart, BlinkMappingUnit, BlinkShapeRun } from './geometry.js'
 import { addGap, sourceOffsetAt, sourceRange } from './gaps.js'
 import { hanKerningCandidates, hanKerningMayApply, measureHanKerningFontData } from './hankerning.js'
 import { LIGATURE_MERGED, LIGATURE_NONE, LIGATURE_UNCERTAIN, fontFactsOfText } from './ligatures.js'
@@ -22,7 +23,7 @@ import {
   adjust16, ceilFrom16, isSegmentEdge, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
   isFontRunEdge, pairAdjust16, pairAdjustNoLigatures16, pairPlacementUnknown, partGraphemeStarts, partPrefix16, partWidth16, positionLimit, requeuedSpaceAt, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
-import type { BlinkGroup, BlinkLine, BlinkLineResult, BlinkLineStart, BlinkPrepared } from './types.js'
+import type { BlinkGroup, BlinkLine, BlinkLineResult, BlinkPrepared } from './types.js'
 
 // InlineNode::ShapeText's grouping (inline_node.cc:1625-1680): equal Font, equal direction, no control item or atomic
 // inline between, no ZWNJ at an item start, and no open or close tag whose box edges or vertical-align break shaping
@@ -1333,7 +1334,7 @@ function needsAccurateEndPosition(align: TextAlign): boolean {
   }
 }
 
-export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, BlinkLineStart, BlinkLineGeometry> = {
+export const blinkEngine = {
   prepare(paragraph: Paragraph, env: BlinkEnvironment, measurer: Measurer): BlinkPrepared {
     const zoom = env.devicePixelRatio
     const index = indexContent(paragraph)
@@ -1370,7 +1371,7 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     if (is8Bit) {
       for (let i = 0; i <= text.length; i++) if (!(i > 0 && text.charCodeAt(i - 1) === 0x0d && text.charCodeAt(i) === 0x0a)) graphemeStarts[i] = 1
     } else {
-      const boundaries = graphemeBoundaries(text, graphemeRulesFor('blink'))
+      const boundaries = graphemeBoundaries(text, blinkGraphemeRules)
       for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
     }
     const contexts = []

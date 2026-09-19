@@ -1,8 +1,8 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { BlinkLineGeometry, FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
-import type { LineOf, LineResultOf } from '../engine.js'
+import type { FontDecl, FontFacts, Gap, LineBreak, LineOf, LineResultOf, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
+import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
 import type { HanKerningFontData } from './hankerning.js'
 
 // InlineItem types this model produces (specs/blink-text.md §1; inline_item.h): text, control items, the open and close
@@ -182,27 +182,6 @@ export type BlinkPrepared = {
   needsAccurateEndPosition: boolean
   // The paragraph's gaps: its content, fonts and environment.
   gaps: Gap[]
-}
-
-// The break token (line_breaker.cc:4696-4774): nothing else carries to the next line (specs/blink-lines.md §4.1).
-export type BlinkLineStart = {
-  engine: 'blink'
-  // InlineItemTextIndex.
-  itemIndex: number
-  textOffset: number
-  // The style current at the break (index into BlinkPrepared.styles).
-  style: number
-  // The previous line ended in a forced break, so this line is not a wrapped line start and ShapeLine doesn't reshape
-  // its start (shaping_line_breaker.cc IsStartOfWrappedLine).
-  afterForcedBreak: boolean
-  // InlineBreakToken::kIsPastFirstFormattedLine: the previous lines include one that isn't empty
-  // (line_breaker.cc:4723-4724), so text-indent no longer applies (:45-56, :470-472).
-  isPastFirstFormattedLine: boolean
-  // The leading floats were placed: the first line handles the floats before any inline content (HandleFloat, their item
-  // results in that line; PositionLeadingFloats, inline_layout_algorithm.cc), so every later break token is past them and
-  // no later line has leading floats (line_breaker.cc:4225-4248 reads them). The model's slot floats aren't items, so the
-  // token carries this.
-  afterLeadingFloats: boolean
 }
 
 // The line nextLine fills, and what it returns for a slot.

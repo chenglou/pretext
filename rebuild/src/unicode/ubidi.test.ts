@@ -13,8 +13,10 @@ import { resolve } from 'node:path'
 import { BROWSER_ENGINES } from '../../tools/gen-shared.ts'
 import { buildIcuBidiOracle, runIcuBidiOracle, type IcuBuild } from '../../tools/icu-bidi-oracle.ts'
 import { forEachLine } from '../../tools/lines.ts'
+import { blinkBidiData } from '../engines/blink/data.js'
+import { webkitBidiData } from '../engines/webkit/data.js'
 import type { EngineName } from '../env.js'
-import { bidiClassOf, bidiDataFor, type BidiData, type ParagraphDirection } from './bidi.js'
+import { bidiClassOf, type BidiData, type ParagraphDirection } from './bidi.js'
 import { resolveIcuBidi, type IcuBidiParagraph } from './ubidi.js'
 
 const ICU_TESTDATA = resolve(BROWSER_ENGINES, 'chromium-152/src/third_party/icu/source/test/testdata')
@@ -29,8 +31,8 @@ type Case = { text: string; direction: ParagraphDirection }
 type Oracle = { engine: EngineName; build: IcuBuild; binary: string; data: BidiData }
 
 const ORACLES: Oracle[] = [
-  { engine: 'blink', build: 'icu4c-78', binary: buildIcuBidiOracle('icu4c-78'), data: bidiDataFor('blink') },
-  { engine: 'webkit', build: 'libicucore', binary: buildIcuBidiOracle('libicucore'), data: bidiDataFor('webkit') },
+  { engine: 'blink', build: 'icu4c-78', binary: buildIcuBidiOracle('icu4c-78'), data: blinkBidiData },
+  { engine: 'webkit', build: 'libicucore', binary: buildIcuBidiOracle('libicucore'), data: webkitBidiData },
 ]
 
 function oracleLine(c: Case): string {
@@ -132,7 +134,7 @@ const DIRECTIONS: readonly ParagraphDirection[] = ['ltr', 'rtl', 'auto']
 
 describe('ICU ubidi port equals ICU', () => {
   test('BidiTest-17.0.0 inputs', async () => {
-    for (let i = 0; i < REPRESENTATIVES.length; i++) expect(bidiClassOf(bidiDataFor('blink'), REPRESENTATIVES[i]!)).toBe(i)
+    for (let i = 0; i < REPRESENTATIVES.length; i++) expect(bidiClassOf(blinkBidiData, REPRESENTATIVES[i]!)).toBe(i)
     const { cases, failures } = await compareWithIcu(async add => {
       await forEachLine(resolve(ICU_TESTDATA, 'BidiTest.txt'), line => {
         if (line.length === 0 || line.startsWith('#') || line.startsWith('@')) return
@@ -256,7 +258,7 @@ const DIRECTED: readonly string[] = [
 
 // What Blink and WebKit get where the resolvers disagree (specs/bidi.md §7.5, measured with ICU).
 describe('ICU behaviour the engines depend on', () => {
-  const data = bidiDataFor('blink')
+  const data = blinkBidiData
   test('D5: Arabic-Indic digits right after letters are not mixed, so every level is 0 and Blink turns bidi off', () => {
     const r = resolveIcuBidi(DIRECTED[4]!, 'ltr', data)
     expect(r.direction).toBe('ltr')
