@@ -21,8 +21,8 @@ Baselines for transitions:
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, after the correctness line, from the worktree branch `rx-blink-storage`
 on 32e2a1e (the line's library). A correctness change on the line's architecture, made before the re-architecture takes the
 string memo out (research/ARCHITECTURE-PLAN-2.md X2), so that taking it out moves nothing. Probe `blink-storage` (S1 to S5,
-`rebuild/probes/blink-storage.ts`, `.artifacts/probes/blink/storage`; 83 facts in `rebuild/facts/blink/153.0.8010.50.ndjson`,
-rerun per release by `rebuild/tests/rerun-probes.sh`). Runs: `.artifacts/tests/runs/rx-blink-storage/`. V8 is read at
+`rebuild/probes/blink-storage.ts`, `.artifacts/probes/blink/storage`; 85 facts in `rebuild/facts/blink/153.0.8010.50.ndjson`,
+rerun per release by `rebuild/tests/rerun-probes.sh`; S6 and its 2 facts are the alternative's). Runs: `.artifacts/tests/runs/rx-blink-storage/`. V8 is read at
 `~/github/browser-engines/v8-153` (6b96683d, Chrome 153's); files the sparse 153 checkout lacks (`platform/bindings`,
 `core/html/parser`) are read from the pinned commit's objects (`git show 153.0.8010.48:<path>`).
 
@@ -147,12 +147,36 @@ the wrong run and kept the other whole, six lines; now the Arabic run splits as 
 still splits, seven. Every such failure is covered by `script-context`, and every wrong answer left in these cases lies in
 a range that condition reports.
 
+### The alternative: spaces stay in a Latin range of script-neutral characters
+
+Branch `rx-blink-storage-latin-space`, stacked on the fix (`blink/measure/spaces-stay-in-neutral-latin-range`;
+`shape.ts` `spacesStay`). The class the fix leaves is a recipe's, not a storage's: U+2028 stands for every space so that
+Canvas keeps a string in one piece, and it makes the string 16-bit. For a range the paragraph shapes as Latin that holds a
+space, a character beside white space and no character with a script of its own, RunSegmenter then resolves everything as
+Common over the string alone. In a font Canvas shapes whole (`canvasSplitsWords` false: the font's kerning or ligature
+lookups hold the space glyph, font_fallback_list.cc:264-286) the 8-bit string with U+0020 itself is one item shaped as one
+Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), which is the paragraph's own shaping: its
+characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would cut the string there
+(:387-399), and keeps `script-context`. A range with a letter resolves to Latin either way, and white space alone is no
+script's, as `hasScriptNeutral` already takes it. Probe S6: brackets, a space and brackets in Amiri at 48px are
+136.421875px in the DOM, 136.41599 as the 8-bit string with U+0020 at the zoomed size, and 233.86 with U+2028.
+
+| Check, against the fix | Result |
+|---|---|
+| `bun test rebuild` | 789 pass (1 new) |
+| tier 1, Chrome | 0 predictions changed; 4,693 cases ask a new question (the 49 above, and the ranges that keep their spaces with the word split probe they ask first) |
+| tier 2, both orders, recorded, both configurations | outside `twins` no status and no exact-value status differs from the fix's run in any of 66,685 cases; differing predicted values 266 and 552, as the fix |
+| `twins` | lineCount, breaks and widths 380 of 380 (from 346, 335 and 267), exact 380 of 380 with 0 differing predicted values and 0 differing rect counts; painter 353 pass, 25 covered, 2 open |
+
+The 36 cases that lose a pass under the fix all pass here. The 2 open painter rows (`c-0aaf6ad5c7daf6da`,
+`c-48abe81f791883d3`, RTL block) are lines whose prediction now passes and whose painted line wraps without a painter
+limit: the painted line shapes its brackets otherwise than the paragraph did, which the failing prediction's conditions
+covered before. Without the word-split narrowing to ranges with a character beside white space, 34,087 cases ask a new
+question (every lone space asks the probe), with the same statuses. Runs: `.artifacts/tests/runs/rx-blink-storage/
+alt-latin-space-narrow` (and `alt-latin-space`, the wider first version).
+
 ### Open
 
-- **A Latin-script range that holds a space and no letter.** An 8-bit string with U+0020 itself is shaped as the DOM's
-  Latin segment wherever Canvas shapes the font whole (`canvasSplitsWords` false: the font's kerning or ligature lookups
-  hold the space glyph, font_fallback_list.cc:264-286); a font shaped word by word would shape the words apart. It would
-  convert the class above for fonts like Amiri and needs a round of its own.
 - The painter builds a fragment's text from single characters, one byte when the units fit, but `paintedText(fragment).slice`
   of a fragment that holds a wide character elsewhere makes a two-byte text node from 13 units on (paint.ts, the prefix
   cut), which Blink segments where `blinkScriptsOf` takes one Latin segment. No tier case reaches it.

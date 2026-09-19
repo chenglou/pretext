@@ -427,6 +427,7 @@ export function canvasScriptsPerUnit(sh: Shaper, style: number, s: string): Uint
 // harfbuzz_shaper.cc:1072-1077): the paragraph's own characters, script, font and direction. A font shaped word by word
 // keeps U+2028, since U+0020 would cut the string there (plain_text_node.cc:387-399), and script-context with it. With a
 // letter in the range RunSegmenter gives Latin either way, and white space alone is no script's (hasScriptNeutral).
+// rule blink/measure/spaces-stay-in-neutral-latin-range
 function spacesStay(sh: Shaper, style: number, from: number, to: number): boolean {
   const p = sh.p
   if (p.scripts[from] !== USCRIPT_LATIN) return false
