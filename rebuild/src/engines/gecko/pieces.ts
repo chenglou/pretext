@@ -50,7 +50,7 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
   }
   for (let k = texts.length - 1; k >= 0; k--) {
     const r = texts[k]!.r
-    const style = p.runStyles[p.frames[r.frame]!.run]!
+    const style = p.leaves[p.frames[r.frame]!.run]!.style
     if (!(style.whitespaceCanHang && style.whiteSpaceIsSignificant)) break
     if (r.prov === null) continue
     for (let t = r.tEnd - r.trimmableChars; t < r.tEnd; t++) hanging.add(p.tSource[t]!)
@@ -63,7 +63,7 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
   const fragments: Fragment[] = []
   const runOf = (s: number): number => {
     let r = 0
-    while (p.runStarts[r + 1]! <= s) r++
+    while (p.leaves[r]!.end <= s) r++
     return r
   }
   let cursor = start.contentOffset

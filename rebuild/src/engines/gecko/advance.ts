@@ -3,7 +3,7 @@
 // groups, pair adjustments and joining forms Canvas can show, and the reason where Canvas can't confirm it
 // (gfxTextRun::GetAdvanceWidth, gfxTextRun.cpp:1214-1256; ComputeLigatureData :238-322). specs/gecko-canvas.md §3.
 import { bounds, contextFor, width } from '../../measure/canvas.js'
-import { listedFontOf } from './fonts.js'
+import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
@@ -144,7 +144,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
     const inner = advanceBefore(p, run, end)
     const previous = (p.tUnits[t - 1]! & 0xfc00) === 0xdc00 && t - 2 >= unit.tStart ? t - 2 : t - 1
-    const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.joining !== 'opentype'
+    const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.font.facts.joining !== 'opentype'
     return { au: inner.au, standIn: { kind: 'inside-cluster', at: p.tSource[t]!, betweenMarks } }
   }
   // A mark that starts a cluster: Unicode leaves some spacing marks out of Grapheme_Cluster_Break=SpacingMark (U+102B, U+102C
@@ -190,7 +190,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // the fact calls 'opentype'.
     let marks = false
     for (let k = group.start; k < group.end && !marks; k++) marks = p.clusterStart[k] === 0 && (p.tUnits[k]! & 0xfc00) !== 0xdc00
-    const markAdvance = marks && run.joining !== 'opentype'
+    const markAdvance = marks && run.font.facts.joining !== 'opentype'
     const edges = from.standIn ?? to.standIn
     return {
       au: from.au + before * Math.floor((to.au - from.au) / clusters),
@@ -343,15 +343,17 @@ function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' 
     const likely = locale === null ? '' : addLikelySubtags(locale.language, locale.script, locale.region).script
     script = likely === '' ? 'Latn' : likely
   }
-  if (script === 'Latn') return run.pairKerning
-  if (run.scriptLookups === null || (script !== 'Grek' && script !== 'Cyrl')) return null
+  if (script === 'Latn') return run.font.facts.pairKerning
+  // The scripts that select other lookups than Latin text, which pairKerning describes.
+  const scriptLookups = firstFontScriptLookups(run.font)
+  if (scriptLookups === null || (script !== 'Grek' && script !== 'Cyrl')) return null
   let own = -1
   let latin = -1
-  for (let g = 0; g < run.scriptLookups.length; g++) {
-    if (run.scriptLookups[g]!.includes(script)) own = g
-    if (run.scriptLookups[g]!.includes('Latn')) latin = g
+  for (let g = 0; g < scriptLookups.length; g++) {
+    if (scriptLookups[g]!.includes(script)) own = g
+    if (scriptLookups[g]!.includes('Latn')) latin = g
   }
-  return own === latin ? run.pairKerning : null
+  return own === latin ? run.font.facts.pairKerning : null
 }
 
 // Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required

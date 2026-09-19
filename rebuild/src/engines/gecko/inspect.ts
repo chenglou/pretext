@@ -70,10 +70,10 @@ function justificationSpacing(p: GeckoPrepared, pf: PlacedText): Map<number, num
   const r = pf.r
   if (p.paragraph.textAlign !== 'justify' || r.prov === null) return null
   const f = p.frames[r.frame]!
-  const style = p.runStyles[f.run]!
+  const leaf = p.leaves[f.run]!
   // GetTrimmedOffsets with default flags: the end is trimmed on a frame at the end of the line (:3287-3330).
   let end = r.contentStart + r.contentLength
-  if (!style.whiteSpaceIsSignificant && pf.endOfLine) while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, f.is8bit)) end--
+  if (!leaf.style.whiteSpaceIsSignificant && pf.endOfLine) while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, leaf.is8bit)) end--
   const { info, assignments, arrayStart } = computeJustification(p, r.frame, r.offset, end)
   const totalGaps = info.inner * 2 + pf.assign.start + pf.assign.end
   if (totalGaps === 0 || assignments.length === 0) return null

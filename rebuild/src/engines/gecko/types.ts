@@ -21,6 +21,25 @@ export type GeckoStyle = {
   tabSize: number
 }
 
+// A text leaf of the paragraph, a DOM text node, with what its frames read from their parent element's computed style: a
+// text node inherits every property the model has. `run` indices name leaves.
+export type GeckoLeaf = {
+  // Source offsets [start, end); leaves tile the text.
+  start: number
+  end: number
+  // The span holding it, -1 for the block.
+  parent: number
+  style: GeckoStyle
+  font: FontDecl
+  // The style language, canonicalized (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375).
+  lang: string
+  // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
+  is8bit: boolean
+  // Resolved in au (nsTextFrame.cpp:1949-1980).
+  letterSpacingAu: number
+  wordSpacingAu: number
+}
+
 // A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
 // (nsBidiPresUtils.cpp:1039-1057). Line breaking later makes fluid continuations, which are line state, not frames.
 export type GeckoFrame = {
@@ -33,9 +52,7 @@ export type GeckoFrame = {
   // The frame's transformed range [tStart, tEnd).
   tStart: number
   tEnd: number
-  // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
-  is8bit: boolean
-  // Index of this frame's item in GeckoPrepared.items.
+  // Index of this frame's item in GeckoPrepared.items: with frameOfSource, what makes a line start from a source offset.
   item: number
 }
 
@@ -62,23 +79,40 @@ export type GeckoSpanEdges = {
   endMargin: number
 }
 
-export type GeckoElement =
-  | {
-      // `open` and `close`: the element's own start and end items; `closes`: every close item of its continuations in order,
-      // the bidi splits' and then `close`.
-      kind: 'span'; parent: number; open: number; close: number; closes: number[]; style: GeckoStyle; edges: GeckoSpanEdges
-      // PreventCrossBoundaryShaping's test on each logical side: a nonzero margin, border or padding, or a vertical-align
-      // other than baseline (nsTextFrame.cpp:2054-2098).
-      breaksShapingAtStart: boolean
-      breaksShapingAtEnd: boolean
-      // nsInlineFrame::IsSelfEmpty: no border, padding or margin on either inline side (nsInlineFrame.cpp:87-154).
-      selfEmpty: boolean
-    }
-  // An inline-block of declared border box: its inline size and margins in au. `level` is the embedding level of the
-  // character bidi resolution stands it for: U+FFFC for an atomic inline, U+2028 for a <br>, U+200B for a <wbr>
-  // (TraverseFrames, nsBidiPresUtils.cpp:1381-1400; ResolveParagraph :975-982); 0 without bidi.
+export type GeckoSpan = {
+  // `open` and `close`: the element's own start and end items; `closes`: every close item of its continuations in order,
+  // the bidi splits' and then `close`.
+  kind: 'span'; parent: number; open: number; close: number; closes: number[]; style: GeckoStyle; edges: GeckoSpanEdges
+  // PreventCrossBoundaryShaping's test on each logical side: a nonzero margin, border or padding, or a vertical-align
+  // other than baseline (nsTextFrame.cpp:2054-2098).
+  breaksShapingAtStart: boolean
+  breaksShapingAtEnd: boolean
+  // nsInlineFrame::IsSelfEmpty: no border, padding or margin on either inline side (nsInlineFrame.cpp:87-154).
+  selfEmpty: boolean
+}
+
+// An inline-block of declared border box: its inline size and margins in au. `level` is the embedding level of the
+// character bidi resolution stands it for: U+FFFC for an atomic inline, U+2028 for a <br>, U+200B for a <wbr>
+// (TraverseFrames, nsBidiPresUtils.cpp:1381-1400; ResolveParagraph :975-982); 0 without bidi.
+export type GeckoObject =
   | { kind: 'atomic'; parent: number; item: number; iSize: number; startMargin: number; endMargin: number; level: number }
   | { kind: 'br' | 'wbr'; parent: number; item: number; level: number }
+
+// The paragraph's elements by the model's element index, which items and fragments name.
+export type GeckoElement = GeckoSpan | GeckoObject
+
+// The element an item names, by the item's kind: an open or a close item names a span, the others an object.
+export function spanAt(elements: GeckoElement[], e: number): GeckoSpan {
+  const el = elements[e]!
+  if (el.kind !== 'span') throw new Error(`gecko: element ${e} is a ${el.kind}, not a span`)
+  return el
+}
+
+export function objectAt(elements: GeckoElement[], e: number): GeckoObject {
+  const el = elements[e]!
+  if (el.kind === 'span') throw new Error(`gecko: element ${e} is a span`)
+  return el
+}
 
 // The frames and element events of the paragraph in document order: what nsBlockFrame and nsInlineFrame reflow. `at` is the
 // source offset where the item sits: a text frame's start, the offset of the content after an element event.
@@ -98,12 +132,14 @@ export type ScriptRun = { limit: number; script: string }
 export type GeckoTextRun = {
   tStart: number
   tEnd: number
-  is8bit: boolean
   level: number
   // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au. The contexts a
   // recipe needs beside it are made from its settings (advance.ts, gaps.ts).
   context: Context
-  // The first flow's font declaration, for its facts about the listed families (advance.ts, ligature rows).
+  // The first flow's font declaration, for its facts: about the listed families (advance.ts, ligature rows), which glyph of
+  // a pair carries HarfBuzz's pair adjustment (FontFacts.pairKerning, advance.ts pairKerningAt), and whether HarfBuzz shapes
+  // the font through GSUB and GPOS or through morx, kerx and kern state machines, where marks keep their advances
+  // (FontFacts.joining, advance.ts, ligature groups).
   font: FontDecl
   // The run's script runs, which decide the script context a measured piece of a unit needs (measure.ts rangeAu).
   scriptRuns: ScriptRun[]
@@ -119,14 +155,6 @@ export type GeckoTextRun = {
   hasTab: boolean
   // Glyph advance of the whole run.
   totalAdvance: number
-  // FontFacts.pairKerning of the run's font: which glyph of a pair carries HarfBuzz's pair adjustment.
-  pairKerning: 'first-advance' | 'split' | null
-  // ListedFontFacts.scriptLookups of the first listed family that gives a font, or null where it isn't known: the scripts
-  // that select other lookups than Latin text, which pairKerning describes (advance.ts, pairKerningAt).
-  scriptLookups: readonly (readonly string[])[] | null
-  // FontFacts.joining of the run's font: whether HarfBuzz shapes it through GSUB and GPOS or through morx, kerx and kern
-  // state machines, where marks keep their advances (advance.ts, ligature groups).
-  joining: 'opentype' | 'aat' | null
   // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
   advancesStandIn: 'font-size-quantization' | 'optical-size' | null
 }
@@ -169,15 +197,8 @@ export type GeckoPrepared = {
   // The block's own style (the line container's), which the root span and tab widths read.
   blockStyle: GeckoStyle
   text: string
-  // Per text leaf: its start offset (length leaves + 1), its style, and the span holding it (-1 for the block).
-  runStarts: number[]
-  runStyles: GeckoStyle[]
-  runParents: number[]
-  // The style language of each leaf, canonicalized (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375).
-  runLangs: string[]
-  // Resolved per run in au (nsTextFrame.cpp:1949-1980).
-  letterSpacingAu: number[]
-  // Frames in logical order; runs without a frame (white space at a line boundary) have none.
+  leaves: GeckoLeaf[]
+  // Frames in logical order; leaves without a frame (white space at a line boundary) have none.
   frames: GeckoFrame[]
   items: GeckoItem[]
   elements: GeckoElement[]
@@ -229,7 +250,8 @@ export type GeckoInspect = {
   // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
   // on the line (DESIGN.md §2.8).
   gaps: Gap[]
-  // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
-  // letters around the hyphen are one font's isn't known (prepare.ts step 4). Only the line's font-fallback gap reads it.
-  emergencyUnconfirmed: Set<number>
+  // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm, in text order:
+  // whether the letters around the hyphen are one font's isn't known (prepare.ts step 4). Only the line's font-fallback
+  // gap reads it, once for a line that such a break decides.
+  emergencyUnconfirmed: number[]
 }

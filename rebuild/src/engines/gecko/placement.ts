@@ -43,12 +43,13 @@ function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: SpanData): { handled: b
     } else {
       const r = pf.r
       const f = p.frames[r.frame]!
+      const leaf = p.leaves[f.run]!
       const contentEnd = r.contentStart + r.contentLength
       pf.endOfLine = true
       let changed = false
-      if (!p.runStyles[f.run]!.whiteSpaceIsSignificant && !r.trimmedTrailingWhitespace && r.prov !== null) {
+      if (!leaf.style.whiteSpaceIsSignificant && !r.trimmedTrailingWhitespace && r.prov !== null) {
         let end = contentEnd
-        while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, f.is8bit)) end--
+        while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, leaf.is8bit)) end--
         pf.trimmedEnd = end
         const tA = Math.min(p.nextT[end]!, f.tEnd)
         const tB = Math.min(p.nextT[contentEnd]!, f.tEnd)
@@ -117,8 +118,8 @@ function participatesInJustification(p: GeckoPrepared, pf: Placed): boolean {
       if (!pf.r.nonEmpty) return false
       if (!pf.endOfLine) return true
       // TextIsOnlyWhitespace of the node (CharacterData.cpp:486-510).
-      const run = p.frames[pf.r.frame]!.run
-      for (let s = p.runStarts[run]!; s < p.runStarts[run + 1]!; s++) {
+      const leaf = p.leaves[p.frames[pf.r.frame]!.run]!
+      for (let s = leaf.start; s < leaf.end; s++) {
         const u = p.text.charCodeAt(s)
         if (u !== 0x20 && u !== 0x09 && u !== 0x0a && u !== 0x0d) return true
       }

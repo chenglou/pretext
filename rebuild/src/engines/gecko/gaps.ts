@@ -11,7 +11,7 @@
 import type { GeckoEnvironment } from '../../env.js'
 import { contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { FontDecl, Gap, GapName, TextStyle } from '../../model.js'
+import type { FontDecl, Gap, GapName } from '../../model.js'
 import { advanceBefore, type InWordReason } from './advance.js'
 import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
@@ -19,7 +19,7 @@ import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, PlacedText, SpanData } from './lines.js'
 import { CANVAS_AU_PER_PX, quantize7, rangeAu } from './measure.js'
 import type { EmojiPresentation } from './prepare.js'
-import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoPrepared, type GeckoTextRun } from './types.js'
+import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun } from './types.js'
 
 // Where gaps go: a list in raise order, or null on a plain paragraph.
 export type GapSink = Gap[] | null
@@ -285,31 +285,31 @@ export function dictionaryBreaks(sink: GapSink, env: GeckoEnvironment, text: str
 // the prediction follows the state at measuring time. Which fonts cover U+FFFD isn't a Canvas fact, so every U+FFFD reports
 // it unless the coverage facts name a listed family for it (the round 2 held-out suite's 104 history-dependent
 // suite/U+FFFD rows: 16px natively after one history, 13.133px after another).
-export function replacementCharacters(sink: GapSink, text: string, runStarts: number[], styles: TextStyle[]): void {
+export function replacementCharacters(sink: GapSink, text: string, leaves: GeckoLeaf[]): void {
   if (sink === null) return
-  for (let s = 0; s < text.length; s++) {
-    if (text.charCodeAt(s) !== 0xfffd) continue
-    let run = 0
-    while (runStarts[run + 1]! <= s) run++
-    // A listed family that the coverage facts say draws U+FFFD keeps it out of system fallback (fonts.ts listedFontOf).
-    const listed = listedFontOf(styles[run]!.font, 0xfffd)
-    if (listed !== null && listed >= 0) continue
-    sink.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
+  for (let run = 0; run < leaves.length; run++) {
+    for (let s = leaves[run]!.start; s < leaves[run]!.end; s++) {
+      if (text.charCodeAt(s) !== 0xfffd) continue
+      // A listed family that the coverage facts say draws U+FFFD keeps it out of system fallback (fonts.ts listedFontOf).
+      const listed = listedFontOf(leaves[run]!.font, 0xfffd)
+      if (listed !== null && listed >= 0) continue
+      sink.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
+    }
   }
 }
 
 // gfxFont::SynthesizeSpaceWidth gives a U+2007 or U+2008 that no font in the list covers the font's figure or space width,
 // rounded to whole device pixels (gfxTextRun.cpp:3032-3043, gfxFont.cpp:4809-4814). Canvas rounds at apd 60 and shows
 // neither whether a font covers it nor the unrounded width.
-export function figureSpaces(sink: GapSink, apd: number, text: string, runStarts: number[]): void {
+export function figureSpaces(sink: GapSink, apd: number, text: string, leaves: GeckoLeaf[]): void {
   if (sink === null) return
   if (apd !== 60) {
-    for (let s = 0; s < text.length; s++) {
-      const u = text.charCodeAt(s)
-      if (u !== 0x2007 && u !== 0x2008) continue
-      let run = 0
-      while (runStarts[run + 1]! <= s) run++
-      sink.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it`, at: { start: s, end: s + 1 } })
+    for (let run = 0; run < leaves.length; run++) {
+      for (let s = leaves[run]!.start; s < leaves[run]!.end; s++) {
+        const u = text.charCodeAt(s)
+        if (u !== 0x2007 && u !== 0x2008) continue
+        sink.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it`, at: { start: s, end: s + 1 } })
+      }
     }
   }
 }
@@ -317,7 +317,7 @@ export function figureSpaces(sink: GapSink, apd: number, text: string, runStarts
 // prepare.ts step 4 couldn't settle whether the emergency break at t exists (emergencyHyphenBreak).
 export function emergencyBreakUnconfirmed(inspect: GeckoInspect | null, t: number): void {
   if (inspect === null) return
-  inspect.emergencyUnconfirmed.add(t)
+  inspect.emergencyUnconfirmed.push(t)
 }
 
 // ---- A fill ----
@@ -330,7 +330,7 @@ export function emergencyBreakUnconfirmed(inspect: GeckoInspect | null, t: numbe
 export function emergencyHyphenBreak(sink: GapSink, p: GeckoPrepared, run: number, wordCanWrap: boolean, r: Measured, tOffset: number, tLength: number): void {
   if (sink === null) return
   if (r.charsFit < tLength && r.breakPriority === WORD_WRAP_BREAK && !wordCanWrap && p.breakFlags[tOffset + r.charsFit] === BREAK_EMERGENCY_WRAP &&
-    p.inspect!.emergencyUnconfirmed.has(tOffset + r.charsFit)) {
+    p.inspect!.emergencyUnconfirmed.includes(tOffset + r.charsFit)) {
     sink.push({ gap: 'font-fallback', run, detail: `offset ${p.tSource[tOffset + r.charsFit]}: the emergency break after a hyphen needs the hyphen and the letters around it in one font range, which Canvas can't show (gfxFont.cpp:741-753, gfxTextRun.cpp:2930-3000)` })
   }
 }

@@ -119,7 +119,7 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, prov: Provider, end: numb
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
   // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
   // a span with tab-size 12 in a block with tab-size 3).
-  const tabWidth = p.runStyles[p.frames[prov.frame]!.run]!.tabSize * p.tabUnit
+  const tabWidth = p.leaves[p.frames[prov.frame]!.run]!.style.tabSize * p.tabUnit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
   if (!prov.run.hasTab || tabWidth <= 0) return
@@ -146,7 +146,7 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, prov: Provider, end: numb
 // characters ending in SHY, inside this frame's measured content, not at the frame start of a line-starting frame, and
 // only where the frame's white-space wraps.
 function hyphenSoft(p: GeckoPrepared, prov: Provider, t: number): boolean {
-  if (!p.runStyles[p.frames[prov.frame]!.run]!.wrap) return false
+  if (!p.leaves[p.frames[prov.frame]!.run]!.style.wrap) return false
   const s = p.tSource[t]! - 1
   if (s < prov.start || s >= prov.start + prov.length || p.text.charCodeAt(s) !== SHY) return false
   return !prov.startOfLine || t > prov.startT
@@ -391,8 +391,9 @@ function isJustifiableCharacter(p: GeckoPrepared, s: number, frameEnd: number, i
 // side, shared with a justifiable neighbour. `assignments` index transformed characters from nextT[rangeStart].
 export function computeJustification(p: GeckoPrepared, frame: number, rangeStart: number, rangeEnd: number): { info: Justification; assignments: Assignment[]; arrayStart: number } {
   const f = p.frames[frame]!
-  const style = p.runStyles[f.run]!
-  const lang = p.runLangs[f.run]!.toLowerCase()
+  const leaf = p.leaves[f.run]!
+  const style = leaf.style
+  const lang = leaf.lang.toLowerCase()
   const cj = lang === 'ja' || lang === 'zh' || lang.startsWith('ja-') || lang.startsWith('zh-') // IsChineseOrJapanese, :3441-3454
   const arrayStart = Math.min(p.nextT[rangeStart]!, f.tEnd)
   const tEnd = Math.min(p.nextT[rangeEnd]!, f.tEnd)
@@ -402,7 +403,7 @@ export function computeJustification(p: GeckoPrepared, frame: number, rangeStart
   for (let s = rangeStart; s < rangeEnd; s++) {
     const t = p.sourceT[s]!
     if (t === -1) continue
-    if (!isJustifiableCharacter(p, s, f.end, f.is8bit, style.whiteSpaceIsSignificant, cj)) continue
+    if (!isJustifiableCharacter(p, s, f.end, leaf.is8bit, style.whiteSpaceIsSignificant, cj)) continue
     // FindClusterStart and FindClusterEnd (:3549-3576): back to the cluster start, forward to its last character, stopping
     // at skipped characters.
     let first = t
@@ -435,7 +436,8 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   const fi = (p.items[item] as { frame: number }).frame
   const f = p.frames[fi]!
   const run = p.textRuns[f.textRun]!
-  const style = p.runStyles[f.run]!
+  const leaf = p.leaves[f.run]!
+  const style = leaf.style
   const maxContentLength = f.end - contentStart
   const empty = (offset: number): FrameResult => ({
     frame: fi, item, contentStart, offset, length: 0, charsFit: 0, contentLength: maxContentLength,
@@ -458,7 +460,7 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   if (atStartOfLine && !style.whiteSpaceIsSignificant) {
     const skipLength = newLineOffset >= 0 ? length - 1 : length
     let count = 0
-    while (count < skipLength && isTrimmableChar(p.text, offset + count, f.end, f.is8bit)) count++
+    while (count < skipLength && isTrimmableChar(p.text, offset + count, f.end, leaf.is8bit)) count++
     offset += count
     length -= count
   }
@@ -476,7 +478,7 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   const availWidth = psd.iEnd - psd.iCoord - psd.inset
   const canTrim = !style.whiteSpaceIsSignificant
   const prov: Provider = {
-    run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: p.letterSpacingAu[f.run]!,
+    run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: leaf.letterSpacingAu,
     tabs: new Map(), tabStandIn: new Map(),
   }
   // GetCurrentFrameInlineDistanceFromBlock less the block's padding, 0 here (nsTextFrame.cpp:11063-11067,
@@ -619,7 +621,7 @@ function openSpansAt(p: GeckoPrepared, start: GeckoLineStart): number[] {
   const item = p.items[start.frame]!
   let parent: number
   switch (item.kind) {
-    case 'text': parent = p.runParents[p.frames[item.frame]!.run]!; break
+    case 'text': parent = p.leaves[p.frames[item.frame]!.run]!.parent; break
     case 'close': parent = item.element; break
     default: parent = p.elements[item.element]!.parent
   }
