@@ -80,6 +80,11 @@ function stubAu(font: string, text: string, lang: string): number {
       au += Math.round(576 * size / 16) - (mongolian(cps[i - 1]) || (cps[i - 1] === '\u200d' && i > 1) ? 40 : 0) - (mongolian(cps[i + 1]) || cps[i + 1] === '\u200d' ? 40 : 0)
       continue
     }
+    // Charter's glyph for U+00A0 is twice as wide as its space (probe gecko-mainfacts M4: 534 au against 267 at 16px).
+    if (c === '\u00a0' && font.includes('Charter')) {
+      au += Math.round(1152 * size / 16)
+      continue
+    }
     // Lam with alef madda is one glyph of 1001 au: the alef adds 425 au after a lam.
     if (c === 'آ' && cps[i - 1] === 'ل') {
       au += Math.round(425 * size / 16)
@@ -956,6 +961,16 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     expect(prepared.inspect).toBeNull()
     expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
     expect(() => geckoParagraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('a boundary U+00A0 is measured as itself, once a text run (gfxFont.cpp:3834-3861; probe gecko-mainfacts M4)', () => {
+    const charter = { ...courier, family: 'Charter' }
+    const l = layout(paragraph([run('aa\u00a0bb\u00a0cc dd', 'span', { font: charter })], 500, { font: charter }))
+    expect(l.lines.map(line => line.geometry.width)).toEqual([8 * 576 + 2 * 1152 + 576])
+    expect(l.measure.calls.filter(c => c.text === '\u00a0').length).toBe(1)
+    expect(l.measure.calls.filter(c => c.text === ' ').length).toBe(1)
+    // Where the font's U+00A0 is its space, nothing moves.
+    expect(layout(paragraph([run('aa\u00a0bb')], 500)).lines.map(line => line.geometry.width)).toEqual([5 * 576])
   })
 
   test('paragraphGaps hands out copies: writing into them doesn\'t reach the prepared paragraph', () => {

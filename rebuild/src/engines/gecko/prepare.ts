@@ -1013,8 +1013,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const au = (s: string) => auIn(context, s)
     let advance = 0
     const run = { context, scriptRuns: b.scriptRuns, tStart: b.tStart }
-    // The width of U+0020 in the run's context, which every boundary space of the run takes: asked at the first one.
+    // The width of U+0020 in the run's context, which every boundary space of the run takes: asked at the first one. A
+    // boundary U+00A0 is a shaped word of its own, the character U+00A0 (gfxFont.cpp:3834-3861), so it takes the font's
+    // glyph for U+00A0, and the space glyph only where the font has none (gfxHarfBuzzShaper.cpp:113-118; font matching tries
+    // U+0020 for it, gfxTextRun.cpp:3226-3229). Canvas shapes it the same way, so it is asked as itself, at the run's first
+    // one. Probe gecko-mainfacts M4: in 43 of 249 styles the two differ (16px "Hoefler Text" 754 au against 240, Charter 534
+    // against 267, Thonburi 640 against 319), and W(U+00A0) is the DOM's advance in 228 of the 249, where W(U+0020) is in
+    // 197; the other 21 are off for the space too (synthetic bold, system-ui, "Apple Color Emoji" as the first family).
     let spaceAu: number | null = null
+    let nbspAu: number | null = null
     // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
     const spaces = gaps.spaceTest(sink, context, firstRun, tUnits, tSource, b.tStart)
     for (let u = 0; u < b.units.length; u++) {
@@ -1023,8 +1030,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       switch (kind) {
         case 'space':
         case 'nbsp': {
-          spaceAu ??= au(' ')
-          let w = spaceAu
+          let w = kind === 'space' ? spaceAu ??= au(' ') : nbspAu ??= au('\u00a0')
           // A character after U+200D takes the font of the character before it where that font has it (FindFontForChar,
           // gfxTextRun.cpp:3319-3325), and a boundary space is the space glyph of its own font run (gfxTextRun.cpp:1590-1622).
           // So after a word that ends in U+200D the space is the word's last font's: the word with the space after it, less
