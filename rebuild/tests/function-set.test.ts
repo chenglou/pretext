@@ -121,7 +121,8 @@ describe('plain equals inspected', () => {
     expect(plainEqualsInspected(asSet(planted), recorded(WORDS, 120), predictor).problem!.detail).toContain('the plain path asks a question the record lacks')
   })
 
-  test('a plain path that asks the lab path\'s questions in another order fails', () => {
+  // Tier 1 sends such a case to the browser; here it passes and is counted (function-set.ts, the header's plain bullet).
+  test('a plain path that asks the lab path\'s questions in another order passes and is counted', () => {
     const planted = { ...toy, prepare: (p: ToyParagraph, env: unknown, inspect: boolean): ToyPrepared => {
       if (inspect) return toy.prepare(p, env, inspect)
       const ctx = context(p.font)
@@ -129,7 +130,8 @@ describe('plain equals inspected', () => {
       const words = p.text.split(' ')
       return { words, widths: words.map(word => ctx.measureText(word).width), space, inspect, whole: null }
     } }
-    expect(plainEqualsInspected(asSet(planted), recorded(WORDS, 120), predictor).problem!.detail).toContain('the plain path\'s questions aren\'t the lab path\'s or fewer')
+    expect(plainEqualsInspected(asSet(planted), recorded(WORDS, 120), predictor)).toMatchObject({ problem: null, otherOrder: true })
+    expect(plainEqualsInspected(asSet(toy), recorded(WORDS, 120), predictor)).toMatchObject({ problem: null, otherOrder: false })
   })
 
   test('a plain path that makes more contexts fails', () => {

@@ -8,9 +8,15 @@
 //
 // - plain: plain equals inspected. Per recorded case, under the replay of its record (replay.ts): every line's fill result
 //   (its kind, `next` and `hasLineBox`) and linePieces from a plain paragraph equal the inspected paragraph's; the plain
-//   path asks no question the lab's path didn't (dropped only, or the same, or repeats only: replay.ts classifyAsked) and
+//   path asks no question the lab's path didn't (a question is a context and a string: replay.ts classifyAsked) and
 //   makes no more contexts; inspectLine throws on a plain paragraph. It reports the plain path's questions asked and
-//   distinct, and their ratio.
+//   distinct, their ratio, and the cases whose first asks come in another order than the lab's. The order isn't a failure
+//   here as it is in tier 1: the lab's path asks inspection's questions between two fills, and a later fill asks some of
+//   them again, where the memo answers; a plain path first asks those when that fill needs them, after questions the
+//   lab's path asked later, so no path that asks less can keep the lab's order (all three ports' X1, 2026-09-18). What a
+//   canvas makes of the plain path's order no offline check can say: the plain predictor's browser run does
+//   (browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts, compared with compare-sets.ts
+//   --prediction=line-ranges), and it belongs to every milestone that changes the plain path's questions.
 // - pure: linePieces and inspectLine give the same result twice and in either order. Per recorded case under replay, on an
 //   inspected paragraph: each line's pieces, inspection, pieces again and inspection again; then a second paragraph whose
 //   lines are inspected before their pieces are read, which must give the first one's results. A function that writes into
@@ -59,7 +65,7 @@ export type Check = typeof CHECKS[number]
 
 // A case's outcome: null when it passes; `skipped` when the lab's path gives no layout to read a paragraph from.
 export type Problem = { kind: 'problem' | 'skipped'; detail: string }
-export type CaseResult = { problem: Problem | null; asked: number; distinct: number }
+export type CaseResult = { problem: Problem | null; asked: number; distinct: number; otherOrder?: boolean }
 
 // ---- One case ----
 
@@ -165,10 +171,10 @@ export function plainEqualsInspected(lib: FunctionSet, input: InputCase, predict
   if (!same(inspected, plain)) return { problem: { kind: 'problem', detail: describe('plain differs from inspected, line', inspected, plain) }, ...counts }
   const phase = input.record.phases.predict
   const questions = classifyAsked(input.record.calls, phase, askedOf(lab.answeredBy, phase), askedOf(answered, phase))
-  if (questions.change === 'other questions') return { problem: { kind: 'problem', detail: `the plain path's questions aren't the lab path's or fewer: ${questions.detail}` }, ...counts }
+  if (questions.added > 0) return { problem: { kind: 'problem', detail: `the plain path asks questions the lab's path didn't: ${questions.detail}` }, ...counts }
   if (replay.contexts > lab.contexts) return { problem: { kind: 'problem', detail: `the plain path makes ${replay.contexts} contexts, the lab's path ${lab.contexts}` }, ...counts }
   if (answersOnPlain) return { problem: { kind: 'problem', detail: 'inspectLine answers on a plain paragraph; it throws there (§5.2)' }, ...counts }
-  return { problem: null, ...counts }
+  return { problem: null, ...counts, otherOrder: questions.reordered > 0 }
 }
 
 export function pure(lib: FunctionSet, input: InputCase, predictor: Predictor): CaseResult {
@@ -248,7 +254,7 @@ export function runCheck(check: Check, lib: FunctionSet, input: InputCase, predi
 
 // ---- The command ----
 
-type ShardResult = { cases: number; passed: number; asked: number; distinct: number; failures: Array<{ id: string; family: string; kind: Problem['kind']; detail: string }> }
+type ShardResult = { cases: number; passed: number; asked: number; distinct: number; otherOrder: number; failures: Array<{ id: string; family: string; kind: Problem['kind']; detail: string }> }
 type Report = {
   format: 'pretext-function-set-check/1'
   check: Check
@@ -259,6 +265,8 @@ type Report = {
   counts: { cases: number; passed: number; problems: number; skipped: number }
   // plain: the plain path's questions under replay. sweep: the stand-in's calls. pure: nothing.
   asked: { asked: number; distinct: number }
+  // plain: passing cases whose first asks come in another order than the lab's path's (the header says why that passes).
+  otherOrder: number
   problems: Array<{ set: string; id: string; family: string; detail: string }>
   skipped: Array<{ set: string; id: string; family: string; detail: string }>
 }
@@ -276,12 +284,13 @@ async function work(options: Map<string, string>): Promise<void> {
   if ('missing' in lib) throw new Error(`${options.get('library')} lacks ${lib.missing.join(', ')}`)
   const predictor = await import(resolve(REPO, options.get('predictor')!)) as Predictor
   const inputs = readShard<InputCase>(options.get('inputs')!)
-  const result: ShardResult = { cases: inputs.length, passed: 0, asked: 0, distinct: 0, failures: [] }
+  const result: ShardResult = { cases: inputs.length, passed: 0, asked: 0, distinct: 0, otherOrder: 0, failures: [] }
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i]!
     const outcome = runCheck(check, lib, input, predictor)
     result.asked += outcome.asked
     result.distinct += outcome.distinct
+    if (outcome.otherOrder === true) result.otherOrder++
     if (outcome.problem === null) result.passed++
     else result.failures.push({ id: input.id, family: input.family, kind: outcome.problem.kind, detail: outcome.problem.detail })
   }
@@ -301,7 +310,7 @@ async function run(check: Check, browser: TierBrowser, config: Config, options: 
   }))
   const report: Report = {
     format: 'pretext-function-set-check/1', check, browser, config, library, sets: sets.filter(name => inputs.sets[name] !== undefined),
-    counts: { cases: 0, passed: 0, problems: 0, skipped: 0 }, asked: { asked: 0, distinct: 0 }, problems: [], skipped: [],
+    counts: { cases: 0, passed: 0, problems: 0, skipped: 0 }, asked: { asked: 0, distinct: 0 }, otherOrder: 0, problems: [], skipped: [],
   }
   for (const job of jobs) {
     const result = JSON.parse(readFileSync(job.result, 'utf8')) as ShardResult
@@ -309,6 +318,7 @@ async function run(check: Check, browser: TierBrowser, config: Config, options: 
     report.counts.passed += result.passed
     report.asked.asked += result.asked
     report.asked.distinct += result.distinct
+    report.otherOrder += result.otherOrder
     for (const failure of result.failures) (failure.kind === 'problem' ? report.problems : report.skipped).push({ set: job.set, id: failure.id, family: failure.family, detail: failure.detail })
   }
   report.counts.problems = report.problems.length
@@ -319,7 +329,7 @@ async function run(check: Check, browser: TierBrowser, config: Config, options: 
   writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`)
   const c = report.counts
   const asked = check === 'plain'
-    ? `; the plain path asked ${report.asked.asked} questions, ${report.asked.distinct} distinct, ask ratio ${report.asked.distinct === 0 ? 'none' : (report.asked.asked / report.asked.distinct).toFixed(2)}`
+    ? `; the plain path asked ${report.asked.asked} questions, ${report.asked.distinct} distinct, ask ratio ${report.asked.distinct === 0 ? 'none' : (report.asked.asked / report.asked.distinct).toFixed(2)}; ${report.otherOrder} cases first ask in another order than the lab's path`
     : check === 'sweep' ? `; the stand-in Canvas answered ${report.asked.asked} questions` : ''
   console.log(`[function-set] ${check}, ${browser} ${config}: ${c.cases} cases in ${report.sets.length} sets: ${c.passed} pass, ${c.problems} fail, ${c.skipped} skipped (the lab's path gave no layout)${asked} (${Math.round((Date.now() - started) / 100) / 10} s)`)
   for (const value of report.problems.slice(0, 8)) console.log(`    ${value.set} ${value.id} ${value.family}: ${value.detail.slice(0, 400)}`)

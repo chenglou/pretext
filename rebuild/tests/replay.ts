@@ -587,8 +587,10 @@ type ShardResult = { cases: number; same: number; counts: AskCounts; sites: { si
 
 // One phase's questions against the reference's. Both lists index the phase's recorded calls; a question is the context
 // and the string of the call that answered it, so two recorded calls of one string on one context are one question.
-export function classifyAsked(calls: readonly RecordedCall[], phase: [number, number], before: Asked, after: Asked): { change: QuestionsChange; detail: string } {
-  if (JSON.stringify(before) === JSON.stringify(after)) return { change: 'same', detail: '' }
+// `added` counts recorded questions the reference didn't ask, `reordered` the ones first asked after a question the
+// reference asked later, `dropped` the reference's questions that are gone (function-set.ts reads them).
+export function classifyAsked(calls: readonly RecordedCall[], phase: [number, number], before: Asked, after: Asked): { change: QuestionsChange; detail: string; added: number; reordered: number; dropped: number } {
+  if (JSON.stringify(before) === JSON.stringify(after)) return { change: 'same', detail: '', added: 0, reordered: 0, dropped: 0 }
   const recorded = phase[1] - phase[0]
   // Per recorded call of the phase, its question: the first call of the same context and string.
   const question: number[] = []
@@ -638,7 +640,7 @@ export function classifyAsked(calls: readonly RecordedCall[], phase: [number, nu
   if (dropped > 0) parts.push(`${dropped} dropped`)
   if (added > 0) parts.push(`${added} recorded questions the reference didn't ask`)
   if (reordered > 0) parts.push(`${reordered} first asked after a question that the reference asked later`)
-  return { change, detail: parts.join(', ') }
+  return { change, detail: parts.join(', '), added, reordered, dropped }
 }
 
 // A case's questions against the reference's: the worse of its two phases, and the contexts. Fewer contexts go with
