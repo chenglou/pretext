@@ -42,6 +42,13 @@ may read the DOM freely; this is research, not the library.
   with U+0020 and its 16-bit one with U+2028 (S6). Every probe returns `checks`; `rebuild/tests/rerun-probes.sh` reruns it
   per Chrome release. Beside it `blink-twins.ts`, the first look at the same thing (raw widths).
 
+- `font-family-syntax.ts`: whether each browser's own CSS parser, for an element's style and for a Canvas font, reads a
+  font-family list the way the library's one parser does (`src/font-family.ts`): a comma inside a string, escapes, runs of
+  white space, U+00A0, keyword case, an unclosed string, and the lists CSS rejects. It returns `checks`, and beside them
+  `classification`: which reference a list measures as where that is the engine's choice of keywords and not syntax (a
+  quoted `"system-ui"`, `BlinkMacSystemFont` in small letters, `-apple-system` quoted). On 2026-09-19 all 95 checks held in
+  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`).
+
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
   `text-rendering: optimizeLegibility`, and no context first). Each returns checks and is meaningful only alone in a fresh
