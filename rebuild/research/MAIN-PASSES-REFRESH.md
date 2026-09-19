@@ -2,6 +2,84 @@
 
 The maintainer asked: "do we pass all or almost all of main's non-accidentally-passing cases?" The census's main-only lists were run through the library at the X2 merge (f474123) in the three pinned browsers, in both configurations, and counted by the triage's classes (`MAIN-TRIAGE.md`); a second agent then recomputed every number from the rows. The check comes first, because it corrects the run in two places.
 
+## After correctness round 5 (2026-09-19)
+
+Correctness round 5 (`CORRECTNESS-ROUND-5.md`) landed the fixes that Canvas can settle without supplied font facts.
+Each owner ran the same main-only lists again at its branch, in both configurations, and counted by this document's
+rules; the round's critic recounted main's true passes from the owners' rows. The numbers below were recomputed once
+more from the owners' per-case files against this refresh's (`.artifacts/session/cr5-blink/list-fix2-*`,
+`cr5-gecko-20260919/list-5bf1104`, `cr5-webkit/list-*`, against `.artifacts/session/main-check-20260919`). No list
+case went from pass to fail in any browser or configuration, and every case that still fails is covered by a gap the
+rebuild reports. The sections below keep the numbers of before the round.
+
+**Main's true passes that the rebuild still fails** (this document's "facts to learn", by today's rows):
+
+| | No facts, before | No facts, after | Facts, before | Facts, after |
+|---|---:|---:|---:|---:|
+| Chrome | 344 | 344 | 78 | 78 |
+| Firefox | 202 | 76 | 95 | 72 |
+| Firefox, by the 09-17 triage classes | 164 | 68 | 87 | 64 |
+| webkit-host | 263 | 252 | 263 | 252 |
+| webkit-host, the 21 page-history cases set aside (12 of them true passes) | 251 | 240 | 251 | 240 |
+| All, no facts | 809 | 672 (660) | | |
+
+**List cases that still fail** (line count, breaks only):
+
+| | No facts, before | No facts, after | Facts, before | Facts, after |
+|---|---|---|---|---|
+| Chrome (1,194) | 466 (260, 206) | 451 (245, 206) | 174 (130, 44) | 159 (115, 44) |
+| Firefox (768) | 254 (238, 16) | 119 (113, 6) | 147 (138, 9) | 115 (109, 6) |
+| webkit-host (2,056) | 306 (135, 171) | 285 (118, 167) | 306 (135, 171) | 285 (118, 167) |
+| webkit-host, the 21 page-history cases set aside | 285 (116, 169) | 264 (99, 165) | 285 (116, 169) | 264 (99, 165) |
+
+webkit-host's two 285s are different cases. The round fixed 21 list cases, and the 21 page-history cases still fail
+in the list's long document.
+
+**Correction: 21 webkit-host cases are page history.** The 18 cases this document filed under "punctuation and Latin
+after another script" and the 3 "zero-width line" cases are not failures of the rebuild. WebKit keeps one break
+position cache per process. Its key is the text and the wrapping styles, without the direction or the font
+(TextBreakingPositionCache.h:37-52, TextBreakingPositionContext.h:61-80). In the list's 2,056-case run each of the 21
+comes after a case with the same key and the other direction, and gets that case's item ends. Run together in one
+fresh webkit-host process, 21 of 21 pass line count, breaks and widths, at the main-facts study's library and again at
+the round's (`.artifacts/session/main-facts-20260919/webkit/group2-alone`,
+`.artifacts/session/cr5-webkit/group2-alone-head`). Native line counts change on 19 of the 21 between the two
+documents, and main's recorded count equals the fresh one on 2. One of them, `c-7fcab2c1e2e0c85a`, sits in
+`heldout-suite-sample` and is history-dependent in the frozen ledger. 12 of the 21 are true passes of main and 9 are
+right counts with wrong breaks. They join the 1,320 set aside, and the known tail names them
+(`rebuild/tests/known-tail.json`, `webkit/page-history`). What that changes in webkit-host's numbers below, before the
+round: decided cases are 715, not 736 (430 pass both, 285 fail); facts to learn, wrong breaks and zero-width are 251,
+30 and 4, not 263, 39 and 4; of main's 180,602 passing line counts 0.158% still fail and 0.139% non-accidentally; the
+cause "Punctuation and Latin after another script, 12, 12" is 12 then and 0 now. The fifth webkit-host example,
+`c-49feb03a06bd4b90`, is one of the 21, and `page-history` does name its miss.
+
+**Why each remaining group stays.**
+
+- *Chrome, 344 (78 with facts).* Nothing moved among the true passes. The 15 cases that pass now are accidental passes
+  of main, "zero-width elsewhere": 24 to 9 without facts, 20 to 5 with them. They were the rebuild's own miss: the pair
+  window stopped at a cluster of an ignorable character and a mark. Of the 344, 245 ligature clusters and 54 U+2060
+  cases rest on two facts: which letters a glyph cluster covers, and which glyph of a kerned pair carries the
+  adjustment. Neither reaches anything Canvas returns. The round tried again on 26 kerning families and 31 Arabic
+  family names (probe blink-cr5 K and L): Blink keeps 16.16 advances and rounds no glyph, so the trick that works in
+  Firefox has nothing to read. The two supplied facts pass 255 of those 299, and 266 of the 344. 14 U+FFFC cases: Canvas
+  replaces the character. 12 Latin kerning and ligature cases: the same two facts. 10 joined letters at overflow:
+  positions inside a ligature nobody can see; a guard was traced on all 10 and fixes none. 9 script-context and
+  smaller pairs: not traced (`DESIGN.md` §5; `specs/blink-RESULTS.md`, "Correctness round 5").
+- *Firefox, 76 (72 with facts).* About 103 true passes went with pair placement asked of Canvas, which Gecko's app-unit
+  rounding allows, and 23 with the rule that U+200D at the start of a Canvas string takes the first font. 72 stay in
+  either configuration: contextual joined forms, mostly Amiri. The font swaps both glyphs when two letters meet, and
+  Canvas gives totals only, so no string isolates the first glyph in the form the word gives it. Main's passes there
+  were coincidences of width. The other 4 fail without facts only, all in Times New Roman (`1111({tail`, and `waffles`
+  under letter spacing three times): digits and `f` kern with none of the probe letters, so nothing proves which face
+  draws them and the port refuses to tell. That is the price of a guard against two faces under one declaration
+  (known tail `gecko/contextual-joined-forms`, `gecko/pair-same-face-refused`).
+- *webkit-host, 252, or 240 without the 12 page-history true passes.* 11 true passes went with the rule that a width's
+  font code path is the measured string's. All 240 that stay are letter-spacing ligature cases. 233 need the pair
+  kerning between two letters with ligature features off under letter spacing, which no Canvas string gives, because
+  WebKit's Canvas `letterSpacing` keeps the ligatures CSS turns off (`rebuild/platform-bugs/LEDGER.md`, entry 6). A
+  family the application declares again with the features off would make them exact; it is a new kind of fact and is
+  not built (`DESIGN.md` §5, `MAIN-FACTS-ANALYSIS.md`). The other 7 are what an unlanded measuring heuristic would
+  pass: it rests on what closed-source Core Text does around U+200C inside a run, and a probe has it 1.9px off.
+
 ## The independent check
 
 Independent check of the main comparison (2026-09-19)

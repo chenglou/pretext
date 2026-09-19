@@ -116,6 +116,79 @@ later rounds merged into. Knip is clean but for the four test helpers its config
   named files that have moved. Blink: 47 of 4,088 measured lines of the port never ran; Gecko 123 of 3,399; WebKit 111 of
   4,062. They go stale with every change to a port: `bun rebuild/tests/coverage-map.ts` makes them again in about a minute.
 
+**Since correctness round 5, 2026-09-19.** One owner per engine landed the fixes that close the gap with main's true
+passes where Canvas can settle them without supplied font facts, and a critic read the three branches, merged them in
+a scratch clone and ran a held-out probe of its own (research/CORRECTNESS-ROUND-5.md; DESIGN.md §4.4, §4.6, §4.7, §5).
+The fixes ask Canvas new questions and change gap lists, so tier 1 couldn't pass at the merge before a new recording.
+
+- *Tier 1 exits 1 or 4 at this merge, as accounted, until the references are recorded again.* On the three branches
+  merged together it reproduces every owner's numbers exactly (the critic's run, before its fix to Gecko's lazy scan,
+  which leaves the inspected path that tier 1 replays untouched). No line range changed in any case that replays.
+  - Chrome exits 1. 66,328 of 67,065 cases are the same per configuration. 569 cases without facts and 416 with them
+    ask a new question, 39 and 56 ask other questions, and 129 and 265 predictions changed: in gap lists (without
+    facts 329 `script-context` line entries and 3 paragraph entries fewer, 2 `unsafe-to-break` entries more) and in 2
+    `suite/cross-item` cases' cluster advances. Every touched case holds a cluster without a base, and every changed
+    case passes line count, breaks and widths with exact values in the ledger.
+  - webkit-host exits 1. 154 cases change in their gaps alone, in both configurations, by the
+    `control-character-width` condition (94 lines lose the gap, 58 keep it only through the whole item a carried width
+    comes from, 1 gains it, 1 line's first gap becomes the `page-history` that followed). 22,450 cases without facts
+    and 22,426 with them ask the same or fewer questions in another order, and 7,020 and 7,044 ask a box's space that
+    the record lacks. A questions-only freeze won't do, because gap lists changed: it needs a full recording, pack and
+    freeze with a reason, and the painter differential's frozen side bundled again.
+  - Firefox exits 4 with 0 predictions changed. Without facts 54,427 cases are the same and 9,344 ask a question the
+    record lacks (by the first missing question: 5,099 pair placement, 2,672 the suffix behind its letter, 1,573
+    U+00A0). With facts 57,767 are the same, 1,444 are repeats only and 4,560 ask a new question.
+  - The function set's plain and pure checks skip the cases that can't replay and pass on the rest, 0 fail (Chrome
+    66,496 and 66,649, Firefox 54,427 and 59,211, webkit-host 56,967 and 56,943). The painter differential exits 3 with
+    0 paintings differing. The sweep on the stand-in Canvas passes on every case (Chrome 67,065, Firefox 63,771,
+    webkit-host 63,987, no facts). The citation ledger loses nothing.
+- *What covers the cases that can't replay is the browser.* Each owner ran tier 2 in both orders and both
+  configurations in its browser: 0 transitions from a pass, exact values not worse, every gate lost 0
+  (`.artifacts/tests/runs/cr5-blink`, `cr5-webkit`, `cr5-gecko`; the critic ran Firefox without facts again on the
+  merged tree, `cr5-critic`). Chrome: 4 transitions per configuration, all on `c-bff5270008f33766`, from a failure to a
+  pass. webkit-host: 3 painter rows lose `control-character-width` from their cover, and nothing else moves. Firefox
+  without facts: 943 transitions; line count 14, breaks 42 and widths 142 go from a covered failure to pass, 41 widths
+  from unobserved to pass, differing predicted values 301 to 239, the gate lost 0 and gained 241. Firefox with facts:
+  453 transitions; line count 2, breaks 2 and widths 13 go to pass, the gate lost 0 and gained 19.
+- *The plain predictor's browser runs.* Chrome: 0 line ranges and 0 native observations differ on 67,065 cases.
+  webkit-host: 0 line ranges on 63,987 cases, and the same 3 history cases differ natively as at X1, X2 and X3.
+  Firefox: 0 line ranges on 63,771 cases in the owner's run. The plain predictor's run in Firefox is not stable in
+  `heldout-suite-sample` part 0: 7 native observations and 0 line ranges in one run, 74 and 7 in another, every one
+  history-dependent in the ledger. That browser process has two fallback-font states, and the critic's run landed in
+  the other one; all 7 cases whose line ranges moved replay offline, where the plain path equals the inspected path.
+- *Questions a paragraph since the round*, counted in the browser (DESIGN.md §4.7): webkit-host's plain path 36.51
+  without facts and 18.83 with them (39.32 and 21.65 before), its lab path 85.90 and 56.98; Firefox's plain path 55.07
+  without facts (54.56), its lab path 120.23 and 117.03 (114.54 and 115.70); Chrome's plain path 234.31, unchanged.
+  The numbers elsewhere in this section are of before the round.
+- *74 Firefox cases without facts, and 87 with them, read as going from history-dependent to pass in the both-orders
+  runs.* They belong to that same process (`heldout-suite-sample`), and the 74 are exactly the cases whose native
+  observations differ in the critic's plain run. A pass in one recording isn't stable, so the known tail names them
+  under `gecko/process-font-fallback-state` and they stay that class whatever a recording shows.
+- *What guards a plain paragraph's lines.* The function set's plain check, the sweep and the plain predictor's browser
+  run. None of them holds Gecko's lazy plain scan (DESIGN.md §4.6) on the shape the critic found, because no set case
+  has it: a ligature group that reaches past the frame's end and starts at a kerned or joined offset. That shape has a
+  unit test built from a constructed paragraph on a stand-in Canvas, `engines/gecko/lazy-scan.test.ts`: plain and
+  inspected lines over a sweep of 901 widths, which differed at 22 of them before the fix.
+- *New unit tests* (`bun test rebuild`: 831 tests in 61 files at the merge). Gecko, six in `engines/gecko/gecko.test.ts`
+  and the lazy scan's file: sides that add up only with the suffix behind its own first letter; a pair whose total only
+  one placement explains, the third placement (`Je`) among them; a probe pair tells for the pairs of its own face and
+  for no other; a plain scan asks where a pair's adjustment goes only where a fit test or an edge needs it, at widths
+  on both sides of a pair's share; a boundary U+00A0 measured as itself, once a text run; `paragraphGaps` hands out
+  copies. WebKit, three in `engines/webkit/lines.test.ts`: a pair after a combining mark of the same box is still
+  measured apart, a pair in a string with a complex-path character is left as Canvas shapes it, and a control in a
+  string without one reports as on the simple path. Blink, `engines/blink/pair-window.test.ts`: the window reaches past
+  a cluster of a default-ignorable character and a mark, as it does past the character alone.
+- *New probes* (measurement only): `rebuild/probes/gecko-mainfacts.ts` M1 to M5 (a kerned pair's placement from
+  app-unit rounding, U+200D at the start of a Canvas string, native lines beside the suite's widths, a boundary U+00A0
+  in 249 styles, a first font that draws only the digits) and `rebuild/probes/blink-cr5.ts` K, L and Z (pair placement
+  in 26 kerning families, lam-alef cluster membership in 31 Arabic family names, a cluster of an ignorable character
+  and a mark at overflow widths). WebKit added none: its bug already has a page (rebuild/platform-bugs/LEDGER.md,
+  entry 6).
+- *The rule registry* took the round's rules through `rule-changes.json` (§3), and `coverage.ts` lists no unknown
+  annotation. *The known tail* has 67 items and 783 named cases (lab README, "The known tail").
+
+All six references were recorded again and frozen at the correctness round 5 merge.
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
@@ -197,7 +270,7 @@ Terms:
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
 | `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/` | Tier 2 and its adopted seeds, `<browser>-<engine build>-<config>.json` with seed records |
-| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (63 items) |
+| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (67 items since correctness round 5) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/function-set.ts`, `stand-in-canvas.ts`; `rebuild/tests/coverage-map.ts`, `coverage-map.shard.ts`, `coverage-map/` | The function set's checks (plain, pure, sweep), and the lines of `rebuild/src` no replay runs, per engine |
 | `rebuild/tools/citations.ts`, `painter-diff.ts`, `twin-scan.ts`, `two-trees.ts` with `stand-in-canvas.ts` | The citation and prose ledger, the painter differential, the twin scan, and two checkouts on the same cases under a stand-in Canvas |
@@ -231,9 +304,9 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
 
 - `bun rebuild/tests/import-rules.ts` writes `rules.json` from the 2026-09-16 catalogue (399 rules) and `rule-changes.json`:
   - 31 rules removed, each with its replacement: the lab-visibility widths, the choices by score and the name keys the owners replaced, and at the re-architecture's last step the two rules of the measurer and its memo;
-  - 41 reclassified entries, 14 of them round 4's new names for tests renamed since the catalogue, and 1 round 4c's restatement of Gecko's tab width (tab-size is the text frame's own);
-  - 174 added, 3 of them with the Blink string storage fix and 2 at the re-architecture's last step; of the first 169: 44 from the owners' stage 1 reports, 55 for stage 5 (2026-09-17), 6 in ceiling round 2, 9 in ceiling round 3, 51 in round 4 (the runtime font checks 6, the Canvas checks 1, Blink 12, Gecko's round 3 rules 11 and round 4 rules 16, WebKit 2, scorer 6's observer assumptions 3) and 4 in round 4c (the port rules research/PREWRAP-RICH.md found: Blink 2, Gecko 1, WebKit 1);
-  - 542 rules are current: Blink 198, WebKit 156, Gecko 152, shared 36.
+  - 44 reclassified entries, 14 of them round 4's new names for tests renamed since the catalogue, 1 round 4c's restatement of Gecko's tab width (tab-size is the text frame's own), and 3 correctness round 5's restatements (WebKit's merged glyphs and `control-character-width`, which read the measured string's code path, and Blink's pair window, which reaches past marks too);
+  - 181 added, 3 of them with the Blink string storage fix, 2 at the re-architecture's last step and 7 in correctness round 5 (WebKit's `webkit/measure/code-path-per-measured-string`, annotated in source, and Gecko's `gecko/measure/joined-suffix-behind-its-letter`, `pair-placement-from-rounding`, `probe-pairs-per-context`, `same-face-by-kerning` and `boundary-nbsp-as-itself` with `gecko/lines/plain-scan-rough-candidates`, the port's own structure with no engine source); of the first 169: 44 from the owners' stage 1 reports, 55 for stage 5 (2026-09-17), 6 in ceiling round 2, 9 in ceiling round 3, 51 in round 4 (the runtime font checks 6, the Canvas checks 1, Blink 12, Gecko's round 3 rules 11 and round 4 rules 16, WebKit 2, scorer 6's observer assumptions 3) and 4 in round 4c (the port rules research/PREWRAP-RICH.md found: Blink 2, Gecko 1, WebKit 1);
+  - 549 rules are current: Blink 198, WebKit 157, Gecko 158, shared 36.
 - **Change rules in `rule-changes.json`, never in `rules.json`.** A `reclassified` entry replaces the fields it names (kind, statement, source, probes, tests, area, declaredBy) on any rule, from the catalogue or added; entries for one rule apply in order. Until ceiling round 3 the importer threw on a reclassified id that wasn't in the catalogue, so round 2's owners edited `rules.json` by hand, and a regeneration would have lost those edits.
 - **Hand edits aren't lost.** `rules.json` keeps a hash of every rule as generated (`generated`). On the next import a rule whose file version moved while `rule-changes.json` didn't is written into `rule-changes.json` (a reclassified entry with the fields that differ, or an added entry for a rule added by hand), and the importer says so. When both moved and disagree, a rule was deleted by hand, or a hand edit touches id, engine, status, replacedBy or audit, it stops, names the rule and writes nothing. `--check` writes nothing and exits 1 when either file would change. The first run moved round 2's hand edits over: 5 Gecko rules' statements, sources, probes and tests, and the 2 Gecko rules added by hand. A registry without hashes counts as hand-edited wherever it differs from the generation, so on that first run a fresh change to `rule-changes.json` looks like a hand edit of the old text; it happened with two entries, which were put right by hand.
 - `declaredBy` says where an id comes from:
@@ -242,7 +315,7 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
   - `provisional`, for 19 WebKit and Gecko replacements that the owner reports gave only as table rows;
   - `provisional (stage 5, feature families 2026-09-17)`, for the 55 stage 5 rules. They come from DESIGN.md §1.1, §2.9 and §8.3 stage 5 with the architect's citations; the engine owners confirm or rename them when they annotate the source.
 - The stage 5 rules are 17 Blink, 17 WebKit and 16 Gecko rules for box edges, per-element styles, atomic inlines, `<br>`, `<wbr>`, text-indent, text-align and line slots; 3 observation rules for `Element.getClientRects()`; and 2 observer assumptions (kind `observer assumption`): `shared/lab/vertical-centre-grouping` and `shared/lab/slot-rows`.
-- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all but 21 on 2026-09-19) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
+- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all but 21 of 549 on 2026-09-19) and annotations the registry doesn't know (none since correctness round 5 registered `webkit/measure/code-path-per-measured-string`). Once owners annotate, the registry is regenerated from the annotations.
 
 ## 4. Rule-targeted families
 
@@ -561,7 +634,7 @@ Ceiling round 3 gave each of round 2's six rules what it lacked (below the list)
 
 Round 2 added six rules, and none had a test, fact or family in that matrix: `blink/justify/cjk-ideograph-or-symbol`, `blink/measure/pair-kerning-from-fact`, `blink/shape/cluster-unit-grapheme`, `blink/shape/pair-window-whole-clusters`, `gecko/lines/in-word-advance-split-kerning` and `gecko/measure/lang-empty-locale-language`. Four more Gecko rules carry probe labels without a holding fact, since the round 2 probes (F7 to F12) aren't in the facts files: `gecko/gap/in-word-prefix`, `gecko/lines/in-word-advance-split-kerning`, `gecko/measure/range-in-script-context` and `gecko/script/latin-fast-path`.
 
-- Four of the six had a test all along. The registry names it as bun prints it, `describe block > test name`, and `coverage.ts` looked for that whole string in the file; it now finds each part (`testPresent`). 14 other test references were stale until round 4, which gave them the names the files hold now (`blink/lines/forced-break`, `blink/script/script-run-iterator`, four Gecko B2 and B4 entries, six shared entries): every test the registry lists is present. A name with an apostrophe is listed up to the apostrophe, because `testPresent` looks for the name in the source, where it is escaped.
+- Four of the six had a test all along. The registry names it as bun prints it, `describe block > test name`, and `coverage.ts` looked for that whole string in the file; it now finds each part (`testPresent`). 14 other test references were stale until round 4, which gave them the names the files hold now (`blink/lines/forced-break`, `blink/script/script-run-iterator`, four Gecko B2 and B4 entries, six shared entries): every test the registry lists is present. A name with an apostrophe is listed up to the apostrophe, because `testPresent` looks for the name in the source, where it is escaped; where two names share that beginning, the part after the apostrophe's clause is listed instead (correctness round 5's WebKit tests, "the code path is the measured string's: ...").
 - Families now name the rules they exercise: `in-word-breaks` (`AV` and `Wa` words in Arial, Hoefler Text and Times New Roman, fonts on both sides of the `pairKerning` fact) names `blink/measure/pair-kerning-from-fact` and `gecko/lines/in-word-advance-split-kerning`; `clusters` (Bengali conjuncts in Kohinoor Bangla) names `blink/shape/cluster-unit-grapheme`; `languages` (`lang=""`) names `gecko/measure/lang-empty-locale-language`.
 - Two families grew: `joining` has a `shy-mark` word, a kasra right after the soft hyphen, for `blink/shape/pair-window-whole-clusters` (96 to 128 paragraphs an engine), and `text-align` has an ideograph word in PingFang SC under `justify` and `start`, for `blink/justify/cjk-ideograph-or-symbol` (144 to 160).
 

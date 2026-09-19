@@ -189,6 +189,7 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 - **Pretext:** main measures letter-spaced text with `ctx.letterSpacing`, so ligature pairs under letter spacing come
   out too narrow in Safari. The rebuild adds spacing itself and reports such lines under its
   `letter-spacing-ligatures` gap: WebKit's Canvas has no way to measure the text without ligatures.
+- **Evidence from correctness round 5 (2026-09-19):** the rebuild as it is sets `ctx.letterSpacing` too, finds the pairs Canvas merges by a glyph count and measures them apart with U+200C where the string takes the simple path; what is left is the pair kerning between the separated letters, which no Canvas string gives (1,596 strings tried in 15 fonts), and 233 of main's passing cases fail in webkit-host for that alone, where a family declared again with liga, clig, dlig and hlig off equals the letter-spaced DOM bit for bit on 1,274 of 1,274 simple-path strings with a ligature pair; a fix would make the rebuild's context exact with no recipe (rebuild/DESIGN.md §5; rebuild/research/MAIN-FACTS-ANALYSIS.md).
 
 ## 7. Firefox: canvas `letterSpacing` separates joined Arabic letters
 
