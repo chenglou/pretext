@@ -152,12 +152,12 @@ export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedG
 // then the control's advance, then the text after it, and the pieces don't add up in the DOM's float32 order, so the line
 // reports control-character-width (probe R5: 46 of 48 VT and FF strings equal the pieces, 2 are a float32 step off). A CR
 // followed by more of the measured string always reports it: the adjustment on CR's own advance isn't observable.
-function isPiecedControl(c: number): boolean {
+export function isPiecedControl(c: number): boolean {
   return c === 0x0b || c === 0x0c || c === 0x0d
 }
 
 // Whether Canvas shows a pair adjustment around the control at `index` of `text`.
-function controlIsAdjusted(m: Measurer, context: number, text: string, index: number): boolean {
+export function controlIsAdjusted(m: Measurer, context: number, text: string, index: number): boolean {
   const before = index > 0 && !isPiecedControl(text.charCodeAt(index - 1)) ? text[index - 1]! : ''
   const after = index + 1 < text.length && !isPiecedControl(text.charCodeAt(index + 1)) ? text[index + 1]! : ''
   const standIn = text.charCodeAt(index) === 0x0d ? String.fromCharCode(0) : String.fromCharCode(1)
@@ -165,17 +165,6 @@ function controlIsAdjusted(m: Measurer, context: number, text: string, index: nu
   if (before !== '' && measureText(m, context, `${before} `) !== f32(measureText(m, context, before) + space)) return true
   if (before !== '' && after !== '' && measureText(m, context, before + standIn + after) !== f32(f32(measureText(m, context, before) + measureText(m, context, standIn)) + measureText(m, context, after))) return true
   return false
-}
-
-// Whether the width of a string holding VT, FF or CR is the DOM's own float32 sum (see above).
-export function controlsMeasureExactly(m: Measurer, context: number, text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    if (!isPiecedControl(c)) continue
-    if (c === 0x0d && i + 1 < text.length) return false
-    if (controlIsAdjusted(m, context, text, i)) return false
-  }
-  return true
 }
 
 // The Canvas width of a range the DOM measures: in a letter-spaced box the separated string where Canvas shows merged pairs,
@@ -218,11 +207,6 @@ export function singleSpaceWidth(m: Measurer, box: WebKitBox): number {
 // TextUtil::hyphenWidth (TextUtil.cpp:621-624): the hyphen string measured through the cascade.
 export function hyphenWidth(m: Measurer, box: WebKitBox): number {
   return Math.max(0, measureText(m, box.context, box.hyphen))
-}
-
-// Whether U+2010 and U+002D measure differently in the box's context: where FontFacts.mapsHyphen decides a width.
-export function hyphenGlyphsDiffer(m: Measurer, box: WebKitBox): boolean {
-  return measureText(m, box.context, '‐') !== measureText(m, box.context, '-')
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from
@@ -337,16 +321,6 @@ export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: n
     // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
     width = measureDomString(m, box, box.spacedContext, box.text.slice(from, end))
   }
-  if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
-  return Number.isNaN(width) ? 0 : Math.max(0, width)
-}
-
-// The width shortcut's answer for the same range, which a fixed-pitch primary font would give (test T1 of
-// specs/webkit-gaps.md §2.5): where it differs from boxWidth, FontFacts.monospace decides the width.
-export function fixedPitchShortcutWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, trailingSpace: boolean): number {
-  if (from === to) return 0
-  const end = measuredEnd(box, to, trailingSpace)
-  let width = fixedPitchWidth(p, m, box, from, end)
   if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)
 }

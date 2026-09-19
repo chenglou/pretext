@@ -442,7 +442,7 @@ describe('simplified measuring (probes webkit-round3 R1 and R2)', () => {
   })
 })
 
-describe('page history worlds (content.ts, "Page history")', () => {
+describe('page history worlds (gaps.ts, "Page history")', () => {
   test('ICU resolves a text without RTL characters at the paragraph level, so another paragraph gives an isolate its own level', () => {
     // `a` SHY LRI `b` PDI `c`: alone every level is 0; in a paragraph with an RTL character `b` is at level 2, so a box of the
     // same text there ends items at 3 and 4 (held-out c-7cc5e3e26ff7c30d).
@@ -463,6 +463,91 @@ describe('page history worlds (content.ts, "Page history")', () => {
 
   test('a text whose levels no context changes has no world', () => {
     expect(layout(paragraph([['aaa bbb ccc', 'text']], { width: 60 })).gaps).not.toContain('page-history')
+  })
+})
+
+describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
+  // Every fill result with its pieces, and what the paragraph asked of Canvas.
+  function walk(p: Sized, inspect: boolean, insets: Insets[] = []) {
+    const prepared = prepare(p, env, inspect)
+    const out: unknown[] = []
+    let row = 0
+    for (let start = firstLine(prepared); start !== null;) {
+      const inset = row < insets.length ? insets[row]! : { left: 0, right: 0 }
+      const filled = fillLine(prepared, start, { width: p.width, left: inset.left, right: inset.right })
+      switch (filled.kind) {
+        case 'below-floats':
+          out.push({ kind: filled.kind, next: filled.next })
+          row++
+          break
+        case 'line':
+          out.push({ start: filled.start, end: filled.end, next: filled.next, hasLineBox: filled.hasLineBox, pieces: linePieces(prepared, filled.line) })
+          if (filled.hasLineBox) row++
+          break
+      }
+      start = filled.next
+    }
+    const log = prepared.measurer.log
+    return { prepared, lines: out, fonts: log.contexts.map(context => context.font), asked: log.calls.map(call => `${log.contexts[call.context]!.font}|${call.text}`) }
+  }
+
+  test('a plain paragraph answers neither inspectLine nor paragraphGaps', () => {
+    const prepared = prepare(paragraph([['foo bar', 'text']], { width: 30 }), env, false)
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 30, left: 0, right: 0 })
+    expect(filled.line.gaps).toBeNull()
+    expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
+    expect(() => paragraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('the lines and pieces of a plain paragraph are the inspected paragraph\'s, from a subset of its Canvas questions', () => {
+    advance = c => c === 0x2010 ? 6 : c === 0x20 ? 4 : 8
+    const cases: Array<[Sized, Insets[]]> = [
+      [paragraph([['super\u00adcalifragilistic expialidocious', 'text']], { width: 45 }), []],
+      [paragraph([['aaa bbb ccc.', 'text']], { width: 84 }), []],
+      [paragraph([['a\u00ad\u2066b\u2069c', 'text']], { width: 45, overflowWrap: 'break-word' }), []],
+      [paragraph([['foo bar baz', 'text']], { width: 60, letterSpacing: 2, textAlign: 'justify' }), []],
+      [paragraph([['foo bar', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true }), []],
+      [paragraph([['abcdefghij klm', 'text']], { width: 40 }), [{ left: 30, right: 0 }]],
+    ]
+    for (const [p, insets] of cases) {
+      const inspected = walk(p, true, insets)
+      const plain = walk(p, false, insets)
+      expect(plain.lines).toEqual(inspected.lines)
+      for (const question of plain.asked) expect(inspected.asked).toContain(question)
+      expect(plain.asked.length).toBeLessThanOrEqual(inspected.asked.length)
+    }
+    advance = c => c === 0x20 ? 4 : 8
+  })
+
+  test('a plain paragraph asks nothing that only a gap reads: the other hyphen, LastResort beside the coverage test, a world\'s items', () => {
+    advance = c => c === 0x2010 ? 6 : c === 0x20 ? 4 : 8
+    const hyphenated = paragraph([['super\u00adcalifragilistic', 'text']], { width: 45 })
+    expect(walk(hyphenated, true).asked.filter(question => question.endsWith('|-')).length).toBe(1)
+    expect(walk(hyphenated, false).asked.filter(question => question.endsWith('|-')).length).toBe(0)
+    advance = c => c === 0x20 ? 4 : 8
+    const fixedPitch = paragraph([['foo bar', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true, primaryFamily: 'Menlo' })
+    expect(walk(fixedPitch, true).fonts.some(font => font.endsWith('px LastResort'))).toBe(true)
+    expect(walk(fixedPitch, false).fonts.some(font => font.endsWith('px LastResort'))).toBe(false)
+    const withWorlds = paragraph([['aaa bbb ccc.', 'text']], { width: 84 })
+    expect(walk(withWorlds, true).prepared.inspect!.worlds.length).toBeGreaterThan(0)
+    expect(walk(withWorlds, false).prepared.inspect).toBeNull()
+  })
+
+  test('reading a decided line twice, in either order, gives the same pieces, geometry and gaps', () => {
+    const p = paragraph([['aaa bbb ccc.', 'text']], { width: 84 })
+    const prepared = prepare(p, env, true)
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      if (filled.kind === 'line') {
+        const kept = JSON.stringify(filled.line)
+        const inspection = JSON.stringify(inspectLine(prepared, filled.line))
+        const pieces = JSON.stringify(linePieces(prepared, filled.line))
+        expect(JSON.stringify(linePieces(prepared, filled.line))).toBe(pieces)
+        expect(JSON.stringify(inspectLine(prepared, filled.line))).toBe(inspection)
+        expect(JSON.stringify(filled.line)).toBe(kept)
+      }
+      start = filled.next
+    }
   })
 })
 

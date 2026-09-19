@@ -69,14 +69,11 @@ export type WebKitBox = {
   // canTakeFixedPitchFastContentMeasuring: fixed pitch and a primary family other than Courier New (FontCoreText.cpp:776-784;
   // Safari hides user-installed fonts, so :784's attribute is never set for web content). The width shortcut.
   fixedPitchFastMeasuring: boolean
-  // FontFacts.monospace was null: laid out as variable pitch, with the fixed-pitch-path gap where test T1 fails.
-  monospaceUnknown: boolean
   // The primary family as a lowercase name, from FontFacts.primaryFamily or the first family listed.
   primaryFamily: string
   // hyphenString() (StyleComputedStyle.cpp:419-435): U+2010 when the primary font maps it, else U+002D. FontFacts.mapsHyphen
   // null lays out U+2010 and reports hyphen-glyph where the two measure differently.
   hyphen: string
-  hyphenUnknown: boolean
   // computedLocale after the Han swap; '' for a null locale (specs/webkit-text.md §4.1).
   locale: string
   // Canvas contexts: the run's font with its letter spacing and no word spacing (JS adds word spacing as WidthIterator
@@ -98,44 +95,15 @@ export type WebKitBox = {
   cssLetterSpacing: number
   // InlineTextBox::hasStrongDirectionalityContent (TextUtil.cpp:486-576).
   hasStrongDirectionality: boolean
-  // The code points the primary-font coverage test found as wide as LastResort's box, where it can't tell (gap font-fallback).
-  unverifiedCoverage: number[]
-  // FontFacts.primaryFamily was null: the first listed family stands in for the realized one, which the Courier New test of the
-  // width shortcut reads (gap fixed-pitch-path where the shortcut decides a width).
-  primaryFamilyUnknown: boolean
   // The listed families that realize, in list order, each with the code points it draws and the ones its liga, clig, dlig
   // and hlig lookups can act on (ListedFontFacts.coverage and spacingInputs); null where the declaration's facts don't give
   // both for every family that may realize (measure.ts mergedGlyphs).
   spacingFacts: ReadonlyArray<{ coverage: readonly number[]; inputs: readonly number[] }> | null
-  // FontFacts.pairKerning was null: whether the font's tables put a pair adjustment on the pair's second glyph isn't given,
-  // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
-  pairKerningUnknown: boolean
   // The font-family list Canvas is given: the declared list with each generic keyword the locale resolves to a family of its
   // own named (fonts.ts), and the script's standard family appended where no listed family resolves. `firstNamedGeneric` is
   // the index of the first family named that way, or -1.
   canvasFamily: string
   firstNamedGeneric: number
-  // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts beyond that (gap canvas-language; content.ts
-  // collectBoxFacts). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
-  // before the first one below, followed by LastResort, against `lastResortContext`, LastResort alone):
-  // - `unknownFamily`: the list holds a family the locale resolves in a way Canvas can't be given (a system design, or
-  //   -webkit-standard under USCRIPT_HAN without the preferred languages);
-  // - `namedGeneric`: the list holds a generic named for Canvas, which concerns a character with default emoji presentation,
-  //   since the DOM skips a generic family's outline glyph for it.
-  // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (content.ts
-  // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
-  // the Canvas list followed by LastResort). null: none of these.
-  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean } | null
-  namedContext: number
-  listContext: number
-  lastResortContext: number
-  // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
-  // locale, which isn't given (gap ui-language).
-  hanLocaleUnknown: boolean
-  quoteLocaleUnknown: boolean
-  // The engine ranges of dictionary text that start with a combining mark, [start, end) in box offsets (gap
-  // dictionary-breaks-stand-in).
-  dictionaryRangesStartingWithMark: Array<[number, number]>
 }
 
 // InlineTextItem (InlineTextItem.h). `level` is UBIDI_DEFAULT_LTR (254) when bidi didn't run.
@@ -185,18 +153,61 @@ export type WebKitPrepared = {
   // The text of every leaf, by run.
   runTexts: string[]
   items: WebKitItem[]
-  gaps: Gap[]
-  // The paragraph as it lays out where the break position cache hands one of its boxes another item list (content.ts, "Page
-  // history"). Empty in a world.
-  historyWorlds: WebKitHistoryWorld[]
   // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
   // (measure/canvas.ts). A world shares its paragraph's.
   measurer: Measurer
-  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
-  inspect: boolean
+  // What the paragraph keeps only for inspectLine and paragraphGaps; null on a paragraph prepared plain, which computes no
+  // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts). Nothing else says which of the
+  // two a paragraph is.
+  inspect: WebKitInspect | null
+}
+
+export type WebKitInspect = {
+  // The paragraph's gaps: conditions of the environment alone (gaps.ts inspectParagraph).
+  gaps: Gap[]
+  // Per box, in box order, what only gaps read of it.
+  boxes: WebKitBoxInspect[]
+  // The paragraph as it lays out where the break position cache hands one of its boxes another item list (gaps.ts, "Page
+  // history"). Empty in a world.
+  worlds: WebKitHistoryWorld[]
+}
+
+// The facts of a box that decide no line and that the gaps of the lines measuring it read (gaps.ts).
+export type WebKitBoxInspect = {
+  // FontFacts.monospace was null: laid out as variable pitch, with the fixed-pitch-path gap where test T1 fails.
+  monospaceUnknown: boolean
+  // FontFacts.mapsHyphen was null (WebKitBox.hyphen).
+  hyphenUnknown: boolean
+  // The code points the primary-font coverage test found as wide as LastResort's box, where it can't tell (gap font-fallback).
+  unverifiedCoverage: number[]
+  // FontFacts.primaryFamily was null: the first listed family stands in for the realized one, which the Courier New test of the
+  // width shortcut reads (gap fixed-pitch-path where the shortcut decides a width).
+  primaryFamilyUnknown: boolean
+  // FontFacts.pairKerning was null: whether the font's tables put a pair adjustment on the pair's second glyph isn't given,
+  // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
+  pairKerningUnknown: boolean
+  // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts beyond that (gap canvas-language; gaps.ts
+  // collectBoxFacts). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
+  // before the first one below, followed by LastResort, against `lastResortContext`, LastResort alone):
+  // - `unknownFamily`: the list holds a family the locale resolves in a way Canvas can't be given (a system design, or
+  //   -webkit-standard under USCRIPT_HAN without the preferred languages);
+  // - `namedGeneric`: the list holds a generic named for Canvas, which concerns a character with default emoji presentation,
+  //   since the DOM skips a generic family's outline glyph for it.
+  // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (gaps.ts
+  // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
+  // the Canvas list followed by LastResort). null: none of these.
+  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean; namedContext: number; listContext: number; lastResortContext: number } | null
+  // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
+  // locale, which isn't given (gap ui-language).
+  hanLocaleUnknown: boolean
+  quoteLocaleUnknown: boolean
+  // The engine ranges of dictionary text that start with a combining mark, [start, end) in box offsets (gap
+  // dictionary-breaks-stand-in).
+  dictionaryRangesStartingWithMark: Array<[number, number]>
 }
 
 // A history world: the prepared paragraph with `box` built from a cached list. `itemIndex` maps each of the paragraph's own
 // item indices to the world's item that holds the own item's start, and `changed` marks the own items the world splits,
-// merges or flags otherwise.
+// merges or flags otherwise. A world is an inspected paragraph without worlds of its own, so its lines are filled and
+// inspected by the functions that fill and inspect the paragraph's.
 export type WebKitHistoryWorld = { prepared: WebKitPrepared; box: number; itemIndex: number[]; changed: boolean[] }
