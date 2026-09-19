@@ -10,7 +10,13 @@
 // so tier 1 can't see a twin change hands; this scan says which cases ask a two-byte slice, so they are in the sets tier
 // 2 runs, and whether any context is asked both.
 //
-//   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N]
+//   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N] [--page]
+//
+// --page scans a case file as one page that keeps one measurer (lab/baselines/page-measurer-predictor.ts): every case of
+// the file shares its Canvas contexts with the ones before it, whatever their page language, so a twin is one run of
+// characters any two cases of the file ask one context in both storages. It is listed under the case that asked the
+// second storage. With per-paragraph contexts the partition by storage had to hold inside a paragraph; with a page's it
+// has to hold across paragraphs (research/PROFILING-START.md, item 1).
 //
 // It works on a scratch copy of the tree's rebuild/src and rebuild/lab with one line added to measure16, after its
 // raw16Of call, which notes the context, the string and canvasString's `twoByte`. The anchor is that call's text: the scan
@@ -37,6 +43,7 @@ const SHAPE = 'rebuild/src/engines/blink/shape.ts'
 const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)'
 // The port holds its contexts by reference; a context's place in the paragraph's list names it here.
 const TAP = '  ;(globalThis as { twinScan?: Array<[number, string, boolean]> }).twinScan?.push([p.canvases.indexOf(context), cs.s, cs.twoByte])'
+const PAGE_PREDICTOR = 'rebuild/lab/baselines/page-measurer-predictor.ts'
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
 const ENV: PredictEnv = { browser: 'chrome', build: '153.0.8010.50', languages: { engine: 'blink', uiLanguage: 'zh-CN' } }
 
@@ -46,13 +53,15 @@ type Twin = { context: number; text: string; first: 'one-byte' | 'two-byte'; ask
 type Report = { format: 'pretext-twin-scan/1'; tree: string; cases: number; withTwoByteSlice: number; withTwin: number; slices: Array<{ id: string; family: string; strings: string[] }>; twins: Array<{ id: string; family: string; twins: Twin[] }> }
 
 const options = new Map<string, string>()
+const page = process.argv.includes('--page')
 for (const raw of process.argv.slice(2)) {
+  if (raw === '--page') continue
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
   if (match === null) throw new Error(`Unknown argument ${raw}`)
   options.set(match[1]!, match[2]!)
 }
 const files = options.get('cases')?.split(',')
-if (files === undefined) throw new Error('Usage: bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N]')
+if (files === undefined) throw new Error('Usage: bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N] [--page]')
 
 const tree = options.get('tree') ?? REPO
 const report: Report = { format: 'pretext-twin-scan/1', tree, cases: 0, withTwoByteSlice: 0, withTwin: 0, slices: [], twins: [] }
@@ -91,7 +100,7 @@ else {
   for (let w = 0; w < Math.min(jobs, files.length); w++) workers.push((async () => {
     while (next < order.length) {
       const i = order[next++]!
-      const code = await withCore(false, () => Bun.spawn(['bun', import.meta.path, `--cases=${files[i]!}`, `--scratch=${scratch}`, `--out=${join(scratch, `report-${i}.json`)}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited)
+      const code = await withCore(false, () => Bun.spawn(['bun', import.meta.path, `--cases=${files[i]!}`, `--scratch=${scratch}`, `--out=${join(scratch, `report-${i}.json`)}`, ...(page ? ['--page'] : [])], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited)
       if (code !== 0) failed.push(files[i]!)
     }
   })())
@@ -110,16 +119,19 @@ else {
   }
 }
 execFileSync('trash', [scratch])
-console.log(`[twin-scan] ${report.cases} cases: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
+console.log(`[twin-scan] ${report.cases} cases${page ? ', a file one page with one measurer' : ''}: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
 for (const entry of report.twins.slice(0, 12)) console.log(`  ${entry.id} ${entry.family}: ${entry.twins.map(twin => `${JSON.stringify(twin.text)} on context ${twin.context}, ${twin.first} first, ${twin.asks} asks`).join('; ')}`)
 const out = options.get('out')
 if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(report, null, 1)}\n`)
 
 // The files' cases through the scratch copy's Chrome predictor, into `report`.
 async function scan(scratch: string, files: readonly string[]): Promise<void> {
-  const predictor = await import(join(scratch, PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
+  const predictor = await import(join(scratch, page ? PAGE_PREDICTOR : PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
   const asked: Array<[number, string, boolean]> = []
   ;(globalThis as { twinScan?: typeof asked }).twinScan = asked
+  // Per context and string: the storages asked, in order. A case's own, or with --page the process's, whose predictor keeps
+  // one measurer, so a context's place in its list names it across cases.
+  let byQuestion = new Map<string, { context: number; text: string; storages: boolean[] }>()
   for (const file of files) for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
     if (line === '' || report.cases >= limit) continue
     const c = JSON.parse(line) as Case
@@ -131,9 +143,10 @@ async function scan(scratch: string, files: readonly string[]): Promise<void> {
     } finally {
       standIn.restore()
     }
-    // Per context and string: the storages asked, in order.
-    const byQuestion = new Map<string, { context: number; text: string; storages: boolean[] }>()
+    if (!page) byQuestion = new Map()
     const sliced = new Set<string>()
+    // The questions whose second storage this case asked first: a twin is listed once.
+    const found: Array<{ context: number; text: string; storages: boolean[] }> = []
     for (let i = 0; i < asked.length; i++) {
       const [context, text, twoByte] = asked[i]!
       // Only a Latin-1-only string has a one-byte spelling.
@@ -141,16 +154,17 @@ async function scan(scratch: string, files: readonly string[]): Promise<void> {
       if (twoByte) sliced.add(text)
       const key = `${context}\n${text}`
       const entry = byQuestion.get(key)
-      if (entry === undefined) byQuestion.set(key, { context, text, storages: [twoByte] })
-      else entry.storages.push(twoByte)
+      if (entry === undefined) {
+        byQuestion.set(key, { context, text, storages: [twoByte] })
+        continue
+      }
+      if (!entry.storages.includes(twoByte)) found.push(entry)
+      entry.storages.push(twoByte)
     }
+    const twins: Twin[] = found.map(entry => ({ context: entry.context, text: entry.text, first: entry.storages[0]! ? 'two-byte' : 'one-byte', asks: entry.storages.length }))
     if (sliced.size > 0) {
       report.withTwoByteSlice++
       report.slices.push({ id: c.id, family: c.family, strings: [...sliced] })
-    }
-    const twins: Twin[] = []
-    for (const entry of byQuestion.values()) {
-      if (entry.storages.includes(true) && entry.storages.includes(false)) twins.push({ context: entry.context, text: entry.text, first: entry.storages[0]! ? 'two-byte' : 'one-byte', asks: entry.storages.length })
     }
     if (twins.length > 0) {
       report.withTwin++
