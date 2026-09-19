@@ -151,7 +151,10 @@ export type BlinkPrepared = {
   // Per style, its iterator settings.
   settings: IteratorSettings[]
   groups: BlinkGroup[]
+  // Per style, the contexts its strings are measured on, and in a segmented paragraph the contexts of its one-byte
+  // strings, undefined until one is asked (shape.ts contextsOf).
   contexts: StyleContexts[]
+  oneByteContexts: (StyleContexts | undefined)[]
   bidiEnabled: boolean
   baseLevel: number
   // Extended grapheme cluster boundaries over text_content (flags per offset, the end included).

@@ -1386,6 +1386,7 @@ export const blinkEngine = {
       fontRun: new Int16Array(text.length).fill(-1),
       groupOfUnit: new Int32Array(text.length).fill(-1),
       wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
+      oneByteContexts: styles.map(() => undefined),
       canvasSplitsWords: styles.map(() => undefined),
       hanKerning: styles.map(() => null),
       textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign),

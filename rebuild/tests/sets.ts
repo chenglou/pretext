@@ -52,6 +52,9 @@ export const SETS: readonly TestSet[] = [
   // White-space: pre-wrap in rich inline content (lab/cases/rich-prewrap.ts, research/PREWRAP-RICH.md): the only set that
   // reaches tab-size on a span, and justify beside a preserved newline or beside preserved spaces across a box end.
   one('rich-prewrap', 'development', `${A}/lab/cases/rich-prewrap.ndjson`),
+  // One run of 13 or more brackets after Latin and after Arabic in one Amiri style (lab/cases/twins.ts): the only set where
+  // the Blink port asks the same characters as a one-byte and as a two-byte string in one paragraph (tools/twin-scan.ts).
+  one('twins', 'development', `${A}/lab/cases/twins.ndjson`, ['chrome']),
   { name: 'suite-sample', group: 'development', parts: [0, 1, 2, 3].map(k => `${A}/lab/final-20260916/cases/suite-sample-part${k}.ndjson`), runArgs: [], browsers: ALL },
   one('families', 'families', `${DERIVED}/{browser}/families/final/family-cases.ndjson`),
   one('features', 'families', `${DERIVED}/{browser}/features/final/family-cases.ndjson`),

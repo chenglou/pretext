@@ -16,6 +16,172 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## String storage
+
+Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, after the correctness line, from the worktree branch `rx-blink-storage`
+on 32e2a1e (the line's library). A correctness change on the line's architecture, made before the re-architecture takes the
+string memo out (research/ARCHITECTURE-PLAN-2.md X2), so that taking it out moves nothing. Probe `blink-storage` (S1 to S5,
+`rebuild/probes/blink-storage.ts`, `.artifacts/probes/blink/storage`; 85 facts in `rebuild/facts/blink/153.0.8010.50.ndjson`,
+rerun per release by `rebuild/tests/rerun-probes.sh`; S6 and its 2 facts are the alternative's). Runs: `.artifacts/tests/runs/rx-blink-storage/`. V8 is read at
+`~/github/browser-engines/v8-153` (6b96683d, Chrome 153's); files the sparse 153 checkout lacks (`platform/bindings`,
+`core/html/parser`) are read from the pinned commit's objects (`git show 153.0.8010.48:<path>`).
+
+### The mechanism
+
+Blink takes a script's string as an 8-bit WTF string when V8 holds it in one byte (`v8::String::IsOneByte`, which reads the
+representation and not the characters, api.cc:5937-5939; to_blink_string.cc:216-227, :224), Canvas shapes an 8-bit string
+as one Latin segment and runs RunSegmenter over a 16-bit one (harfbuzz_shaper.cc:1072-1101), and the port makes a
+Latin-1-only string two-byte, where the paragraph shapes the range under another script, by slicing 13 units or more out
+of a two-byte string (`canvasString`). At the line that slice never reached Canvas as two-byte:
+
+- **V8 internalizes a string used as a key**, and an internalized string is one-byte whenever its units fit. `Map` and
+  `Set` lookups call `Runtime::kInternalizeString` on a string key that isn't internalized yet
+  (builtins-collections-gen.cc:2590-2604) and compare keys by pointer afterwards (:1225-1236). `StringTable::LookupString`
+  hashes the string, notes whether every unit fits one byte, and either finds the internalized string of the same
+  characters, whatever its storage, or makes one: a one-byte copy when the units fit, even from a two-byte source
+  (string-table.cc:398-427; factory.cc:1239-1257, and :1293-1300 forces the copy where an in-place transition would keep
+  two bytes). The looked-up string then becomes a ThinString whose map follows the internalized string's representation
+  (string-table.cc:426-428; string.cc:164-166), so `IsOneByte` answers true for it from then on.
+- `measure/canvas.ts` looked every string up in its memo before it asked Canvas. S1: Amiri's 13 brackets at 48px measure
+  285.79193115234375 as the two-byte slice and 159.119873046875 after any keyed use of that string (`Map` get, has, set
+  and delete, `Set` has and add, a property read or write, `in`, `Object.hasOwn`, `Symbol.for`), also when Canvas had taken
+  the string once before and when no literal of the page spells its characters. Nothing else changes it: reading units,
+  comparing, searching, a regular expression, iterating, holding it in an array, as a property value or as a `Map` value,
+  `JSON.stringify`, `localeCompare`, `Intl.Segmenter`, measuring it, six million short-lived objects in between. Lookups of other strings
+  that hold its characters (`'2' + s`, `s + '\0'`, a one-byte twin) leave it alone: only the object looked up changes.
+- **Which strings V8 holds in two bytes though their units fit one** (S2): a `slice`, `substring`, `split` part or regular
+  expression match of 13 units or more out of a two-byte string (SlicedString::kMinLength; 12 units are copied into one
+  byte), a slice of such a slice, and what concatenation, a template, `join`, `normalize`, `toLowerCase`, `replace` or
+  `padEnd` make of one; a cons string of two such slices, which flattening leaves two-byte (string-inl.h:884-896). One-byte: literals, `String.fromCharCode`, concatenations of one-byte strings and of short slices,
+  a `join` of single characters, `JSON.parse` of a one-byte, a two-byte or an escaped source, `TextDecoder` of ASCII. The
+  text read back from a text node measures as one byte even when the node keeps 16 bits (`data`, `nodeValue`,
+  `textContent`, `substringData`); v8_value_cache.cc makes an external two-byte string there, so this one isn't explained
+  from source and is kept as a supplementary fact.
+- **One canvas keeps the first shaping.** `FrameShapeCache` keeps a node per whole string and a shape result per Canvas
+  word under the characters and the direction, whatever the storage (frame_shape_cache.cc:45-65, :135-149;
+  plain_text_node.cc:400-412). S3: on one canvas the brackets answer 159.12, 159.12, 159.12 when the one-byte string is
+  asked first and 285.79 three times when the two-byte one is; two canvases of equal settings share nothing. The word level
+  is read from source alone: Amiri is shaped whole (its lookups hold the space glyph, plain_text_node.cc:377-383), and none
+  of Noto Naskh Arabic, Geeza Pro, Times New Roman and Arial shapes five brackets differently as Latin and as Common.
+
+### Which storage the DOM has
+
+- A text node keeps the string it was given (character_data.h:70-89). Script hands it V8's representation
+  (`createTextNode`, `textContent`, `append`, `data`, `appendData`), so S4's 13 brackets are shaped as Latin from a one-byte
+  string, as Common from a two-byte slice, and as Latin again from that slice after a `Map` lookup. `deleteData` and
+  `splitText` keep a node's 16 bits.
+- The HTML parser makes 8-bit text when every character of the text is at most U+00FF, whatever the markup string's storage
+  (`UCharLiteralBuffer::AsString`, literal_buffer.h:306-321; atomic_html_token.h:236-238; the pending text's StringBuilder,
+  html_construction_site.cc:392-455): `innerHTML` of a two-byte slice is shaped as Latin.
+- A paragraph counts 16-bit content by storage: `AppendTransformedString` sets `has_non_orc_16bit_` when the appended text's
+  string is 16-bit, whatever its characters (inline_items_builder.cc:725), where characters appended one at a time count by
+  value, U+FFFC excepted (:216-218, :1258, :1343). With the flag, or bidi, `SegmentScriptRuns` runs RunSegmenter over the
+  whole text_content (inline_node.cc:1256-1290). S4: the brackets' one-byte node is segmented beside a two-byte sibling of
+  13 full stops, beside a sibling that holds U+2014, and beside a text node that holds U+FFFC alone; it is one Latin segment
+  beside a one-byte sibling and beside an inline-block. `StringBuilder::Append` keeps text_content 8-bit for a one-character
+  Latin-1 view of a 16-bit string (string_builder.cc:298-302), which the flag doesn't read.
+- A block laid out again with an equal text_content keeps its earlier segments whatever the storage
+  (inline_node.cc:1231-1254): S4's first version reused one block and read the previous way's script every time.
+- **The lab's nodes** are `createTextNode` of strings `JSON.parse` made, so they are 8-bit exactly when their characters fit,
+  which is the port's rule (`is8Bit`, `hasNonOrc16Bit` by characters). The rule was wrong in one place: a text node that
+  holds U+FFFC is 16-bit content, and the port excepted every U+FFFC, the atomic inlines' and the text's.
+- **An application's nodes** follow its strings. A paragraph cut out of a larger two-byte string (a Markdown source with
+  one emoji in it, split at newlines) is a two-byte string from 13 units on, and its text node is 16-bit though its
+  characters are Latin-1. No script can read a string's storage, so the port can't know; CHARTER.md "known deviations".
+  The library's painter builds its text from single characters, which gives one byte whenever the units fit.
+
+### The change
+
+1. `measure/canvas.ts`: the memo's key is `'|' + text`, another string object, and the measured string is never a key
+   (`blink/measure/string-reaches-canvas-as-built`). `src/measure/canvas.test.ts` watches every `Map` and `Set` key while
+   `measureText` runs; S5 runs the library's own bundled module in Chrome.
+2. `engines/blink/shape.ts` `contextsOf`: a segmented paragraph measures its one-byte strings on contexts of their own
+   (partition `8bit`, made when the first one is asked), the two-byte ones on the paragraph's (`16bit`). No canvas is
+   asked a string or a word in both storages, so the order of questions can't change an answer
+   (`blink/measure/contexts-per-storage`). An unsegmented paragraph keeps one set: its strings are two-byte by their
+   characters alone, and Canvas cuts no words from them (no U+0020, TAB, U+FFFC or CJK character; a shaping group ends at
+   an atomic inline). The hyphen goes by its string (U+2010 two-byte, U+002D one-byte, as the DOM's hyphen strings are),
+   the tab's space is one-byte. A context costs 5 µs in Chrome, so the four more of such a paragraph cost 20 µs.
+3. `engines/blink/content.ts`: a leaf whose text holds a unit above U+00FF is 16-bit content, U+FFFC included
+   (`blink/script/single-latin-segment`, restated).
+
+S5, the library's answers for the brackets after an Arabic word and after a Latin one in one style, in both orders:
+285.79 on the `16bit` context and 159.12 on the `8bit` one. Planted: the memo keyed by the text gives 159.12 on both; one
+set of contexts gives whichever was asked first on both.
+
+### What moved
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 788 pass (5 new: `measure/canvas.test.ts` 2, `lines.test.ts` "blink string storage" 3) |
+| tier 1, Firefox and webkit-host, both configurations | every case the same |
+| tier 1, Chrome, both configurations | 0 predictions changed; 37,253 of 66,685 cases ask other questions, each by more contexts alone (a segmented paragraph's one-byte set: 4 to 8, 12 to 16); 49 cases of `suite/U+FFFC/*` ask a new question (`a` U+2060 `b`: their paragraph is segmented now, so a default ignorable stays in the string) |
+| tier 2, Chrome, both orders, recorded, no facts | 66,685 cases compared, 41 transitions, none from a pass; differing predicted values 266 to 266, rect counts 992 to 992; exit 0 |
+| tier 2, with facts | 44 transitions, none from a pass; differing predicted values 549 to 552; exit 1 on the 3 cases below |
+| the `twins` set (380 cases, new), against the line's library run the same way | lineCount 320 to 346 passing, breaks 278 to 335, widths 131 to 267, painter 133 to 259, exact 284 to 335; differing predicted values 117 to 30 without facts and 445 to 32 with; passing cases that hold a wrong predicted value 0 |
+| memo off, planted on this branch, `twins` in Chrome, both orders and configurations | 0 of 380 layouts, expected rects and painter limits differ (at the line 254 of 380 moved) |
+| group order reversed, planted, `twins` with facts | 0 line ends and 0 expected rects differ; gap order in 60 |
+| `tools/twin-scan.ts` on `twins` | 281 cases ask a two-byte slice, 0 ask one context both storages (166 at the line) |
+
+**The 44 transitions on the frozen sets** are all in the 49 `suite/U+FFFC/*` cases: `soft-hyphen-shaping` leaves the
+covering conditions of failures that `font-fallback` covers, since a segmented paragraph keeps its default ignorables as
+U+2060. In 3 of them (`c-5deba5ed817d3b59`, `c-6f6776f10f18af33`, `c-8aeaebe3fe97e39d`: `a` SHY `b` U+FFFC in Arial at a
+width the fallback font's 16px U+FFFC overflows) the x of U+FFFC was limited by that condition and is reported as predicted
+now, 17.80 on line 0 where the browser wraps it to x 0: the class of known-tail item "the x after a fallback-font cluster
+(U+FFFC) reported as predicted", in cases whose lineCount fails under `font-fallback`.
+
+**Every answer the fix changed is right.** Traced on `twins` with facts, forward order, by replaying each case with a tap in
+`measure16`: 475 Canvas answers differ between the two libraries, all of them two-byte slices, and each equals the native
+width of its range now and didn't before. What stays wrong is one class, in both libraries: a Latin-script range that
+holds a space is measured as a two-byte string, because U+2028 stands for the space, and Canvas resolves its
+script-neutral characters as Common over the string alone where the paragraph shapes them as Latin (`script-context`
+names it: harfbuzz_shaper.cc:1080-1101 against plain_text_node.cc:372-425). That is 2,420 of the 47,500 answers without
+an Arabic letter; the other 45,100 equal the native width of their range.
+
+**The 36 cases that lose a pass** (17 lineCount, 9 breaks, 20 widths, 20 painter; 32 `twins/rtl-block`, 2 `latin-first`, 2
+`spans`) all hold both runs of brackets, and at the line both were measured wrong by the same amount in opposite
+directions: the run under Latin as Common, 126.67px too wide at 48px, and the run under Arabic as Latin, 126.67px too
+narrow. `c-49e864d0751621ba` (RTL block, one line): the line's width was 45,310 LayoutUnits, the browser's, as a sum of two
+wrong runs; it is 53,417 now, with the Arabic run right. `c-0aaf6ad5c7daf6da`: six native lines; the line's library split
+the wrong run and kept the other whole, six lines; now the Arabic run splits as the browser's does and the Latin run
+still splits, seven. Every such failure is covered by `script-context`, and every wrong answer left in these cases lies in
+a range that condition reports.
+
+### The alternative: spaces stay in a Latin range of script-neutral characters
+
+Branch `rx-blink-storage-latin-space`, stacked on the fix (`blink/measure/spaces-stay-in-neutral-latin-range`;
+`shape.ts` `spacesStay`). The class the fix leaves is a recipe's, not a storage's: U+2028 stands for every space so that
+Canvas keeps a string in one piece, and it makes the string 16-bit. For a range the paragraph shapes as Latin that holds a
+space, a character beside white space and no character with a script of its own, RunSegmenter then resolves everything as
+Common over the string alone. In a font Canvas shapes whole (`canvasSplitsWords` false: the font's kerning or ligature
+lookups hold the space glyph, font_fallback_list.cc:264-286) the 8-bit string with U+0020 itself is one item shaped as one
+Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), which is the paragraph's own shaping: its
+characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would cut the string there
+(:387-399), and keeps `script-context`. A range with a letter resolves to Latin either way, and white space alone is no
+script's, as `hasScriptNeutral` already takes it. Probe S6: brackets, a space and brackets in Amiri at 48px are
+136.421875px in the DOM, 136.41599 as the 8-bit string with U+0020 at the zoomed size, and 233.86 with U+2028.
+
+| Check, against the fix | Result |
+|---|---|
+| `bun test rebuild` | 789 pass (1 new) |
+| tier 1, Chrome | 0 predictions changed; 4,693 cases ask a new question (the 49 above, and the ranges that keep their spaces with the word split probe they ask first) |
+| tier 2, both orders, recorded, both configurations | outside `twins` no status and no exact-value status differs from the fix's run in any of 66,685 cases; differing predicted values 266 and 552, as the fix |
+| `twins` | lineCount, breaks and widths 380 of 380 (from 346, 335 and 267), exact 380 of 380 with 0 differing predicted values and 0 differing rect counts; painter 353 pass, 25 covered, 2 open |
+
+The 36 cases that lose a pass under the fix all pass here. The 2 open painter rows (`c-0aaf6ad5c7daf6da`,
+`c-48abe81f791883d3`, RTL block) are lines whose prediction now passes and whose painted line wraps without a painter
+limit: the painted line shapes its brackets otherwise than the paragraph did, which the failing prediction's conditions
+covered before. Without the word-split narrowing to ranges with a character beside white space, 34,087 cases ask a new
+question (every lone space asks the probe), with the same statuses. Runs: `.artifacts/tests/runs/rx-blink-storage/
+alt-latin-space-narrow` (and `alt-latin-space`, the wider first version).
+
+### Open
+
+- The painter builds a fragment's text from single characters, one byte when the units fit, but `paintedText(fragment).slice`
+  of a fragment that holds a wide character elsewhere makes a two-byte text node from 13 units on (paint.ts, the prefix
+  cut), which Blink segments where `blinkScriptsOf` takes one Latin segment. No tier case reaches it.
+- Text read back from a 16-bit node measures as one byte (S2), unexplained from source.
+
 ## Round 4c
 
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18: the two Blink rules research/PREWRAP-RICH.md found. The baseline is the

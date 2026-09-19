@@ -355,7 +355,7 @@ JS width       = float64(measure_width)
 - `UniqueFontSelector` keeps `Font` objects per description, so reassigning the same font string finds the same `Font` and the same caches (`unique_font_selector.cc:58-84`).
 
 **Mechanisms that make one measurement depend on earlier ones** (all [V code, I effect])
-1. **Script context.** A word shaped from 8-bit text is Latin; the same characters from 16-bit text go through `RunSegmenter`. Both share the key (word, direction). WTF string equality does not care about 8-bit vs 16-bit storage [I]. Sources of 16-bit text: a bidi split (RTL characters), or any normalization (TAB, LF, VT, FF, CR, SHY, bidi controls, U+FEFF, U+FFFC).
+1. **Script context.** A word shaped from 8-bit text is Latin; the same characters from 16-bit text go through `RunSegmenter`. Both share the key (word, direction). WTF string equality does not care about 8-bit vs 16-bit storage [I]. Measured for a whole string in Chrome 153 (probe blink-storage S3: the first shaping answers both storages on a canvas, in either order; blink-RESULTS "String storage"). A Latin-1-only script string is 16-bit when V8 holds it in two bytes (a slice of 13 units or more of a two-byte string) and turns 8-bit once it was used as a `Map`, `Set` or property key (S1). Sources of 16-bit text: a bidi split (RTL characters), or any normalization (TAB, LF, VT, FF, CR, SHY, bidi controls, U+FEFF, U+FFFC).
 2. **Word spacing at offset 0.** A cached `" "` result keeps its first spacing decision. `measureText(" x")` then `measureText("x y")` gives the second call no word spacing on its space.
 3. **Fonts that can't shape word by word.** The node is built from whole bidi runs, but the result is still cached by the run's text.
 4. **Node cache.** The same whole string returns the node built the first time, even after other measurements.
@@ -762,7 +762,7 @@ Unless stated otherwise:
 ## Open questions
 
 - `HanKerning::MayApply` conditions for Canvas words (not read).
-- Whether `WTF::String::substr` of a 16-bit string whose characters are all ≤ U+00FF stays 16-bit. Assumed for mechanism 1.7.1.
+- Whether `WTF::String::substr` of a 16-bit string whose characters are all ≤ U+00FF stays 16-bit. Assumed for mechanism 1.7.1. Measured in the DOM: a text node keeps its 16 bits through `deleteData` and `splitText` (probe blink-storage S4).
 - Whether an element's zoomed `letter-spacing` reaches a connected canvas as zoomed px (H12).
 - Chrome's UI language on this Mac. `Local State` was not readable from the sandbox; `AppleLanguages` = (zh-Hans-US, en-US).
 - Where `FinalizeFrame` runs for an OffscreenCanvas that never commits: `measureText` alone never switches frames.

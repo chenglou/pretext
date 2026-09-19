@@ -373,14 +373,18 @@
    "engine": "blink",
    "area": "script",
    "kind": "ported rule",
-   "statement": "an 8-bit paragraph (or 16-bit with only U+FFFC) without bidi is one Latin segment",
-   "source": "inline_node.cc:1256-1290; specs/blink-canvas.md §1.4",
-   "probes": [],
-   "tests": [],
+   "statement": "a paragraph without bidi is one Latin segment while none of its text is stored in 16 bits: a text whose string is 16-bit is 16-bit content whatever its characters, a text node's string is 16-bit when it holds a unit above U+00FF, U+FFFC included, and the U+FFFC of an atomic inline doesn't count",
+   "source": "inline_node.cc:1256-1290; inline_items_builder.cc:216-218, :725, :1258; to_blink_string.cc:216-227; literal_buffer.h:306-321; specs/blink-canvas.md §1.4",
+   "probes": [
+    "blink-storage S4: confirmed"
+   ],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "catalogue 2026-09-16; restated by the string storage fix (specs/blink-RESULTS.md \"String storage\")"
   },
   {
    "id": "blink/script/script-run-iterator",
@@ -9079,6 +9083,64 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/string-reaches-canvas-as-built",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "the string a port hands to measureText reaches Canvas as the port built it: the measurer never uses it as a Map, Set or property key, since V8 internalizes a key, stores an internalized string in one byte when its units fit and turns the looked-up string into a reference to it, which made canvasString's two-byte slice a one-byte string that Canvas shapes as one Latin segment; the memo's key is a concatenation, another string object",
+   "source": "v8 6b96683d builtins-collections-gen.cc:2590-2604, string-table.cc:398-427, factory.cc:1239-1257, :1293-1300, string.cc:164-166, api.cc:5937-5939; to_blink_string.cc:216-227; harfbuzz_shaper.cc:1072-1101",
+   "probes": [
+    "blink-storage S1: confirmed",
+    "blink-storage S2: confirmed",
+    "blink-storage S5: confirmed"
+   ],
+   "tests": [
+    "src/measure/canvas.test.ts :: never looks the measured string up: no key holds its characters alone"
+   ],
+   "declaredBy": "string storage fix (specs/blink-RESULTS.md \"String storage\")",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/contexts-per-storage",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "a segmented paragraph measures its one-byte strings on contexts of their own, made when the first is asked, so no canvas is asked a string or a word in both storages: Chrome keeps the strings and words a canvas shaped under their characters and direction, whatever the storage, and the first shaping answers both; an unsegmented paragraph's strings are two-byte by their characters alone and Canvas cuts no words from them, so it keeps one set",
+   "source": "frame_shape_cache.cc:45-65, :135-149; plain_text_node.cc:377-425; harfbuzz_shaper.cc:1072-1101",
+   "probes": [
+    "blink-storage S3: confirmed",
+    "blink-storage S5: confirmed"
+   ],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: a segmented paragraph asks its one-byte and its two-byte strings on contexts of their own",
+    "src/engines/blink/lines.test.ts :: an unsegmented paragraph keeps one set of contexts"
+   ],
+   "declaredBy": "string storage fix (specs/blink-RESULTS.md \"String storage\")",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/spaces-stay-in-neutral-latin-range",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "a range the paragraph shapes as Latin that holds a space, a character beside white space and no character with a script of its own is measured as an 8-bit string with U+0020 itself, in a font Canvas shapes whole: U+2028 would make the string 16-bit and RunSegmenter would resolve its characters as Common over the string alone, where the 8-bit string is one item shaped as one Latin segment, as the paragraph shapes it; a font shaped word by word keeps U+2028 and script-context",
+   "source": "plain_text_node.cc:377-400; harfbuzz_shaper.cc:1072-1101; font_fallback_list.cc:264-286; script_run_iterator.cc",
+   "probes": [
+    "blink-storage S6: confirmed"
+   ],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: a Latin range of script-neutral characters keeps its spaces as U+0020 in a font shaped whole"
+   ],
+   "declaredBy": "string storage fix, the alternative branch (specs/blink-RESULTS.md \"String storage\")",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9104,7 +9166,7 @@
   "blink/bidi/enable": "8412c6d55a4a65ba",
   "blink/bidi/ltr-unmixed-turns-bidi-off": "c76d16d825c2b547",
   "blink/bidi/items-split-at-level-changes": "8538c768872ad002",
-  "blink/script/single-latin-segment": "484c7ecb9ed47551",
+  "blink/script/single-latin-segment": "f85fda1a29663e74",
   "blink/script/script-run-iterator": "2b53f5ac99cfac25",
   "blink/grapheme/8bit-every-unit-but-crlf": "6fa6c57eb1d9a311",
   "blink/units/layout-zoom-is-dpr": "a2486e6f4393e64f",
@@ -9649,6 +9711,9 @@
   "gecko/lines/preserved-newline-ends-line-in-br": "43dd81a874c4b251",
   "blink/output/box-fragment-edges": "23e662c11e9f7f70",
   "blink/output/end-offset-for-justify": "72714947a9cdeee7",
-  "webkit/output/first-and-last-display-box": "f48c4f0b11cc5689"
+  "webkit/output/first-and-last-display-box": "f48c4f0b11cc5689",
+  "blink/measure/string-reaches-canvas-as-built": "3bf60df5bff3afea",
+  "blink/measure/contexts-per-storage": "2ee9fa98354d304c",
+  "blink/measure/spaces-stay-in-neutral-latin-range": "259bc897a7a25b38"
  }
 }
