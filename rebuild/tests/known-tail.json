@@ -484,12 +484,17 @@
         {
           "id": "c-a3d4baab0945f957",
           "browser": "chrome",
-          "where": "critic-r4-1: a candidate in the stalled round trip; 2.5 em, keep-all with break-word, `？」` at the end"
+          "where": "critic-r4-1: a candidate in the stalled round trip"
         },
         {
           "id": "c-a3deda1d0803dca9",
           "browser": "chrome",
-          "where": "critic-r4-1: a candidate in the stalled round trip; 2px"
+          "where": "critic-r4-1: a candidate in the stalled round trip"
+        },
+        {
+          "id": "c-a948c5abca7d9a92",
+          "browser": "chrome",
+          "where": "final-20260919-a part 2 (research/FINAL-EVALUATION.md): found one case a round trip, set aside"
         }
       ],
       "source": "round 4a Blink report \"Bug report\"; rebuild/platform-bugs; research/ROUND4-CRITIC.md \"Known tail\" 6 (.artifacts/ceiling-20260917/critic-r4/fresh/chrome-part-02-set-aside.ids)",
