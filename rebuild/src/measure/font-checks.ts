@@ -125,12 +125,17 @@ const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantas
 // where it prepares its paragraphs again. A context is found by every setting that reaches Canvas and an answer by its
 // context, so the environment, the language and the text can't make either stale.
 // Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
-// partition: a handful of contexts per declaration) and a dozen probe strings per checks' context. Settings that don't
-// repeat (an animated letter spacing) gain nothing from it and grow it: such a paragraph is prepared without one.
+// partition: a handful of contexts per declaration) and a dozen probe strings per checks' context, and by MAX_CONTEXTS:
+// settings that don't repeat (an animated letter spacing, a size per paragraph) would grow the lists without end, and
+// every search with them, so a call that finds more contexts than that starts the measurer over. Prepared paragraphs hold
+// their contexts by reference and keep theirs. Such a page gains nothing from a measurer and loses little: at the bound
+// a search costs about a tenth of a Blink prepare on the stand-in Canvas.
 export type Measurer = {
   contexts: Context[]
   asked: { context: Context; text: string; width: number }[]
 }
+
+const MAX_CONTEXTS = 1024
 
 export function newMeasurer(): Measurer {
   return { contexts: [], asked: [] }
@@ -308,6 +313,10 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
 
 // The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
 export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, measurer: Measurer): Paragraph {
+  if (measurer.contexts.length > MAX_CONTEXTS) {
+    measurer.contexts.length = 0
+    measurer.asked.length = 0
+  }
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
   // The declarations resolved so far, each under the language its checks measured in: a few, compared one by one.

@@ -293,6 +293,17 @@ describe('one call', () => {
     expect([calls - askedBefore, made.length - madeBefore]).toEqual([0, 0])
   })
 
+  test('a measurer whose settings never repeat starts over instead of growing without end', () => {
+    const measurer = newMeasurer()
+    let most = 0
+    for (let i = 0; i < 2000; i++) {
+      withLearnedFontFacts(paragraph('Prop', 'ab', UNKNOWN_FONT_FACTS, 10 + i / 100), blinkFontChecks(blink(2)), measurer)
+      most = Math.max(most, measurer.contexts.length)
+    }
+    expect(most).toBeLessThan(1100)
+    expect(measurer.asked.length).toBeLessThan(1100)
+  })
+
   test('a question several checks share is asked once', () => {
     // WebKit's fixed-pitch check reads the space under the list the primary family check measured it under, and both
     // declarations' primary family checks read the space under the two generics alone.
