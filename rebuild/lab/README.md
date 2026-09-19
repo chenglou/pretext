@@ -1265,6 +1265,14 @@ then `rebuild/tests/compare-sets.ts <its run> <the usual run>`):
 - `baselines/other-widths-first-predictor.ts`, with `--prediction=without-measure`: one prepared paragraph serves any width,
   and Chrome keeps the first shaping of a word per canvas, so the layouts after two other widths must be the usual run's;
   only the counts of Canvas work differ.
+- `baselines/page-measurer-predictor.ts` and `page-measurer-facts-predictor.ts` (`--config=facts`), with
+  `--prediction=without-measure`, and `page-measurer-plain-predictor.ts`, with `--prediction=line-ranges`: one measurer
+  for every case a document lays out (`makePredictor`'s `pageMeasurer`; `src/measure/font-checks.ts` `Measurer`), where
+  the usual predictors hand `prepare` none, so that every case makes its own contexts and a case's record stays what one
+  paragraph asks. A document's cases share their Canvas contexts and the font checks' answers, so in Chrome what a canvas
+  shaped before is the document's history: the layouts must be the usual run's in file order, reversed, and in a shuffled
+  third order (`browser-sets.ts --shuffle=<seed>`). `tools/twin-scan.ts --page` is its offline tripwire: a case file
+  scanned as one page, where no two cases may ask one context the same characters in both storages.
 
 ## Font facts
 
