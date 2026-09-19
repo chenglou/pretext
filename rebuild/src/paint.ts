@@ -96,6 +96,9 @@ export type TextPiece = Extract<Fragment, { kind: 'text' | 'trimmed' | 'hanging'
 // the node of the text before them, or in a span of their own that ends the shaping group.
 export type HangingForm = 'own-node' | 'same-node' | 'own-group'
 
+// The paragraph with its content index (content.ts), where an engine's limits find a leaf's style and source text.
+export type PaintedContent = { paragraph: Paragraph; index: ContentIndex<FontDecl> }
+
 // What the painter's plan of a line says about its two edges, for the engine's limits (PaintRules.limits).
 export type LineEdges = {
   // The line's first and last fragment with painted characters, and the last one's place among the fragments.
@@ -180,7 +183,7 @@ export type PaintRules<Facts> = {
   controlsBetweenPieces: PainterLimit | null
   // The engine's own limits of a line with painted characters, in the order the lab records them, between the painter's
   // edge-inside-cluster and overflowing-line-rebreaks.
-  limits: (content: { paragraph: Paragraph; index: ContentIndex<FontDecl> }, line: PaintLine<Facts>, edges: LineEdges) => PainterLimit[]
+  limits: (content: PaintedContent, line: PaintLine<Facts>, edges: LineEdges) => PainterLimit[]
 }
 
 function setFont(style: CSSStyleDeclaration, font: CssFont): void {
@@ -525,23 +528,23 @@ type LinePlan = {
 function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolean): LinePlan {
   const { paragraph, lines, rules, index, base, collapses } = c
   const { bidi, graphemes } = rules
-  const line = lines[l]!.pieces
+  const { pieces } = lines[l]!
   // The line's trailing white space. A painted line is a bidi paragraph of its own, and all three browsers give white
   // space at a paragraph's end the paragraph level (resetAtParagraphEnd), so the level it's painted at only decides
   // node division. Painting it at the level of the text before it in the same leaf keeps that slice one text node, as
   // it was in the paragraph: WebKit measures a word together with the space after it in its text box
   // (TextUtil.cpp:76-77), and Blink keeps the space in the text item. Box edges, <br> and <wbr> don't end the trailing
   // white space.
-  let trailing = line.fragments.length
+  let trailing = pieces.fragments.length
   while (trailing > 0) {
-    const fragment = line.fragments[trailing - 1]!
+    const fragment = pieces.fragments[trailing - 1]!
     const white = fragment.kind === 'collapsed' || fragment.kind === 'forced-break' || fragment.kind === 'trimmed' ||
       fragment.kind === 'hanging' || fragment.kind === 'box-start' || fragment.kind === 'box-end' || fragment.kind === 'br' ||
       fragment.kind === 'wbr' || (fragment.kind === 'text' && SPACES_AND_TABS.test(fragment.painted))
     if (!white) break
     trailing--
   }
-  const beforeTrailing = trailing > 0 ? line.fragments[trailing - 1]! : null
+  const beforeTrailing = trailing > 0 ? pieces.fragments[trailing - 1]! : null
   // Blink shapes a space with the text before it only where the two had one direction in the paragraph: items split
   // where the level changes, and a shaping group ends where the direction does (ShouldBreakShapingBeforeText,
   // inline_node.cc:470-490). The fragments' levels come after Blink's line-end rule, which moves trailing spaces to the
@@ -550,10 +553,10 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // a space and Hebrew in an RTL paragraph was shaped without the space, 10.67 px, and painted with it in one override
   // span 9.79 px (c-1235f5a7105d6155).
   let spaceJoinsText = true
-  if (rules.resolvesTrailingSpaceDirection && beforeTrailing !== null && beforeTrailing.kind === 'text' && trailing < line.fragments.length) {
+  if (rules.resolvesTrailingSpaceDirection && beforeTrailing !== null && beforeTrailing.kind === 'text' && trailing < pieces.fragments.length) {
     let lastPiece = -1
-    for (let f = line.fragments.length - 1; f >= trailing && lastPiece < 0; f--) {
-      const fragment = line.fragments[f]!
+    for (let f = pieces.fragments.length - 1; f >= trailing && lastPiece < 0; f--) {
+      const fragment = pieces.fragments[f]!
       if ((fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging') && fragment.painted.length > 0) lastPiece = f
     }
     if (lastPiece >= 0) {
@@ -571,9 +574,9 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // by level itself, as the paragraph did, with no control between them.
   // Only the units that continue the cluster move: a space after the U+200C keeps its own level (c-d0d9e12845327e52).
   const clusterPrefix: number[] = []
-  for (let f = 0; f < line.fragments.length; f++) {
-    const fragment = line.fragments[f]!
-    const before = f > 0 ? line.fragments[f - 1]! : null
+  for (let f = 0; f < pieces.fragments.length; f++) {
+    const fragment = pieces.fragments[f]!
+    const before = f > 0 ? pieces.fragments[f - 1]! : null
     let prefix = 0
     if (fragment.kind === 'text' && before !== null && before.kind === 'text' && before.run === fragment.run && before.end === fragment.start &&
       before.level !== fragment.level && before.painted.length > 0 && fragment.painted.length > 0) {
@@ -591,8 +594,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
     if (clusterPrefix[f]! === fragment.painted.length && clusterPrefix[f]! > 0) return paintedLevels[f - 1]!
     return f >= trailing && spaceJoinsText && beforeTrailing !== null && beforeTrailing.kind === 'text' && beforeTrailing.run === fragment.run ? beforeTrailing.level : fragment.level
   }
-  for (let f = 0; f < line.fragments.length; f++) {
-    const fragment = line.fragments[f]!
+  for (let f = 0; f < pieces.fragments.length; f++) {
+    const fragment = pieces.fragments[f]!
     paintedLevels.push(fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging' ? levelOf(f, fragment) : base)
   }
 
@@ -612,8 +615,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   let lastAny = -1
   const startEdges = new Set<number>()
   const endEdges = new Set<number>()
-  for (let f = 0; f < line.fragments.length; f++) {
-    const fragment = line.fragments[f]!
+  for (let f = 0; f < pieces.fragments.length; f++) {
+    const fragment = pieces.fragments[f]!
     switch (fragment.kind) {
       case 'text':
       case 'trimmed':
@@ -688,8 +691,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // A line block that doesn't wrap gets no box, and neither does a line ending with R7's U+200D, which allows no break
   // after it (UAX #14 LB8a, ICU line.txt:151-153).
   let lastContent: Fragment['kind'] | null = null
-  for (let f = line.fragments.length - 1; f >= 0 && lastContent === null; f--) {
-    const kind = line.fragments[f]!.kind
+  for (let f = pieces.fragments.length - 1; f >= 0 && lastContent === null; f--) {
+    const kind = pieces.fragments[f]!.kind
     if (kind !== 'box-start' && kind !== 'box-end' && kind !== 'collapsed' && kind !== 'wbr') lastContent = kind
   }
   // In Blink a trimmed space has its own rule below. In WebKit a space reset to the base level becomes a run of its own,
@@ -704,7 +707,7 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
     case 'by-rule': endPiece = lastPainted; break
   }
   if (endPiece >= 0) {
-    const fragment = line.fragments[endPiece]!
+    const fragment = pieces.fragments[endPiece]!
     if ((fragment.kind === 'text' || fragment.kind === 'hanging' || fragment.kind === 'trimmed') && fragment.level !== base) {
       const painted = fragment.painted
       let last = painted.length - 1
@@ -732,8 +735,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   switch (rules.lineEndWrapping) {
     case 'block': break
     case 'last-character-box':
-      for (let f = line.fragments.length - 1; f >= 0; f--) {
-        const fragment = line.fragments[f]!
+      for (let f = pieces.fragments.length - 1; f >= 0; f--) {
+        const fragment = pieces.fragments[f]!
         if ((fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging') && fragment.painted.length > 0) {
           endWraps = wraps(styleUnder(paragraph, index, index.leaves[fragment.run]!.parent).whiteSpace)
           break
@@ -742,11 +745,11 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
       }
       break
   }
-  let softWrap = l < lines.length - 1 && endWraps && !hyphenated && !joinsPreviousLine && !line.joinsNextLine &&
+  let softWrap = l < lines.length - 1 && endWraps && !hyphenated && !joinsPreviousLine && !pieces.joinsNextLine &&
     lastContent !== 'forced-break' && lastContent !== 'br'
   switch (rules.trimmedSpaceAtEnd.takesBox) {
     case 'where-reset': softWrap &&= resetAboveBase || lastContent === 'hanging'; break
-    case 'by-rule': softWrap &&= resetAboveBase || lastContent === 'hanging' || (lastContent === 'trimmed' && rules.trimmedSpaceAtEnd.rule(line.facts)); break
+    case 'by-rule': softWrap &&= resetAboveBase || lastContent === 'hanging' || (lastContent === 'trimmed' && rules.trimmedSpaceAtEnd.rule(pieces.facts)); break
   }
 
   // Gecko adds letter spacing after a text run's last character whatever it is, and after any other character only when
@@ -761,8 +764,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // for its levels gets none.
   let continuation = ''
   let spacingAtRunEnd = false
-  if (rules.spacingAfterRunEnd && lastPainted >= 0 && !trimmedAfter && !line.joinsNextLine) {
-    const fragment = line.fragments[lastPainted]!
+  if (rules.spacingAfterRunEnd && lastPainted >= 0 && !trimmedAfter && !pieces.joinsNextLine) {
+    const fragment = pieces.fragments[lastPainted]!
     if (fragment.kind === 'text') {
       const style = styleUnder(paragraph, index, index.leaves[fragment.run]!.parent)
       if (style.letterSpacing !== 0 && /[\t\p{Cf}]$/u.test(fragment.painted)) {
@@ -841,8 +844,8 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
     }
     case 'limit-only': {
       let painted = ''
-      for (let f = 0; f < line.fragments.length && painted.length < 64; f++) {
-        const fragment = line.fragments[f]!
+      for (let f = 0; f < pieces.fragments.length && painted.length < 64; f++) {
+        const fragment = pieces.fragments[f]!
         if (fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging' || fragment.kind === 'hyphen') painted += fragment.painted
       }
       const own = FIRST_WITH_SCRIPT.exec(painted)
@@ -863,14 +866,14 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // may trim, which ShapeLine does only while it breaks lines, shaping_line_breaker.cc:344-376; the candidates are
   // Character::MaybeHanKerningOpenOrCloseFast's ranges, character.h:138-141).
   const wantsScriptMark = marksScript && firstText >= 0 && firstText === firstAny
-  if (!softWrap && !trimmedAfter && lastPainted >= 0 && line.overflows) {
-    const last = line.fragments[lastPainted]!
+  if (!softWrap && !trimmedAfter && lastPainted >= 0 && pieces.overflows) {
+    const last = pieces.fragments[lastPainted]!
     const endsInWhiteSpace = last.kind === 'hanging' || (last.kind === 'text' && /\s$/u.test(last.painted))
     const mayTrim = rules.trimsAtLineEnd !== null && last.kind === 'text' && rules.trimsAtLineEnd.test(last.painted)
     if (!endsInWhiteSpace && !mayTrim) {
       let painted = ''
-      for (let f = 0; f < line.fragments.length; f++) {
-        const fragment = line.fragments[f]!
+      for (let f = 0; f < pieces.fragments.length; f++) {
+        const fragment = pieces.fragments[f]!
         if (fragment.kind === 'text' || fragment.kind === 'hyphen') painted += fragment.painted
         else if (fragment.kind === 'atomic') painted += 'x'
       }
@@ -886,12 +889,12 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // out again as it did.
   let keptSpace = -1
   if (lastAny >= 0 && lastAny === lastPainted) {
-    const fragment = line.fragments[lastAny]!
+    const fragment = pieces.fragments[lastAny]!
     if (fragment.kind === 'text' && /[ \t\n\r\f]$/.test(fragment.painted)) {
       const whiteSpace = styleUnder(paragraph, index, index.leaves[fragment.run]!.parent).whiteSpace
       if (whiteSpace === 'normal' || whiteSpace === 'nowrap' || whiteSpace === 'pre-line') {
-        for (let f = lastAny + 1; f < line.fragments.length; f++) {
-          const next = line.fragments[f]!
+        for (let f = lastAny + 1; f < pieces.fragments.length; f++) {
+          const next = pieces.fragments[f]!
           if (next.kind === 'collapsed' && next.run === fragment.run && /[^ \t\n\r\f]/.test(index.text.slice(next.start, next.end))) keptSpace = lastAny
         }
       }
@@ -906,13 +909,13 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
   // has no such character for the other scripts. The mark is a strong right-to-left character, so it goes in the first
   // piece's text node, inside that piece's override span where the line has any. It is a grapheme cluster of its own,
   // which a line that reaches past its band and still wraps would keep alone on its first line, so such a line gets none.
-  const scriptMark = wantsScriptMark && (nowrap || !line.overflows)
+  const scriptMark = wantsScriptMark && (nowrap || !pieces.overflows)
 
   // ---- What painting this line alone can't reproduce (PainterLimitName has the source readings) ----
   const limits: PainterLimit[] = []
   if (firstAny >= 0) {
-    const first = line.fragments[firstAny] as TextPiece
-    const last = line.fragments[lastAny] as TextPiece
+    const first = pieces.fragments[firstAny] as TextPiece
+    const last = pieces.fragments[lastAny] as TextPiece
     const before = neighbour(c, l, firstAny, -1)
     const after = neighbour(c, l, lastAny, 1)
     const startInLeaf = before !== null && shapesWith(c, before.run, first.run)
@@ -925,7 +928,7 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
       limits.push({ limit: 'edge-inside-cluster', detail: 'the line starts or ends inside a grapheme cluster' })
     }
     const startInWord = joinsPreviousLine || (startInLeaf && before.kind === 'text' && first.kind === 'text' && !/\s$/u.test(before.painted) && !/^\s/u.test(first.painted))
-    const endInWord = line.joinsNextLine || (endInLeaf && last.kind === 'text' && after.kind === 'text' && !/\s$/u.test(last.painted) && !/^\s/u.test(after.painted))
+    const endInWord = pieces.joinsNextLine || (endInLeaf && last.kind === 'text' && after.kind === 'text' && !/\s$/u.test(last.painted) && !/^\s/u.test(after.painted))
     const softEnd = lastContent !== 'forced-break' && lastContent !== 'br'
     const edges: LineEdges = {
       first, last, lastAt: lastAny, before, after, startInLeaf, endInLeaf, startInWord, endInWord, softEnd, joinsPreviousLine,
@@ -934,10 +937,10 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
     const own = rules.limits({ paragraph, index }, lines[l]!, edges)
     for (let k = 0; k < own.length; k++) limits.push(own[k]!)
   }
-  if (!nowrap && line.overflows) {
+  if (!nowrap && pieces.overflows) {
     let painted = ''
-    for (let f = 0; f < line.fragments.length; f++) {
-      const fragment = line.fragments[f]!
+    for (let f = 0; f < pieces.fragments.length; f++) {
+      const fragment = pieces.fragments[f]!
       if (fragment.kind === 'text' || fragment.kind === 'hyphen' || fragment.kind === 'hanging' || fragment.kind === 'trimmed') painted += fragment.painted
       else if (fragment.kind === 'atomic') painted += 'x'
     }
@@ -950,13 +953,13 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
 // to the painted block's second line.
 function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPreviousLine: boolean): { tokens: Token[]; continues: boolean } {
   const { paragraph, rules, index, base } = c
-  const line = c.lines[l]!.pieces
+  const { pieces } = c.lines[l]!
   const { paintedLevels, clusterPrefix, firstText, lastText, firstRun, firstInSpan, lastPainted, endEdges, softWrap, boxLevel, continuation, keptSpace, scriptMark } = plan
   const tokens: Token[] = []
   // The last fragment with painted text of each leaf on the line.
   const lastPieceOfRun = new Map<number, number>()
-  for (let f = 0; f < line.fragments.length; f++) {
-    const fragment = line.fragments[f]!
+  for (let f = 0; f < pieces.fragments.length; f++) {
+    const fragment = pieces.fragments[f]!
     if ((fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging') && fragment.painted.length > 0) lastPieceOfRun.set(fragment.run, f)
   }
   // The elements open at this point of the walk, outermost first.
@@ -1034,8 +1037,8 @@ function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPr
     level = pieceLevel
     wrap = leaf === firstRun && firstInSpan ? 'block-style' : 'none'
   }
-  for (let f = 0; f < line.fragments.length; f++) {
-    const fragment = line.fragments[f]!
+  for (let f = 0; f < pieces.fragments.length; f++) {
+    const fragment = pieces.fragments[f]!
     switch (fragment.kind) {
       case 'text': {
         const prefix = clusterPrefix[f]!
@@ -1045,7 +1048,7 @@ function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPr
           text += paintedText(fragment).slice(0, prefix)
           enterLeaf(fragment.run, paintedLevels[f]!)
           text += paintedText(fragment).slice(prefix)
-          if (f === lastText && line.joinsNextLine) text += ZWJ
+          if (f === lastText && pieces.joinsNextLine) text += ZWJ
           if (f === lastPainted) text += continuation
           break
         }
@@ -1053,15 +1056,15 @@ function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPr
         if (f === firstText && joinsPreviousLine) text += ZWJ
         if (f === firstText && scriptMark) text += ARABIC_LETTER_MARK
         text += paintedText(fragment)
-        if (f === lastText && line.joinsNextLine) text += ZWJ
+        if (f === lastText && pieces.joinsNextLine) text += ZWJ
         if (f === lastPainted) text += continuation
         break
       }
       case 'trimmed':
       case 'hanging':
         enterLeaf(fragment.run, paintedLevels[f]!)
-        if (fragment.kind === 'hanging' && f > 0 && line.fragments[f - 1]!.kind !== 'hanging') {
-          const form = rules.hangingForm(c.lines[l]!, line.fragments[f - 1]!, fragment, styleUnder(paragraph, index, index.leaves[fragment.run]!.parent))
+        if (fragment.kind === 'hanging' && f > 0 && pieces.fragments[f - 1]!.kind !== 'hanging') {
+          const form = rules.hangingForm(c.lines[l]!, pieces.fragments[f - 1]!, fragment, styleUnder(paragraph, index, index.leaves[fragment.run]!.parent))
           if (form !== 'same-node') flush()
           if (form === 'own-group') wrap = 'shaping-group'
         }

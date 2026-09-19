@@ -1,14 +1,12 @@
 // What a line painted alone needs in WebKit (Safari 27.0) that the painter's shared forms don't give (paint.ts
 // PaintRules; DESIGN.md §7): text nodes that keep what WebKit's layout reads of the paragraph's nodes, and WebKit's
 // limits. The painter hands a line's WebKitPaintFacts back to these rules unread.
-import type { ContentIndex } from '../../content.js'
-import type { FontDecl, Paragraph } from '../../model.js'
-import type { LineEdges, PaintLine, PaintRules, PainterLimit } from '../../paint.js'
+import type { LineEdges, PaintLine, PaintRules, PaintedContent, PainterLimit } from '../../paint.js'
 import { webkitBidiData, webkitGraphemeRules } from './data.js'
 import type { WebKitPaintFacts } from './output.js'
 
 // WebKit's limits (paint.ts PainterLimitName has each condition's source reading).
-function limits(content: { paragraph: Paragraph; index: ContentIndex<FontDecl> }, line: PaintLine<WebKitPaintFacts>, edges: LineEdges): PainterLimit[] {
+function limits(content: PaintedContent, line: PaintLine<WebKitPaintFacts>, edges: LineEdges): PainterLimit[] {
   const { last, startInWord, endInWord } = edges
   const { carriedWidth, shapedAcrossBoxes } = line.pieces.facts
   const out: PainterLimit[] = []

@@ -36,7 +36,7 @@ export type { GeckoFillResult, GeckoFilledLine, GeckoPaintFacts, GeckoRefusedSlo
 export type { WebKitFillResult, WebKitFilledLine, WebKitPaintFacts, WebKitRefusedSlot } from './engines/webkit/index.js'
 // The painter (paint.ts) is shared and names no engine: it paints the lines an engine's linePieces gave with that engine's
 // painting rules.
-export { paintLines, painterLimits, type LineEdges, type PaintLine, type PaintRules, type PainterLimit, type PainterLimitName } from './paint.js'
+export { paintLines, painterLimits, type LineEdges, type PaintLine, type PaintRules, type PaintedContent, type PainterLimit, type PainterLimitName } from './paint.js'
 export { blinkPaintRules } from './engines/blink/paint-rules.js'
 export { geckoPaintRules } from './engines/gecko/paint-rules.js'
 export { webkitPaintRules } from './engines/webkit/paint-rules.js'

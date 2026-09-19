@@ -1,14 +1,12 @@
 // What a line painted alone needs in Gecko (Firefox 156.0) that the painter's shared forms don't give (paint.ts
 // PaintRules; DESIGN.md §7): a text run that doesn't end with the line where the paragraph's went on, and Gecko's limits.
 // Gecko's rules read nothing of a line beside its pieces (GeckoPaintFacts).
-import type { ContentIndex } from '../../content.js'
-import type { FontDecl, Paragraph } from '../../model.js'
-import type { LineEdges, PaintLine, PaintRules, PainterLimit } from '../../paint.js'
+import type { LineEdges, PaintLine, PaintRules, PaintedContent, PainterLimit } from '../../paint.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
 import type { GeckoPaintFacts } from './pieces.js'
 
 // Gecko's limits (paint.ts PainterLimitName has each condition's source reading).
-function limits(_content: { paragraph: Paragraph; index: ContentIndex<FontDecl> }, line: PaintLine<GeckoPaintFacts>, edges: LineEdges): PainterLimit[] {
+function limits(_content: PaintedContent, line: PaintLine<GeckoPaintFacts>, edges: LineEdges): PainterLimit[] {
   const { last, endInLeaf, startInWord, endInWord, softEnd, leadingScript } = edges
   const out: PainterLimit[] = []
   // Gecko keeps the glyphs of the word it shaped whole, so any pair adjustment across the cut counts.
@@ -19,7 +17,7 @@ function limits(_content: { paragraph: Paragraph; index: ContentIndex<FontDecl> 
     out.push({ limit: 'script-at-line-start', detail: `characters of the line continued a script run of the text before it (${leadingScript})` })
   }
   if (edges.spacingAtRunEnd) out.push({ limit: 'spacing-at-run-end', detail: "the line's last character is its text run's last when painted and takes letter spacing" })
-  if (last.kind === 'trimmed' && endInLeaf && softEnd && (line.pieces.align === 'justify' || /　/.test(last.painted))) {
+  if (last.kind === 'trimmed' && endInLeaf && softEnd && (line.pieces.align === 'justify' || /\u3000/.test(last.painted))) {
     out.push({ limit: 'frame-ended-at-break', detail: line.pieces.align === 'justify' ? 'the trimmed space was a justification opportunity of the paragraph' : 'U+3000 is trimmed only where the text frame breaks inside itself' })
   }
   return out
