@@ -60,7 +60,7 @@ describe('measureText', () => {
     expect(m.log.calls).toEqual([{ context, text, width: 130 }])
   })
 
-  test('the memo keeps texts apart, a text that spells another text\'s key too', () => {
+  test('the memo keeps texts apart, also a text that spells the key of another', () => {
     const m = createMeasurer()
     const context = measureContext(m, SETTINGS)
     expect(measureText(m, context, 'a')).toBe(10)

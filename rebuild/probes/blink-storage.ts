@@ -281,7 +281,7 @@ const S5 = `
 `
 
 function probe(id: string, source: string, note: string): Probe {
-  return { id: `blink-storage ${id}`, spec: 'blink-port storage', pageLang: 'en', browsers: ['chrome'], fontFixtures: ['Amiri', 'Noto Naskh Arabic'], html: '<div id="t"></div>', observe: [{ kind: 'script', source }], note }
+  return { id: `blink-storage ${id}`, spec: `blink-storage ${id.slice(0, 2)}`, pageLang: 'en', browsers: ['chrome'], fontFixtures: ['Amiri', 'Noto Naskh Arabic'], html: '<div id="t"></div>', observe: [{ kind: 'script', source }], note }
 }
 
 export default async function storageProbes(): Promise<Probe[]> {

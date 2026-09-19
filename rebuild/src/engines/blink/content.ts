@@ -456,6 +456,7 @@ class Builder {
   // string in 8 bits when its units fit (CHARTER.md known deviations has the strings V8 doesn't). Probe blink-storage S4:
   // 13 brackets in Amiri are shaped as one Latin segment beside an inline-block and segmented beside a text node that
   // holds U+FFFC alone.
+  // rule blink/script/single-latin-segment
   appendText(s: string, base: number, run: number, style: number): void {
     for (let i = 0; i < s.length && !this.hasNonOrc16Bit; i++) if (s.charCodeAt(i) >= 0x100) this.hasNonOrc16Bit = true
     this.restoreTrailingCollapsibleSpaceIfRemoved()

@@ -583,9 +583,10 @@ describe('blink string storage', () => {
     expect(new Set(all.map(a => a.partition))).toEqual(new Set(['8bit']))
   })
 
-  test('a text node that holds U+FFFC is 16-bit content, an atomic inline isn\'t (inline_items_builder.cc:725, 1258)', () => {
+  test('a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)', () => {
     const measurer = createMeasurer()
-    expect(blinkEngine.prepare(paragraph([['abc', 'text'], ['￼', 'span']], 2000), env, measurer).segmented).toBe(true)
-    expect(blinkEngine.prepare(paragraph([['abc', 'text']], 2000), env, measurer).segmented).toBe(false)
+    const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
+    expect(blinkEngine.prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, measurer).segmented).toBe(true)
+    expect(blinkEngine.prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, measurer).segmented).toBe(false)
   })
 })

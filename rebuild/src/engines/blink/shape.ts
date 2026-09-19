@@ -133,6 +133,7 @@ export type Shaper = {
 // questions can't change an answer. An unsegmented paragraph needs one set: its strings are two-byte by their characters
 // alone, and Canvas cuts no words from them (they hold no U+0020, TAB, U+FFFC or CJK character: text_content is Latin-1
 // but for atomic inlines, where a shaping group ends), so every two-byte string and word holds a unit above U+00FF.
+// rule blink/measure/contexts-per-storage
 export function contextsOf(sh: Shaper, style: number, twoByte: boolean): StyleContexts {
   const p = sh.p
   if (twoByte || !p.segmented) return p.contexts[style]!
