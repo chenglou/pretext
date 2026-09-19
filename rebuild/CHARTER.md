@@ -98,6 +98,11 @@ The maintainer's, after ceiling round 3's evaluation and critic (research/ROUND3
    family; `optical-size` is then reported in 0 development cases and 95.4% of values are predicted, and a named variable
    font with an opsz axis would measure wrong without a gap. The charter removed Gecko's name-keyed optical sizing, which
    is why it isn't merged).
+   Looked at again on 2026-09-19, on the maintainer's two conditions (the element is truly light, and workers keep working
+   by feature detection), and left as decided: the element costs the same time and less memory, but a kept element
+   context makes Firefox carry out the page's pending style sheet update inside `measureText`, and the only test for a
+   document that gives the element the page's fonts reads a Gecko internal and has to be asked at every measuring call
+   (research/FIREFOX-CANVAS-ELEMENT.md, with what would reopen it).
 3. **The correctness line freezes after round 4, with a known tail.** Round 4b fixes only defects that give wrong lines or
    wrong exact values without warning, and what the test suite needs before the reference is frozen. Everything else found
    (classes under gaps that could become predictions, conditions that only diagnose, the rare-script tail, painter
