@@ -30,7 +30,7 @@ import { basename, join, relative, resolve } from 'node:path'
 import { installReplay, NewQuestion } from '../lab/measurements.ts'
 import type { Predictor } from '../lab/predictor-core.ts'
 import type { LayoutPrediction } from '../lab/types.ts'
-import { firstDifference, type InputCase, type ReferenceCase } from '../tests/replay.ts'
+import { GROUP_SHARDS, callsPerCase, firstDifference, shardGroups, type InputCase, type ReferenceCase } from '../tests/replay.ts'
 import { CONFIGS, PREDICTORS, TIER_BROWSERS, selectSets, type Config, type TierBrowser } from '../tests/sets.ts'
 import { RecordingDocument, UnmodelledDom, recordedPainting } from './recording-document.ts'
 
@@ -96,7 +96,7 @@ function frozenBundle(config: Config): string {
   return path
 }
 
-// ---- One shard (hidden command `work`) ----
+// ---- One group of shards (hidden command `work`) ----
 
 type Outcome =
   | { id: string; family: string; kind: 'painting'; first: { path: string; before: string; after: string } }
@@ -135,17 +135,25 @@ function rowLayout(layout: LayoutPrediction['layout']): string {
   return JSON.stringify(rest)
 }
 
+type Job = { set: string; shard: { cases: number; calls: number }; inputs: string; reference: string; result: string }
+
+// A process paints a group of shards, as tier 1 replays them (tests/replay.ts shardGroups).
 async function work(): Promise<void> {
-  const inputs = readShard<InputCase>(options.get('inputs')!)
-  const reference = readShard<ReferenceCase>(options.get('reference')!)
-  if (reference.length !== inputs.length) throw new Error(`${options.get('reference')} holds ${reference.length} cases for ${inputs.length} inputs`)
   const working = await import(options.get('working')!) as Predictor
   const frozen = await import(options.get('frozen')!) as Predictor
+  const group = JSON.parse(readFileSync(options.get('group')!, 'utf8')) as Job[]
+  for (let k = 0; k < group.length; k++) workShard(group[k]!, working, frozen)
+}
+
+function workShard(job: Job, working: Predictor, frozen: Predictor): void {
+  const inputs = readShard<InputCase>(job.inputs)
+  const reference = readShard<ReferenceCase>(job.reference)
+  if (reference.length !== inputs.length) throw new Error(`${job.reference} holds ${reference.length} cases for ${inputs.length} inputs`)
   const result: ShardResult = { cases: inputs.length, painted: 0, same: 0, nothingToPaint: 0, refused: {}, outcomes: [] }
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i]!
     const expected = reference[i]!
-    if (expected.id !== input.id) throw new Error(`${options.get('reference')}: case ${i} is ${expected.id}, the inputs hold ${input.id}`)
+    if (expected.id !== input.id) throw new Error(`${job.reference}: case ${i} is ${expected.id}, the inputs hold ${input.id}`)
     const where = { id: input.id, family: input.family }
     if ('error' in expected.prediction) {
       result.nothingToPaint++
@@ -175,7 +183,7 @@ async function work(): Promise<void> {
       if ('error' in before) result.refused[before.error] = (result.refused[before.error] ?? 0) + 1
     } else result.outcomes.push({ ...where, kind: 'painting', first: firstDifference(before, after, '')! })
   }
-  writeFileSync(options.get('result')!, JSON.stringify(result))
+  writeFileSync(job.result, JSON.stringify(result))
 }
 
 // ---- check ----
@@ -216,23 +224,25 @@ async function check(browser: TierBrowser, config: Config): Promise<number> {
   if (!existsSync(working)) fail(`${working} doesn't exist`)
   const sets = selectSets(browser, options.get('sets'), undefined).map(set => set.name).filter(name => inputs.sets[name] !== undefined)
   const scratch = mkdtempSync(join(tmpdir(), 'painter-diff-'))
-  type Job = { set: string; inputs: string; reference: string; result: string; calls: number }
   const jobs: Job[] = []
   for (const name of sets) {
     const shards = (inputs.sets[name] as { shards: Shard[] }).shards
     const frozenShards = reference.sets[name] as Shard[]
     for (let k = 0; k < shards.length; k++) {
       if (frozenShards[k]?.cases !== shards[k]!.cases) fail(`reference/manifest.json doesn't hold shard ${k} of ${name} as the inputs do`)
-      jobs.push({ set: name, inputs: join(dir, 'inputs', shards[k]!.file), reference: join(dir, 'reference', frozenShards[k]!.file), result: join(scratch, `${jobs.length}.json`), calls: shards[k]!.calls ?? 0 })
+      jobs.push({ set: name, shard: { cases: shards[k]!.cases, calls: shards[k]!.calls ?? 0 }, inputs: join(dir, 'inputs', shards[k]!.file), reference: join(dir, 'reference', frozenShards[k]!.file), result: join(scratch, `${jobs.length}.json`) })
     }
   }
   const started = Date.now()
   const failures: string[] = []
-  // Largest first, so the last shards to finish are small.
-  const order = [...jobs].sort((a, b) => b.calls - a.calls)
-  await pool(order, Math.max(1, Number(options.get('jobs') ?? Math.max(1, cpus().length - 2))), async job => {
-    const proc = Bun.spawn(['bun', import.meta.path, 'work', `--inputs=${job.inputs}`, `--reference=${job.reference}`, `--working=${working}`, `--frozen=${frozen}`, `--result=${job.result}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
-    if (await proc.exited !== 0) failures.push(job.inputs)
+  // The groups with the most recorded calls a case first: the long paragraphs, so the last to finish are small.
+  const groups = shardGroups(jobs, GROUP_SHARDS)
+  const order = groups.map((_, i) => i).sort((a, b) => callsPerCase(groups[b]!) - callsPerCase(groups[a]!))
+  await pool(order, Math.max(1, Number(options.get('jobs') ?? Math.max(1, cpus().length - 2))), async i => {
+    const groupFile = join(scratch, `group-${i}.json`)
+    writeFileSync(groupFile, JSON.stringify(groups[i]))
+    const proc = Bun.spawn(['bun', import.meta.path, 'work', `--group=${groupFile}`, `--working=${working}`, `--frozen=${frozen}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
+    if (await proc.exited !== 0) failures.push(...groups[i]!.map(job => job.inputs))
   })
   if (failures.length > 0) fail(`the differential failed on ${failures.sort().join(', ')}`)
   const pin = JSON.parse(readFileSync(PIN_PATH, 'utf8')) as Pin
