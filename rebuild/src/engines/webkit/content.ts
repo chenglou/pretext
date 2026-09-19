@@ -13,6 +13,7 @@ import { computedLocale, localeScript, webkitBidiData } from './data.js'
 import { boxMade, coveredLikeLastResort, newInspection, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { collectHistoryWorlds } from './history.js'
 import { buildItems } from './items.js'
+import { isComplexCodePath } from './measure.js'
 import { boxEdges, layoutUnit, preservesNewline, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle } from './types.js'
 
@@ -47,111 +48,6 @@ function textRendererIsNeeded(text: string, previous: PreviousRenderer, parentSt
   // A RenderInline parent keeps the node unless the previous renderer is a block (:564-570).
   if (parentIsInline) return true
   return previous !== 'none'
-}
-
-// Supplementary blocks isEmojiGroupCandidate accepts (WTF/wtf/text/CharacterProperties.h:34-55): Miscellaneous Symbols and
-// Pictographs, Emoticons, Transport and Map Symbols, Supplemental Symbols and Pictographs, Symbols and Pictographs
-// Extended-A. Only supplementary code points reach it.
-function isEmojiGroupCandidate(c: number): boolean {
-  return (c >= 0x1f300 && c <= 0x1f64f) || (c >= 0x1f680 && c <= 0x1f6ff) || (c >= 0x1f900 && c <= 0x1f9ff) || (c >= 0x1fa70 && c <= 0x1faff)
-}
-
-// FontCascade::characterRangeCodePath (FontCascade.cpp:733-960): true when it returns Complex.
-function isComplexCodePath(text: string): boolean {
-  let previousIsEmojiGroupCandidate = false
-  const size = text.length
-  for (let i = 0; i < size; i++) {
-    const c = text.charCodeAt(i)
-    if (c === 0x200d && previousIsEmojiGroupCandidate) return true
-    previousIsEmojiGroupCandidate = false
-    if (c < 0x2e5) continue
-    if (c <= 0x2e9) return true
-    if (c < 0x300) continue
-    if (c <= 0x36f) return true
-    if (c < 0x591 || c === 0x5be) continue
-    if (c <= 0x5cf) return true
-    if (c < 0x600) continue
-    if (c <= 0x109f) return true
-    if (c < 0x1100) continue
-    if (c <= 0x11ff) return true
-    if (c < 0x135d) continue
-    if (c <= 0x135f) return true
-    if (c < 0x1700) continue
-    if (c <= 0x18af) return true
-    if (c < 0x1900) continue
-    if (c <= 0x194f) return true
-    if (c < 0x1980) continue
-    if (c <= 0x19df) return true
-    if (c < 0x1a00) continue
-    if (c <= 0x1cff) return true
-    if (c < 0x1dc0) continue
-    if (c <= 0x1dff) return true
-    if (c <= 0x2000) continue
-    if (c < 0x20d0) continue
-    if (c <= 0x20ff) return true
-    if (c < 0x26f9) continue
-    if (c < 0x26fa) return true
-    if (c < 0x2cef) continue
-    if (c <= 0x2cf1) return true
-    if (c < 0x302a) continue
-    if (c <= 0x302f) return true
-    if (c < 0x3099) continue
-    if (c < 0x309d) return true
-    if (c < 0xa67c) continue
-    if (c <= 0xa67d) return true
-    if (c < 0xa6f0) continue
-    if (c <= 0xa6f1) return true
-    if (c < 0xa800) continue
-    if (c <= 0xabff) return true
-    if (c < 0xd7b0) continue
-    if (c <= 0xd7ff) return true
-    if (c <= 0xdbff) {
-      if (i + 1 === size) continue
-      const next = text.charCodeAt(++i)
-      if ((next & 0xfc00) !== 0xdc00) continue
-      const s = ((c - 0xd800) << 10) + next - 0xdc00 + 0x10000
-      if (s < 0x10a00) continue
-      if (s < 0x10a60) return true
-      if (s < 0x11000) continue
-      if (s < 0x110d0) return true
-      if (s < 0x11100) continue
-      if (s < 0x111e0) return true
-      if (s < 0x11200) continue
-      if (s < 0x11250) return true
-      if (s < 0x112b0) continue
-      if (s < 0x11380) return true
-      if (s < 0x11400) continue
-      if (s < 0x114e0) return true
-      if (s < 0x11580) continue
-      if (s < 0x11660) return true
-      if (s < 0x11680) continue
-      if (s < 0x116d0) return true
-      if (s < 0x11700) continue
-      if (s < 0x11cc0) return true
-      if (s < 0x16b00) continue
-      if (s < 0x16b90) return true
-      if (s < 0x1e900) continue
-      if (s < 0x1e960) return true
-      if (s < 0x1f1e6) continue
-      if (s <= 0x1f1ff) return true
-      if (s >= 0x1f3fb && s <= 0x1f3ff) return true
-      if (isEmojiGroupCandidate(s)) {
-        previousIsEmojiGroupCandidate = true
-        continue
-      }
-      if (s < 0xe0000) continue
-      if (s < 0xe0080) return true
-      if (s < 0xe0100) continue
-      if (s <= 0xe01ef) return true
-      continue
-    }
-    // :961-969, variation selectors and combining half marks.
-    if (c < 0xfe00) continue
-    if (c <= 0xfe0f) return true
-    if (c < 0xfe20) continue
-    if (c <= 0xfe2f) return true
-  }
-  return false
 }
 
 // WidthIterator::characterCanUseSimplifiedTextMeasuring (WidthIterator.cpp:694-742).

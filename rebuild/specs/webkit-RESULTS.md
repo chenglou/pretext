@@ -7,6 +7,24 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-19: correctness round 5 (main's true passes)
+
+research/MAIN-FACTS-ANALYSIS.md traced the cases main passes and the port fails to WebKit's source. What landed from it,
+one fix a commit; the prototypes it names (branch `x-mainfacts-webkit`) were made before X3 and were ported by meaning.
+
+- **The font code path is the measured string's** (a ported rule; `measure.ts` "The font code path"). FontCascade::width
+  chooses the simple or the complex path from the TextRun it is handed (FontCascade.cpp:304-309, :708-730), TextUtil::width
+  hands it the measured range alone (TextUtil.cpp:84-89), and Canvas measures through the same function. `mergedGlyphs`
+  asked the box, so a box with a combining mark or an Arabic letter anywhere separated no ligature pair: `ffi` after
+  U+2060 U+0301 kept its ligature at -4px of letter spacing, about 8px too wide (suite `c-19d718b564ee2744`, 9 lines for the
+  DOM's 4). It now asks the string. `isComplexCodePath` moved from `content.ts` to `measure.ts` for it. The box's path stays
+  what WebKit reads the box's for: simplified measuring, breakWord, firstUserPerceivedCharacterLength and the runs shaped
+  across inline boxes. Cost: nothing without letter spacing, and nothing in a simple path box; in a letter-spaced complex
+  path box, a measured string that holds no complex path character and has a merged pair asks the separated string's two
+  totals (the count context and the plain one) and measures the separated string where it measured the unseparated one.
+  Tier 1: 2 of 63,987 cases ask a question the record lacks in each configuration (`c-1d3594196ff8bfae`,
+  `c-65b6a6b017410209`, both `heldout-suite-sample`), every other case is the same, 0 predictions changed.
+
 ## 2026-09-19: re-architecture X3 (the model clean-up)
 
 research/ARCHITECTURE-PLAN-2.md §8 step 2, X3. No rule, citation, gap condition, merge rule, probe order or measured string
