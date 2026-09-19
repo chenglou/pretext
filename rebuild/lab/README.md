@@ -243,12 +243,13 @@ Run tier 2 in both: with no supplied facts most values are limited, so a change 
 facts configuration, where they are predicted ("The ledger", the exact-value status).
 
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
-sets `runs`, `ws`, `policy`, `rich-prewrap` and `suite-sample`; the rule and feature families derived in round 3 (`families`,
-`features`, and Chrome's `features-en-US` under its second locale; `.artifacts/tests/derive-r3-20260917`); and the 09-16
-held-out sets `heldout-runs`, `heldout-ws`, `heldout-policy` and `heldout-suite-sample`. Chrome 66,685 cases, Firefox 63,771,
-webkit-host 63,987. A case id can sit in two sets (the smoke set samples the others, and `features-en-US` observes
-`features` ids under another locale), so everything keys on set and id. Giants are in no set: a giant's record is as large
-as its calls and one can take minutes, so they stay an evaluation job.
+sets `runs`, `ws`, `policy`, `rich-prewrap`, `twins` (Chrome alone) and `suite-sample`; the rule and feature families
+derived in round 3 (`families`, `features`, and Chrome's `features-en-US` under its second locale;
+`.artifacts/tests/derive-r3-20260917`); and the 09-16 held-out sets `heldout-runs`, `heldout-ws`, `heldout-policy` and
+`heldout-suite-sample`. Chrome 66,685 cases (67,065 with `twins`), Firefox 63,771, webkit-host 63,987. A case id can sit
+in two sets (the smoke set samples the others, and `features-en-US` observes `features` ids under another locale), so
+everything keys on set and id. Giants are in no set: a giant's record is as large as its calls and one can take minutes,
+so they stay an evaluation job.
 
 `rich-prewrap` (1,334 cases; `bun rebuild/lab/cases/rich-prewrap.ts --out=.artifacts/lab/cases/rich-prewrap.ndjson`, sha256
 61bdf919…; research/PREWRAP-RICH.md) joined in round 4c, after the first references of 2026-09-18 were recorded, so the
@@ -257,6 +258,12 @@ hold it ("The correctness line"). It is the only set that reaches tab-size on a 
 preserved newline or beside preserved spaces across a box end: round 4c's three fixes (Gecko's tab-size and preserved
 newline, Blink's justify end offset) changed the prediction of 0 cases of the other sets in Chrome and 2 in Firefox, and
 corrected observed values in 7 and 47 cases of this one. Both orders with recording take 4 to 6 s a browser.
+
+`twins` (380 Chrome cases, `lab/cases/twins.ts`, sha256 b7716331…): one run of 13 or more brackets after Latin and after
+Arabic in one Amiri style, the only set where the Blink port asks the same characters in both storages in one paragraph;
+Chrome 67,065 cases with it. It joined the development sets with the Blink string storage fix, after the correctness
+line (specs/blink-RESULTS.md "String storage", research/BLINK-STRING-STORAGE.md), so the counts of the line in this
+section are without it.
 
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
@@ -521,7 +528,11 @@ prediction. One command each; every one was run against a planted violation and 
 | Line ranges against layouts | `bun rebuild/tests/compare-sets.ts <plain predictor's run> <usual run> --prediction=line-ranges` | exit 1: a line range differs or a row is missing; exit 3: only native observations differ |
 
 Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin family) are the tools owner's, under
-`rebuild/tools`.
+`rebuild/tools`. Check 9's scan (`bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>]`, offline on the stand-in
+Canvas) counts the cases where the Blink port asks one context the same characters as a one-byte and as a two-byte
+string; since the string storage fix it is a tripwire: 0 on every set (at the merge 0 of the 67,072 case lines of Chrome's
+set files, 377 of which ask a two-byte slice at all, 281 of them in `twins`; at the line 166 of the 380 `twins` cases held
+such a pair).
 
 - **Checks 1 to 3 wait for the function set** (`prepare(paragraph, env, inspect)`, `firstLine`, `fillLine(prepared, start,
   { width, left, right })`, `linePieces`, `inspectLine`; the plan's §5.6), which step 1's S3 exports from
@@ -609,6 +620,8 @@ pass (Chrome's 404 by a `not exact` rule over `rule/wbr-elements` and 12 named c
 U+FFFC cluster reported as predicted (14 cases), Firefox's 209 history-dependent fresh cases against 0, the 82 fresh WebKit
 cases that fail in both orders and pass alone, the wider signature of Chrome's hang, `src/paint.ts` outside tier 1, one Mac
 at DPR 2, and the traces of the half-width ideographic full stop and of WebKit's inline box width a float32 step off.
+After the line the Blink string storage fix added 3 named cases to the U+FFFC item (the x of U+FFFC itself, in the facts
+configuration) and one painter item for the 2 open painter rows of `twins` (63 items, 594 named cases).
 
 ## Running
 

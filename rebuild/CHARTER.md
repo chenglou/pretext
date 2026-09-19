@@ -243,6 +243,15 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 - Tier 1 can't see V8 string storage; Chrome's storage-sensitive cases (4,695 with the lab's facts, 65,384 of 66,685
   without, where font check 4 asks a 15-unit sample) go to tier 2 by rule when the code that builds Canvas strings changed,
   a path rule, not a detection. No such rule routes a change under `src/paint.ts`, which tier 1 can't see at all.
+- Chrome: a text node's storage is an input the library can't read. The Blink port takes a text node for 8-bit exactly
+  when its characters are at most U+00FF, which is what the HTML parser and V8 make of literals, `JSON.parse`,
+  `String.fromCharCode` and their concatenations, and what the library's painter paints. V8 keeps a slice, `split` part or
+  match of 13 units or more out of a string that holds a character above U+00FF in two bytes, with whatever is built from
+  it; a text node made from one is 16-bit, and Chrome segments its paragraph by script where the port takes one Latin
+  segment (inline_items_builder.cc:725, inline_node.cc:1256-1290). Only a paragraph with no character that has a script of
+  its own is shaped otherwise, in a font with other lookups for Common and Latin. No script can read a string's storage
+  and no condition reports it (probe blink-storage S2, S4; specs/blink-RESULTS.md "String storage";
+  research/BLINK-STRING-STORAGE.md, decision 2).
 - The frozen line is one Mac at a device pixel ratio of 2: the OS is no part of the environment, `detectEngine()` answers
   supported for Chrome or Firefox on any OS, and no case runs at another ratio.
 
@@ -351,3 +360,8 @@ record).
   two `measureText` calls, and answers unsupported by name; Firefox 140.16.0esr, where predictions collapsed under an
   `engine-build` gap alone, is refused for its missing `lang`, the 0.001px spacing kept as a fraction and the ink box it
   moves, and the five neighbouring builds that predicted well pass (probe `probes/canvas-checks.ts`).
+- After the line, string storage: the Blink port's two-byte slice reaching Canvas as one byte (the memo's lookup
+  internalized it), one canvas asked the same characters in both storages, a text node's U+FFFC taken for an atomic
+  inline's, and, in fonts Canvas shapes whole, a Latin range of script-neutral characters with a space measured as a
+  two-byte string and shaped as Common (`shape.ts` `spacesStay`; fonts shaped word by word keep U+2028 and
+  `script-context`). research/BLINK-STRING-STORAGE.md.

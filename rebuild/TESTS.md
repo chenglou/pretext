@@ -60,12 +60,13 @@ Terms:
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
 | `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/` | Tier 2 and its adopted seeds, `<browser>-<engine build>-<config>.json` with seed records |
-| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (62 items) |
+| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (63 items) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
 | `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (20 tests; one ties the joining-script test to the Blink port's joining types, two hold the checks' contexts to the engine's own text rendering), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
 | `rebuild/src/measure/canvas-checks.test.ts`, `rebuild/probes/canvas-checks.ts` | `detectEngine()`'s Canvas checks against stand-in contexts, and the library's own `detectEngine()` in a browser: a pinned browser must answer supported (`LAB_CHROME_APP`, `LAB_FIREFOX_APP` for another build) |
+| `rebuild/src/measure/canvas.test.ts`, `rebuild/probes/blink-storage.ts` | The string an engine hands to `measureText` reaches Canvas as built: no `Map` or `Set` key holds the measured string's characters alone while `measureText` runs (V8 would hand Blink a one-byte string afterwards), and in pinned Chrome the library's own bundled module answers a run of brackets on its `8bit` and `16bit` contexts as each storage shapes (S5; `rerun-probes.sh` reruns the probe per Chrome release) |
 | `rebuild/knip.config.ts` | `bunx knip --config rebuild/knip.config.ts`: unused files and exports under `rebuild/`, tests ignored |
 | `rebuild/lab/browser-build.ts`, `rebuild/lab/pin-browser.sh` | The apps `lab/run.ts` and `probes/runner.ts` launch (pinned copies of Chrome and Firefox), and the build read from their bundles |
 | `rebuild/lab/sharded.ts` | One case file as several jobs at once; derivation observes through it |
