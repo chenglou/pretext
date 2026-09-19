@@ -9,7 +9,7 @@
 // Gecko's lists aren't merged: a condition that shows twice is listed twice, as when both passes of a redo meet the same
 // emergency break. Only the in-word report is sorted.
 import type { GeckoEnvironment } from '../../env.js'
-import { contextFor, width, type Context } from '../../measure/canvas.js'
+import { width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName } from '../../model.js'
 import { advanceBefore } from './advance.js'
@@ -17,7 +17,7 @@ import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
-import { CANVAS_AU_PER_PX, quantize7, rangeAu } from './measure.js'
+import { CANVAS_AU_PER_PX, letterSpacedContext, quantize7, rangeAu } from './measure.js'
 import type { PlacedText } from './placement.js'
 import type { EmojiPresentation } from './props.js'
 import { WORD_WRAP_BREAK, holderOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
@@ -189,7 +189,7 @@ export function runEnded(test: SpaceTest | null, end: number): void {
 // goes by the same two flags (CanvasRenderingContext2D.cpp:4759-4790): W at 2px less W at 0.001px, over 2px, counts the
 // unit's groups (probe gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer,
 // Canvas doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
-export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>,
+export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick<GeckoTextRun, 'contexts' | 'scriptRuns' | 'tStart'>,
   leaf: number, letterSpacing: number, tUnits: Uint16Array, tSource: Int32Array, clusterStart: Uint8Array, spacingPrefix: Int32Array, t: number, e: number, w: number): void {
   if (sink === null || letterSpacing === 0) return
   let clusters = 0
@@ -199,7 +199,7 @@ export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick
     if (spacingPrefix[k + 1] !== spacingPrefix[k]) spaced = true
   }
   if (spaced) {
-    const wide = rangeAu(contextFor(contexts, { ...run.context.settings, letterSpacing: '2px' }), run, tUnits, t, e)
+    const wide = rangeAu(letterSpacedContext(contexts, run.contexts), run, tUnits, t, e)
     const groups = (wide - w) / (2 * CANVAS_AU_PER_PX)
     if (groups !== clusters) {
       sink.push({ gap: 'glyph-clusters', run: leaf, detail: `Canvas letter spacing counts ${groups} ligature groups in a unit of ${clusters} clusters, and the DOM spaces by ligature group starts (nsTextFrame.cpp:3860-3873)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })

@@ -3,9 +3,10 @@
 // groups, pair adjustments and joining forms Canvas can show, and the reason where Canvas can't confirm it
 // (gfxTextRun::GetAdvanceWidth, gfxTextRun.cpp:1214-1256; ComputeLigatureData :238-322). specs/gecko-canvas.md §3.
 import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
+import { canvasFont } from '../../measure/font.js'
 import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
-import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
+import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
 import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigatureRow, PairPlacement } from './types.js'
 
@@ -19,16 +20,15 @@ import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InW
 // one that begins more than a cluster before t, doesn't show. A run with letter spacing has ligatures off in the DOM too
 // (nsLayoutUtils.cpp:6901-6904).
 function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
-  const settings = run.context.settings
-  if (settings.letterSpacing !== '0px') return false
+  if (run.contexts.own.settings.letterSpacing !== '0px') return false
   let a = t - 1
   while (a > unit.tStart && p.clusterStart[a] === 0) a--
   let b = t + 1
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
   let pair = ''
   for (let k = a; k < b; k++) pair += String.fromCharCode(p.tUnits[k]!)
-  const on = bounds(run.context, pair)
-  const off = bounds(contextFor(p.contexts, { ...settings, letterSpacing: '0.001px' }), pair)
+  const on = bounds(run.contexts.own, pair)
+  const off = bounds(noLigaturesContext(p.contexts, run.contexts), pair)
   return on.width !== off.width || on.left !== off.left || on.right !== off.right
 }
 
@@ -106,7 +106,7 @@ const ZWNJ = '\u200c'
 // `withCluster`). Whichever comes first asks Canvas, and the other reads it here.
 function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): number {
   const entry = entryAt(unit, t)
-  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.context, run, p.tUnits, t, unit.tEnd)
+  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd)
   return entry.suffixAu
 }
 
@@ -151,7 +151,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // in the unit. 20px "Myanmar MN": U+1038 alone is 982 au, a 649 au dotted circle and the 333 au the DOM gives it after
   // U+1004 U+102B (probe gecko-port F23). The value is the prefix's width, which ends before the mark, and a stand-in.
   if (generalCategory(codePointAtT(p, t))[0] === 'M') {
-    const prefixAu = rangeAu(run.context, run, p.tUnits, unit.tStart, t)
+    const prefixAu = rangeAu(run.contexts.own, run, p.tUnits, unit.tStart, t)
     return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'mark-starts-cluster', at: p.tSource[t]! } }
   }
   const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
@@ -159,7 +159,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // characters as a group of their own when it measures the unit alone and as part of the space before them when a script
   // context stands in front (rangeAu), so its ligature groups can't be counted, and its positions stay stand-ins.
   if (p.clusterStart[unit.tStart] === 0) {
-    const inner = rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
+    const inner = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
     return { au: unit.startAdvance + unit.canvasAu - inner + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'unit-starts-inside-cluster', at: p.tSource[t]! } }
   }
   // A ligature group over t: the DOM gives a range edge inside it the group's advance in equal shares per started cluster,
@@ -200,7 +200,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   const row = rowAround(p, run, unit, t)
   const leftOver = row !== null && row.unconfirmed
   const reversed = shapedReversed(p, run, unit, t)
-  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
+  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
@@ -215,7 +215,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   }
   if (joiner !== '' || reversed || before === 'R' || before === 'D' || before === 'L' || before === 'C') {
     // The two sides as the unit shapes them: with U+200D at the cut between joined letters.
-    prefixAu = rangeAu(run.context, run, p.tUnits, unit.tStart, t, '', joiner)
+    prefixAu = rangeAu(run.contexts.own, run, p.tUnits, unit.tStart, t, '', joiner)
     across = unit.canvasAu - prefixAu - suffixAu
     sides = joiner !== '' ? 'joined' : 'apart'
   } else {
@@ -226,7 +226,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
     // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
     const withCluster = a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
-    across = withCluster - suffixAu - rangeAu(run.context, run, p.tUnits, a, t)
+    across = withCluster - suffixAu - rangeAu(run.contexts.own, run, p.tUnits, a, t)
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
@@ -270,7 +270,7 @@ function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: n
     const first = (p.tUnits[t]! & 0xfc00) === 0xd800 && t + 1 < unit.tEnd ? 2 : 1
     let letter = ''
     for (let k = t; k < t + first; k++) letter += String.fromCharCode(p.tUnits[k]!)
-    const behindLetter = rangeAu(run.context, run, p.tUnits, t, unit.tEnd, letter + ZWNJ + ZWJ, '') - rangeAu(run.context, run, p.tUnits, t, t + first, '', ZWNJ)
+    const behindLetter = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, letter + ZWNJ + ZWJ, '') - rangeAu(run.contexts.own, run, p.tUnits, t, t + first, '', ZWNJ)
     if (prefixAu + behindLetter === unit.canvasAu) sides = 'joined-prefix'
   }
   const standIn: InWordReason | null = leftOver ? { kind: 'between-ligatures', at: p.tSource[t]! }
@@ -328,9 +328,9 @@ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a
   let b1 = b
   if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
   for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return { after: null, placement: fact }
-  const pairAu = rangeAu(run.context, run, p.tUnits, a, b)
-  const firstAu = rangeAu(run.context, run, p.tUnits, a, t)
-  const secondAu = rangeAu(run.context, run, p.tUnits, t, b)
+  const pairAu = rangeAu(run.contexts.own, run, p.tUnits, a, b)
+  const firstAu = rangeAu(run.contexts.own, run, p.tUnits, a, t)
+  const secondAu = rangeAu(run.contexts.own, run, p.tUnits, t, b)
   const alone = pairAu - firstAu - secondAu
   if (fact === 'first-advance') return { after: alone === R ? 0 : null, placement: fact }
   if (Math.abs(alone - R) > 2) return { after: null, placement: fact }
@@ -411,15 +411,19 @@ function toldBy(placed: ReturnType<typeof placedTotals>, R: number): 'first-adva
   return placed.first === R ? 'first-advance' : null
 }
 
-// The run's context at 2^k times its font size, the largest under gfxFont's clamp of 2000px (gfxFont.cpp:4956-4960).
+// The run's context at 2^k times its font size, the largest under gfxFont's clamp of 2000px (gfxFont.cpp:4956-4960): found
+// in the paragraph's list or made at its end where a recipe first asks, and read from the run's record from then on. null
+// for a font of size 0, which no power of two makes larger.
 function largeContext(p: GeckoPrepared, run: GeckoTextRun): { context: Context; scale: number } | null {
-  const settings = run.context.settings
-  const size = /(\d+(?:\.\d+)?)px/.exec(settings.font)
-  if (size === null || !(Number(size[1]) > 0)) return null
-  let k = 0
-  while (Number(size[1]) * 2 ** (k + 1) <= 2000) k++
-  const scale = 2 ** k
-  return { context: contextFor(p.contexts, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) }), scale }
+  const size = run.font.size
+  if (!(size > 0)) return null
+  if (run.contexts.large === null) {
+    let k = 0
+    while (size * 2 ** (k + 1) <= 2000) k++
+    const scale = 2 ** k
+    run.contexts.large = { context: contextFor(p.contexts, { ...run.contexts.own.settings, font: canvasFont(run.font, size * scale) }), scale }
+  }
+  return run.contexts.large
 }
 
 // Pairs of printable ASCII that many Latin fonts kern and none ligates, in a fixed order: each shares a letter with one
@@ -438,16 +442,16 @@ const PROBE_PAIRS = ['AV', 'VA', 'AT', 'TA', 'AW', 'WA', 'To', 'Ty', 'T.', 'LT',
 // `tellers`. A pair whose letters alone don't measure as the larger size predicts ends the probe: the font's advances
 // aren't linear in the size (system-ui's optical sizes, Hoefler Text), which is the face's property. The answer depends on
 // the context alone, so it is asked once per context of a prepared paragraph, by whichever offset needs it first, and
-// kept with the paragraph (GeckoPrepared.pairPlacements). Three questions a pair that doesn't kern, six a pair that does,
+// kept on the context's record (RunContexts.pairPlacement). Three questions a pair that doesn't kern, six a pair that does,
 // none for a pair that shares no letter. Over the rows of probes gecko-mainfacts M1 and the critic's G1
 // (research/MAIN-FACTS-ANALYSIS.md), this recipe run offline: 25 of 30 and 88 of 106 styles told, a median of 30 and 24
 // questions; with it 759 of 764 told cuts of 881 are the DOM's advance in M1 and 4,231 of 4,245 of 5,114 in G1. The 19
 // others: 13 are 1 au off in words whose DOM total is 1 au off Canvas's, and 6 sit in a ligature the rows' words hold
 // (`ff`, `ffl`, Zapfino's `st`), which the ligature tests take before this recipe.
 function askedPlacement(p: GeckoPrepared, run: GeckoTextRun): PairPlacement {
-  for (let i = 0; i < p.pairPlacements.length; i++) if (p.pairPlacements[i]!.context === run.context) return p.pairPlacements[i]!
-  const asked: PairPlacement = { context: run.context, placement: null, tellers: [], tellerAu: [], sameFace: [], otherFace: [] }
-  p.pairPlacements.push(asked)
+  if (run.contexts.pairPlacement !== null) return run.contexts.pairPlacement
+  const asked: PairPlacement = { placement: null, tellers: [], tellerAu: [], sameFace: [], otherFace: [] }
+  run.contexts.pairPlacement = asked
   const large = largeContext(p, run)
   if (large === null) return asked
   const au = (context: Context, text: string): number => Math.round(width(context, text) * CANVAS_AU_PER_PX)
@@ -457,9 +461,9 @@ function askedPlacement(p: GeckoPrepared, run: GeckoTextRun): PairPlacement {
   for (let i = 0; i < PROBE_PAIRS.length; i++) {
     const pair = PROBE_PAIRS[i]!
     if (asked.tellers.length > 0 && !asked.tellers.includes(pair[0]!) && !asked.tellers.includes(pair[1]!)) continue
-    const firstAu = au(run.context, pair[0]!)
-    const secondAu = au(run.context, pair[1]!)
-    const R = au(run.context, pair) - firstAu - secondAu
+    const firstAu = au(run.contexts.own, pair[0]!)
+    const secondAu = au(run.contexts.own, pair[1]!)
+    const R = au(run.contexts.own, pair) - firstAu - secondAu
     if (R === 0) continue
     const y = au(large.context, pair[0]!) / large.scale
     const z = au(large.context, pair[1]!) / large.scale
@@ -489,7 +493,7 @@ function askedPlacement(p: GeckoPrepared, run: GeckoTextRun): PairPlacement {
 function sameFace(run: GeckoTextRun, asked: PairPlacement, cluster: string, clusterAu: number): boolean {
   if (asked.tellers.includes(cluster) || asked.sameFace.includes(cluster)) return true
   if (asked.otherFace.includes(cluster)) return false
-  const au = (text: string): number => Math.round(width(run.context, text) * CANVAS_AU_PER_PX)
+  const au = (text: string): number => Math.round(width(run.contexts.own, text) * CANVAS_AU_PER_PX)
   for (let i = 0; i < asked.tellers.length && i < 4; i++) {
     const apart = clusterAu + asked.tellerAu[i]!
     if (au(cluster + asked.tellers[i]!) !== apart || au(asked.tellers[i]! + cluster) !== apart) {
@@ -521,7 +525,7 @@ function pairFactDescribes(run: GeckoTextRun, t: number): boolean {
   while (run.scriptRuns[k]!.limit <= t) k++
   let script = run.scriptRuns[k]!.script
   if (script === 'Zyyy' || script === 'Zinh') {
-    const locale = tryParseLocale(run.context.settings.lang)
+    const locale = tryParseLocale(run.contexts.own.settings.lang)
     const likely = locale === null ? '' : addLikelySubtags(locale.language, locale.script, locale.region).script
     script = likely === '' ? 'Latn' : likely
   }
@@ -639,7 +643,7 @@ function listedParts(p: GeckoPrepared, run: GeckoTextRun, start: number, end: nu
   const facts = fonts[listed]!.ligatures
   if (facts === null || !facts.complete) return null
   if (facts.languageSystems.length > 0) {
-    const lang = run.context.settings.lang.toLowerCase()
+    const lang = run.contexts.own.settings.lang.toLowerCase()
     if (lang !== 'en' && !lang.startsWith('en-')) return null
     for (let k = 0; k < facts.languageSystems.length; k++) if (facts.languageSystems[k]!.split('/')[2] === 'ENG ') return null
   }
@@ -697,9 +701,8 @@ function rowContinues(p: GeckoPrepared, pattern: { positions: readonly (readonly
 // lam-meem and lam lam heh, U+0E24 U+0E32 in Thonburi); Arial's optional Allah ligature measures 761 au with ligatures and
 // 957 without.
 function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, joiner: string): boolean {
-  const settings = run.context.settings
-  const spaced = contextFor(p.contexts, { ...settings, letterSpacing: '2px' })
-  const off = contextFor(p.contexts, { ...settings, letterSpacing: '0.001px' })
+  const spaced = letterSpacedContext(p.contexts, run.contexts)
+  const off = noLigaturesContext(p.contexts, run.contexts)
   const groups = (tStart: number, tEnd: number, before: string, after: string): number =>
     (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
   // The unit's own count is the same at every offset, so the unit keeps it.

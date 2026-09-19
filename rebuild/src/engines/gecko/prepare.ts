@@ -10,7 +10,7 @@ import { geckoBidiData, geckoGraphemeRules } from './data.js'
 import { COLOR_EMOJI_FAMILY, extenderFontOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
 import * as gaps from './gaps.js'
 import { canonicalLanguageTag } from './likely.js'
-import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, textRunScripts } from './measure.js'
+import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, runContextsFor, textRunScripts } from './measure.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
@@ -24,7 +24,7 @@ import {
 import {
   KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
   type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
-  type ScriptRun,
+  type RunContexts, type ScriptRun,
 } from './types.js'
 
 const f32 = Math.fround
@@ -972,6 +972,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const units: GeckoUnit[] = []
   const correction = new Int32Array(T)
   const textRuns: GeckoTextRun[] = []
+  // One record per distinct context of the text runs, which the runs that measure alike share (types.ts RunContexts).
+  const runContexts: RunContexts[] = []
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     const firstRun = frames[b.flows[0]!.frame]!.run
@@ -1008,11 +1010,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
       direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '',
     }
-    const context = contextFor(contexts, settings)
+    const shared = runContextsFor(runContexts, contexts, settings)
+    const context = shared.own
     const auIn = (ctx: Context, s: string) => Math.round(width(ctx, s) * CANVAS_AU_PER_PX)
     const au = (s: string) => auIn(context, s)
     let advance = 0
-    const run = { context, scriptRuns: b.scriptRuns, tStart: b.tStart }
+    const run = { contexts: shared, scriptRuns: b.scriptRuns, tStart: b.tStart }
     // The width of U+0020 in the run's context, which every boundary space of the run takes: asked at the first one. A
     // boundary U+00A0 is a shaped word of its own, the character U+00A0 (gfxFont.cpp:3834-3861), so it takes the font's
     // glyph for U+00A0, and the space glyph only where the font has none (gfxHarfBuzzShaper.cpp:113-118; font matching tries
@@ -1151,7 +1154,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     }
     gaps.runEnded(spaces, b.tEnd)
     textRuns.push({
-      tStart: b.tStart, tEnd: b.tEnd, level: b.level, context, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
+      tStart: b.tStart, tEnd: b.tEnd, level: b.level, contexts: shared, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance,
       advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
@@ -1181,7 +1184,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, pairPlacements: [], inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
 

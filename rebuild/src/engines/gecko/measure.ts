@@ -1,11 +1,11 @@
-// What the Gecko port asks Canvas for a range of transformed text (Firefox 156.0): the script runs gfxFontGroup::InitTextRun
-// shapes, the script context a piece of a shaping unit needs, and rangeAu, the one recipe every unit, prefix and suffix goes
-// through. specs/gecko-canvas.md §2-§3.
-import { width, type Context } from '../../measure/canvas.js'
+// What the Gecko port asks Canvas for a range of transformed text (Firefox 156.0): the contexts text runs measure in, the
+// script runs gfxFontGroup::InitTextRun shapes, the script context a piece of a shaping unit needs, and rangeAu, the one
+// recipe every unit, prefix and suffix goes through. specs/gecko-canvas.md §2-§3.
+import { contextFor, width, type CanvasSettings, type Context } from '../../measure/canvas.js'
 import { AL, R, bidiClassOf } from '../../unicode/bidi.js'
 import { geckoBidiData } from './data.js'
 import { hasScript, isBidiControl, isBidiMirrored, isClosePunctuation, isClusterExtender, isOpenPunctuation, openingMirror, scriptOf } from './props.js'
-import type { GeckoTextRun, ScriptRun } from './types.js'
+import type { GeckoTextRun, RunContexts, ScriptRun } from './types.js'
 
 // A Canvas total is its text runs' au over the context's 60 app units per px (CanvasRenderingContext2D.cpp:5277, :7135-7140).
 export const CANVAS_AU_PER_PX = 60
@@ -16,6 +16,26 @@ export function quantize7(size: number): number {
   const d = f32(size * 131073)
   const t = f32(d - size)
   return f32(d - t)
+}
+
+// The record of the text runs that measure with `settings` (types.ts RunContexts), made at the list's end when no record's
+// own context has them.
+export function runContextsFor(records: RunContexts[], contexts: Context[], settings: CanvasSettings): RunContexts {
+  const own = contextFor(contexts, settings)
+  for (let i = 0; i < records.length; i++) if (records[i]!.own === own) return records[i]!
+  const made: RunContexts = { own, noLigatures: null, letterSpaced: null, large: null, pairPlacement: null }
+  records.push(made)
+  return made
+}
+
+// A run's context with letter spacing 0.001px, and with 2px: found in the paragraph's list or made at its end where a recipe
+// first asks, and read from the record from then on.
+export function noLigaturesContext(contexts: Context[], run: RunContexts): Context {
+  return run.noLigatures ??= contextFor(contexts, { ...run.own.settings, letterSpacing: '0.001px' })
+}
+
+export function letterSpacedContext(contexts: Context[], run: RunContexts): Context {
+  return run.letterSpaced ??= contextFor(contexts, { ...run.own.settings, letterSpacing: '2px' })
 }
 
 export const isSurrogatePair = (a: number, b: number) => (a & 0xfc00) === 0xd800 && (b & 0xfc00) === 0xdc00
@@ -185,8 +205,8 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // word boundary that nothing kerns across (gfxFont.cpp:3781-3866), and in the Canvas text run the space and the piece's
 // Common characters join the context's script run. Units, suffixes and prefixes all go through this one recipe.
 // `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (advance.ts).
-// The Canvas context is the text run's own, or one made from its settings: another letter spacing, a larger size
-// (advance.ts, gaps.ts).
+// The Canvas context is the text run's own, or another of its record: another letter spacing, a larger size
+// (types.ts RunContexts).
 export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' | 'tStart'>, units: Uint16Array,
   tStart: number, tEnd: number, before = '', after = ''): number {
   let piece = before
