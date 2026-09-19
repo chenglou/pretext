@@ -7,7 +7,7 @@ import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
-import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, LigatureRow, PairPlacement } from './types.js'
+import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigatureRow, PairPlacement } from './types.js'
 
 // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
 // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
@@ -56,8 +56,31 @@ export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): I
   const unit = p.units[p.unitOf[t]!]!
   if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
   const entry = entryAt(unit, t)
-  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
+  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t, entry, true)
+  else if (entry.unrefined !== null) entry.advance = sidesAdvance(p, run, unit, t, entry, entry.unrefined, true)
   return entry.advance
+}
+
+// The advance before t as a break scan's fit test takes it on a plain paragraph: without the questions that only place a
+// pair's adjustment or a joined letter's form on one side of t (sidesAdvance), which move the advance by no more than what
+// crosses t. advanceSlack is that bound, in au either way, 0 where the advance is whole. The scan asks for the whole
+// advance where the bound reaches its fit test, and the line's own edges always take it (lines.ts breakAndMeasureText), so
+// a plain paragraph's lines are the inspected one's; text whose words fit their lines asks none of those questions.
+export function roughAdvanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
+  if (t >= run.tEnd) return run.totalAdvance
+  const unit = p.units[p.unitOf[t]!]!
+  if (t === unit.tStart) return unit.startAdvance
+  const entry = entryAt(unit, t)
+  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t, entry, false)
+  return entry.advance.au
+}
+
+export function advanceSlack(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
+  if (t >= run.tEnd) return 0
+  const unit = p.units[p.unitOf[t]!]!
+  const entry = unit.inWord === null || t === unit.tStart ? null : unit.inWord.offsets[t - unit.tStart] ?? null
+  // Two au more than what crosses t: each glyph's rounding moves a told share by one.
+  return entry === null || entry.unrefined === null ? 0 : Math.abs(entry.unrefined.across) + 2
 }
 
 // What measuring found inside a unit (GeckoUnit.inWord), made when its first offset asks.
@@ -70,7 +93,7 @@ function entryAt(unit: GeckoUnit, t: number): InWordEntry {
   const offsets = inWordOf(unit).offsets
   const known = offsets[t - unit.tStart] ?? null
   if (known !== null) return known
-  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
+  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null, unrefined: null }
   offsets[t - unit.tStart] = entry
   return entry
 }
@@ -87,7 +110,7 @@ function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: nu
   return entry.suffixAu
 }
 
-function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): InWordAdvance {
+function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, entry: InWordEntry, whole: boolean): InWordAdvance {
   if (p.clusterStart[t] === 0) {
     // Inside a grapheme cluster: a soft hyphen breaks there (GetHyphenationBreaks), and a text node can start there.
     // HarfBuzz keeps a mark in a cluster of its own unless the font merges it (HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS,
@@ -176,7 +199,6 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // A ligature candidate that ends a part of a row of them (rowAround), and the facts don't say so.
   const row = rowAround(p, run, unit, t)
   const leftOver = row !== null && row.unconfirmed
-  const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
   const reversed = shapedReversed(p, run, unit, t)
   const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.context, run, p.tUnits, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
@@ -208,9 +230,22 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
+  return sidesAdvance(p, run, unit, t, entry, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver }, whole)
+}
+
+// The advance before t from its two measured sides. Two recipes ask more where the sides don't add up, each to put what
+// crosses t on one side of it: a kerned pair's placement and a joined suffix's font range (below). A break scan on a plain
+// paragraph leaves them out (`whole` false) and keeps the sides on the offset's record, and whoever needs the whole
+// advance finishes from them (advanceBefore, roughAdvanceBefore).
+function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, entry: InWordEntry, s: InWordSides, whole: boolean): InWordAdvance {
+  const { a, across, prefixAu, suffixAu, reversed, leftOver } = s
+  const joiner = s.joined ? ZWJ : ''
+  let sides = s.sides
+  const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
+  entry.unrefined = !whole && across !== 0 && !reversed && !leftOver && (s.joined || pairFactDescribes(run, t)) ? s : null
   // Which glyph of a pair carries its adjustment: the fact, or where it isn't given what Canvas told of the pair at t.
   let placement = pairKerningAt(run, t)
-  if (across !== 0 && joiner === '' && !reversed && !leftOver) {
+  if (whole && across !== 0 && joiner === '' && !reversed && !leftOver) {
     // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
     // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
     const share = pairKernedShare(p, run, unit, a, t, across)
@@ -231,7 +266,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // 26 cuts; of the 24 whose sides don't add up 18 add up this way, the prefix's side is the DOM's advance at 16 of them
   // and 3 au off at 2, and W(unit) − W(U+200D suffix) is the DOM's at none; Arabic under Georgia, 7 of 7. Two questions
   // a joined offset whose sides don't add up.
-  if (joiner !== '' && across !== 0 && !reversed && !leftOver) {
+  if (whole && joiner !== '' && across !== 0 && !reversed && !leftOver) {
     const first = (p.tUnits[t]! & 0xfc00) === 0xd800 && t + 1 < unit.tEnd ? 2 : 1
     let letter = ''
     for (let k = t; k < t + first; k++) letter += String.fromCharCode(p.tUnits[k]!)

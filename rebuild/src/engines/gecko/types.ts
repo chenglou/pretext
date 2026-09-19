@@ -199,6 +199,23 @@ export type InWordEntry = {
   advance: InWordAdvance | null
   // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
   suffixAu: number | null
+  // The offset's two sides, kept while `advance` lacks what only a chosen edge asks (advance.ts roughAdvanceBefore): a
+  // break scan on a plain paragraph took it so. null once the advance is whole, and where nothing was left out.
+  unrefined: InWordSides | null
+}
+
+// The two sides of an offset inside a unit as inWordAdvance measured them: `a` the start of the cluster before it (of its
+// ligature where it ends one), `across` what the unit's shaping moves across the offset, `joined` whether letters join
+// across it and U+200D stood at the cut.
+export type InWordSides = {
+  a: number
+  across: number
+  prefixAu: number
+  suffixAu: number
+  sides: Extract<InWordReason, { kind: 'sides' }>['sides']
+  joined: boolean
+  reversed: boolean
+  leftOver: boolean
 }
 
 // A row of ligature candidates: `edges` are the ends of its ligature groups, the row's own two included (advance.ts rowAround).
