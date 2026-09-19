@@ -4,7 +4,7 @@
 import type { GapName, LineSlot, TextAlign } from '../../model.js'
 import { WS, bidiClassOf } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
-import { boxEndEmpty, boxStartEmpty, collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
+import { boxEndEmpty, boxStartEmpty, collapsesWhiteSpace, hasBorder, isSpaceLB, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { blinkBidiData } from './data.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
@@ -111,11 +111,6 @@ export type LineInfo = {
 // the break opportunity before `offset`; one that failed, the text from the line's end.
 export type EndTest = { fits: true; offset: number; from: number } | { fits: false; offset: number }
 
-// line_breaker.cc:186-188
-function isSpaceLB(c: number): boolean {
-  return c === 0x20 || c === 0x09
-}
-
 // shaping_line_breaker.cc:38-41: SP, TAB, LF and U+3000.
 function isSpaceSLB(c: number): boolean {
   return c === 0x20 || c === 0x09 || c === 0x0a || c === 0x3000
@@ -154,7 +149,16 @@ function isForcedBreak(item: InlineItem): boolean {
 }
 
 type BreakOpportunity = { offset: number; nonHangableRunEnd: number | null }
-type ShapeLineResult = { breakOffset: number; isOverflow: boolean; isHyphenated: boolean; hasTrailingSpaces: boolean; partsKnown: boolean }
+// ShapingLineBreaker::Result, with the port's own: `partsKnown` (ItemResult.partsKnown), and `clampRests`, set where the
+// clamp of a wrapped line start's corrected space rests on a stand-in position, with whether the port clamped.
+type ShapeLineResult = {
+  breakOffset: number; isOverflow: boolean; isHyphenated: boolean; hasTrailingSpaces: boolean; partsKnown: boolean
+  clampRests: { limit: GapName; clamped: boolean } | null
+}
+
+function newShapeLineResult(): ShapeLineResult {
+  return { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true, clampRests: null }
+}
 
 export class LineBreaker {
   readonly sh: Shaper
@@ -194,8 +198,6 @@ export class LineBreaker {
   readonly shapeResults: ShapeResult[] = []
   untestedEnds: number[] = []
   clampedStarts: { start: number; limit: GapName }[] = []
-  // Set by shapeLineWith where the clamp of a start's corrected space rests on a stand-in, with whether the port clamped.
-  clampRests: { limit: GapName; clamped: boolean } | null = null
   endTests: EndTest[] = []
   truncatedStarts: number[] = []
 
@@ -531,7 +533,7 @@ export class LineBreaker {
     let inlineSize: number
     let out: ShapeLineResult
     for (;;) {
-      out = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true }
+      out = newShapeLineResult()
       const view = this.shapeLine(sr, r.start, Math.max(0, availableWidth), noResultIfOverflow, dontReshapeEndIfAtSpace, out)
       if (view === null) {
         r.inlineSize = availableWidthWithHyphens + 1
@@ -616,15 +618,14 @@ export class LineBreaker {
   // Where the clamp of a wrapped line start's corrected space rests on a stand-in position (shapeLineWith), the port lays
   // the line out the other way too, and records the start only when that gives another line.
   shapeLine(sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult): View | null {
-    this.clampRests = null
     const view = this.shapeLineWith(sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, sr.end + 1, false)
-    const rests = this.clampRests as { limit: GapName; clamped: boolean } | null
+    const rests = out.clampRests
     if (rests === null || this.clampedStarts.some(c => c.start === start)) return view
     let differs = rests.clamped
     if (!differs) {
       // The port didn't clamp: the line Blink makes if it does.
       const kept = { gaps: gapCount(this.sh.gaps), untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
-      const other: ShapeLineResult = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true }
+      const other = newShapeLineResult()
       const otherView = this.shapeLineWith(sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, other, sr.end + 1, true)
       dropGapsFrom(this.sh.gaps, kept.gaps)
       this.untestedEnds.length = kept.untestedEnds
@@ -671,7 +672,7 @@ export class LineBreaker {
       // line overflows at SHY, where the port's 111 left 18 units (c-909a7a77bad03225).
       if (sr.kind === 'group' && (availableSpace - reshaped <= 0 || availableSpace + diff <= 0)) {
         const limit = clampedStartLimit(sh.gaps, sh, sr.group, start)
-        if (limit !== null) this.clampRests = { limit, clamped: diff !== 0 && availableSpace + diff <= 0 }
+        if (limit !== null) out.clampRests = { limit, clamped: diff !== 0 && availableSpace + diff <= 0 }
       }
       if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
       if (forceClamp) availableSpace = 0

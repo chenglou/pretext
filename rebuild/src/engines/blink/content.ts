@@ -21,6 +21,11 @@ export function isCollapsibleSpace(c: number): boolean {
   return c === SPACE || c === LF || c === TAB || c === CR
 }
 
+// IsBreakableSpace as the line breaker reads it: a space or a tab (line_breaker.cc:186-188).
+export function isSpaceLB(c: number): boolean {
+  return c === SPACE || c === TAB
+}
+
 // IsAsciiSpace: U+0020, U+0009..U+000D (ascii_ctype.h:102-104).
 function isAsciiSpace(c: number): boolean {
   return c === SPACE || (c >= 0x09 && c <= 0x0d)

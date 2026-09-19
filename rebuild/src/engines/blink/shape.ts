@@ -514,25 +514,15 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 // broken cluster the paragraph never has (c-01763358db8471a3: a kasra after SHY gave its neighbour a -2 px adjustment).
 // HarfBuzz's lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a side that holds only
 // default-ignorable characters (U+200B between two letters) reaches to the next cluster.
-export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
+// `noLigatures` measures it through the no-ligature contexts: the adjustment without liga, clig and calt.
+export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number, noLigatures: boolean = false): number {
   const p = sh.p
   if (k <= lo || k >= hi) return 0
   let a = clusterStartAtOrBefore(p, k - 1, lo)
   while (a > lo && allDefaultIgnorable(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
   let b = clusterEndAfter(p, k, hi)
   while (b < hi && allDefaultIgnorable(p, k, b)) b = clusterEndAfter(p, b, hi)
-  return measure16(sh, g, a, b, lo, hi) - measure16(sh, g, a, k, lo, hi) - measure16(sh, g, k, b, lo, hi)
-}
-
-// pairAdjust16 measured through the no-ligature contexts: the adjustment without liga, clig and calt.
-export function pairAdjustNoLigatures16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
-  const p = sh.p
-  if (k <= lo || k >= hi) return 0
-  let a = clusterStartAtOrBefore(p, k - 1, lo)
-  while (a > lo && allDefaultIgnorable(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
-  let b = clusterEndAfter(p, k, hi)
-  while (b < hi && allDefaultIgnorable(p, k, b)) b = clusterEndAfter(p, b, hi)
-  return measure16(sh, g, a, b, lo, hi, true) - measure16(sh, g, a, k, lo, hi, true) - measure16(sh, g, k, b, lo, hi, true)
+  return measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
 }
 
 // The adjustment across offset k inside a shaping call over [lo, hi) of group g: what the text before k and the text after

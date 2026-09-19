@@ -10,8 +10,8 @@
 // prepared plain, where every function returns at once: what a function measures to decide its condition is asked of
 // Canvas on an inspected paragraph alone.
 import type { Gap, GapName } from '../../model.js'
-import { hasDictionaryCharacters, lineTable } from './breaks.js'
-import { collapsesWhiteSpace } from './content.js'
+import { hasDictionaryCharacters, languageOf, lineTable } from './breaks.js'
+import { collapsesWhiteSpace, isSpaceLB } from './content.js'
 import { raw16Of } from './contexts.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
@@ -21,7 +21,7 @@ import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
-  joinsAcross, pairAdjust16, pairAdjustNoLigatures16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
+  joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
   startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'
@@ -113,11 +113,6 @@ export function runOfSource(p: BlinkPrepared, s: number): number {
 function runAt(p: BlinkPrepared, k: number): number | null {
   const source = p.sourceOffsets[k]!
   return source >= 0 ? runOfSource(p, source) : null
-}
-
-// line_breaker.cc:186-188.
-function isSpaceLB(c: number): boolean {
-  return c === 0x20 || c === 0x09
 }
 
 // The source range of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi).
@@ -369,11 +364,7 @@ export function breakCandidate(sink: GapSink, sh: Shaper, sr: ShapeResult, endPo
     const bounds = positionBounds(sh, sr, k)
     if (bounds === null || endPosition < bounds[0] || endPosition > bounds[1]) continue
     // The condition concerns the glyph clusters on both sides of k, whose shares of the adjustment aren't known.
-    let a = k - 1
-    while (a > sr.start && !isClusterBoundary(p, a)) a--
-    let b = k + 1
-    while (b < sr.end && !isClusterBoundary(p, b)) b++
-    addGap(sink, 'unsafe-to-break', runAt(p, k), CANDIDATE_DETAIL, sourceRange(p, a, b))
+    addGap(sink, 'unsafe-to-break', runAt(p, k), CANDIDATE_DETAIL, clustersAround(p, k, sr.start, sr.end))
   }
 }
 
@@ -429,10 +420,6 @@ const SCALED_DETAIL = 'advances measured in a font made for the CSS size and sca
 const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis from the specified size (font_platform_data_mac.mm:170-178) and takes the platform font from a cache of the renderer process whose key holds the zoomed size alone (font_cache_key.h:53-68, font_description.cc:308-331), so text or a canvas that asked for this family at the same zoomed size under another specified size first decides the optical size of both (Chromium #489579956)'
 
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
-
-function languageOf(tag: string): string {
-  return tag.split(/[-_@]/)[0]!.toLowerCase()
-}
 
 // The source ranges of the text items under a style.
 function styleRanges(p: BlinkPrepared, style: number): { start: number; end: number }[] {
@@ -563,11 +550,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
     case 'start': case 'end': return
     case 'unknown':
       if (pair !== 0) {
-        let a = k - 1
-        while (a > group.start && !isClusterBoundary(p, a)) a--
-        let b = k + 1
-        while (b < group.end && !isClusterBoundary(p, b)) b++
-        addGap(gaps, 'font-fallback', run, REQUEUED_SPACE_DETAIL, sourceRange(p, a, b))
+        addGap(gaps, 'font-fallback', run, REQUEUED_SPACE_DETAIL, clustersAround(p, k, group.start, group.end))
         return
       }
       break
@@ -582,7 +565,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   // Where the declaration's ligature facts say no ligature covers k (ligatures.ts), what liga, clig and calt change there is
   // a contextual form, which no fact places.
   const ligatureFree = p.ligature[k] === LIGATURE_NONE
-  const contextual = pair !== 0 && isClusterBoundary(p, k) && style.letterSpacing === 0 && pairAdjustNoLigatures16(sh, g, k, group.start, group.end) !== pair
+  const contextual = pair !== 0 && isClusterBoundary(p, k) && style.letterSpacing === 0 && pairAdjust16(sh, g, k, group.start, group.end, true) !== pair
   if (contextual && !ligatureFree) addGap(gaps, 'glyph-clusters', run, LIGATURE_DETAIL, at)
   // A joining edge is reshaped; the reshape's measurement reports joining-technology or unsafe-to-break. Joining letters
   // are where fonts form ligatures over several graphemes (lam-alef, the three-letter Allah ligature in Geeza Pro,
@@ -626,12 +609,7 @@ function itemEdgeGaps(gaps: Gap[], sh: Shaper, info: LineInfo): void {
     const group = p.groups[g]!
     if (r.start <= group.start) continue
     const limit = positionLimit(sh, g, r.start, group.start, group.end)
-    if (limit === null) continue
-    let a = r.start - 1
-    while (a > group.start && !isClusterBoundary(p, a)) a--
-    let b = r.start + 1
-    while (b < group.end && !isClusterBoundary(p, b)) b++
-    addGap(gaps, limit, runAt(p, r.start), ITEM_EDGE_DETAIL, sourceRange(p, a, b))
+    if (limit !== null) addGap(gaps, limit, runAt(p, r.start), ITEM_EDGE_DETAIL, clustersAround(p, r.start, group.start, group.end))
   }
 }
 
@@ -673,7 +651,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
         // A boundary the ligature facts settle is predicted: a ligature's cluster takes one position, and none forms elsewhere.
         if (!isClusterBoundary(p, k) || p.ligature[k] === LIGATURE_NONE) continue
         const d = pairAdjust16(sh, g, k, group.start, group.end)
-        if (pairAdjustNoLigatures16(sh, g, k, group.start, group.end) !== d) {
+        if (pairAdjust16(sh, g, k, group.start, group.end, true) !== d) {
           addGap(gaps, 'glyph-clusters', runAt(p, k), LIGATURE_DETAIL, sourceOffsetAt(p, k))
           break
         }
@@ -686,12 +664,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
   // c-06218d32a4b76797 keeps `له` together where natively every letter, reshaped alone, takes a line).
   if (info.breaksInsideWords) {
     for (let k = start.textOffset + 1; k < info.decisionEnd; k++) {
-      if (p.ligature[k] !== LIGATURE_UNCERTAIN) continue
-      let a = k - 1
-      while (a > 0 && !isClusterBoundary(p, a)) a--
-      let b = k + 1
-      while (b < p.text.length && !isClusterBoundary(p, b)) b++
-      addGap(gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, sourceRange(p, a, b))
+      if (p.ligature[k] === LIGATURE_UNCERTAIN) addGap(gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, clustersAround(p, k, 0, p.text.length))
     }
   }
   // An opportunity the port gave up after its end reshape failed the fit test, which Blink takes untested where HarfBuzz

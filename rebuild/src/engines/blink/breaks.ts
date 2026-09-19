@@ -20,7 +20,7 @@ export function isBreakableSpace(c: number): boolean {
   return c === SPACE || c === TAB || c === LF
 }
 
-function languageOf(tag: string): string {
+export function languageOf(tag: string): string {
   return tag.split(/[-_@]/)[0]!.toLowerCase()
 }
 
