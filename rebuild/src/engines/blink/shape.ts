@@ -456,12 +456,11 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
   measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts)
   if (ls16 === 0) return w + adjust
-  return w + adjust + letterSpacingDifference16(sh, cs, scripts, ls16)
+  return w + adjust + letterSpacingDifference16(p, cs, scripts, ls16)
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
-function letterSpacingDifference16(sh: Shaper, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
-  const p = sh.p
+function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
   let adjust = 0
   for (let u = 0; u < cs.units.length; u++) {
     const t = cs.units[u]!
@@ -1034,7 +1033,7 @@ export function sliceEdge(p: BlinkPrepared, k: number, lo: number, hi: number): 
 }
 
 // The advance sum before slice edge k in the shaping call a part's glyphs come from: the item's result or a reshape.
-export function slicePrefix16(sh: Shaper, part: Part, k: number): number {
+function slicePrefix16(sh: Shaper, part: Part, k: number): number {
   switch (part.kind) {
     case 'range': return prefix16(sh, part.sr, part.sr.kind === 'group' ? sliceEdge(sh.p, k, part.sr.start, part.sr.end) : k)
     case 'reshape': return callPrefix16(sh, part.call, sliceEdge(sh.p, k, part.call.start, part.call.end))

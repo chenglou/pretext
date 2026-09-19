@@ -16,6 +16,79 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Re-architecture X2: the memo goes
+
+Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-19, branch `ra-x2-blink` on the X1 merge (bd0fefe), step X2 of
+research/ARCHITECTURE-PLAN-2.md. No rule, recipe, gap condition, prose or probe order changed. Runs:
+`.artifacts/tests/runs/ra-x2-blink/`; probe `.artifacts/probes/blink/storage-ra-x2`.
+
+**What changed.**
+
+- Every Canvas read is `width` or `bounds` (`src/measure/canvas.ts`) on a context a style holds by reference
+  (`StyleContexts`), so nothing answers a question but Canvas. The prepared paragraph keeps its contexts as one list
+  (`canvases`, one per settings, which grows when a segmented paragraph first asks a one-byte string) where it kept a
+  measurer with a memo and a call log. `Shaper` is the prepared paragraph and where gaps go; what measures without raising a
+  gap takes the prepared paragraph alone (`contextsOf`, `trim16`, `measureHanKerningFontData`, the word-split probe).
+- Three values go where they are needed instead of being measured again: a piece's total from the cut search to the
+  group's prefixes (`addPieces`), a window's total to `windowAdjust16` from the caller that has it, and the advance sums
+  before a view's part and run edges, measured once in `floatWidthOfParts`.
+- The port's tests and probe `blink-storage` S5 count what Canvas is asked on the Canvas classes themselves, and
+  `tools/twin-scan.ts` names a context by its place in the paragraph's list.
+
+**A measurement made again is part of an inspected paragraph's gap lists.** Every `measure16` call raises its range's
+gaps, and a range raised again merges into the first entry it meets (`gaps.ts` `addGap`), which can be an earlier entry
+that grew in between. So a list's grouping follows the repeats, though never what the entries cover together, and a
+value handed on in place of a repeated measurement can regroup ranges in a row. Two flows did, and were taken back:
+the clusters' prefixes carried through `inspect.ts` `shapeOf` (lab path 10.2 to 7.6 asks per distinct question;
+`script-context` ranges regrouped in 3 of 67,065 cases without facts: `c-513d0dd644d21e13`, `c-f8f4958db0d9fff5`,
+`c-84431ee1355fbd05`), and positions kept through one binary search of `offsetForPosition` (1 case with facts,
+`c-8af1bb2f8dc37348`). The three kept flows change no row in tier 1, and none of the development sets' 80,757 layouts
+at 60, 150 and 400px on the stand-in Canvas against the step's start, in either configuration (`tools/two-trees.ts`). Until gap lists are frozen
+again in a form that doesn't follow the repeats, what can drop repeats on the lab's path is what tier 1 shows row for
+row, and anything that answers from stored positions has to measure again under a gap list.
+
+**Gates.**
+
+| Gate | Result |
+|---|---|
+| tier 0 | `tsc` clean for the six projects; 805 tests pass |
+| tier 1, all six references | Chrome: 0 predictions changed, 0 new questions, 0 other questions; 65,900 cases without facts and 65,898 with them ask again what they asked (repeats only), exit 3. Firefox and webkit-host: every case the same, exit 0 |
+| tier 2, both orders, no facts and facts | 0 status transitions and 0 exact-value changes in both (differing predicted values 266 and 552, rect counts 992 and 869, limited values 149,318 and 108,919, all as the references); gate lost 0. Row for row against X1's runs in both orders (134,130 rows a configuration): 0 native observations, predictions or painted lines differ |
+| plain predictor, forward, all 67,065 no-facts cases | line ranges equal the usual run's in every case; 0 native observations differ |
+| other widths first, forward, all 67,065 no-facts cases | layouts equal the usual run's in every case: 0 native observations, predictions or painted lines differ |
+| `function-set.ts plain`, `pure` | 67,065 of 67,065 in both configurations; 26,035 and 21,826 cases first ask in another order than the lab's path, as before |
+| citations | 0 lost |
+| twin scan (`twins`, `runs`, `ws`, `policy`, `rich-prewrap`: 6,919 cases) | 333 ask a two-byte slice, 0 ask one context both storages; with one set of contexts planted, 166 of the 380 `twins` do, as at the correctness line |
+| probe `blink-storage` | 6 of 6 probes, 85 of 85 checks, every value as in X1's run; S5 notes Canvas's answers on the page: the 16bit context gives 285.79 and the 8bit one 159.12, in both orders |
+
+**Canvas questions a paragraph** (the 67,065 recorded cases under replay; the browser's usual run counts 1,016.78):
+
+| | asked at the start | distinct | asked, memo gone | asked now | ask ratio now |
+|---|---:|---:|---:|---:|---:|
+| lab path, no supplied facts | 99.97 | 99.74 | 1,055.8 | 1,016.8 | 10.19 |
+| lab path, with the lab's facts | 91.91 | 91.68 | 1,098.2 | 1,055.7 | 11.52 |
+| plain path, no supplied facts | 61.18 | 61.02 | 289.8 | 250.7 | 4.11 |
+| plain path, with the lab's facts | 48.49 | 48.33 | 283.2 | 240.8 | 4.98 |
+
+**Where the repeats are** (tier 1 `--sites`, no supplied facts; 61.5 M repeats). By what is measured: the pair window's
+three strings 67.5%, a position's prefix 13.5%, the wide window 10.5%, the script split inside `measure16` 5.8%, the
+no-ligature pair window 2.3%. By who asks: `inspectLine` 64.6% (`shapeOf` 52.2%, `lineEdgeGaps` 12.4%, of which `edgeGap`
+5.3%; `pairPlacement` 10.4% and `floatSum` 10.5% sit under them), `fillLine` 32.1% (`offsetForPosition` 9.9%,
+`floatWidthOfParts` under views and `snappedWidth`, the safe tests 3.9%), `prepare` 3.2%. With the lab's facts
+`viewPositionLimit` asks 24.4% and `shapeOf` 65.2% in all. A reshape's own positions (`callPrefix16`) are 0.1%, so a
+reshape record keeps no positions. On the plain path, over every sixth case of the development, family and feature sets
+(8,450 cases): 70% of the repeats fall inside one `fillLine` call, 19% across calls and 11% in `prepare`; inside a call the binary search
+repeats its own and its neighbours' windows, and the start's position, the search and the view's edges ask about the
+same offsets. Per-offset position data on the item's shape result for one fill, as Blink's `ShapeResult` has
+(`character_position_`), is what would take them; it stores measured values, so it waits (the plan's decision 4), and
+under a gap list it couldn't answer.
+
+**Times** (quiet machine, this step and its start commit back to back): the giants under the exclusive lock 122.0 s with
+55.3 s of prediction against 116.2 s and 49.5 s (step 0: 118.8 s and 49.8 s); tier 2 forward without facts 82.8 s with
+72.4 s of prediction over the rows against 79.3 s and 66.5 s (step 0: 77.3 s). Both within the step's tripwire of twice
+step 0's. Chrome answers a repeated string from its per-canvas cache; the port's own work around a read (building the
+Canvas string, the script and spacing scans) is what a repeat costs.
+
 ## Re-architecture X1: gaps' home, plain and inspected
 
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, branch `ra-x1-blink` on the S3 merge (6f499ca), step X1 of
