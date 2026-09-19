@@ -19,7 +19,7 @@ Candidates for browser bug reports found while rebuilding Pretext, reduced to st
   appends a small reporter script while serving, and launches browsers the way `rebuild/probes/runner.ts` does.
 - Every page reproduces in its target browser, and none reproduces in the other two. The one exception is the Chrome
   `system-ui` page, where Firefox shows its own tracked `system-ui` bug.
-- A page whose bug is a call that never returns can't print a result. Entry 13's page sets its title to `STEP …` before
+- A page whose bug is a call that never returns can't print a result. Such a page (entry 13's, withheld for now) sets its title to `STEP …` before
   the call, and `verify.ts` records the run as `hung` when the browser `pages/index.json` names never gets past that step
   within 30 seconds.
 - Source paths are under `~/github/browser-engines/`: `chromium-153.0.8010.48/third_party/blink/renderer/` (B/),
@@ -40,7 +40,7 @@ they keep their numbers, and their rows sit where they rank.
 | # | Browser | Bug | Page |
 |---|---|---|---|
 | 1 | WebKit | `word-break: keep-all` breaks after commas, full stops and colons inside numbers and abbreviations, and after an opening parenthesis (new in Safari 27.0) | `webkit-keep-all-breaks-after-punctuation.html` |
-| 13 | Chrome | `Range.getClientRects()` never returns over a full stop in an 8px wide block with `overflow-wrap: break-word`; the tab has to be killed | `chrome-range-client-rects-never-returns.html` |
+| 13 | Chrome | `Range.getClientRects()` never returns in one narrow-block case; the tab has to be killed. Reported to Chromium privately on 2026-09-19; the page and the details of what triggers it are withheld from this branch until they have looked at it (the maintainer's notes hold them) | withheld |
 | 14 | Firefox | A text frame becomes about 17.9 million px wide when a span starts between two combining marks that share a glyph cluster | `firefox-frame-width-between-combining-marks.html` |
 | 2 | Chrome | A 2D canvas takes `letter-spacing` and `word-spacing` from the canvas element's CSS, scaled by the device pixel ratio, and `'0px'` doesn't clear it | `chrome-canvas-inherits-css-letter-spacing.html` |
 | 3 | WebKit | `white-space: break-spaces` text lays out like `pre-wrap` after the same text was laid out under `pre-wrap` | `webkit-break-spaces-after-pre-wrap.html` |
@@ -309,24 +309,13 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 ## 13. Chrome: `Range.getClientRects()` never returns
 
 - **Browser:** Chrome 153.0.8010.50. macOS 27.0 (26A428), arm64, DPR 2.
-- **Steps:** open `pages/chrome-range-client-rects-never-returns.html`. An 8px wide block in 16px PingFang SC with
-  `overflow-wrap: break-word` holds U+3002 IDEOGRAPHIC FULL STOP and U+300F RIGHT WHITE CORNER BRACKET. After layout the
-  page asks for the client rects of a range over the first character.
-- **Expected:** the call returns. Firefox 156 and WebKit return one rect, 16px wide.
-- **Actual:** layout finishes (the block is 45px tall, two lines) and the call never returns. The tab stays busy until
-  it is killed; `verify.ts` recorded no result 30 seconds after the page's last step.
-- **Also hangs** (Blink owner's reduction, `.artifacts/probes/blink/round4-range-hang-*`): at 10px wide, and in Hiragino
-  Sans. **Returns:** with `text-spacing-trim: space-all`; at 1px wide; under `word-break: break-all` without
-  `overflow-wrap`; for U+6211 before the two characters, over U+6211; over the bracket, whose rect is then 32px wide,
-  twice the glyph.
-- **Source, a reading that wasn't traced further:** what the hanging cases share is the line-end trim of the full stop,
-  `ShapeLine`'s `han_kerning_end` reshape that lets the half-width full stop fit
-  (`B/platform/fonts/shaping/shaping_line_breaker.cc:342-363`), on a line that then holds it alone.
-- **How sure:** high on the behaviour (every run of the lab case and of each reduction). The cause is a reading.
-- **Tracker:** not searched.
-- **Pretext:** found by the rebuild's lab, whose native step asks for every code point's rects: fresh case
-  `c-1fda71ce84fd9989` (PingFang SC, 8px wide, `keep-all`, `break-word`, `line-break: strict`) stalled the page whatever the
-  predictor.
+- **What happens:** in one kind of very narrow block, layout finishes and a later `Range.getClientRects()` call never
+  returns. The tab stays busy until it is killed. Firefox 156 and WebKit return.
+- **How sure:** high on the behaviour: every run of the lab case and of each reduction, and again on 2026-09-19 in a
+  fresh profile.
+- **Tracker:** reported to Chromium privately on 2026-09-19; the page and the details of what triggers it are withheld from this branch until they have looked at it (the maintainer's notes hold them).
+- **Pretext:** found by the rebuild's lab, whose native step asks for every code point's rects: one fresh case stalled
+  the page whatever the predictor. The lab sets such cases aside in a part's `excluded-native-hang.ndjson`.
 
 ## 14. Firefox: a text frame about 17.9 million px wide between two combining marks
 
