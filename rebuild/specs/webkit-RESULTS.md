@@ -7,6 +7,89 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-18: re-architecture X1 (gaps get their home; plain and inspected paragraphs)
+
+research/ARCHITECTURE-PLAN-2.md §8 step 2, X1. No rule, citation, gap condition, merge rule or probe order moved; what
+moved is where they live. Runs and the scratch verifiers are under `.artifacts/tests/runs/ra-x1-webkit/`.
+
+- **The decided line** (`lines.ts`). `fillLine` runs the line builder and returns where the line breaks (`start`, `end`,
+  `next`, `hasLineBox`) with the engine's record of it: the closed `Line::Run` list, the start and the slot it was filled
+  from and in, the builder that filled it, the line rect, the last-line flag, `measuredEnd`, and on an inspected paragraph
+  the gaps the filling raised, in order. It builds no fragment and no display box. `linePieces` and `lineGeometry`
+  (`output.ts`) and `lineGaps` (`gaps.ts`) read it and write nothing; the display boxes of a reordered line without content
+  no longer switch a flag of the line off and on. `webkitNextLine` and the function-set wrapper over it are gone.
+- **`gaps.ts`** holds every gap: the four conditions a break decision itself shows, raised into the fill's `GapSink`
+  (`hyphen-glyph`, the 8-bit emergency break's `string-storage`, `dictionary-breaks-stand-in` between boxes,
+  `rtl-shaping-across-inline-boxes`), `lineGaps` with its item conditions, `page-history` with the history worlds and their
+  building, the box facts only gaps read, LastResort measured beside makeBox's coverage test, and the tests that exist for a
+  gap alone (`hyphenGlyphsDiffer`, `controlsMeasureExactly`, `fixedPitchShortcutWidth`, `familyDraws`,
+  `hasLanguageDependentFallback`). The six merge rules are ported one by one, each named at its site. A world's line is
+  filled and inspected by the functions that fill and inspect the paragraph's own, its gap work included, as before.
+- **`prepared.inspect`** is a record or null: the paragraph's gaps, per box the facts only gaps read (`monospaceUnknown`,
+  `hyphenUnknown`, `unverifiedCoverage`, `primaryFamilyUnknown`, `pairKerningUnknown`, `localeChoosesFonts` with its three
+  contexts, `hanLocaleUnknown`, `quoteLocaleUnknown`, `dictionaryRangesStartingWithMark`), and the history worlds. A plain
+  paragraph has none of it, a null `GapSink`, and makes none of the contexts that serve a gap alone.
+- **Dropped:** `reverted`, `decisionStart` and `overflowStart` of the fill state, which round 2's narrowing read and nothing
+  has read since round 3's worlds replaced it.
+
+Gates, webkit-host, 63,987 cases a configuration:
+
+- Tier 1: exit 0 in both configurations, every prediction and every question the same, in order.
+- The function set against the start commit's (`tools/diff-set.ts`, under replay): every fill result, every line's pieces
+  with `overflows` and the paint facts, every inspection, the paragraph's gaps and the inspected path's questions in order,
+  and the plain paragraph's fills and pieces: 0 of 63,987 cases differ, either configuration.
+- `function-set.ts pure`: exit 0. `function-set.ts plain`: the plain path's lines and pieces equal the inspected
+  paragraph's on every case, it asks no question the record lacks and makes no more contexts, and `inspectLine` throws on
+  it; 1,174 cases without facts and 1,218 with fail the check's order rule alone (below).
+- Citations: 0 lost.
+- Tier 2 forward, both configurations: 0 status transitions, 0 cases less exact, gate lost 0. The two configurations'
+  pass, history-dependent and unobserved totals are equal, as they are in the two frozen references; what differs between
+  them is which gaps cover a failure, and each run gives its own reference's breakdown.
+- The plain predictor over the development sets (26,472 rows) against the usual run: 0 line ranges differ; 2 native
+  observations differ, `rich-prewrap/trailing-spaces` `c-1ca0bab9ded7a4c6` and `c-53283654e67b8035` (one code point rect
+  11 against 10.125px wide, one 9.953125 against 10), both history-dependent in every metric in the reference ledger
+  already. The plain run's page paints nothing, so its process lays out no painted copy of a case's text, which is another
+  break position cache history as well as a smaller set of Canvas questions.
+
+Canvas questions a paragraph, asked and distinct alike (the memo is still there):
+
+| | the lab's path | the plain path before | the plain path now |
+|---|---:|---:|---:|
+| without facts | 31.81 | 31.81 | 26.14 (−17.8%) |
+| with the lab's facts | 19.18 | 19.18 | 12.38 (−35.4%) |
+
+What the plain path drops, by the `gaps.ts` function that asks it on the lab's path (`tools/plain-drops.ts`, which reads the
+call stack under replay), a paragraph, without facts and with them:
+
+| Asked by | without facts | with facts |
+|---|---:|---:|
+| `familyDraws`: a character under the named list or the whole list, and under LastResort (`canvas-language`) | 2.30 | 2.30 |
+| `itemGaps`: single code points and the total for `simplified-measuring`, test T1's width | 1.47 | 2.85 |
+| LastResort beside makeBox's coverage test (`font-fallback`) | 1.03 | 1.03 |
+| the item widths of the history worlds | 0.58 | 0.58 |
+| glyph counts of letter-spaced strings asked for the gap first | 0.22 | 0.02 |
+| the worlds' lines, controls | 0.01 | 0.01 |
+
+The same tool checks the drop itself, on all 127,974 cases: the plain path asks only questions the lab's path asked; every
+question the lab's path asks outside `gaps.ts` it asks too, in the lab's order; every question it drops was asked under
+`gaps.ts`. 0 violations. `hyphen-glyph`'s second hyphen is dropped too, but no recorded case has `mapsHyphen` unknown; a
+unit test holds it.
+
+**The order rule of `function-set.ts plain`.** A question the lab's path first asks under `gaps.ts` and a later fill needs
+(a single code point that `simplified-measuring` measured for line 1 and `breakWord` probes on line 2; a world item's width
+that is a prefix a later line measures) is answered by the memo on the lab's path, and asked by the fill on the plain path:
+later than in the lab's order, which the check reads as other questions. It follows from dropping, not from the port: 2,133
+such questions without facts and 2,008 with, every one first asked under `gaps.ts` on the lab's path (the tool's fourth
+check). WebKit keeps measured words per font, not per canvas, so the order of two different strings changes no answer.
+
+### Open
+
+- The decided line carries no width the fill measured: with the memo in place `lineGaps` finds them there. X2 hands them
+  over.
+- `gaps.ts`, `lines.ts` and `content.ts` import each other's functions: the break decisions raise into `gaps.ts`, and
+  `gaps.ts` fills the worlds' lines and builds their items with content.ts's white-space and bidi helpers. No module reads
+  another's values while loading.
+
 ## 2026-09-18: round 4c (the first and last display box rule, checked and registered)
 
 research/PREWRAP-RICH.md's WebKit rule, `computeIsFirstIsLastBox` (InlineDisplayContentBuilder.cpp:1036-1060, read at
@@ -298,7 +381,7 @@ character no named family draws before a generic family. Three source readings a
   every character no family of the list draws. As the source reads, that is every such character under any locale: the
   condition then fires on 29% of passing development lines at a lift of 0.8 (`dev-all-x1`), because the lab's Latin lists meet
   Arabic, Hebrew, Thai, Han and emoji everywhere. So which characters a language moves stays a table of probe verdicts,
-  `content.ts` hasLanguageDependentFallback, now registered as a heuristic. Round 3's table was Han, kana, Hangul, CJK
+  `gaps.ts` hasLanguageDependentFallback (in `content.ts` until X1), now registered as a heuristic. Round 3's table was Han, kana, Hangul, CJK
   punctuation and fullwidth blocks under Han, kana and Hangul scripts. R13 (3 Latin fonts, 45 languages, 28 strings of 25
   scripts) and R14 (Helvetica, Times and Geeza Pro, 70 languages, three sample characters of each of 321 blocks) add Arabic
   under Urdu and Kashmiri (Noto Nastaliq Urdu for Geeza Pro) and enclosed alphanumerics, box drawing, geometric shapes and
@@ -651,7 +734,7 @@ before it (lab/README.md, "Line-local gaps"), and round 1's WebKit gaps were all
 content and fonts is now reported on the lines whose filling measured the characters it concerns, with `at` naming them;
 the paragraph keeps only `page-zoom`.
 
-- **Which characters a line concerns** (`lineGaps`, engines/webkit/lines.ts). The items from the line start to the end of
+- **Which characters a line concerns** (`lineGaps`, engines/webkit/gaps.ts since X1). The items from the line start to the end of
   the last candidate content the builder formed: the placed content and the content whose fit ended the line, which the
   next line starts with. The builders record how far they read (`measuredEnd`), where the last candidate began
   (`decisionStart`), whether InlineContentBreaker ran on it (`overflowStart`) and whether they rebuilt the line back to an
