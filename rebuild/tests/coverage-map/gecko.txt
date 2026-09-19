@@ -1,6 +1,6 @@
 The gecko port and the shared files: measured lines that the replay of the recorded sets never ran.
-bun rebuild/tests/coverage-map.ts --browser=firefox; firefox no-facts and facts, 127542 replayed cases in 13 sets; library 48be30e1a1a4.
-1491 of 6164 measured lines in 89 ranges over 31 files. A line ran when any part of it did; lines without code aren't measured.
+bun rebuild/tests/coverage-map.ts --browser=firefox; firefox no-facts and facts, 127542 replayed cases in 13 sets; library a059ef2cd636.
+1420 of 5744 measured lines in 74 ranges over 37 files. A line ran when any part of it did; lines without code aren't measured.
 Tier 1 says nothing of these lines: in a rewrite they move verbatim, or get a browser run. Columns: lines, the function the range starts in, its first line.
 
 rebuild/src/breaks/icu4x.ts: 12 of 99 measured lines
@@ -9,26 +9,27 @@ rebuild/src/breaks/icu4x.ts: 12 of 99 measured lines
   152-154     icu4xRuleBoundaries          front = markFront; pos = markPos; cp = markCp
   158-159     icu4xRuleBoundaries          index = next - INTERMEDIATE
 
-rebuild/src/breaks/rbbi.ts: 193 of 194 measured lines
-  22-285                                   export const DONE = -1
+rebuild/src/breaks/pair-table.ts: 2 of 2 measured lines
+  4-5         pairCanBreak                 export function pairCanBreak(pairs: Uint8Array, before: number, after: number): boolean {
 
-rebuild/src/breaks/tables.ts: 6 of 26 measured lines
-  20          blinkBreakRules              export function blinkBreakRules(table: BlinkBreakTable): BreakRules {
-  25          webkitBreakRules             export function webkitBreakRules(table: WebKitBreakTable): BreakRules {
-  30          blinkLinePairs               export function blinkLinePairs(): Uint8Array {
-  35          webkitLinePairs              export function webkitLinePairs(): Uint8Array {
-  39-40       pairCanBreak                 export function pairCanBreak(pairs: Uint8Array, before: number, after: number): boolean {
+rebuild/src/breaks/rbbi.ts: 176 of 177 measured lines
+  22-263                                   export const DONE = -1
 
-rebuild/src/engines/engine.ts: 4 of 6 measured lines
-  29-32       constructor                  constructor(engine: EngineName, feature: string, detail: string) {
+rebuild/src/engines/gecko/advance.ts: 2 of 303 measured lines
+  474-476     rowContinues                 k += cp > 0xffff ? 2 : 1
 
-rebuild/src/engines/gecko/fonts.ts: 20 of 118 measured lines
+rebuild/src/engines/gecko/fonts.ts: 17 of 115 measured lines
   17-18       genericFamily                case 'cursive': return 'cursive'
   26-33       escape                       function escape(text: string, i: number): { value: string; next: number } {
   52-54       parseFamilyList              const e = escape(list, i)
   70-72       parseFamilyList              const e = escape(list, i)
-  125-127     primaryFamilyOf              export function primaryFamilyOf(font: FontDecl): string {
-  179         extenderFontOf               return listedFontOf(font, cp)
+  172         extenderFontOf               return listedFontOf(font, cp)
+
+rebuild/src/engines/gecko/gaps.ts: 14 of 247 measured lines
+  90          wideUnit                     sink.push({ gap: 'float32-precision', run, detail: `a shaping unit ${w} au wide: measureText's float
+  128         testWindow                   test.sink.push({ gap: 'space-in-shaping', run: test.run, detail: `the whole range measures ${whole} 
+  253-258     deviceSizeOffGrid            sink.push({ gap: 'bitmap-emoji-size', run, detail: `device size ${devSize}px is not on Canvas's 7-bi
+  268-278     dictionaryBreaks             case 'unavailable': {
 
 rebuild/src/engines/gecko/likely.ts: 62 of 352 measured lines
   53-54       isUnicodeExtensionPart       const isUnicodeExtensionPart = (ts: Parser, t: Token) =>
@@ -43,72 +44,64 @@ rebuild/src/engines/gecko/likely.ts: 62 of 352 measured lines
   402         maximize                     value = defaultLsrIndex
   408-417     maximize                     retainLanguage = language !== ''
 
-rebuild/src/engines/gecko/lines.ts: 25 of 1305 measured lines
-  484-486     rowContinues                 k += cp > 0xffff ? 2 : 1
-  590         textRunAt                    return null
-  634         groupEndSpacing              extra = { at: group.end - 1, au: prov.letterSpacingAu }
-  837-841     breakAndMeasureText          lastBreak = candBreak
-  969-975     isJustifiableCharacter       if ((ch >= 0x2150 && ch <= 0x22ff) || (ch >= 0x2460 && ch <= 0x24ff) || (ch >= 0x2580 && ch <= 0x27b
-  1254        reflowChildren               case 'close':
-  1432        nextGeckoLine                throw new Error(`gecko: no progress at item ${start.frame}, offset ${start.contentOffset}`)
-  1555-1557   trimFrom                     if (pf.kind !== 'br') return { advance: 0, count: 0 }
-  1677-1679   applyFrameJustification      deltaICoord += consume(state, pf.assign.start)
-  1954-1956   lineOutput                   pushCollapsed(fragments, runOf, cursor, to)
+rebuild/src/engines/gecko/lines.ts: 13 of 492 measured lines
+  82          groupEndSpacing              return { at: group.end - 1, au: prov.letterSpacingAu }
+  253-257     breakAndMeasureText          lastBreak = candBreak
+  378-382     isJustifiableCharacter       if ((ch >= 0x2150 && ch <= 0x22ff) || (ch >= 0x2460 && ch <= 0x24ff) || (ch >= 0x2580 && ch <= 0x27b
+  655         reflowChildren               case 'close':
+  852         fillLine                     throw new Error(`gecko: no progress at item ${start.frame}, offset ${start.contentOffset}`)
 
-rebuild/src/engines/gecko/prepare.ts: 15 of 1002 measured lines
-  401-404     scriptRunLimits              if (fixupCount > 0) fixupCount--
-  839-841     prepareGecko                 chunk.push({ kind: 'object', element: event.element })
-  955         continuesAcross              const swap = ((prevFrame.level & 1) === 1) === !rtlBlock
-  1468        prepareGecko                 gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au a
-  1531-1537   prepareGecko                 if (complexLanguage(text.charCodeAt(s)) === '') { s++; continue }
+rebuild/src/engines/gecko/measure.ts: 4 of 143 measured lines
+  86-89       scriptRunLimits              if (fixupCount > 0) fixupCount--
 
-rebuild/src/env.ts: 22 of 45 measured lines
-  119-121     engineFromUserAgent          if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: '
-  128-132     detectEngine                 export function detectEngine(): DetectedEngine {
-  146-161     detectEnvironment            case 'blink':
+rebuild/src/engines/gecko/pieces.ts: 3 of 100 measured lines
+  82-84       linePieces                   pushCollapsed(fragments, p.leaves, cursor, to)
 
-rebuild/src/index.ts: 25 of 77 measured lines
-  47          prepareParagraph             case 'blink': return { engine: 'blink', env, paragraph, state: blinkEngine.prepare(paragraph, env, m
-  54-62       firstLineStart               export function firstLineStart(prepared: PreparedParagraph): LineStart | null {
-  68-77       layoutLine                   export function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResul
-  85          paragraphGaps                case 'blink': return buildGaps(prepared.env).concat(blinkEngine.gaps(prepared.state))
-  98-104      layoutParagraph              case 'blink': {
-  117-118     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
+rebuild/src/engines/gecko/placement.ts: 3 of 186 measured lines
+  207-209     applyFrameJustification      deltaICoord += consume(state, pf.assign.start)
 
-rebuild/src/measure/canvas-checks.ts: 26 of 29 measured lines
-  35-38       canvasNeeds                  function canvasNeeds(engine: EngineName): CanvasNeeds {
-  57-81       missingCanvasSupport         export function missingCanvasSupport(engine: EngineName): string[] {
+rebuild/src/engines/gecko/prepare.ts: 5 of 752 measured lines
+  574-576     prepareGecko                 chunk.push({ kind: 'object', element: event.element })
+  694         continuesAcross              const swap = ((prevFrame.level & 1) === 1) === !rtlBlock
+  1127        prepareGecko                 gaps.inexactDeviceAdvance(sink, firstRun, deviceAu60, apd, clusterAt)
 
-rebuild/src/measure/font-checks.ts: 82 of 125 measured lines
-  117-202     kept                         function kept<T extends Answer>(m: Measurer, key: string, compute: () => T): T {
-  209-242     effectiveSize                function effectiveSize(size: number): number {
-  274-292     learnedFacts                 const p: Probe = { m, engine, font, lang }
+rebuild/src/env.ts: 27 of 53 measured lines
+  122-132     engineFromUserAgent          if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: '
+  140-144     detectEngine                 export function detectEngine(): DetectedEngine {
+  158-173     detectEnvironment            case 'blink':
 
-rebuild/src/paint.ts: 434 of 744 measured lines
-  101         overflow                     case 'blink': { const g = layout.lines[l]!.geometry; return g.width - g.hangWidth - g.availableWidth
-  107-110     setFont                      function setFont(style: CSSStyleDeclaration, font: CssFont): void {
-  120-205     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
-  221-224     textNode                     function textNode(doc: Document, engine: EngineName, text: string, wideLeaf: boolean): Text {
-  349         blinkScriptsOf               function blinkScriptsOf(text: string): Uint8Array {
-  368-379     contextOf                    let text = ''
-  422         shapesAcross                 function shapesAcross(c: Context, run: number, around: string): boolean {
-  490-499     planLine                     let lastPiece = -1
-  665-670     planLine                     const fragment = line.fragments[f]!
-  675         planLine                     case 'blink': softWrap &&= resetAboveBase || lastContent === 'hanging' || (lastContent === 'trimmed'
-  696-701     hangingForm                  const hangingForm = (run: number): 'own-node' | 'same-node' | 'own-group' => {
-  768-788     planLine                     const from = c.blinkScripts.lineStarts[l]!
-  875-896     planLine                     case 'webkit': {
-  917-929     planLine                     if (endInLeaf && softEnd && (last.kind === 'hanging' || (last.kind === 'text' && /\s$/u.test(last.pa
-  957-1236    lineTokens                   function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: boolean): { tokens: To
-  1251        painterLimits                limits.push({ limit: 'controls-between-pieces', detail: "two pieces of one direction sit in differen
-  1259-1392   paintLines                   export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivEle
+rebuild/src/index.ts: 40 of 69 measured lines
+  71          prepare                      case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFo
+  78-90       firstLine                    export function firstLine(prepared: Prepared): LineStart | null {
+  99-108      fillLine                     export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult {
+  114-123     linePieces                   export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
+  130-139     inspectLine                  export function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection {
+  148         paragraphGaps                case 'blink': return buildGaps(prepared.state.env).concat(blink.paragraphGaps(prepared.state))
+  158-159     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
 
-rebuild/src/unicode/bidi.ts: 5 of 38 measured lines
-  55-59       bidiDataFor                  case 'blink':
+rebuild/src/measure/canvas-checks.ts: 26 of 26 measured lines
+  32-65                                    const CHECK_FONT = '16px serif'
 
-rebuild/src/unicode/grapheme.ts: 6 of 17 measured lines
-  19          graphemeRulesFor             case 'blink': return { kind: 'icu-rbbi', rules: blinkBreakRules('char') }
-  28-32       graphemeBoundaries           case 'icu-rbbi': {
+rebuild/src/measure/font-checks.ts: 55 of 124 measured lines
+  124-212     familiesOf                   function familiesOf(list: string): Family[] {
+  219-245     effectiveSize                function effectiveSize(size: number): number {
+
+rebuild/src/paint.ts: 400 of 699 measured lines
+  189-192     setFont                      function setFont(style: CSSStyleDeclaration, font: CssFont): void {
+  202-276     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
+  293-296     textNode                     function textNode(doc: Document, keepsLeafStorage: boolean, text: string, wideLeaf: boolean): Text {
+  441-454     contextOf                    case 'arabic-letter-mark': {
+  557-566     planLine                     let lastPiece = -1
+  737-744     planLine                     case 'last-character-box':
+  818-843     planLine                     case 'arabic-letter-mark': {
+  954-1232    lineTokens                   function lineTokens<Facts>(c: Context<Facts>, l: number, plan: LinePlan, joinsPreviousLine: boolean)
+  1247        painterLimits                limits.push({ limit: rules.controlsBetweenPieces.limit, detail: rules.controlsBetweenPieces.detail }
+  1257-1390   paintLines                   export function paintLines<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>[], refusedR
+
+rebuild/src/test-lines.ts: no replay loads it
+
+rebuild/src/unicode/grapheme.ts: 5 of 11 measured lines
+  14-18       graphemeBoundaries           case 'icu-rbbi': {
 
 rebuild/src/unicode/ubidi.ts: 526 of 604 measured lines
   85-88       paraLevelAt                  function paraLevelAt(u: Ubidi, index: number): number {

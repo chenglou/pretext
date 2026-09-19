@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { FontDecl } from '../types.ts'
-import { canonicalFontFamily, formatFontShorthand, parseFontFamilyList, parseFontShorthand } from './font.ts'
+import { canonicalFontFamily, parseFontFamilyList, parseFontShorthand } from './font.ts'
 
 describe('parseFontShorthand', () => {
   test('size and one family', () => {
@@ -53,7 +53,7 @@ describe('parseFontShorthand', () => {
     ]
     for (const value of fonts) {
       const parsed = parseFontShorthand(value)
-      expect(parseFontShorthand(formatFontShorthand(parsed))).toEqual(parsed)
+      expect(parseFontShorthand(`${parsed.style === 'italic' ? 'italic ' : ''}${parsed.weight} ${parsed.size}px ${parsed.family}`)).toEqual(parsed)
     }
     expect(parseFontShorthand('20px "Geeza Pro", "Arial", serif').family).toBe('"Geeza Pro", Arial, serif')
   })

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { EngineName } from '../src/env.ts'
 import { UNKNOWN_FONT_FACTS, type CssFont, type FontFacts } from '../src/model.ts'
-import { fontFactsFor, labDeclarations, parseFamilyList, resolveFontFacts } from './font-facts.ts'
+import { fontFactsFor, labDeclarations, resolveFontFacts } from './font-facts.ts'
 import table from './font-facts.json' with { type: 'json' }
 
 const ENGINES: EngineName[] = ['blink', 'webkit', 'gecko']
@@ -21,12 +21,11 @@ function face(postScriptName: string) {
   return Object.values(faces).find(f => f.postScriptName === postScriptName)!
 }
 
-describe('parseFamilyList', () => {
-  test('quoted and unquoted names; generic keywords only unquoted', () => {
-    expect(parseFamilyList('"Helvetica Neue", Helvetica,  Arial ,sans-serif')).toEqual([
-      { name: 'Helvetica Neue', generic: false }, { name: 'Helvetica', generic: false }, { name: 'Arial', generic: false }, { name: 'sans-serif', generic: true },
-    ])
-    expect(parseFamilyList("Times   New Roman, 'serif'")).toEqual([{ name: 'Times New Roman', generic: false }, { name: 'serif', generic: false }])
+describe('a family list', () => {
+  test('quoted and unquoted names, with runs of spaces inside a name and around a comma', () => {
+    expect(fontFactsFor(font('"Helvetica Neue", Helvetica,  Arial ,sans-serif'), 'blink', []).primaryFamily).toBe('Helvetica Neue')
+    expect(fontFactsFor(font("Times   New Roman, 'serif'"), 'blink', []).primaryFamily).toBe('Times New Roman')
+    expect(fontFactsFor(font(' Arial ,sans-serif'), 'blink', [])).toEqual(fontFactsFor(font('Arial, sans-serif'), 'blink', []))
   })
 })
 

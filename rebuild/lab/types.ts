@@ -12,14 +12,13 @@ import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geo
 import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
 import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
-import type { CssFont, Fragment, Gap, InlineElementOf, InlineNodeOf, Paragraph as LibraryParagraph, ParagraphOf, TextAlign } from '../src/model.ts'
+import type { CssFont, Fragment, Gap, InlineNodeOf, Paragraph as LibraryParagraph, ParagraphOf, TextAlign } from '../src/model.ts'
 import type { ExpectedObservation } from './observe/contract.ts'
 export type FontDecl = CssFont
 // The tree the library takes, with the page's CSS fonts: what cases that use inline structure, atomic inlines, <br>,
 // <wbr>, text-indent or text-align describe (DESIGN.md §8.3 stage 5).
 export type InlineParagraph = ParagraphOf<CssFont>
 export type InlineNode = InlineNodeOf<CssFont>
-export type InlineElement = InlineElementOf<CssFont>
 // Where a line box sits between floats, as a case and a row keep it: the CSS px its row's floats take off each side of the
 // paragraph's content box. The library's slot also carries the width (src/model.ts LineSlot), which the adapter gives
 // every slot from the case's paragraph.
