@@ -16,6 +16,200 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Correctness round 5: main's true passes, a negative result, and one window fix
+
+Pinned Chrome 153.0.8010.50, DPR 2, scorer 7, 2026-09-19, branch `cr5-blink` on the X3 merge (a0a4726). The round asked
+whether the rebuild can pass what main passes without supplied font facts (research/MAIN-PASSES-REFRESH.md,
+research/MAIN-FACTS-ANALYSIS.md). Output folder: `.artifacts/session/cr5-blink/` (probe results, the list runs, tier 1's
+reports, tools); tier 2: `.artifacts/tests/runs/cr5-blink/`. Probe file: `rebuild/probes/blink-cr5.ts` (Z, K, L).
+
+Words: a *case* is one styled paragraph at one width. A *glyph cluster* is the set of characters HarfBuzz ties to one
+glyph or glyph group. A *pair window* is the Canvas question `shape.ts` `pairAdjust16` asks at an offset: the clusters on
+both sides together, less each side alone. A *stand-in* is a value the port returns and reports a gap on. *Split* and
+*first* name where a font's pair adjustment sits: half on each glyph (the legacy kern and kerx machine,
+hb-kern.hh:102-106), or all of it on the first glyph (GPOS PairPos).
+
+### The negative result: Chrome's two big groups can't pass without supplied font facts
+
+344 of main's true passes fail in Chrome without facts. 299 of them are two groups: ligature clusters at an overflow break
+(245) and U+2060 before spaces in Times New Roman (54). The analysis found no sound Canvas recipe for either. This round
+spent a bounded effort trying to break that, with one probe run over many more fonts. It holds. **No fix is landed for
+these groups, and none should be tried again without new Canvas API.**
+
+**Pair placement (probe K).** 34 families, 11 pairs each (`AV`, `To`, `Ty`, `LT`, `P.`, `Wa`, `Yo`, `r,`, `VA`, `AT`, and
+`A` U+2060 space), 18px at DPR 2. The DOM's Range width of the first letter inside the pair is the ground truth.
+
+- 26 families kern. 14 are *split*: Times New Roman, Verdana, Trebuchet MS, Helvetica Neue, Helvetica, Times, Palatino,
+  Optima, Baskerville, Didot, Hoefler Text, American Typewriter, Marker Felt, Apple Chancery. 12 are *first*: Arial,
+  Tahoma, Futura, Gill Sans, Avenir Next, Cochin, Rockwell, Charter, Iowan Old Style, Papyrus, Shantell Sans,
+  ProbeShantell. 264 kerned pairs in all, 145 split and 119 first. Every pair of a family is of one kind.
+- Asked of Canvas per pair: the total and the ink box of the pair and of each letter; the same at the size times 2, 4, 8,
+  16 and 32; the pair under `direction = 'rtl'`; the pair inside a right-to-left override; the pair at 1px of letter
+  spacing.
+- **No quantity differs between the two kinds.**
+  - The ink box holds the total only: ink right of the pair less (total less the second letter's total plus its ink
+    right) is 0 in 238 of 264 pairs, and the 26 others are pairs whose first letter's ink reaches past the second's, 9
+    first and 17 split. Ink left of the pair equals the first letter's in all 264. This is the source's arithmetic: the
+    kern machine adds the second glyph's share to its advance and to its x offset (hb-kern.hh:102-106), so every drawn
+    position equals GPOS's.
+  - At the size times 2^k the kern is 2^k times the kern to within 2^(k-1) units of 1/65536 px, the same spread in both
+    kinds (first: -16 to 16 at 2^5 with 84 of 119 exact; split: -16 to 16 with 93 of 145 exact). HarfBuzz scales each
+    advance and the kern to whole 16.16 units once, and the two halves of a split kern add up to the kern exactly. Blink
+    keeps those units and rounds no glyph, so a total never moves. Gecko's app-unit trick has nothing to read here.
+  - Letter spacing adds exactly one spacing per cluster in all 264. A right-to-left override shapes the reversed pair
+    (it equals the two letters in the other order in 256 of 264), which is another pair.
+  - LayoutUnits (1/64 px) exist in the DOM's line breaker only. Canvas returns the float sum of 16.16 advances.
+- One indirect check exists (the analysis's M3: a letter kerns with U+2028 and not with U+0020, so Canvas shaped word by
+  word and the kern is the legacy table's). It answers for 3 of 22 families and not for Times New Roman. It stays unbuilt.
+- A second idea was read and dropped: the kern machine always ignores marks (hb-kern.hh:58), a GPOS lookup only where its
+  flag says so. "Kerns, but not across a mark" would prove GPOS. "Kerns across a mark" proves nothing, and that is the
+  answer for the font the 52 cases need.
+
+**Cluster membership (probe L).** Lam-alef in 31 family names, 16px at DPR 2. Ground truth from the DOM: the Range
+widths of lam and alef inside beh lam alef beh (equal halves of one advance, or two advances), and the lines at four
+widths that hold beh and lam by the paragraph's own positions and not alef.
+
+- 26 names draw lam-alef as one cluster (23 when the system fallback's repeats count once: Geeza Pro also answers for
+  "SF Arabic", Shantell Sans and Georgia): Arial, Times New Roman, Courier New, Geeza Pro, Al Bayan, Al Nile, Al Tarikh,
+  Baghdad, Beirut, Damascus, DecoType Naskh, Farah, Farisi, KufiStandardGK, Mishafi, Muna, Nadeem, Sana, Waseem, Tahoma,
+  Microsoft Sans Serif, Arial Unicode MS, system-ui. 5 draw two clusters: Amiri, Noto Naskh Arabic, Noto Nastaliq Urdu,
+  Diwan Kufi, Diwan Thuluth.
+- Asked of Canvas: lam alef; the same with U+200D, U+200C, U+2060, U+034F, tatweel and a kasra between; each letter with
+  U+200D; ink boxes; `direction = 'ltr'` and a left-to-right override; 4px of letter spacing; the no-ligature context
+  (1/64 px of letter spacing, which turns liga, clig and calt off); the size times 2, 4 and 8.
+- **Every candidate recipe is wrong on a probed font, or blind.**
+  - "Lam alef measures otherwise than lam U+200D alef, so it is a ligature": says ligature for Amiri (+499,122 units),
+    Noto Naskh Arabic (+111,149), Diwan Kufi (-374,784) and Diwan Thuluth (-448,512), which are two clusters, and says no
+    ligature for Geeza Pro (1 unit), which is one.
+  - U+2060 or U+034F between: 0 in Arial, Times New Roman, Courier New, Tahoma, Microsoft Sans Serif and Arial Unicode MS
+    (one cluster) and in Amiri, Noto Naskh Arabic and Noto Nastaliq Urdu (two), where lookups skip them; a difference in
+    Geeza Pro and the 17 other faces macOS ships, Diwan Kufi and Diwan Thuluth (two clusters) among them. It follows how
+    the font is shaped, not the cluster.
+  - A kasra between and `direction = 'ltr'`: no difference in any face. The override gives the two isolated letters in
+    every face. The size times 2^k is 2^k times the total to within 12 units in every named face (system-ui changes
+    design with the size).
+  - 4px of letter spacing adds nothing to any total: Blink gives cursive scripts no letter spacing
+    (shape_result.cc:977-990), so the one thing in Blink that counts clusters doesn't count here. Turning liga off moves
+    only Arial Unicode MS (by 10,240 units, under the letter spacing too).
+  - The signs and sizes of the differences overlap between the kinds, so no threshold separates them either.
+- Blink's cluster counter for Latin is letter spacing too, and any letter spacing turns liga, clig and calt off
+  (font_features.cc:54-86), so it can't count the `ffi` of a paragraph without letter spacing. `getTextClusters` and
+  `TextMetrics.advances` are still off (probe textmetrics-api).
+
+**What stands.** The headline configuration can't pass these 299 cases. Two supplied facts pass 255 of them
+(`fonts[].ligatures` with `coverage` and `realizes`, and `pairKerning`; 266 of the 344 in all). Both defaults stay under
+their gaps, `glyph-clusters` and `unsafe-to-break`. Flipping the lam-alef default to "one cluster" would be a choice by
+count (26 names against 5 here), which the charter forbids. Main passes these cases by coincidence of width
+(research/MAIN-FACTS-ANALYSIS.md, the constructed cases).
+
+### Fix: the pair window reaches past a cluster without a base (b4dbad6)
+
+**The cases.** 20 cases of the refresh's list hold a miss of the rebuild's own, in both configurations: natively SHY and
+a kasra after it share a line, and the rebuild gave each its own (`c-3b9588a5730c17d8`: beh SHY kasra beh, 16px Noto
+Nastaliq Urdu, 0.5px, 3 native lines, 4 predicted). Main fails their breaks too; the triage filed them as accidental.
+
+**What Blink does.** A mark after SHY, ZWSP or U+2060 continues that character's HarfBuzz cluster
+(hb_form_clusters, hb-ot-shape.cc:578-586), so SHY and the kasra are one cluster of no advance. Probe Z shows the rule
+in every font tried (Arial, Times New Roman, Georgia, five Arabic faces): after an overflowing letter, SHY with its mark,
+and U+2060 with its mark, share a line; ZWSP and its mark don't, because ZWSP is a break opportunity of the normal pass,
+which then needs no break-anywhere retry. The line that starts at SHY is a wrapped line start inside shaped text.
+ShapeLine reshapes from there to the first safe offset and corrects the space by the paragraph's width of that text less
+the reshape's, clamped at 0 (shaping_line_breaker.cc:309-324). With space left, the candidate is the second beh, whose
+glyph starts inside the space, and the break opportunity before it is after the kasra. With the space clamped at 0 the
+candidate is the start itself (CachedOffsetForPosition returns the logical next character at a border, shape_result.cc
+:2300-2318), the line overflows and ends at the next grapheme boundary, which is after SHY.
+
+**What the port got wrong.** Not a line-breaking rule: the port follows all of the above. It was the position of SHY.
+The two beh adjust each other across the cluster: beh U+2060 kasra beh measures 2,810,183 units at 32px, exactly what beh
+kasra beh measures, and 174,063 less than the two beh apart. HarfBuzz's lookups skip the default-ignorable glyph
+(may_skip, hb-ot-layout-gsubgpos.hh:558-571) and skip marks where the lookup's flag says IgnoreMarks
+(check_glyph_property, :561-562), which the kern machine always sets (hb-kern.hh:58). The port's pair window stopped at the
+cluster next to the offset. At SHY that window was beh with SHY and the kasra, and at the second beh it was SHY and the
+kasra with beh, and both measure no adjustment. So the whole difference fell on the last letter by subtraction, the
+paragraph's width of the reshaped text came out 170 LayoutUnits short of the reshape, and the space of 65 was clamped.
+The window already reached past a side that holds only default-ignorable characters. Now it also reaches past a side
+that holds only such characters and marks (`shape.ts` `holdsNoBase`, in `pairAdjust16` and `windowAdjust16`). Canvas
+then says what the two sides change, and `pairBefore16` places it as it places every pair adjustment: by `pairKerning`,
+on the first glyph where the fact isn't given. The text without SHY was already measured that way.
+
+**Kind of fix.** Canvas at runtime, with an engine rule choosing which string is asked. Nothing is kept per font, per
+declaration or per text run. The window's strings change; their number doesn't.
+
+**Results.**
+
+- The list (1,194 cases, `.artifacts/session/main-check-20260919/`, counted with the refresh's rule; this round's
+  `tools/compare-list.py`): 15 cases go from fail to pass in both configurations, all 15 on line count, breaks and widths,
+  0 lost, every other status the same. Failing cases 466 to 451 without facts, 174 to 159 with them. 14 are the Noto
+  Nastaliq Urdu cases. The 15th is `c-d1d894359107d0a8` (a ZWSP acute `)` and a Devanagari letter, Shantell Sans,
+  letter spacing -1): it passes because the offset after the cluster now has its exact position; why Chrome keeps ZWSP
+  and the mark on the first line there (without letter spacing it doesn't, probe Z) is not traced.
+- **Main's true passes still failing: 344 before and 344 after without facts, 78 and 78 with them.** The 15 are main's
+  accidental passes. The 5 of the 20 left: `c-b53dc153f250d155` (the Geeza Pro fallback under Shantell Sans, where
+  U+2060 breaks the AAT joining Canvas measures, 2,683,064 units against 1,965,368 without it) and four `f` SHY `fi`
+  cases in Shantell Sans, which pass with the ligature fact.
+- Tier 2, pinned Chrome, both orders, both configurations, at b4dbad6 and again at cc549ca (which changes the window's
+  comment and this file), with the same result: 67,065 cases, 4 status transitions in each configuration, all
+  on `c-bff5270008f33766` (suite/accepted-r; line count and breaks from `fail covered by glyph-clusters+unsafe-to-break`
+  to pass, widths from unobserved to pass, exact from `not exact (rect counts 1)` to exact). 0 from a pass to a
+  failure. Differing predicted values 266 to 266 and 552 to 552, rect counts 992 to 991 and 869 to 868, limited values
+  149,318 to 149,308 and 108,919 to 108,909. Gate lost 0.
+- Tier 1: exit 1 for Chrome, 0 for the other four references. Of 67,065 cases 66,328 are the same in each
+  configuration. Without facts 569 ask a new question (563 ids; `tier1/chrome-no-facts-new-questions.ids`: rule/joining
+  178, suite/marks 56, suite/cluster-v2-new 49, suite/history-collision 49, suite/prefix-cap-control 37, policy/thai 32
+  and smaller families), 39 ask other questions and 129 predictions changed; with facts 416, 56 and 265. Every one holds
+  a cluster without a base. The changed predictions that replay move no line range: without facts 329 `script-context`
+  entries on lines and 3 on paragraphs go (the port no longer measures the cluster alone, a string without a strong
+  character, which Canvas resolves under another script), 2 `unsafe-to-break` entries come (a pair adjustment now seen
+  across the cluster), and the cluster advances of 2 suite/cross-item cases move by that adjustment. All 129 and 265 pass
+  line count, breaks and widths and are exact in the ledger, before and after.
+- Function set: plain and pure pass on 66,496 and 66,649 cases, 0 fail, 569 and 416 skipped for their new questions;
+  the sweep on the stand-in Canvas, which needs no record and so runs those cases too, passes on 67,065 of 67,065
+  without facts. The plain predictor's browser run over all 67,065 cases against the usual run, at both commits,
+  `compare-sets --prediction=line-ranges`: 0 line ranges differ, 0 native observations differ, exit 0. Citations: 0 lost. Painter differential: exit 3, 0 paintings
+  differ, the 698 and 681 rows tier 1 names aren't painted offline and tier 2's painter column has 0 transitions.
+
+**Cost, plain path, Canvas questions a paragraph** (the plain predictor's browser runs, X3 merge against this commit):
+
+| Cases | Before | After | Asked per |
+|---|---:|---:|---|
+| All 67,065 | 234.31 | 234.31 (486 more questions in all) | |
+| The 66,328 without such a cluster | 228.19 | 228.19, no count moved | nothing added |
+| The 737 with one | 784.69 | 785.35: 729 ask the same number, 7 more (at most 385 to 543), 1 fewer | a consulted offset beside the cluster: the same three strings, one of them longer |
+| The bench's chat mix and script messages | | 0 of 49,275 strings hold such a cluster (`tools/chat-scan.ts`), so no question changes | |
+
+**Known limit.** Where the letters around the cluster take contextual forms, no placement is right. In Amiri the first
+beh is 117 LayoutUnits wider before the second and the last 228 narrower than reshaped (`c-909a7a77bad03225`), so at 0.5px
+Chrome clamps and gives the kasra its own line, and the port now doesn't (probe Z; at 1px it didn't before either). The
+line reports the clamp that rests on a stand-in (`glyph-clusters`) as before. No such case is in the tier sets or the
+list: nothing went from pass to fail.
+
+### Not landed: a guard for positions that run backwards
+
+10 of main's true passes are joined letters at an overflow break, and the analysis thought a guard before ShapeLine's
+early return might fix 5. Traced: none of the 10 is fixed by a guard, and a guard would be a clamp over a wrong number.
+
+- `c-06218d32a4b76797` and two more (the word ending in lam lam heh, 16px Courier New): the font draws lam lam heh as one
+  glyph, so natively offsets inside it have the cluster's start position (ComputePositionData, shape_result.cc
+  :2113-2200), the line that starts at the second lam has its start one cell from the end, and only one letter goes on
+  it. The port's stand-in for that start is the prefix measured alone, 5 cells, which equals the whole word (5 glyphs), so
+  the rest of the word seems to have no advance and stays on one line. The offset after it measures 6 cells, past the
+  end, which is the position that runs backwards; bounding it changes nothing, because the line is decided at the offset
+  before. Canvas shows that the three letters share one cell. It can't show whether they are one cluster or three, and
+  the two give different lines. The pair windows see nothing (the ligature needs all three letters), the wide window
+  does, and the line reports `glyph-clusters` and `unsafe-to-break`. The supplied facts don't settle it either.
+- Two cases of four lams and heh in the Geeza Pro fallback: the same, with positions that don't run backwards.
+- One Noto Nastaliq Urdu case: the port's two letters fit by 12 LayoutUnits and natively don't: contextual forms.
+- Four cases of CR or FF before beh SHY beh in Amiri at 3px: the port's first beh is 278 LayoutUnits and fits 385 with
+  its hyphen; natively it is 117 wider (the Amiri forms above) and doesn't.
+
+The right answer there is the gap, which every one of the 10 has.
+
+### Checked
+
+The X1 wording fix ("a character other than white space", `shape.ts` `spacesStay`, rule
+`blink/measure/spaces-stay-in-neutral-latin-range`) is still in `shape.ts`, this file, DESIGN.md §4.2 and both rule files.
+The X3 reports flag nothing else for this folder.
+
 ## Re-architecture X3: the model clean-up, canonical gap lists, the painter's script check
 
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-19, branch `ra-x3-blink` on the X2 merge (f474123), step X3 of
