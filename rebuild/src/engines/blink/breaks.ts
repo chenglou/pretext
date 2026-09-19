@@ -2,10 +2,9 @@
 // whole text_content, the ICU text restarted at every line start, the space rule, Blink's generated Latin-1 pair table,
 // break-all and keep-all, soft hyphens, and grapheme boundaries for kBreakCharacter.
 import { pairCanBreak } from '../../breaks/pair-table.js'
-import { DONE, NO_OVERRIDES, RuleBreakIterator, getCategory, type BreakRules } from '../../breaks/rbbi.js'
+import { DONE, NO_OVERRIDES, RuleBreakIterator, getCategory } from '../../breaks/rbbi.js'
 import type { BlinkEnvironment } from '../../env.js'
-import { graphemeBoundaries } from '../../unicode/grapheme.js'
-import { blinkBreakRules, blinkGraphemeRules, blinkLinePairs } from './data.js'
+import { blinkBreakRules, blinkLinePairs } from './data.js'
 import type { BlinkBreakTable } from './generated/break-tables.js'
 import { LB_AL, LB_BA, LB_CM, LB_ID, LB_NU, LB_SA, isLetterOrNumber, isMark, lineBreakClass } from './props.js'
 import type { IteratorSettings } from './types.js'
@@ -97,6 +96,21 @@ const UNKNOWN = 2
 type V8BreakIterator = { adoptText(text: string): void; first(): number; next(): number }
 type IntlWithV8 = { v8BreakIterator: new (locales: string[], options: { type: 'line' }) => V8BreakIterator }
 
+// The boundaries an ICU rule iterator gives over text_content from `start`, with no prior context, pulled as the line
+// asks for them: a line reads little past its own end, and every line start restarts the text.
+type Boundaries = {
+  start: number
+  table: BlinkBreakTable
+  // Over text_content[start..]; its `text` is that string.
+  iterator: RuleBreakIterator
+  // Absolute offsets in ascending order, without `start`: what the iterator has given so far, and inside the dictionary
+  // runs it passed the running browser's own.
+  found: number[]
+  done: boolean
+  // The running browser's line boundaries over the iterator's text, asked when the first dictionary segment comes by.
+  v8: Uint8Array | null
+}
+
 export class LineBreakIterator {
   readonly text: string
   readonly is8Bit: boolean
@@ -109,8 +123,8 @@ export class LineBreakIterator {
   locale: string | null = null
   // LineBreakType in effect, after an override to kBreakCharacter.
   breakType: IteratorSettings['breakType']
-  private icu: { start: number; table: BlinkBreakTable; flags: Uint8Array } | null = null
-  private graphemes: { start: number; flags: Uint8Array } | null = null
+  private icu: Boundaries | null = null
+  private graphemes: Boundaries | null = null
 
   constructor(text: string, is8Bit: boolean, settings: IteratorSettings, uiLanguage: string | null, dictionaryBreaks: BlinkEnvironment['dictionaryBreaks']) {
     this.text = text
@@ -130,46 +144,56 @@ export class LineBreakIterator {
     return lineTable(this.locale, this.settings.strictness, this.uiLanguage)
   }
 
-  // ICU boundaries over text_content[startOffset..] with no prior context (text_break_iterator_icu.cc:735-810), as
-  // flags at absolute offsets. Segments ICU hands to a dictionary engine take the running browser's own boundaries
-  // inside their runs of dictionary characters (DESIGN.md §6.3).
-  private icuFlags(): Uint8Array {
-    const table = this.table()
-    if (this.icu !== null && this.icu.start === this.startOffset && this.icu.table === table) return this.icu.flags
-    const start = this.startOffset
-    const sub = this.text.slice(start)
-    const flags = new Uint8Array(this.text.length + 1)
-    const rules = blinkBreakRules[table]
-    const iterator = new RuleBreakIterator(rules, NO_OVERRIDES)
-    iterator.setText(sub)
-    let previous = 0
-    let v8: Uint8Array | null = null
-    for (let b = iterator.next(); b !== DONE; b = iterator.next()) {
-      flags[start + b] = 1
-      if (iterator.dictionaryCharCount > 0) {
+  // The boundaries of `table` over the text from the line start, kept while the start and the table stay.
+  private boundaries(kept: Boundaries | null, table: BlinkBreakTable): Boundaries {
+    if (kept !== null && kept.start === this.startOffset && kept.table === table) return kept
+    const iterator = new RuleBreakIterator(blinkBreakRules[table], NO_OVERRIDES)
+    iterator.setText(this.text.slice(this.startOffset))
+    return { start: this.startOffset, table, iterator, found: [], done: false, v8: null }
+  }
+
+  // The first boundary after absolute offset `after`, or DONE. Segments ICU hands to a dictionary engine take the running
+  // browser's own boundaries inside their runs of dictionary characters (DESIGN.md §6.3); char.brk has no dictionary
+  // category, so grapheme boundaries never do.
+  private boundaryAfter(b: Boundaries, after: number): number {
+    while (!b.done && (b.found.length === 0 || b.found[b.found.length - 1]! <= after)) {
+      const previous = b.found.length === 0 ? 0 : b.found[b.found.length - 1]! - b.start
+      const next = b.iterator.next()
+      if (next === DONE) { b.done = true; break }
+      if (b.iterator.dictionaryCharCount > 0) {
         switch (this.dictionaryBreaks.kind) {
           case 'v8-break-iterator': {
-            if (v8 === null) {
-              v8 = new Uint8Array(sub.length + 1)
+            if (b.v8 === null) {
+              b.v8 = new Uint8Array(b.iterator.text.length + 1)
               const bi = new (Intl as unknown as IntlWithV8).v8BreakIterator([], { type: 'line' })
-              bi.adoptText(sub)
+              bi.adoptText(b.iterator.text)
               bi.first()
-              for (let x = bi.next(); x !== -1; x = bi.next()) v8[x] = 1
+              for (let x = bi.next(); x !== -1; x = bi.next()) b.v8[x] = 1
             }
-            this.markDictionaryRuns(rules, sub, previous, b, v8, flags, start)
+            this.addDictionaryRuns(b, previous, next, b.v8)
             break
           }
           case 'unavailable':
             break
         }
       }
-      previous = b
+      b.found.push(b.start + next)
     }
-    this.icu = { start, table, flags }
-    return flags
+    let lo = 0
+    let hi = b.found.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (b.found[mid]! <= after) lo = mid + 1
+      else hi = mid
+    }
+    return lo < b.found.length ? b.found[lo]! : DONE
   }
 
-  private markDictionaryRuns(rules: BreakRules, sub: string, from: number, to: number, v8: Uint8Array, flags: Uint8Array, start: number): void {
+  // The running browser's boundaries strictly inside each run of dictionary characters of the segment [from, to) the
+  // iterator just gave, in ascending order.
+  private addDictionaryRuns(b: Boundaries, from: number, to: number, v8: Uint8Array): void {
+    const rules = b.iterator.rules
+    const sub = b.iterator.text
     let runStart = -1
     for (let i = from; i <= to;) {
       let dictionary = false
@@ -185,44 +209,34 @@ export class LineBreakIterator {
       if (dictionary) {
         if (runStart < 0) runStart = i
       } else if (runStart >= 0) {
-        for (let x = runStart + 1; x < i; x++) if (v8[x] === 1) flags[start + x] = 1
+        for (let x = runStart + 1; x < i; x++) if (v8[x] === 1) b.found.push(b.start + x)
         runStart = -1
       }
       i += size
     }
   }
 
-  // BreakIterator::following(x) on the text from the line start: the first boundary after x, or DONE.
+  // BreakIterator::following(x) on the text from the line start (text_break_iterator_icu.cc:735-810): the first boundary
+  // after x, or DONE.
   private following(x: number): number {
-    const flags = this.icuFlags()
-    for (let b = this.startOffset + x + 1; b <= this.text.length; b++) if (flags[b] === 1) return b - this.startOffset
-    return DONE
+    this.icu = this.boundaries(this.icu, this.table())
+    const b = this.boundaryAfter(this.icu, this.startOffset + x)
+    return b === DONE ? DONE : b - this.startOffset
   }
 
-  // CharacterBreakIterator over text_content[startOffset..]: char.brk for 16-bit text, every code unit but LF after CR
-  // for 8-bit text (character_break_iterator.cc:106-154).
-  private graphemeFlags(): Uint8Array {
-    if (this.graphemes !== null && this.graphemes.start === this.startOffset) return this.graphemes.flags
-    const start = this.startOffset
-    const flags = new Uint8Array(this.text.length + 1)
-    if (this.is8Bit) {
-      for (let i = start + 1; i <= this.text.length; i++) {
-        if (!(this.text.charCodeAt(i - 1) === 0x0d && this.text.charCodeAt(i) === LF)) flags[i] = 1
-      }
-    } else {
-      const boundaries = graphemeBoundaries(this.text.slice(start), blinkGraphemeRules)
-      for (let i = 1; i < boundaries.length; i++) flags[start + boundaries[i]!] = 1
-    }
-    this.graphemes = { start, flags }
-    return flags
-  }
-
-  // NextBreakablePositionBreakCharacter (text_break_iterator.cc:404-417).
+  // NextBreakablePositionBreakCharacter (text_break_iterator.cc:404-417) with CharacterBreakIterator over
+  // text_content[startOffset..]: char.brk for 16-bit text, every code unit but LF after CR for 8-bit text
+  // (character_break_iterator.cc:106-154).
   private nextBreakCharacter(pos: number): number {
-    const flags = this.graphemeFlags()
     const x = pos - this.startOffset
-    for (let b = this.startOffset + (x > 0 ? x - 1 : 0) + 1; b <= this.text.length; b++) if (flags[b] === 1) return b
-    return this.text.length
+    const after = this.startOffset + (x > 0 ? x - 1 : 0)
+    if (this.is8Bit) {
+      for (let b = after + 1; b <= this.text.length; b++) if (!(this.text.charCodeAt(b - 1) === 0x0d && this.text.charCodeAt(b) === LF)) return b
+      return this.text.length
+    }
+    this.graphemes = this.boundaries(this.graphemes, 'char')
+    const b = this.boundaryAfter(this.graphemes, after)
+    return b === DONE ? this.text.length : b
   }
 
   // NextBreakablePosition (text_break_iterator.cc:267-387).
