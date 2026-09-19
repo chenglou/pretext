@@ -1183,7 +1183,7 @@ type Pass = { kind: 'below-floats' } | { kind: 'line'; status: Status; ll: LineL
 type Band = { iStart: number; iSize: number; impactedByFloats: boolean; left: number; containerWidth: number }
 
 function bandOf(p: GeckoPrepared, slot: LineSlot): Band {
-  const containerWidth = pxToAu(p.paragraph.width)
+  const containerWidth = pxToAu(slot.width)
   const left = pxToAu(slot.left)
   const right = pxToAu(slot.right)
   const rtl = p.paragraph.direction === 'rtl'

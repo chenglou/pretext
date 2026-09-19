@@ -25,23 +25,26 @@ function testCase(words: string, width: number): Case {
 }
 
 // What a browser run leaves: the record of the library's questions, and the prediction in the reference's shape.
-function recordInBrowser(c: Case): { input: InputCase; browser: ReferenceCase } {
+function recordInBrowser(c: Case): { input: InputCase; browser: ReferenceCase & { calls: number } } {
   beginCase(c.id)
   beginPhase('predict')
   const hook = predictor.predict(c, ENV) as LayoutPrediction
   beginPhase('observe')
   beginPhase('paint')
-  const record = endCase(hook.layout.measure)
+  const record = endCase()
   const { measure, ...layout } = hook.layout
   const input: InputCase = { id: c.id, family: c.family, case: c, browser: 'chrome', env: { userAgent: USER_AGENT, devicePixelRatio: 2, pageLang: 'en' }, build: BUILD, languages: ENV.languages, record }
-  return { input, browser: { id: c.id, prediction: { layout, observation: { codePoints: [], nodes: [], elements: [], unobservable: [] }, painterLimits: predictor.limits(hook) }, questions: { predict: 'all', observe: 'all', contexts: measure.contexts.length } } }
+  return { input, browser: { id: c.id, prediction: { layout, observation: { codePoints: [], nodes: [], elements: [], unobservable: [] }, painterLimits: predictor.limits(hook) }, questions: { predict: 'all', observe: 'all', contexts: measure.contexts }, calls: measure.calls } }
 }
 
 describe('offline replay', () => {
-  test('the recorder and the library\'s own call log agree, so the record holds what the library asked', () => {
-    const { input } = recordInBrowser(testCase('The quick brown fox jumps over the lazy dog', 120))
-    expect(input.record.library).toMatchObject({ agrees: true })
-    expect(input.record.phases.predict[1] - input.record.phases.predict[0]).toBeGreaterThan(5)
+  test('the recorder and the adapter\'s own count agree, so the record holds what the library asked', () => {
+    const { input, browser } = recordInBrowser(testCase('The quick brown fox jumps over the lazy dog', 120))
+    const asked = input.record.phases.predict[1] - input.record.phases.predict[0]
+    expect(asked).toBeGreaterThan(5)
+    expect(asked).toBe(browser.calls)
+    // The recorder lists the contexts that were asked; the adapter counts the ones the layout made.
+    expect(browser.questions!.contexts).toBeGreaterThanOrEqual(input.record.contexts.length)
   })
 
   test('the replay gives the recorded layout and painter limits back, and asks exactly the recorded questions in order', () => {

@@ -168,7 +168,7 @@ async function work(): Promise<void> {
       continue
     }
     result.painted++
-    const before = painted(frozen, input, { paragraph: line.paragraph, layout: expected.prediction.layout as LayoutPrediction['layout'] })
+    const before = painted(frozen, input, { ...line, layout: expected.prediction.layout as LayoutPrediction['layout'] })
     const after = painted(working, input, now)
     if (JSON.stringify(before) === JSON.stringify(after)) {
       result.same++

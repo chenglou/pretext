@@ -79,7 +79,7 @@ function recorded(words: string, width: number): InputCase {
   predictor.predict(c, { browser: 'chrome', build: BUILD.engine, languages: null })
   beginPhase('observe')
   beginPhase('paint')
-  return { id: c.id, family: c.family, case: c, browser: 'chrome', env: { userAgent: USER_AGENT, devicePixelRatio: 2, pageLang: 'en' }, build: BUILD, languages: null, record: endCase(null) }
+  return { id: c.id, family: c.family, case: c, browser: 'chrome', env: { userAgent: USER_AGENT, devicePixelRatio: 2, pageLang: 'en' }, build: BUILD, languages: null, record: endCase() }
 }
 
 const WORDS = 'The quick brown fox jumps over the lazy dog and runs far away'

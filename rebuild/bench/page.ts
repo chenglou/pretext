@@ -4,16 +4,13 @@
 // the next context.
 //
 // Only fetch promises and MessageChannel tasks drive the loop (no timers), so background timer throttling can't stall it.
-import { clearCache, layout, layoutWithLines, prepare, prepareWithSegments } from '../../src/layout.ts'
+import { clearCache, layout, layoutWithLines, prepare as mainPrepare, prepareWithSegments } from '../../src/layout.ts'
 import { clearMeasurementCaches } from '../../src/measurement.ts'
 import { fontFactsFor } from '../lab/font-facts.ts'
-import { layoutParagraph } from '../lab/predictor-core.ts'
-import { blinkEngine } from '../src/engines/blink/index.ts'
-import { geckoEngine } from '../src/engines/gecko/index.ts'
-import { webkitEngine } from '../src/engines/webkit/index.ts'
-import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/index.ts'
-import { createMeasurer, type Measurer } from '../src/measure/canvas.ts'
-import type { FontDecl, Gap, LineResultOf, LineSlot, Paragraph } from '../src/model.ts'
+import {
+  detectEnvironment, fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
+} from '../src/index.ts'
+import type { FontDecl, Paragraph } from '../src/model.ts'
 import type {
   BrowserKind, ContextDonePost, ContextPlan, Library, PageEnvironment, PageSnapshot, RowCount, RowPost, RowSpec, RowTiming,
   VariantCount, VariantResult,
@@ -35,10 +32,6 @@ const contextIndex = Number(params.get('context') ?? '-1')
 
 // Everything a repetition returns is summed here, so no engine can drop the work as unused.
 let sink = 0
-
-// The rebuild's measure logs of the repetitions run while `trackLogs` is set (the counting pass only).
-let trackLogs = false
-const logTotals = { contexts: 0, calls: 0 }
 
 function message(error: unknown): string {
   return error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
@@ -117,79 +110,65 @@ function givenFacts(engine: EngineName, build: string): GivenFacts {
   }
 }
 
-// ---- The rebuild's engine loop, as rebuild/lab/predictor-core.ts fillLines runs it, over several widths with one measurer ----
+// ---- The rebuild: one prepared paragraph, filled at any width (rebuild/src/index.ts) ----
 
-// What the three engine objects share (src/engines/<engine>/index.ts).
-type EngineLoop<Env, Prepared, Start, Geometry> = {
-  prepare(paragraph: Paragraph, env: Env, measurer: Measurer): Prepared
-  firstLine(prepared: Prepared): Start | null
-  nextLine(prepared: Prepared, start: Start, slot: LineSlot, measurer: Measurer): LineResultOf<Start, Geometry>
-  gaps(prepared: Prepared): Gap[]
-}
+// What a repetition reads of every line, from the least to the most. `count` fills the lines of a plain paragraph and
+// reads nothing more, which is what a height takes; `pieces` also reads what a painter takes of each line; `inspect`
+// prepares the paragraph for inspection and reads each line's geometry and gaps before its pieces, then the paragraph's
+// gaps, which is the lab's path (rebuild/lab/predictor-core.ts).
+type Mode = 'count' | 'pieces' | 'inspect'
+const MODES: readonly Mode[] = ['count', 'pieces', 'inspect']
 
-function prepareAndFill<Env, Prepared, Start, Geometry>(
-  engine: EngineLoop<Env, Prepared, Start, Geometry>, paragraph: Paragraph, env: Env, widths: readonly number[], measurer: Measurer,
-  ranges: number[] | null,
-): number {
-  const prepared = engine.prepare(paragraph, env, measurer)
-  let lines = 0
-  for (let w = 0; w < widths.length; w++) {
-    for (let start = engine.firstLine(prepared); start !== null;) {
-      const line = engine.nextLine(prepared, start, widths[w]!, measurer)
-      if (ranges !== null) ranges.push(line.start, line.end)
-      lines++
-      start = line.next
+// Every line at `width`; returns the line boxes. `ranges` takes every line's source range.
+function fillAll(prepared: Prepared, width: number, mode: Mode, ranges: number[] | null): number {
+  let lineBoxes = 0
+  for (let start = firstLine(prepared); start !== null;) {
+    const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+    if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
+    switch (mode) {
+      case 'count': break
+      case 'pieces': sink += linePieces(prepared, filled.line).fragments.length; break
+      case 'inspect':
+        sink += inspectLine(prepared, filled.line).gaps.length
+        sink += linePieces(prepared, filled.line).fragments.length
+        break
     }
+    if (ranges !== null) ranges.push(filled.start, filled.end)
+    if (filled.hasLineBox) lineBoxes++
+    start = filled.next
   }
-  engine.gaps(prepared)
-  return lines
+  return lineBoxes
 }
 
-function internalPrepareAndFill(paragraph: Paragraph, env: Environment, widths: readonly number[], measurer: Measurer, ranges: number[] | null): number {
-  switch (env.engine) {
-    case 'blink': return prepareAndFill(blinkEngine, paragraph, env, widths, measurer, ranges)
-    case 'webkit': return prepareAndFill(webkitEngine, paragraph, env, widths, measurer, ranges)
-    case 'gecko': return prepareAndFill(geckoEngine, paragraph, env, widths, measurer, ranges)
-  }
-}
-
-function internalPrepareOnly(paragraph: Paragraph, env: Environment, measurer: Measurer): void {
-  switch (env.engine) {
-    case 'blink': blinkEngine.prepare(paragraph, env, measurer); break
-    case 'webkit': webkitEngine.prepare(paragraph, env, measurer); break
-    case 'gecko': geckoEngine.prepare(paragraph, env, measurer); break
-  }
-}
-
-function track(measurer: Measurer): void {
-  if (!trackLogs) return
-  logTotals.contexts += measurer.log.contexts.length
-  logTotals.calls += measurer.log.calls.length
-}
-
-function rebuildLayout(paragraph: Paragraph, env: Environment, ranges: number[] | null): number {
-  const result = layoutParagraph(paragraph, env)
-  if (trackLogs) {
-    logTotals.contexts += result.measure.contexts.length
-    logTotals.calls += result.measure.calls.length
-  }
-  if (ranges !== null) {
-    for (let i = 0; i < result.lines.length; i++) ranges.push(result.lines[i]!.start, result.lines[i]!.end)
-  }
-  return result.lines.length
+function prepareAndFill(paragraph: Paragraph, env: Environment, widths: readonly number[], mode: Mode, ranges: number[] | null): number {
+  const prepared = prepare(paragraph, env, mode === 'inspect')
+  let lineBoxes = 0
+  for (let w = 0; w < widths.length; w++) lineBoxes += fillAll(prepared, widths[w]!, mode, ranges)
+  if (mode === 'inspect') sink += paragraphGaps(prepared).length
+  return lineBoxes
 }
 
 // ---- Variants ----
 
 type Context = { plan: ContextPlan; env: Environment; font: FontDecl }
 
-function paragraphOf(c: Context, text: string, width: number): Paragraph {
+function paragraphOf(c: Context, text: string): Paragraph {
   const s = c.plan.style
   return {
-    runs: [{ text, node: 'text', font: c.font, letterSpacing: 0, wordSpacing: 0, lang: null }],
-    font: c.font, letterSpacing: 0, wordSpacing: 0, width, lineHeight: s.lineHeight, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8, direction: s.direction, lang: s.lang,
+    content: [{ kind: 'text', text }], font: c.font, letterSpacing: 0, wordSpacing: 0, lineHeight: s.lineHeight, whiteSpace: 'normal', wordBreak: 'normal',
+    overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8, direction: s.direction, lang: s.lang, textIndent: 0, textAlign: 'start',
   }
+}
+
+// What each of the rebuild's modes is compared with in the table: main's line count for `count`, main's materialized
+// lines for `pieces` where a row has them, nothing for the lab's path.
+function rebuildVariants(label: string, what: string, baselines: Record<Mode, string | null>, run: (mode: Mode) => number): Variant[] {
+  const out: Variant[] = []
+  for (let i = 0; i < MODES.length; i++) {
+    const mode = MODES[i]!
+    out.push({ name: `rebuild ${label}, ${mode}`, library: 'rebuild', baseline: baselines[mode], desc: `${what}; ${mode} mode`, run: () => run(mode) })
+  }
+  return out
 }
 
 function variantsFor(row: RowSpec, c: Context): Variant[] {
@@ -200,13 +179,14 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
     case 'cold': {
       const text = row.text
       const width = row.width
-      const paragraph = paragraphOf(c, text, width)
+      const paragraph = paragraphOf(c, text)
+      const widths = [width]
       return [
         {
           name: 'main prepare+layout', library: 'main', baseline: null, desc: 'clearCache(); prepare(); layout()',
           run: () => {
             clearCache()
-            return layout(prepare(text, font), width, lineHeight).lineCount
+            return layout(mainPrepare(text, font), width, lineHeight).lineCount
           },
         },
         {
@@ -214,7 +194,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           desc: 'clearMeasurementCaches(), which keeps the Intl.Segmenter objects clearCache() drops; prepare(); layout()',
           run: () => {
             clearMeasurementCaches()
-            return layout(prepare(text, font), width, lineHeight).lineCount
+            return layout(mainPrepare(text, font), width, lineHeight).lineCount
           },
         },
         {
@@ -224,29 +204,27 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
             return layoutWithLines(prepareWithSegments(text, font), width, lineHeight).lines.length
           },
         },
-        {
-          name: 'rebuild layoutParagraph', library: 'rebuild', baseline: 'main prepare+layout', desc: 'layoutParagraph(), which creates a fresh measurer',
-          run: () => rebuildLayout(paragraph, env, null),
-        },
+        ...rebuildVariants('prepare+fill', 'prepare(), which makes new Canvas contexts, then every line', {
+          count: 'main prepare+layout', pieces: 'main prepareWithSegments+layoutWithLines', inspect: null,
+        }, mode => prepareAndFill(paragraph, env, widths, mode, null)),
       ]
     }
     case 'sweep': {
       const text = row.text
       const widths = row.widths
-      const paragraphs: Paragraph[] = []
-      for (let i = 0; i < widths.length; i++) paragraphs.push(paragraphOf(c, text, widths[i]!))
-      const base = paragraphs[0]!
+      const paragraph = paragraphOf(c, text)
       clearCache()
-      const prepared = prepare(text, font)
+      const handle = mainPrepare(text, font)
+      const prepared = prepare(paragraph, env, false)
       const n = widths.length
       return [
         {
           name: `main prepare+layout×${n}`, library: 'main', baseline: null, desc: `clearCache(); prepare() once; layout() at ${n} widths`,
           run: () => {
             clearCache()
-            const handle = prepare(text, font)
+            const fresh = mainPrepare(text, font)
             let lines = 0
-            for (let i = 0; i < n; i++) lines += layout(handle, widths[i]!, lineHeight).lineCount
+            for (let i = 0; i < n; i++) lines += layout(fresh, widths[i]!, lineHeight).lineCount
             return lines
           },
         },
@@ -254,35 +232,26 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           name: `main layout×${n}`, library: 'main', baseline: null, desc: `layout() at ${n} widths on a handle prepared outside the timing`,
           run: () => {
             let lines = 0
-            for (let i = 0; i < n; i++) lines += layout(prepared, widths[i]!, lineHeight).lineCount
+            for (let i = 0; i < n; i++) lines += layout(handle, widths[i]!, lineHeight).lineCount
             return lines
           },
         },
+        ...rebuildVariants(`prepare+fill×${n}`, `prepare() once, then every line at ${n} widths`, {
+          count: `main prepare+layout×${n}`, pieces: null, inspect: null,
+        }, mode => prepareAndFill(paragraph, env, widths, mode, null)),
         {
-          name: `rebuild layoutParagraph×${n}`, library: 'rebuild', baseline: `main prepare+layout×${n}`,
-          desc: `layoutParagraph() at ${n} widths, each with a fresh measurer (the public API has no reusable preparation)`,
+          name: `rebuild fill×${n}, count`, library: 'rebuild', baseline: `main layout×${n}`,
+          desc: `every line at ${n} widths of a plain paragraph prepared outside the timing, which has met every width by the first sample`,
           run: () => {
-            let lines = 0
-            for (let i = 0; i < n; i++) lines += rebuildLayout(paragraphs[i]!, env, null)
-            return lines
+            let lineBoxes = 0
+            for (let i = 0; i < n; i++) lineBoxes += fillAll(prepared, widths[i]!, 'count', null)
+            return lineBoxes
           },
         },
         {
-          name: `rebuild internal prepare+nextLine×${n}`, library: 'rebuild', baseline: `main prepare+layout×${n}`,
-          desc: `engine prepare() once with a fresh measurer, then the firstLine/nextLine loop at ${n} widths with the same measurer`,
+          name: 'rebuild prepare', library: 'rebuild', baseline: null, desc: 'prepare() of a plain paragraph alone',
           run: () => {
-            const measurer = createMeasurer()
-            const lines = internalPrepareAndFill(base, env, widths, measurer, null)
-            track(measurer)
-            return lines
-          },
-        },
-        {
-          name: 'rebuild internal prepare', library: 'rebuild', baseline: null, desc: 'engine prepare() alone with a fresh measurer',
-          run: () => {
-            const measurer = createMeasurer()
-            internalPrepareOnly(base, env, measurer)
-            track(measurer)
+            prepare(paragraph, env, false)
             return 0
           },
         },
@@ -292,7 +261,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
       const messages = row.messages
       const width = row.width
       const paragraphs: Paragraph[] = []
-      for (let i = 0; i < messages.length; i++) paragraphs.push(paragraphOf(c, messages[i]!, width))
+      for (let i = 0; i < messages.length; i++) paragraphs.push(paragraphOf(c, messages[i]!))
       const n = messages.length
       const widths = [width]
       return [
@@ -301,30 +270,17 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
           run: () => {
             clearCache()
             let lines = 0
-            for (let i = 0; i < n; i++) lines += layout(prepare(messages[i]!, font), width, lineHeight).lineCount
+            for (let i = 0; i < n; i++) lines += layout(mainPrepare(messages[i]!, font), width, lineHeight).lineCount
             return lines
           },
         },
-        {
-          name: `rebuild layoutParagraph×${n}`, library: 'rebuild', baseline: `main prepare+layout×${n}`,
-          desc: `layoutParagraph() for each of ${n} messages; the library keeps no measurement cache across calls`,
-          run: () => {
-            let lines = 0
-            for (let i = 0; i < n; i++) lines += rebuildLayout(paragraphs[i]!, env, null)
-            return lines
-          },
-        },
-        {
-          name: `rebuild internal shared measurer×${n}`, library: 'rebuild', baseline: `main prepare+layout×${n}`,
-          desc: `experiment: engine prepare() and the nextLine loop for each of ${n} messages with one measurer, so Canvas contexts and the memo carry across messages; the count pass checks its lines against layoutParagraph()`,
-          run: () => {
-            const measurer = createMeasurer()
-            let lines = 0
-            for (let i = 0; i < n; i++) lines += internalPrepareAndFill(paragraphs[i]!, env, widths, measurer, null)
-            track(measurer)
-            return lines
-          },
-        },
+        ...rebuildVariants(`prepare+fill×${n}`, `prepare() and every line for each of ${n} messages; the library keeps nothing across paragraphs`, {
+          count: `main prepare+layout×${n}`, pieces: null, inspect: null,
+        }, mode => {
+          let lineBoxes = 0
+          for (let i = 0; i < n; i++) lineBoxes += prepareAndFill(paragraphs[i]!, env, widths, mode, null)
+          return lineBoxes
+        }),
       ]
     }
   }
@@ -410,6 +366,7 @@ async function timeRow(row: RowSpec, rowIndex: number, c: Context, timerMs: numb
 // ---- Counting ----
 
 let measureTextCalls = 0
+let contextsMade = 0
 
 function countMeasureText(proto: { measureText(text: string): TextMetrics } | undefined): void {
   if (proto === undefined) return
@@ -420,34 +377,46 @@ function countMeasureText(proto: { measureText(text: string): TextMetrics } | un
   }
 }
 
+function countContexts(proto: { getContext: (...rest: never[]) => unknown } | undefined): void {
+  if (proto === undefined) return
+  const original = proto.getContext as (this: unknown, ...rest: unknown[]) => unknown
+  ;(proto as { getContext: unknown }).getContext = function (this: unknown, ...rest: unknown[]): unknown {
+    contextsMade++
+    return original.apply(this, rest)
+  }
+}
+
+// The rebuild's line ranges of the row in one mode: every paragraph, every width.
+function rebuildRanges(row: RowSpec, c: Context, mode: Mode): number[] {
+  const ranges: number[] = []
+  switch (row.kind) {
+    case 'cold': prepareAndFill(paragraphOf(c, row.text), c.env, [row.width], mode, ranges); break
+    case 'sweep': prepareAndFill(paragraphOf(c, row.text), c.env, row.widths, mode, ranges); break
+    case 'many':
+      for (let i = 0; i < row.messages.length; i++) prepareAndFill(paragraphOf(c, row.messages[i]!), c.env, [row.width], mode, ranges)
+      break
+  }
+  return ranges
+}
+
 function countRow(row: RowSpec, c: Context): RowCount {
   const variants = variantsFor(row, c)
   const counts: VariantCount[] = []
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i]!
     measureTextCalls = 0
-    logTotals.contexts = 0
-    logTotals.calls = 0
-    trackLogs = true
+    contextsMade = 0
     const lines = variant.run()
-    trackLogs = false
-    const rebuild = variant.library === 'rebuild'
-    counts.push({ variant: variant.name, measureTextCalls, logContexts: rebuild ? logTotals.contexts : null, logCalls: rebuild ? logTotals.calls : null, lines })
+    counts.push({ variant: variant.name, measureTextCalls, contexts: contextsMade, lines })
     sink += lines
   }
-  let same: boolean | null = null
-  if (row.kind === 'many') {
-    const publicRanges: number[] = []
-    const sharedRanges: number[] = []
-    const measurer = createMeasurer()
-    for (let i = 0; i < row.messages.length; i++) {
-      const paragraph = paragraphOf(c, row.messages[i]!, row.width)
-      rebuildLayout(paragraph, c.env, publicRanges)
-      internalPrepareAndFill(paragraph, c.env, [row.width], measurer, sharedRanges)
-    }
-    same = publicRanges.length === sharedRanges.length && publicRanges.every((value, i) => value === sharedRanges[i])
+  const counted = rebuildRanges(row, c, 'count')
+  let same = true
+  for (let m = 1; m < MODES.length && same; m++) {
+    const ranges = rebuildRanges(row, c, MODES[m]!)
+    same = ranges.length === counted.length && ranges.every((value, i) => value === counted[i])
   }
-  return { id: row.id, variants: counts, sharedMeasurerSameLines: same }
+  return { id: row.id, variants: counts, rebuildModesSameLines: same }
 }
 
 // ---- Main ----
@@ -476,6 +445,8 @@ async function main(): Promise<void> {
   // Counting wrappers go on after every timed repetition in this document and stay until it unloads.
   countMeasureText(typeof OffscreenCanvasRenderingContext2D === 'undefined' ? undefined : OffscreenCanvasRenderingContext2D.prototype)
   countMeasureText(typeof CanvasRenderingContext2D === 'undefined' ? undefined : CanvasRenderingContext2D.prototype)
+  countContexts(typeof OffscreenCanvas === 'undefined' ? undefined : OffscreenCanvas.prototype)
+  countContexts(typeof HTMLCanvasElement === 'undefined' ? undefined : HTMLCanvasElement.prototype)
   const counts: RowCount[] = []
   for (let i = 0; i < plan.rows.length; i++) counts.push(countRow(plan.rows[i]!, c))
   const reply = await post<{ kind: 'navigate'; url: string } | { kind: 'done' }>('/api/context-done', { runId, context: plan.index, environment, counts } satisfies ContextDonePost)

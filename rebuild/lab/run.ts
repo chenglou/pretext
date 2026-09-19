@@ -582,7 +582,7 @@ let baseUrl = ''
 function partTag(): string {
   return `${runId}-p${parts.length}`
 }
-const measurementTotals = { cases: 0, contexts: 0, calls: 0, segmentations: 0, libraryLogDisagrees: 0 }
+const measurementTotals = { cases: 0, contexts: 0, calls: 0, segmentations: 0 }
 let settle: { resolve: () => void; reject: (error: Error) => void } | null = null
 const completion = new Promise<void>((resolve, reject) => { settle = { resolve, reject } })
 completion.catch(() => {})
@@ -736,7 +736,6 @@ async function writeMeasurements(records: CaseMeasurements[], start: number): Pr
     measurementTotals.contexts += record.contexts.length
     measurementTotals.calls += record.calls.length
     measurementTotals.segmentations += record.segmentations.length
-    if (record.library !== null && !record.library.agrees) measurementTotals.libraryLogDisagrees++
   }
   zstd!.stdin.write(text)
   await zstd!.stdin.flush()
@@ -966,8 +965,7 @@ try {
     measureFirst: measureFirst ? measureFirstTotals : null,
     // Parts: the fresh browser processes the run went through, and what ends one (null: nothing but the run's end).
     partCases: partCases === Number.MAX_SAFE_INTEGER ? null : partCases, partMs: partMs === Number.MAX_SAFE_INTEGER ? null : partMs, partsFrom: partsFrom === undefined ? null : resolve(partsFrom), parts,
-    // run.ts --record-measurements. libraryLogDisagrees: cases whose recorded predict-phase calls differ from the library's own
-    // call log, so their contexts carry no declared settings.
+    // run.ts --record-measurements.
     measurements: recordMeasurements ? { file: measurementsPath, ...measurementTotals } : null,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.

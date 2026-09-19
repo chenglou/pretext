@@ -190,7 +190,7 @@ export class LineBreaker {
     // DESIGN.md §4.4). A slot's floats take their margin boxes off each side, each resolved to LayoutUnits on its own
     // (DESIGN.md §2.9), and ComputeLineLayoutOpportunity clamps the non-dominant side (layout_opportunity.cc:164-189).
     const zoom = p.layoutZoom
-    const containerWidth = lengthLU(p.paragraph.width, zoom)
+    const containerWidth = lengthLU(slot.width, zoom)
     let left = slot.left > 0 ? lengthLU(slot.left, zoom) : 0
     let right = containerWidth - (slot.right > 0 ? lengthLU(slot.right, zoom) : 0)
     if (p.baseLevel === 0) right = Math.max(Math.min(right, containerWidth), left)

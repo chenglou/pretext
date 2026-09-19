@@ -22,7 +22,7 @@ function paragraphOf(r: Request): Paragraph {
   // The oracle's page has <html lang="en">; a request's lang is the div's (null: none, "": lang="").
   return {
     content: [{ kind: 'text', text: r.text }], font, letterSpacing: 0, wordSpacing: 0,
-    width: 100, lineHeight: 20, whiteSpace: r.whiteSpace, wordBreak: r.wordBreak, overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
+    lineHeight: 20, whiteSpace: r.whiteSpace, wordBreak: r.wordBreak, overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
     // No lang on the div inherits <html lang="en">, which the model writes as the element's own lang.
     direction: 'ltr', lang: r.lang ?? 'en', textIndent: 0, textAlign: 'start',
   }

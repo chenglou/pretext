@@ -12,17 +12,18 @@ import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geo
 import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
 import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
-import type {
-  CssFont, Fragment, Gap, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, Paragraph as LibraryParagraph, ParagraphOf, TextAlign,
-} from '../src/model.ts'
-import type { CanvasSettings, ExpectedObservation } from './observe/contract.ts'
+import type { CssFont, Fragment, Gap, InlineElementOf, InlineNodeOf, Paragraph as LibraryParagraph, ParagraphOf, TextAlign } from '../src/model.ts'
+import type { ExpectedObservation } from './observe/contract.ts'
 export type FontDecl = CssFont
 // The tree the library takes, with the page's CSS fonts: what cases that use inline structure, atomic inlines, <br>,
 // <wbr>, text-indent or text-align describe (DESIGN.md §8.3 stage 5).
 export type InlineParagraph = ParagraphOf<CssFont>
 export type InlineNode = InlineNodeOf<CssFont>
 export type InlineElement = InlineElementOf<CssFont>
-export type LineSlot = LibraryLineSlot
+// Where a line box sits between floats, as a case and a row keep it: the CSS px its row's floats take off each side of the
+// paragraph's content box. The library's slot also carries the width (src/model.ts LineSlot), which the adapter gives
+// every slot from the case's paragraph.
+export type LineSlot = { left: number; right: number }
 
 // The flat case format of every case file written through 2026-09-17: one level of spans and bare text nodes, the
 // block's wrapping styles on every run, no box edges. predictor.ts turns it into the equivalent tree (DESIGN.md §1.1,
@@ -200,8 +201,8 @@ export type PredictionLine = {
   // UTF-16 offsets into the concatenated run text.
   start: number
   end: number
-  // Predicted line width in CSS px.
-  width: number
+  // Predicted line width in CSS px, from a predictor that has one.
+  width?: number
 }
 
 // A prediction of line ranges alone: an external predictor such as baselines/main-predictor.ts, and every row recorded
@@ -212,9 +213,10 @@ export type LinesPrediction = {
   measureLog?: number
 }
 
-// ---- The layout a row keeps (predictor-core.ts makes it from the library's lines, one slot at a time) ----
+// ---- The layout a row keeps (predictor-core.ts makes it from the library's function set, one slot at a time) ----
 
-// A line as a row keeps it: today every field of the line the engine returns (src/model.ts LineOf).
+// A line as a row keeps it, a frozen format: what filling the slot decided (start, end, hasLineBox, next), the line's pieces
+// (fragments, joinsNextLine, indented, align), its inspection (geometry, gaps), and the slot's insets.
 export type LineOf<Start, Geometry> = {
   // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
   // are placed by fragments.
@@ -255,27 +257,29 @@ export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 // the row of the slot list it was, and the gaps the decision rests on.
 export type BelowFloats = { row: number; gaps: Gap[] }
 
-// The library's Canvas call log of one layout (src/measure/log.ts): every context it used and every measureText call it
-// made, in order, and the lookups its memo answered.
-export type MeasureLog = { contexts: CanvasSettings[]; calls: { context: number; text: string; width: number }[]; memoHits: number }
+// What a layout asked of Canvas, as the adapter counts it on the page's Canvas classes (predictor-core.ts): the contexts it
+// made and its measureText calls. `memoHits` was the library's count of the lookups its memo answered, which the lab
+// doesn't see; the field keeps the row's shape and is 0.
+export type CanvasWork = { contexts: number; calls: number; memoHits: number }
 
 // `engine` is the environment's engine, the union's tag. `gaps` holds the conditions of the paragraph's content, fonts
 // and environment; lines hold the ones their breaks decide.
 export type ParagraphLayout =
-  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
+  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
+  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
 
 export type BlinkLayout = Extract<ParagraphLayout, { engine: 'blink' }>
 export type WebKitLayout = Extract<ParagraphLayout, { engine: 'webkit' }>
 export type GeckoLayout = Extract<ParagraphLayout, { engine: 'gecko' }>
 
-// What predictor.ts gives the page for an engine prediction: the library's input, with the font facts the predictor gave,
-// and its layout. The page runs the observation port over them and records an EnginePrediction.
-export type LayoutPrediction = { paragraph: LibraryParagraph; layout: ParagraphLayout }
+// What predictor.ts gives the page for an engine prediction: the library's input, which is the paragraph with the font
+// facts the predictor gave and the width every slot got, and its layout. The page runs the observation port over them and
+// records an EnginePrediction.
+export type LayoutPrediction = { paragraph: LibraryParagraph; width: number; layout: ParagraphLayout }
 
 // ParagraphLayout as a row keeps it: every engine line with its geometry, fragments and gaps, the environment and the
-// paragraph's gaps, without the Canvas call log (counted in EnginePrediction.measure).
+// paragraph's gaps; the Canvas work is beside it (EnginePrediction.measure).
 type WithoutMeasure<Layout> = Layout extends unknown ? Omit<Layout, 'measure'> : never
 export type RecordedLayout = WithoutMeasure<ParagraphLayout>
 
@@ -288,7 +292,7 @@ export type PainterLimits = Array<Array<{ limit: string; detail: string }>>
 // live in the page (DESIGN.md §9).
 export type EnginePrediction = {
   layout: RecordedLayout
-  measure: { contexts: number; calls: number; memoHits: number }
+  measure: CanvasWork
   // An error when the observation port threw: a lab failure, not a prediction.
   observation: ExpectedObservation | { error: string }
   // Absent in rows from before 2026-09-18, and where the predictor exports no limits().

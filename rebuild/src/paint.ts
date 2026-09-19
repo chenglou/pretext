@@ -1289,7 +1289,7 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
     s.margin = '0'
     s.padding = '0'
     s.border = '0'
-    s.width = `${paragraph.width}px`
+    s.width = `${line.slot.width}px`
     s.height = `${paragraph.lineHeight}px`
     s.lineHeight = `${paragraph.lineHeight}px`
     setFont(s, paragraph.font)
@@ -1324,7 +1324,7 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
       r.margin = '0'
       r.padding = '0'
       r.border = '0'
-      r.width = `${paragraph.width}px`
+      r.width = `${line.slot.width}px`
       r.height = `${paragraph.lineHeight}px`
     }
     if (line.slot.left > 0) root.append(floatInset(doc, 'left', line.slot.left, paragraph.lineHeight))

@@ -4,10 +4,10 @@
 // <br>, <wbr>, text-indent, text-align, line slots), not browser widths: no expectation here is a browser observation.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
-import { createMeasurer } from '../../measure/canvas.js'
-import { FULL_WIDTH, UNKNOWN_FONT_FACTS, type FontFacts, type LineSlot, type Paragraph } from '../../model.js'
+import { UNKNOWN_FONT_FACTS, type FontFacts } from '../../model.js'
+import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import type { WebKitDisplayBox, WebKitTextBox } from './geometry.js'
-import { webkitEngine } from './index.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare } from './index.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 import type { WebKitLine } from './types.js'
 
@@ -66,32 +66,20 @@ function fontWith(facts: FontFacts = UNKNOWN_FONT_FACTS) {
   return { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts }
 }
 
-function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}, facts: FontFacts = UNKNOWN_FONT_FACTS): Paragraph {
+function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Sized> = {}, facts: FontFacts = UNKNOWN_FONT_FACTS): Sized {
   return flatParagraph(runs, fontWith(facts), overrides)
 }
 
-function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
-  const m = createMeasurer()
-  const prepared = webkitEngine.prepare(p, environment, m)
-  const lines: WebKitLine[] = []
-  const belowFloats: number[] = []
-  let row = 0
-  const gaps = webkitEngine.gaps(prepared).map(g => g.gap)
-  for (let start = webkitEngine.firstLine(prepared); start !== null;) {
-    const result = webkitEngine.nextLine(prepared, start, slots[row] ?? FULL_WIDTH, m)
-    if (result.kind === 'below-floats') {
-      for (const gap of result.gaps) gaps.push(gap.gap)
-      belowFloats.push(row++)
-      if (result.next !== undefined) start = result.next
-      continue
-    }
-    lines.push(result.line)
-    for (const gap of result.line.gaps) gaps.push(gap.gap)
-    if (result.line.hasLineBox) row++
-    start = result.line.next
-  }
+function layout(p: Sized, insets: Insets[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
+  const prepared = prepare(p, environment, true)
+  const { lines, belowFloats } = everyLine({
+    first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
+  }, p.width, insets)
   // The paragraph's gaps, then every line's and refused slot's: content conditions are reported on the lines that measure them.
-  return { lines, gaps, belowFloats, fonts: m.log.contexts.map(context => context.font) }
+  const gaps = paragraphGaps(prepared).map(g => g.gap)
+  for (const line of lines) for (const gap of line.gaps) gaps.push(gap.gap)
+  for (const refused of belowFloats) for (const gap of refused.gaps) gaps.push(gap.gap)
+  return { lines, gaps, belowFloats: belowFloats.map(refused => refused.row), fonts: prepared.measurer.log.contexts.map(context => context.font) }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -230,8 +218,7 @@ describe('environment facts (DESIGN.md §1.4)', () => {
   })
 
   test('page zoom not given reports page-zoom on the paragraph', () => {
-    const m = createMeasurer()
-    expect(webkitEngine.gaps(webkitEngine.prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, m)).map(g => g.gap)).toContain('page-zoom')
+    expect(paragraphGaps(prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, true)).map(g => g.gap)).toContain('page-zoom')
   })
 
   test('a quoted "system-ui" names a family, not the system design (research/CHARTER-CRITIC.md item 9)', () => {
@@ -660,7 +647,7 @@ describe('text-indent, text-align and line slots (DESIGN.md §2.9)', () => {
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 5]])
     expect(lines[0]!.geometry.lineBoxWidth).toBe(30)
     expect(textBoxes(lines[0]!.geometry.boxes)[0]!.x).toBe(20)
-    expect(lines[0]!.slot).toEqual({ left: 20, right: 0 })
+    expect(lines[0]!.slot).toEqual({ width: 50, left: 20, right: 0 })
   })
 
   test('content that does not fit beside floats moves below them (InlineFormattingUtils.cpp:54-103)', () => {

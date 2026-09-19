@@ -67,10 +67,12 @@
 // carries a pair adjustment, and the others are whole sets where a check answers one string at a time
 // (research/FACTS-FREE.md).
 //
-// Answers are kept for the measurer's life, per check, declaration and language, in a bounded map. The checks measure at
-// 16px whatever the declaration's size, except the two sizes of check 4: font matching doesn't read the size, the answers
-// are shared between sizes, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their
-// contexts are their own (`partition`), so no engine measurement shares a Blink word cache with them.
+// One call resolves one paragraph, and everything it keeps is local to the call (Resolution below): each distinct
+// declaration under its language is resolved once, and a question is asked of Canvas once, since checks share questions
+// (the two generics alone, a family's list at the probe size). The checks measure at 16px whatever the declaration's size,
+// except the two sizes of check 4: font matching doesn't read the size, so declarations of several sizes share their
+// questions, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their contexts are their
+// own (`partition`), so no engine measurement shares a Blink word cache with them.
 //
 // The checks measure in the engine's own kind of context (FontChecks.textRendering): in Blink `textRendering =
 // 'optimizeLegibility'`, as engines/blink/shape.ts styleContexts does. Blink's font cache keys a platform font by the
@@ -93,7 +95,7 @@
 // that key; a width its glyph geometry cache keeps is the computed value (FontCascade.cpp:319-352). Its Canvas has no
 // textRendering attribute, and the checks assign the default as the port's recipes do. Gecko is asked nothing.
 import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
-import { measureContext, measureText, type Measurer } from './canvas.js'
+import { contextFor, width as canvasWidth, type Context } from './canvas.js'
 import { canvasFont } from './font.js'
 
 const PROBE_SIZE = 16
@@ -107,24 +109,13 @@ const LINEAR_SAMPLE = 'Hamburgefonstiv'
 // CSS Fonts 4 generic family keywords, which name a family only unquoted.
 const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong']
 
-type Answer = string | boolean | null
-
-const STORE_LIMIT = 256
-const stores = new WeakMap<Measurer, Map<string, Answer>>()
-
-// The answer kept under `key`, or compute's, kept from now on. The oldest answer leaves a full store.
-function kept<T extends Answer>(m: Measurer, key: string, compute: () => T): T {
-  let store = stores.get(m)
-  if (store === undefined) {
-    store = new Map()
-    stores.set(m, store)
-  }
-  const known = store.get(key)
-  if (known !== undefined) return known as T
-  const value = compute()
-  if (store.size >= STORE_LIMIT) store.delete(store.keys().next().value!)
-  store.set(key, value)
-  return value
+// What one call keeps while it resolves a paragraph's declarations, all of it few enough to compare one by one: the
+// checks' contexts, the questions asked so far with Canvas's answers, and the declarations resolved so far, each under the
+// language its checks measured in.
+type Resolution = {
+  contexts: Context[]
+  asked: { context: Context; text: string; width: number }[]
+  resolved: { font: FontDecl; lang: string; learned: FontDecl }[]
 }
 
 type Family = { css: string; name: string; quoted: boolean }
@@ -179,14 +170,18 @@ export type FontChecks = {
   textRendering: CanvasTextRendering
 }
 
-type Probe = { m: Measurer; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
+type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
 
 function width(p: Probe, family: string, size: number, text: string): number {
-  const context = measureContext(p.m, {
+  const context = contextFor(p.resolution.contexts, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
     textRendering: p.textRendering, direction: 'ltr', partition: 'font-checks',
   })
-  return measureText(p.m, context, text)
+  const asked = p.resolution.asked
+  for (let i = 0; i < asked.length; i++) if (asked[i]!.context === context && asked[i]!.text === text) return asked[i]!.width
+  const measured = canvasWidth(context, text)
+  asked.push({ context, text, width: measured })
+  return measured
 }
 
 // The two-fallback test: false when the two lists give `text` different widths, so a generic drew some of it; true when
@@ -274,28 +269,34 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 
 // The facts of one declaration as the engine gets them: each supplied fact, else the check's answer where this engine
 // reads the fact and the paragraph's text can ask for it (FontChecks; each port says why it reads what it reads).
-function learnedFacts(m: Measurer, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
+function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
-  const p: Probe = { m, textRendering: checks.textRendering, font, lang }
-  const key = (check: string, ...more: number[]): string => JSON.stringify([check, font.family, font.weight, font.style, lang, ...more])
+  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang }
   const scaling = checks.opticalSizeAxis
   const asksHyphen = given.mapsHyphen === null && checks.mapsHyphen && needs.hyphen
   const asksPitch = given.monospace === null && checks.monospace
   const asksScaling = given.opticalSizeAxis === null && scaling !== null && scaling.zoom !== 1
   let primary = given.primaryFamily
-  if (primary === null && (checks.primaryFamily || asksHyphen || asksPitch || asksScaling)) primary = kept(m, key('primaryFamily'), () => primaryFamily(p))
+  if (primary === null && (checks.primaryFamily || asksHyphen || asksPitch || asksScaling)) primary = primaryFamily(p)
   let mapsHyphen = given.mapsHyphen
   let monospace = given.monospace
   let opticalSizeAxis = given.opticalSizeAxis
   let joiningFact = given.joining
   if (primary !== null) {
-    const family = primary
-    if (asksHyphen) mapsHyphen = kept(m, key('mapsHyphen'), () => draws(p, cssFamily(family), HYPHEN))
-    if (asksPitch) monospace = kept(m, key('monospace'), () => fixedPitch(p, cssFamily(family)))
-    if (asksScaling) opticalSizeAxis = kept(m, key('opticalSizeAxis', font.size, scaling.zoom), () => scalesLinearly(p, family, scaling.zoom, scaling.cssSizeFamilies))
+    if (asksHyphen) mapsHyphen = draws(p, cssFamily(primary), HYPHEN)
+    if (asksPitch) monospace = fixedPitch(p, cssFamily(primary))
+    if (asksScaling) opticalSizeAxis = scalesLinearly(p, primary, scaling.zoom, scaling.cssSizeFamilies)
   }
-  if (joiningFact === null && checks.joining && needs.joining) joiningFact = kept(m, key('joining'), () => joining(p))
+  if (joiningFact === null && checks.joining && needs.joining) joiningFact = joining(p)
   return { ...given, primaryFamily: primary, mapsHyphen, monospace, opticalSizeAxis, joining: joiningFact }
+}
+
+function sameDeclaration(a: FontDecl, b: FontDecl): boolean {
+  const fa = a.facts
+  const fb = b.facts
+  return a.family === b.family && a.size === b.size && a.weight === b.weight && a.style === b.style &&
+    fa.primaryFamily === fb.primaryFamily && fa.mapsHyphen === fb.mapsHyphen && fa.monospace === fb.monospace && fa.opticalSizeAxis === fb.opticalSizeAxis &&
+    fa.joining === fb.joining && fa.pairKerning === fb.pairKerning && fa.fonts === fb.fonts
 }
 
 function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (font: FontDecl, lang: string) => FontDecl): InlineNode[] {
@@ -313,9 +314,17 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
 }
 
 // The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
-export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, m: Measurer): Paragraph {
+export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks): Paragraph {
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
-  const learn = (font: FontDecl, lang: string): FontDecl => ({ ...font, facts: learnedFacts(m, checks, font, checks.contextTakesLang ? lang : '', needs) })
+  const resolution: Resolution = { contexts: [], asked: [], resolved: [] }
+  const learn = (font: FontDecl, elementLang: string): FontDecl => {
+    const lang = checks.contextTakesLang ? elementLang : ''
+    const resolved = resolution.resolved
+    for (let i = 0; i < resolved.length; i++) if (resolved[i]!.lang === lang && sameDeclaration(resolved[i]!.font, font)) return resolved[i]!.learned
+    const learned = { ...font, facts: learnedFacts(resolution, checks, font, lang, needs) }
+    resolved.push({ font, lang, learned })
+    return learned
+  }
   return { ...paragraph, font: learn(paragraph.font, paragraph.lang), content: withLearnedFactsIn(paragraph.content, paragraph.lang, learn) }
 }

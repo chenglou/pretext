@@ -5,12 +5,13 @@
 // own line boxes and frames; what a Range reports is lab/observe/gecko.ts's business.
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
-import { paragraphGaps, prepareParagraph } from '../../index.js'
-import { createMeasurer, type Measurer } from '../../measure/canvas.js'
-import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineSlot, type Paragraph } from '../../model.js'
+import { paragraphGaps, prepare } from '../../index.js'
+import type { Measurer } from '../../measure/canvas.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type Paragraph } from '../../model.js'
+import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
 import type { GeckoTextFrame } from './geometry.js'
-import { geckoEngine } from './index.js'
+import { fillLine, firstLine, inspectLine, linePieces } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
 import type { GeckoLine } from './types.js'
@@ -128,13 +129,13 @@ const arial = (size: number): FontDecl => ({ family: 'Arial', size, weight: 400,
 // The flat form the probe verdicts were written in: runs that are spans or bare text nodes, the block's wrapping styles
 // everywhere (DESIGN.md §1.1, "Flat paragraphs").
 type Run = { text: string; node: 'span' | 'text'; font: FontDecl; letterSpacing: number; wordSpacing: number; lang: string | null }
-type Flat = Omit<Paragraph, 'content'>
+type Flat = Omit<Sized, 'content'>
 
 function run(text: string, node: 'span' | 'text' = 'text', extra: Partial<Run> = {}): Run {
   return { text, node, font: courier, letterSpacing: 0, wordSpacing: 0, lang: null, ...extra }
 }
 
-function paragraph(runs: Run[], width: number, extra: Partial<Flat> = {}): Paragraph {
+function paragraph(runs: Run[], width: number, extra: Partial<Flat> = {}): Sized {
   const block: Flat = {
     font: courier, letterSpacing: 0, wordSpacing: 0, width, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
     overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', ...extra,
@@ -154,29 +155,18 @@ function textFrames(l: GeckoLine): GeckoTextFrame[] {
 type GeckoLayout = { lines: GeckoLine[]; belowFloats: { row: number; gaps: Gap[] }[]; measure: Measurer['log']; gaps: Gap[] }
 
 // The lab's line loop (lab/predictor-core.ts) over a paragraph prepared through src/index.ts, font checks included.
-function layout(p: Paragraph, e: GeckoEnvironment = env, slots: LineSlot[] = []): GeckoLayout {
-  const prepared = prepareParagraph(p, e)
+function layout(p: Sized, e: GeckoEnvironment = env, insets: Insets[] = []): GeckoLayout {
+  const prepared = prepare(p, e, true)
   if (prepared.engine !== 'gecko') throw new Error('expected a gecko paragraph')
-  const lines: GeckoLine[] = []
-  const belowFloats: GeckoLayout['belowFloats'] = []
-  let row = 0
-  for (let start = geckoEngine.firstLine(prepared.state); start !== null;) {
-    const result = geckoEngine.nextLine(prepared.state, start, row < slots.length ? slots[row]! : FULL_WIDTH, prepared.measurer)
-    if (result.kind === 'below-floats') {
-      belowFloats.push({ row, gaps: result.gaps })
-      row++
-      if (result.next !== undefined) start = result.next
-      continue
-    }
-    lines.push(result.line)
-    if (result.line.hasLineBox) row++
-    start = result.line.next
-  }
-  return { lines, belowFloats, measure: prepared.measurer.log, gaps: paragraphGaps(prepared) }
+  const state = prepared.state
+  const { lines, belowFloats } = everyLine({
+    first: firstLine(state), fill: (start, slot) => fillLine(state, start, slot), inspect: line => inspectLine(state, line), pieces: line => linePieces(state, line),
+  }, p.width, insets)
+  return { lines, belowFloats, measure: state.measurer.log, gaps: paragraphGaps(prepared) }
 }
 
 // The first laid-out character of each line with a line box.
-function starts(p: Paragraph): number[] {
+function starts(p: Sized): number[] {
   const out: number[] = []
   const lines = layout(p).lines
   for (let l = 0; l < lines.length; l++) {
@@ -189,7 +179,7 @@ function starts(p: Paragraph): number[] {
 }
 
 // Gecko's line box widths (psd->mICoord after TrimTrailingWhiteSpaceIn) of the lines with a line box, in au.
-function widths(p: Paragraph): number[] {
+function widths(p: Sized): number[] {
   return layout(p).lines.filter(l => l.hasLineBox).map(l => l.geometry.width)
 }
 
@@ -388,15 +378,14 @@ describe('gecko engine output', () => {
   })
   test('in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes', () => {
     const p = paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' })
-    const measurer = createMeasurer()
-    const prepared = geckoEngine.prepare(p, env, measurer)
+    const prepared = prepareGecko(p, env, true)
     const before = prepared.gaps.length
-    const first = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, FULL_WIDTH, measurer)
-    const again = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, FULL_WIDTH, measurer)
-    if (first.kind !== 'line' || again.kind !== 'line') throw new Error('expected lines')
-    expect(first.line.gaps.map(g => g.gap)).toContain('in-word-prefix')
-    expect(again.line.gaps).not.toBe(first.line.gaps)
-    expect(again.line.gaps.map(g => g.gap)).toEqual(first.line.gaps.map(g => g.gap))
+    const slot = { width: p.width, left: 0, right: 0 }
+    const first = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
+    const again = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
+    expect(first.map(g => g.gap)).toContain('in-word-prefix')
+    expect(again).not.toBe(first)
+    expect(again.map(g => g.gap)).toEqual(first.map(g => g.gap))
     expect(prepared.gaps.length).toBe(before)
     expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
   })
@@ -443,7 +432,7 @@ describe('gecko engine output', () => {
     expect(allGaps(layout(paragraph([run('a')], 500))).map(g => g.gap)).not.toContain('optical-size')
   })
   test('nsLineBreaker takes Chinese or Japanese from likely subtags (specs/gecko-oracle-replay.md §4.1)', () => {
-    const p = (lang: string) => prepareGecko(paragraph([run('あ；', 'span')], 100, { lineBreak: 'loose', lang }), env, createMeasurer())
+    const p = (lang: string) => prepareGecko(paragraph([run('あ；', 'span')], 100, { lineBreak: 'loose', lang }), env, true)
     expect(p('yue').breakFlags[1]).toBe(BREAK_NORMAL)
     expect(p('ko').breakFlags[1]).not.toBe(BREAK_NORMAL)
   })
@@ -470,7 +459,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
 
   test('B1a: the device-size emoji advance applies only where Canvas shows Apple Color Emoji draws the cluster', () => {
     const p = (text: string) => paragraph([run(text, 'span', { font: arial(16) })], 500, { font: arial(16) })
-    const gapNames = (q: Paragraph) => allGaps(layout(q)).map(g => g.gap)
+    const gapNames = (q: Sized) => allGaps(layout(q)).map(g => g.gap)
     try {
       expect(widths(p('😀'))).toEqual([960])
       expect(gapNames(p('😀'))).not.toContain('page-history')
@@ -509,7 +498,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
   test('the space-in-shaping test reads Canvas widths only below 2^18 px (CanvasRenderingContext2D.cpp:5277)', () => {
     // 9,134 words of `aa ` are 15,783,552 au, 263,059.2px: measureText's float width is 1/32 px steps there and reads back
     // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
-    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, createMeasurer())
+    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, true)
     expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
     expect(long.gaps.map(g => g.gap)).toEqual([])
   })
@@ -545,7 +534,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
 
 // Break positions of one text node, as the groundwork oracle reports them.
 function breaks(text: string, whiteSpace: Paragraph['whiteSpace'] = 'normal', wordBreak: Paragraph['wordBreak'] = 'normal') {
-  const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, wordBreak }), env, createMeasurer())
+  const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, wordBreak }), env, true)
   const normal: number[] = []
   const emergency: number[] = []
   for (let t = 1; t < p.tUnits.length; t++) {
@@ -608,7 +597,7 @@ describe('gecko break opportunities (groundwork oracle unit cases)', () => {
 
 describe('gecko TransformText (specs/gecko-text.md §6.3)', () => {
   const transformed = (text: string, whiteSpace: Paragraph['whiteSpace'] = 'normal', lang = 'en') => {
-    const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, lang }), env, createMeasurer())
+    const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, lang }), env, true)
     return String.fromCharCode(...p.tUnits)
   }
   test('collapsing and segment breaks', () => {
@@ -629,7 +618,7 @@ describe('gecko TransformText (specs/gecko-text.md §6.3)', () => {
 // Inline structure, line slots and alignment (DESIGN.md §8.3 stage 5), over the stand-in's 576 au glyphs: expectations
 // from probe verdicts where one exists (specs/gecko-lines.md §10), else from the cited source arithmetic.
 describe('gecko inline structure', () => {
-  const block = (content: InlineNode[], width: number, extra: Partial<Flat> = {}): Paragraph => ({ ...paragraph([], width, extra), content })
+  const block = (content: InlineNode[], width: number, extra: Partial<Flat> = {}): Sized => ({ ...paragraph([], width, extra), content })
   const span = (children: InlineNode[], edges: { start?: number; end?: number; whiteSpace?: Paragraph['whiteSpace'] } = {}): InlineNode => ({
     kind: 'span', font: courier, letterSpacing: 0, wordSpacing: 0, whiteSpace: edges.whiteSpace ?? 'normal', wordBreak: 'normal', overflowWrap: 'normal',
     lineBreak: 'auto', tabSize: 8, lang: null, inlineStart: { margin: 0, border: 0, padding: edges.start ?? 0 },
@@ -638,7 +627,7 @@ describe('gecko inline structure', () => {
   const leaf = (text: string): InlineNode => ({ kind: 'text', text })
 
   test('H12b: every continuation reserves the end padding (nsInlineFrame.cpp:514-521)', () => {
-    const lineStarts = (p: Paragraph) => layout(p).lines.filter(l => l.hasLineBox).map(l => l.start)
+    const lineStarts = (p: Sized) => layout(p).lines.filter(l => l.hasLineBox).map(l => l.start)
     expect(lineStarts(block([span([leaf('aaa aaa b')], { end: 9.6 })], 67.2))).toEqual([0, 4])
     expect(lineStarts(block([span([leaf('aaa aaa b')])], 67.2))).toEqual([0, 8])
   })
@@ -696,7 +685,7 @@ describe('gecko inline structure', () => {
 
   test('a <br> in an RTL block appends U+2028 and ends the bidi paragraph, so the space before it takes the paragraph level (nsBidiPresUtils.cpp:1381-1384)', () => {
     const p = block([leaf('ab '), { kind: 'br' }, leaf('cd')], 500, { direction: 'rtl' })
-    expect(prepareGecko(p, env, createMeasurer()).elements.map(e => e.kind === 'span' ? -1 : e.level)).toEqual([1])
+    expect(prepareGecko(p, env, true).elements.map(e => e.kind === 'span' ? -1 : e.level)).toEqual([1])
     const l = layout(p)
     expect(l.lines.map(line => textFrames(line).map(f => [f.level, f.x, f.width]))).toEqual([[[2, 30000 - 1152, 1152], [1, 30000 - 1152, 0]], [[2, 30000 - 1152, 1152]]])
     expect(l.lines[0]!.geometry.frames.find(f => f.kind === 'br')!.x).toBe(30000 - 1152)
@@ -865,7 +854,7 @@ describe('ceiling round 2', () => {
 describe('round 4c', () => {
   test('tab-size comes from the text frame, the space and spacing from the block (nsTextFrame.cpp:3875-3906)', () => {
     // Courier New at 16px: 576 au a character. The block's tab-size is 8, the span's 4: its tab stops every 2304 au.
-    const spanWith = (tabSize: number, blockTabSize: number): Paragraph => {
+    const spanWith = (tabSize: number, blockTabSize: number): Sized => {
       const p = paragraph([run('a\tb', 'span'), run('\tc')], 500, { whiteSpace: 'pre', tabSize: blockTabSize })
       const span = p.content[0]!
       if (span.kind !== 'span') throw new Error('expected a span')

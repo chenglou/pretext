@@ -13,7 +13,7 @@ import { createPortMeasure } from './port-measure.ts'
 import * as predictorModule from './predictor.ts'
 import { beginCase, beginPhase, endCase, installRecorder, type CaseMeasurements } from './record.ts'
 import type {
-  BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, MeasureLog, NativeObservation, PageEnv,
+  BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
   PainterLimits, PainterLine, PainterObservation, ParagraphLayout, ProcessLanguages, Rect, RecordedLayout,
 } from './types.ts'
 
@@ -378,9 +378,9 @@ const measureLive: CanvasMeasure = createPortMeasure()
 function observeLayout(prediction: LayoutPrediction): ExpectedObservation {
   const layout = prediction.layout
   switch (layout.engine) {
-    case 'blink': return observeBlink(prediction.paragraph, layout, measureLive)
-    case 'webkit': return observeWebKit(prediction.paragraph, layout, measureLive)
-    case 'gecko': return observeGecko(prediction.paragraph, layout, measureLive)
+    case 'blink': return observeBlink(prediction.paragraph, prediction.width, layout, measureLive)
+    case 'webkit': return observeWebKit(prediction.paragraph, prediction.width, layout, measureLive)
+    case 'gecko': return observeGecko(prediction.paragraph, prediction.width, layout, measureLive)
   }
 }
 
@@ -465,12 +465,11 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
     installRecorder()
     beginCase(c.id)
   }
-  let log: MeasureLog | null = null
   try {
-    const row = await observeRow(c, reply, range, recording, value => { log = value })
-    return { row, measurements: recording ? endCase(log) : null }
+    const row = await observeRow(c, reply, range, recording)
+    return { row, measurements: recording ? endCase() : null }
   } catch (error) {
-    if (recording) endCase(null)
+    if (recording) endCase()
     throw error
   }
 }
@@ -478,7 +477,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
 // The prediction of a case and what the page records of it: the library's layout, what the observation port expects the
 // browser to report for it, and the painter limits. Nothing here touches the DOM, so under run.ts --measure-first a document
 // runs it for every case before its first native layout.
-function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, recording: boolean, libraryLog: (log: MeasureLog) => void): Predicted {
+function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, recording: boolean): Predicted {
   const timings = { predictMs: 0, observeMs: 0, limitsMs: 0 }
   let start = performance.now()
   if (recording) beginPhase('predict')
@@ -491,7 +490,6 @@ function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, reco
   }
   timings.predictMs = performance.now() - start
   if (!('layout' in hook)) return { hook, prediction: hook, timings }
-  libraryLog(hook.layout.measure)
   start = performance.now()
   if (recording) beginPhase('observe')
   let observation: ExpectedObservation | { error: string }
@@ -513,9 +511,8 @@ function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, reco
     }
   }
   timings.limitsMs = performance.now() - start
-  const log = hook.layout.measure
   const prediction: PageRow['prediction'] = {
-    layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation,
+    layout: recordedLayout(hook.layout), measure: hook.layout.measure, observation,
     ...(painterLimits === undefined ? {} : { painterLimits }),
   }
   return { hook, prediction, timings }
@@ -524,7 +521,7 @@ function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, reco
 // One case's row. Under the usual protocol: native layout, then the prediction, then the painted lines. Under run.ts
 // --measure-first the prediction was made before the document's first native layout (`held`), and this lays the case out
 // natively and paints the held prediction.
-async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: MeasureLog) => void): Promise<PageRow> {
+async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean): Promise<PageRow> {
   const env = readEnv()
   let before: { predicted: Predicted; index: number } | null = null
   if (reply.measureFirst === 'observe') {
@@ -546,7 +543,7 @@ async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>,
     }
     nativeMs = performance.now() - start
   }
-  const predicted = before === null ? predictCase(c, reply, recording, libraryLog) : before.predicted
+  const predicted = before === null ? predictCase(c, reply, recording) : before.predicted
   casesObserved++
   previousCaseId = c.id
   const timings = { nativeMs, ...predicted.timings, paintMs: 0, painterObserveMs: 0 }
@@ -602,7 +599,7 @@ async function main(): Promise<void> {
           for (let i = 0; i < reply.cases.length; i++) {
             const c = reply.cases[i]!
             if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
-            held.set(c.id, { predicted: predictCase(c, reply, false, () => {}), index: documentPredictions++ })
+            held.set(c.id, { predicted: predictCase(c, reply, false), index: documentPredictions++ })
           }
           reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows: [], predicted: reply.cases.length })
           break

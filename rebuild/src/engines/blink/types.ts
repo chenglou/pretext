@@ -1,6 +1,7 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
+import type { Measurer } from '../../measure/canvas.js'
 import type { FontDecl, FontFacts, Gap, LineBreak, LineOf, LineResultOf, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
 import type { HanKerningFontData } from './hankerning.js'
@@ -185,6 +186,11 @@ export type BlinkPrepared = {
   needsAccurateEndPosition: boolean
   // The paragraph's gaps: its content, fonts and environment.
   gaps: Gap[]
+  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
+  // (measure/canvas.ts).
+  measurer: Measurer
+  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
+  inspect: boolean
 }
 
 // The line nextLine fills, and what it returns for a slot.

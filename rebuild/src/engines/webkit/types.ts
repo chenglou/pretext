@@ -1,5 +1,6 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
+import type { Measurer } from '../../measure/canvas.js'
 import type { AtomicInline, Gap, LineOf, LineResultOf, Paragraph, TextAlign } from '../../model.js'
 import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
 
@@ -189,6 +190,11 @@ export type WebKitPrepared = {
   // The paragraph as it lays out where the break position cache hands one of its boxes another item list (content.ts, "Page
   // history"). Empty in a world.
   historyWorlds: WebKitHistoryWorld[]
+  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
+  // (measure/canvas.ts). A world shares its paragraph's.
+  measurer: Measurer
+  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
+  inspect: boolean
 }
 
 // A history world: the prepared paragraph with `box` built from a cached list. `itemIndex` maps each of the paragraph's own

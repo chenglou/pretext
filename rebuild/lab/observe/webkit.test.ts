@@ -6,8 +6,11 @@ import { PINNED_BUILDS } from '../../src/env.ts'
 import type { WebKitDisplayBox, WebKitTextBox } from '../../src/engines/webkit/geometry.ts'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph } from '../../src/model.ts'
 import type { WebKitLayout, WebKitLine } from '../types.ts'
-import type { CanvasMeasure, ExpectedRect } from './contract.ts'
+import type { CanvasMeasure, ExpectedObservation, ExpectedRect } from './contract.ts'
 import { observeWebKit } from './webkit.ts'
+// The port at the width of this file's paragraphs.
+const WIDTH = 100
+const observe = (p: Paragraph, layout: WebKitLayout, measure: CanvasMeasure): ExpectedObservation => observeWebKit(p, WIDTH, layout, measure)
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
@@ -17,7 +20,7 @@ function paragraph(texts: string[], overrides: Partial<Paragraph> = {}): Paragra
 
 function treeParagraph(content: InlineNode[], overrides: Partial<Paragraph> = {}): Paragraph {
   return {
-    content, font, letterSpacing: 0, wordSpacing: 0, width: 100, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
+    content, font, letterSpacing: 0, wordSpacing: 0, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
     overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', ...overrides,
   }
 }
@@ -35,7 +38,7 @@ function box(run: number, start: number, end: number, x: number, width: number, 
 
 function layoutOf(lines: WebKitLine[]): WebKitLayout {
   return {
-    engine: 'webkit', lines, belowFloats: [], gaps: [], measure: { contexts: [], calls: [], memoHits: 0 },
+    engine: 'webkit', lines, belowFloats: [], gaps: [], measure: { contexts: 0, calls: 0, memoHits: 0 },
     env: { engine: 'webkit', build: PINNED_BUILDS.webkit, devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, preferredLanguages: null, icuDefaultLocale: null, dictionaryBreaks: { kind: 'unavailable' } },
   }
 }
@@ -57,7 +60,7 @@ describe('code point rects (research/observe-webkit.md §7-§8)', () => {
   test('c-16d2dea18ab3b7f6: abc­ in 16px Arial, box [0, 25.796875]; c shares its glyph with the soft hyphen', () => {
     const p = paragraph(['abc­'])
     const layout = layoutOf([line([box(0, 0, 4, 0, 25.796875)])])
-    const observed = observeWebKit(p, layout, advances([8.8984375, 8.8984375, 4, 4]))
+    const observed = observe(p, layout, advances([8.8984375, 8.8984375, 4, 4]))
     expect(plain(observed.nodes[0]!)).toEqual([[0, 0, 25.796875]])
     expect(observed.codePoints.map(c => plain(c.rects))).toEqual([
       [[0, 0, 9]],
@@ -74,14 +77,14 @@ describe('code point rects (research/observe-webkit.md §7-§8)', () => {
   test('c-1696ae676dfa6699: a code point alone on its line equals its box rect', () => {
     const p = paragraph(['ab'])
     const layout = layoutOf([line([box(0, 0, 1, 0, 8.8984375)]), line([box(0, 1, 2, 0, 8.8984375)])])
-    const observed = observeWebKit(p, layout, advances([8.8984375, 8.8984375]))
+    const observed = observe(p, layout, advances([8.8984375, 8.8984375]))
     expect(observed.codePoints[0]!.rects).toEqual([{ line: 0, x: { state: 'predicted', value: 0 }, width: { state: 'predicted', value: 8.8984375 } }])
   })
 
   test('a␠␠␠b: first space partial, second a zero-width rect at the glyph end, third none', () => {
     const p = paragraph(['a   b'])
     const layout = layoutOf([line([box(0, 0, 2, 0, 12.4453125), box(0, 4, 5, 12.4453125, 8.8984375)])])
-    const observed = observeWebKit(p, layout, advances([8.8984375, 3.546875, 3.546875, 3.546875, 8.8984375]))
+    const observed = observe(p, layout, advances([8.8984375, 3.546875, 3.546875, 3.546875, 8.8984375]))
     // x floor(trunc64(8.8984375)) = 8; ceil(8.890625 + ceil64(3.546875)) = 13 > 12.4453125, so trunc64(12.4453125 - 8).
     expect(plain(observed.codePoints[1]!.rects)).toEqual([[0, 8, 4.4375]])
     expect(plain(observed.codePoints[2]!.rects)).toEqual([[0, 12, 0]])
@@ -92,21 +95,21 @@ describe('code point rects (research/observe-webkit.md §7-§8)', () => {
   test('leading collapsible white space clamps to caretMinOffset: a caret rect at the first box start', () => {
     const p = paragraph(['x', ' foo'])
     const layout = layoutOf([line([box(0, 0, 1, 0, 8), box(1, 1, 4, 10.5, 24)])])
-    const observed = observeWebKit(p, layout, advances([8, 8, 8]))
+    const observed = observe(p, layout, advances([8, 8, 8]))
     expect(observed.codePoints[1]!.rects).toEqual([{ line: 0, x: { state: 'predicted', value: 10 }, width: { state: 'predicted', value: 0 } }])
   })
 
   test('a chosen soft hyphen extends the range over the hyphen string, clamped at trunc64 of the box right', () => {
     const p = paragraph(['ab­cd'])
     const layout = layoutOf([line([box(0, 0, 3, 0, 22.4296875, { hyphen: '‐' })]), line([box(0, 3, 5, 0, 16)])])
-    const observed = observeWebKit(p, layout, advances([8, 8, 0, 6.4296875]))
+    const observed = observe(p, layout, advances([8, 8, 0, 6.4296875]))
     expect(plain(observed.codePoints[2]!.rects)).toEqual([[0, 16, 6.421875]])
   })
 
   test('RTL partial rects count from the right: total - after', () => {
     const p = paragraph(['אב'], { direction: 'rtl' })
     const layout = layoutOf([line([box(0, 0, 2, 84, 16, { level: 1 })])])
-    const observed = observeWebKit(p, layout, advances([7.5, 8.5]))
+    const observed = observe(p, layout, advances([7.5, 8.5]))
     // The logical first letter is on the right: x = 84 + trunc64(total - after) = 84 + 8.5; only the logical last letter's
     // x is a box edge.
     expect(plain(observed.codePoints[0]!.rects)).toEqual([[0, 92, 8]])
@@ -117,7 +120,7 @@ describe('code point rects (research/observe-webkit.md §7-§8)', () => {
 
   test('a text node without boxes reports nothing', () => {
     const p = paragraph([' ', 'a'])
-    const observed = observeWebKit(p, layoutOf([line([box(1, 0, 1, 0, 8)])]), advances([8]))
+    const observed = observe(p, layoutOf([line([box(1, 0, 1, 0, 8)])]), advances([8]))
     expect(observed.nodes[0]).toEqual([])
     expect(observed.codePoints[0]!.rects).toEqual([])
   })
@@ -126,14 +129,14 @@ describe('code point rects (research/observe-webkit.md §7-§8)', () => {
 describe('whole-node rects', () => {
   test('width is f32(f32(x + w) - x) (FloatQuad::boundingBox)', () => {
     const p = paragraph(['ab'])
-    const observed = observeWebKit(p, layoutOf([line([box(0, 0, 2, 30.469196319580078, 71.9345703125)])]), advances([8, 8]))
+    const observed = observe(p, layoutOf([line([box(0, 0, 2, 30.469196319580078, 71.9345703125)])]), advances([8, 8]))
     const width = Math.fround(Math.fround(30.469196319580078 + 71.9345703125) - 30.469196319580078)
     expect(observed.nodes[0]![0]!.width).toEqual({ state: 'predicted', value: width })
   })
 
   test('a box of negative width reports its right corner and a positive width (c-d5867bf0ebda5742)', () => {
     const p = paragraph(['ab'])
-    const observed = observeWebKit(p, layoutOf([line([box(0, 0, 2, 0, -11.808002471923828)])]), advances([8, 8]))
+    const observed = observe(p, layoutOf([line([box(0, 0, 2, 0, -11.808002471923828)])]), advances([8, 8]))
     expect(observed.nodes[0]).toEqual([{ line: 0, x: { state: 'predicted', value: -11.808002471923828 }, width: { state: 'predicted', value: 11.808002471923828 } }])
   })
 
@@ -143,7 +146,7 @@ describe('whole-node rects', () => {
     l.geometry.lineLeft = 20
     l.geometry.contentEdgeOffset = 20
     // Every unit 8, so W(' ') is 8 and stops fall every 32px: xPos 20 + 8 reaches the stop at 32 with a 4px tab.
-    const observed = observeWebKit(p, layoutOf([l]), advances([8, 8, 8]))
+    const observed = observe(p, layoutOf([l]), advances([8, 8, 8]))
     expect(plain(observed.codePoints[2]!.rects)).toEqual([[0, 32, 8]])
   })
 
@@ -151,7 +154,7 @@ describe('whole-node rects', () => {
     const p = paragraph(['a'])
     const layout = layoutOf([line([box(0, 0, 1, 0, 8)])])
     layout.env.pageZoom = null
-    expect(observeWebKit(p, layout, advances([8])).nodes[0]![0]!.x).toEqual({ state: 'limited', gap: 'page-zoom', value: 0 })
+    expect(observe(p, layout, advances([8])).nodes[0]![0]!.x).toEqual({ state: 'limited', gap: 'page-zoom', value: 0 })
   })
 })
 
@@ -166,7 +169,7 @@ describe('element rects (DESIGN.md §9, stage 5)', () => {
       line([{ kind: 'inline-box', element: 0, x: 0, width: 23, hasStartEdge: true, hasEndEdge: true }, box(0, 0, 2, 7, 16), { kind: 'atomic', element: 1, level: 0, x: 23, width: 20 }, { kind: 'line-break', element: 2, x: 43, width: 0 }]),
       line([box(1, 0, 1, 0, 8)]),
     ])
-    const observed = observeWebKit(p, layout, advances([8, 8]))
+    const observed = observe(p, layout, advances([8, 8]))
     expect(observed.elements.map(plain)).toEqual([[[0, 0, 23]], [[0, 23, 20]], [[0, 43, 0]], []])
     expect(plain(observed.nodes[0]!)).toEqual([[0, 7, 16]])
     expect(plain(observed.nodes[1]!)).toEqual([[1, 0, 8]])
@@ -186,7 +189,7 @@ describe('states: what a reported gap can move (the file header of webkit.ts)', 
       lineOf([box(0, 6, 11, 0, 40), box(0, 11, 12, 40, 0, { kind: 'soft-line-break' })], 6, 12, { fragments: [{ kind: 'forced-break', run: 0, start: 11, end: 12 }] }),
       lineOf([box(0, 12, 14, 0, 16)], 12, 14),
     ])
-    const observed = observeWebKit(p, layout, advances(new Array<number>(14).fill(8)))
+    const observed = observe(p, layout, advances(new Array<number>(14).fill(8)))
     expect(states(observed.nodes[0]!)).toEqual(['predicted/predicted', 'canvas-language/canvas-language', 'canvas-language/canvas-language', 'canvas-language/predicted', 'predicted/predicted'])
     // A code point on a box edge sits where its box does.
     expect(observed.codePoints[0]!.rects[0]!.x.state).toBe('predicted')
@@ -202,7 +205,7 @@ describe('states: what a reported gap can move (the file header of webkit.ts)', 
       lineOf([box(0, 0, 2, 10, 16), box(0, 2, 3, 26, 0, { kind: 'soft-line-break' })], 0, 3, { slot, gaps: [{ gap: 'tab-stops', run: 0, detail: '', at: { start: 0, end: 1 } }], fragments: [{ kind: 'forced-break', run: 0, start: 2, end: 3 }] }),
       lineOf([box(0, 3, 5, 0, 16)], 3, 5),
     ])
-    const observed = observeWebKit(p, layout, advances([8, 8, 0, 8, 8]))
+    const observed = observe(p, layout, advances([8, 8, 0, 8, 8]))
     expect(states(observed.nodes[0]!)).toEqual(['tab-stops/tab-stops', 'tab-stops/predicted', 'tab-stops/tab-stops'])
   })
 
@@ -210,10 +213,10 @@ describe('states: what a reported gap can move (the file header of webkit.ts)', 
     const p = paragraph(['aa bb'])
     const refused = layoutOf([lineOf([box(0, 0, 2, 0, 16)], 0, 3), lineOf([box(0, 3, 5, 0, 16)], 3, 5)])
     refused.belowFloats = [{ row: 1, gaps: [{ gap: 'simplified-measuring', run: 0, detail: '' }] }]
-    expect(states(observeWebKit(p, refused, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'simplified-measuring/simplified-measuring'])
+    expect(states(observe(p, refused, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'simplified-measuring/simplified-measuring'])
     const ranged = layoutOf([lineOf([box(0, 0, 2, 0, 16)], 0, 3), lineOf([box(0, 3, 5, 0, 16)], 3, 5)])
     ranged.gaps = [{ gap: 'string-storage', run: 0, detail: '', at: { start: 4, end: 5 } }]
-    expect(states(observeWebKit(p, ranged, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'string-storage/string-storage'])
+    expect(states(observe(p, ranged, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'string-storage/string-storage'])
   })
 
   test('element rects follow their line, and a text box that measures 0 under a gap is limited', () => {
@@ -223,7 +226,7 @@ describe('states: what a reported gap can move (the file header of webkit.ts)', 
     }
     const p = treeParagraph([spanNode, { kind: 'br' }])
     const layout = layoutOf([lineOf([{ kind: 'inline-box', element: 0, x: 0, width: 0, hasStartEdge: true, hasEndEdge: true }, box(0, 0, 2, 0, 0), { kind: 'line-break', element: 1, x: 0, width: 0 }], 0, 2, { gaps: [{ gap: 'rtl-shaping-across-inline-boxes', run: 0, detail: '', at: { start: 0, end: 2 } }] })])
-    const observed = observeWebKit(p, layout, advances([0, 0]))
+    const observed = observe(p, layout, advances([0, 0]))
     expect(observed.elements.map(states)).toEqual([['rtl-shaping-across-inline-boxes/rtl-shaping-across-inline-boxes'], ['rtl-shaping-across-inline-boxes/predicted']])
     expect(states(observed.nodes[0]!)).toEqual(['rtl-shaping-across-inline-boxes/rtl-shaping-across-inline-boxes'])
   })
@@ -237,7 +240,7 @@ describe('the Canvas family (WebKitTextBox.canvasFamily)', () => {
       fonts.add(settings.font)
       return 8 * text.length
     }
-    observeWebKit(p, layoutOf([line([box(0, 0, 2, 0, 16, { canvasFamily: '"Menlo"' })])]), measure)
+    observe(p, layoutOf([line([box(0, 0, 2, 0, 16, { canvasFamily: '"Menlo"' })])]), measure)
     expect([...fonts]).toEqual(['normal 400 16px "Menlo"'])
   })
 })

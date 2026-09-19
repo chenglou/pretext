@@ -3,9 +3,9 @@
 // 640 raw LayoutUnits.
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
-import { createMeasurer } from '../../measure/canvas.js'
-import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BoxEdge, type FontFacts, type Gap, type InlineNode, type LineSlot, type Paragraph } from '../../model.js'
-import { blinkEngine } from './index.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BoxEdge, type FontFacts, type Gap, type InlineNode, type Paragraph } from '../../model.js'
+import { everyLine, type Insets, type Sized } from '../../test-lines.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare } from './index.js'
 import type { BlinkLine } from './types.js'
 
 beforeAll(() => {
@@ -39,7 +39,7 @@ function fontOf(facts: FontFacts): Paragraph['font'] {
 }
 
 // A flat paragraph: each run a span or a bare text node with the block's styles (DESIGN.md §1.1, "Flat paragraphs").
-function paragraph(runs: [string, 'span' | 'text'][], width: number, o: Options = {}): Paragraph {
+function paragraph(runs: [string, 'span' | 'text'][], width: number, o: Options = {}): Sized {
   const whiteSpace = o.whiteSpace ?? 'normal'
   const font = fontOf(o.facts ?? UNKNOWN_FONT_FACTS)
   const style = { font, letterSpacing: 0, wordSpacing: 0, whiteSpace, wordBreak: 'normal' as const, overflowWrap: 'normal' as const, lineBreak: 'auto' as const, tabSize: 8 }
@@ -61,29 +61,17 @@ function span(children: InlineNode[], edges: { start?: BoxEdge; end?: BoxEdge; w
   }
 }
 
-function tree(content: InlineNode[], width: number, o: Options = {}): Paragraph {
+function tree(content: InlineNode[], width: number, o: Options = {}): Sized {
   return { ...paragraph([], width, o), content }
 }
 
 // The lab's line loop (lab/predictor-core.ts) over the Blink engine alone.
-function blink(p: Paragraph, e: BlinkEnvironment = env, slots: LineSlot[] = []): { lines: BlinkLine[]; gaps: Gap[]; belowFloats: number[] } {
-  const measurer = createMeasurer()
-  const prepared = blinkEngine.prepare(p, e, measurer)
-  const lines: BlinkLine[] = []
-  const belowFloats: number[] = []
-  let row = 0
-  for (let start = blinkEngine.firstLine(prepared); start !== null;) {
-    const result = blinkEngine.nextLine(prepared, start, row < slots.length ? slots[row]! : FULL_WIDTH, measurer)
-    if (result.kind === 'below-floats') {
-      belowFloats.push(row)
-      row++
-      continue
-    }
-    lines.push(result.line)
-    if (result.line.hasLineBox) row++
-    start = result.line.next
-  }
-  return { lines, gaps: blinkEngine.gaps(prepared), belowFloats }
+function blink(p: Sized, e: BlinkEnvironment = env, insets: Insets[] = []): { lines: BlinkLine[]; gaps: Gap[]; belowFloats: number[] } {
+  const prepared = prepare(p, e, true)
+  const { lines, belowFloats } = everyLine({
+    first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
+  }, p.width, insets)
+  return { lines, gaps: paragraphGaps(prepared), belowFloats: belowFloats.map(refused => refused.row) }
 }
 
 describe('blink lines', () => {
@@ -111,7 +99,7 @@ describe('blink lines', () => {
     const text = g.items[0]!
     if (text.kind !== 'text') throw new Error('expected a text item')
     expect(text.clusters.map(c => [c.textStart, c.textEnd, c.advance])).toEqual([[0, 1, 655360], [1, 2, 655360], [2, 3, 655360], [3, 4, 655360], [4, 5, 655360]])
-    expect([layout.lines[0]!.slot, layout.lines[0]!.indented, layout.lines[0]!.align]).toEqual([FULL_WIDTH, false, 'start'])
+    expect([layout.lines[0]!.slot, layout.lines[0]!.indented, layout.lines[0]!.align]).toEqual([{ width: 60, left: 0, right: 0 }, false, 'start'])
   })
 
   test('DESIGN.md §2.2 example 2: pre-wrap spaces hang', () => {
@@ -283,7 +271,7 @@ describe('blink inline structure', () => {
     // Class 3 in specs/blink-RESULTS.md: line 1 starts at a joining letter, ShapeToEnd joins the reshaped [1, 2) and the
     // item's [2, 3), and TruncateLineEndResult's view [1, 2) finds no part numbered there.
     const base = paragraph([['بب ', 'text'], ['بب', 'span']], 1, { facts: { ...UNKNOWN_FONT_FACTS, joining: 'opentype' } })
-    const p: Paragraph = { ...base, wordBreak: 'break-all', content: base.content.map(n => n.kind === 'span' ? { ...n, wordBreak: 'break-all' } : n) }
+    const p: Sized = { ...base, wordBreak: 'break-all', content: base.content.map(n => n.kind === 'span' ? { ...n, wordBreak: 'break-all' } : n) }
     const lines = blink(p).lines
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 1], [1, 3], [3, 4], [4, 5]])
     expect(lines.map(l => l.geometry.width > 0)).toEqual([true, false, true, true])
@@ -304,7 +292,7 @@ describe('blink round 2', () => {
 
   test('with tab-size 0 and letter spacing, tabs stop at multiples of the letter spacing (font.cc:303-340)', () => {
     const base = paragraph([['ab\tc', 'text']], 400, { whiteSpace: 'pre-wrap' })
-    const p: Paragraph = { ...base, letterSpacing: 2, tabSize: 0 }
+    const p: Sized = { ...base, letterSpacing: 2, tabSize: 0 }
     const tab = blink(p).lines[0]!.geometry.items.find(i => i.kind === 'tab')!
     // The stand-in Canvas gives "ab" 20px whatever the spacing: 20 is a multiple of 2, the distance 2 is under half a space
     // (5px), so the tab takes one more stop: 4px.
@@ -547,15 +535,11 @@ describe('blink round 4c', () => {
 
 describe('blink string storage', () => {
   // Every string asked, with the partition of its context.
-  function asks(p: Paragraph): { partition: string; text: string }[] {
-    const measurer = createMeasurer()
-    const prepared = blinkEngine.prepare(p, env, measurer)
-    for (let start = blinkEngine.firstLine(prepared); start !== null;) {
-      const result = blinkEngine.nextLine(prepared, start, FULL_WIDTH, measurer)
-      if (result.kind === 'below-floats') throw new Error('no floats here')
-      start = result.line.next
-    }
-    return measurer.log.calls.map(call => ({ partition: measurer.log.contexts[call.context]!.partition, text: call.text }))
+  function asks(p: Sized): { partition: string; text: string }[] {
+    const prepared = prepare(p, env, true)
+    for (let start = firstLine(prepared); start !== null;) start = fillLine(prepared, start, { width: p.width, left: 0, right: 0 }).next
+    const log = prepared.measurer.log
+    return log.calls.map(call => ({ partition: log.contexts[call.context]!.partition, text: call.text }))
   }
   const latin1 = (text: string): boolean => /^[ -ÿ]*$/.test(text)
   const RUN = '((((((((((((('
@@ -595,9 +579,8 @@ describe('blink string storage', () => {
   })
 
   test('a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)', () => {
-    const measurer = createMeasurer()
     const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
-    expect(blinkEngine.prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, measurer).segmented).toBe(true)
-    expect(blinkEngine.prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, measurer).segmented).toBe(false)
+    expect(prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, true).segmented).toBe(true)
+    expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true).segmented).toBe(false)
   })
 })

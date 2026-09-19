@@ -1,6 +1,7 @@
 // Paragraphs for the WebKit port's tests: flat runs as the tree DESIGN.md §1.1 describes ("Flat paragraphs"), and the few
 // tree nodes the feature tests need. Test support only; no library file imports it.
 import { NO_BOX_EDGE, type AtomicInline, type BoxEdge, type FontDecl, type InlineElement, type InlineNode, type Paragraph, type TextStyle } from '../../model.js'
+import type { Sized } from '../../test-lines.js'
 
 export type FlatNode = 'span' | 'text'
 
@@ -12,7 +13,7 @@ export function textStyleOf(p: Paragraph): TextStyle {
 }
 
 // A paragraph of the block's styles holding `content`.
-export function treeParagraph(content: InlineNode[], font: FontDecl, overrides: Partial<Paragraph> = {}): Paragraph {
+export function treeParagraph(content: InlineNode[], font: FontDecl, overrides: Partial<Sized> = {}): Sized {
   return {
     content, font, letterSpacing: 0, wordSpacing: 0, width: 1000, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
     overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', ...overrides,
@@ -20,7 +21,7 @@ export function treeParagraph(content: InlineNode[], font: FontDecl, overrides: 
 }
 
 // Flat runs: a bare text node, or a span with the block's styles and one leaf; the block's overrides apply to every span.
-export function flatParagraph(runs: Array<[string, FlatNode]>, font: FontDecl, overrides: Partial<Paragraph> = {}): Paragraph {
+export function flatParagraph(runs: Array<[string, FlatNode]>, font: FontDecl, overrides: Partial<Sized> = {}): Sized {
   const block = treeParagraph([], font, overrides)
   const content: InlineNode[] = []
   for (let i = 0; i < runs.length; i++) {

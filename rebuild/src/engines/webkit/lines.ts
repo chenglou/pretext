@@ -2411,7 +2411,7 @@ function floatAvoidingRect(rect: LineRect, marginStart: number, startX: number |
 //   indent alone, and each float then narrows the line with the indent as margin start (:1394-1396), in document order, the
 //   left float first.
 function lineRect(p: WebKitPrepared, slot: LineSlot, indent: number, placesSlotFloats: boolean): { left: number; width: number; contentEdgeOffset: number; constrainedByFloat: boolean } {
-  const containerWidth = layoutUnit(f32(f32(p.paragraph.width) * f32(p.zoom)))
+  const containerWidth = layoutUnit(f32(f32(slot.width) * f32(p.zoom)))
   const startInset = layoutUnit(f32(f32(p.style.rtl ? slot.right : slot.left) * f32(p.zoom)))
   const endInset = layoutUnit(f32(f32(p.style.rtl ? slot.left : slot.right) * f32(p.zoom)))
   const startX = startInset > 0 ? startInset : null
@@ -2743,7 +2743,7 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
   // content ineligible for them.
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
-  const rect = lineRect(p, builder === 'line-builder' ? slot : { left: 0, right: 0 }, builder === 'line-builder' ? indent : 0, placesSlotFloats)
+  const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? indent : 0, placesSlotFloats)
   const L: Layout = { p, m, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: [], measuredEnd: start.itemIndex, reverted: false, decisionStart: start.itemIndex, overflowStart: null, shapedCarry: false }
   const items = p.items
   const itemsEnd: Position = { index: items.length, offset: 0 }
@@ -2842,7 +2842,7 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
   const hasContentfulInFlowContent = lineHasVisuallyNonEmptyContent(p, line)
   const alignmentOffset = line.runs.length > 0 ? horizontalAlignmentOffset(p.style, contentLogicalRight, rect.width, hangingWidth, isLastLineOrLineEndsWithForcedLineBreak) : 0
   // The display line's left edge (IDLB:124-129): the line rect's left, mirrored across the container in an RTL block.
-  const containerWidth = f32(layoutUnit(f32(f32(p.paragraph.width) * f32(p.zoom))))
+  const containerWidth = f32(layoutUnit(f32(f32(slot.width) * f32(p.zoom))))
   const lineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
   const result: WebKitLineResult = {
     kind: 'line',

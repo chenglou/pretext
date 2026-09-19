@@ -1,5 +1,6 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
+import type { Measurer } from '../../measure/canvas.js'
 import type { FontDecl, Gap, LineOf, LineResultOf, Paragraph, TextStyle } from '../../model.js'
 import type { GeckoLineGeometry, GeckoLineStart } from './geometry.js'
 
@@ -197,6 +198,11 @@ export type GeckoPrepared = {
   // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
   // on the line (DESIGN.md §2.8).
   gaps: Gap[]
+  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
+  // (measure/canvas.ts).
+  measurer: Measurer
+  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
+  inspect: boolean
 }
 
 // The line nextLine fills, and what it returns for a slot.

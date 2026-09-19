@@ -57,6 +57,8 @@ function toLayoutUnitCeil(v: number): number {
 type LeafCanvas = { text: string; context: CanvasSettings; plain: CanvasSettings; letterSpacing: number; wordSpacing: number; allowTabs: boolean; tabSize: number }
 type Port = {
   paragraph: Paragraph
+  // The content-box width in CSS px.
+  width: number
   measure: CanvasMeasure
   leaves: LeafCanvas[]
   // Page zoom other than 1, or not given: inverseFrameScale isn't ported (research/observe-webkit.md U8).
@@ -327,7 +329,7 @@ function partialRect(port: Port, layout: WebKitLayout, own: OwnBox, next: OwnBox
     // line's contentLogicalLeft, the root inline box's left inside the line box (InlineDisplayLineBuilder.cpp:134-160,
     // InlineLineBoxBuilder.cpp:63, :100): the alignment offset. Tab stops count from the content box edge, past slot insets and
     // text-indent.
-    const contentBoxWidth = toLayoutUnit(f32(f32(port.paragraph.width) * f32(layout.env.pageZoom ?? 1))) / 64
+    const contentBoxWidth = toLayoutUnit(f32(f32(port.width) * f32(layout.env.pageZoom ?? 1))) / 64
     const xPos = rtl ? f32(f32(contentBoxWidth - f32(b.x + b.width)) - geometry.alignmentOffset) : f32(b.x - geometry.alignmentOffset)
     const shares = expansionShares(rendered, rtl, b)
     const before = advanceTo(port, canvas, rendered, clampedStart, xPos, shares)
@@ -436,10 +438,10 @@ function lineLimits(layout: WebKitLayout): Limit[] {
   return limits
 }
 
-export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, measure) => {
+export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, width, layout, measure) => {
   const zoom = layout.env.pageZoom ?? 1
   const tree = walkTree(paragraph)
-  const port: Port = { paragraph, measure, leaves: [], zoomGap: layout.env.pageZoom !== 1 }
+  const port: Port = { paragraph, width, measure, leaves: [], zoomGap: layout.env.pageZoom !== 1 }
   // InlineIterator::textBoxesFor: a node's boxes in box index order, line then visual order
   // (LayoutIntegrationLineLayout.cpp:1048-1059, InlineIteratorTextBox.cpp:71-102); inlineBoxesFor likewise for an element.
   const own: OwnBox[][] = []

@@ -1,21 +1,21 @@
 // Public entry: lay out a styled paragraph the way the environment's engine does, one line slot at a time. The engine
-// difference is this one switch; everything engine-specific lives under engines/<engine>/.
+// difference is the switches of this file; everything engine-specific lives under engines/<engine>/, and each engine's
+// index.ts gives the same function set (DESIGN.md §2.9).
 import { blinkFontChecks } from './engines/blink/checks.js'
-import type { BlinkLineStart } from './engines/blink/geometry.js'
-import { blinkEngine } from './engines/blink/index.js'
-import type { BlinkLineResult, BlinkPrepared } from './engines/blink/types.js'
+import type { BlinkLineGeometry, BlinkLineStart } from './engines/blink/geometry.js'
+import * as blink from './engines/blink/index.js'
+import type { BlinkPrepared } from './engines/blink/types.js'
 import { geckoFontChecks } from './engines/gecko/checks.js'
-import type { GeckoLineStart } from './engines/gecko/geometry.js'
-import { geckoEngine } from './engines/gecko/index.js'
-import type { GeckoLineResult, GeckoPrepared } from './engines/gecko/types.js'
+import type { GeckoLineGeometry, GeckoLineStart } from './engines/gecko/geometry.js'
+import * as gecko from './engines/gecko/index.js'
+import type { GeckoPrepared } from './engines/gecko/types.js'
 import { webkitFontChecks } from './engines/webkit/checks.js'
-import type { WebKitLineStart } from './engines/webkit/geometry.js'
-import { webkitEngine } from './engines/webkit/index.js'
-import type { WebKitLineResult, WebKitPrepared } from './engines/webkit/types.js'
-import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from './env.js'
-import { createMeasurer, type Measurer } from './measure/canvas.js'
+import type { WebKitLineGeometry, WebKitLineStart } from './engines/webkit/geometry.js'
+import * as webkit from './engines/webkit/index.js'
+import type { WebKitPrepared } from './engines/webkit/types.js'
+import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
 import { withLearnedFontFacts } from './measure/font-checks.js'
-import type { Gap, LineSlot, Paragraph } from './model.js'
+import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from './model.js'
 
 export type {
   BlinkEnvironment, BlinkProcessLanguages, DetectedEngine, DetectedEnvironment, EngineName, Environment, GeckoEnvironment,
@@ -23,96 +23,121 @@ export type {
 } from './env.js'
 export { PINNED_BUILDS, detectEngine, detectEnvironment } from './env.js'
 export type {
-  AtomicInline, BoxEdge, CssFont, Direction, FontDecl, FontFacts, Fragment, Gap, GapName, InlineElement, InlineElementOf, InlineNode,
-  InlineNodeOf, LineBreak, LineBreakElement, LineOf, LineResultOf, LineSlot, OverflowWrap, Paragraph, ParagraphOf, TextAlign, TextLeaf,
-  TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
+  AtomicInline, BoxEdge, CssFont, Direction, FillResultOf, FontDecl, FontFacts, Fragment, Gap, GapName, InlineElement, InlineElementOf, InlineNode,
+  InlineNodeOf, LineBreak, LineBreakElement, LineInspectionOf, LineOf, LinePieces, LineResultOf, LineSlot, OverflowWrap, Paragraph, ParagraphOf, TextAlign,
+  TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
-export { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
+export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
 export type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit } from './engines/blink/geometry.js'
 export type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry, GeckoTextFrame } from './engines/gecko/geometry.js'
 export type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './engines/webkit/geometry.js'
-export type { BlinkLine, BlinkLineResult } from './engines/blink/types.js'
-export type { GeckoLine, GeckoLineResult } from './engines/gecko/types.js'
-export type { WebKitLine, WebKitLineResult } from './engines/webkit/types.js'
+export type { BlinkFillResult, BlinkFilledLine, BlinkPaintFacts, BlinkRefusedSlot } from './engines/blink/index.js'
+export type { GeckoFillResult, GeckoFilledLine, GeckoPaintFacts, GeckoRefusedSlot } from './engines/gecko/index.js'
+export type { WebKitFillResult, WebKitFilledLine, WebKitPaintFacts, WebKitRefusedSlot } from './engines/webkit/index.js'
 export { paintLines, painterLimits, type PaintableLayout, type PaintedLine, type PainterLimit, type PainterLimitName } from './paint.js'
 
-// A paragraph prepared for one engine, from which lines are laid out one slot at a time (DESIGN.md §2.9). `state` is the
-// engine's own: content building from the inline tree, itemization, bidi, break opportunities, and the widths the engine
-// knows before it fills lines. The measurer holds the Canvas contexts, the memo and the call log of preparation and of
-// every line laid out from it. `paragraph` is the one the engine laid out: the caller's, with the font facts Canvas
-// answered (below).
-export type PreparedParagraph =
-  | { engine: 'blink'; env: BlinkEnvironment; paragraph: Paragraph; state: BlinkPrepared; measurer: Measurer }
-  | { engine: 'webkit'; env: WebKitEnvironment; paragraph: Paragraph; state: WebKitPrepared; measurer: Measurer }
-  | { engine: 'gecko'; env: GeckoEnvironment; paragraph: Paragraph; state: GeckoPrepared; measurer: Measurer }
+// A paragraph prepared for one engine, which never changes: lines are filled from it one slot at a time, at any width
+// (DESIGN.md §2.9). `state` is the engine's own: content building from the inline tree, itemization, bidi, break
+// opportunities, the widths the engine knows before it fills lines, its Canvas contexts, the environment, and the paragraph
+// it laid out, which is the caller's with the font facts Canvas answered (below).
+export type Prepared =
+  | { engine: 'blink'; state: BlinkPrepared }
+  | { engine: 'webkit'; state: WebKitPrepared }
+  | { engine: 'gecko'; state: GeckoPrepared }
 
-// The state the next line starts from, per engine (DESIGN.md §2.7).
+// The state the next line starts from, per engine (DESIGN.md §2.7): small plain data that names positions in the prepared
+// paragraph's lists and holds nothing of it.
 export type LineStart = BlinkLineStart | WebKitLineStart | GeckoLineStart
+
+// What fillLine returns, the engine's record of a decided line in it, and what is read from that record.
+export type FillResult = blink.BlinkFillResult | webkit.WebKitFillResult | gecko.GeckoFillResult
+export type FilledLine = blink.BlinkFilledLine | webkit.WebKitFilledLine | gecko.GeckoFilledLine
+export type RefusedSlot = blink.BlinkRefusedSlot | webkit.WebKitRefusedSlot | gecko.GeckoRefusedSlot
+export type Pieces = LinePieces<blink.BlinkPaintFacts> | LinePieces<webkit.WebKitPaintFacts> | LinePieces<gecko.GeckoPaintFacts>
+export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectionOf<WebKitLineGeometry> | LineInspectionOf<GeckoLineGeometry>
 
 // The one place a paragraph's fonts reach the engines. A font fact the caller left null is asked of Canvas first, where a
 // check is sound for the engine (measure/font-checks.ts, with what the engine's port asks for, engines/<engine>/checks.ts);
-// the engines read FontFacts as the caller had given them.
-export function prepareParagraph(given: Paragraph, env: Environment): PreparedParagraph {
-  const measurer = createMeasurer()
+// the engines read FontFacts as the caller had given them. `inspect` prepares the paragraph for inspectLine and
+// paragraphGaps, which the lab reads; a plain paragraph gives lines and pieces alone.
+export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean): Prepared {
   switch (env.engine) {
-    case 'blink': {
-      const paragraph = withLearnedFontFacts(given, blinkFontChecks(env), measurer)
-      return { engine: 'blink', env, paragraph, state: blinkEngine.prepare(paragraph, env, measurer), measurer }
-    }
-    case 'webkit': {
-      const paragraph = withLearnedFontFacts(given, webkitFontChecks, measurer)
-      return { engine: 'webkit', env, paragraph, state: webkitEngine.prepare(paragraph, env, measurer), measurer }
-    }
-    case 'gecko': {
-      const paragraph = withLearnedFontFacts(given, geckoFontChecks, measurer)
-      return { engine: 'gecko', env, paragraph, state: geckoEngine.prepare(paragraph, env, measurer), measurer }
-    }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env)), env, inspect) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks), env, inspect) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks), env, inspect) }
   }
 }
 
 // Where the first line starts, or null when the paragraph makes no line.
-export function firstLineStart(prepared: PreparedParagraph): LineStart | null {
+export function firstLine(prepared: Prepared): LineStart | null {
   switch (prepared.engine) {
-    case 'blink': return blinkEngine.firstLine(prepared.state)
-    case 'webkit': return webkitEngine.firstLine(prepared.state)
-    case 'gecko': return geckoEngine.firstLine(prepared.state)
+    case 'blink': return blink.firstLine(prepared.state)
+    case 'webkit': return webkit.firstLine(prepared.state)
+    case 'gecko': return gecko.firstLine(prepared.state)
   }
 }
 
-// What layoutLine returns: the engine's line in the slot, or its move below the slot's floats (model.ts LineResultOf).
-export type LineResult = BlinkLineResult | WebKitLineResult | GeckoLineResult
-
-function startMismatch(engine: string, start: string): Error {
-  return new Error(`a ${start} line start can't continue a ${engine} paragraph`)
+function mismatch(engine: string, what: string): Error {
+  return new Error(`${what} can't continue a ${engine} paragraph`)
 }
 
-// Fills one line from `start` in `slot`: the content box less the slot's insets, as the engine turns float intrusion into
-// a line's offsets and available width, measuring what the engine measures at line-edge time (DESIGN.md §2.9). Returns the
-// line, with or without a line box, or below-floats when the slot has an inset and the engine moves the line down past the
-// floats instead. The gaps its breaks decide go on the line. `start` is firstLineStart's or a previous line's `next` from
-// the same prepared paragraph, which never changes, so it can serve lines in other slots, and a start state serves any slot
-// of the next line.
-export function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResult {
+// Fills one line from `start` in `slot`: the slot's width less its insets, as the engine turns float intrusion into a
+// line's offsets and available width, measuring what the engine measures at line-edge time (DESIGN.md §2.9). Returns the
+// decided line, with or without a line box, or below-floats when the slot has an inset and the engine moves the line down
+// past the floats instead (model.ts FillResultOf). `start` is firstLine's or a fill result's `next` from the same prepared
+// paragraph, so it can serve lines in other slots, and a start state serves any slot of the next line.
+export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult {
   switch (prepared.engine) {
     case 'blink':
-      if (start.engine !== 'blink') throw startMismatch(prepared.engine, start.engine)
-      return blinkEngine.nextLine(prepared.state, start, slot, prepared.measurer)
+      if (start.engine !== 'blink') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      return blink.fillLine(prepared.state, start, slot)
     case 'webkit':
-      if (start.engine !== 'webkit') throw startMismatch(prepared.engine, start.engine)
-      return webkitEngine.nextLine(prepared.state, start, slot, prepared.measurer)
+      if (start.engine !== 'webkit') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      return webkit.fillLine(prepared.state, start, slot)
     case 'gecko':
-      if (start.engine !== 'gecko') throw startMismatch(prepared.engine, start.engine)
-      return geckoEngine.nextLine(prepared.state, start, slot, prepared.measurer)
+      if (start.engine !== 'gecko') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      return gecko.fillLine(prepared.state, start, slot)
+  }
+}
+
+// What a painter takes of a filled line (model.ts LinePieces). A pure function of its arguments.
+export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
+  switch (prepared.engine) {
+    case 'blink':
+      if (line.engine !== 'blink') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return blink.linePieces(prepared.state, line)
+    case 'webkit':
+      if (line.engine !== 'webkit') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return webkit.linePieces(prepared.state, line)
+    case 'gecko':
+      if (line.engine !== 'gecko') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return gecko.linePieces(prepared.state, line)
+  }
+}
+
+// The engine's geometry of a decided line and the gaps its breaks decide; a refused slot gives the gaps its refusal rests
+// on, without geometry. A pure function of its arguments, which throws on a paragraph prepared plain.
+export function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection {
+  switch (prepared.engine) {
+    case 'blink':
+      if (line.engine !== 'blink') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return blink.inspectLine(prepared.state, line)
+    case 'webkit':
+      if (line.engine !== 'webkit') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return webkit.inspectLine(prepared.state, line)
+    case 'gecko':
+      if (line.engine !== 'gecko') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      return gecko.inspectLine(prepared.state, line)
   }
 }
 
 // The gaps of the prepared paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5), computed by
-// prepare; the engine-build gap first.
-export function paragraphGaps(prepared: PreparedParagraph): Gap[] {
+// prepare; the engine-build gap first. It throws on a paragraph prepared plain.
+export function paragraphGaps(prepared: Prepared): Gap[] {
   switch (prepared.engine) {
-    case 'blink': return buildGaps(prepared.env).concat(blinkEngine.gaps(prepared.state))
-    case 'webkit': return buildGaps(prepared.env).concat(webkitEngine.gaps(prepared.state))
-    case 'gecko': return buildGaps(prepared.env).concat(geckoEngine.gaps(prepared.state))
+    case 'blink': return buildGaps(prepared.state.env).concat(blink.paragraphGaps(prepared.state))
+    case 'webkit': return buildGaps(prepared.state.env).concat(webkit.paragraphGaps(prepared.state))
+    case 'gecko': return buildGaps(prepared.state.env).concat(gecko.paragraphGaps(prepared.state))
   }
 }
 
