@@ -23,6 +23,8 @@
 //   page waits 15 seconds and sends its tab to the runner's same document under the host name `localhost`, another site
 //   than 127.0.0.1, so Firefox and Chrome load it in another process; the runner sends a restarted page its probes again
 //   (runner.ts step), and there the sweep runs. `host` in the result says which page answered.
+// - A7: A6 with the new process's page waiting 15 seconds more before it makes a context or measures anything: whether
+//   the state belongs to a process's first moments or to its first ask.
 // - A8: A3 beside the DOM, for what A3 found about the kept list itself: a span in the same family, its width read at
 //   every reading beside the kept context's and a new context's, so it shows whether the DOM follows a family name that
 //   resolves late where a kept context doesn't.
@@ -148,6 +150,10 @@ for (let i = 0; i < spans.length; i++) spans[i].remove();
 return { userAgent: navigator.userAgent, host: location.host, msSinceNavigationStart: Math.round(t0), rows: FAMILIES.map((row, i) => ({ what: row[0], font: fonts[i], kept: seen[i].kept, fresh: seen[i].fresh, dom: seen[i].dom })) };
 `
 
+const WAIT = String.raw`
+await new Promise(resolve => setTimeout(resolve, 15000));
+`
+
 const OVER_TIME = String.raw`
 const make = (font) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c.lang = 'en'; c.font = font; return c; };
 const t0 = performance.now();
@@ -240,6 +246,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A6', spec: 'store prototype: the sweep after strings that hold U+FE0E, in a new content process of a browser that has been up 15 seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${SAMPLES}\n${HOP}\nconst ROWS = rowsOf(TEXT_PRESENTATION.concat(BLOCKS));\n${OVER_TIME}` }],
+  }, {
+    id: 'store-attack A7', spec: 'store prototype: A6 with the new process idle for 15 seconds before its first measurement', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: `${SAMPLES}\n${HOP}\n${WAIT}\nconst ROWS = rowsOf(TEXT_PRESENTATION.concat(BLOCKS));\n${OVER_TIME}` }],
   }, {
     id: 'store-attack A8', spec: 'the contexts list: a family named by a localized name, a kept context and a new one beside the DOM over ten seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: BESIDE_DOM }],
