@@ -521,15 +521,22 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
   return e
 }
 
+// A character taken to have no advance: HarfBuzz's default-ignorable ones, the C0 and C1 controls and U+FFFC. Such a
+// character where the port's rules start a glyph cluster is read as a cluster of its own that getTextClusters leaves out
+// of a 16-bit string (clusterTable); a letter Canvas doesn't report went into a ligature. Canvas can't tell the two apart,
+// so this is a rule of thumb the probe text-clusters holds against the DOM.
+function hasNoAdvance(cp: number): boolean {
+  return isDefaultIgnorableHarfBuzz(cp) || cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0xfffc
+}
+
 // What one getTextClusters call per measured string tells of text_content [from, to) inside a shaping call (speculative:
 // measure/canvas.ts hasTextClusters): `before[i]` is the 16.16 advance sum before the glyph cluster that holds unit
 // from + i, in the call's own shaping, `before[to - from]` the total, and `starts[i]` whether a cluster starts at the unit
 // (1), goes on (0), or Canvas told nothing of it (-1: a unit left out of the string, or what follows an unreported cluster).
 // The strings, contexts, script segments, word spacing and letter spacing difference are measure16's, and so are the gaps
-// raised. A cluster's advance is the distance to the next left edge, so the sums follow logical order in either direction.
-// Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a default-ignorable character where
-// the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at the next cluster's start;
-// any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
+// raised. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a character without an
+// advance (hasNoAdvance) where the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at
+// the next cluster's start; any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
 // position. Null where Canvas has no getTextClusters.
 export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
   if (!hasTextClusters || from >= to) return null
@@ -555,8 +562,9 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
       const found = canvasClusters(group.rtl ? contexts.rtl : contexts.ltr, cs.s)
       const n = found.starts.length
       const advance = new Array<number>(n)
-      const visual: number[] = []
-      for (let i = 0; i < n; i++) visual.push(i)
+      const logical: number[] = []
+      for (let i = 0; i < n; i++) logical.push(i)
+      logical.sort((i, j) => found.starts[i]! - found.starts[j]!)
       let width16 = 0
       if (found.rights !== null) {
         // A string of 256 px or more: every cluster's own advance, exact, and the total is their sum.
@@ -565,16 +573,19 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
           width16 += advance[i]!
         }
       } else {
+        // A cluster's advance is the distance from its left edge to its logical neighbour's: the next cluster's left edge in
+        // an LTR call, the one before it in an RTL call, where the first cluster ends at the string's right end. It holds
+        // under a negative letter spacing, where left edges don't grow with the offsets. Canvas counts an x from the
+        // alignment point, the right end in the RTL context (measure/canvas.ts clusters).
         width16 = Math.round(found.width * 65536)
-        // Left edges from the string's left end: Canvas counts them from the alignment point (measure/canvas.ts clusters).
-        let origin = 0
-        for (let i = 0; i < n; i++) origin = Math.min(origin, found.lefts[i]!)
         const x16: number[] = []
-        for (let i = 0; i < n; i++) x16.push(Math.round((found.lefts[i]! - origin) * 65536))
-        visual.sort((i, j) => x16[i]! - x16[j]!)
-        for (let v = 0; v < n; v++) advance[visual[v]!] = (v + 1 < n ? x16[visual[v + 1]!]! : width16) - x16[visual[v]!]!
+        for (let i = 0; i < n; i++) x16.push(Math.round((found.lefts[i]! + (group.rtl ? found.width : 0)) * 65536))
+        for (let l = 0; l < n; l++) {
+          const c = logical[l]!
+          if (!group.rtl) advance[c] = (l + 1 < n ? x16[logical[l + 1]!]! : width16) - x16[c]!
+          else advance[c] = (l === 0 ? width16 : x16[logical[l - 1]!]!) - x16[c]!
+        }
       }
-      const logical = visual.slice().sort((i, j) => found.starts[i]! - found.starts[j]!)
       let sum = 0
       for (let l = 0; l < n; l++) {
         const c = logical[l]!
@@ -584,8 +595,8 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
         for (let u = s; u < end; u++) {
           const t = cs.units[u]!
           if (t < 0) continue
-          // An unreported default-ignorable cluster of no advance takes the next cluster's start, and so does what follows it.
-          if (u > s && isClusterBoundary(p, t) && isDefaultIgnorableHarfBuzz(cs.s.codePointAt(u)!)) {
+          // An unreported cluster of no advance takes the next cluster's start, and so does what follows it.
+          if (u > s && isClusterBoundary(p, t) && hasNoAdvance(cs.s.codePointAt(u)!)) {
             starts[t - from] = 1
             break
           }
