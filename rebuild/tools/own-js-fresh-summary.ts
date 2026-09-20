@@ -35,8 +35,8 @@ for (let i = 0; i < file.results.length; i++) {
 }
 const labels = [...new Set(pages.map(page => page.label))]
 const rounds = [...new Set(pages.map(page => page.round))].filter(round => labels.every(label => pages.some(page => page.round === round && page.label === label)))
-const sets = Object.keys(pages[0]!.scratch)
-console.log(`${labels.length} checkouts (${labels.join(', ')}), ${rounds.length} whole rounds, ${pages[0]!.messages} messages from scratch, ${pages[0]!.kept} kept at 3 widths, isolated ${pages[0]!.crossOriginIsolated}`)
+const sets = pages.length === 0 ? [] : Object.keys(pages[0]!.scratch)
+if (pages.length > 0) console.log(`${labels.length} checkouts (${labels.join(', ')}), ${rounds.length} whole rounds, ${pages[0]!.messages} messages from scratch, ${pages[0]!.kept} kept at 3 widths, isolated ${pages[0]!.crossOriginIsolated}`)
 
 function table(title: string, per: number, time: (page: Page) => number): void {
   const at = (label: string, round: number): number => time(pages.find(page => page.label === label && page.round === round)!)
@@ -63,7 +63,7 @@ for (let s = 0; s < sets.length; s++) {
   table(`from scratch, ${set}`, pages[0]!.messages, page => median(page.scratch[set]!))
   table(`kept messages laid out again, ${set}`, pages[0]!.kept * 3, page => median(page.relayout[set]!))
 }
-table(`the page's first pass of ${sets[0]} (the library is compiled during it)`, pages[0]!.messages, page => page.cold)
+if (pages.length > 0) table(`the page's first pass of ${sets[0]} (the library is compiled during it)`, pages[0]!.messages, page => page.cold)
 
 for (let k = 0; k < splits.length; k++) {
   const split = splits[k]!
