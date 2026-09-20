@@ -78,14 +78,14 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // a context made now and no page can know when. A context resolves its family names once, at its first measurement
 // (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy family names
 // after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name it doesn't know,
-// which takes about a second here (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a
-// font group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1110,
-// gfxPlatformFontList.cpp:3135-3165, PresShell.cpp:11042-11047). So a context first used before it stays on the fallback
-// for a family named by its Japanese name, or by a legacy name like `Avenir Next Condensed Heavy`, while the DOM and a
-// new context find the family. Nothing a page can assign makes it look again: the same font string returns early, and another string and back, fontKerning
-// or lang changed and back find the old font group in the context's own cache (CanvasRenderingContext2D.cpp:4409-4478;
-// probes/contexts-start-up.ts S1, S2). That gives back what the list bought Firefox: ×0.92 on the chat mix and ×0.75 on
-// plain ASCII (research/PERF-LIFETIME.md).
+// which takes about a second here (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a font
+// group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1110, gfxPlatformFontList.cpp:3135-3165,
+// PresShell.cpp:11042-11047). So a context first used before it stays on the fallback for a family named by its Japanese
+// name, or by a legacy name like `Avenir Next Condensed Heavy`, while the DOM and a new context find the family. Nothing a
+// page can assign makes it look again: the same font string returns early, another string and back finds the old font group
+// in the context's own cache, and fontKerning or lang changed and back makes a new group once and finds that one ever after
+// (CanvasRenderingContext2D.cpp:4409-4478, :5480-5523; probes/contexts-start-up.ts S1, S2). That gives back what the list
+// bought Firefox: ×0.92 on the chat mix and ×0.75 on plain ASCII (research/PERF-LIFETIME.md).
 // Invalidated in WebKit alone, by one thing a page does itself: adding a FontFace that has already loaded (load() first
 // and add() after, or a FontFace made from bytes) to a document.fonts that holds no face yet. WebKit's font cache leaves
 // the page's font set out of its key while the set is empty, and the set tells a context's font about a new face before
