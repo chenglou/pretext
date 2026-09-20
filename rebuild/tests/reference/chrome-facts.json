@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "chrome",
   "config": "facts",
-  "inputsSha256": "5ae59c20c5067dd9971660ce39ff5cb04044a6c23eb81262e2c5591a555fb050",
-  "commit": "d7df936d816728b328ae21d5dad73959e9b161e3",
+  "inputsSha256": "99e0f06ea5ea9d43f871a8111f4d632225180ed46f0012b8a09279d31cb6537d",
+  "commit": "6d71b371b3f453f520e4606c101a8be2c21c0cb7",
   "dirty": [],
-  "createdAt": "2026-09-19T21:22:41.642Z",
-  "reason": "the fresh-eyes follow-up merge (d7df936): Blink creates a box fragment for a span of empty items and a collapsible space, which moves painter rows in 494 cases, and system-ui is matched as a CSS keyword; recorded again at the merge",
+  "createdAt": "2026-09-20T15:49:14.003Z",
+  "reason": "the profiling phase's first merges (6d71b37): prepare takes the caller's list of Canvas contexts and a Blink shaping group keeps its positions and adjustments by offset; files under src/measure and engines/blink/shape.ts changed, no prediction did (0 transitions in both orders); recorded again at the merge",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -67,6 +67,12 @@
       "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
       "createdAt": "2026-09-19T18:19:40.958Z",
       "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
+      "cases": 67065
+    },
+    {
+      "commit": "d7df936d816728b328ae21d5dad73959e9b161e3",
+      "createdAt": "2026-09-19T21:22:41.642Z",
+      "reason": "the fresh-eyes follow-up merge (d7df936): Blink creates a box fragment for a span of empty items and a collapsible space, which moves painter rows in 494 cases, and system-ui is matched as a CSS keyword; recorded again at the merge",
       "cases": 67065
     }
   ],
@@ -2104,7 +2110,7 @@
   },
   "cases": 67065,
   "ledger": {
-    "headerSha256": "dc0557bee86c7ec0d802053ac15460de04c23c3460b43e6cba180c6b904dd6dd",
+    "headerSha256": "39d21f51bdc6580ef3358d56ffd81d8f5932403b7bd7f82fdb7f6058df9c0b1d",
     "entriesSha256": "33e5e15902e6efe30154070656d327cc2c98bc276e655c8e7d657492efc6e741"
   }
 }
