@@ -2,8 +2,8 @@
 // slices overlap and long strings repeat across messages. Here every unit of a source text is used once: consecutive
 // slices of the checked-in long-form corpora (corpora/*.txt), with the bench's chat lengths, under the stand-in Canvas.
 //
-//   bun rebuild/tools/store-real-text.ts --engine=blink|webkit|gecko --set=ascii-once|languages-once|bench-latin|bench-mix
-//     [--count=N] [--device-pixel-ratio=2] [--out=<report.json>]
+//   bun rebuild/tools/store-real-text.ts --engine=blink|webkit|gecko --set=ascii-once|languages-once|bench-latin|bench-mix|bench-real
+//     [--count=N] [--device-pixel-ratio=2] [--page-list=yes] [--bound=N] [--out=<report.json>]
 //
 // - ascii-once: the bench's ASCII source (en-gatsby-opening, made printable ASCII as bench/cases.ts does), cut once from
 //   start to end: about 2,600 messages, no unit of text in two messages.
@@ -11,6 +11,12 @@
 //   and the English text with its curly quotes), cut the same way and dealt in turn, so the page's languages mix as the
 //   messages accumulate. The Arabic text the bench uses is left out; ar-al-bukhala stands for Arabic.
 // - bench-latin, bench-mix: the bench's own generator, for the same tallies over the same number of messages.
+// - bench-real: the bench's set of real text read once (cases.ts buildChat 'real').
+// --page-list=yes hands every message one list of contexts, as a page does (index.ts prepare); without it a message gets
+// a list of its own. --bound=N also plays a store that forgets everything a context holds when it holds N answers, which
+// is what measure/canvas.ts does on the x-perf-store prototype: on a tree without that store `reachCanvasPerMessage`
+// is what the bound would let through, and on the prototype's tree with --page-list=yes `asksPerMessage` already is what
+// its store let through, so the two trees check each other.
 // A question is a context's assigned settings and a string, as in tools/store-study.ts. Per block of messages it counts
 // the asks and the ones new to the page, split by the string's length (1 or 2 units, 3 to 16, over 16), since the
 // study's claim is that short strings repeat across messages and long ones don't.
@@ -24,7 +30,7 @@ import { geckoFontChecks } from '../src/engines/gecko/checks.ts'
 import * as gecko from '../src/engines/gecko/index.ts'
 import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
 import * as webkit from '../src/engines/webkit/index.ts'
-import { detectEnvironment, fillLine, firstLine, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
+import { detectEnvironment, fillLine, firstLine, type Context, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
 import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type Paragraph } from '../src/model.ts'
 import { CHAT_LENGTH_CLASSES, CHAT_STYLE, CHAT_WIDTH, buildChat, chatText } from '../bench/cases.ts'
@@ -133,6 +139,7 @@ function messagesOf(name: string): string[] {
     }
     case 'bench-latin': return buildChat('latin', Number(options.get('count') ?? 2600)).map(chatText)
     case 'bench-mix': return buildChat('mix', Number(options.get('count') ?? 2600)).map(chatText)
+    case 'bench-real': return buildChat('real', Number(options.get('count') ?? 2600)).map(chatText)
     default: throw new Error(`Unknown set ${name}`)
   }
 }
@@ -191,12 +198,16 @@ function paragraphOf(text: string): Paragraph {
   }
 }
 
+const pageList: Context[] | null = options.get('page-list') === 'yes' ? [] : null
+
 function prepareMessage(text: string): Prepared {
   const paragraph = paragraphOf(text)
+  const checks = pageList ?? []
+  const contexts = pageList ?? []
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), []), env, false, []) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, []), env, false, []) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, []), env, false, []) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), checks), env, false, contexts) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, checks), env, false, contexts) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, checks), env, false, contexts) }
   }
 }
 
@@ -212,11 +223,14 @@ function fillAll(prepared: Prepared, width: number): void {
 
 const LENGTHS = ['1 or 2 units', '3 to 16 units', 'over 16 units'] as const
 const lengthClass = (text: string): number => text.length <= 2 ? 0 : text.length <= 16 ? 1 : 2
-type Block = { from: number; to: number; asks: number[]; fresh: number[]; freshUnits: number[] }
-const newBlock = (from: number): Block => ({ from, to: from, asks: [0, 0, 0], fresh: [0, 0, 0], freshUnits: [0, 0, 0] })
+type Block = { from: number; to: number; asks: number[]; fresh: number[]; freshUnits: number[]; reach: number }
+const newBlock = (from: number): Block => ({ from, to: from, asks: [0, 0, 0], fresh: [0, 0, 0], freshUnits: [0, 0, 0], reach: 0 })
+const bound = Number(options.get('bound') ?? 0)
+const bounded = new Map<string, Set<string>>()
+let forgotten = 0
 
 const page = new Map<string, Set<string>>()
-const EDGES = [100, 500, 1000, 1500, 2000, 2500, 5000, 10000]
+const EDGES = [100, 500, 1000, 1500, 2000, 2500, 5000, 9000, 10000]
 const blocks: Block[] = []
 let block = newBlock(0)
 onCall = (settings, text) => {
@@ -227,6 +241,21 @@ onCall = (settings, text) => {
   }
   const kind = lengthClass(text)
   block.asks[kind]!++
+  if (bound > 0) {
+    let held = bounded.get(settings)
+    if (held === undefined) {
+      held = new Set()
+      bounded.set(settings, held)
+    }
+    if (!held.has(text)) {
+      if (held.size >= bound) {
+        held.clear()
+        forgotten++
+      }
+      held.add(text)
+      block.reach++
+    }
+  }
   if (strings.has(text)) return
   strings.add(text)
   block.fresh[kind]!++
@@ -243,14 +272,26 @@ for (let i = 0; i < messages.length; i++) {
   }
 }
 
+// What a store without a bound holds at the end: strings and their UTF-16 units, in all and in its largest context.
+let storedStrings = 0
+let storedUnits = 0
+let largestContext = 0
+for (const strings of page.values()) {
+  storedStrings += strings.size
+  largestContext = Math.max(largestContext, strings.size)
+  for (const held of strings) storedUnits += held.length
+}
+
 const report = {
   engine, set, devicePixelRatio: Number(options.get('device-pixel-ratio') ?? 2), messages: messages.length, unitsOfText: units,
+  pageList: pageList !== null, bound, timesAContextForgot: forgotten, contexts: page.size, storedStrings, storedUnits, largestContext,
   blocks: blocks.map(b => {
     const over = b.to - b.from
     const asks = b.asks[0]! + b.asks[1]! + b.asks[2]!
     const fresh = b.fresh[0]! + b.fresh[1]! + b.fresh[2]!
     return {
       messages: `${b.from + 1} to ${b.to}`, asksPerMessage: asks / over, newToThePagePerMessage: fresh / over, hitRate: 1 - fresh / asks,
+      reachCanvasPerMessage: bound > 0 ? b.reach / over : null, hitRateUnderBound: bound > 0 ? 1 - b.reach / asks : null,
       newUnitsPerMessage: (b.freshUnits[0]! + b.freshUnits[1]! + b.freshUnits[2]!) / over,
       byLength: LENGTHS.map((name, k) => ({ length: name, asksPerMessage: b.asks[k]! / over, newPerMessage: b.fresh[k]! / over, hitRate: b.asks[k] === 0 ? null : 1 - b.fresh[k]! / b.asks[k]! })),
     }
