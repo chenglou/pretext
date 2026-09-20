@@ -193,7 +193,7 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
     writeFileSync(join(repo, path), text)
   }
   const shard = '.artifacts/tests/reference/firefox-no-facts/inputs/smoke/part0-000.ndjson.zst'
-  write('.gitignore', '.artifacts\nnode_modules\n')
+  write('.gitignore', '.artifacts\nnode_modules\ndist\nrebuild/tests/.check/\n')
   write('rebuild/src/a.ts', 'export const a = 1\n')
   write('node_modules/typescript/package.json', '{"version":"6.0.2"}')
   write('node_modules/@types/bun/package.json', '{"version":"1.4.0"}')
@@ -217,6 +217,8 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   expect(inputsKey(repo, run('--quick'))).toBe(keys[0]!)
   changes(() => write('rebuild/src/a.ts', 'export const a = 2\n'))
   changes(() => write('rebuild/src/untracked.ts', ''))
+  // Under rebuild also what git ignores: tsc, the unit tests and the citation ledger read its folders whole.
+  changes(() => write('rebuild/src/dist/ignored.test.ts', ''))
   changes(() => unlinkSync(join(repo, 'rebuild/src/a.ts')))
   changes(() => write('package.json', '{}'))
   changes(() => write('node_modules/typescript/package.json', '{"version":"6.0.3"}'))
@@ -227,8 +229,11 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   changes(() => write(shard, 'shar'))
   changes(() => utimesSync(join(repo, shard), new Date(2026, 0, 1), new Date(2026, 0, 1)))
   const last = keys[keys.length - 1]!
-  // What this run's gates don't read: an ignored file, another engine's reference, the painter's frozen bundle with --quick.
+  // What this run's gates don't read: an ignored file outside rebuild, what the gates write, another engine's reference,
+  // the painter's frozen bundle with --quick.
   write('.artifacts/notes.txt', 'x')
+  write('dist/layout.js', '')
+  write('rebuild/tests/.check/gates/gates.json', '[]')
   write('.artifacts/tests/reference/chrome-facts/inputs/manifest.json', '{"sets":{ }}')
   write('.artifacts/tests/painter-frozen/facts.js', '// frozen again\n')
   expect(inputsKey(repo, run('--quick'))).toBe(last)

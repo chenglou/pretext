@@ -65,8 +65,11 @@
 // would hide a failure, so the key (inputsKey) is a sha256 over everything a gate reads:
 // - every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
 //   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
-//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Of what git ignores, the gates
-//   read node_modules and .artifacts and write the rest (.check, and tsc's state, which tsc keys by content itself);
+//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
+//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
+//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
+//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
+//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself;
 // - what is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
 //   worktree installed it;
 // - the frozen references of the run's browsers, .artifacts/tests/reference/<browser>-<config>: every file under
@@ -382,10 +385,14 @@ export function inputsKey(repo: string, run: Run): string {
   }
   hash.update(`${run.engines.join(',')} ${run.quick ? 'quick' : 'full'}; bun ${Bun.version} ${Bun.revision}; ${process.platform} ${release()}\0`)
   // An empty list from a git that failed would be a key that reads no file of the tree.
-  const tree = Bun.spawnSync(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repo })
-  if (tree.exitCode !== 0) throw new Error(`git ls-files failed in ${repo}: ${tree.stderr.toString()}`)
-  const tracked = tree.stdout.toString().split('\0')
-  for (let i = 0; i < tracked.length; i++) if (tracked[i] !== '') addFile(join(repo, tracked[i]!))
+  const listed = (...args: string[]): string[] => {
+    const list = Bun.spawnSync(['git', 'ls-files', '-z', ...args], { cwd: repo })
+    if (list.exitCode !== 0) throw new Error(`git ls-files failed in ${repo}: ${list.stderr.toString()}`)
+    return list.stdout.toString().split('\0')
+  }
+  // Under rebuild also what git ignores, but for what the gates write: the gates read its folders whole.
+  const tree = [...listed('--cached', '--others', '--exclude-standard'), ...listed('--others', '--ignored', '--exclude-standard', '--', 'rebuild', ':!rebuild/tests/.check')]
+  for (let i = 0; i < tree.length; i++) if (tree[i] !== '') addFile(join(repo, tree[i]!))
   const modules = join(repo, 'node_modules')
   const installed = readdirSync(modules).sort()
   for (let i = 0; i < installed.length; i++) {
