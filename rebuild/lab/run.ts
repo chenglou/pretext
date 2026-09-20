@@ -341,7 +341,7 @@ async function launchChrome(url: string): Promise<Session> {
     `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
-    ...languages.launch!.arguments,
+    ...languages.launch!.arguments, ...(process.env['LAB_DSF'] === undefined ? [] : [`--force-device-scale-factor=${process.env['LAB_DSF']}`]),
   ])
   // Known before the window opens, so the page's first step can read the renderers (chromeUiLanguage).
   chromePid = session.pid
