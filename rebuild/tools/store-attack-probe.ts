@@ -17,6 +17,9 @@
 //   context's language from the document at every call, probes/contexts-page-lang.ts) and for content in `en`, beside
 //   the DOM's own line count for an element with that lang attribute.
 //
+// - A5: A1 with three strings alone, so nothing else in the page can be what changes the state: the bitcoin sign, a
+//   sentence that holds it and a plain word, under the bench's list.
+//
 // Per string: every change of the kept context's answer and of the new contexts', with the time of the reading that first
 // showed it. A row of one entry never changed. Counts, not times (one browser slot); a newly started browser a probe:
 //
@@ -183,6 +186,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A3', spec: 'store prototype: one kept context of a family named by a localized or a face name, over ten seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${NAMES}\nconst ROWS = rowsOfNames();\n${OVER_TIME}` }],
+  }, {
+    id: 'store-attack A5', spec: 'store prototype: one kept context a string over ten seconds in a browser that has just started, the bitcoin sign alone', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: `${SAMPLES}\nconst ROWS = [['bitcoin sign, the bench list', LIST, cp(0x20bf)], ['a sentence with the bitcoin sign, the bench list', LIST, 'that is 5 ' + cp(0x20bf) + ' a month'], ['a plain word, the bench list', LIST, 'Hamburgefonstiv']];\n${OVER_TIME}` }],
   }, {
     id: 'store-attack A4', spec: 'store prototype: the library with one kept list under a changing <html lang>, beside the DOM', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundle}\n${PAGE_LANG}` }],
