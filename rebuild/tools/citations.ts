@@ -29,7 +29,7 @@
 // never edit the same file. An owner who moves a test updates its engine's pointers in tests/rules.json in the same commit.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
@@ -68,7 +68,7 @@ function fail(text: string): never {
 }
 
 function finish(code: number): never {
-  if (scratch.length > 0) execFileSync('trash', scratch)
+  for (let i = 0; i < scratch.length; i++) rmSync(scratch[i]!, { recursive: true, force: true })
   process.exit(code)
 }
 
@@ -89,7 +89,7 @@ function scopeOf(path: string): Scope {
   return match === null ? 'shared' : match[1] as Scope
 }
 
-// The tree of a commit, under a scratch folder that goes to the Trash when the command ends: rebuild/src and the registry.
+// The tree of a commit, under a scratch folder that is removed when the command ends: rebuild/src and the registry.
 const scratch: string[] = []
 function treeAt(commit: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'citations-'))
