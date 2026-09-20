@@ -483,7 +483,7 @@ says when.
 | shared/env/engine-from-user-agent | heuristic | the user agent gives the engine only; the build and the browser process's languages are given facts, and what the engine's recipes assume of Canvas is asked of the running browser (§1.4) |
 | blink/measure/ignorables-left-out-if-8bit | heuristic | a probe of the unexplained RLM case before keeping a storage-based rule (blink audit D2); `soft-hyphen-shaping` meanwhile |
 | blink/measure/v8-short-slice-storage, force-16bit-string | heuristic | V8's substring and concat rules cited at Chrome 153's V8 pin, or probed per length (blink audit E3) |
-| blink/shape/wide-group-halved | heuristic | the cut keeps its source trigger, 256 zoomed px; the cut location reports `unsafe-to-break` where the safe test can't vouch for it (blink audit E4) |
+| blink/shape/wide-group-halved | heuristic | the cut keeps its source trigger, 256 zoomed px; the cut is found without asking Canvas, and an inspected paragraph reports `unsafe-to-break` at a cut where the wide window over both pieces doesn't show the adjustment the pieces add (blink audit E4; §4.4) |
 | blink/lines/reshaped-part-measured-alone-when-cut | heuristic | keep a reshape's pieces and slice them, as `ShapeResultView::Create` does (blink audit F6) |
 | webkit/measure/letter-spacing-after-tab, word-spacing-after-tab, canvas-word-spacing | heuristic | probes of Canvas word spacing at index 0, mid-string and after TAB, and tabs in Helvetica Neue and SF with letter spacing (webkit audit E2, E3); `tab-stops` where they differ |
 | webkit/breaks/dictionary-engine-by-block | heuristic | the script from pinned ppucd, as `brkeng.cpp:163-199` uses `uscript_getScript` (webkit audit E5) |
@@ -1519,6 +1519,26 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
 
+Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `measureGroups`; `gaps.ts`
+`cutAdjustment`; profiling item 6, research/RECIPE-COSTS.md B1b). A Canvas total is an exact 16.16 value only below 256
+zoomed px, so a wider group is measured in pieces. Its prefixes are the sums of the pieces' totals plus, at each cut,
+the adjustment a position takes there (`positionAdjust16`: the wide window's before white space, the pair window's
+elsewhere). The cut is found without asking Canvas: the offset nearest the middle beside a space where glyph clusters
+part and no letters join, else the nearest such offset, else the nearest grapheme boundary. Until 2026-09-19 the search
+asked: it took the wide window and the pair window at candidate after candidate until one beside a space showed no
+adjustment in either. That was 12.1% of Chrome's calls on the tier cases and a third of a chat message's at a device
+pixel ratio of 2, where 256 zoomed px is about 22 characters and nearly every message is cut, and it bought no line
+(§4.7). What the search settled is a condition now. The pieces and the adjustment added at a cut are the group's
+shaping only where that adjustment is all the shaping did across the cut, so an inspected paragraph asks the wide
+window over both pieces at every cut and reports `unsafe-to-break` at the cut where it shows another adjustment than
+the one added, or where clusters don't part or letters join (§5). Before white space the adjustment added is the wide
+window's own, so only a cut elsewhere can report. A plain paragraph asks nothing for it, and its lines are the inspected
+paragraph's, since both add the same adjustment. Only a line that holds a cut, or starts or ends at one, can be off by
+what the cut missed: every position after the cut in the group holds the same sum, so it cancels in a later line's
+width, and the gap's range is the cut's offset. Unit: per cut, the 3 strings of the pair window, or the wide window's 4
+or more before white space. Two things follow the cuts and so moved with them: the prefix of an offset is measured from
+the last cut before it, and the wide window of an offset ends at the cuts around it (`adjust16`).
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 
@@ -1590,8 +1610,8 @@ shaping unit, and one per Canvas context for pair placement. Nothing is asked ea
 the space of a WebKit box that never reads it (§4.7).
 
 - Blink: a piece's measured total goes from the cut search to the group's prefixes, which are sums of those totals
-  (`shape.ts` `addPieces`); `windowAdjust16` takes its window's total from its caller; `floatWidthOfParts` measures a
-  view's part and run edges once each; `inspect.ts` `shapeOf` carries the advance sum before the cluster it is making, so
+  (`shape.ts` `addPieces`); the adjustment at a cut goes from `measureGroups` to the cut's condition
+  (`gaps.ts` `cutAdjustment`); `floatWidthOfParts` measures a view's part and run edges once each; `inspect.ts` `shapeOf` carries the advance sum before the cluster it is making, so
   a cluster edge is measured once; and `shape.ts` `offsetForPosition` keeps the positions at `low` and past `high` in
   two locals, the only indices its binary search comes back to. The last two need gap lists that don't follow how often
   a range is raised (§5).
@@ -1976,7 +1996,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Gecko size quantization (`font-size-quantization`) | Gecko | Canvas keeps 7 significant bits; the DOM uses Servo's 10-bit size on a 1/60 px grid. | The gate in §4.3. | Sizes such as 13.33px, 16.8px or odd eighths. |
 | Bitmap emoji (`bitmap-emoji-size`) | Blink, Gecko at DPR ≠ 1 | The DOM asks Core Text for the sbix advance at the device size. | Measure at size × DPR and divide. Gecko under a bold font: the weight 400 advance at the page's apd plus synthetic bold's DOM steps (probe gecko-port F24). | Gecko: a device size off Canvas's 7-bit grid (one device pixel off at apd 27, probe cross-cutting 1). Blink: until H17 is verified. |
 | Chrome's per-canvas shape cache | Blink | The first shaping of a word per canvas wins: script context, word spacing at offset 0 (blink-canvas §1.7). | Handled: partitions, JS word spacing, fresh contexts per prepared paragraph. | — |
-| Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). Which glyph carries a pair adjustment: fact `pairKerning` (§1.2). | At a chosen line edge where the test can't vouch for the offset: contextual forms across it, a line edge taken from positions where the pair adjustment isn't 0 and `pairKerning` is null, a shaping group of 256 px with no safe cut. |
+| Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). Which glyph carries a pair adjustment: fact `pairKerning` (§1.2). | At a chosen line edge where the test can't vouch for the offset: contextual forms across it, a line edge taken from positions where the pair adjustment isn't 0 and `pairKerning` is null, a cut of a shaping group of 256 px where clusters don't part, letters join, or the wide window over both pieces shows another adjustment than the one the pieces add (§4.4). |
 | Joining technology (`joining-technology`) | Blink | Letters joined across a shaping call's edge keep joined forms in OpenType fonts, which read the call's context, and lose them in `morx` fonts (hb-ot-shape.cc:60-66, 100-101). | Fact `joining` (§1.2). | `joining` null at a group edge or chosen line edge between joining letters (Geeza Pro is AAT; Amiri and Noto Naskh Arabic are OpenType). |
 | Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a range the paragraph shapes as Latin as an 8-bit string, one Latin segment; slice other ranges into 16-bit strings. | A grapheme without a strong character that some Canvas string the port measures (the grapheme alone, or in the pair window with its neighbour) resolves to another script than the paragraph: the brackets and digits of Arabic or Hebrew text, a curly quote or emoji beside a space in a Latin paragraph; its width can differ in fonts whose lookups depend on the script (Amiri, Noto Naskh Arabic). Reported with the grapheme's range. Since correctness round 5 the pair window reaches past a cluster of only default-ignorable characters and marks (§4.4), so the port no longer measures such a cluster alone, a string without a strong character, and the condition no longer fires there: in the recorded no-facts cases 329 line entries and 3 paragraph entries went, every one on a case that passes line count, breaks and widths with exact values, so they covered nothing. |
 | Spaces in shaping (`space-in-shaping`) | Blink, Gecko | The DOM kerns across spaces when the font's lookups involve the space glyph. Blink's word-by-word check ignores legacy `kern`, `kerx` and `morx`; Gecko shapes whole ranges when `SpaceMayParticipateInShaping` (gecko-text §7.2). | Blink: `optimizeLegibility` contexts. Gecko: measure the whole range when `au(a + ' ' + b) ≠ au(a) + au(' ') + au(b)`, a hypothesis to probe. | Blink: cross-space legacy kerning. Gecko: until the detection is verified. |
