@@ -43,7 +43,9 @@ for the analysis, M4 and M5 this round; `.artifacts/session/cr5-gecko-20260919/p
   measure together with one other than apart (probe M5: a first font that draws only the digits has `11` in halves and
   `AV` on the first glyph under one declaration, and 0 au across all 30 digit and letter pairs). A stand-in beside a told
   cut takes the told placement, so the cluster between them keeps one share of each pair.
-- **A plain paragraph's break scan leaves those questions out until they matter** (`advance.ts` `roughAdvanceBefore`,
+- **A plain paragraph's break scan left those questions out until they mattered; the profiling phase took that out**
+  (research/PROFILING-START.md item 8: it bought about 40 ms per 10,000 chat messages, and a plain scan now reads every
+  candidate whole). What it was (`advance.ts` `roughAdvanceBefore`,
   `advanceSlack`; `lines.ts` `breakAndMeasureText`). Both recipes only move what crosses a cut to one side of it, so the
   advance without them is within that amount, plus 2 au, of the whole one. The scan reads its candidates that way, asks
   for the whole advance where the bound reaches a fit test, and a line's and a frame's own edges always take it. The

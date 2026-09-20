@@ -189,7 +189,9 @@ The fixes ask Canvas new questions and change gap lists, so tier 1 couldn't pass
   run. None of them holds Gecko's lazy plain scan (DESIGN.md §4.6) on the shape the critic found, because no set case
   has it: a ligature group that reaches past the frame's end and starts at a kerned or joined offset. That shape has a
   unit test built from a constructed paragraph on a stand-in Canvas, `engines/gecko/lazy-scan.test.ts`: plain and
-  inspected lines over a sweep of 901 widths, which differed at 22 of them before the fix.
+  inspected lines over a sweep of 901 widths, which differed at 22 of them before the fix. (The profiling phase took
+  the lazy scan out, and that file with it: a plain scan reads every candidate whole, research/PROFILING-START.md
+  item 8.)
 - *New unit tests* (`bun test rebuild`: 831 tests in 61 files at the merge). Gecko, six in `engines/gecko/gecko.test.ts`
   and the lazy scan's file: sides that add up only with the suffix behind its own first letter; a pair whose total only
   one placement explains, the third placement (`Je`) among them; a probe pair tells for the pairs of its own face and
