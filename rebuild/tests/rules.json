@@ -9340,7 +9340,7 @@
    "tests": [
     "src/engines/gecko/windows.test.ts :: a kerned pair across a cut keeps its two cells in one window, and the lines are the glyph records",
     "src/engines/gecko/windows.test.ts :: a ligature as wide as its parts across a cut keeps its two cells in one window",
-    "src/engines/gecko/windows-reversed.test.ts :: a right-to-left script in a left-to-right run has no windows, and its offsets are measured as the reversed unit's"
+    "src/engines/gecko/windows-reversed.test.ts :: a right-to-left script in a left-to-right run has no windows, and its offsets are measured as in the reversed unit"
    ],
    "declaredBy": "gecko owner (profiling item 3, 2026-09-19); no windows under a direction override is the item's reviewer's fix (2026-09-20)",
    "audit": null,
@@ -9947,7 +9947,7 @@
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
   "gecko/lines/plain-scan-rough-candidates": "5098cc53f534eeef",
-  "gecko/measure/windows-in-long-units": "e24229bae32aa430",
+  "gecko/measure/windows-in-long-units": "6606bc77393217f0",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848"
  }
 }

@@ -32,7 +32,7 @@ const env: GeckoEnvironment = {
 }
 const font: FontDecl = { family: 'Optima', size: 16, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }
 
-test('a right-to-left script in a left-to-right run has no windows, and its offsets are measured as the reversed unit\'s', () => {
+test('a right-to-left script in a left-to-right run has no windows, and its offsets are measured as in the reversed unit', () => {
   // Under U+202D everything is at level 2: six Hebrew letters, sixty digits and three letters are one unit of a
   // right-to-left script in a left-to-right run. Cuts would fall between `7` and `1`, which don't kern, and hold.
   let digits = ''
