@@ -3,7 +3,7 @@
 // slices of the checked-in long-form corpora (corpora/*.txt), with the bench's chat lengths, under the stand-in Canvas.
 //
 //   bun rebuild/tools/store-real-text.ts --engine=blink|webkit|gecko --set=ascii-once|languages-once|bench-latin|bench-mix
-//     [--count=N] [--out=<report.json>]
+//     [--count=N] [--device-pixel-ratio=2] [--out=<report.json>]
 //
 // - ascii-once: the bench's ASCII source (en-gatsby-opening, made printable ASCII as bench/cases.ts does), cut once from
 //   start to end: about 2,600 messages, no unit of text in two messages.
@@ -14,6 +14,8 @@
 // A question is a context's assigned settings and a string, as in tools/store-study.ts. Per block of messages it counts
 // the asks and the ones new to the page, split by the string's length (1 or 2 units, 3 to 16, over 16), since the
 // study's claim is that short strings repeat across messages and long ones don't.
+// --device-pixel-ratio: the study counted at 2. Blink measures at the zoomed size and cuts a group into pieces below 256
+// zoomed px, so its asks a message grow with the ratio.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { blinkFontChecks } from '../src/engines/blink/checks.ts'
@@ -174,7 +176,7 @@ function installLog(): void {
   globals.OffscreenCanvas = class { getContext(): Logged { return new Logged() } } as never
 }
 
-installStandInCanvas({ userAgent: USER_AGENTS[engine], devicePixelRatio: 2, pageLang: CHAT_STYLE.lang })
+installStandInCanvas({ userAgent: USER_AGENTS[engine], devicePixelRatio: Number(options.get('device-pixel-ratio') ?? 2), pageLang: CHAT_STYLE.lang })
 installLog()
 const detected = detectEnvironment(givenFacts(engine))
 if (detected.kind === 'unsupported') throw new Error(detected.reason)
@@ -242,7 +244,7 @@ for (let i = 0; i < messages.length; i++) {
 }
 
 const report = {
-  engine, set, messages: messages.length, unitsOfText: units,
+  engine, set, devicePixelRatio: Number(options.get('device-pixel-ratio') ?? 2), messages: messages.length, unitsOfText: units,
   blocks: blocks.map(b => {
     const over = b.to - b.from
     const asks = b.asks[0]! + b.asks[1]! + b.asks[2]!
