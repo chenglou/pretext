@@ -1,6 +1,7 @@
 // Browser side of the realism study (realism-run.ts): the bench's headline and nothing else. Every set's messages are laid
 // out from scratch in count mode, as page.ts scratchChat does (prepare() with its font checks and new Canvas contexts,
-// then fillLine over every line at the plan's width, nothing kept across messages), once a pass, the sets taking turns.
+// then fillLine over every line at the plan's width, nothing kept across messages), once a pass, the sets taking turns,
+// after an untimed warm-up of each set's first 500 messages.
 // After the timed passes a counting pass wraps measureText and getContext and runs every set once more: calls, the UTF-16
 // units of the strings sent, contexts and lines, in all and by message kind. Only fetch promises and MessageChannel tasks
 // drive it, so background timer throttling can't stall it.
@@ -18,6 +19,8 @@ export type RealismPlan = {
   codePadding: number
   width: number
   passes: number
+  // Whether the counting pass runs after the timed passes (a timed sitting whose counts are known leaves it out).
+  counts: boolean
   sets: { id: ChatSetId; messages: ChatMessage[] }[]
 }
 
@@ -125,6 +128,8 @@ function scratch(paragraph: Paragraph, env: Environment, width: number): number 
 }
 
 const canvasWork = { measureTextCalls: 0, unitsSent: 0, contexts: 0 }
+// Messages of every set laid out before the first timed pass.
+const WARM_UP = 500
 
 function wrapCanvas(): void {
   const context = OffscreenCanvasRenderingContext2D.prototype
@@ -156,6 +161,8 @@ async function main(): Promise<void> {
     paragraphs.push(paragraphsOf(plan, set.messages))
     results.push({ id: set.id, messages: set.messages.length, units: 0, scratchMs: [], lines: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, byKind: [] })
   }
+  // Untimed, so every timed pass is of compiled code, as the bench's headline passes are after its timed rows.
+  for (let s = 0; s < paragraphs.length; s++) for (let i = 0; i < Math.min(WARM_UP, paragraphs[s]!.length); i++) sink += scratch(paragraphs[s]![i]!, env, plan.width)
   spin()
   const spinStart = spin()
   for (let pass = 0; pass < plan.passes; pass++) {
@@ -173,8 +180,8 @@ async function main(): Promise<void> {
     }
   }
   const spinEnd = spin()
-  wrapCanvas()
-  for (let s = 0; s < plan.sets.length; s++) {
+  if (plan.counts) wrapCanvas()
+  for (let s = 0; s < plan.sets.length && plan.counts; s++) {
     document.title = `realism counting ${plan.sets[s]!.id}`
     const messages = plan.sets[s]!.messages
     const list = paragraphs[s]!

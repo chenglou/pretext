@@ -3,7 +3,7 @@
 // pass and then counts what they asked of Canvas, in one browser session, and writes one JSON result. A run is short, so
 // runs at several settings can take turns inside one exclusive stretch.
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
-//     [--sets=mix,latin,real] [--messages=10000] [--passes=3] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
+//     [--sets=mix,latin,real] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
 // --device-scale-factor: Chrome's --force-device-scale-factor=N at launch. A forced ratio is a real one: Blink lays out at
 //   it, where a DevTools-emulated one lays out at zoom 1 (rebuild/probes/blink-probes.ts). In Firefox the profile's
 //   layout.css.devPixelsPerPx, which sets the app units of a device pixel as a screen's ratio does.
@@ -48,7 +48,7 @@ const runId = randomUUID()
 const build = readBuild(browser)
 
 const plan: RealismPlan = {
-  runId, browser, engineBuild: build.engine, style: CHAT_STYLE, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes,
+  runId, browser, engineBuild: build.engine, style: CHAT_STYLE, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes, counts: args.get('counts') !== 'no',
   sets: sets.map(id => ({ id, messages: buildChat(id, messages) })),
 }
 

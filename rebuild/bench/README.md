@@ -311,7 +311,8 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
 - `--cpu-throttle=N` (Chrome): `Emulation.setCPUThrottlingRate` over a DevTools session that stays attached for the run.
   The throttle stops the renderer's main thread for a share of every interval. It is not a slower processor: caches,
   memory and the font code's own waits aren't slowed, so a time under it is this Mac's time stretched.
-- `--sets=mix,latin,real`, `--messages=N` (10,000), `--passes=N` (3), `--out=<file.json>`.
+- `--sets=mix,latin,real`, `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
+  known leaves the counting pass out), `--out=<file.json>`.
 
 ## Method
 
