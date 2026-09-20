@@ -8,7 +8,8 @@
 // not the paragraph's. The rows' layouts must equal no-facts-predictor.ts's in every order (`bun
 // rebuild/tests/compare-sets.ts <its run> <a usual run> --prediction=without-measure`: `measure` counts fewer contexts).
 // Offline a replay can't run it: a case's record holds what the case asked when nothing outlived a paragraph
-// (research/PROFILING-START.md, "Records are per case").
+// (research/PROFILING-START.md, "Records are per case"). In Firefox prepare makes its contexts anew whatever list it is
+// handed (src/index.ts prepare), so there this predictor's run is a usual run.
 import { UNKNOWN_FONT_FACTS } from '../../src/model.ts'
 import { makePredictor } from '../predictor-core.ts'
 

@@ -336,7 +336,9 @@ function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean, 
 }
 
 // prepare() with a page's list of contexts for both of its halves, which is prepare() handed the list, or for one half
-// while the other gets a call's own list, as both do in a prepare() that is given none (protocol.ts Kept).
+// while the other gets a call's own list, as both do in a prepare() that is given none (protocol.ts Kept). In Firefox
+// prepare() makes its contexts anew whatever list it is handed (src/index.ts prepare), so 'both' measures there what a
+// list a message measures; 'checks' and 'contexts' call the port itself and still share, as the study they were built for did.
 function prepareKeeping(paragraph: Paragraph, env: Environment, kept: Kept, page: CanvasContext[]): Prepared {
   switch (kept) {
     case 'both': return prepare(paragraph, env, false, page)
