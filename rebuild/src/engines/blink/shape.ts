@@ -613,9 +613,13 @@ function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: numb
   if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   const i = lastCutAtOrBefore(cuts, k)
-  const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
-  const to = cuts[i + 1] ?? group.end
-  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
+  // A side that holds no script of its own takes the next piece in: a word's pieces are short, and `, ` alone is no stand-in
+  // for the comma in its run.
+  let from = cuts[i] === k ? i - 1 : i
+  let to = i + 1
+  while (from > 0 && holdsNoScript(sh.p, cuts[from]!, k)) from--
+  while (to + 1 < cuts.length && holdsNoScript(sh.p, k, cuts[to]!)) to++
+  return windowAdjust16(sh, g, k, cuts[from]!, cuts[to]!, lo, hi, measure16(sh, g, cuts[from]!, cuts[to]!, lo, hi))
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -649,10 +653,22 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
     pairAdjust16(sh, g, k, group.start, group.end) === 0
 }
 
-// Whether the word that starts at k, up to the next U+0020 or `end`, holds SHY.
-function wordHoldsSoftHyphen(p: BlinkPrepared, k: number, end: number): boolean {
-  for (let i = k; i < end && p.text.charCodeAt(i) !== 0x20; i++) if (p.text.charCodeAt(i) === 0xad) return true
+function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0xad) return true
   return false
+}
+
+// Whether [from, to) holds a character other than white space and none with a script of its own: measured alone, Canvas
+// resolves such a range's script over the string, where the paragraph resolves it over its run (script-context).
+function holdsNoScript(p: BlinkPrepared, from: number, to: number): boolean {
+  let other = false
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp)) return false
+    if (!isWhiteSpace(cp)) other = true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return other
 }
 
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
@@ -708,7 +724,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, a, k, cuts, totals, zero)
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero)
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !holdsNoScript(p, a, k) && !holdsNoScript(p, k, b)))
 }
 
 // The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, and is measured
@@ -718,16 +734,16 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
 // pass is no cut. What is left between two cuts and isn't one word below 256 zoomed px (words whose space didn't pass, a
 // long word, text without spaces) is cut as before (addPieces). So no range of 256 zoomed px or more is measured whole
 // where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
-// In an unsegmented paragraph a word that holds SHY isn't cut from the text before it: there a string without a space
-// leaves SHY out and a string with one carries U+2060 (canvasString), so the cut would change how the word's prefixes are
-// written.
+// A group of an unsegmented paragraph that holds SHY has no words: there a string without a space leaves SHY out and a
+// string with one carries U+2060 (canvasString; gap soft-hyphen-shaping), so a word alone and the same word with its space
+// are written in two ways, and their sums would hold the difference.
 function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], zero: boolean[]): void {
   const p = sh.p
   const group = p.groups[g]!
   const starts = [group.start]
-  for (let k = group.start + 1; k < group.end; k++) {
-    if (p.text.charCodeAt(k - 1) !== 0x20 || isWhiteSpace(p.text.charCodeAt(k)) || !isClusterBoundary(p, k) || joinsAcross(p, k, group.start, group.end)) continue
-    if (p.segmented || !wordHoldsSoftHyphen(p, k, group.end)) starts.push(k)
+  const words = p.segmented || !holdsSoftHyphen(p, group.start, group.end)
+  for (let k = group.start + 1; words && k < group.end; k++) {
+    if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(p.text.charCodeAt(k)) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) starts.push(k)
   }
   starts.push(group.end)
   const word16: number[] = []
