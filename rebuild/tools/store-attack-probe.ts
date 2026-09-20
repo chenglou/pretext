@@ -29,6 +29,10 @@
 //   every reading beside the kept context's and a new context's, so it shows whether the DOM follows a family name that
 //   resolves late where a kept context doesn't.
 // - A9: A8 in a new content process of a browser that has been up 15 seconds (A6's way there).
+// - A10: what A5 means for lines. The library lays four words of ten bitcoin signs out at 250px with one kept list as the
+//   page starts, and again three seconds later with the same list and with a new one, beside the DOM's line count. On a
+//   tree whose contexts keep no answers the kept list follows Firefox's own context; on the prototype's it can't. Run it
+//   on both trees (copy this file and its entry into the other checkout's rebuild/tools).
 //
 // Per string: every change of the kept context's answer and of the new contexts', with the time of the reading that first
 // showed it. A row of one entry never changed. Counts, not times (one browser slot); a newly started browser a probe:
@@ -151,6 +155,31 @@ for (let i = 0; i < spans.length; i++) spans[i].remove();
 return { userAgent: navigator.userAgent, host: location.host, msSinceNavigationStart: Math.round(t0), rows: FAMILIES.map((row, i) => ({ what: row[0], font: fonts[i], kept: seen[i].kept, fresh: seen[i].fresh, dom: seen[i].dom })) };
 `
 
+const LATE_FONT_LINES = String.raw`
+const lib = globalThis.storeAttack;
+const FAMILY = '"Helvetica Neue", "PingFang TC", "Geeza Pro", sans-serif';
+const WORD = String.fromCodePoint(0x20bf).repeat(10);
+const TEXT = [WORD, WORD, WORD, WORD].join(' ');
+const box = document.createElement('div');
+box.style.cssText = 'font: normal 400 16px/20px ' + FAMILY + '; width: 250px; white-space: normal; overflow-wrap: normal; position: absolute; left: 0; top: 0';
+box.lang = 'en';
+box.textContent = TEXT;
+document.body.append(box);
+const domLines = () => Math.round(box.getBoundingClientRect().height / 20);
+const raw = new OffscreenCanvas(1, 1).getContext('2d'); raw.lang = 'en'; raw.font = 'normal 400 16px ' + FAMILY;
+const kept = [];
+const out = { userAgent: navigator.userAgent, host: location.host, msSinceNavigationStart: Math.round(performance.now()), atTheStart: {}, threeSecondsLater: {} };
+out.atTheStart = { rawWordWidth: raw.measureText(WORD).width, dom: domLines(), keptList: lib.lines(TEXT, FAMILY, 16, 'en', 250, kept).length };
+await new Promise(resolve => setTimeout(resolve, 3000));
+out.threeSecondsLater = { rawWordWidth: raw.measureText(WORD).width, dom: domLines(), keptList: lib.lines(TEXT, FAMILY, 16, 'en', 250, kept).length, newList: lib.lines(TEXT, FAMILY, 16, 'en', 250, []).length };
+let again = 0;
+for (let i = 0; i < 200; i++) again = lib.lines(TEXT, FAMILY, 16, 'en', 250, kept).length;
+out.threeSecondsLater.keptListAfter200MorePrepares = again;
+out.storedAnswers = kept.map(context => context.widths === undefined ? null : context.widths.size + context.inkBoxes.size);
+box.remove();
+return out;
+`
+
 const WAIT = String.raw`
 await new Promise(resolve => setTimeout(resolve, 15000));
 `
@@ -256,6 +285,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A9', spec: 'the contexts list: A8 in a new content process of a browser that has been up 15 seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${HOP}\n${BESIDE_DOM}` }],
+  }, {
+    id: 'store-attack A10', spec: 'store prototype: the library with one kept list as a Firefox page starts and three seconds later, four words of bitcoin signs, beside the DOM', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: `${bundle}\n${LATE_FONT_LINES}` }],
   }, {
     id: 'store-attack A4', spec: 'store prototype: the library with one kept list under a changing <html lang>, beside the DOM', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundle}\n${PAGE_LANG}` }],
