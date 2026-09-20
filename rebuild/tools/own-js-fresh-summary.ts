@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 
 type Page = { label: string; round: number; crossOriginIsolated: boolean; messages: number; kept: number; cold: number; scratch: Record<string, number[]>; relayout: Record<string, number[]>; lines: Record<string, number> }
-type Split = { label: string; split: Array<{ set: string; calls: number; contexts: number; real: number[]; asked: number[]; loop: number[] }> }
+type Split = { label: string; split: Array<{ set: string; calls: number; contexts: number; real: number[]; asked: number[]; askedOfNew?: number[]; loop: number[] }> }
 
 function quantile(values: readonly number[], q: number): number {
   const sorted = [...values].sort((a, b) => a - b)
@@ -72,6 +72,10 @@ for (let k = 0; k < splits.length; k++) {
     const one = split.split[i]!
     const real = median(one.real)
     const canvas = median(one.asked) - median(one.loop)
+    if (one.askedOfNew !== undefined) {
+      const ofNew = median(one.askedOfNew) - median(one.loop)
+      console.log(`  ${one.set}, the questions asked of contexts made anew: Canvas ${ms(ofNew)} (${(ofNew / one.calls * 1e6).toFixed(0)} ns a call, ${(ofNew / real * 100).toFixed(1)}% of the pass), own JS ${ms(real - ofNew)} (${((real - ofNew) / real * 100).toFixed(1)}%)`)
+    }
     console.log(`  ${one.set}: a pass ${ms(real)}; its ${one.calls} questions (${one.contexts} contexts) asked again ${ms(median(one.asked))}, the loop alone ${ms(median(one.loop))}: Canvas ${ms(canvas)} (${(canvas / one.calls * 1e6).toFixed(0)} ns a call, ${(canvas / real * 100).toFixed(1)}% of the pass), own JS ${ms(real - canvas)} (${((real - canvas) / real * 100).toFixed(1)}%)`)
   }
 }

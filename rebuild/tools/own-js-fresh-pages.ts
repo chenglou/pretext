@@ -13,7 +13,9 @@
 // context object and the string, in order), and then the real measureText is called with them again, in the same order
 // on the same contexts, with nothing of the library between two calls. That is what Canvas costs for those questions
 // with no timer and no wrapper inside the library's pass. It is a lower bound of Canvas's share in place: the calls
-// follow each other, so Canvas's code and data stay in the processor's caches.
+// follow each other, so Canvas's code and data stay in the processor's caches. They are asked twice, of the recorded
+// contexts and of contexts made anew with their settings, since a pass starts its own list of contexts and a new
+// context has looked up none of its fonts' glyphs.
 //
 // A document fetches its library and the messages from a second local server this module starts (a bundle is 2 MB, and
 // the runner keeps every probe's script in its output).
@@ -84,7 +86,7 @@ const realMeasureText = Canvas2D.measureText;
 const out = { label: LABEL, split: [] };
 for (const set of sets) lib.scratch(paragraphs[set].slice(0, 1000), env, WIDTH);
 for (const set of sets) {
-  const result = { set, calls: 0, contexts: 0, real: [], asked: [], loop: [] };
+  const result = { set, calls: 0, contexts: 0, real: [], asked: [], askedOfNew: [], loop: [] };
   lib.scratch(paragraphs[set], env, WIDTH);
   const questions = [];
   Canvas2D.measureText = function (text) {
@@ -95,6 +97,23 @@ for (const set of sets) {
   Canvas2D.measureText = realMeasureText;
   result.calls = questions.length / 2;
   result.contexts = new Set(questions.filter((_, i) => i % 2 === 0)).size;
+  // The same questions for contexts made anew with the recorded ones' settings, as a pass that starts its own list asks
+  // them: a new context starts with none of the fonts' glyphs looked up.
+  const SETTINGS = ['lang', 'font', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction'];
+  const onNewContexts = () => {
+    const made = new Map();
+    const out = [];
+    for (let i = 0; i < questions.length; i += 2) {
+      let context = made.get(questions[i]);
+      if (context === undefined) {
+        context = new OffscreenCanvas(1, 1).getContext('2d');
+        for (const name of SETTINGS) context[name] = questions[i][name];
+        made.set(questions[i], context);
+      }
+      out.push(context, questions[i + 1]);
+    }
+    return out;
+  };
   // The loop alone: the same walk over the recorded questions with a call that asks nothing.
   const nothing = function (text) { return { width: text.length }; };
   for (let pass = 0; pass < PASSES; pass++) {
@@ -107,6 +126,11 @@ for (const set of sets) {
     t0 = performance.now();
     for (let i = 0; i < questions.length; i += 2) sum += realMeasureText.call(questions[i], questions[i + 1]).width;
     result.asked.push(performance.now() - t0);
+    const again = onNewContexts();
+    await pause();
+    t0 = performance.now();
+    for (let i = 0; i < again.length; i += 2) sum += realMeasureText.call(again[i], again[i + 1]).width;
+    result.askedOfNew.push(performance.now() - t0);
     await pause();
     t0 = performance.now();
     for (let i = 0; i < questions.length; i += 2) sum += nothing.call(questions[i], questions[i + 1]).width;
@@ -164,7 +188,7 @@ export default async function freshPageProbes(): Promise<Probe[]> {
   }
   for (let i = 0; i < splits.length; i++) {
     probes.push({
-      id: `own-js fresh split ${splits[i]!}`, spec: 'the profiling phase: Canvas\'s share by asking one pass\'s questions again', pageLang: 'en', html: '<div></div>',
+      id: `own-js fresh split ${i} ${splits[i]!}`, spec: 'the profiling phase: Canvas\'s share by asking one pass\'s questions again', pageLang: 'en', html: '<div></div>',
       observe: [{ kind: 'script', source: `${constants(splits[i]!, rounds)}${LOAD}${SPLIT}` }],
     })
   }
