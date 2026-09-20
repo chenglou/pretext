@@ -298,7 +298,7 @@ scales linearly to the zoomed size.
 and to a slower processor. It serves `realism-page.ts`, which is the headline and nothing else: every set (`mix`, `latin`,
 `real`) laid out from scratch in count mode once a pass, the sets taking turns, then one counting pass with wrappers on
 `measureText` and `getContext`: calls, the UTF-16 units of the strings sent, contexts and lines, in all and by message
-kind. A run is a launch and a few passes, so runs at several settings can take turns inside one exclusive stretch. It
+kind (by language in the `languages` set). A run is a launch and a few passes, so runs at several settings can take turns inside one exclusive stretch. It
 launches what `run.ts` launches, in the background, and doesn't take the browser lock.
 
 ```sh
@@ -311,7 +311,9 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
 - `--cpu-throttle=N` (Chrome): `Emulation.setCPUThrottlingRate` over a DevTools session that stays attached for the run.
   The throttle stops the renderer's main thread for a share of every interval. It is not a slower processor: caches,
   memory and the font code's own waits aren't slowed, so a time under it is this Mac's time stretched.
-- `--sets=mix,latin,real`, `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
+- `--sets=mix,latin,real,languages`: the chat sets, and `languages`, the eleven languages of `corpora/` read once with the
+  chat lengths and taking turns (`cases.ts` `buildLanguages`), which the counting pass files by language.
+- `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
   known leaves the counting pass out), `--out=<file.json>`.
 
 ## Method

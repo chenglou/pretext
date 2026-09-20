@@ -3,7 +3,7 @@
 // pass and then counts what they asked of Canvas, in one browser session, and writes one JSON result. A run is short, so
 // runs at several settings can take turns inside one exclusive stretch.
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
-//     [--sets=mix,latin,real] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
+//     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
 // --device-scale-factor: Chrome's --force-device-scale-factor=N at launch. A forced ratio is a real one: Blink lays out at
 //   it, where a DevTools-emulated one lays out at zoom 1 (rebuild/probes/blink-probes.ts). In Firefox the profile's
 //   layout.css.devPixelsPerPx, which sets the app units of a device pixel as a screen's ratio does.
@@ -17,15 +17,16 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { loadavg } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/browser-build.ts'
-import { buildChat, CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_STYLE, CHAT_WIDTH, describeChat } from './cases.ts'
-import type { ChatSetId } from './protocol.ts'
-import type { RealismPlan, RealismResult } from './realism-page.ts'
+import { buildChat, buildLanguages, CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_STYLE, CHAT_WIDTH } from './cases.ts'
+import type { RealismMessage, RealismPlan, RealismResult } from './realism-page.ts'
 
 const BENCH_DIR = import.meta.dir
 const REPO = resolve(BENCH_DIR, '../..')
 const PROFILES_DIR = join(REPO, '.artifacts/profiles')
 const WEBKIT_HOST = join(REPO, '.artifacts/webkit-host/webkit-host')
-const SETS: readonly ChatSetId[] = ['mix', 'latin', 'real']
+// The bench's chat sets, and 'languages': every language of the corpora in turn, filed by language (cases.ts buildLanguages).
+type SetId = 'mix' | 'latin' | 'real' | 'languages'
+const SETS: readonly SetId[] = ['mix', 'latin', 'real', 'languages']
 
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -35,7 +36,7 @@ for (const raw of process.argv.slice(2)) {
 }
 const browser = args.get('browser')
 if (browser !== 'chrome' && browser !== 'firefox' && browser !== 'webkit-host') throw new Error('--browser=chrome|firefox|webkit-host')
-const sets = (args.get('sets') ?? 'mix,latin,real').split(',') as ChatSetId[]
+const sets = (args.get('sets') ?? 'mix,latin,real').split(',') as SetId[]
 for (let i = 0; i < sets.length; i++) if (!SETS.includes(sets[i]!)) throw new Error(`Unknown set ${sets[i]}`)
 const messages = Number(args.get('messages') ?? 10000)
 const passes = Number(args.get('passes') ?? 3)
@@ -47,9 +48,16 @@ const outPath = resolve(args.get('out') ?? join(REPO, '.artifacts/bench', `reali
 const runId = randomUUID()
 const build = readBuild(browser)
 
+function messagesOf(id: SetId): RealismMessage[] {
+  switch (id) {
+    case 'mix': case 'latin': case 'real': return buildChat(id, messages).map(message => ({ label: message.kind, parts: message.parts }))
+    case 'languages': return buildLanguages(messages).map(message => ({ label: message.language, parts: [{ code: false, text: message.text }] }))
+  }
+}
+
 const plan: RealismPlan = {
   runId, browser, engineBuild: build.engine, style: CHAT_STYLE, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes, counts: args.get('counts') !== 'no',
-  sets: sets.map(id => ({ id, messages: buildChat(id, messages) })),
+  sets: sets.map(id => ({ id, messages: messagesOf(id) })),
 }
 
 // run.ts asciiJsonResponse: every character above U+007E escaped, so a string is 8-bit in the page where its characters allow.
@@ -262,7 +270,7 @@ const report = {
   durationMs: Date.now() - startedAt.getTime(), deviceScaleFactor: scaleFactor, cpuThrottle: throttle, passes,
   load: { start: loadStart, end: loadavg()[0]! }, power: execFileSync('pmset', ['-g', 'batt'], { encoding: 'utf8' }).split('\n').slice(0, 2).join(' '),
   head: execFileSync('git', ['-C', REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  sets: plan.sets.map(set => ({ id: set.id, holds: describeChat(set.messages) })), result,
+  result,
 }
 mkdirSync(dirname(outPath), { recursive: true })
 writeFileSync(outPath, `${JSON.stringify(report, null, 1)}\n`)

@@ -3,12 +3,15 @@
 // then fillLine over every line at the plan's width, nothing kept across messages), once a pass, the sets taking turns,
 // after an untimed warm-up of each set's first 500 messages.
 // After the timed passes a counting pass wraps measureText and getContext and runs every set once more: calls, the UTF-16
-// units of the strings sent, contexts and lines, in all and by message kind. Only fetch promises and MessageChannel tasks
+// units of the strings sent, contexts and lines, in all and by label (a chat message's kind, a text's language). Only fetch promises and MessageChannel tasks
 // drive it, so background timer throttling can't stall it.
 import { detectEnvironment, fillLine, firstLine, prepare, type EngineName, type Environment, type GivenFacts } from '../src/index.ts'
 import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
-import type { BrowserKind, ChatKind, ChatMessage, ChatSetId, ScriptStyle } from './protocol.ts'
+import type { BrowserKind, ChatPart, ScriptStyle } from './protocol.ts'
 import type { CssFont } from '../src/model.ts'
+
+// A message and what the counting pass files it under: a chat set's message kind, or a text's language.
+export type RealismMessage = { label: string; parts: ChatPart[] }
 
 export type RealismPlan = {
   runId: string
@@ -21,13 +24,14 @@ export type RealismPlan = {
   passes: number
   // Whether the counting pass runs after the timed passes (a timed sitting whose counts are known leaves it out).
   counts: boolean
-  sets: { id: ChatSetId; messages: ChatMessage[] }[]
+  sets: { id: string; messages: RealismMessage[] }[]
 }
 
-export type RealismKindCount = { kind: ChatKind; messages: number; units: number; measureTextCalls: number; unitsSent: number; contexts: number; lines: number }
+// `ms` is timed in the counting pass, with its wrappers on and two timer reads a message: for the labels beside each other.
+export type RealismLabelCount = { label: string; messages: number; units: number; measureTextCalls: number; unitsSent: number; contexts: number; lines: number; ms: number }
 
 export type RealismSetResult = {
-  id: ChatSetId
+  id: string
   messages: number
   // UTF-16 units of the messages' text.
   units: number
@@ -38,7 +42,7 @@ export type RealismSetResult = {
   // UTF-16 units of every string given to measureText.
   unitsSent: number
   contexts: number
-  byKind: RealismKindCount[]
+  byLabel: RealismLabelCount[]
 }
 
 export type RealismResult = {
@@ -94,7 +98,7 @@ function givenFacts(engine: EngineName, build: string): GivenFacts {
 }
 
 // page.ts chatInputs: a message as the rebuild takes it, no font facts supplied.
-function paragraphsOf(plan: RealismPlan, messages: readonly ChatMessage[]): Paragraph[] {
+function paragraphsOf(plan: RealismPlan, messages: readonly RealismMessage[]): Paragraph[] {
   const s = plan.style
   const font: FontDecl = { ...s.font, facts: UNKNOWN_FONT_FACTS }
   const codeFont: FontDecl = { ...plan.codeFont, facts: UNKNOWN_FONT_FACTS }
@@ -159,7 +163,7 @@ async function main(): Promise<void> {
   for (let s = 0; s < plan.sets.length; s++) {
     const set = plan.sets[s]!
     paragraphs.push(paragraphsOf(plan, set.messages))
-    results.push({ id: set.id, messages: set.messages.length, units: 0, scratchMs: [], lines: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, byKind: [] })
+    results.push({ id: set.id, messages: set.messages.length, units: 0, scratchMs: [], lines: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, byLabel: [] })
   }
   // Untimed, so every timed pass is of compiled code, as the bench's headline passes are after its timed rows.
   for (let s = 0; s < paragraphs.length; s++) for (let i = 0; i < Math.min(WARM_UP, paragraphs[s]!.length); i++) sink += scratch(paragraphs[s]![i]!, env, plan.width)
@@ -188,13 +192,16 @@ async function main(): Promise<void> {
     const result = results[s]!
     for (let i = 0; i < list.length; i++) {
       const before = { ...canvasWork }
+      const start = performance.now()
       const lines = scratch(list[i]!, env, plan.width)
-      const kind = messages[i]!.kind
-      let entry = result.byKind.find(item => item.kind === kind)
+      const ms = performance.now() - start
+      const label = messages[i]!.label
+      let entry = result.byLabel.find(item => item.label === label)
       if (entry === undefined) {
-        entry = { kind, messages: 0, units: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, lines: 0 }
-        result.byKind.push(entry)
+        entry = { label, messages: 0, units: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, lines: 0, ms: 0 }
+        result.byLabel.push(entry)
       }
+      entry.ms += ms
       let units = 0
       for (let k = 0; k < messages[i]!.parts.length; k++) units += messages[i]!.parts[k]!.text.length
       entry.messages++

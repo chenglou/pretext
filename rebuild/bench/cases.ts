@@ -239,13 +239,17 @@ function realTexts(): RealTexts {
   }
 }
 
-function realSlice(real: RealTexts, script: 'latin' | 'cjk' | 'arabic', min: number, max: number): string {
-  const texts = real[script]
-  const source = texts[real.next[script]++ % texts.length]!
+// The next slice of a text read from start to end, and from its start again when it ends.
+function readNext(source: RealText, min: number, max: number): string {
   if (source.at + min >= source.text.length) source.at = 0
   const start = alignStart(source.text, source.at)
   source.at = excerptEnd(source.text, start, min, max)
   return source.text.slice(start, source.at).trim()
+}
+
+function realSlice(real: RealTexts, script: 'latin' | 'cjk' | 'arabic', min: number, max: number): string {
+  const texts = real[script]
+  return readNext(texts[real.next[script]++ % texts.length]!, min, max)
 }
 
 function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind, real: RealTexts | null): ChatMessage | null {
@@ -315,6 +319,39 @@ export function buildChat(set: ChatSetId, count: number): ChatMessage[] {
     }
     const message = chatMessage(rng, kind, real)
     if (message !== null) out.push(message)
+  }
+  return out
+}
+
+// What each language costs beside the others (realism-run.ts --sets=languages): every language of the long-form corpora
+// read once from its start with the chat lengths, the languages taking turns; a text that ends is read again. The shortest,
+// Burmese, has about 4,000 units, 35 messages a reading.
+const LANGUAGES: readonly { language: string; corpora: string[]; joiner: string }[] = [
+  { language: 'en', corpora: ['en-gatsby-opening'], joiner: ' ' }, { language: 'ar', corpora: ['ar-al-bukhala', 'ar-risalat-al-ghufran-part-1'], joiner: ' ' },
+  { language: 'he', corpora: ['he-masaot-binyamin-metudela'], joiner: ' ' }, { language: 'ur', corpora: ['ur-chughd'], joiner: ' ' },
+  { language: 'hi', corpora: ['hi-eidgah'], joiner: ' ' }, { language: 'zh', corpora: ['zh-zhufu', 'zh-guxiang'], joiner: '' },
+  { language: 'ja', corpora: ['ja-rashomon', 'ja-kumo-no-ito'], joiner: '' }, { language: 'ko', corpora: ['ko-sonagi', 'ko-unsu-joh-eun-nal'], joiner: ' ' },
+  { language: 'th', corpora: ['th-nithan-vetal-story-1', 'th-nithan-vetal-story-7'], joiner: ' ' },
+  { language: 'km', corpora: ['km-prachum-reuang-preng-khmer-volume-7-stories-1-10'], joiner: ' ' },
+  { language: 'my', corpora: ['my-cunning-heron-teacher', 'my-bad-deeds-return-to-you-teacher'], joiner: ' ' },
+]
+
+export function buildLanguages(count: number): { language: string; text: string }[] {
+  const rng = createRng('rebuild-bench-languages')
+  const texts: RealText[] = LANGUAGES.map(entry => ({ text: flow(entry.corpora.map(corpus).join('\n'), entry.joiner), at: 0 }))
+  const out: { language: string; text: string }[] = []
+  for (let i = 0; out.length < count; i++) {
+    const r = rng.next()
+    let lengths = CHAT_LENGTH_CLASSES[CHAT_LENGTH_CLASSES.length - 1]!
+    for (let k = 0, edge = 0; k < CHAT_LENGTH_CLASSES.length; k++) {
+      edge += CHAT_LENGTH_CLASSES[k]!.share
+      if (r < edge) {
+        lengths = CHAT_LENGTH_CLASSES[k]!
+        break
+      }
+    }
+    const text = readNext(texts[i % texts.length]!, lengths.min, lengths.min + rng.int(lengths.max - lengths.min + 1))
+    if (text.length > 0) out.push({ language: LANGUAGES[i % texts.length]!.language, text })
   }
   return out
 }
