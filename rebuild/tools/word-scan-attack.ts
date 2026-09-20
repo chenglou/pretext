@@ -19,9 +19,9 @@
 // `--no-spaced-nbsp` leaves out the words with U+00A0 before a join control, the first shape this tool found (negative
 // word spacing on a no-break space inside a word, word-scan-attack.test.ts), so that a run says whether anything else
 // differs. `--focus` draws what the word scan's premise decides more often: no letter spacing, no break-spaces, wider
-// lines.
+// lines. `--all-lines` looks for the widths where any line's break moves, not the first line's alone.
 //
-//   bun rebuild/tools/word-scan-attack.ts [--seed=1] [--count=20000] [--no-spaced-nbsp] [--focus] [--out=<report.json>]
+//   bun rebuild/tools/word-scan-attack.ts [--seed=1] [--count=20000] [--no-spaced-nbsp] [--focus] [--all-lines] [--out=<report.json>]
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../src/env.ts'
@@ -41,6 +41,7 @@ const seed = Number(options.get('seed') ?? 1)
 const count = Number(options.get('count') ?? 20000)
 const spacedNbsp = !options.has('no-spaced-nbsp')
 const focus = options.has('focus')
+const allLines = options.has('all-lines')
 
 // ---- A seeded stream ----
 
@@ -284,7 +285,7 @@ function layout(p: Paragraph, widthAu: number, mode: typeof wordScanState.mode, 
       const filled = fillLine(prepared, start, { width: widthAu / 60, left: 0, right: 0 })
       if (filled.kind !== 'line') throw new Error('below floats without floats')
       lines.push(firstOnly ? `${filled.start}-${filled.end}` : JSON.stringify({ start: filled.start, end: filled.end, box: filled.hasLineBox, pieces: linePieces(prepared, filled.line) }))
-      if (firstOnly || ++guard > 2000) break
+      if ((firstOnly && !allLines) || ++guard > 2000) break
       start = filled.next
     }
   } catch (error) {
@@ -293,17 +294,21 @@ function layout(p: Paragraph, widthAu: number, mode: typeof wordScanState.mode, 
   return { lines, error: null }
 }
 
-// The widths where the first line's break moves, by bisection between two widths whose first lines differ.
+// The widths where the first line's break moves (any line's under --all-lines), by bisection between two widths whose
+// lines differ.
 function thresholds(p: Paragraph, lo: number, hi: number, into: number[], depth: number): void {
-  const a = layout(p, lo, 'exact', false, true)
-  const b = layout(p, hi, 'exact', false, true)
-  if (a.error !== null || b.error !== null || a.lines[0] === b.lines[0]) return
+  const ranges = (widthAu: number): string | null => {
+    const laid = layout(p, widthAu, 'exact', false, true)
+    return laid.error !== null ? null : allLines ? laid.lines.join(' ') : laid.lines[0]!
+  }
+  const first = ranges(lo)
+  const last = ranges(hi)
+  if (first === null || last === null || first === last) return
   let l = lo
   let h = hi
-  const first = a.lines[0]
   while (h - l > 1) {
     const mid = (l + h) >> 1
-    if (layout(p, mid, 'exact', false, true).lines[0] === first) l = mid
+    if (ranges(mid) === first) l = mid
     else h = mid
   }
   into.push(l, h, l - 1, h + 1)
@@ -323,7 +328,13 @@ const report = {
 for (let n = 0; n < count; n++) {
   const p = paragraph()
   const widths: number[] = focus ? [1200 + int(3000), 3000 + int(6000), 9000 + int(21000)] : [1 + int(1800), 1800 + int(7200), 9000 + int(21000), 1]
-  thresholds(p, focus ? 1200 : 1, 40000, widths, focus ? 6 : 3)
+  if (allLines) {
+    // The first width after a drawn one where some line's break moves: six drawn starts.
+    for (let k = 0; k < 6; k++) {
+      const from = 1200 + int(24000)
+      thresholds(p, from, from + 600 + int(3000), widths, 0)
+    }
+  } else thresholds(p, focus ? 1200 : 1, 40000, widths, focus ? 6 : 3)
   report.paragraphs++
   for (let w = 0; w < widths.length; w++) {
     const widthAu = Math.max(1, widths[w]!)
