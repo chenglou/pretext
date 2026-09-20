@@ -1036,25 +1036,15 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     expect(plain.calls).toBeLessThan(inspected.calls)
   })
 
-  test('a plain scan asks where a kerned pair\'s adjustment goes only where the fit test or a line\'s edge needs it', () => {
+  test('a plain scan reads a kerned candidate as the inspected one does', () => {
     const optima = { ...courier, family: 'Optima' }
-    const large = () => asked.contexts.filter(c => c.font.includes(' 1024px ')).length
-    // `KaKa` is 554 + 554 + 576 + 576 au with the adjustment in halves, which only the pair recipe tells. At 100px the first
-    // word's every cluster is a wrap candidate, none within the adjustment of the width, and every line ends at a space.
+    // `KaKa` is 554 + 554 + 576 + 576 au with the adjustment in halves, which only the pair recipe tells. At 100px every
+    // line ends at a space, at 2px every line is cut inside the word, and at a width one au under the first pair's whole
+    // advance whether `K` and `a` share the first line rests on the halves: 554 + 554 = 1108 au is 18.4667px, and the
+    // stand-in gives `a` 577 au (1108 − 531).
     const wide = paragraph([run('KaKaKa KaKa KaKaKaKa', 'span', { font: optima })], 100, { overflowWrap: 'anywhere', font: optima })
-    const plainWide = plainWalk(wide, false)
-    expect(large()).toBe(0)
-    const inspectedWide = plainWalk(wide, true)
-    expect(large()).toBe(1)
-    expect(plainWide.lines).toEqual(inspectedWide.lines)
-    // At 2px every line is cut inside the word, and the plain paragraph asks as the inspected one does.
-    const narrow = paragraph([run('KaKa', 'span', { font: optima })], 2, { overflowWrap: 'anywhere', font: optima })
-    const plainNarrow = plainWalk(narrow, false)
-    expect(large()).toBe(1)
-    expect(plainNarrow.lines).toEqual(plainWalk(narrow, true).lines)
-    // A width one au under the first pair's whole advance: whether `K` and `a` share the first line rests on the halves.
-    // 554 + 554 = 1108 au is 18.4667px; the stand-in gives `a` 577 au (1108 − 531), so rough and whole disagree at 18.47px.
-    for (const width of [18.45, 18.47, 18.49]) {
+    expect(plainWalk(wide, false).lines).toEqual(plainWalk(wide, true).lines)
+    for (const width of [2, 18.45, 18.47, 18.49]) {
       const edge = paragraph([run('KaKa', 'span', { font: optima })], width, { overflowWrap: 'anywhere', font: optima })
       expect(plainWalk(edge, false).lines).toEqual(plainWalk(edge, true).lines)
     }

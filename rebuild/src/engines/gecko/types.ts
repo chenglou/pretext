@@ -224,9 +224,6 @@ export type InWordEntry = {
   advance: InWordAdvance | null
   // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
   suffixAu: number | null
-  // The offset's two sides, kept while `advance` lacks what only a chosen edge asks (advance.ts roughAdvanceBefore): a
-  // break scan on a plain paragraph took it so. null once the advance is whole, and where nothing was left out.
-  unrefined: InWordSides | null
 }
 
 // The two sides of an offset inside a unit as inWordAdvance measured them: `a` the start of the cluster before it (of its
