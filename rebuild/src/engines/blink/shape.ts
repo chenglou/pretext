@@ -522,9 +522,10 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 }
 
 // A character taken to have no advance: HarfBuzz's default-ignorable ones, the C0 and C1 controls and U+FFFC. Such a
-// character where the port's rules start a glyph cluster is read as a cluster of its own that getTextClusters leaves out
-// of a 16-bit string (clusterTable); a letter Canvas doesn't report went into a ligature. Canvas can't tell the two apart,
-// so this is a rule of thumb the probe text-clusters holds against the DOM.
+// character that HarfBuzz doesn't mark a continuation of the cluster before it (BlinkPrepared.continuations: U+200C after
+// a space, U+200D at an emoji segment's edge) is read as a cluster of its own that getTextClusters leaves out of a 16-bit
+// string (clusterTable); a letter Canvas doesn't report went into a ligature. Canvas can't tell the two apart, so this is
+// a rule of thumb, which tier 2's exact values hold against the DOM.
 function hasNoAdvance(cp: number): boolean {
   return isDefaultIgnorableHarfBuzz(cp) || cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0xfffc
 }
@@ -535,8 +536,8 @@ function hasNoAdvance(cp: number): boolean {
 // (1), goes on (0), or Canvas told nothing of it (-1: a unit left out of the string, or what follows an unreported cluster).
 // The strings, contexts, script segments, word spacing and letter spacing difference are measure16's, and so are the gaps
 // raised. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a character without an
-// advance (hasNoAdvance) where the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at
-// the next cluster's start; any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
+// advance (hasNoAdvance) that HarfBuzz doesn't mark a continuation, which Canvas doesn't report, is such a cluster and sits
+// at the next cluster's start; any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
 // position. Null where Canvas has no getTextClusters, or where a cluster formed across a character the string left out.
 export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
   if (!hasTextClusters || from >= to) return null
@@ -601,7 +602,7 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
           const t = cs.units[u]!
           if (t < 0) continue
           // An unreported cluster of no advance takes the next cluster's start, and so does what follows it.
-          if (u > s && isClusterBoundary(p, t) && hasNoAdvance(cs.s.codePointAt(u)!)) {
+          if (u > s && p.continuations[t] !== 1 && hasNoAdvance(cs.s.codePointAt(u)!)) {
             starts[t - from] = 1
             break
           }
