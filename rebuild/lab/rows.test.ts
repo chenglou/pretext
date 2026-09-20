@@ -1,17 +1,22 @@
 // Row files read the same plain or compressed (rows.ts): compress-rows.sh must never make a run look missing, or make a
 // tool ask for `zstd -d` by hand.
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { abcd, abcdExpected, abcdLayout, abcdNative, row } from './row-fixtures.ts'
 import { existingRows, plainRows, readLines } from './rows.ts'
 import { indexRows } from './score.ts'
 
+// The temporary folders the tests make, removed at the end: about 1,500 of them had gathered by 2026-09-20.
+const made: string[] = []
+afterAll(() => { for (let i = 0; i < made.length; i++) rmSync(made[i]!, { recursive: true, force: true }) })
+
 // The same two rows plain in one folder and compressed in another, as compress-rows.sh leaves them (only the .zst stays).
 function twoFolders(): { plain: string; compressed: string; lines: string[] } {
   const dir = mkdtempSync(join(tmpdir(), 'lab-rows-test-'))
+  made.push(dir)
   // U+2028 inside a JSON string must not split a line.
   const first = { ...row('chrome', abcd, abcdNative, abcdLayout, abcdExpected), id: 'c-1', family: 'line separator' }
   const second = { ...row('chrome', abcd, abcdNative, abcdLayout, abcdExpected), id: 'c-2' }
@@ -57,6 +62,7 @@ describe('rows read plain or compressed', () => {
   test('score.ts scores compressed rows, against compressed rows of the other order', () => {
     const { plain, compressed } = twoFolders()
     const out = mkdtempSync(join(tmpdir(), 'lab-rows-score-'))
+    made.push(out)
     const score = (rows: string, other: string, name: string): string => {
       const result = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${rows}`, `--native-compare=${other}`, `--out=${join(out, `${name}.json`)}`, `--per-case=${join(out, `${name}.ndjson`)}`])
       expect(result.exitCode).toBe(0)
