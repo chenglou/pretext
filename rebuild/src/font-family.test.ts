@@ -81,6 +81,19 @@ describe('a font-family list as CSS syntax', () => {
     expect(names('"Courier New\\')).toEqual([['Courier New', true]])
   })
 
+  // Found by the tooling checker: JSON's escapes aren't CSS's, so a name with a newline (through a CSS escape) was handed
+  // on as "A\nB", which CSS reads as AnB.
+  test('a name closed by the library is a CSS string: it reads back as the same name, whatever it holds', () => {
+    const open = ['"A\\a B', '"say \\"hi\\" \\\\ there', '"tab\\9 here', 'Arial, "x\\7f y']
+    for (let i = 0; i < open.length; i++) {
+      const families = listedFamilies(open[i]!)
+      const last = families[families.length - 1]!
+      expect(last.css.endsWith('"')).toBe(true)
+      expect(listedFamilies(`${last.css}, monospace`).map(family => family.name)).toEqual([last.name, 'monospace'])
+    }
+    expect(listedFamilies('"A\\a B')[0]).toMatchObject({ name: 'A\nB', css: '"A\\a B"' })
+  })
+
   // Old: the font checks skipped an empty family; WebKit and Gecko listed a family with an empty name; Blink read the first
   // family alone. After a string, Gecko skipped one character and read on, and the others took the rest into the name. CSS
   // rejects all of these whole, so no page can set them.
