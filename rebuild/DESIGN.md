@@ -2293,7 +2293,9 @@ Generators read pinned engine data, check every input's sha256 against a recorde
 Data only one engine reads sits under that engine; the bidi data, which the engines share, stays shared and is named by
 where it comes from (Unicode 17, libicucore 78.1, `unicode-bidi` 15). Tables are base64 in the module, and each engine
 decodes and parses its own when its data module loads (`src/engines/<engine>/data.ts`): every table of the three engines
-in about 3 ms under bun, kept for the life of the page. Not shipped:
+in about 3 ms under bun, kept for the life of the page. Blink's `props.ts` also fills two tables read by index as it
+loads, the properties and the script of every code point below U+3000, from its runs: about a millisecond in a cold
+process and 72 KB, kept the same way (§4.7, "The Blink port's own JavaScript"). Not shipped:
 the phrase tables and `jaml` model (the input model has no `word-break: auto-phrase`), ICU's dictionaries (`cjdict` is
 2 MB) and Firefox's LSTM models (874 KB), because §6.3 takes SA breaks from the running browser. Compacting tables
 (dropping the reverse table and rule source, which `rbbi.ts` never reads) is later performance work.
