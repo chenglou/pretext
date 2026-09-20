@@ -603,6 +603,16 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
           if (t < 0) continue
           // An unreported cluster of no advance takes the next cluster's start, and so does what follows it.
           if (u > s && p.continuations[t] !== 1 && hasNoAdvance(cs.s.codePointAt(u)!)) {
+            // The character is one canvasString put U+2060 in place of (a soft hyphen), and the same Canvas cluster goes on
+            // with a letter after it: a ligature formed across it, which the paragraph's own character may not allow.
+            // `f` SHY `fi` is one `ffi` cluster in Shantell Sans's Canvas string and three clusters natively. Such a string
+            // tells nothing of the call.
+            if (p.text.charCodeAt(t) !== cs.s.charCodeAt(u)) {
+              for (let v = u + 1; v < end; v++) {
+                const tv = cs.units[v]!
+                if (tv >= 0 && p.continuations[tv] !== 1 && !hasNoAdvance(cs.s.codePointAt(v)!)) return null
+              }
+            }
             starts[t - from] = 1
             break
           }
