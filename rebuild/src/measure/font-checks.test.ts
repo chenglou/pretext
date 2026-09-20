@@ -279,16 +279,17 @@ describe('one call', () => {
     expect(calls).toBe(3 * asked + 2)
   })
 
-  test('a list that outlives the call saves the next call its contexts and none of its questions, so a font that loads between two calls shows in the second', () => {
+  test('a list that outlives the call saves the next call its contexts and its questions, so a font that loads between two calls shows only in a new list', () => {
     const p = paragraph('Late, Prop', 'ab')
     const contexts: Context[] = []
     expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Prop')
     const askedFirst = calls
     const madeFirst = made.length
     expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Prop')
-    expect([calls, made.length]).toEqual([2 * askedFirst, madeFirst])
+    expect([calls, made.length]).toEqual([askedFirst, madeFirst])
     fonts = { ...fonts, Late: fixed(0.5) }
-    expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Late')
+    expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Prop')
+    expect(withLearnedFontFacts(p, webkitFontChecks, []).font.facts.primaryFamily).toBe('Late')
   })
 
   test('a list whose settings never repeat is emptied instead of growing without end', () => {

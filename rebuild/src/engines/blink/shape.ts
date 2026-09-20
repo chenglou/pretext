@@ -214,7 +214,10 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
-export type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
+// `key` is the string's name in its context's store of answers (measure/canvas.ts width): `s` itself, but for a forced
+// slice, which a keyed use would turn one-byte, the one-byte string it was sliced from. A 16bit context is asked no
+// one-byte string (contextsOf), so there that key names the forced slice alone.
+export type CanvasString = { s: string; key: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
 
 export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false): CanvasString {
   let codes: number[] = []
@@ -258,8 +261,8 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
   const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: Int32Array.from([-1, ...units]), twoByte, leftOut }
-  return { s: forced ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte, leftOut }
+  if (prefixed) { s = '\u2060' + s; return { s, key: s, units: Int32Array.from([-1, ...units]), twoByte, leftOut } }
+  return { s: forced ? ('Ā' + s).slice(1) : s, key: s, units: Int32Array.from(units), twoByte, leftOut }
 }
 
 // IsWordDelimiter<true> over the string as NormalizeSpacesAndMaybeBidi leaves it (plain_text_node.cc:26-91): U+0020, TAB and
@@ -390,7 +393,7 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(p, group.style, from, to))
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
-  const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
+  const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s, cs.key)
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   const adjust = wordSpacing16(p, group.style, from, to)

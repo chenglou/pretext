@@ -1,8 +1,9 @@
-// measure/canvas.ts hands Canvas the string its caller built and never uses that string as a key. bun can't see a string's
-// storage, so the test watches the keys: any Map or Set lookup of the measured string would show as a key with its
-// characters. In Chrome the same is pinned by storage (probes/blink-storage.ts S5).
+// measure/canvas.ts hands Canvas the string its caller built, asks a context each question once, and keys a stored answer by
+// the text or by the key its caller gave instead. bun can't see a string's storage, so the test watches the keys: a Map or
+// Set lookup of a measured string that came with another key would show as a key that is that object. In Chrome the same is
+// pinned by storage (probes/blink-storage.ts S5).
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { bounds, contextFor, width, type CanvasSettings, type Context } from './canvas.js'
+import { bounds, contextFor, MAX_ANSWERS, width, type CanvasSettings, type Context } from './canvas.js'
 
 const SETTINGS: CanvasSettings = { font: '16px x', lang: 'en', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto', textRendering: 'auto', direction: 'ltr', partition: '' }
 
@@ -45,7 +46,7 @@ function keysDuring(run: () => void): string[] {
 }
 
 describe('contextFor, width and bounds', () => {
-  test('always ask Canvas and use no key', () => {
+  test('a context asks Canvas a string once, for its width and for its ink box apart', () => {
     const contexts: Context[] = []
     const text = '((((((((((((('
     const keys = keysDuring(() => {
@@ -53,10 +54,39 @@ describe('contextFor, width and bounds', () => {
       expect(width(context, text)).toBe(130)
       expect(width(contextFor(contexts, { ...SETTINGS }), text)).toBe(130)
       expect(bounds(context, text)).toEqual({ width: 130, left: 1, right: 129 })
+      expect(bounds(context, text)).toEqual({ width: 130, left: 1, right: 129 })
+      expect(width(contextFor(contexts, { ...SETTINGS, partition: '16bit' }), text)).toBe(130)
     })
     expect(asked).toEqual([text, text, text])
-    expect(keys).toEqual([])
-    expect(contexts.length).toBe(1)
+    expect(keys).toEqual([text, text, text, text, text, text, text, text])
+    expect(contexts.length).toBe(2)
+  })
+
+  test('a text that comes with a key is never a key itself', () => {
+    const context = contextFor([], SETTINGS)
+    const text = ['((((((', '((((((('].join('')
+    const key = '((((((' + '((((((('
+    const keys = keysDuring(() => {
+      expect(width(context, text, key)).toBe(130)
+      expect(width(context, text, key)).toBe(130)
+    })
+    expect(asked.length).toBe(1)
+    expect(asked[0]).toBe(text)
+    expect(keys.length).toBe(3)
+    // Object.is can't tell two equal strings apart, so the test reads which object was handed over from the call's order:
+    // the key is what every lookup got, and measureText got the text.
+    expect(keys.every(k => k === key)).toBe(true)
+  })
+
+  test('a context that holds MAX_ANSWERS answers forgets them all', () => {
+    const context = contextFor([], SETTINGS)
+    for (let i = 0; i < MAX_ANSWERS; i++) width(context, `w${i}`)
+    expect(context.widths.size).toBe(MAX_ANSWERS)
+    width(context, 'one more')
+    expect(context.widths.size).toBe(1)
+    const before = asked.length
+    width(context, 'w0')
+    expect(asked.length).toBe(before + 1)
   })
 
   test('a context is found by every setting, the partition too', () => {

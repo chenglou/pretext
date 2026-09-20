@@ -63,6 +63,6 @@ export function styleContexts(canvases: Context[], style: ComputedStyle, zoom: n
 // W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
 // times the style's scale: 16.16 units of the zoomed px. Whole where the scale is 1 or 2; under another scale the
 // fractions are exact, so sums and differences of measured totals are too.
-export function raw16Of(contexts: StyleContexts, context: Context, s: string): number {
-  return Math.round(canvasWidth(context, s) * 65536) * contexts.scale
+export function raw16Of(contexts: StyleContexts, context: Context, s: string, key: string = s): number {
+  return Math.round(canvasWidth(context, s, key) * 65536) * contexts.scale
 }

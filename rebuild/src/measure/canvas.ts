@@ -12,11 +12,14 @@
 // paragraphs asked of it, and not only this paragraph's strings. That changes no answer while equal settings mean equal
 // shaping and `partition` keeps apart the strings that Chrome would shape differently on one canvas.
 //
-// `width` and `bounds` always ask Canvas: nothing here stores an answer, counts a call or logs one. Within a context,
-// measuring the same text again returns the same bits in all three engines (Blink returns the cached node for the whole
-// text; WebKit and Gecko run the same shaping), so asking again can't change a result, only cost a call.
+// PROTOTYPE (x-perf-store, not for merging): a context keeps the answers Canvas gave it, by the measured string, and
+// `width` and `bounds` ask Canvas only what the context has not answered. Lifetime: the context's, which is its list's
+// (index.ts prepare). Nothing but the string is in the key, because every other setting is what found the context.
+// Invalidated with the list, and by nothing else: a kept answer does not follow a font that loads later, where a kept
+// context in Chrome and Firefox does. Bounded by MAX_ANSWERS a context: a context that holds as many forgets them all.
 //
-// The string an engine hands to measureText reaches Canvas as the engine built it: nothing here uses it as a key.
+// The string an engine hands to measureText reaches Canvas as the engine built it: a string whose storage a keyed use
+// would change is never the key (`key` below).
 // V8 internalizes a string used as a Map, Set or property key, stores an internalized string in one byte whenever its
 // units fit, and turns the looked-up string into a reference to it (builtins-collections-gen.cc:2590-2604,
 // string-table.cc:398-427, factory.cc:1239-1257 and 1293-1300, string.cc:164-166 at Chrome 153's V8 6b96683d). Blink
@@ -43,7 +46,12 @@ export type CanvasSettings = {
 // Chrome and Firefox implement CanvasTextDrawingStyles.lang; the DOM lib types don't declare it yet.
 type ContextWithLang = OffscreenCanvasRenderingContext2D & { lang: string }
 
-export type Context = { settings: CanvasSettings; ctx: ContextWithLang }
+export type InkBox = { width: number; left: number; right: number }
+
+export type Context = { settings: CanvasSettings; ctx: ContextWithLang; widths: Map<string, number>; inkBoxes: Map<string, InkBox> }
+
+// About twice what Chrome's own canvas keeps (frame_shape_cache.cc:12-16: 32,768 strings).
+export const MAX_ANSWERS = 65536
 
 function sameSettings(a: CanvasSettings, b: CanvasSettings): boolean {
   return a.font === b.font && a.lang === b.lang && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing &&
@@ -64,19 +72,31 @@ export function contextFor(contexts: Context[], settings: CanvasSettings): Conte
   ctx.fontKerning = settings.fontKerning
   ctx.textRendering = settings.textRendering
   ctx.direction = settings.direction
-  const context = { settings, ctx }
+  const context = { settings, ctx, widths: new Map<string, number>(), inkBoxes: new Map<string, InkBox>() }
   contexts.push(context)
   return context
 }
 
+// `key` names the question in the context's store: the text itself, or, for a text whose storage V8 would change when it is
+// used as a key (the header above), another string object of the same characters (engines/blink/shape.ts canvasString).
 // rule blink/measure/string-reaches-canvas-as-built
-export function width(context: Context, text: string): number {
-  return context.ctx.measureText(text).width
+export function width(context: Context, text: string, key: string = text): number {
+  const stored = context.widths.get(key)
+  if (stored !== undefined) return stored
+  if (context.widths.size >= MAX_ANSWERS) context.widths.clear()
+  const w = context.ctx.measureText(text).width
+  context.widths.set(key, w)
+  return w
 }
 
 // measureText with the glyph ink extent: actualBoundingBoxLeft and actualBoundingBoxRight, as distances left and right of
-// the text origin.
-export function bounds(context: Context, text: string): { width: number; left: number; right: number } {
+// the text origin. No caller's text has a storage to keep, so the text is the key.
+export function bounds(context: Context, text: string): InkBox {
+  const stored = context.inkBoxes.get(text)
+  if (stored !== undefined) return stored
+  if (context.inkBoxes.size >= MAX_ANSWERS) context.inkBoxes.clear()
   const metrics = context.ctx.measureText(text)
-  return { width: metrics.width, left: metrics.actualBoundingBoxLeft, right: metrics.actualBoundingBoxRight }
+  const box = { width: metrics.width, left: metrics.actualBoundingBoxLeft, right: metrics.actualBoundingBoxRight }
+  context.inkBoxes.set(text, box)
+  return box
 }
