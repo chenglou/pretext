@@ -1,7 +1,7 @@
 // The bench's inputs stay in their size classes and deterministic, and the statistics are the documented ones.
 //   bun test rebuild/bench
 import { describe, expect, test } from 'bun:test'
-import { buildChat, buildContexts, buildInput, buildMessages, CHAT_KIND_SHARES, CHAT_LENGTH_CLASSES, CHAT_SETS, chatText, describeChat, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
+import { buildChat, buildContexts, buildInput, buildMessages, CHAT_KIND_SHARES, CHAT_LENGTH_CLASSES, CHAT_SETS, chatText, DEFAULT_CHAT_SETS, describeChat, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
 import { median, quantile, summarize } from './stats.ts'
 
 describe('cases', () => {
@@ -29,7 +29,7 @@ describe('cases', () => {
   })
 
   test('contexts hold one row per size per scenario and one many row, then the chat context', () => {
-    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10, chat: { timed: 10, headline: 25, headlinePasses: 1, phasePasses: 1 } })
+    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10, chat: { sets: DEFAULT_CHAT_SETS, timed: 10, headline: 25, headlinePasses: 1, phasePasses: 1 } })
     expect(contexts.length).toBe(SCRIPTS.length + 1)
     for (let c = 0; c < SCRIPTS.length; c++) expect(contexts[c]!.rows.length).toBe(2 * SIZES.length + 1)
     expect(SWEEP_WIDTHS.length).toBe(20)
@@ -66,6 +66,35 @@ describe('chat', () => {
     expect(mix.withCodeSpan).toBe(mix.byKind.find(entry => entry.kind === 'latin-code')!.messages)
     expect(mix.withEmoji).toBeGreaterThan(0)
     expect(mix.withUrl).toBeGreaterThan(0)
+  })
+
+  test('the real set starts with its shorter self, holds the mix\'s kinds near their shares, and reads its English texts once in 4,000 messages', () => {
+    const long = buildChat('real', 4000)
+    expect(buildChat('real', 500)).toEqual(long.slice(0, 500))
+    const real = describeChat(long)
+    for (let k = 0; k < CHAT_KIND_SHARES.length; k++) {
+      const [kind, share] = CHAT_KIND_SHARES[k]!
+      expect(Math.abs(real.byKind.find(entry => entry.kind === kind)!.messages / real.messages - share)).toBeLessThan(0.02)
+    }
+    // No two long plain-ASCII messages are the same text, which random slices of one text can't promise.
+    const seen = new Set<string>()
+    for (let i = 0; i < long.length; i++) {
+      const text = chatText(long[i]!)
+      expect(text.trim().length).toBeGreaterThan(0)
+      expect(text.includes('\n')).toBe(false)
+      if (long[i]!.kind !== 'latin' || text.length < 40) continue
+      expect(seen.has(text)).toBe(false)
+      seen.add(text)
+    }
+  })
+
+  // Counts and times of different days are held against each other, so a change to the generator must not move these sets
+  // by accident (the real set's first form swapped two draws and moved 407 of the mix's 10,000 messages). The digests are
+  // b2d9050's; a change that means to move a set changes them by name.
+  test('the mix and the latin set are the messages every earlier number was taken on', () => {
+    const digest = (set: 'mix' | 'latin'): string => new Bun.CryptoHasher('sha256').update(JSON.stringify(buildChat(set, 2000))).digest('hex').slice(0, 16)
+    expect(digest('mix')).toBe('c81763a2e738cd77')
+    expect(digest('latin')).toBe('b6cc92fda14dd6e9')
   })
 
   test('the latin set is printable ASCII in one part', () => {

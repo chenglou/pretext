@@ -31,8 +31,9 @@ export type RowSpec =
 
 // ---- Chat (README.md, "Chat") ----
 
-// 'mix': chat-like messages of every kind below. 'latin': plain ASCII messages only, the common case.
-export type ChatSetId = 'mix' | 'latin'
+// 'mix': chat-like messages of every kind below. 'latin': plain ASCII messages only, the common case. 'real': the mix's
+// kinds, shares and lengths over long texts read once from start to end, so no text is in two messages (cases.ts realTexts).
+export type ChatSetId = 'mix' | 'latin' | 'real'
 
 // What a message is made of. 'latin' is printable ASCII; 'latin-smart' keeps the source's curly quotes and dashes, which
 // make the text 16-bit; the next three are ASCII text with an emoji, a URL, or one inline code span; 'app-mixed' is a
