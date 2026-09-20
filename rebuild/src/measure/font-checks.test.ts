@@ -9,7 +9,7 @@ import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvir
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type InlineNode, type Paragraph } from '../model.ts'
 import type { Context } from './canvas.ts'
 import { withLearnedFontFacts, type FontChecks } from './font-checks.ts'
-import { prepare } from '../index.ts'
+import { fillLine, firstLine, prepare } from '../index.ts'
 
 const BEH = '\u0628'
 const LAJANYALAN = '\u07fa'
@@ -26,6 +26,9 @@ const proportional: StandInFont = { advance: ch => (ch.charCodeAt(0) >= 0x250 &&
 const arabicWidths = (joinedEm: number): StandInFont['advance'] => ch => (ch === BEH ? joinedEm : undefined)
 
 let fonts: Record<string, StandInFont> = {}
+// A stand-in context measures with the fonts of the moment, as Chrome's does. With `keepsFirstFonts` it keeps the listed
+// families it found at its first measurement, as Firefox's keeps the font group whose family names it resolved then.
+let keepsFirstFonts = false
 let calls = 0
 // Every context made since the last test began, and every question asked, in order.
 let made: StandInContext[] = []
@@ -39,12 +42,15 @@ class StandInContext {
   fontKerning = 'auto'
   textRendering = 'auto'
   direction = 'ltr'
+  found: string[] | null = null
   measureText(text: string): { width: number } {
     calls++
     asked.push({ context: this, text })
     const match = /^(?:normal|italic) \d+ ([\d.]+)px (.*)$/.exec(this.font)!
     const size = Number(match[1])
-    const families = match[2]!.split(',').map(f => f.trim().replace(/^"|"$/g, ''))
+    const listed = match[2]!.split(',').map(f => f.trim().replace(/^"|"$/g, ''))
+    if (!keepsFirstFonts || this.found === null) this.found = listed.filter(family => fonts[family] !== undefined)
+    const families = this.found
     let width = 0
     for (const ch of text) {
       let em = 1
@@ -57,7 +63,7 @@ class StandInContext {
       }
       width += em * size
     }
-    const first = fonts[families[0]!]
+    const first = fonts[listed[0]!]
     if (first?.adjust !== undefined) width += first.adjust(text, size) * size
     return { width }
   }
@@ -80,6 +86,7 @@ beforeEach(() => {
   calls = 0
   made = []
   asked = []
+  keepsFirstFonts = false
   fonts = { monospace: fixed(0.625), serif: proportional, Prop: proportional, Mono: fixed(0.5) }
 })
 
@@ -289,6 +296,36 @@ describe('one call', () => {
     expect([calls, made.length]).toEqual([2 * askedFirst, madeFirst])
     fonts = { ...fonts, Late: fixed(0.5) }
     expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Late')
+  })
+
+  test('Gecko\'s contexts are one call\'s whatever list the caller keeps, so a family name that contexts learn only at their first use shows in the next call', () => {
+    keepsFirstFonts = true
+    const p = paragraph('Late, Prop', 'ab ab ab')
+    const lineCount = (env: Environment, contexts: Context[]): number => {
+      const prepared = prepare(p, env, false, contexts)
+      let lines = 0
+      for (let start = firstLine(prepared); start !== null;) {
+        const filled = fillLine(prepared, start, { width: 50, left: 0, right: 0 })
+        if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
+        lines++
+        start = filled.next
+      }
+      return lines
+    }
+    const geckoList: Context[] = []
+    const webkitList: Context[] = []
+    expect([lineCount(gecko, geckoList), lineCount(webkit, webkitList)]).toEqual([2, 2])
+    const madeFirst = made.length
+    fonts = { ...fonts, Late: fixed(0.25) }
+    expect(lineCount(gecko, geckoList)).toBe(1)
+    expect(geckoList.length).toBe(0)
+    expect(made.length).toBeGreaterThan(madeFirst)
+    // The control: contexts that keep their first fonts on a list that is used, which is what WebKit's do after a loaded
+    // FontFace is added. The second call makes no context and lays out with the fallback; a new list finds the family.
+    const madeSecond = made.length
+    expect(lineCount(webkit, webkitList)).toBe(2)
+    expect(made.length).toBe(madeSecond)
+    expect(lineCount(webkit, [])).toBe(1)
   })
 
   test('a list whose settings never repeat is emptied instead of growing without end', () => {

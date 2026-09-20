@@ -71,11 +71,27 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 //
 // `contexts` is the list the checks and the engine find their Canvas contexts in, each by its settings, and make them in
 // (measure/canvas.ts contextFor). Nothing else is kept across calls: the checks ask Canvas again at every call.
-// Lifetime: the caller's. A call that is given none gets an empty list, and then nothing outlives its prepared paragraph.
-// A page that hands one list to every call pays for a context once per settings instead of once per paragraph.
-// Invalidated by the page's fonts changing, in WebKit alone: there a context keeps the fonts its font string resolved to
-// when it was assigned, so after a web font loads a page starts a new list where it prepares its paragraphs again.
-// Chrome's and Firefox's contexts measure with the loaded font from their next call on (probes/contexts-font-load.ts).
+// Lifetime: the caller's, in Blink and WebKit. A call that is given none gets an empty list, and then nothing outlives its
+// prepared paragraph. A page that hands one list to every call pays for a context once per settings instead of once per
+// paragraph.
+// Gecko's contexts are one call's, whatever list the caller keeps, because a kept Firefox context can answer otherwise than
+// a context made now and no page can know when. A context resolves its family names once, at its first measurement
+// (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy family names
+// after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name it doesn't know,
+// which takes about a second here (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a
+// font group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1110, gfxPlatformFontList.cpp:3135-3165,
+// PresShell.cpp:11042-11047). So a context first used before it stays on the fallback for a family named by its Japanese
+// name, or by a legacy name like `Avenir Next Condensed Heavy`, while the DOM and a new context find the family. Nothing
+// a page can assign makes it look again: the same font string returns early, and another string and back, fontKerning
+// or lang changed and back find the old font group in the context's own cache (CanvasRenderingContext2D.cpp:4409-4478;
+// probes/contexts-start-up.ts S1, S2). That gives back what the list bought Firefox: ×0.92 on the chat mix and ×0.75 on
+// plain ASCII (research/PERF-LIFETIME.md).
+// Invalidated in WebKit alone, by one thing a page does itself: adding a FontFace that has already loaded to
+// document.fonts, which is load() first and add() after, or a FontFace made from bytes. WebKit's kept context stays on
+// the fallback then, so the page starts a new list where it prepares its paragraphs again. A FontFace added before it
+// loads and an @font-face rule reach a kept WebKit context by themselves, and every font change reaches Chrome's, whose
+// Font asks the page's font selector for its fallback list again once that list was marked invalid (font.cc:71-77,
+// font_fallback_map.cc:29-67; probes/contexts-start-up.ts W1 to W8, probes/contexts-font-load.ts).
 // Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
 // partition: about 8 contexts per declaration in Blink, 3 in WebKit and Gecko), and by MAX_CONTEXTS: settings that never
 // repeat (an animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so
@@ -94,7 +110,10 @@ export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean
   switch (env.engine) {
     case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), contexts), env, inspect, contexts) }
     case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, contexts), env, inspect, contexts) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, contexts), env, inspect, contexts) }
+    case 'gecko': {
+      const own: Context[] = []
+      return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, own), env, inspect, own) }
+    }
   }
 }
 
