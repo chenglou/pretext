@@ -185,15 +185,17 @@ and the two stores that would answer most of it). In the lab that costs little i
 a repeat, and it tripped the time tripwire once, on Firefox's giants along the inspected path (15.3 s of prediction against
 4.2 s; their plain path 1.28×), which was accepted.
 
-**What an application pays today**, from the chat benchmark's first real pass (research/BENCH-NIGHT.md, 2026-09-19, no
-supplied facts, the library at the X3 merge): 10,000 chat messages from scratch take 9.59 s in Chrome (4.16 s for plain
-ASCII), 2.63 s in Firefox (0.61 s) and 11.7 s in webkit-host (8.83 s), against main's cold prepare at 0.72 s, 0.30 s and
-1.53 s; the same 10,000 kept and laid out at three new widths take 4.04 s, 0.70 s and 0.21 s. Chrome spends 43% of the
-time making Canvas contexts (11 a message) and 31% in the runtime font checks; webkit-host spends 98% inside `measureText`
-at 41 calls a message, each about three times as dear as main's, because 5.4 new contexts a message each pay for
-resolving their font; Firefox spends 88% in the fill, carried by CJK and Arabic messages. The maintainer's bar is about
-2 s after the performance work, or the stateless ideal is dropped. research/PROFILING-START.md has where that work
-starts: the measurer's lifetime first, by measured share.
+**What an application paid at the end of the re-architecture**, from the chat benchmark (research/BENCH-NIGHT.md,
+2026-09-19, no supplied facts, the library at the X3 merge). Its first pass ran on a loaded machine and its times were
+wrong for Chrome and webkit-host, for main's rows too; these are the quiet reruns' of that evening
+(research/PROFILING-START.md's correction; main's Chrome row from over 25 later reports): 10,000 chat messages from
+scratch took 4.6 s in Chrome (4.0 s for plain ASCII), 2.76 s in Firefox (0.58 s) and 0.235 s in webkit-host (0.195 s),
+against main's cold prepare at 0.31 to 0.34 s, 0.30 s and 0.31 s; the same 10,000 kept and laid out at three new widths
+took about 3.8 s, 0.70 s and 0.21 s, against main's 0.008 to 0.014 s. Chrome made 11 Canvas contexts a message, most
+of them the runtime font checks', and webkit-host 5.4 for its 41 calls a message; Firefox spent 88% in the fill,
+carried by CJK and Arabic messages. research/PROFILING-START.md has where the performance work starts, the measurer's
+lifetime first, and what it has bought since; the work is ranked by measured gain, lines and state, with no fixed bar
+(a first bar of about 2 s was withdrawn on 2026-09-20 as unsubstantiated).
 
 ## Round 4 evaluation, 2026-09-18
 

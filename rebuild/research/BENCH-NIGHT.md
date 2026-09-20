@@ -147,6 +147,8 @@ These are expectations from reading the code, checked against the smokes' counts
 
 One run of `rebuild/bench/chat-night.sh`, background windows, no supplied font facts, on AC power. Chrome started after its 15-minute wait for a quiet machine ran out, at a load average of 48 that fell to 5 during its run (the page's fixed arithmetic took 60.7 ms before and 29.1 ms after, so its early rows ran about twice as slow as its late ones; the three headline passes came late and agree: 9.02 s, 9.90 s, 9.59 s). Firefox and webkit-host ran on a quiet machine (load 5 and 3). Treat Chrome's timed rows as upper bounds until the quiet rerun; the counts don't depend on load.
 
+**Note of 2026-09-20: this pass's times don't stand for Chrome and webkit-host, main's rows included.** Quiet reruns the same evening gave Chrome 4.6 s and 4.0 s and webkit-host 0.235 s and 0.195 s from scratch, and main's cold prepare at 0.31 s in webkit-host; main's cold prepare in Chrome is 0.31 to 0.34 s in over 25 later reports, not 0.72 s (research/PROFILING-START.md has both corrections). The tables below are this run's record and are left as they were; the counts stand.
+
 **Against the maintainer's bar** ("if 10k messages relaid from scratch is about 2 s after the perf work, drop the ideal that we can be stateless"), before any perf work, 10,000 chat messages from scratch:
 
 | | Chrome | Firefox | webkit-host |

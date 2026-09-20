@@ -2096,13 +2096,15 @@ words and the memo answered a word's later occurrences. Their plain path is 1.28
 was accepted, because the tripped path is the inspected one, which the lab and inspection use and an application doesn't
 lay text out with.
 
-For an application the first real numbers are the chat benchmark's (research/BENCH-NIGHT.md, "The real pass", 2026-09-19,
-no supplied facts): 10,000 chat messages from scratch take 9.59 s in Chrome (4.16 s for plain ASCII messages), 2.63 s in
-Firefox (0.61 s) and 11.7 s in webkit-host (8.83 s), against main's cold prepare at 0.72 s, 0.30 s and 1.53 s. The
-repeats of this section are one part of that and not the largest: Chrome spends 43% of the time making Canvas contexts
-(11 a message) and 31% in the runtime font checks; webkit-host spends 98% inside `measureText` at only 41 calls a message,
-each about three times as dear as main's, because 5.4 new contexts a message each pay for resolving their font;
-Firefox spends 88% in the fill, carried by CJK and Arabic messages. research/PROFILING-START.md starts from there.
+For an application the first real numbers are the chat benchmark's (research/BENCH-NIGHT.md, 2026-09-19, no supplied
+facts). Its first pass ran on a loaded machine and its times were wrong for Chrome and webkit-host, for main's rows
+too; these are the quiet reruns' of that evening (research/PROFILING-START.md's correction; main's Chrome row from
+over 25 later reports): 10,000 chat messages from scratch took 4.6 s in Chrome (4.0 s for plain ASCII messages), 2.76 s
+in Firefox (0.58 s) and 0.235 s in webkit-host (0.195 s), against main's cold prepare at 0.31 to 0.34 s, 0.30 s and
+0.31 s. The repeats of this section are one part of that and not the largest: Chrome made 11 Canvas contexts a message,
+most of them the runtime font checks', and webkit-host 5.4 for its 41 calls a message, which a page's list of contexts
+has since taken away (§4.6); Firefox spent 88% in the fill, carried by CJK and Arabic messages.
+research/PROFILING-START.md starts from there.
 
 ## 5. Gaps
 

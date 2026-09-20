@@ -34,6 +34,13 @@ new context paying for its font) was the load, not the engine. The counts in the
 stand. Item 1's "Expected" below is corrected by the same document: in Chrome the font checks' contexts were the cost,
 not the engine's, and the item bought a fifth, not a half.
 
+**Corrected again on 2026-09-20: main's Chrome row was wrong too, and stayed quoted for a day.** Main's cold prepare of
+the mix in Chrome is 0.31 to 0.34 s, not 0.72 s: over 25 bench reports since, on quiet and on loaded machines alike,
+give a median of 310 to 338 ms over three passes (`.artifacts/bench/*/chrome-bench.md`, the headline's `main cold` row),
+about 0.20 s on plain ASCII and 0.38 s on the real set; research/PERF-STORE-STUDY.md's quiet table already said 0.34 s.
+The maintainer caught it. So Chrome's distance to main is larger than the table says: with a page's list of contexts
+the mix takes about 3.6 s against 0.33 s.
+
 One run of `rebuild/bench/chat-night.sh`, 2026-09-19, the library at the X3 merge (the last step changed no question),
 no supplied font facts, background windows. Chrome ran under load that fell during its run, so its timed rows are upper
 bounds until a quiet rerun, which the phase should take first; counts don't depend on load.
