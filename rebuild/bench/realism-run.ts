@@ -4,7 +4,9 @@
 // runs at several settings can take turns inside one exclusive stretch.
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
 //     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N]
-//     [--family=<font-family list>] --out=<file.json>
+//     [--family=<font-family list>] [--units-per-em=<json>] --out=<file.json>
+// --units-per-em: the cut-grain study's switch. The messages' declaration takes the lab's font facts, with these
+//   unitsPerEm per listed family ({} gives the lab's facts alone, the pair's base; {"Arial":2048} the head).
 // --family: the messages' font-family list in place of the bench's. The bench's three families have every character of the
 //   mix, but no kana, Hangul, Hebrew, Devanagari, Thai, Khmer or Burmese: those texts are laid out in the system's fallback
 //   fonts unless a run names a family that has them, so a language's cost under the bench's list is its fallback's too.
@@ -62,6 +64,7 @@ function messagesOf(id: SetId): RealismMessage[] {
 
 const plan: RealismPlan = {
   runId, browser, engineBuild: build.engine, style: { ...CHAT_STYLE, font: { ...CHAT_STYLE.font, family }, mainFont: `${CHAT_STYLE.font.size}px ${family}` }, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes, counts: args.get('counts') !== 'no',
+  studyUnitsPerEm: args.has('units-per-em') ? JSON.parse(args.get('units-per-em')!) as Record<string, number> : null,
   sets: sets.map(id => ({ id, messages: messagesOf(id) })),
 }
 

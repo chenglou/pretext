@@ -6,6 +6,7 @@
 // units of the strings sent, contexts and lines, in all and by label (a chat message's kind, a text's language). Only fetch promises and MessageChannel tasks
 // drive it, so background timer throttling can't stall it.
 import { detectEnvironment, fillLine, firstLine, prepare, type EngineName, type Environment, type GivenFacts } from '../src/index.ts'
+import { fontFactsFor } from '../lab/font-facts.ts'
 import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
 import type { BrowserKind, ChatPart, ScriptStyle } from './protocol.ts'
 import type { CssFont } from '../src/model.ts'
@@ -24,6 +25,9 @@ export type RealismPlan = {
   passes: number
   // Whether the counting pass runs after the timed passes (a timed sitting whose counts are known leaves it out).
   counts: boolean
+  // The cut-grain study's switch (--units-per-em), null otherwise: the messages' declaration takes the lab's font facts
+  // with these unitsPerEm per listed family (ListedFontFacts.unitsPerEm; an empty record gives the lab's facts alone).
+  studyUnitsPerEm: Record<string, number> | null
   sets: { id: string; messages: RealismMessage[] }[]
 }
 
@@ -102,7 +106,10 @@ function givenFacts(engine: EngineName, build: string): GivenFacts {
 // page.ts chatInputs: a message as the rebuild takes it, no font facts supplied.
 function paragraphsOf(plan: RealismPlan, messages: readonly RealismMessage[]): Paragraph[] {
   const s = plan.style
-  const font: FontDecl = { ...s.font, facts: UNKNOWN_FONT_FACTS }
+  const units = plan.studyUnitsPerEm
+  const lab = fontFactsFor(s.font, engineOf(plan.browser), [])
+  const font: FontDecl = units === null ? { ...s.font, facts: UNKNOWN_FONT_FACTS }
+    : { ...s.font, facts: { ...lab, fonts: lab.fonts!.map(listed => ({ ...listed, unitsPerEm: units[listed.family] ?? null })) } }
   const codeFont: FontDecl = { ...plan.codeFont, facts: UNKNOWN_FONT_FACTS }
   const text = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8 } as const
   const edge: BoxEdge = { margin: 0, border: 0, padding: plan.codePadding }
