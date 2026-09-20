@@ -141,7 +141,7 @@ function edgePairs(): string {
   return text
 }
 
-const TEXTS: Array<{ lang: string; text: string }> = [
+export const TEXTS: Array<{ lang: string; text: string }> = [
   { lang: 'en', text: 'To be, or not to be: that is the question. Whether \'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles.' },
   { lang: 'en', text: edgePairs() },
   { lang: 'en', text: 'AVATAR Wave Yo. Ty fly office affix fjord Tr r. P. L T V A W. Y, F. T, r, y. "Quoted" (paren) [bracket] it\'s don\'t rock\'n\'roll WAVE AWAY To Tomorrow. Yes, Your Truly, V. A. Wyatt' },
