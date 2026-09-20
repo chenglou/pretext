@@ -16,6 +16,11 @@
 // - H4: a loaded FontFace added to a font set that held a face and was emptied again (add, delete, then the late add).
 //   WebKit's font cache leaves the font set out of its key whenever the set holds no face (CSSFontSelector.cpp:526-539),
 //   not only before its first face.
+// - H5: the late names with two more ways of touching a kept context at every reading: reset() and then the settings
+//   again, and the canvas resized and then the settings again. Both bring a Gecko context back to its first state
+//   (CanvasRenderingContext2D.h:124-128, SetDimensions, ClearTarget, SetInitialState, CanvasRenderingContext2D.cpp:1871),
+//   and neither empties the context's own cache of font groups (:4456-4478, filled at :4606-4608), so by the source the
+//   font assigned again finds the old font group.
 //
 // Per row and way: every change of the answer with the time of the reading that first showed it. A list of one entry
 // never changed.
@@ -71,6 +76,8 @@ const touch = (r, way, c, ms) => {
     case 'sameString': c.font = fontOf(ROWS[r], 32); return true;
     case 'otherAndBack': c.font = fontOf(ROWS[r], 31); c.font = fontOf(ROWS[r], 32); return true;
     case 'firstMeasuredLate': return ms >= LATE_MS;
+    case 'reset': c.reset(); c.lang = 'en'; c.font = fontOf(ROWS[r], 32); return true;
+    case 'resize': c.canvas.width = 2; c.canvas.width = 1; c.lang = 'en'; c.font = fontOf(ROWS[r], 32); return true;
   }
 };
 const readAll = () => {
@@ -130,6 +137,9 @@ const probes: Probe[] = [{
 }, {
   id: 'contexts-heal-attack H4', spec: 'a loaded FontFace added two seconds in to a font set that held a face and was emptied again', pageLang: 'en', html: '<div></div>',
   observe: [{ kind: 'script', source: overTime([['a web font, loaded and then added to a set emptied before', '"Late Attack", monospace']], WAYS, false, true, 'Late Attack') }],
+}, {
+  id: 'contexts-heal-attack H5', spec: 'late family names, a kept context reset or resized and given its settings again at every reading', pageLang: 'en', html: '<div></div>',
+  observe: [{ kind: 'script', source: overTime(LATE_NAMES, ['kept', 'reset', 'resize'], false, false, null) }],
 }]
 
 export default probes
