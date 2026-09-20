@@ -326,14 +326,15 @@ for the 0 the search measured (DESIGN.md §4.4; research/PROFILING-START.md, ite
 first and moved lines). The cuts are the old search's by construction, so the tiers hold the change as one that drops
 questions (`.artifacts/tests/runs/b1b-rework-20260920`):
 
-- *Offline* (`gates.ts --engine=blink` at 9d5fad7). Tier 1 replays every Chrome case, with 0 questions the record
-  lacks, and exits 1: 750 predictions changed without facts and 343 with them, every one first in a gap list, every one
-  pass, pass, pass and exact in the ledger; 38,310 cases are the same and the rest ask fewer or the same questions in
-  another order. The function set's plain and pure checks pass all 67,065 cases in both configurations with none
-  skipped, and the plain path asks 213.43 questions a paragraph without facts where it asked 234.31 (203.48 for 224.3
-  with them). The painter differential's Chrome rows exit 3 on the changed cases, with no painting differing; the
-  citation ledger loses nothing; the twin scan finds 0. The unit-test row failed by 5 s timeouts under a load of 30 to
-  60 (`lab/rows.test.ts`, `lab/compare-rows.test.ts`, `tests/families/families.test.ts`); alone the three files pass.
+- *Offline* (`gates.ts --engine=blink` at 9d5fad7). Tier 1 replays every Chrome case, with 0 questions the record lacks,
+  and exits 1: 750 predictions changed without facts and 343 with them, every one first in a gap list, every one pass,
+  pass, pass and exact in the ledger; 38,310 cases are the same and the rest ask fewer or the same questions in another
+  order. The function set's plain, pure and sweep checks pass all 67,065 cases in both configurations with none skipped,
+  and the plain path asks 213.43 questions a paragraph without facts where it asked 234.31 (203.48 for 224.3 with them).
+  The painter differential's Chrome rows exit 3 on the changed cases, with no painting differing; the citation ledger
+  loses nothing; the twin scan finds 0. The unit-test row failed by 5 s timeouts under a load of 30 to 60
+  (`lab/rows.test.ts`, `lab/compare-rows.test.ts`, `tests/families/families.test.ts`); alone the three files pass, and
+  `bun test rebuild` alone passes its 888 tests in 68 files.
 - *Chrome, tier 2*, both orders, both configurations, recorded: 0 status transitions, exact values unchanged (265 and
   551 differing predicted values, 991 and 868 rect counts), limited values unchanged, the gates lost 0. The plain
   predictor's run: 0 of 67,065 line ranges differ. Field by field against the references' recording (134,130 rows a

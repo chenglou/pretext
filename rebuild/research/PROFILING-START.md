@@ -325,25 +325,25 @@ of 256 zoomed px or more"). B1a is built, with one thing more; B1b was built fir
   a list a message; this one takes 0.43 s and 0.23 s off there and 0.80 s and 0.87 s off one list.
 - *Proof.* By construction first: the search tries the same offsets with the same test and takes the same winner, so the
   cuts are the old search's, and with them every position; what can differ is which strings were measured, and so a gap
-  entry that a measured string raises. Then in pinned Chrome 153.0.8010.50 (`.artifacts/tests/runs/b1b-rework-20260920`):
-  the critic's 22,536 cases at device pixel ratios of 2 and 1, the old search against this one with equal native
-  observations in both runs: 0 rows differ in any field of the prediction but its counts of Canvas work, gap lists
-  included; the generator's 51,672 and 51,816 cases at the two ratios, the second survey's 29,280 among them: 0 rows.
-  Tier 2, both orders, both configurations, recorded: 0 status transitions in either (the first form had 20 on the
-  painter's metric with facts, 8 of them from covered to open; the old gap is where it was), exact values unchanged (265
-  and 551 differing predicted values, 991 and 868 rect counts), limited values unchanged (149,308 and 108,909), the
-  gates lost 0. The plain predictor's run: 0 of 67,065 line ranges and 0 native observations differ. Field by field
-  against the references' recording, 134,130 rows a configuration: 1,500 rows (750 cases) differ without facts and 686
-  (343) with them, every one in a gap list; 34 of the rows also in the name of the gap that limits a value, none in a
-  value's state, and none anywhere else: no line range, no geometry (the first form's 6 cases of reshape flags are
-  gone), no value, native observation or painted line. Every gap entry that one side alone holds is `script-context`
-  (1,369 lost and 288 gained without facts, 803 and 204 with them): a string the search no longer measures raised it,
-  or a merged range is cut otherwise. Offline (`gates.ts --engine=blink`): tier 1 replays every case with 0 questions
-  the record lacks and shows those 750 and 343 predictions changed, all first in a gap list, all passing and exact in
-  the ledger; the function set's plain and pure checks pass all 67,065 cases in both configurations with none skipped
-  (the first form skipped 8,675 and 2,526 that tier 1 couldn't replay); the citation ledger loses nothing; the twin
-  scan finds 0; the painter differential's Chrome rows exit 3 on the changed cases, as they do for any changed
-  prediction, with no painting differing.
+  entry that a measured string raises. Then in pinned Chrome 153.0.8010.50
+  (`.artifacts/tests/runs/b1b-rework-20260920`): the critic's 22,536 cases at device pixel ratios of 2 and 1, the old
+  search against this one with equal native observations in both runs: 0 rows differ in any field of the prediction but
+  its counts of Canvas work, gap lists included; the generator's 51,672 and 51,816 cases at the two ratios, the second
+  survey's 29,280 among them: 0 rows. Tier 2, both orders, both configurations, recorded: 0 status transitions in either
+  (the first form had 20 on the painter's metric with facts, 8 of them from covered to open; the old gap is where it
+  was), exact values unchanged (265 and 551 differing predicted values, 991 and 868 rect counts), limited values
+  unchanged (149,308 and 108,909), the gates lost 0. The plain predictor's run: 0 of 67,065 line ranges and 0 native
+  observations differ. Field by field against the references' recording, 134,130 rows a configuration: 1,500 rows (750
+  cases) differ without facts and 686 (343) with them, every one in a gap list; 34 of the rows also in the name of the
+  gap that limits a value, none in a value's state, and none anywhere else: no line range, no geometry (the first form's
+  6 cases of reshape flags are gone), no value, native observation or painted line. Every gap entry that one side alone
+  holds is `script-context` (1,369 lost and 288 gained without facts, 803 and 204 with them): a string the search no
+  longer measures raised it, or a merged range is cut otherwise. Offline (`gates.ts --engine=blink`): tier 1 replays
+  every case with 0 questions the record lacks and shows those 750 and 343 predictions changed, all first in a gap list,
+  all passing and exact in the ledger; the function set's plain, pure and sweep checks pass all 67,065 cases in both
+  configurations with none skipped (the first form skipped 8,675 and 2,526 that tier 1 couldn't replay); the citation
+  ledger loses nothing; the twin scan finds 0; the painter differential's Chrome rows exit 3 on the changed cases, as
+  they do for any changed prediction, with no painting differing.
 - *The family.* The attack set is a generator of the lab now (`lab/cases/wide-group-cuts.ts`): the critic's 939
   variants, id for id, and 1,220 more after that survey (44 more Latin families with ligatures, contextual forms or
   kerning, 18 more Arabic ones, Bengali, Tamil, Telugu, Malayalam, Khmer, pointed Hebrew, letter and word spacing, soft
