@@ -39,6 +39,8 @@
 // beside the next gate's first. A quarter of the cores go to groups of long paragraphs first, whichever gate asks: they
 // take up to two minutes each in the sweep and bound the run's end, so they start at once, and the other three quarters
 // keep the order. (With every core open to them the sweep's long groups held tier 1's result back for seven minutes.)
+// A gate's process asks over one connection, whatever its --jobs: macOS refuses a connection at once while 128 wait
+// for the listener to accept them, and a connection a request was 496 at the start of a full run (cores.ts).
 // The socket is pretext-gates-<pid>.sock in the temporary folder. A run that is killed leaves its file, and listening fails
 // on a path that exists, so a run first removes the socket files of processes that are gone (removeStaleSockets).
 //
@@ -557,9 +559,13 @@ export function nextWaiter(waiting: readonly Waiter[], longFirst: boolean): numb
   return best
 }
 
-// Starts every gate at once. The cores go round through `waiting`: a part of a single-process gate waits here, and a
-// sharded gate's children wait through the socket (cores.ts), where a connection is a core until it closes.
-async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
+// A run's cores, one child process at a time: `take` resolves when a core is this process's, for a part of a
+// single-process gate, and `give` gives it back; a sharded gate's process asks through the socket (cores.ts), over its
+// one connection, a number a request: `<n> long|short <holder>` asks, `<n> done` gives the core back, and the answer
+// `<n>` grants it. Every core of a connection that closes comes back, so a gate that dies gives its cores back by dying.
+export type Cores = { take: (holder: number) => Promise<void>; give: () => void; stop: () => void }
+type Ask = { waiter: Waiter; granted: boolean }
+export function shareCores(cores: number, socketPath: string): Cores {
   const waiting: Waiter[] = []
   let free = cores
   // The cores that groups of long paragraphs hold.
@@ -572,28 +578,58 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
       next.grant()
     }
   }
-  removeStaleSockets(tmpdir())
-  const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
-  const server = Bun.listen<{ waiter: Waiter | null; granted: boolean }>({
+  // A request that ends, by its `done` or with its connection: its core comes back, or it no longer waits for one.
+  const end = (ask: Ask): void => {
+    if (ask.granted) {
+      free++
+      if (ask.waiter.long) long--
+    } else waiting.splice(waiting.indexOf(ask.waiter), 1)
+  }
+  const server = Bun.listen<{ partial: string; asks: Map<number, Ask> }>({
     unix: socketPath,
     socket: {
-      open(socket) { socket.data = { waiter: null, granted: false } },
+      open(socket) { socket.data = { partial: '', asks: new Map() } },
+      // Lines can come several to a chunk, and a chunk can end inside one.
       data(socket, bytes) {
-        const [kind, holder] = bytes.toString().trim().split(' ')
-        socket.data.waiter = { long: kind === 'long', holder: Number(holder), grant: () => { socket.data.granted = true; socket.write('1') } }
-        waiting.push(socket.data.waiter)
+        const lines = (socket.data.partial + bytes.toString()).split('\n')
+        socket.data.partial = lines.pop()!
+        for (let i = 0; i < lines.length; i++) {
+          const [n, kind, holder] = lines[i]!.split(' ')
+          if (kind === 'done') {
+            end(socket.data.asks.get(Number(n))!)
+            socket.data.asks.delete(Number(n))
+          } else {
+            const ask: Ask = { granted: false, waiter: { long: kind === 'long', holder: Number(holder), grant: () => { ask.granted = true; socket.write(`${n}\n`) } } }
+            socket.data.asks.set(Number(n), ask)
+            waiting.push(ask.waiter)
+          }
+        }
         grant()
       },
       close(socket) {
-        const waiter = socket.data.waiter
-        if (socket.data.granted) {
-          free++
-          if (waiter!.long) long--
-        } else if (waiter !== null) waiting.splice(waiting.indexOf(waiter), 1)
+        for (const ask of socket.data.asks.values()) end(ask)
         grant()
       },
     },
   })
+  return {
+    take: holder => new Promise<void>(granted => {
+      waiting.push({ long: false, holder, grant: granted })
+      grant()
+    }),
+    give: () => {
+      free++
+      grant()
+    },
+    stop: () => { server.stop() },
+  }
+}
+
+// Starts every gate at once, and shares the cores among their child processes.
+async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
+  removeStaleSockets(tmpdir())
+  const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
+  const shared = shareCores(cores, socketPath)
   const runGate = async (gate: Gate, g: number): Promise<Row> => {
     const log = join(OUT, `${gate.name.replaceAll(/[^a-z0-9]+/gi, '-')}.log`)
     const fd = openSync(log, 'w')
@@ -601,13 +637,9 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     const env = { ...process.env, PRETEXT_GATES_CORES: socketPath, PRETEXT_GATES_HOLDER: String(g) }
     const codes = await Promise.all(gate.parts.map(async part => {
       if (gate.sharded) return await Bun.spawn(['bun', ...part, `--jobs=${Math.min(cores, gate.atMost ?? cores)}`], { cwd: REPO, env, stdin: 'ignore', stdout: fd, stderr: fd }).exited
-      await new Promise<void>(granted => {
-        waiting.push({ long: false, holder: g, grant: granted })
-        grant()
-      })
+      await shared.take(g)
       const code = await Bun.spawn(['bun', ...part], { cwd: REPO, stdin: 'ignore', stdout: fd, stderr: fd }).exited
-      free++
-      grant()
+      shared.give()
       return code
     }))
     closeSync(fd)
@@ -621,7 +653,7 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     return row
   }
   const rows = await Promise.all(gates.map(runGate))
-  server.stop()
+  shared.stop()
   return rows
 }
 

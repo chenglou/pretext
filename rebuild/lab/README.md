@@ -452,7 +452,11 @@ fine there when no case dropped a question (repeats only, or Chrome's string sto
 sends the listed cases to tier 2; a function-set check that skipped cases isn't fine although it exits 0. Logs and the
 rows as JSON are in `rebuild/tests/.check/gates`. Tier 2 stays its own command. Every gate starts at once, and they
 share the cores one child process at a time (`rebuild/tests/cores.ts`): the table's order decides who gets a core, and a
-quarter of the cores go to groups of long paragraphs first, which bound the run's end. Measured on 2026-09-19 with the
+quarter of the cores go to groups of long paragraphs first, which bound the run's end. A gate's process asks for all its
+cores over one connection: macOS refuses a connection at once while 128 wait for the listener to accept them, a
+connection a request was 496 of them at a full run's start, and at a load average of 60 that failed two gates of a run
+(exit 2) on 2026-09-19; with the same start, 24 of 31 stand-in gates failed to connect before and none does since
+(`rebuild/tests/cores.test.ts`). Measured on 2026-09-19 with the
 X3 merge's library, other owners' jobs beside it (load averages of 10 to 40): `--quick` 27 s for WebKit, 49 s for Gecko
 and 112 s for Blink (1,800 CPU-seconds on 16 cores: Chrome's cases ask the most questions); the full form for the three
 engines 13 minutes (10,300 CPU-seconds, 12 GB at the peak; tier 1's six rows after 74 s), against 62 minutes and 18,000
