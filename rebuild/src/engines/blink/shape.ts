@@ -645,6 +645,48 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, k, b, cuts, totals)
 }
 
+// Whether [from, to) holds a character with a script of its own: one whose Script property isn't Common or Inherited.
+function holdsScript(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp)) return true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return false
+}
+
+// The offsets after a space where group g is cut into words before anything is measured: each piece is a word with the
+// spaces after it, as WebKit's line builder measures its items, and measureGroups adds between two pieces the adjustment a
+// position takes there, the pair window's between the space and the cluster after it. It is addPieces's cut beside a
+// space, which keeps every lookup but pair kerning inside one piece, made at every space, so a piece is a short string
+// that other paragraphs of the page ask again, and a position at a word's edge is a sum of pieces. Where glyph clusters
+// part and no letters join (addPieces's test), and:
+// - the words on both sides each hold a character with a script of its own. Canvas resolves a Common or Inherited
+//   character over the measured string alone, so a word without one can take another script measured alone than in its
+//   run (gaps.ts script-context; research/PERF-STORE-STUDY.md section 3.5: 818 of 28,774 recorded positions with such a
+//   side differ, 0 of 379,714 with a script on both sides). Such a word stays in one piece with its neighbours;
+// - the style has no letter spacing: Canvas gives a character spacing by the script its own segmenter gives the measured
+//   string, and the recorded answers of right-to-left text differ between a whole and its words by whole spacings there
+//   (tools/words-identity.ts: 1,482 of 2,078 positions, against 0 of 325,399 without letter spacing).
+function wordCuts(p: BlinkPrepared, g: number): number[] {
+  const group = p.groups[g]!
+  const cuts: number[] = []
+  if (p.styles[group.style]!.letterSpacing !== 0) return cuts
+  const text = p.text
+  // The start of the word before the space run, and whether that word holds a script.
+  let wordStart = group.start
+  for (let c = group.start + 1; c < group.end; c++) {
+    if (text.charCodeAt(c - 1) !== 0x20 || text.charCodeAt(c) === 0x20) continue
+    let spaces = c - 1
+    while (spaces > wordStart && text.charCodeAt(spaces - 1) === 0x20) spaces--
+    let wordEnd = c
+    while (wordEnd < group.end && text.charCodeAt(wordEnd) !== 0x20) wordEnd++
+    if (isClusterBoundary(p, c) && !joinsAcross(p, c, group.start, group.end) && holdsScript(p, wordStart, spaces) && holdsScript(p, c, wordEnd)) cuts.push(c)
+    wordStart = c
+  }
+  return cuts
+}
+
 // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
 export function measureGroups(sh: Shaper): void {
   const p = sh.p
@@ -655,7 +697,13 @@ export function measureGroups(sh: Shaper): void {
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
     const cuts = [group.start]
     const totals: number[] = []
-    addPieces(sh, g, group.start, group.end, cuts, totals)
+    const words = wordCuts(p, g)
+    let a = group.start
+    for (let i = 0; i < words.length; i++) {
+      addPieces(sh, g, a, words[i]!, cuts, totals)
+      a = words[i]!
+    }
+    addPieces(sh, g, a, group.end, cuts, totals)
     const prefix = [0]
     for (let i = 0; i < totals.length; i++) prefix.push(prefix[i]! + totals[i]!)
     group.cuts = cuts
