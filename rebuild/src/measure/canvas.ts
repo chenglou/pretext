@@ -93,14 +93,22 @@ export const hasTextClusters: boolean = typeof TextMetrics !== 'undefined' && 'g
 // them. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944). An x is a distance from the
 // context's alignment point, which is the string's right end in an RTL context (text_metrics.cc:113-126, 534-539), so
 // only differences of them mean anything to a caller.
-export function clusters(context: Context, text: string): { width: number; starts: number[]; xs: number[] } {
+// An x is a float32 (shape_result.h GraphemeClusterCallback), exact for a 16.16 position below 256 px. From a total of
+// 256 px on, `rights` holds the same clusters' right edges, asked with the other alignment: Chrome adds a cluster's own
+// advance to its left edge in a double (text_metrics.cc:534-539, text_cluster.cc:44-47), so right less left is the
+// cluster's 16.16 advance exactly, at any distance from the origin.
+export function clusters(context: Context, text: string): { width: number; starts: number[]; lefts: number[]; rights: number[] | null } {
   const metrics = context.ctx.measureText(text) as ClusterMetrics
   const list = metrics.getTextClusters({ align: 'left' })
   const starts: number[] = []
-  const xs: number[] = []
+  const lefts: number[] = []
   for (let i = 0; i < list.length; i++) {
     starts.push(list[i]!.start)
-    xs.push(list[i]!.x)
+    lefts.push(list[i]!.x)
   }
-  return { width: metrics.width, starts, xs }
+  if (metrics.width < 256) return { width: metrics.width, starts, lefts, rights: null }
+  const other = metrics.getTextClusters({ align: 'right' })
+  const rights: number[] = []
+  for (let i = 0; i < other.length; i++) rights.push(other[i]!.x)
+  return { width: metrics.width, starts, lefts, rights }
 }

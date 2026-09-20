@@ -530,7 +530,7 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 // Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a default-ignorable character where
 // the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at the next cluster's start;
 // any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
-// position. Null where Canvas has no getTextClusters, or where a total isn't an exact 16.16 value.
+// position. Null where Canvas has no getTextClusters.
 export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
   if (!hasTextClusters || from >= to) return null
   const p = sh.p
@@ -553,19 +553,27 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
     let total = wordSpacing16(p, group.style, a, b) + (ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16))
     if (cs.s.length > 0) {
       const found = canvasClusters(group.rtl ? contexts.rtl : contexts.ltr, cs.s)
-      const width16 = Math.round(found.width * 65536)
-      if (width16 >= EXACT16) return null
       const n = found.starts.length
-      // Left edges from the string's left end: Canvas counts them from the alignment point (measure/canvas.ts clusters).
-      let origin = 0
-      for (let i = 0; i < n; i++) origin = Math.min(origin, found.xs[i]!)
-      const x16: number[] = []
-      for (let i = 0; i < n; i++) x16.push(Math.round((found.xs[i]! - origin) * 65536))
+      const advance = new Array<number>(n)
       const visual: number[] = []
       for (let i = 0; i < n; i++) visual.push(i)
-      visual.sort((i, j) => x16[i]! - x16[j]!)
-      const advance = new Array<number>(n)
-      for (let v = 0; v < n; v++) advance[visual[v]!] = (v + 1 < n ? x16[visual[v + 1]!]! : width16) - x16[visual[v]!]!
+      let width16 = 0
+      if (found.rights !== null) {
+        // A string of 256 px or more: every cluster's own advance, exact, and the total is their sum.
+        for (let i = 0; i < n; i++) {
+          advance[i] = Math.round((found.rights[i]! - found.lefts[i]!) * 65536)
+          width16 += advance[i]!
+        }
+      } else {
+        width16 = Math.round(found.width * 65536)
+        // Left edges from the string's left end: Canvas counts them from the alignment point (measure/canvas.ts clusters).
+        let origin = 0
+        for (let i = 0; i < n; i++) origin = Math.min(origin, found.lefts[i]!)
+        const x16: number[] = []
+        for (let i = 0; i < n; i++) x16.push(Math.round((found.lefts[i]! - origin) * 65536))
+        visual.sort((i, j) => x16[i]! - x16[j]!)
+        for (let v = 0; v < n; v++) advance[visual[v]!] = (v + 1 < n ? x16[visual[v + 1]!]! : width16) - x16[visual[v]!]!
+      }
       const logical = visual.slice().sort((i, j) => found.starts[i]! - found.starts[j]!)
       let sum = 0
       for (let l = 0; l < n; l++) {
@@ -731,6 +739,37 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, k, b, cuts, totals)
 }
 
+// A told group's cuts: what bounds the windows of the safe-to-break tests (adjust16), which still ask Canvas totals, so a
+// window has to stay below 256 zoomed px. Found from the table's positions without asking: a piece ends at the last
+// cluster start before it holds WINDOW16 of the group's advances, beside a space where it has one and never between
+// letters that join. Two pieces, the window of an offset at a cut, stay below 256 px.
+const WINDOW16 = 120 * 65536
+
+function windowCuts(p: BlinkPrepared, group: BlinkGroup, table: ClusterTable): void {
+  const cuts = [group.start]
+  const prefix = [0]
+  let from = group.start
+  let spaceCut = -1
+  let clusterCut = -1
+  for (let k = group.start + 1; k < group.end; k++) {
+    if (table.starts[k - group.start] !== 1 || joinsAcross(p, k, group.start, group.end)) continue
+    if (table.before[k - group.start]! - table.before[from - group.start]! > WINDOW16 && (spaceCut > from || clusterCut > from)) {
+      from = spaceCut > from ? spaceCut : clusterCut
+      cuts.push(from)
+      prefix.push(table.before[from - group.start]!)
+      // The candidates after the new cut up to k are read again.
+      k = from
+      continue
+    }
+    if ((p.text.charCodeAt(k - 1) === 0x20) !== (p.text.charCodeAt(k) === 0x20)) spaceCut = k
+    else clusterCut = k
+  }
+  cuts.push(group.end)
+  prefix.push(table.before[group.end - group.start]!)
+  group.cuts = cuts
+  group.prefixAtCut = prefix
+}
+
 // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
 export function measureGroups(sh: Shaper): void {
   const p = sh.p
@@ -739,6 +778,18 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
+    // Where Canvas has getTextClusters, one table tells the whole group at any length (clusterTable), so nothing is measured
+    // in pieces and no adjustment is added at a cut. Which units start a glyph cluster becomes a fact of the prepared
+    // paragraph that every later question reads (isClusterBoundary), whatever was asked first.
+    if (p.clusterStarts !== null) {
+      const table = clusterTable(sh, g, group.start, group.end, group.start, group.end)
+      if (table !== null) {
+        group.clusters = table
+        for (let k = group.start + 1; k < group.end; k++) p.clusterStarts[k] = table.starts[k - group.start]!
+        windowCuts(p, group, table)
+        continue
+      }
+    }
     const cuts = [group.start]
     const totals: number[] = []
     addPieces(sh, g, group.start, group.end, cuts, totals)
@@ -751,17 +802,6 @@ export function measureGroups(sh: Shaper): void {
       const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       cutAdjustment(sh.gaps, sh, g, cuts[i]!, d)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
-    }
-    // Where Canvas has getTextClusters, every piece's table is made here, so which units start a glyph cluster is a fact of
-    // the prepared paragraph that every later question reads (isClusterBoundary), whatever was asked first. The cuts above
-    // were found by the rules, since a piece has to exist before Canvas can tell of it.
-    if (p.clusterStarts !== null) {
-      for (let i = 0; i + 1 < cuts.length; i++) {
-        const table = clusterTable(sh, g, cuts[i]!, cuts[i + 1]!, group.start, group.end)
-        group.clusterTables[i] = table
-        if (table === null) continue
-        for (let k = cuts[i]! + 1; k < cuts[i + 1]!; k++) p.clusterStarts[k] = table.starts[k - cuts[i]!]!
-      }
     }
   }
 }
@@ -816,46 +856,14 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   }
 }
 
-// The piece of group g that holds offset k, as an index into its cuts.
-function pieceOf(group: BlinkGroup, k: number): number {
-  const cuts = group.cuts
-  let lo = 0
-  let hi = cuts.length - 2
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (cuts[mid]! <= k) lo = mid
-    else hi = mid - 1
-  }
-  return lo
-}
-
-// What getTextClusters tells of offset k inside the paragraph's shaping of group g (clusterTable), or null: one table per
-// piece, made when a position inside the piece is first asked and kept by the group, since it is a fact of the text and
-// its fonts that no width changes. A piece's own start rests on the adjustment added at its cut, which no table holds.
-function toldInGroup(sh: Shaper, g: number, k: number): { table: ClusterTable; piece: number } | null {
-  if (!hasTextClusters) return null
-  const group = sh.p.groups[g]!
-  if (k <= group.start || k >= group.end) return null
-  const piece = pieceOf(group, k)
-  if (group.cuts[piece] === k) return null
-  let table = group.clusterTables[piece]
-  if (table === undefined) {
-    table = clusterTable(sh, g, group.cuts[piece]!, group.cuts[piece + 1]!, group.start, group.end)
-    group.clusterTables[piece] = table
-  }
-  return table === null ? null : { table, piece }
-}
-
 // The 16.16 advance sum before offset k inside a shaping call over [lo, hi) of group g where getTextClusters tells it,
-// without the HanKerning trim at the call's start: the paragraph's own call through the group's tables, another call (a
-// reshape) through a table of its own, which the caller keeps where it asks more than once (callPrefix16).
+// without the HanKerning trim at the call's start: the paragraph's own call through the group's table, made while the
+// paragraph was prepared (measureGroups), another call (a reshape) through a table of its own, which the caller keeps where
+// it asks more than once (callPrefix16).
 export function toldPrefix16(sh: Shaper, g: number, k: number, lo: number, hi: number): number | null {
   const group = sh.p.groups[g]!
-  if (lo === group.start && hi === group.end) {
-    const told = toldInGroup(sh, g, k)
-    return told === null ? null : group.prefixAtCut[told.piece]! + told.table.before[k - group.cuts[told.piece]!]!
-  }
   if (k <= lo || k >= hi) return null
+  if (lo === group.start && hi === group.end) return group.clusters === null ? null : group.clusters.before[k - lo]!
   const table = clusterTable(sh, g, lo, hi, lo, hi)
   return table === null ? null : table.before[k - lo]!
 }
@@ -863,12 +871,8 @@ export function toldPrefix16(sh: Shaper, g: number, k: number, lo: number, hi: n
 // Whether getTextClusters tells that a glyph cluster starts at offset k of the call, or null where it tells nothing.
 export function toldClusterStart(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean | null {
   const group = sh.p.groups[g]!
-  if (lo === group.start && hi === group.end) {
-    const told = toldInGroup(sh, g, k)
-    return told === null || told.table.starts[k - group.cuts[told.piece]!]! < 0 ? null : told.table.starts[k - group.cuts[told.piece]!] === 1
-  }
   if (k <= lo || k >= hi) return null
-  const table = clusterTable(sh, g, lo, hi, lo, hi)
+  const table = lo === group.start && hi === group.end ? group.clusters : clusterTable(sh, g, lo, hi, lo, hi)
   return table === null || table.starts[k - lo]! < 0 ? null : table.starts[k - lo] === 1
 }
 

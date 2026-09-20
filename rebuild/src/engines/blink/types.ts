@@ -126,9 +126,9 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
-  // What getTextClusters told of each piece (shape.ts toldInGroup), filled when a position inside the piece is first
-  // asked: undefined until then, null where Canvas tells nothing. Empty for good where Canvas has no getTextClusters.
-  clusterTables: (ClusterTable | null | undefined)[]
+  // What getTextClusters told of the group's own shaping, at any length (shape.ts measureGroups); null where Canvas has no
+  // getTextClusters. With it `cuts` only bound the windows of the safe-to-break tests, and `prefixAtCut` holds no adjustment.
+  clusters: ClusterTable | null
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
