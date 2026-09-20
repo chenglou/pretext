@@ -6,11 +6,13 @@
 //   eight seconds beside a new context and a DOM span. A name whose new context changes and whose kept context doesn't
 //   is a late name on this machine.
 // - H2: contexts-start-up S1's four late names in a page whose font set has used a src: local() rule from the start.
-//   When the late names arrive Firefox rebuilds the font sets that used a local() rule
+//   The guess it tests: when the late names arrive the parent process rebuilds the font sets that used a local() rule
 //   (gfxPlatformFontList::ForceGlobalReflow, RebuildLocalFonts, gfxPlatformFontList.cpp:2864-2942;
 //   gfxUserFontSet::RebuildLocalRules, gfxUserFontSet.cpp:1087-1092), and a font group looks its families up again when
-//   its font set was rebuilt (gfxFontGroup::UpdateUserFonts, gfxTextRun.cpp:3946-3965). So in such a page a kept context
-//   should follow by itself, which says the cause is the missing generation and nothing about the context.
+//   its font set was rebuilt (gfxFontGroup::UpdateUserFonts, gfxTextRun.cpp:3946-3965), so a kept context might follow
+//   by itself there. It doesn't (2026-09-20, one run): the kept context stays on the fallback. A page's own process
+//   only forgets its local() faces (nsPresContext::ForceReflowForFontInfoUpdate, nsPresContext.cpp:210-214), which moves
+//   no rebuild generation.
 // - H3: a family that draws at first through an installed font and later through a web font of the same name: a
 //   FontFace named `Helvetica Neue`, loaded first and added two seconds in, with a span in the family.
 // - H4: a loaded FontFace added to a font set that held a face and was emptied again (add, delete, then the late add).
