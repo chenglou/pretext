@@ -1,8 +1,9 @@
 // A study tool, not a test: what the chat benchmark's messages ask of Canvas, offline, under the stand-in Canvas
 // (tools/stand-in-canvas.ts), with every question logged where it reaches Canvas. It changes nothing in rebuild/src.
 //
-//   bun rebuild/tools/store-study.ts --engine=blink|webkit|gecko --set=mix|latin [--count=10000]
-//     [--part=store|sites|widths|short|trace|tier] [--widths=260,320,380,440] [--sets=a,b] [--out=<report.json>]
+//   bun rebuild/tools/store-study.ts --engine=blink|webkit|gecko --set=mix|latin|real [--count=10000]
+//     [--part=store|sites|widths|short|trace|tier] [--widths=260,320,380,440] [--sets=a,b] [--device-pixel-ratio=2]
+//     [--out=<report.json>]
 //
 // A question is a context's assigned settings and a string. Parts:
 // - store: every message prepared from scratch and filled at 320px, as the bench's `scratch, count` row does. Counts what
@@ -264,10 +265,12 @@ const set = (options.get('set') ?? 'mix') as ChatSetId
 const count = Number(options.get('count') ?? 10000)
 const part = options.get('part') ?? 'store'
 const widths = (options.get('widths') ?? '260,320,380,440').split(',').map(Number)
+// The study counted at 2. Blink measures at the zoomed size, so what it asks follows the ratio (research: the realism study).
+const devicePixelRatio = Number(options.get('device-pixel-ratio') ?? 2)
 
 const messages = part === 'tier' ? [] : buildChat(set, count)
 if (part !== 'tier') {
-  installStandInCanvas({ userAgent: USER_AGENTS[engine], devicePixelRatio: 2, pageLang: CHAT_STYLE.lang })
+  installStandInCanvas({ userAgent: USER_AGENTS[engine], devicePixelRatio, pageLang: CHAT_STYLE.lang })
   installLog()
 }
 const detected = part === 'tier' ? null : detectEnvironment(givenFacts(engine))
@@ -283,7 +286,7 @@ function prepareMessage(message: ChatMessage): Prepared {
   return prepared
 }
 
-const report: Record<string, unknown> = { engine, set, messages: count, part }
+const report: Record<string, unknown> = { engine, set, messages: count, part, devicePixelRatio }
 const CHECKPOINTS = [100, 1000, 10000]
 
 // A store with the page's lifetime: per settings, the strings it holds.

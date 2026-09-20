@@ -14,12 +14,12 @@ const config: KnipConfig = {
     'rebuild/tests/{browser-sets,compare-sets,coverage,coverage-map,derive,facts,function-set,gate,import-rules,known-tail,ledger,replay}.ts',
     // Run by path under `bun test --coverage` (tests/coverage-map.ts).
     'rebuild/tests/coverage-map.shard.ts',
-    'rebuild/bench/{run,report}.ts',
+    'rebuild/bench/{run,report,realism-run}.ts',
     'rebuild/platform-bugs/verify.ts',
     'rebuild/probes/{runner,blink-verdicts,gecko-verdicts,webkit-verdicts-crosscheck}.ts',
     // Bundled into browser pages by their drivers.
     'rebuild/lab/page.ts', 'rebuild/lab/predictor.ts', 'rebuild/lab/baselines/*.ts', 'rebuild/tests/noop-predictor.ts',
-    'rebuild/bench/page.ts', 'rebuild/probes/page.ts',
+    'rebuild/bench/page.ts', 'rebuild/bench/realism-page.ts', 'rebuild/probes/page.ts',
     // Probe sets, loaded by path through runner.ts --probes=<file>.
     'rebuild/probes/*.ts',
   ],
