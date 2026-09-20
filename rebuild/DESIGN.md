@@ -2470,6 +2470,14 @@ rebuild/
     painter-diff.ts recording-document.ts    the painter differential: the working painter against a frozen bundle, offline
     stand-in-canvas.ts two-trees.ts          a deterministic Canvas, and two checkouts on the same cases under it
     twin-scan.ts                             counts the cases that ask one Blink context the same characters in both storages
+    store-study.ts store-*-probe.ts          the store study (research/STORE-STUDY.md): what the chat messages ask of Canvas,
+                                             offline, and four probes that time or check it in the browsers
+    store-key-check.ts store-real-text.ts    checks on the store study: a key with two recorded answers, a store's hit rates
+    store-space-identity.ts                  on long-form text used once, a run against its sides measured with their space,
+    store-cluster-sums.ts                    a cluster's advance inside a run against the cluster alone,
+    store-word-facts.ts                      the word facts new to a page on text used once,
+    store-canvas-bound-probe.ts              how many measured strings one canvas keeps,
+    store-stale-answer-probe.ts              and one key with two answers inside one page (Firefox's emoji state)
     webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
     index.ts        prepare, firstLine, fillLine, linePieces, inspectLine, paragraphGaps: the dispatch over the engines'
