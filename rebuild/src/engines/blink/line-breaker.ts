@@ -10,10 +10,11 @@ import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
 import { breakCandidate, clampedStartLimit, dropGapsFrom, endTestCouldTurn, gapCount } from './gaps.js'
 import { maybeHanKerningClose } from './hankerning.js'
+import { isMark } from './props.js'
 import {
-  isClusterBoundary, isFontRunEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, luCeil, nextSafeToBreak, offsetForPosition, positionForOffset,
-  previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
-  viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
+  isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, lastCutAtOrBefore, luCeil, nextSafeToBreak,
+  offsetForPosition, positionForOffset, previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf,
+  widthOf16, viewFromSegments, WHOLE, wordsCheck, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 import type { AtomicItem, BlinkStyle, ControlItem, InlineItem, TagItem } from './types.js'
 
@@ -678,7 +679,8 @@ export class LineBreaker {
       if (forceClamp) availableSpace = 0
     }
     const endPosition = startPosition + flip(availableSpace)
-    let candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
+    let candidate = candidateBefore > rangeEnd ? this.wordCandidate(sr, start, endPosition) : -1
+    if (candidate < 0) candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
     breakCandidate(sh.gaps, sh, sr, endPosition, candidate, start)
     const searched = candidate
     // ShapeToEnd (shaping_line_breaker.cc:640-670).
@@ -814,6 +816,92 @@ export class LineBreaker {
     if (lineEndResult === null) lastSafe = bo.offset
     this.setBreakOffset(out, bo.offset)
     return concat(lastSafe, lineEndResult)
+  }
+
+  // The candidate of a line that ends between two words, found from the positions at the group's cuts, or a negative number
+  // where they don't settle it and offsetForPosition searches every offset (-1: the search reads no position either; the
+  // others say why, for the tools that count lines). On a paragraph prepared plain, in a left-to-right item: an inspected
+  // paragraph reports what the search itself read (gaps.ts breakCandidate).
+  //
+  // CachedOffsetForPosition searches sorted positions for the last offset whose position isn't past x
+  // (shape_result.cc:2300-2318). A piece below 256 zoomed px is cut into words (shape.ts addWords), and the position at a
+  // cut is a sum the group holds (groupPrefix16 asks nothing there), so walking the cuts from the line's start finds the
+  // last one that isn't past x, and with it the word x falls in or after: [u0, e), one U+0020, then the next cut u1.
+  // - The word's end e isn't past x: the offset found is e, since the next offset is u1, which is past x.
+  // - It is past x: the offset found lies in [u0, e), and ShapeLine reads three things of it, the same for each of them
+  //   when the word holds no white space, no soft hyphen, no character HanKerning may trim at a line end and no break
+  //   opportunity after its start: whether HanKerning may trim it (shaping_line_breaker.cc:345-347), that it isn't white
+  //   space and the break opportunity at or before it (:392-395), and, in the port alone, that it lies at or after every
+  //   safe offset the reshape loop tries. So u0 stands for it. When the word starts the line it overflows, and the next
+  //   opportunity is looked for from the offset itself (:405-407): that stays the search's.
+  // The search's premise is sorted positions. What the cuts show of it is checked here: the positions walked never run
+  // backwards, the word's end lies between its two cuts, the spacing isn't negative, and the cut after the word doesn't
+  // start with a character every lookup skips, where the port's next position takes the cut's adjustment a second time
+  // and can lie before the cut's. Inside words it is the search's own premise, and the checked run (shape.ts wordsCheck)
+  // holds every candidate against the search.
+  wordCandidate(sr: ShapeResult, start: number, x: number): number {
+    const sh = this.sh
+    if (x <= 0 || Math.fround(x / 64) >= widthOf16(sr.width16)) return -1
+    if (sh.gaps !== null) return -2
+    if (sr.kind !== 'group') return -3
+    if (sr.rtl) return -4
+    const found = this.wordCandidateOf(sr, start, x)
+    if (found >= 0 && wordsCheck.on) {
+      const exact = offsetForPosition(sh, sr, x)
+      const same = this.char(found) === 0x20 ? exact === found : exact >= found && this.holdsNoSpace(found, exact + 1)
+      if (!same) throw new Error(`words check: the search finds offset ${exact} and the cuts give ${found}, from ${start} at ${x} in ${JSON.stringify(this.text.slice(sr.start, sr.end))}`)
+    }
+    return found
+  }
+
+  holdsNoSpace(from: number, to: number): boolean {
+    for (let i = from; i < to; i++) if (isSpaceSLB(this.char(i)) || isSpaceLB(this.char(i))) return false
+    return true
+  }
+
+  wordCandidateOf(sr: Extract<ShapeResult, { kind: 'group' }>, start: number, x: number): number {
+    const sh = this.sh
+    const group = sh.p.groups[sr.group]!
+    const style = this.style(group.style)
+    if (style.wordSpacing < 0 || style.letterSpacing < 0) return -5
+    const cuts = group.cuts
+    // The group's end is a cut, so there is one after the line's start.
+    let next = lastCutAtOrBefore(cuts, start) + 1
+    let u0 = start
+    let u0Position = positionForOffset(sh, sr, start)
+    while (cuts[next]! < sr.end) {
+      const position = positionForOffset(sh, sr, cuts[next]!)
+      if (position < u0Position) return -6
+      if (position > x) break
+      u0 = cuts[next]!
+      u0Position = position
+      next++
+    }
+    const u1 = Math.min(sr.end, cuts[next]!)
+    if (u0 !== start && this.char(u0 - 1) !== 0x20) return -7
+    let e = u0
+    while (e < u1) {
+      const c = this.char(e)
+      if (isSpaceSLB(c) || isSpaceLB(c)) break
+      if (c === 0xad || maybeHanKerningClose(c)) return -8
+      e++
+    }
+    if (e === u0) return -9
+    if (e < u1) {
+      if (this.char(e) !== 0x20 || e + 1 !== u1) return -10
+      if (u1 < sr.end) {
+        const after = this.text.codePointAt(u1)!
+        if (isDefaultIgnorableHarfBuzz(after) || isMark(after)) return -11
+      }
+      const position = positionForOffset(sh, sr, e)
+      if (position < u0Position || position > positionForOffset(sh, sr, u1)) return -6
+      if (position <= x) return e
+    } else if (u1 !== sr.end) {
+      return -11
+    }
+    if (u0 === start) return -12
+    if (this.iterator.nextBreakablePosition(u0 + 1, e) !== e) return -13
+    return u0
   }
 
   // Records a line-end fit test that another last safe offset, or another first safe offset of a wrapped line start, could

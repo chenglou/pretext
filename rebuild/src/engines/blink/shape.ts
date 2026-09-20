@@ -596,7 +596,7 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
 }
 
 // The index of the last of a group's cuts at or before offset k.
-function lastCutAtOrBefore(cuts: number[], k: number): number {
+export function lastCutAtOrBefore(cuts: number[], k: number): number {
   let lo = 0
   let hi = cuts.length - 1
   while (lo < hi) {
@@ -985,6 +985,11 @@ export function positionForOffset(sh: Shaper, sr: ShapeResult, k: number): numbe
   if (offset === 0) return luCeil(widthOf16(sr.width16))
   return ceilFrom16(sr.width16 - prefix16(sh, sr, k))
 }
+
+// The checked run of a candidate found from the cuts' positions (line-breaker.ts wordCandidate): while `on`, each one is
+// held against offsetForPosition's and a difference throws. The offline judge sets it (PRETEXT_WORDS_CHECKED=1 under bun,
+// tools/words-attack.ts); a page never does.
+export const wordsCheck = { on: typeof process !== 'undefined' && process.env['PRETEXT_WORDS_CHECKED'] === '1' }
 
 // CachedOffsetForPosition (shape_result.cc:2261-2323), returning an absolute text_content offset. `before` keeps the search
 // below that offset, for a caller that knows an exact position there lies past x (ShapeLine's out-of-order stand-ins).
