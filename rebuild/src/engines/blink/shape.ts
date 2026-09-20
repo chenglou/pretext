@@ -538,7 +538,7 @@ function hasNoAdvance(cp: number): boolean {
 // raised. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a character without an
 // advance (hasNoAdvance) that HarfBuzz doesn't mark a continuation, which Canvas doesn't report, is such a cluster and sits
 // at the next cluster's start; any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
-// position. Null where Canvas has no getTextClusters, or where a cluster formed across a character the string left out.
+// position. Null where Canvas has no getTextClusters, or where a measured string leaves a character out.
 export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
   if (!hasTextClusters || from >= to) return null
   const p = sh.p
@@ -559,6 +559,10 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
     const contexts = contextsOf(p, group.style, cs.twoByte)
     const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
     measuredRange(sh.gaps, p, g, a, b, callStart, callEnd, cs, scripts)
+    // A string that leaves a character out (canvasString, an 8-bit paragraph's soft hyphen) isn't the paragraph's text:
+    // `f` SHY `fi` is one `ffi` ligature in Shantell Sans's Canvas string and three clusters natively. It tells nothing of
+    // the call, and the port's rules, recipes and gaps answer as before.
+    if (cs.leftOut) return null
     let total = wordSpacing16(p, group.style, a, b) + (ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16))
     if (cs.s.length > 0) {
       const found = canvasClusters(group.rtl ? contexts.rtl : contexts.ltr, cs.s)
@@ -593,10 +597,6 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
         const c = logical[l]!
         const s = found.starts[c]!
         const end = l + 1 < n ? found.starts[logical[l + 1]!]! : cs.s.length
-        // A cluster over a character the string left out (canvasString, an 8-bit paragraph's soft hyphen) formed in Canvas
-        // across a character the paragraph shapes between its letters: `f` SHY `fi` is one `ffi` ligature in Shantell Sans's
-        // Canvas string and three clusters natively. Such a string tells nothing of the call.
-        if (cs.leftOut) for (let u = s; u + 1 < end; u++) if (cs.units[u]! >= 0 && cs.units[u + 1]! >= 0 && cs.units[u + 1] !== cs.units[u]! + 1) return null
         const extra = ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16, s)
         for (let u = s; u < end; u++) {
           const t = cs.units[u]!
@@ -879,8 +879,8 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
 // it asks more than once (callPrefix16).
 export function toldPrefix16(sh: Shaper, g: number, k: number, lo: number, hi: number): number | null {
   const group = sh.p.groups[g]!
-  if (k <= lo || k >= hi) return null
-  if (lo === group.start && hi === group.end) return group.clusters === null ? null : group.clusters.before[k - lo]!
+  if (k <= lo || k >= hi || group.clusters === null) return null
+  if (lo === group.start && hi === group.end) return group.clusters.before[k - lo]!
   const table = clusterTable(sh, g, lo, hi, lo, hi)
   return table === null ? null : table.before[k - lo]!
 }
@@ -888,7 +888,7 @@ export function toldPrefix16(sh: Shaper, g: number, k: number, lo: number, hi: n
 // Whether getTextClusters tells that a glyph cluster starts at offset k of the call, or null where it tells nothing.
 export function toldClusterStart(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean | null {
   const group = sh.p.groups[g]!
-  if (k <= lo || k >= hi) return null
+  if (k <= lo || k >= hi || group.clusters === null) return null
   const table = lo === group.start && hi === group.end ? group.clusters : clusterTable(sh, g, lo, hi, lo, hi)
   return table === null || table.starts[k - lo]! < 0 ? null : table.starts[k - lo] === 1
 }
@@ -1133,7 +1133,9 @@ function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   if (k <= call.start) return 0
   if (k >= call.end) return call.width16
   const p = sh.p
-  if (hasTextClusters) {
+  // A reshape is told only inside a group that was: a reshape of `fi` leaves nothing out, but the paragraph shaped those
+  // letters beside a soft hyphen that Canvas never saw.
+  if (p.groups[call.group]!.clusters !== null) {
     if (call.clusters === undefined) call.clusters = clusterTable(sh, call.group, call.start, call.end, call.start, call.end)
     if (call.clusters !== null) return call.clusters.before[k - call.start]! - call.startTrim16
   }
