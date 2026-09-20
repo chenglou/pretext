@@ -2,8 +2,8 @@
 // and the Canvas share of a pass by two methods that tool doesn't use.
 //
 //   python3 .artifacts/session/with-browser-lock.py <job> --browser=all --exclusive -- bun rebuild/tools/js-profile-fresh.ts \
-//     --trees=<label>=<checkout>[,...] --out=<dir> [--rounds=12] [--relayout-rounds=6] [--split=<label>[,<label>]] \
-//     [--sets=mix,latin] [--messages=10000]
+//     --trees=<label>=<checkout>[,...] --out=<dir> [--rounds=12] [--relayout-rounds=6] [--load-rounds=0] \
+//     [--split=<label>[,<label>]] [--sets=mix,latin] [--messages=10000]
 //
 // A checkout is a folder that holds rebuild/src; the page side is js-profile-entry.ts, bundled once per checkout as
 // js-profile.ts bundles it. One pinned Chrome runs the whole schedule, and every page is a new window that is closed
@@ -13,6 +13,9 @@
 // prepared and filled at 320 px, one list of contexts a pass). `--rounds` rounds; a round opens a page per checkout, and
 // the next round starts one checkout later. A relayout page: the same start, then per set the messages prepared, filled
 // and kept (timed: a pass that keeps what it prepares) and filled at 260, 380 and 440 px (timed).
+//
+// A load page runs nothing: it times the checkout's script from before its tag to after it (fetched from this machine,
+// compiled and run once, cold), which holds whatever the library does when it loads. `--load-rounds` rounds.
 //
 // A split page (--split names its checkouts), per set, after the same start:
 //   wall       a pass on the real Canvas;
@@ -46,6 +49,7 @@ const outDir = resolve(args.get('out')!)
 const sets = (args.get('sets') ?? 'mix,latin').split(',') as Array<'mix' | 'latin'>
 const rounds = Number(args.get('rounds') ?? 12)
 const relayoutRounds = Number(args.get('relayout-rounds') ?? 6)
+const loadRounds = Number(args.get('load-rounds') ?? 0)
 const splitLabels = (args.get('split') ?? '').split(',').filter(label => label !== '')
 const messages = Number(args.get('messages') ?? 10000)
 mkdirSync(outDir, { recursive: true })
@@ -196,13 +200,18 @@ await fetch('/api/result', { method: 'POST', headers: { 'content-type': 'applica
 document.title = 'done'
 `
 
+const LOAD_PAGE = String.raw`
+await fetch('/api/result', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: window.crossOriginIsolated, cells: [], loadMs: globalThis.libLoaded - globalThis.libStart }) })
+document.title = 'done'
+`
+
 type Timed = { ms: number; lines: number; hash: number }
 type Cell = {
   set: string; scratch?: Timed; keepMs?: number; relayout?: Timed
   calls?: number; distinct?: number; contexts?: number; answered?: number; wall?: Timed; stopwatch?: Timed; stopwatchSumMs?: number; free?: Timed; freeStopwatch?: Timed; timerSumMs?: number
   alone?: Array<{ ms: number; total: number }>
 }
-type PageResult = { userAgent: string; devicePixelRatio: number; crossOriginIsolated: boolean; cells: Cell[] }
+type PageResult = { userAgent: string; devicePixelRatio: number; crossOriginIsolated: boolean; cells: Cell[]; loadMs?: number }
 
 // run.ts asciiJsonResponse: every character above U+007E escaped, so a string is 8-bit in the page where its characters allow.
 const ABOVE_ASCII = new RegExp(`[${String.fromCharCode(0x7f)}-${String.fromCharCode(0xffff)}]`, 'g')
@@ -215,9 +224,10 @@ let settle: { resolve: (result: PageResult) => void; reject: (error: Error) => v
 async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url)
   switch (url.pathname) {
-    case '/': return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>js profile, fresh pages</title></head><body><p>Pretext JS profile, fresh pages.</p><script src="/lib.js?tree=${url.searchParams.get('tree')}"></script><script type="module" src="/page.js"></script></body></html>`, { headers: { ...ISOLATION, 'content-type': 'text/html; charset=utf-8' } })
+    case '/': return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>js profile, fresh pages</title></head><body><p>Pretext JS profile, fresh pages.</p><script>globalThis.libStart = performance.now()</script><script src="/lib.js?tree=${url.searchParams.get('tree')}"></script><script>globalThis.libLoaded = performance.now()</script><script type="module" src="${url.searchParams.get('kind') === 'load' ? '/load.js' : '/page.js'}"></script></body></html>`, { headers: { ...ISOLATION, 'content-type': 'text/html; charset=utf-8' } })
     case '/lib.js': return new Response(bundles[Number(url.searchParams.get('tree'))]!, { headers: { ...ISOLATION, 'content-type': 'text/javascript; charset=utf-8' } })
     case '/page.js': return new Response(FATAL + PAGE, { headers: { ...ISOLATION, 'content-type': 'text/javascript; charset=utf-8' } })
+    case '/load.js': return new Response(FATAL + LOAD_PAGE, { headers: { ...ISOLATION, 'content-type': 'text/javascript; charset=utf-8' } })
     case '/api/config': return Response.json({ width: CHAT_WIDTH, widths: CHAT_RESIZE_WIDTHS })
     case '/api/sets': return new Response(setsBody, { headers: { 'content-type': 'application/json; charset=utf-8' } })
     case '/api/result': settle!.resolve(await request.json() as PageResult); return new Response('ok')
@@ -288,7 +298,7 @@ function command(method: string, params: object, sessionId: string | null): Prom
 }
 
 // One page: a new window, the result it posts, the window closed.
-async function page(tree: number, kind: 'scratch' | 'relayout' | 'split'): Promise<PageResult> {
+async function page(tree: number, kind: 'scratch' | 'relayout' | 'split' | 'load'): Promise<PageResult> {
   const posted = new Promise<PageResult>((resolve, reject) => { settle = { resolve, reject } })
   const target = await command('Target.createTarget', { url: 'about:blank', newWindow: true, background: true }, null)
   const attached = await command('Target.attachToTarget', { targetId: target['targetId'], flatten: true }, null)
@@ -306,6 +316,7 @@ const loadStart = loadavg()[0]!
 const scratchRows: Row[] = []
 const relayoutRows: Row[] = []
 const splits: Row = []
+const loadRows: Row[] = []
 let failure: string | null = null
 try {
   for (let round = 0; round < rounds; round++) {
@@ -325,6 +336,14 @@ try {
     }
     relayoutRows.push(row)
     console.log(`[js-profile-fresh] relayout round ${round + 1}/${relayoutRounds}: ${row.map(cell => `${cell.label} ${cell.page.cells.map(c => `${c.keepMs!.toFixed(0)}+${c.relayout!.ms.toFixed(0)}`).join('|')}`).join(', ')}`)
+  }
+  for (let round = 0; round < loadRounds; round++) {
+    const row: Row = []
+    for (let k = 0; k < trees.length; k++) {
+      const t = (k + round) % trees.length
+      row.push({ label: trees[t]!.label, load: loadavg()[0]!, page: await page(t, 'load') })
+    }
+    loadRows.push(row)
   }
   for (let s = 0; s < splitLabels.length; s++) {
     const t = trees.findIndex(tree => tree.label === splitLabels[s])
@@ -373,6 +392,16 @@ function summarize(title: string, rows: Row[], read: (cell: Cell) => Timed | { m
 
 const summary: string[] = [`load ${loadStart.toFixed(1)} to ${loadavg()[0]!.toFixed(1)}; ${execFileSync('pmset', ['-g', 'batt'], { encoding: 'utf8' }).split('\n').slice(0, 2).join(' ')}`]
 summary.push(...summarize('scratch', scratchRows, cell => cell.scratch!), ...summarize('prepared and kept', relayoutRows, cell => ({ ms: cell.keepMs! })), ...summarize('relayout', relayoutRows, cell => cell.relayout!))
+for (let t = 0; t < trees.length && loadRows.length > 0; t++) {
+  const ms = loadRows.map(row => row.find(cell => cell.label === trees[t]!.label)!.page.loadMs!)
+  let line = `script load ${trees[t]!.label}: median ${median(ms).toFixed(2)} ms (${Math.min(...ms).toFixed(2)} to ${Math.max(...ms).toFixed(2)}; ${loadRows.length} rounds)`
+  if (t > 0) {
+    const before = loadRows.map(row => row.find(cell => cell.label === trees[t - 1]!.label)!.page.loadMs!)
+    const diffs = ms.map((value, r) => value - before[r]!).sort((a, b) => a - b)
+    line += `; minus ${trees[t - 1]!.label}: median ${median(diffs).toFixed(2)} ms, quartiles ${diffs[Math.floor(diffs.length / 4)]!.toFixed(2)} to ${diffs[Math.floor(diffs.length * 3 / 4)]!.toFixed(2)}, ${diffs.filter(diff => diff < 0).length} of ${diffs.length} rounds under 0`
+  }
+  summary.push(line)
+}
 const hashes = new Set<string>()
 for (const row of scratchRows) for (const entry of row) for (const cell of entry.page.cells) hashes.add(`${cell.set} ${cell.scratch!.lines} lines, hash ${cell.scratch!.hash}`)
 for (const row of relayoutRows) for (const entry of row) for (const cell of entry.page.cells) hashes.add(`${cell.set} relayout ${cell.relayout!.lines} lines, hash ${cell.relayout!.hash}`)
@@ -386,7 +415,7 @@ for (let i = 0; i < splits.length; i++) {
 }
 const report = {
   schema: 'rebuild-js-profile-fresh-1', status: failure === null ? 'ok' : 'error', failure, build: readBuild('chrome'), startedAt: startedAt.toISOString(), durationMs: Date.now() - startedAt.getTime(),
-  load: { start: loadStart, end: loadavg()[0]! }, trees, messages, scratchRows, relayoutRows, splits,
+  load: { start: loadStart, end: loadavg()[0]! }, trees, messages, scratchRows, relayoutRows, loadRows, splits,
 }
 writeFileSync(join(outDir, 'fresh-result.json'), `${JSON.stringify(report, null, 1)}\n`)
 writeFileSync(join(outDir, 'fresh-summary.txt'), `${summary.join('\n')}\n`)
