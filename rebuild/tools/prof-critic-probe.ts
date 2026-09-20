@@ -13,6 +13,11 @@
 //   (measureText, the width read, a TextMetrics object to free) and misses whatever a first ask costs more than a repeat,
 //   so it is a lower bound where the stand-in's difference is an upper one. One page per checkout of PROF_REPEAT_TREES,
 //   the modes (the real Canvas as it is, k = 1, 2, 3) taking turns round by round.
+// - `floor`: what the stand-in's pass leaves out of the port's own JavaScript. prof-entry.ts's stand-in never looks at the
+//   string it is asked, so a compiler may drop the string's building, and a string built a character at a time is never
+//   made flat. Three stand-ins over one recording take turns: one that ignores the string (prof-entry.ts's), one that
+//   reads its length, one that reads its last unit, which makes it flat as measureText must. One page per checkout of
+//   PROF_FLOOR_TREES.
 //
 //   PROF_TREES="base=<checkout>,head=<checkout>" PROF_REPEAT_TREES=base PROF_SECTIONS=pairs,repeat PROF_ROUNDS=12 \
 //   python3 .artifacts/session/with-browser-lock.py <job> --browser=all --exclusive -- \
@@ -110,6 +115,58 @@ for (let round = 0; round < CONFIG.rounds; round++) {
 return out;
 `
 
+const FLOOR_BODY = String.raw`
+const lib = globalThis.prof;
+const sets = Object.keys(SETS);
+const pause = () => new Promise((resolve) => setTimeout(resolve, 0));
+const env = lib.environment();
+const out = { section: 'floor', label: CONFIG.label, userAgent: navigator.userAgent, messages: CONFIG.messages, rows: [] };
+let answers = null;
+let cursor = 0;
+let sink = 0;
+const answer = { width: 0, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 };
+// A stand-in that answers the n-th call with the n-th recorded answer, and reads of the string what 'mode' says.
+function standIn(mode) {
+  class Context {
+    constructor() { this.lang = ''; this.font = ''; this.letterSpacing = ''; this.wordSpacing = ''; this.fontKerning = ''; this.textRendering = ''; this.direction = ''; }
+    measureText(text) {
+      if (mode === 'length') sink += text.length;
+      else if (mode === 'last unit') sink += text.charCodeAt(text.length - 1);
+      const i = cursor++;
+      answer.width = answers.width[i];
+      answer.actualBoundingBoxLeft = answers.left[i];
+      answer.actualBoundingBoxRight = answers.right[i];
+      return answer;
+    }
+  }
+  cursor = 0;
+  globalThis.OffscreenCanvas = class { getContext() { return new Context(); } };
+}
+const modes = ['ignored', 'length', 'last unit'];
+for (const set of sets) {
+  const paragraphs = SETS[set].map((message) => lib.paragraphOf(message.parts));
+  const recording = lib.newRecording(false);
+  lib.recordingCanvas(recording);
+  const lines = lib.scratch(paragraphs, env, 320);
+  lib.realCanvas();
+  answers = lib.answersOf(recording);
+  for (const mode of modes) { standIn(mode); lib.scratch(paragraphs.slice(0, 1000), env, 320); }
+  for (let round = 0; round < CONFIG.rounds; round++) {
+    for (let m = 0; m < modes.length; m++) {
+      const mode = modes[(round % 2 === 0 ? m + round : modes.length * CONFIG.rounds - m - round) % modes.length];
+      standIn(mode);
+      await pause();
+      const t0 = performance.now();
+      const got = lib.scratch(paragraphs, env, 320);
+      out.rows.push({ set, mode, round, ms: performance.now() - t0, same: got === lines && cursor === answers.width.length });
+    }
+  }
+  lib.realCanvas();
+}
+out.sink = sink;
+return out;
+`
+
 type Tree = { label: string; path: string }
 
 function treesOf(value: string): Tree[] {
@@ -161,6 +218,10 @@ export default async function criticProbes(): Promise<Probe[]> {
       page(`repeat ${repeatLabels[i]!}`, repeatLabels[i]!, config, REPEAT_BODY)
     }
   }
+  if (sections.includes('floor')) {
+    const labels = (process.env['PROF_FLOOR_TREES'] ?? trees[0]!.label).split(',')
+    for (let i = 0; i < labels.length; i++) page(`floor ${labels[i]!}`, labels[i]!, { label: labels[i]!, messages, rounds: Number(process.env['PROF_FLOOR_ROUNDS'] ?? '12') }, FLOOR_BODY)
+  }
   return probes
 }
 
@@ -170,6 +231,7 @@ type PairsRow = { scenario: string; set: string; pass: number; ms: number; lines
 type RepeatRow = { scenario: string; set: string; k: number; round: number; ms: number; lines: number; calls: number }
 type PairsPage = { section: 'pairs'; label: string; round: number; messages: number; rows: PairsRow[] }
 type RepeatPage = { section: 'repeat'; label: string; messages: number; rows: RepeatRow[] }
+type FloorPage = { section: 'floor'; label: string; messages: number; rows: Array<{ set: string; mode: string; round: number; ms: number; same: boolean }> }
 
 const median = (values: number[]): number => {
   const sorted = [...values].sort((a, b) => a - b)
@@ -179,21 +241,29 @@ const median = (values: number[]): number => {
 const fixed = (value: number, digits: number): string => value.toFixed(digits)
 
 // Every script observation's value in the runner's output, whatever wraps it.
-function pagesOf(value: unknown, out: Array<PairsPage | RepeatPage>): void {
+function pagesOf(value: unknown, out: Array<PairsPage | RepeatPage | FloorPage>): void {
   if (typeof value !== 'object' || value === null) return
   if (Array.isArray(value)) { for (let i = 0; i < value.length; i++) pagesOf(value[i], out); return }
   const record = value as Record<string, unknown>
-  if ((record['section'] === 'pairs' || record['section'] === 'repeat') && Array.isArray(record['rows'])) { out.push(record as unknown as PairsPage | RepeatPage); return }
+  if ((record['section'] === 'pairs' || record['section'] === 'repeat' || record['section'] === 'floor') && Array.isArray(record['rows'])) { out.push(record as unknown as PairsPage | RepeatPage | FloorPage); return }
   const keys = Object.keys(record)
   for (let i = 0; i < keys.length; i++) pagesOf(record[keys[i]!], out)
 }
 
 function summary(path: string): void {
-  const pages: Array<PairsPage | RepeatPage> = []
+  const pages: Array<PairsPage | RepeatPage | FloorPage> = []
   pagesOf(JSON.parse(readFileSync(path, 'utf8')), pages)
   const pairs: PairsPage[] = []
   const repeats: RepeatPage[] = []
-  for (let i = 0; i < pages.length; i++) { const p = pages[i]!; if (p.section === 'pairs') pairs.push(p); else repeats.push(p) }
+  const floors: FloorPage[] = []
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages[i]!
+    switch (p.section) {
+      case 'pairs': pairs.push(p); break
+      case 'repeat': repeats.push(p); break
+      case 'floor': floors.push(p); break
+    }
+  }
   if (pairs.length > 0) {
     const messages = pairs[0]!.messages
     const labels: string[] = []
@@ -252,6 +322,21 @@ function summary(path: string): void {
       for (let r = 0; r < rounds; r++) slopes.push((at(3)[r]! - at(1)[r]!) / 2)
       const slope = median(slopes)
       console.log(`  ${scenario} ${set}: real ${fixed(t[0]!, 1)}; k=1 ${fixed(t[1]!, 1)}, k=2 ${fixed(t[2]!, 1)}, k=3 ${fixed(t[3]!, 1)}; steps ${fixed(t[2]! - t[1]!, 1)} and ${fixed(t[3]! - t[2]!, 1)}; slope ${fixed(slope, 1)} [${fixed(Math.min(...slopes), 1)}..${fixed(Math.max(...slopes), 1)}] ms = ${fixed(100 * slope / t[0]!, 1)}% of the real pass; ${calls} calls, ${fixed(slope * 1e6 / calls, 0)} ns a call; own JS by this method ${fixed(t[0]! - slope, 1)} ms`)
+    }
+  }
+  for (let i = 0; i < floors.length; i++) {
+    const page = floors[i]!
+    console.log(`FLOOR (${page.label}): the pass from scratch over three stand-ins; ms per ${page.messages} messages, medians over the rounds, and each one's pair difference from the stand-in that ignores the string`)
+    for (const set of ['latin', 'mix']) {
+      const at = (mode: string): number[] => page.rows.filter(row => row.set === set && row.mode === mode).map(row => row.ms)
+      if (at('ignored').length === 0) continue
+      const parts: string[] = []
+      for (const mode of ['ignored', 'length', 'last unit']) {
+        const differences: number[] = []
+        for (let r = 0; r < at(mode).length; r++) differences.push(at(mode)[r]! - at('ignored')[r]!)
+        parts.push(`${mode} ${fixed(median(at(mode)), 1)}${mode === 'ignored' ? '' : ` (${fixed(median(differences), 1)} [${fixed(Math.min(...differences), 1)}..${fixed(Math.max(...differences), 1)}])`}`)
+      }
+      console.log(`  ${set}: ${parts.join('; ')}; every pass asked the recording's calls and made its lines: ${page.rows.every(row => row.same)}`)
     }
   }
 }
