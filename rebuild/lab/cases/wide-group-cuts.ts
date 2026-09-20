@@ -225,25 +225,30 @@ function variantCases(v: Variant, row: Row): Case[] {
   return mergeCases(cases)
 }
 
-// Every case, or with `oneEach` one case of every variant, drawn with the seed.
+// Every case, or with `oneEach` one case of every variant, drawn with the seed and the variant's key: a variant that joins or
+// leaves (a new text, a font the page can't resolve) moves no other variant's case.
 export function generatePass2(rows: readonly Row[], oneEach: boolean, seed: string): { cases: Case[]; missing: number } {
   const byOrigin = new Map<string, Row>()
   for (let i = 0; i < rows.length; i++) byOrigin.set(rows[i]!.case.origin, rows[i]!)
   const all = variants()
   const perVariant: Case[][] = []
+  const keys: string[] = []
   let missing = 0
   for (let i = 0; i < all.length; i++) {
     const v = all[i]!
     const row = byOrigin.get(caseOf(v, 'cuts-one-line', 'one line', 20000).origin)
     if (row === undefined) throw new Error(`no pass-1 row for ${v.key}`)
     const made = variantCases(v, row)
-    if (made.length === 0) missing++
-    else perVariant.push(made)
+    if (made.length === 0) {
+      missing++
+      continue
+    }
+    perVariant.push(made)
+    keys.push(v.key)
   }
   const cases: Case[] = []
-  const rng = createRng(seed)
   for (let i = 0; i < perVariant.length; i++) {
-    if (oneEach) cases.push(rng.pick(perVariant[i]!))
+    if (oneEach) cases.push(createRng(`${seed}/${keys[i]}`).pick(perVariant[i]!))
     else for (let k = 0; k < perVariant[i]!.length; k++) cases.push(perVariant[i]![k]!)
   }
   return { cases: sortCases(mergeCases(cases)), missing }

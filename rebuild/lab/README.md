@@ -561,7 +561,7 @@ Chrome 67,065 cases with it. It joined the development sets with the Blink strin
 line (specs/blink-RESULTS.md "String storage", research/BLINK-STRING-STORAGE.md), so the counts of the line in this
 section are without it.
 
-`wide-group-cuts` (2,159 Chrome cases, `lab/cases/wide-group-cuts.ts`, sha256 8ae79092…): lines that end within half a px
+`wide-group-cuts` (2,159 Chrome cases, `lab/cases/wide-group-cuts.ts`, sha256 4da479ef…): lines that end within half a px
 of where the browser fits them, in texts whose cuts of a shaping group of 256 zoomed px or more fall where shaping
 crosses them (ligatures and contextual forms inside unbroken words, kerning inside words and at spaces, joined Arabic
 and Indic letters, letter and word spacing, soft hyphens, combining marks, emoji sequences, the edges of an inline
@@ -571,7 +571,7 @@ scripts, some under more than one. The Blink port alone cuts a group, so the set
 `run.ts` job in pinned Chrome reads the code point rects, and `pass2 --rows=<its rows>` writes, per variant, three
 break candidates past the middle times eight container widths from half a px under the browser's width of the text
 before the candidate to half a px over it: 51,816 cases, of which `--one-each` keeps one a variant, drawn with the seed
-`wide-group-cuts-1`. That is the set; the whole 51,816 stay a tool (`pass2` without `--one-each`). The first 22,536 of
+`wide-group-cuts-1` and the variant's key, so a variant that joins or leaves moves no other variant's case. That is the set; the whole 51,816 stay a tool (`pass2` without `--one-each`). The first 22,536 of
 them are, id for id, the cases with which a critic showed on 2026-09-20 that a form of the port that picked its cuts
 without asking Canvas moved lines in real Chrome (1,158 cases at a device pixel ratio of 2; the set holds 51 of them,
 and 2 of the 61 a second form moved), where the other 67,065 tier cases held no such text
