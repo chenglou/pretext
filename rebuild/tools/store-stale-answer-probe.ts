@@ -15,7 +15,8 @@
 // on a context of its own, made before anything else happens and never touched again, every 250 ms for ten seconds, and
 // beside it on a new context each time. S2 does nothing else, so with the runner's first page in a newly started browser
 // it shows what the process's own start-up does; S3 measures U+1F600 U+FE0E once after its first reading, the known
-// trigger. Per string: the distinct answers of the kept context and of the new ones, with the time each was first seen.
+// trigger. Per string: every change of the kept context's answer and of the new contexts', with the time of the reading
+// that first showed it, so a row of one entry never changed and a row of three went away and came back.
 import type { Probe } from '../probes/types.ts'
 
 const BODY = String.raw`
@@ -70,7 +71,7 @@ const make = (font) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c
 const t0 = performance.now();
 const kept = STRINGS.map(row => make(row[1]));
 const seen = STRINGS.map(() => ({ kept: [], fresh: [] }));
-const note = (list, width, ms) => { if (!list.some(entry => entry.width === width)) list.push({ width, firstSeenMs: ms }); };
+const note = (list, width, ms) => { if (list.length === 0 || list[list.length - 1].width !== width) list.push({ width, fromMs: ms }); };
 const readAll = () => {
   const ms = Math.round(performance.now() - t0);
   for (let i = 0; i < STRINGS.length; i++) {
@@ -88,8 +89,8 @@ for (let i = 0; i < 40; i++) {
 const rows = STRINGS.map((row, i) => ({ what: row[0], font: row[1], text: row[2], kept: seen[i].kept, fresh: seen[i].fresh }));
 return {
   userAgent: navigator.userAgent, msSinceNavigationStart: Math.round(t0), trigger: TRIGGER, sequenceWidth: sequence, tookMs: Math.round(performance.now() - t0),
-  keptContextsWithTwoAnswers: rows.filter(row => row.kept.length > 1).map(row => row.what),
-  freshContextsWithTwoAnswers: rows.filter(row => row.fresh.length > 1).map(row => row.what),
+  keptContextsThatChanged: rows.filter(row => row.kept.length > 1).map(row => row.what),
+  freshContextsThatChanged: rows.filter(row => row.fresh.length > 1).map(row => row.what),
   rows,
 };
 `
