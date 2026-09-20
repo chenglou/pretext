@@ -586,6 +586,21 @@ and 2 of the 61 a second form moved), where the other 67,065 tier cases held no 
 browser build or another set of installed fonts needs pass 1 again. Chrome's references, ledgers and seeds hold the set
 since the recording at its merge (2026-09-20). The twin scan finds 0 on it.
 
+**A change to Blink's cuts also passes the fonts probe before it merges** (since 2026-09-20): a change to how
+`shape.ts` cuts a shaping group, to the safe test or to the windows it measures. The sets hold a few dozen font
+strings, and the first form of the cut found without asking Canvas passed every tier while it moved lines in 196 of the
+318 font families installed here; only a probe across all of them showed it (research/PERF-B1B-REWORK.md).
+`tools/cut-fonts-probe.ts` lays the same long paragraphs out with two checkouts of the library, the main line's and
+the change's, in one page of the pinned Chrome, in every family of a list, at ordinary widths, at the decided lines'
+own widths and one LayoutUnit to either side, and at widths that put a line's end beside a cut; it compares cuts,
+positions and lines, and takes about an hour in a Chrome slot at device pixel ratios 2 and 1
+(`--chrome-args=--force-device-scale-factor=1`). The list is the machine's installed families, a JSON array kept under
+`.artifacts` (the first one is `.artifacts/tests/runs/b1b-fonts-20260920/families.json`, 321 names of which 318
+resolve). A change that means to move nothing must show 0 cuts, positions and layouts differing. Where the two trees
+differ, the probe can't say which is right: `tools/cut-fonts-cases.ts` writes the differing families' paragraphs as lab
+cases, `lab/run.ts` and `lab/score.ts` hold both trees' lines against the browser's own, and no case may go from pass
+to a failure.
+
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
 (25 cases a round trip against 1, and without the giants). So `sets.ts` fixes each set's parts (the suite samples keep
