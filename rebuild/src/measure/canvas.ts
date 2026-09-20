@@ -6,10 +6,15 @@
 // shaping of a word wins (specs/blink-canvas.md §1.7), so engines keep texts that could shape differently apart with
 // `partition`, and a context is never reused across settings.
 //
-// A prepared paragraph keeps the list of its contexts, and the records that measure hold theirs by reference. `width` and
-// `bounds` always ask Canvas: nothing here stores an answer, counts a call or logs one. Within a context, measuring the
-// same text again returns the same bits in all three engines (Blink returns the cached node for the whole text; WebKit and
-// Gecko run the same shaping), so asking again can't change a result, only cost a call.
+// The list of contexts is the caller's: one prepare's alone, or a page's, which every prepare of the page adds to and finds
+// its contexts in (index.ts prepare has the lifetime). A prepared paragraph keeps the list it was made with, and the
+// records that measure hold their contexts by reference. With a page's list a canvas has shaped what the page's earlier
+// paragraphs asked of it, and not only this paragraph's strings. That changes no answer while equal settings mean equal
+// shaping and `partition` keeps apart the strings that Chrome would shape differently on one canvas.
+//
+// `width` and `bounds` always ask Canvas: nothing here stores an answer, counts a call or logs one. Within a context,
+// measuring the same text again returns the same bits in all three engines (Blink returns the cached node for the whole
+// text; WebKit and Gecko run the same shaping), so asking again can't change a result, only cost a call.
 //
 // The string an engine hands to measureText reaches Canvas as the engine built it: nothing here uses it as a key.
 // V8 internalizes a string used as a Map, Set or property key, stores an internalized string in one byte whenever its
@@ -45,8 +50,8 @@ function sameSettings(a: CanvasSettings, b: CanvasSettings): boolean {
     a.fontKerning === b.fontKerning && a.textRendering === b.textRendering && a.direction === b.direction && a.partition === b.partition
 }
 
-// The context of `settings` in `contexts`, made at the end when none has them. A paragraph has a few contexts, so this
-// compares them one by one.
+// The context of `settings` in `contexts`, made at the end when none has them. A paragraph has a few contexts and a page a
+// few per font declaration, so this compares them one by one.
 export function contextFor(contexts: Context[], settings: CanvasSettings): Context {
   for (let i = 0; i < contexts.length; i++) if (sameSettings(contexts[i]!.settings, settings)) return contexts[i]!
   const ctx = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null

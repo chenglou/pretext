@@ -75,7 +75,7 @@ function tree(content: InlineNode[], width: number, o: Options = {}): Sized {
 
 // The lab's line loop (lab/predictor-core.ts) over the Blink engine alone.
 function blink(p: Sized, e: BlinkEnvironment = env, insets: Insets[] = []): { lines: BlinkLine[]; gaps: Gap[]; belowFloats: number[] } {
-  const prepared = prepare(p, e, true)
+  const prepared = prepare(p, e, true, [])
   const { lines, belowFloats } = everyLine({
     first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
   }, p.width, insets)
@@ -546,7 +546,7 @@ describe('blink plain and inspected paragraphs', () => {
   // questions of the whole layout.
   function filled(p: Sized, inspect: boolean): { lines: unknown[]; asked: { letterSpacing: string; text: string }[] } {
     asked = []
-    const prepared = prepare(p, env, inspect)
+    const prepared = prepare(p, env, inspect, [])
     const lines: unknown[] = []
     for (let start = firstLine(prepared); start !== null;) {
       const result = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
@@ -575,7 +575,7 @@ describe('blink plain and inspected paragraphs', () => {
     const noLigatures = (asked: { letterSpacing: string }[]): number => asked.filter(a => a.letterSpacing === '0.015625px').length
     expect(noLigatures(filled(p, false).asked)).toBe(0)
     asked = []
-    const prepared = prepare(p, env, true)
+    const prepared = prepare(p, env, true, [])
     for (let start = firstLine(prepared); start !== null;) {
       const result = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       inspectLine(prepared, result.line)
@@ -586,7 +586,7 @@ describe('blink plain and inspected paragraphs', () => {
 
   test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
     const p = paragraph([['ab cd', 'text']], 400)
-    const prepared = prepare(p, env, false)
+    const prepared = prepare(p, env, false, [])
     const result = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
     expect(() => inspectLine(prepared, result.line)).toThrow('prepared plain')
     expect(() => paragraphGaps(prepared)).toThrow('prepared plain')
@@ -594,7 +594,7 @@ describe('blink plain and inspected paragraphs', () => {
 
   test('reading a decided line writes nothing to it, justification included', () => {
     const p = paragraph([['aa bb cc dd ee ff', 'text']], 85, { textAlign: 'justify' })
-    const prepared = prepare(p, env, true)
+    const prepared = prepare(p, env, true, [])
     const result = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
     const before = JSON.stringify(result.line)
     const first = inspectLine(prepared, result.line)
@@ -614,7 +614,7 @@ describe('blink string storage', () => {
   // Every string asked, with the partition of its context.
   function asks(p: Sized): { partition: string; text: string }[] {
     asked = []
-    const prepared = prepare(p, env, true)
+    const prepared = prepare(p, env, true, [])
     for (let start = firstLine(prepared); start !== null;) start = fillLine(prepared, start, { width: p.width, left: 0, right: 0 }).next
     // The partition is the library's name for a canvas, which the paragraph's context list keeps with it.
     return asked.map(ask => ({ partition: prepared.canvases.find(c => (c.ctx as unknown) === ask.context)!.settings.partition, text: ask.text }))
@@ -658,8 +658,8 @@ describe('blink string storage', () => {
 
   test('a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)', () => {
     const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
-    expect(prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, true).segmented).toBe(true)
-    expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true).segmented).toBe(false)
+    expect(prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, true, []).segmented).toBe(true)
+    expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true, []).segmented).toBe(false)
   })
 })
 

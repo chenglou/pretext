@@ -40,7 +40,7 @@ function linesOf(text: string, width: number): [number, number][] {
     wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8, content: [{ kind: 'text', text }], lineHeight: 20, direction: 'ltr',
     lang: 'en', textIndent: 0, textAlign: 'start',
   }
-  const prepared = prepare(paragraph, env, false)
+  const prepared = prepare(paragraph, env, false, [])
   const lines: [number, number][] = []
   let start = firstLine(prepared)
   while (start !== null) {

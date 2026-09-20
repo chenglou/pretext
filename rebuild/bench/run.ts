@@ -326,15 +326,15 @@ async function handle(request: Request): Promise<Response> {
       switch (part.kind) {
         case 'headline':
           chat.headlines.push(part.result)
-          console.log(`[bench] ${browser} headline ${part.result.set}, ${part.result.messages} messages from scratch: rebuild ${part.result.rebuildScratchMs.map(formatMs).join(', ')}; main ${part.result.mainColdMs.map(formatMs).join(', ')}`)
+          console.log(`[bench] ${browser} headline ${part.result.set}, ${part.result.messages} messages from scratch: rebuild ${part.result.rebuildScratchMs.map(formatMs).join(', ')}; with one list of contexts a pass ${part.result.rebuildKeepingMs.map(formatMs).join(', ')}; main ${part.result.mainColdMs.map(formatMs).join(', ')}`)
           break
         case 'headline-resize':
           chat.headlineResizes.push(part.result)
-          console.log(`[bench] ${browser} headline resize ${part.result.set}, ${part.result.messages} messages at ${part.result.widths.length} widths: rebuild ${formatMs(part.result.rebuildResizeMs)}; main ${formatMs(part.result.mainResizeMs)}`)
+          console.log(`[bench] ${browser} headline resize ${part.result.set}, ${part.result.messages} messages at ${part.result.widths.length} widths: rebuild ${formatMs(part.result.rebuildResizeMs)}; with shared contexts ${formatMs(part.result.rebuildKeepingResizeMs)}; main ${formatMs(part.result.mainResizeMs)}`)
           break
         case 'phases':
           chat.phases.push(part.result)
-          console.log(`[bench] ${browser} phases ${part.result.set}: font checks ${formatMs(part.result.checks.ms)}, engine prepare ${formatMs(part.result.prepare.ms)}, fill ${formatMs(part.result.fill.ms)} over ${part.result.messages} messages`)
+          console.log(`[bench] ${browser} phases ${part.result.set}${part.result.keeping ? ', one list of contexts a pass' : ''}: font checks ${formatMs(part.result.checks.ms)}, engine prepare ${formatMs(part.result.prepare.ms)}, fill ${formatMs(part.result.fill.ms)} over ${part.result.messages} messages`)
           break
       }
       return Response.json({ kind: 'ok' })
@@ -362,7 +362,7 @@ async function handle(request: Request): Promise<Response> {
       if (chat !== null) {
         const headlines = chat.headline > 0 ? chat.sets.length : 0
         if (chat.headlines.length !== headlines || chat.headlineResizes.length !== headlines) errors.push(`Chat posted ${chat.headlines.length} headlines and ${chat.headlineResizes.length} headline resizes; expected ${headlines} of each`)
-        if (chat.phases.length !== chat.sets.length) errors.push(`Chat posted phases for ${chat.phases.length} sets; expected ${chat.sets.length}`)
+        if (chat.phases.length !== 2 * chat.sets.length) errors.push(`Chat posted ${chat.phases.length} phase passes; expected two a set, ${2 * chat.sets.length}`)
       }
       const next = body.context + 1
       if (next < contexts.length) return Response.json({ kind: 'navigate', url: pageUrl(baseUrl, next) })

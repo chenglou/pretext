@@ -33,7 +33,7 @@ Three engine ports that barely touch each other, and a small shared layer that n
 same six functions over its own types (§2.9, §3), and `src/index.ts` is the one place that chooses a port:
 
 ```ts
-prepare(paragraph, env, inspect): Prepared        // width-free: content, items, break data, the widths known before lines
+prepare(paragraph, env, inspect, contexts?): Prepared  // width-free: content, items, break data, the widths known before lines
 firstLine(prepared): Start | null
 fillLine(prepared, start, slot): FillResult       // decides one line in one slot, or refuses the slot (below floats)
 linePieces(prepared, line): LinePieces<Facts>     // what a painter takes; a pure function
@@ -46,7 +46,8 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 | Data | What it holds | Made by | Lives as long as | Depends on the width |
 |---|---|---|---|---|
 | Input | the `Paragraph` tree (§1.1), the `Environment` (§1.4), a `LineSlot { width, left, right }` per line (§2.9) | the caller | the caller's scope | the slot only |
-| Prepared paragraph | the engine's content, items, styles and break data, the widths it knows before filling lines, its Canvas contexts (§4.6), the environment, and `inspect`: a record on a paragraph prepared for inspection, null on a plain one | `prepare` | the caller keeps it | no: one prepared paragraph serves any width |
+| List of contexts | the Canvas contexts a page has made, each found by its settings (§4.6, "A page's list of contexts"); nothing derived from them | the caller, as an empty array; `prepare` starts one per call when it is given none | the page, in WebKit until its fonts change; or one `prepare` call | no |
+| Prepared paragraph | the engine's content, items, styles and break data, the widths it knows before filling lines, references to the Canvas contexts it measures in (§4.6), the environment, and `inspect`: a record on a paragraph prepared for inspection, null on a plain one | `prepare` | the caller keeps it | no: one prepared paragraph serves any width |
 | Line start | where the next line starts: small plain data that names positions in the prepared paragraph's lists and holds nothing of it (§2.7) | `firstLine`, a fill result's `next` | the caller's scope; it survives JSON | no |
 | Decided line | the engine's own record of one filled line (Blink's `LineInfo` with its results, WebKit's closed `Line` with its rect, Gecko's last reflow pass), and on an inspected paragraph the gaps its filling raised, in order | `fillLine` | the caller's scope; counting lines drops it | yes |
 | Pieces | fragments, `joinsNextLine`, `indented`, `align`, `overflows`, the engine's facts for its painting rules (§2.1, §2.2) | `linePieces` | the caller's scope | yes |
@@ -1193,10 +1194,11 @@ run different algorithms, each algorithm is its own shared module, and each engi
 `breaks/rbbi.ts` or `breaks/icu4x.ts`, `unicode/ubidi.ts` or `unicode/unicode-bidi.ts`.
 
 Each engine's `index.ts` exports the function set of §2.9 with its own types, which `src/index.ts` and the lab's adapter
-call; no function takes a measurer, and a prepared paragraph holds its own contexts:
+call; `prepare` takes the list its Canvas contexts are found and made in (§4.6), and a prepared paragraph holds the ones
+it measures in by reference:
 
 ```ts
-prepare(paragraph: Paragraph, env: Env, inspect: boolean): Prepared
+prepare(paragraph: Paragraph, env: Env, inspect: boolean, contexts: Context[]): Prepared
 firstLine(prepared: Prepared): Start | null
 fillLine(prepared: Prepared, start: Start, slot: LineSlot): FillResultOf<Start, FilledLine, RefusedSlot>
 linePieces(prepared: Prepared, line: FilledLine): LinePieces<PaintFacts>
@@ -1555,8 +1557,9 @@ as a key (research/BLINK-STRING-STORAGE.md). Measuring the same text in the same
 all three engines (Blink returns its cached node for the whole string; WebKit and Gecko shape the same way), so asking
 again can't change a result, only cost a call (§4.7).
 
-No function takes a measurer. A prepared paragraph keeps the list of its contexts, which lives as long as it does and
-serves every line filled from it, at any width. The records that measure hold their contexts by reference:
+`prepare` takes the list of contexts (below, "A page's list of contexts"), a page's or one call's; no other function
+does. A prepared paragraph keeps the list it was made with, which serves every line filled from it, at any width, and
+the records that measure hold their contexts by reference:
 
 - Blink: a style holds its contexts (`types.ts` `StyleContexts`: shaping LTR and RTL, the same two without ligatures, and
   the hyphen's), on the style's one record, `BlinkStyle.contexts`, and `BlinkStyle.oneByteContexts` in a segmented
@@ -1669,27 +1672,130 @@ predictor's browser runs (TESTS.md, "Tiers"). The simpler form reads every candi
 about 31 more Canvas questions a chat message. The maintainer may prefer it; the orchestrator accepted the lazy form
 with this note, and research/PROFILING-START.md lists the trade among the things profiling may revisit.
 
-The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. What a call
-keeps is local to it: its contexts, which carry `partition: 'font-checks'`, so no engine measurement shares a Blink word
-cache with them; the declarations it resolved, each once under its language, compared field by field; and the questions
-it asked with Canvas's answers, because checks share questions (the two generics alone, a family's list at the probe
-size, which the primary family check and the fixed-pitch check both read, and which declarations of several sizes
-share). No engine needs that list of questions for correctness, since a question asked again gets the same answer; it
-is kept because deleting it only adds Canvas calls (without it 4,692 Chrome and 27,014 webkit-host cases without facts
-repeat a font-check question; Gecko's checks ask nothing). The Canvas checks of engine detection (§1.4) make their own
-contexts. The checks run before the engine and don't know whether the paragraph is plain or inspected, so one of them
-asks Canvas on a plain paragraph for what only a gap reads: Blink's linear-size check answers `false` or nothing, `false`
-is also the default a named family gets (`engines/blink/content.ts` `measuresAtCssSize`), so its answer decides whether
-`optical-size` is reported and never how the port measures. The primary family check beside it does decide measuring,
-where a list's first family doesn't exist and the realized one is the system font (research/PROFILING-START.md, item 1).
+The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
+contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
+Blink word cache with them. Everything else a call keeps is local to it: the declarations it resolved, each once under
+its language, compared field by field; and the questions it asked with Canvas's answers, because checks share questions
+(the two generics alone, a family's list at the probe size, which the primary family check and the fixed-pitch check
+both read, and which declarations of several sizes share). No engine needs that list of questions for correctness, since
+a question asked again gets the same answer; it is kept because deleting it only adds Canvas calls (without it 4,692
+Chrome and 27,014 webkit-host cases without facts repeat a font-check question; Gecko's checks ask nothing). The Canvas
+checks of engine detection (§1.4) make their own contexts. The checks run before the engine and don't know whether the
+paragraph is plain or inspected, so one of them asks Canvas on a plain paragraph for what only a gap reads: Blink's
+linear-size check answers `false` or nothing, `false` is also the default a named family gets
+(`engines/blink/content.ts` `measuresAtCssSize`), so its answer decides whether `optical-size` is reported and never how
+the port measures. The primary family check beside it does decide measuring, where a list's first family doesn't exist
+and the realized one is the system font (research/PROFILING-START.md, item 1).
 
-**The measurer's lifetime is the first item of the profiling phase, not a thing of this design.** Contexts and
-font-check answers are made per prepared paragraph today, which is what makes every paragraph's measuring independent of
-every other's and tier 1 sound per case. It is also most of what a chat message costs from scratch (§4.7;
-research/PROFILING-START.md, item 1): the font checks run per paragraph, 10.7 `measureText` calls and 6.4 contexts a chat
-message in Chrome, 9.5 and 4.2 in WebKit, 0 in Firefox. An object the caller makes once per page, which holds the
-contexts and the checks' answers per font declaration, pays them once; in Chrome it changes which canvas has shaped what
-before a paragraph asks, so it needs browser proof in several orders before it lands.
+**A page's list of contexts** (the profiling phase's item 1, research/PROFILING-START.md). `prepare(paragraph, env,
+inspect, contexts)` takes a plain `Context[]` (`measure/canvas.ts`): the Canvas contexts a page has made, the engine's
+and the checks' in one list, each found by its settings. The three engines take the list (`engines/blink/index.ts`
+`prepare`, `engines/webkit/content.ts` `prepareWebKit`, `engines/gecko/prepare.ts` `prepareGecko`) and so do the checks
+(`measure/font-checks.ts` `withLearnedFontFacts`). Nothing derived from the contexts is kept: the list has no type of
+its own and nothing makes one but `[]`, and the font checks ask Canvas their questions again at every `prepare`, on the
+kept contexts. A prototype also kept the checks' questions with Canvas's answers; its review measured that the list
+alone pays nearly as much and that the kept answers were the one part that went stale silently
+(research/PERF-LIFETIME.md), so this smaller form was built.
+
+- *Lifetime.* The caller's: a page's, or one call's. A call that is given none starts an empty list, and then nothing
+  outlives a prepared paragraph, which is what the lab's usual predictors do, so a recorded case stays what one
+  paragraph asks and tier 1 stays sound per case. A page keeps one array and hands it to every `prepare`.
+- *What invalidates it.* Only webkit-host's contexts, after the page's fonts change. Probe `contexts-font-load`
+  (2026-09-19): Chrome's and Firefox's OffscreenCanvas contexts measure with a family that loaded after their font was
+  assigned, strings they had measured before included; webkit-host's keep measuring the fallback, until another font
+  string is assigned. So in Chrome and Firefox the next `prepare` on the old list sees the loaded font, in the checks'
+  answers and in the engine's widths alike. In WebKit a page starts a new list where it prepares its paragraphs again
+  after its fonts change, which main's cache asks of its caller too; the library reads nothing of the document, so it
+  can't know. Paragraphs prepared before the load are stale in every engine, as they always were. What doesn't
+  invalidate it:
+  - The document's language. Blink's and Gecko's contexts get an explicit `lang`, one of the settings a context is
+    found by, and WebKit's has none. Probe `contexts-page-lang`: in all three browsers a context made before `<html
+    lang>` changed measures what one made after it measures. In Firefox a context whose `lang` is '' follows the
+    document on every call, a kept one and a new one alike (Gecko's port assigns '' for content with `lang=""` when the
+    process languages are unknown, `engines/gecko/prepare.ts` `canvasLang`), so there the two agree because neither
+    holds the language, not because the kept one does.
+  - The device pixel ratio. Blink's port measures a named family at the CSS size times the ratio, so a new ratio asks
+    for other font strings and gets other contexts; the contexts whose font string stays are the system font's, which
+    is measured at the CSS size, and the checks' at 16px. Probe `contexts-device-scale` (2026-09-19, pinned Chrome, the
+    DevTools device scale factor from 2 to 1 to 3 and back, the page's `devicePixelRatio` following it): every kept
+    context measures what a context made after the change measures and what it measured before, for "Helvetica Neue"
+    and for `system-ui` at three sizes (0 of 135 pairs differ, 0 of 90 widths asked again moved), and a font string
+    measures the same at every factor. Not probed: a real move between displays and the browser's own zoom, which the
+    emulation stands in for.
+- *What bounds it.* The distinct settings a page measures with: about 8 contexts per font declaration in Blink and 3 in
+  WebKit and Gecko (a plain paragraph; `tools/contexts-bound.ts`). The chat mix holds 24 contexts in Chrome, 13 in
+  Firefox and 11 in webkit-host for 1,000 messages, and on the tier sets a document's list makes 1.81 contexts a case in
+  Chrome, 0.42 in Firefox and 0.20 in webkit-host, where a list a case makes 15.75, 4.62 and 7.77, for the same
+  `measureText` calls (736.24, 120.23 and 85.90 a case without facts, inspected). Settings that never repeat (an
+  animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so `prepare`,
+  which sees both of the list's users, empties a list longer than 512 contexts; prepared paragraphs hold theirs by
+  reference and keep them. The number comes from the search's cost: a lookup compares
+  settings one by one at 4 to 6 ns each (JavaScriptCore and V8, 2026-09-19), a plain paragraph makes 15 lookups in
+  Blink, 12 in WebKit and 3 in Gecko, and with every context of the list used in turn it compares 5.6 settings per
+  context held in Blink, 4.1 in WebKit and 1.5 in Gecko. At 512 contexts that is about 17 µs a paragraph in Chrome,
+  where the list saves about 90 µs a chat message, and 9.5 µs in webkit-host, where it saves about 9.7 µs:
+  the largest power of two at which no engine's page pays more to search its list than the list saves. At 1,024 the
+  webkit-host page would pay 19 µs. A Map keyed by the settings would make the search flat, at a key string built per
+  lookup; it was not built, because a page's common declarations are met first and sit at the front of the list, and
+  the chat page's 24 contexts cost about 1 µs a message to search. The bound is a cliff: a Chrome page that uses 60
+  font families in turn holds 484 contexts and makes none again, and one that uses 64 has its list emptied in every
+  cycle and makes 8.06 contexts a paragraph where a list a call makes 10.19 (`tools/contexts-bound.ts`, stand-in
+  Canvas), so past it a page pays about what every page paid before the list. With 10,000 declarations that never
+  repeat (a size per paragraph) the list never holds more than 514 contexts and a `prepare` makes 6.05 contexts where
+  a list a call makes 10, because the checks measure at 16px whatever the size. What a kept canvas holds inside the
+  browser is the browser's to bound: Chrome keeps at most 32,768 strings and 32,768 words per canvas and drops the
+  least recently used half when either fills (frame_shape_cache.cc:12-16, :93-104, whose comment puts 320,000 nodes at
+  about 700 MB), so a page's busiest canvas can hold tens of megabytes where main's one canvas, which is asked words
+  that repeat, fills slowly; fewer distinct questions (items 2 and 6) shrink it.
+- *Chrome's history.* Chrome keeps shaped words per canvas and the first shaping wins (§4.2), so with a page's list a
+  canvas has shaped what the page's earlier paragraphs asked. No answer changes, because a context's settings hold
+  everything Chrome's shaping reads but the string's storage, and `partition` already names the storage for every
+  paragraph: an unsegmented paragraph's contexts are the `8bit` ones and hold one-byte Latin-1 strings and strings that
+  are two-byte by their characters, a segmented paragraph's two-byte strings go to `16bit` contexts and its one-byte
+  ones to `8bit`. Browser proof of 2026-09-19 (`.artifacts/tests/runs/contexts-20260919`; the lab's
+  `baselines/page-contexts-*.ts` predictors keep one list a document): in Chrome every layout, observation and painted
+  line of all 67,065 cases, `twins` included, equals the usual recording's in file order, reversed and in a shuffled
+  third order, in both configurations, and the plain path's line ranges equal them too; `tools/twin-scan.ts --page`
+  finds no context asked the same characters in both storages with a whole case file as one page (67,072 cases, 377 ask
+  a two-byte slice). webkit-host: 0 of 63,987 cases differ in either order and configuration. The largest document of
+  these runs is 13,010 cases, and `prepare` emptied a document's list 213 times in Chrome's run without facts. Firefox:
+  0 of 127,542 rows differ with facts; without facts 7 predictions and 6 native observations differ, all in one reversed
+  part, all history-dependent on every metric in the reference ledger, and each of the 7 predicts what the usual
+  recording predicts for the case in its other order: they are Firefox's two fallback-font states of a process and not
+  the list's doing (the prototype's runs met the same state in 94 and 74 cases, the same 74 that differ between two
+  usual runs). The offline gates exit 0, tier 1 for Chrome by the string storage rule alone, and Chrome's usual tier 2
+  then shows 0 transitions in both configurations (TESTS.md, "Tiers").
+- *What it buys* (the bench's headline: 10,000 chat messages from scratch, a list a message and one list a pass taking
+  turns in one document). On a quiet machine the prototype's review measured this form as a variant of the bench page
+  (2026-09-19, research/PERF-LIFETIME.md, the review's §4): Chrome 4.60 s to 3.70 s on the mix and 4.01 s to 3.35 s on
+  plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox, whose checks ask nothing, 2.76 s to 2.51 s
+  and 0.58 s to 0.46 s. This form's own run (2026-09-20, `.artifacts/bench/contexts-20260919/two`, five alternating
+  pairs) ran while other work kept the machine about twice as slow as that, the bench's fixed arithmetic at 47 to 61 ms
+  where a quiet run has 27 to 29, so its ratios count and its times don't: Chrome 6.34 s to 4.76 s on the mix (medians;
+  the pairs ×0.63 to ×1.00) and 8.30 s to 7.09 s on plain ASCII (×0.82 to ×0.94); webkit-host 283 ms to 166 ms and 260
+  ms to 151 ms (×0.51 to ×0.62). Counts don't depend on load: the `measureText` calls a message stay what they were,
+  since the checks ask again (322.13 and 281.86 in Chrome, 39.78 and 30.00 in webkit-host), contexts made a message go
+  from 11.07 to 0.024 in Chrome and from 5.38 to 0.011 in webkit-host, and every line range of 1,000 messages at four
+  widths is equal in both forms. A kept paragraph no longer keeps canvases of its own alive, about five a message in
+  Chrome: preparing 10,000 messages and keeping them all went from 45.6 s to 9.0 s on the mix and from 107 s to 9.4 s on
+  plain ASCII in the loaded run (one measurement each; the prototype's quiet runs, with a list that holds the same
+  contexts, had 10.3 s to 3.8 s and 15.8 s to 3.5 s).
+- *What it costs.* In Chrome, kept paragraphs of the plain ASCII set that share their contexts lay out again more slowly
+  at a width they have met: 54.7 µs to 69.7 µs a layout, ×1.27 (timed rows of 1,000 messages, six interleaved samples,
+  in the loaded run above; ×1.10 at a new width; the prototype's review had ×1.24 on a quiet machine), and the mix
+  doesn't move (×1.03). The cause is Chrome's bound on a canvas's cache (frame_shape_cache.cc:12-16, :93-104): under the
+  stand-in Canvas 1,000 plain ASCII messages ask one page canvas 113,331 distinct strings at four widths, three times
+  what it keeps, so it has dropped a paragraph's strings by the time the paragraph is laid out again, where a
+  paragraph's own canvas still holds them. A probe in pinned Chrome (2026-09-19, 100,000 two-word strings, three rounds
+  taking turns): one canvas answers them again at 0.56 to 1.06 µs a string, no cheaper than its first answers (0.43 to
+  0.59 µs), and 1,000 canvases of 100 strings each answer again at 0.30 to 0.34 µs. It costs time and changes no answer.
+  The tier 2 documents stay under the bound (the busiest canvas of any of Chrome's is asked 5,437 distinct strings under
+  the stand-in), so two other checks hold that: the benchmark's counting pass, where one canvas is asked about 100,000
+  distinct strings, finds every line range of 1,000 messages at four widths equal with one list and with a list a
+  message, in both sets, in Chrome and in webkit-host (and in all three browsers in the prototype's runs, whose canvases
+  are shared the same way); and a probe in pinned Chrome finds 0 of 120,000 strings answered with other bits when asked
+  again on a canvas past its bound, and 0 of a sample of 3,244 on fresh canvases, for one-byte strings and for two-byte
+  ones. Fewer asks per layout (item 2) is what removes the cost.
 
 ### 4.7 What removing the memo cost
 
@@ -2645,10 +2751,10 @@ recorded again at the merge (TESTS.md, "Tiers"). What the review found and nobod
 owners' entries of SHARED-CHANGES.md.
 
 **Next**: profiling and optimization, which may add complexity back where numbers ask for it
-(research/PROFILING-START.md: the measurer's lifetime first, then the two stores of §4.7, then the recipes that buy
-nothing); then the shape of the public API, where both a stateless call over an invisible store and carried handles
-stay possible (research/IDEMPOTENT-API.md, research/DEMO-COVERAGE.md, research/CAPABILITY-CHECK.md,
-research/INCREMENTAL-API-READING.md).
+(research/PROFILING-START.md: a page's list of contexts first, which is done (§4.6), then the two stores of §4.7, then
+the recipes that buy nothing); then the shape of the public API, where both a stateless call over an invisible store
+and carried handles stay possible (research/IDEMPOTENT-API.md, research/DEMO-COVERAGE.md,
+research/CAPABILITY-CHECK.md, research/INCREMENTAL-API-READING.md).
 
 ## 9. Observation contract
 

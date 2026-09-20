@@ -194,9 +194,9 @@ function paragraphOf(text: string): Paragraph {
 function prepareMessage(text: string): Prepared {
   const paragraph = paragraphOf(text)
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env)), env, false) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks), env, false) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks), env, false) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), []), env, false, []) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, []), env, false, []) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, []), env, false, []) }
   }
 }
 

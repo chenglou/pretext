@@ -331,8 +331,9 @@ export type GeckoPrepared = {
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in
   // for the document's BidiEnabled flag (gecko audit F3).
   bidi: boolean
-  // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
-  // those the recipes make from them. Only the making of a context reads the list; whoever measures holds its context by
+  // The Canvas contexts the paragraph makes its own in, one per distinct settings (measure/canvas.ts contextFor): the
+  // caller's list, a page's or this paragraph's alone (index.ts prepare). The paragraph's are the text runs' own and those
+  // the recipes make from them. Only the making of a context reads the list; whoever measures holds its context by
   // reference (RunContexts).
   contexts: Context[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks

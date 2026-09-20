@@ -14,6 +14,7 @@ import type { WebKitLineGeometry, WebKitLineStart } from './engines/webkit/geome
 import * as webkit from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
 import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
+import type { Context } from './measure/canvas.js'
 import { withLearnedFontFacts } from './measure/font-checks.js'
 import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from './model.js'
 
@@ -28,6 +29,7 @@ export type {
   TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
 export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
+export type { Context } from './measure/canvas.js'
 export type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit } from './engines/blink/geometry.js'
 export type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry, GeckoTextFrame } from './engines/gecko/geometry.js'
 export type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './engines/webkit/geometry.js'
@@ -66,11 +68,33 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // check is sound for the engine (measure/font-checks.ts, with what the engine's port asks for, engines/<engine>/checks.ts);
 // the engines read FontFacts as the caller had given them. `inspect` prepares the paragraph for inspectLine and
 // paragraphGaps, which the lab reads; a plain paragraph gives lines and pieces alone.
-export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean): Prepared {
+//
+// `contexts` is the list the checks and the engine find their Canvas contexts in, each by its settings, and make them in
+// (measure/canvas.ts contextFor). Nothing else is kept across calls: the checks ask Canvas again at every call.
+// Lifetime: the caller's. A call that is given none gets an empty list, and then nothing outlives its prepared paragraph.
+// A page that hands one list to every call pays for a context once per settings instead of once per paragraph.
+// Invalidated by the page's fonts changing, in WebKit alone: there a context keeps the fonts its font string resolved to
+// when it was assigned, so after a web font loads a page starts a new list where it prepares its paragraphs again.
+// Chrome's and Firefox's contexts measure with the loaded font from their next call on (probes/contexts-font-load.ts).
+// Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
+// partition: about 8 contexts per declaration in Blink, 3 in WebKit and Gecko), and by MAX_CONTEXTS: settings that never
+// repeat (an animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so
+// a call that finds a longer list empties it. Prepared paragraphs hold their contexts by reference and keep theirs. The
+// number is where a list whose contexts are all used in turn still costs no engine more to search than it saves
+// (tools/contexts-bound.ts: a plain paragraph compares about 5.6 settings per context held in Blink, 4.1 in WebKit, 1.5 in
+// Gecko, at 4 to 6 ns each; at 512 that is 17 µs in Chrome, where the list saves 90 µs a chat message, and 9.5 µs in
+// WebKit, where it saves 9.7). A page past it, some 60 declarations used in turn in Chrome, makes its contexts again and
+// again, as every page did before the list. What a kept canvas holds inside the browser is the browser's to bound: Chrome
+// keeps at most 32,768 strings and 32,768 words per canvas and drops the least recently used half when either fills
+// (frame_shape_cache.cc:12-16, :93-104), WebKit and Gecko keep measured words per font.
+const MAX_CONTEXTS = 512
+
+export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean, contexts: Context[] = []): Prepared {
+  if (contexts.length > MAX_CONTEXTS) contexts.length = 0
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env)), env, inspect) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks), env, inspect) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks), env, inspect) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), contexts), env, inspect, contexts) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, contexts), env, inspect, contexts) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, contexts), env, inspect, contexts) }
   }
 }
 

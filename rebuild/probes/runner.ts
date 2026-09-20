@@ -87,7 +87,10 @@ const chromeArgs: string[] = (() => {
   if (list.some(arg => !arg.startsWith('--'))) fail('--chrome-args must be switches starting with --')
   return list
 })()
-// DevTools device emulation with this device scale factor, applied before the first navigation and kept for the run.
+// DevTools device emulation with this device scale factor, applied before the first navigation and kept for the run. A
+// probe's script changes it mid-page with a POST to /api/chrome-dsf, { runId, deviceScaleFactor }, which answers once
+// Chrome has applied it; the script puts the run's factor back before it returns, since the run checks that the pages'
+// device pixel ratio never moved between probes.
 const chromeEmulateDsf: number | null = (() => {
   const raw = args.get('chrome-emulate-dsf')
   if (raw === undefined) return null
@@ -366,7 +369,9 @@ async function launchChrome(url: string): Promise<Session> {
     } else {
       const created = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true }) as { targetId: string }
       const attached = await cdp.send('Target.attachToTarget', { targetId: created.targetId, flatten: true }) as { sessionId: string }
-      await cdp.send('Emulation.setDeviceMetricsOverride', { width: 0, height: 0, deviceScaleFactor: chromeEmulateDsf, mobile: false }, attached.sessionId)
+      const socket = cdp
+      overrideChromeDsf = deviceScaleFactor => socket.send('Emulation.setDeviceMetricsOverride', { width: 0, height: 0, deviceScaleFactor, mobile: false }, attached.sessionId)
+      await overrideChromeDsf(chromeEmulateDsf)
       await cdp.send('Page.navigate', { url }, attached.sessionId)
     }
     return session
@@ -377,6 +382,9 @@ async function launchChrome(url: string): Promise<Session> {
 }
 
 type Cdp = { send: (method: string, params: Record<string, unknown>, sessionId?: string) => Promise<unknown>; close: () => void }
+
+// The device metrics override of the run's page, where the run emulates one (launchChrome).
+let overrideChromeDsf: ((deviceScaleFactor: number) => Promise<unknown>) | null = null
 
 // Chrome writes the DevTools port it chose and the browser endpoint's path into the profile once it listens.
 async function devToolsEndpoint(profile: string, pid: number): Promise<string> {
@@ -774,6 +782,13 @@ try {
         case '/api/step':
           if (request.method !== 'POST') return new Response('POST required', { status: 405 })
           return await step(request)
+        case '/api/chrome-dsf': {
+          const body = await request.json() as { runId: string; deviceScaleFactor: number }
+          if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
+          if (overrideChromeDsf === null) throw new Error('A probe asked for another device scale factor in a run without --chrome-emulate-dsf')
+          await overrideChromeDsf(body.deviceScaleFactor)
+          return new Response('ok')
+        }
         case '/api/fatal': {
           const body = await request.json() as { runId: string; message: string }
           if (body.runId === runId) stopRun(new Error(`Page error: ${body.message}`))

@@ -68,12 +68,15 @@
 // engines/gecko/advance.ts `pairKernedShare`), and the others are whole sets where a check answers one string at a time
 // (research/FACTS-FREE.md).
 //
-// One call resolves one paragraph, and everything it keeps is local to the call (Resolution below): each distinct
+// One call resolves one paragraph, and what it works out is local to the call (Resolution below): each distinct
 // declaration under its language is resolved once, and a question is asked of Canvas once, since checks share questions
-// (the two generics alone, a family's list at the probe size). The checks measure at 16px whatever the declaration's size,
-// except the two sizes of check 4: font matching doesn't read the size, so declarations of several sizes share their
-// questions, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their contexts are their
-// own (`partition`), so no engine measurement shares a Blink word cache with them.
+// (the two generics alone, a family's list at the probe size). The contexts alone are the caller's (index.ts prepare has
+// their lifetime): with a page's list the next call finds its contexts made and asks them its questions again, because an
+// answer is a fact of the fonts the page has, and nothing here could tell that a kept one had changed. The checks measure
+// at 16px whatever the declaration's size, except the two sizes of check 4: font matching doesn't read the size, so
+// declarations of several sizes share their questions, and Blink's totals are exact 16.16 values below 256 px
+// (specs/blink-canvas.md §1.5). Their contexts are their own (`partition`), so no engine measurement shares a Blink word
+// cache with them.
 //
 // The checks measure in the engine's own kind of context (FontChecks.textRendering): in Blink `textRendering =
 // 'optimizeLegibility'`, as engines/blink/contexts.ts styleContexts does. Blink's font cache keys a platform font by the
@@ -111,9 +114,9 @@ const LINEAR_SAMPLE = 'Hamburgefonstiv'
 // CSS Fonts 4 generic family keywords, which name a family only unquoted.
 const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong']
 
-// What one call keeps while it resolves a paragraph's declarations, all of it few enough to compare one by one: the
-// checks' contexts, the questions asked so far with Canvas's answers, and the declarations resolved so far, each under the
-// language its checks measured in.
+// What one call reads and keeps while it resolves a paragraph's declarations: the caller's contexts, which the checks'
+// are made in and found in, and the call's own, few enough to compare one by one: the questions asked so far with Canvas's
+// answers, and the declarations resolved so far, each under the language its checks measured in.
 type Resolution = {
   contexts: Context[]
   asked: { context: Context; text: string; width: number }[]
@@ -291,10 +294,10 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
 }
 
 // The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
-export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks): Paragraph {
+export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, contexts: Context[]): Paragraph {
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
-  const resolution: Resolution = { contexts: [], asked: [], resolved: [] }
+  const resolution: Resolution = { contexts, asked: [], resolved: [] }
   const learn = (font: FontDecl, elementLang: string): FontDecl => {
     const lang = checks.contextTakesLang ? elementLang : ''
     const resolved = resolution.resolved

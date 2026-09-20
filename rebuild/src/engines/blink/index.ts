@@ -110,8 +110,7 @@ function markContinuations(p: BlinkPrepared): void {
 
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps; a plain paragraph gives lines and pieces alone
 // (types.ts BlinkPrepared.inspect).
-export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean): BlinkPrepared {
-  const canvases: Context[] = []
+export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean, canvases: Context[]): BlinkPrepared {
   const zoom = env.devicePixelRatio
   const index = indexContent(paragraph)
   const computed = stylesOf(paragraph, index, zoom)

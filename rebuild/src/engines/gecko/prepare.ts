@@ -403,8 +403,7 @@ function borderAu(px: number, apd: number): number {
 
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps: its gaps go to `sink`, with the measuring only they
 // need (gaps.ts). A plain paragraph has no sink.
-export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean): GeckoPrepared {
-  const contexts: Context[] = []
+export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean, contexts: Context[]): GeckoPrepared {
   const blockStyle = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
   const index = indexContent(paragraph)
