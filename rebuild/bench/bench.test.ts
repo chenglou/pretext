@@ -88,6 +88,15 @@ describe('chat', () => {
     }
   })
 
+  // Counts and times of different days are held against each other, so a change to the generator must not move these sets
+  // by accident (the real set's first form swapped two draws and moved 407 of the mix's 10,000 messages). The digests are
+  // b2d9050's; a change that means to move a set changes them by name.
+  test('the mix and the latin set are the messages every earlier number was taken on', () => {
+    const digest = (set: 'mix' | 'latin'): string => new Bun.CryptoHasher('sha256').update(JSON.stringify(buildChat(set, 2000))).digest('hex').slice(0, 16)
+    expect(digest('mix')).toBe('c81763a2e738cd77')
+    expect(digest('latin')).toBe('b6cc92fda14dd6e9')
+  })
+
   test('the latin set is printable ASCII in one part', () => {
     const latin = buildChat('latin', 2000)
     for (let i = 0; i < latin.length; i++) {

@@ -265,13 +265,13 @@ function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind, real: Re
       break
     }
   }
+  // Picked before the length is drawn, as before the real set came: the mix keeps the messages every earlier number was taken on.
+  const source = kind === 'cjk' ? sources.cjk : kind === 'arabic' ? sources.arabic : kind === 'latin-smart' ? sources.latinSmart : kind === 'app-mixed' ? rng.pick(sources.app) : sources.latin
   // A length anywhere in the class, so lengths don't pile up at the class edges.
   const max = lengths.min + rng.int(lengths.max - lengths.min + 1)
   let text: string
-  if (real === null || kind === 'app-mixed') {
-    const source = kind === 'cjk' ? sources.cjk : kind === 'arabic' ? sources.arabic : kind === 'latin-smart' ? sources.latinSmart : kind === 'app-mixed' ? rng.pick(sources.app) : sources.latin
-    text = chatSlice(rng, source, lengths.min, max)
-  } else {
+  if (real === null || kind === 'app-mixed') text = chatSlice(rng, source, lengths.min, max)
+  else {
     switch (kind) {
       case 'cjk': text = realSlice(real, 'cjk', lengths.min, max); break
       case 'arabic': text = realSlice(real, 'arabic', lengths.min, max); break
