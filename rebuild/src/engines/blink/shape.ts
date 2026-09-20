@@ -8,11 +8,12 @@
 // integers; letter spacing is the context's.
 //
 // A group's advances come from one Canvas call while the total is below 256 zoomed px, where Canvas totals are exact 16.16
-// values (blink-canvas §1.5). A wider group is halved at an offset the pair test calls safe (blink-gaps §3.6 L4). The
-// paragraph position of an offset k inside a piece is the piece prefix measured alone plus the adjustment HarfBuzz made
-// between the clusters on both sides of k, d = R(xy) − R(x) − R(y), the part the glyph before k carries: all of it as GPOS
-// first-glyph pair values put it, or d >> 1 where the kern and kerx pair machine applies it (blink-gaps §3.4-§3.5,
-// FontFacts.pairKerning; unsafe-to-break at line edges where the fact isn't given).
+// values (blink-canvas §1.5). A wider group is cut near its middle, beside a space where it has one, and its pieces add the
+// adjustment measured across each cut (addPieces, measureGroups; blink-gaps §3.6 L4). The paragraph position of an offset
+// k inside a piece is the piece prefix measured alone plus the adjustment HarfBuzz made between the clusters on both sides
+// of k, d = R(xy) − R(x) − R(y), the part the glyph before k carries: all of it as GPOS first-glyph pair values put it, or
+// d >> 1 where the kern and kerx pair machine applies it (blink-gaps §3.4-§3.5, FontFacts.pairKerning; unsafe-to-break at
+// line edges where the fact isn't given).
 //
 // Every shaping call carries up to 5 code points of text_content on each side as context
 // (case_mapping_harfbuzz_buffer_filler.cc:32-43, hb-buffer.hh:109-111), and Arabic joining reads it
@@ -28,7 +29,7 @@ import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
 import { isSegmentEdge } from './emoji.js'
-import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
+import { cutAdjustment, floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
@@ -541,10 +542,9 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-// `whole` is the measured total of [from, to), which the caller has or measures.
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number): number {
   const p = sh.p
-  if (k <= from || k >= to) return 0
+  let whole = measure16(sh, g, from, to, lo, hi)
   let a = from
   let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
@@ -574,13 +574,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
 export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi)
   const cuts = group.cuts
   let i = 0
   while (i + 1 < cuts.length && cuts[i + 1]! <= k) i++
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
   const to = cuts[i + 1] ?? group.end
-  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
+  return windowAdjust16(sh, g, k, from, to, lo, hi)
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -602,22 +602,15 @@ export function positionAdjust16(sh: Shaper, g: number, k: number, lo: number, h
   return pairAdjust16(sh, g, k, lo, hi)
 }
 
-// Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
-// whose measured total is `whole`.
-function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number): boolean {
-  const p = sh.p
-  const group = p.groups[g]!
-  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end, whole) === 0 &&
-    pairAdjust16(sh, g, k, group.start, group.end) === 0
-}
-
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
 // syllable-based shapers build syllables only from their script's characters (hb-ot-shaper-myanmar-machine.rl,
-// hb-ot-shaper-use-machine.rl), so a cut beside a space keeps every lookup but pair kerning inside one piece, and the pair
-// adjustment adds that (blink-gaps §3.2, §3.6 L4). A cut inside a word can split a syllable whose clusters the pair test
-// sees one at a time (Myanmar medials and stacked consonants). The cut is the offset nearest the middle beside a space
-// that passes the safe test, else any offset that passes it, else the nearest cluster boundary, reported as
-// unsafe-to-break. Every piece's end goes to `cuts` and its measured total to `totals`, in order.
+// hb-ot-shaper-use-machine.rl), so a cut beside a space keeps every lookup but pair kerning inside one piece, and the
+// adjustment measureGroups adds at the cut holds that (blink-gaps §3.2, §3.6 L4). A cut inside a word can split a syllable
+// whose clusters the pair window sees one at a time (Myanmar medials and stacked consonants). The cut is the offset nearest
+// the middle beside a space where glyph clusters part and no letters join, else the nearest such offset, else the nearest
+// grapheme boundary. The search asks Canvas nothing: whether the adjustment added at a cut is all the shaping did across it
+// is the cut's condition, which an inspected paragraph alone asks about (gaps.ts cutAdjustment). Every piece's end goes to
+// `cuts` and its measured total to `totals`, in order.
 function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[]): void {
   const p = sh.p
   const group = p.groups[g]!
@@ -629,18 +622,16 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   }
   const mid = a + ((b - a) >> 1)
   let spaceCut = -1
-  let safeCut = -1
+  let clusterCut = -1
   let boundary = -1
   for (let d = 0; spaceCut < 0 && (mid - d > a || mid + d < b); d++) {
     for (let side = 0; side < 2 && spaceCut < 0; side++) {
       const c = side === 0 ? mid - d : mid + d
       if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
       if (boundary < 0) boundary = c
-      const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
-      if (!besideSpace && safeCut >= 0) continue
-      if (!passesSafeTest(sh, g, c, a, b, whole)) continue
-      if (besideSpace) spaceCut = c
-      else safeCut = c
+      if (!isClusterBoundary(p, c) || joinsAcross(p, c, group.start, group.end)) continue
+      if ((p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)) spaceCut = c
+      else if (clusterCut < 0) clusterCut = c
     }
   }
   if (boundary < 0) {
@@ -649,11 +640,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
     totals.push(whole)
     return
   }
-  let k = spaceCut >= 0 ? spaceCut : safeCut
-  if (k < 0) {
-    k = boundary
-    unsafeCut(sh.gaps, p, g, k)
-  }
+  const k = spaceCut >= 0 ? spaceCut : clusterCut >= 0 ? clusterCut : boundary
   addPieces(sh, g, a, k, cuts, totals)
   addPieces(sh, g, k, b, cuts, totals)
 }
@@ -676,6 +663,7 @@ export function measureGroups(sh: Shaper): void {
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window).
     for (let i = 1; i < cuts.length - 1; i++) {
       const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
+      cutAdjustment(sh.gaps, sh, g, cuts[i]!, d)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
     }
   }
