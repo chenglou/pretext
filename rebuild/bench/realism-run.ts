@@ -4,6 +4,8 @@
 // runs at several settings can take turns inside one exclusive stretch.
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
 //     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
+// --page=store serves store-page.ts instead (the store prototype's counts and times, one list of contexts a pass); --passes=0
+//   leaves its timed part out.
 // --device-scale-factor: Chrome's --force-device-scale-factor=N at launch. A forced ratio is a real one: Blink lays out at
 //   it, where a DevTools-emulated one lays out at zoom 1 (rebuild/probes/blink-probes.ts). In Firefox the profile's
 //   layout.css.devPixelsPerPx, which sets the app units of a device pixel as a screen's ratio does.
@@ -19,6 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/browser-build.ts'
 import { buildChat, buildLanguages, CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_STYLE, CHAT_WIDTH } from './cases.ts'
 import type { RealismMessage, RealismPlan, RealismResult } from './realism-page.ts'
+import type { StoreResult } from './store-page.ts'
 
 const BENCH_DIR = import.meta.dir
 const REPO = resolve(BENCH_DIR, '../..')
@@ -38,6 +41,8 @@ const browser = args.get('browser')
 if (browser !== 'chrome' && browser !== 'firefox' && browser !== 'webkit-host') throw new Error('--browser=chrome|firefox|webkit-host')
 const sets = (args.get('sets') ?? 'mix,latin,real').split(',') as SetId[]
 for (let i = 0; i < sets.length; i++) if (!SETS.includes(sets[i]!)) throw new Error(`Unknown set ${sets[i]}`)
+const page = args.get('page') ?? 'realism'
+if (page !== 'realism' && page !== 'store') throw new Error('--page=realism|store')
 const messages = Number(args.get('messages') ?? 10000)
 const passes = Number(args.get('passes') ?? 3)
 const scaleFactor = args.get('device-scale-factor') ?? null
@@ -70,7 +75,7 @@ const HTML = `<!doctype html><html lang="${CHAT_STYLE.lang}"><head><meta charset
 let settle: { resolve: (result: RealismResult) => void; reject: (error: Error) => void } | null = null
 const completion = new Promise<RealismResult>((resolve, reject) => { settle = { resolve, reject } })
 
-const built = await Bun.build({ entrypoints: [join(BENCH_DIR, 'realism-page.ts')], target: 'browser', format: 'esm', minify: false })
+const built = await Bun.build({ entrypoints: [join(BENCH_DIR, `${page}-page.ts`)], target: 'browser', format: 'esm', minify: false })
 if (!built.success) throw new Error(built.logs.map(String).join('\n'))
 const bundle = await built.outputs[0]!.text()
 
@@ -274,7 +279,17 @@ const report = {
 }
 mkdirSync(dirname(outPath), { recursive: true })
 writeFileSync(outPath, `${JSON.stringify(report, null, 1)}\n`)
-if (result !== null) {
+if (result !== null && page === 'store') {
+  const stored = result as unknown as StoreResult
+  for (let s = 0; s < stored.sets.length; s++) {
+    const set = stored.sets[s]!
+    const seconds = (ms: number): string => (ms / 1000).toFixed(3)
+    console.log(`[store] ${browser} ${set.id}: scratch ${set.scratchMs.map(seconds).join(', ')} s; kept ${seconds(set.keepMs)} s, 3 widths ${seconds(set.resizeMs)} s, again ${seconds(set.resizeAgainMs)} s; `
+      + `a message ${(set.scratch.calls / set.messages).toFixed(1)} calls, a layout at a new width ${(set.resize.calls / set.messages / 3).toFixed(1)}, again ${(set.resizeAgain.calls / set.messages / 3).toFixed(1)}; `
+      + `stored ${set.stored.widths} widths, ${set.stored.inkBoxes} ink boxes; ${set.lines} lines, hashes ${set.scratchRangesHash} ${set.resizeRangesHash}`)
+  }
+  console.log(`[store] spin ${stored.spinMs.start.toFixed(1)} / ${stored.spinMs.end.toFixed(1)} ms; load ${loadStart.toFixed(1)} to ${loadavg()[0]!.toFixed(1)}; ${outPath}`)
+} else if (result !== null) {
   for (let s = 0; s < result.sets.length; s++) {
     const set = result.sets[s]!
     console.log(`[realism] ${browser} dpr ${result.devicePixelRatio} ${set.id}: ${set.scratchMs.map(ms => (ms / 1000).toFixed(3)).join(', ')} s; a message ${(set.measureTextCalls / set.messages).toFixed(1)} calls, ${(set.unitsSent / set.messages).toFixed(0)} units sent, ${(set.contexts / set.messages).toFixed(1)} contexts; ${set.lines} lines`)

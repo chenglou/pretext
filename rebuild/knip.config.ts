@@ -19,7 +19,7 @@ const config: KnipConfig = {
     'rebuild/probes/{runner,blink-verdicts,gecko-verdicts,webkit-verdicts-crosscheck}.ts',
     // Bundled into browser pages by their drivers.
     'rebuild/lab/page.ts', 'rebuild/lab/predictor.ts', 'rebuild/lab/baselines/*.ts', 'rebuild/tests/noop-predictor.ts',
-    'rebuild/bench/page.ts', 'rebuild/bench/realism-page.ts', 'rebuild/probes/page.ts',
+    'rebuild/bench/page.ts', 'rebuild/bench/realism-page.ts', 'rebuild/bench/store-page.ts', 'rebuild/probes/page.ts',
     // Probe sets, loaded by path through runner.ts --probes=<file>.
     'rebuild/probes/*.ts',
   ],
