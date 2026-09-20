@@ -266,29 +266,36 @@ function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: nu
 
 // The line ranges of a plain paragraph: the lines with a line box, which are the lines a LinesPrediction lists (types.ts).
 // Nothing is inspected, so this is the path an application runs, with the Canvas questions of that path alone.
-function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = []): LinesPrediction {
+// `otherWidthsFirst` fills the paragraph at those widths before, with the same calls, and keeps nothing of them, as
+// layoutParagraph's does: a plain paragraph keeps what its lines measured (Blink's groups, by offset), so what another
+// width measured answers for this one.
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = [], otherWidthsFirst: readonly number[] = []): LinesPrediction {
   countCanvasWork()
   const callsBefore = canvasWork.calls
   const prepared = prepare(paragraph, env, false)
-  const lines: PredictionLine[] = []
-  let row = 0
-  for (let start = firstLine(prepared); start !== null;) {
-    const slot = row < insets.length ? insets[row]! : FULL_WIDTH
-    const filled = fillLine(prepared, start, { width, left: slot.left, right: slot.right })
-    switch (filled.kind) {
-      case 'below-floats':
-        row++
-        break
-      case 'line':
-        // Read as a painting application reads them, though only the range is kept.
-        linePieces(prepared, filled.line)
-        if (filled.hasLineBox) {
-          lines.push({ start: filled.start, end: filled.end })
+  const widths = [...otherWidthsFirst, width]
+  let lines: PredictionLine[] = []
+  for (let w = 0; w < widths.length; w++) {
+    lines = []
+    let row = 0
+    for (let start = firstLine(prepared); start !== null;) {
+      const slot = row < insets.length ? insets[row]! : FULL_WIDTH
+      const filled = fillLine(prepared, start, { width: widths[w]!, left: slot.left, right: slot.right })
+      switch (filled.kind) {
+        case 'below-floats':
           row++
-        }
-        break
+          break
+        case 'line':
+          // Read as a painting application reads them, though only the range is kept.
+          linePieces(prepared, filled.line)
+          if (filled.hasLineBox) {
+            lines.push({ start: filled.start, end: filled.end })
+            row++
+          }
+          break
+      }
+      start = filled.next
     }
-    start = filled.next
   }
   return { lines, measureLog: canvasWork.calls - callsBefore }
 }
@@ -322,13 +329,15 @@ type PlainPredictor = {
   paint: (c: Case, prediction: LinesPrediction, host: HTMLElement) => null
 }
 
-export function makePlainPredictor(factsFor: FactsFor): PlainPredictor {
+// `otherWidthFactors`: see plainLines' `otherWidthsFirst`; the widths are these factors of the case's.
+export function makePlainPredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = []): PlainPredictor {
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
       if ('error' in e) return e
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
-      return plainLines(layoutInput(c, e.engine, factsFor), e, c.paragraph.width, c.inline?.lineSlots ?? [])
+      const width = c.paragraph.width
+      return plainLines(layoutInput(c, e.engine, factsFor), e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor))
     },
     paint: () => null,
   }

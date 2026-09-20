@@ -16,10 +16,11 @@ doesn't depend on the old library in `src/`.
   taken on the page's Canvas classes with every argument passed through untouched. It also keeps, per line, what the
   library's painter takes (the pieces, the slot with its width, the line box flag), and pairs them with the engine's
   painting rules where it dispatches: the hook's `painter` (`types.ts` `LayoutPrediction`), which `paint()` and `limits()`
-  call and no row holds. Two more predictors come from it
+  call and no row holds. Three more predictors come from it
   (`baselines/`): `plain-predictor.ts` returns line ranges from a paragraph prepared plain, the path an application runs,
-  and `other-widths-first-predictor.ts` fills every prepared paragraph at half and at one and a half times the case's width
-  before the case's own ("Prediction hook").
+  `other-widths-first-predictor.ts` fills every prepared paragraph at half and at one and a half times the case's width
+  before the case's own, and `plain-other-widths-first-predictor.ts` does the same on a paragraph prepared plain
+  ("Prediction hook").
 - `port-measure.ts`: how an observation port measures live, shared by the page and the offline replay.
 - `rows.ts`: reading row files, plain or compressed (`<name>-rows.ndjson` or `.zst`); every tool that reads rows goes through
   it, and `rows.test.ts` checks that none reads them its own way.
@@ -1350,7 +1351,7 @@ A predictor swapped in with `--predictor` may return line ranges alone, `{ lines
 (`baselines/main-predictor.ts` does, and `baselines/plain-predictor.ts`, whose lines have no width). The page records those
 as they are and doesn't paint. Rows recorded before the observation ports, 2026-09-16 and earlier, carry that shape too.
 
-Two predictors hold the library's other paths against the usual run in a browser (`browser-sets.ts --predictor=<file>`,
+Three predictors hold the library's other paths against the usual run in a browser (`browser-sets.ts --predictor=<file>`,
 then `rebuild/tests/compare-sets.ts <its run> <the usual run>`):
 - `baselines/plain-predictor.ts`, with `--prediction=line-ranges`: the line ranges of a paragraph prepared plain must be the
   inspected run's, and native observations that differ are read one by one, as history effects of a smaller set of Canvas
@@ -1358,6 +1359,10 @@ then `rebuild/tests/compare-sets.ts <its run> <the usual run>`):
 - `baselines/other-widths-first-predictor.ts`, with `--prediction=without-measure`: one prepared paragraph serves any width,
   and Chrome keeps the first shaping of a word per canvas, so the layouts after two other widths must be the usual run's;
   only the counts of Canvas work differ.
+- `baselines/plain-other-widths-first-predictor.ts`, with `--prediction=line-ranges`: a plain Blink paragraph keeps by
+  offset what its lines measured (DESIGN.md §4.6), so at the case's width it reads back what two other widths asked of
+  Canvas, and its line ranges must still be the inspected run's. The inspected path's predictor above reads back in
+  `linePieces` alone.
 
 ## Font facts
 
