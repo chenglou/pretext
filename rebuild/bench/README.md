@@ -305,7 +305,7 @@ Most phones have 3 and most office monitors 1, and what the rebuild asks of Canv
 measures at the zoomed size, a Canvas total is an exact 16.16 value only below 256 px, and the port cuts a wider group into
 pieces (`engines/blink/shape.ts` `addPieces`), so a message has two to three times the pieces at 3 that it has at 1, and at 1
 check 4 isn't asked at all. `measureText` calls a message from scratch in Chrome 153 over the headline's 10,000 messages
-(`realism-run.ts`, 2026-09-19): 233 (mix) and 211 (ASCII) at a ratio of 1, 336 and 311 at 2, 427 and 400 at 3, with 4.8, 11.2
+(`realism-run.ts`, 2026-09-19): 233 (mix) and 211 (ASCII) at a ratio of 1, 336 and 311 at 2, 426 and 400 at 3, with 4.8, 11.2
 and 11.2 contexts; at 2.625, which many Android phones report (a Galaxy A55: 1080 px over a viewport of 412), 388 and 365. The 10,000 messages from scratch on a quiet machine, the median of six passes in three launches a ratio
 taking turns: 3.06, 4.60 and 5.37 s (mix) and 2.69, 3.92 and 4.67 s (ASCII) at 1, 2 and 3. Firefox's calls are the same at 1 and 3. `--device-scale-factor=3` runs any row at a phone's ratio;
 give the headline at the ratio it is claimed for.
