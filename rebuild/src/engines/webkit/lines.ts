@@ -458,8 +458,8 @@ function handleTrailingHangingContent(line: Line, lineWidth: number, isLastForma
 type ContentRun<Item extends ContentItem = ContentItem> = { item: Item; offset: number; contentWidth: number; shapingBoundary: 'start' | 'end' | null }
 type TextContentRun = ContentRun<WebKitTextItem>
 
-type Content = {
-  runs: ContentRun[]
+type Content<Item extends ContentItem = ContentItem> = {
+  runs: ContentRun<Item>[]
   logicalWidth: number
   leadingTrimmableWidth: number
   trailingTrimmableWidth: number
@@ -474,7 +474,7 @@ type Content = {
   hasTextContentSpanningBoxes: boolean
 }
 
-function newContent(): Content {
+function newContent<Item extends ContentItem = ContentItem>(): Content<Item> {
   return {
     runs: [], logicalWidth: 0, leadingTrimmableWidth: 0, trailingTrimmableWidth: 0, hangingContentWidth: null, hasTextContent: false,
     isFullyTrimmable: false, hasTrailingWordSeparator: false, hasShapedContent: false, lastTextRunIndex: null, lastInlineBoxIndex: null,
@@ -993,15 +993,15 @@ function revertToLastNonOverflowingItem(b: Builder): number {
   return 0
 }
 
-// TOS:343-421
-function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
+// TOS:343-421. The simple builder's candidate content is runs of text alone.
+function handleOverflowingTextContent(b: Builder, c: Content<WebKitTextItem>): SimpleResult {
   const L = b.L
   const available = simpleAvailableWidth(b)
   let r = result('keep', false)
   if (c.logicalWidth > available) r = processInlineContent(L, c, lineStatus(b.line, available, hasContent(b.line), b.wrapOpportunityList.length > 0))
   switch (r.action) {
     case 'keep':
-      for (let i = 0; i < c.runs.length; i++) appendTextFast(L, b.line, c.runs[i]!.item as WebKitTextItem, c.runs[i]!.contentWidth)
+      for (let i = 0; i < c.runs.length; i++) appendTextFast(L, b.line, c.runs[i]!.item, c.runs[i]!.contentWidth)
       if (hasContent(b.line)) b.wrapOpportunityList.push(c.runs[c.runs.length - 1]!.item)
       return simpleResult(r.isEndOfLine, c.runs.length)
     case 'wrap':
@@ -1011,10 +1011,10 @@ function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
       return simpleResult(true)
     case 'break': {
       const t = r.partialTrailingContent
-      for (let i = 0; i < t.trailingRunIndex; i++) appendTextFast(L, b.line, c.runs[i]!.item as WebKitTextItem, c.runs[i]!.contentWidth)
+      for (let i = 0; i < t.trailingRunIndex; i++) appendTextFast(L, b.line, c.runs[i]!.item, c.runs[i]!.contentWidth)
       const committed = t.trailingRunIndex + 1
       const trailing = c.runs[t.trailingRunIndex]!
-      const item = trailing.item as WebKitTextItem
+      const item = trailing.item
       if (t.partialRun === null) {
         appendTextFast(L, b.line, item, trailing.contentWidth)
         return simpleResult(true, committed)
@@ -1042,7 +1042,7 @@ function simpleCommitCandidateContent(b: Builder, start: number, end: number, lo
     if (hasContent(b.line)) b.wrapOpportunityList.push(items[end - 1] as WebKitTextItem)
     return simpleResult(false, end - start)
   }
-  const c = newContent()
+  const c = newContent<WebKitTextItem>()
   let index = start
   if (hasLeadingPartialContent) {
     appendTextContent(L, c, b.partialLeadingTextItem!, measuredItemWidth(L, b.partialLeadingTextItem!, lastRunLogicalRight(b.line)))
