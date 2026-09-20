@@ -1238,7 +1238,9 @@ function isAtSoftWrapOpportunity(L: Layout, previous: WebKitTextItem | AtomicIte
 // InlineFormattingUtils::nextWrapOpportunity (IFU:456-544)
 function nextWrapOpportunity(b: Builder, startIndex: number): number {
   const items = b.L.p.items
-  let previousIndex: number | null = null
+  // The text or atomic item before, and where it sits.
+  let previous: WebKitTextItem | AtomicItem | null = null
+  let previousIndex = startIndex
   for (let index = startIndex; index < b.rangeEnd; index++) {
     const item = items[index]!
     if (isLineBreakItem(item) || item.kind === 'word-break-opportunity') {
@@ -1246,11 +1248,11 @@ function nextWrapOpportunity(b: Builder, startIndex: number): number {
       return index
     }
     if (item.kind === 'inline-box-start' || item.kind === 'inline-box-end') continue
-    if (previousIndex === null) {
+    if (previous === null) {
+      previous = item
       previousIndex = index
       continue
     }
-    const previous = items[previousIndex] as WebKitTextItem | AtomicItem
     if (isAtSoftWrapOpportunity(b.L, previous, item)) {
       if (previousIndex + 1 === index && (previous.kind !== 'text' || item.kind !== 'text')) return index
       // The opportunity sits at the first inline box start that is still open at `index` (:523-541).
@@ -1262,6 +1264,7 @@ function nextWrapOpportunity(b: Builder, startIndex: number): number {
       }
       return stack.length === 0 ? index : stack[0]!
     }
+    previous = item
     previousIndex = index
   }
   return b.rangeEnd
