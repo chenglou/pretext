@@ -43,7 +43,7 @@ function searchScriptProps(cp: number): number {
 
 // Both values of every code point below U+3000 (the scripts written with letters, and General Punctuation), read by
 // index. Every string the port measures reads several: the joining types at its two edges, the marks beside an offset,
-// the script of its first characters. Made from the runs when the module loads, in under a millisecond, and kept like
+// the script of its first characters. Made from the runs when the module loads, in about a millisecond, and kept like
 // them: 72 KB.
 const FLAT = 0x3000
 const flatProps = new Uint16Array(FLAT)
