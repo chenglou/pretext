@@ -1103,12 +1103,12 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
   const isAtSoftWrapOpportunityOrContentEnd = (item: WebKitTextItem): boolean => {
     if (item.isWhitespace) return true
     const next = items[nextIndex]
-    if (nextIndex >= b.rangeEnd || next === undefined || isLineBreakItem(next)) return true
-    const nextText = next as WebKitTextItem
-    if (nextText.isWhitespace) return hasWrapOpportunityBeforeWhitespace
-    if (item.box === nextText.box) return true
+    // The next item is a line break where it isn't text, as in the loop below.
+    if (nextIndex >= b.rangeEnd || next === undefined || next.kind !== 'text') return true
+    if (next.isWhitespace) return hasWrapOpportunityBeforeWhitespace
+    if (item.box === next.box) return true
     const prevBox = L.p.boxes[item.box]!
-    const nextBox = L.p.boxes[nextText.box]!
+    const nextBox = L.p.boxes[next.box]!
     return breakInBetween(L, prevBox, nextBox)
   }
   const process = (): boolean => {
@@ -1149,7 +1149,8 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
   const items = L.p.items
   let candidateEnd = b.rangeStart
   let candidateWidth = 0
-  let trailingLineBreakIndex: number | null = null
+  // The line break that ends the content, which is the item before nextIndex.
+  let trailingLineBreak: LineBreakItem | null = null
   let nextIndex = b.rangeStart
   let isEndOfLine = false
   while (!isEndOfLine) {
@@ -1157,16 +1158,17 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
     if (item.kind === 'text') {
       candidateWidth = f32(candidateWidth + measuredItemWidth(L, item, candidateWidth))
       candidateEnd++
-    } else {
-      trailingLineBreakIndex = nextIndex
+    } else if (isLineBreakItem(item)) {
+      // The source tests for the line break too, and its other branch is ASSERT_NOT_REACHED (TOS:283-288).
+      trailingLineBreak = item
     }
     nextIndex++
     b.measuredEnd = Math.max(b.measuredEnd, nextIndex)
-    isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreakIndex !== null
+    isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreak !== null
   }
-  if (trailingLineBreakIndex !== null && candidateEnd === b.rangeStart) {
-    appendLineBreak(b.line, items[trailingLineBreakIndex] as LineBreakItem)
-    const end = { index: trailingLineBreakIndex + 1, offset: 0 }
+  if (trailingLineBreak !== null && candidateEnd === b.rangeStart) {
+    appendLineBreak(b.line, trailingLineBreak)
+    const end = { index: nextIndex, offset: 0 }
     return { end, overflowLogicalWidth: null }
   }
   const r = simpleCommitCandidateContent(b, b.rangeStart, candidateEnd, candidateWidth)
