@@ -321,12 +321,11 @@ function readTicket(path: string): Ticket | null {
   }
 }
 
-
 // Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
-// worktree, whose reports and logs it would write over; says who holds the turn while it waits. True when it waited. The ticket is a hard link to a finished draft, which fails when the
-// name exists: a ticket holds its run from the moment it exists, two runs never get one number, and the numbers only go
-// up, since a run removes dead tickets below its own only. So every ticket below a run's own was there before it, and
-// nothing is ever taken over.
+// worktree, whose reports and logs it would write over; says who holds the turn while it waits. True when it waited.
+// The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
+// moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
+// its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
 export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
   mkdirSync(dir, { recursive: true })
   const draft = join(dir, `draft-${ticket.pid}`)
