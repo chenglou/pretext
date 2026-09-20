@@ -86,12 +86,16 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // or lang changed and back find the old font group in the context's own cache (CanvasRenderingContext2D.cpp:4409-4478;
 // probes/contexts-start-up.ts S1, S2). That gives back what the list bought Firefox: ×0.92 on the chat mix and ×0.75 on
 // plain ASCII (research/PERF-LIFETIME.md).
-// Invalidated in WebKit alone, by one thing a page does itself: adding a FontFace that has already loaded to
-// document.fonts, which is load() first and add() after, or a FontFace made from bytes. WebKit's kept context stays on
-// the fallback then, so the page starts a new list where it prepares its paragraphs again. A FontFace added before it
-// loads and an @font-face rule reach a kept WebKit context by themselves, and every font change reaches Chrome's, whose
-// Font asks the page's font selector for its fallback list again once that list was marked invalid (font.cc:71-77,
-// font_fallback_map.cc:29-67; probes/contexts-start-up.ts W1 to W8, probes/contexts-font-load.ts).
+// Invalidated in WebKit alone, by one thing a page does itself: adding a FontFace that has already loaded (load() first
+// and add() after, or a FontFace made from bytes) to a document.fonts that holds no face yet. WebKit's font cache leaves
+// the page's font set out of its key while the set is empty, and the set tells a context's font about a new face before
+// the face is in it, so the kept context asks again and gets the fonts it had (FontCascadeCache.cpp:104-115,
+// CSSFontSelector.cpp:526-539, CSSFontFaceSet.cpp:203-209). It stays on the fallback until the set changes again, so a
+// page that adds loaded faces starts a new list after it, where it prepares its paragraphs again. A FontFace added
+// before it loads, an @font-face rule and a face added to a set that holds one reach a kept WebKit context by
+// themselves. Every font change reaches Chrome's, whose Font asks the page's font selector for its fallback list again
+// once that list was marked invalid (font.cc:71-77, font_fallback_map.cc:29-67). probes/contexts-start-up.ts W1 to W10
+// and tools/contexts-start-up-probe.ts L2 have the routes, probes/contexts-font-load.ts the first of them.
 // Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
 // partition: about 8 contexts per declaration in Blink, 3 in WebKit and Gecko), and by MAX_CONTEXTS: settings that never
 // repeat (an animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so
