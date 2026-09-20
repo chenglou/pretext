@@ -8,9 +8,10 @@
 // characters of one shaping call is a stand-in (limits.ts positionLimit).
 import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
+import { raw16Of } from './contexts.js'
 import { isMark } from './props.js'
 import { isSegmentEdge } from './emoji.js'
-import type { BlinkPrepared } from './types.js'
+import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
 
 // What the facts say about the boundary before a text_content unit: nothing (0); no glyph cluster covers it; a ligature's
 // cluster covers it; a listed ligature may cover it (one the facts don't settle: not formed in every context tried, not
@@ -18,6 +19,78 @@ import type { BlinkPrepared } from './types.js'
 export const LIGATURE_NONE = 1
 export const LIGATURE_MERGED = 2
 export const LIGATURE_UNCERTAIN = 3
+// No fact speaks, and the port takes the letters for one glyph cluster by default (assumedClusters): read as merged
+// (shape.ts isClusterBoundary), and never as a fact, so a line that can break between any two glyph clusters reports
+// glyph-clusters over it (gaps.ts) and a position inside it is a stand-in (limits.ts positionLimit).
+export const LIGATURE_ASSUMED = 4
+
+// The study's switch (branch x-lam-alef): what a boundary no ligature fact settles is taken for. Only the study's
+// predictors write it (lab/baselines/cluster-default-*.ts); it is no input of the library.
+// - 'letters': every letter is its own glyph cluster, which is what the port did before the study;
+// - 'lam-alef': lam and the alef after it are one cluster, with combining marks between them or not. The set is the four
+//   lam-alef ligatures Unicode encodes (U+FEF5 to U+FEFC: lam U+0644 before alef U+0622, U+0623, U+0625 and U+0627), which
+//   is HarfBuzz's own table for a font without GSUB (hb-ot-shaper-arabic-table.hh ligature_table);
+// - 'encoded-ligatures': those, and where letter spacing is 0 (it turns liga off, font_features.cc:54-86) the Latin
+//   ligatures Unicode encodes at U+FB00 to U+FB04 (ff, fi, fl, ffi, ffl) and lam lam heh;
+// - 'canvas-lam-alef': 'lam-alef' where the style's Canvas context measures lam, alef otherwise than lam, U+200D, alef
+//   (the Arabic shaper's ligating features don't skip a U+200D, hb-ot-shaper-arabic.cc:209-231), else 'letters'.
+export type ClusterDefault = 'letters' | 'lam-alef' | 'encoded-ligatures' | 'canvas-lam-alef'
+export const study: { clusterDefault: ClusterDefault } = { clusterDefault: 'letters' }
+
+const LAM = 0x644
+const HEH = 0x647
+const LATIN_LIGATURES = ['ffi', 'ffl', 'ff', 'fi', 'fl']
+
+function isLigatingAlef(cp: number): boolean {
+  return cp === 0x622 || cp === 0x623 || cp === 0x625 || cp === 0x627
+}
+
+// Whether Canvas measures lam, alef otherwise than lam, U+200D, alef in the style's context: more than a unit of
+// 1/65536 px a glyph apart (Blink truncates every glyph's advance to one, skia_text_metrics.cc:207-211), asked once a style.
+function canvasLigatesLamAlef(st: BlinkStyle): boolean {
+  if (st.canvasLigatesLamAlef !== null) return st.canvasLigatesLamAlef
+  const joined = raw16Of(st.contexts, st.contexts.rtl, String.fromCharCode(LAM, 0x627))
+  const apart = raw16Of(st.contexts, st.contexts.rtl, String.fromCharCode(LAM, 0x200d, 0x627))
+  return st.canvasLigatesLamAlef = Math.abs(joined - apart) > 2 * st.contexts.scale
+}
+
+// The end of the base characters `count` positions after text offset `at`, with the combining marks before each skipped
+// (a ligature lookup that ignores marks ligates over them, and ligate_input merges their clusters in,
+// hb-ot-layout-gsubgpos.hh:1500-1560); -1 where one of them isn't `wanted`'s.
+function basesEnd(text: string, at: number, limit: number, wanted: readonly ((cp: number) => boolean)[]): number {
+  for (let w = 0; w < wanted.length; w++) {
+    while (at < limit && isMark(text.codePointAt(at)!)) at += text.codePointAt(at)! > 0xffff ? 2 : 1
+    if (at >= limit || !wanted[w]!(text.charCodeAt(at))) return -1
+    at++
+  }
+  return at
+}
+
+// Marks the boundaries inside the sequences of group [start, end) that the study's default takes for one glyph cluster,
+// where no fact speaks about the boundary before the sequence's last letter.
+function assumedClusters(p: BlinkPrepared, group: BlinkGroup, st: BlinkStyle): void {
+  const variant = study.clusterDefault
+  if (variant === 'letters') return
+  const text = p.text
+  const out = p.ligature
+  const others = variant === 'encoded-ligatures' && st.letterSpacing === 0
+  for (let k = group.start; k < group.end; k++) {
+    const unit = text.charCodeAt(k)
+    let end = -1
+    if (unit === LAM) {
+      if (others) end = basesEnd(text, k + 1, group.end, [cp => cp === LAM, cp => cp === HEH])
+      if (end < 0) end = basesEnd(text, k + 1, group.end, [isLigatingAlef])
+      if (end >= 0 && variant === 'canvas-lam-alef' && !canvasLigatesLamAlef(st)) end = -1
+    } else if (unit === 0x66 && others) {
+      for (let n = 0; n < LATIN_LIGATURES.length && end < 0; n++) if (text.startsWith(LATIN_LIGATURES[n]!, k) && k + LATIN_LIGATURES[n]!.length <= group.end) end = k + LATIN_LIGATURES[n]!.length
+    }
+    if (end < 0) continue
+    let unsettled = true
+    for (let i = k + 1; i < end; i++) if (out[i] !== 0) unsettled = false
+    if (unsettled) out.fill(LIGATURE_ASSUMED, k + 1, end)
+    k = end - 1
+  }
+}
 
 // hb_ot_tags_from_language for a locale of one subtag (hb-ot-tag.cc:322-420): whether `tag` is one of the language's tags,
 // in the generated records, [code, tag, ...] sorted by code.
@@ -170,7 +243,10 @@ export function fontFactsOfText(p: BlinkPrepared): void {
     const group = p.groups[g]!
     const style = p.styles[group.style]!
     const fonts = style.font.facts.fonts
-    if (fonts === undefined) continue
+    if (fonts === undefined) {
+      assumedClusters(p, group, style)
+      continue
+    }
     const locale = style.locale ?? p.env.uiLanguage
     // The glyph clusters before ligatures: grapheme starts HarfBuzz doesn't mark a continuation.
     const starts: number[] = []
@@ -239,5 +315,6 @@ export function fontFactsOfText(p: BlinkPrepared): void {
       }
       c = next
     }
+    assumedClusters(p, group, style)
   }
 }

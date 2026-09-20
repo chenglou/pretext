@@ -75,6 +75,9 @@ export type BlinkStyle = ComputedStyle & {
   // Whether Canvas shapes the style's strings word by word (Font::CanShapeWordByWord), measured when a 16-bit string first
   // holds a word edge; null until then (shape.ts canvasSplitsWords).
   canvasSplitsWords: boolean | null
+  // The study's Canvas test of lam-alef (ligatures.ts canvasLigatesLamAlef), asked when a lam-alef is first met under the
+  // 'canvas-lam-alef' default; null until then.
+  canvasLigatesLamAlef: boolean | null
   // HanKerning::FontData, measured in prepare for a style with a shaping group HanKerning may apply to; null for the others.
   hanKerning: HanKerningFontData | null
 }
@@ -178,7 +181,7 @@ export type BlinkPrepared = {
   // tag character (hb-ot-shape.cc:470-546, hb-ot-layout.hh:247 at harfbuzz dfdc088c), or the trail unit of a surrogate pair.
   continuations: Uint8Array
   // Per text_content offset, what the font declaration's ligature facts say about a glyph cluster over the boundary before
-  // it (ligatures.ts): unknown, none, merged into a ligature's cluster, or uncertain.
+  // it (ligatures.ts): unknown, none, merged into a ligature's cluster, uncertain, or merged by the port's default.
   ligature: Uint8Array
   // Per text_content unit of a shaping group, the listed family that draws its glyph cluster by the declaration's coverage
   // facts, or -1 for a font they don't name. HarfBuzzShaper makes a run of every stretch one font draws.

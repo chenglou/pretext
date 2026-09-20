@@ -3,7 +3,7 @@
 // (inspect.ts) and for gaps (gaps.ts); filling a line never does.
 import type { GapName } from '../../model.js'
 import { isSegmentEdge } from './emoji.js'
-import { LIGATURE_NONE } from './ligatures.js'
+import { LIGATURE_ASSUMED, LIGATURE_NONE } from './ligatures.js'
 import {
   adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, joinsAcross, pairAdjust16,
   positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, type ShapeResult, type Shaper, type View,
@@ -31,6 +31,8 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   if (k <= lo || k >= hi) return null
   // Inside a grapheme at a character HarfBuzz doesn't mark a continuation, one cluster or two by the font's lookups.
   if (startsClusterInsideGrapheme(p, k)) return 'glyph-clusters'
+  // Inside letters the port takes for one cluster by default (ligatures.ts assumedClusters): one cluster or two by the font.
+  if (p.ligature[k] === LIGATURE_ASSUMED) return 'glyph-clusters'
   k = clusterStartAtOrBefore(p, k, lo)
   if (k <= lo) return null
   if (isSegmentEdge(p, k)) return null

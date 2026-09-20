@@ -15,7 +15,7 @@ import { collapsesWhiteSpace, isSpaceLB } from './content.js'
 import { raw16Of } from './contexts.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
-import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
+import { LIGATURE_ASSUMED, LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
@@ -550,6 +550,7 @@ const IN_WORD_DETAIL = 'a line edge inside a word where the pair total shows no 
 
 const UNCERTAIN_LIGATURE_DETAIL = 'a ligature the font declaration lists as forming in some contexts only, on a line that can break between any two glyph clusters: Blink never breaks inside a glyph and gives its characters one position (shape_result.cc:684-694, 2113-2200), and whether the glyph forms here isn\'t known'
 
+const ASSUMED_LIGATURE_DETAIL = 'letters the port takes for one glyph cluster by default where the font declaration gives no ligature fact (lam and alef), on a line that can break between any two glyph clusters: Blink never breaks inside a glyph and gives its characters one position (shape_result.cc:684-694, 2113-2200), and a font can draw them as two glyphs in two clusters, which Canvas totals don\'t show'
 const TRUNCATED_START_DETAIL = 'a wrapped line start inside an RTL shaping run that the port\'s width tests call safe, in an item result the line cuts again at its trailing spaces: where HarfBuzz flags the start unsafe (contextual lookups and ligatures before it that change no width), Blink reshapes it, joins the reshape and the rest in one view whose parts it numbers in visual order, and the cut gives the first cluster\'s glyph to the part after it (shape_result_view.cc:215-308)'
 
 const TRUNCATED_RESHAPE_DETAIL = 'a wrapped line start reshaped inside an RTL shaping run, in an item result the line cuts again at its trailing spaces: Blink reshapes up to the first offset HarfBuzz left safe, which can lie past the one the port\'s width tests find, numbers the view\'s parts in visual order, and the cut then keeps other glyphs than the port\'s view does (shape_result_view.cc:215-308, shaping_line_breaker.cc:309-324)'
@@ -704,6 +705,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
   if (info.breaksInsideWords) {
     for (let k = start.textOffset + 1; k < info.decisionEnd; k++) {
       if (p.ligature[k] === LIGATURE_UNCERTAIN) addGap(gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, clustersAround(p, k, 0, p.text.length))
+      if (p.ligature[k] === LIGATURE_ASSUMED && p.graphemeStarts[k] === 1 && p.continuations[k] !== 1) addGap(gaps, 'glyph-clusters', runAt(p, k), ASSUMED_LIGATURE_DETAIL, clustersAround(p, k, 0, p.text.length))
     }
   }
   // An opportunity the port gave up after its end reshape failed the fit test, which Blink takes untested where HarfBuzz

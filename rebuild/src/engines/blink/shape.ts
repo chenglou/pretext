@@ -30,7 +30,7 @@ import { blinkGraphemeRules } from './data.js'
 import { isSegmentEdge } from './emoji.js'
 import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
-import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
+import { LIGATURE_ASSUMED, LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
   isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
@@ -490,7 +490,7 @@ export function isFontRunEdge(p: BlinkPrepared, k: number, lo: number, hi: numbe
 // non-continuation unit as a boundary (fix-r9) fixed the second and lost 8 of the first, so the grapheme stays the unit,
 // and a position asked at another cluster start inside a grapheme reports glyph-clusters (startsClusterInsideGrapheme).
 export function isClusterBoundary(p: BlinkPrepared, k: number): boolean {
-  return p.graphemeStarts[k] === 1 && p.continuations[k] !== 1 && p.ligature[k] !== LIGATURE_MERGED
+  return p.graphemeStarts[k] === 1 && p.continuations[k] !== 1 && p.ligature[k] !== LIGATURE_MERGED && p.ligature[k] !== LIGATURE_ASSUMED
 }
 
 // Whether k is inside a grapheme at a unit HarfBuzz doesn't mark a continuation: whether glyphs there form one cluster or

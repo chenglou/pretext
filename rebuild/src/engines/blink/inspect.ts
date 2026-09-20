@@ -6,8 +6,8 @@ import type { TextAlign } from '../../model.js'
 import { pairPlacement, positionInsideGrapheme, runOfSource } from './gaps.js'
 import { boxStartEmpty } from './content.js'
 import { isSegmentEdge } from './emoji.js'
+import { LIGATURE_ASSUMED, LIGATURE_MERGED } from './ligatures.js'
 import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkLineStart, BlinkMappingUnit, BlinkShapeRun } from './geometry.js'
-import { LIGATURE_MERGED } from './ligatures.js'
 import { viewPositionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
 import { lineSourceRange, trailingSpacesOf, usedTextAlign } from './pieces.js'
@@ -102,7 +102,7 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
     const base16 = slicePrefix16(sh, part, part.start)
     let before16 = 0
     for (let k = part.start + 1; k <= limit; k++) {
-      if (k < limit && k < part.end && (p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED)) continue
+      if (k < limit && k < part.end && (p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED || p.ligature[k] === LIGATURE_ASSUMED)) continue
       if (k < limit && k >= part.end) continue
       if (k < limit) positionInsideGrapheme(sh.gaps, p, k)
       const graphemeStarts = [start + shift]
@@ -239,7 +239,7 @@ function justificationOf(sh: Shaper, info: LineInfo, space: number, endOffset: n
     if (r.shape === null) continue
     const added16 = new Array<number>(r.end - r.start).fill(0)
     const starts: number[] = []
-    for (let k = r.start; k < r.end; k++) if (k === r.start || p.continuations[k] !== 1 && p.graphemeStarts[k] === 1 && p.ligature[k] !== LIGATURE_MERGED) starts.push(k)
+    for (let k = r.start; k < r.end; k++) if (k === r.start || p.continuations[k] !== 1 && p.graphemeStarts[k] === 1 && p.ligature[k] !== LIGATURE_MERGED && p.ligature[k] !== LIGATURE_ASSUMED) starts.push(k)
     const order = (item.bidiLevel & 1) === 1 ? starts.slice().reverse() : starts
     let add = 0
     for (let c = 0; c < order.length; c++) {

@@ -140,7 +140,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   const styles: BlinkStyle[] = []
   for (let s = 0; s < computed.styles.length; s++) {
     const style = computed.styles[s]!
-    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, hanKerning: null })
+    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, canvasLigatesLamAlef: null, hanKerning: null })
   }
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
