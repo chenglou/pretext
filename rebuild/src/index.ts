@@ -79,7 +79,7 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy family names
 // after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name it doesn't know,
 // which takes about a second here (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a font
-// group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1110, gfxPlatformFontList.cpp:3135-3165,
+// group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1116, gfxPlatformFontList.cpp:3135-3165,
 // PresShell.cpp:11042-11047). So a context first used before it stays on the fallback for a family named by its Japanese
 // name, or by a legacy name like `Avenir Next Condensed Heavy`, while the DOM and a new context find the family. Nothing a
 // page can assign makes it look again: the same font string returns early, another string and back finds the old font group
