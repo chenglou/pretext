@@ -5,6 +5,7 @@
 // font checks' found contexts (measure/font-checks.ts) or a kept word segmenter (engines/webkit/breaks.ts).
 //
 //   bun rebuild/tools/own-js-attack.ts --a=<checkout> --b=<checkout> [--only=families,fill,boundaries] [--grain] [--shard=k/n]
+//     [--inspect=plain|inspected] [--giant-units=N]
 //
 // A checkout is any folder that holds rebuild/src. Three parts:
 // 1. families: listedFamilies of both trees over hand-made lists and 300,000 seeded random ones from an alphabet of
@@ -26,7 +27,9 @@
 // form and float32 sums round at every step, as a real font's advances at 16px do (the stand-in's are short).
 // --shard=k/n runs every n-th paragraph of the fill part from the k-th on, so n processes share it (it is some 26,000
 // paragraphs, four times each in both trees). Exit 0 when nothing differs, 1 otherwise; every difference is printed with
-// its case and the first differing piece.
+// its case and the first differing piece. --inspect runs the fill part plain or inspected alone, and --giant-units cuts
+// the 100,000-unit paragraphs down: inspecting the lines of one unbroken word takes time that grows faster than its
+// square (2 s for 2,000 units, 67 s for 8,000, in both trees), so the inspected run takes them at 3,000 units.
 import { join, resolve } from 'node:path'
 import type * as Library from '../src/index.ts'
 import type { FontDecl, InlineNode, LineSlot, Paragraph } from '../src/model.ts'
@@ -44,6 +47,8 @@ if (!options.has('a') || !options.has('b')) throw new Error('--a=<checkout> --b=
 const only = (options.get('only') ?? 'families,fill,boundaries').split(',')
 const GRAIN = options.has('grain') ? 1.0371 : 1
 const shard = (options.get('shard') ?? '0/1').split('/').map(Number)
+const inspectModes = options.get('inspect') === 'plain' ? [false] : options.get('inspect') === 'inspected' ? [true] : [false, true]
+const GIANT_UNITS = Number(options.get('giant-units') ?? 100000)
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15'
 installStandInCanvas({ userAgent: USER_AGENT, devicePixelRatio: 2, pageLang: 'en' })
@@ -172,10 +177,10 @@ const TEXTS: Array<[string, string]> = [
   ['space before break', 'aaa bbb  ccc   ddd \u00adeee fff\u200b ggg'],
 ]
 const GIANTS: Array<[string, string]> = [
-  ['100,000 units of words', 'The quick brown fox, jumping; over a lazy dog. '.repeat(2128).slice(0, 100000)],
-  ['100,000 units of one word', 'abcdefghij'.repeat(10000)],
-  ['100,000 spaces', ' '.repeat(100000)],
-  ['100,000 units of short words', 'a '.repeat(50000)],
+  ['a giant of words', 'The quick brown fox, jumping; over a lazy dog. '.repeat(2128).slice(0, GIANT_UNITS)],
+  ['a giant of one word', 'abcdefghij'.repeat(10000).slice(0, GIANT_UNITS)],
+  ['a giant of spaces', ' '.repeat(GIANT_UNITS)],
+  ['a giant of short words', 'a '.repeat(50000).slice(0, GIANT_UNITS)],
 ]
 
 function cut(text: string): number {
@@ -327,7 +332,7 @@ function attackFill(): void {
   const cases = fillCases().filter((_, i) => i % shard[1]! === shard[0]!)
   let steps = 0
   let threw = 0
-  for (const inspect of [false, true]) {
+  for (const inspect of inspectModes) {
     // A list of contexts a paragraph, then one list for every paragraph, which a tree keeps across the cases.
     for (const shared of [false, true]) {
       const listA: Library.Context[] = []
