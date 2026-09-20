@@ -24,6 +24,21 @@ export type ListedFamily =
   // inside one.
   | { quoted: false; name: string; css: string; identifiers: string[] }
 
+// A name as a CSS string, as CSSOM serializes one (CSSOM §2.1, "serialize a string"): a quote and a backslash take a
+// backslash, a control character is a hex escape with its space (a bare newline would end the string), U+0000 is U+FFFD.
+// JSON's escapes aren't CSS's: `\n` in a CSS string is the letter n.
+function cssString(name: string): string {
+  let out = '"'
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i)
+    if (code === 0) out += '\ufffd'
+    else if (code < 0x20 || code === 0x7f) out += `\\${code.toString(16)} `
+    else if (name[i] === '"' || name[i] === '\\') out += `\\${name[i]}`
+    else out += name[i]
+  }
+  return `${out}"`
+}
+
 // CSS white space: space, tab and the newlines, which are LF, CR and FF (CSS Syntax §4.2, §3.3). U+00A0 isn't one.
 function isWhiteSpace(ch: string | undefined): boolean {
   return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f'
@@ -91,7 +106,7 @@ export function listedFamilies(list: string): ListedFamily[] {
     }
     if (family.css === '' || (i < list.length && list[i] !== ',')) throw new Error(`font-family ${JSON.stringify(list)} isn't a list of family names`)
     // Only an unclosed string and a last backslash read past the list's end.
-    if (i > list.length) family.css = JSON.stringify(family.name)
+    if (i > list.length) family.css = cssString(family.name)
     out.push(family)
     if (i >= list.length) return out
     i++ // ','
