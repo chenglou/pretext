@@ -297,6 +297,45 @@ both, stage the seeds (lost 0 here). Nothing to accept in the citation ledger.
 test of the pair (2), the suffix and the cluster alone. They are short now; fewer of them is another recipe (cluster
 sums where a window's clusters add up, research/PERF-STORE-STUDY.md section 8), not this one.
 
+*Reviewed (2026-09-20), by a second pair of eyes on the same branch.* DESIGN.md §4.4 has what was found about the cut
+rule; here is the rest.
+- The source. Every citation above holds in the pinned source. Three paths the item hadn't read change nothing: a font
+  whose space takes part in shaping has its whole run shaped in one call (gfxFont.cpp:3757-3761, the port's existing
+  gap); the CoreText shaper is off by preference (`gfx.font_rendering.coretext.enabled`), so Apple's AAT fonts go
+  through HarfBuzz as well; and in system fallback a character takes the previous character's font where that font has
+  it (gfxTextRun.cpp:3559-3569), a reach no test beside a cut can see, which the rule's last line holds: the windows
+  must add up to the unit. A unit also ends at a script run's limit (`prepare.ts` `initTextRun`), so Japanese text,
+  which changes script every few characters, has short units and no windows; the item's CJK is Chinese, and Thai,
+  Lao, Khmer, Burmese and Tibetan are the other writing without spaces.
+- The cut rule, attacked with the port itself in pinned Firefox (`tools/windows-attack-probe.ts`, 531 paragraphs without
+  spaces, 106,457 cluster starts; the same samples as 1,566 lab cases; two runs without windows equal everywhere): no
+  line, no exact advance and no drift, in any class but one. A right-to-left script under a direction override is shaped
+  reversed or not by what HarfBuzz's whole buffer holds, so Canvas shapes a window of digits alone the other way round
+  than the DOM shapes the unit: 32 advances, a line's width and one native break (Hebrew letters and sixty digits under
+  U+202D, 24px Arial, 384px: line 1 ends at 30 without windows, as natively, and at 31 with them). Such a unit now has
+  no windows (`windowsOf`, `windows-reversed.test.ts`); with that, the lab set has no scorer transition against the
+  port without windows. No tier case is of that kind: none of the 2,909 with a stretch of 33 units without white space
+  holds a bidi control, so the recordings above stand. Stand-ins aren't always the long recipe's inside a window (4 of
+  14,288 Arabic offsets, DESIGN.md §4.4).
+- What it buys elsewhere, from the same probe's counts (units sent to Canvas, without windows and with them): Han
+  1.48 M and 0.24 M over 36 samples of 33 to 400 units, Thai 1.04 M and 0.17 M, Devanagari 1.78 M and 0.25 M, Khmer
+  0.34 M and 0.07 M, Burmese 0.53 M and 0.10 M, nine units of 1,200 to 2,400 units 25.3 M and 0.68 M; calls rise 4%
+  over the whole probe (950,962 to 984,419). A rule for Han, kana and Hangul alone would need a script list the rule
+  doesn't have now, and would leave Thai and its neighbours with the square.
+- The window's size (pinned Firefox, the counts probe on the same 1,000 messages, a CJK message): 8 clusters 558.14
+  calls and 2,460 units, 16 clusters 516.53 and 2,944. By the two trees' own numbers a call costs about 0.4 µs and a
+  unit about 0.1 µs there (478 calls and 23,499 units in 2,492 µs, 517 and 2,944 in 493 µs), so 8 clusters would be
+  about 6% under 16 on a CJK message, 2% of the mix: not worth another recording.
+- Time. The bench's driver runs only as the lock wrapper's own child unless its lock override is passed, which the
+  review's session wasn't allowed to pass, so a stretch of alternating bench runs wasn't possible. The review timed
+  another way: `tools/fill-ab-probe.ts` runs the headline for several checkouts inside one page, in alternating order,
+  under one exclusive acquisition, so that whatever the machine does it does to every checkout. Ten rounds
+  (`.artifacts/bench/perf-gecko-fill-20260919/attack/AB-2`; the 1-minute load was 37 to 48 from other owners' offline
+  work, which the machine's cores absorbed: the numbers are within 4 to 8% of the quiet ones above): the mix 2,654 ms
+  before and 1,125 ms after, −1,505 ms in the median round (−1,438 to −1,585 over the ten, −57%); plain ASCII 598 and
+  608 ms, +8 ms in the median round with rounds on both sides of 0. Five rounds at a load of 8 to 11 (`AB-1`) gave
+  −58% on the mix.
+
 ### 4. WebKit: the space of a box measured as the box is made (done), and box constants
 
 *Done in correctness round 5* (2026-09-19, `WebKitBox.spaceWidth`; DESIGN.md §4.4, §4.7). A box whose white space is
@@ -408,10 +447,10 @@ the base and item 3's branch, each with the lazy scan and without.
   with item 3, with either form.
 
 *Recommendation: the simpler form.* The lazy scan buys 4 µs a message in an engine that is 1.9 to 3.4 times under the
-bar with or without it, and it pays with the port's most intricate code, a record whose value depends on who asked
-first and two accepted exceptions to "nothing writes a prepared paragraph after `prepare`" (DESIGN.md §4.6). Without it
-`rebuild/src` is 46 lines shorter, and a plain paragraph's lines equal the inspected one's because both read the same
-advances, not by a bound argument.
+bar with or without it, and it pays with the port's most intricate code, a record whose value depends on who asked first
+and one of the two accepted exceptions to "nothing writes a prepared paragraph after `prepare`" (DESIGN.md §4.6).
+Without it `rebuild/src` is 46 lines shorter, and a plain paragraph's lines equal the inspected one's because both read
+the same advances, not by a bound argument.
 
 *Taken on the branch, as its last commits* (the code with its tests and registry entry, then the documents), so that a
 merge can leave them out. What holds it: the unit tests; the quick gates (tier 1 as for item 3, 0 predictions changed;
@@ -421,6 +460,14 @@ passing; without facts, against item 3's own run, every row equal with its count
 reversed part, all marked history-dependent, so the inspected path didn't move; the plain predictor's run against that
 usual run, 0 line ranges and 0 native observations differing over 63,771 cases
 (`.artifacts/tests/runs/perf-gecko-fill-20260919/simple-*`, `compare-simple-*`).
+
+*Reviewed (2026-09-20).* The same in-page alternating runs (item 3's review, `AB-2`, ten rounds) hold the trade: plain
+ASCII 608 ms lazy and 663 ms simple with item 3, +26 ms in the median round and more in every one of the ten (+13 to
++87); 598 and 640 ms without item 3, +40 ms in the median round, more in nine of ten. On the mix +30 and +23 ms. So
+25 to 45 ms per 10,000 messages, 4 to 7% of plain ASCII, as measured above, and Firefox's mix stays near 1.1 to 1.2 s
+with both changes. The reviewer agrees with the simpler form: the port itself gives the same advances, reasons and
+lines with it on all 531 samples of the windows' probe, plain and inspected, and the lab set run with it has no scorer
+transition against the port at the phase's start.
 
 ### 9. Later, with numbers only
 
