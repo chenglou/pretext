@@ -33,6 +33,18 @@ function linesOf(kept: Prepared, width: number): number {
   return lines
 }
 
+// Where the kept paragraph's lines end at `width`, as source offsets: finer than their count.
+function lineEnds(kept: Prepared, width: number): string {
+  const ends: number[] = []
+  for (let start = firstLine(kept); start !== null;) {
+    const filled = fillLine(kept, start, { width, left: 0, right: 0 })
+    if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
+    ends.push(filled.end)
+    start = filled.next
+  }
+  return ends.join(' ')
+}
+
 // The Canvas contexts a Gecko paragraph holds, which grows where a fill makes one (engines/gecko/measure.ts
 // noLigaturesContext, advance.ts largeContext); -1 for the other engines, whose probes don't read it.
 function contextsHeld(kept: Prepared): number {
@@ -43,4 +55,4 @@ function contextsHeld(kept: Prepared): number {
   }
 }
 
-;(globalThis as unknown as { contextsHealAttack: unknown }).contextsHealAttack = { prepared, linesOf, contextsHeld }
+;(globalThis as unknown as { contextsHealAttack: unknown }).contextsHealAttack = { prepared, linesOf, lineEnds, contextsHeld }
