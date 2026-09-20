@@ -177,9 +177,12 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
   while (runs[k]!.limit <= tStart) { from = runs[k]!.limit; k++ }
   const domScript = runs[k]!.script
   if (isCommonScript(domScript)) return null
-  // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851).
-  const alone = textRunScripts(units.subarray(tStart, tEnd), 0, tEnd - tStart, false)[0]!.script
-  if (alone === domScript) return null
+  // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851), whose first script run takes
+  // the script of the piece's first character that has one: Common characters before it join its run, and a bracket
+  // takes a script only from a run that has one (scriptRunLimits).
+  let alone = 'Zyyy'
+  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(units, i)
+  if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
   const limit = runs[k]!.limit
   for (let i = tStart - 1; i >= from; i--) {
     if (scriptAt(units, i) !== domScript) continue
