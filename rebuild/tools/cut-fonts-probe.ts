@@ -60,7 +60,7 @@ function firstEnd(prepared, width) {
 function groupsOf(prepared) {
   const p = prepared.state
   const groups = []
-  for (let g = 0; g < p.groups.length; g++) groups.push({ start: p.groups[g].start, end: p.groups[g].end, cuts: p.groups[g].cuts, prefix: p.groups[g].prefixAtCut })
+  for (let g = 0; g < p.groups.length; g++) groups.push({ start: p.groups[g].start, end: p.groups[g].end, cuts: p.groups[g].cuts, prefix: p.groups[g].prefixAtCut, windows: p.groups[g].windows ?? p.groups[g].cuts })
   return { text: p.text, groups }
 }
 
@@ -100,7 +100,7 @@ const out = [];
 for (let f = 0; f < FONTS.length; f++) {
   const family = FONTS[f].startsWith('!') ? FONTS[f].slice(1) : '"' + FONTS[f] + '"';
   if (!resolves(family)) { out.push({ family: FONTS[f], resolves: false }); continue; }
-  const row = { family: FONTS[f], resolves: true, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
+  const row = { family: FONTS[f], resolves: true, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, wordCuts: 0, wordEdges: 0, wordEdgesDiffer: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
   const shared = SHARED ? [[], [], []] : null;
   for (let t = 0; t < TEXTS.length; t++) for (let z = 0; z < SIZES.length; z++) {
     const text = TEXTS[t].text, size = SIZES[z];
@@ -122,10 +122,29 @@ for (let f = 0; f < FONTS.length; f++) {
       const group = gb.groups[g];
       row.groups++;
       if (group.cuts.length > 2) row.cutGroups++;
-      if (JSON.stringify(ga.groups[g].cuts) !== JSON.stringify(group.cuts)) { row.cutsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseCuts: ga.groups[g].cuts, headCuts: group.cuts }); }
-      else if (JSON.stringify(ga.groups[g].prefix) !== JSON.stringify(group.prefix)) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, cuts: group.cuts, basePositions: ga.groups[g].prefix, headPositions: group.prefix }); }
+      // The head's cuts hold the words' too (shape.ts addWords): its windows' edges are held against the base's cuts, the
+      // positions at those against the base's, and at every other cut of the head, and at the space before it, the position
+      // the head sums against the one the base measures from its last cut.
+      const baseCuts = ga.groups[g].cuts, basePrefix = ga.groups[g].prefix;
+      const headAt = new Map();
+      for (let i = 0; i < group.cuts.length; i++) headAt.set(group.cuts[i], group.prefix[i]);
+      if (JSON.stringify(baseCuts) !== JSON.stringify(group.windows)) { row.cutsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseCuts, headWindows: group.windows }); }
+      else {
+        let same = true;
+        for (let i = 0; i < baseCuts.length; i++) if (headAt.get(baseCuts[i]) !== basePrefix[i]) same = false;
+        if (!same) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, cuts: baseCuts, basePositions: basePrefix, headCuts: group.cuts, headPositions: group.prefix }); }
+      }
       for (let i = 1; i + 1 < group.cuts.length; i++) {
         const k = group.cuts[i];
+        if (!baseCuts.includes(k)) {
+          row.wordCuts++;
+          const edges = text.charCodeAt(k - 1) === 0x20 ? [k, k - 1] : [k];
+          for (let e = 0; e < edges.length; e++) {
+            const pa = A.position16(a, g, edges[e]), pb = B.position16(b, g, edges[e]);
+            row.wordEdges++;
+            if (pa !== pb) { row.wordEdgesDiffer++; if (row.examples.length < 6) row.examples.push({ text: TEXTS[t].name, size, group: g, edge: edges[e], around: text.slice(Math.max(0, k - 12), k + 12), base16: pa, head16: pb }); }
+          }
+        }
         row.cuts++;
         inner.push([g, k, before16]);
         if (sameText) for (let o = 0; o <= text.length; o++) if (Math.abs(index[o] - index[k]) <= 1) near[o] = 1;
@@ -198,7 +217,7 @@ for (let f = 0; f < FONTS.length; f++) {
     }
     row.targets.push({ text: t, size, widths: used });
   }
-  if (!DETAIL.includes(FONTS[f]) && row.differ === 0 && row.cutsDiffer === 0 && row.positionsDiffer === 0) row.targets = [];
+  if (!DETAIL.includes(FONTS[f]) && row.differ === 0 && row.cutsDiffer === 0 && row.positionsDiffer === 0 && row.wordEdgesDiffer === 0) row.targets = [];
   out.push(row);
   if (f % 2 === 1) await new Promise(resolve => setTimeout(resolve, 0));
 }

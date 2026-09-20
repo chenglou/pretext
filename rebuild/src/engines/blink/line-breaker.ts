@@ -878,6 +878,8 @@ export class LineBreaker {
       next++
     }
     const u1 = Math.min(sr.end, cuts[next]!)
+    // A piece's cut can lie before the space (shape.ts addPieces), and the space is then a piece of its own: x falls in it.
+    if (this.char(u0) === 0x20 && u0 + 1 === u1) return u0
     if (u0 !== start && this.char(u0 - 1) !== 0x20) return -7
     let e = u0
     while (e < u1) {
@@ -896,7 +898,8 @@ export class LineBreaker {
       const position = positionForOffset(sh, sr, e)
       if (position < u0Position || position > positionForOffset(sh, sr, u1)) return -6
       if (position <= x) return e
-    } else if (u1 !== sr.end) {
+    } else if (u1 !== sr.end && this.char(u1) !== 0x20) {
+      // The word ends at a cut that isn't before a space: a cut inside a word.
       return -11
     }
     if (u0 === start) return -12
