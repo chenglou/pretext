@@ -7,7 +7,7 @@
 //
 //   bun rebuild/tools/two-trees.ts --a=<checkout or commit> [--b=<checkout or commit>] --cases=<cases.ndjson>[,<more>]
 //     [--browser=chrome|firefox|webkit-host|all] [--config=no-facts|facts] [--predictor-a=<path in the tree>] [--predictor-b=...]
-//     [--widths=60,150,400] [--dpr=2] [--limit=N] [--jobs=N] [--out=<report.json>]
+//     [--widths=60,150,400] [--dpr=2] [--limit=N] [--jobs=N] [--ignore=gaps] [--out=<report.json>]
 //
 // `--b` is this checkout when left out; a commit is read with `git archive` into a scratch folder that goes to the Trash
 // at the end. `--widths` lays every case out at each of those widths instead of its own. Exit 0 when every case is the
@@ -113,6 +113,22 @@ function painting(predictor: Predictor, c: Case, prediction: LayoutPrediction): 
   return attempt(() => recordedPainting(paint(c, prediction, new RecordingDocument().createElement('div') as unknown as HTMLElement)))
 }
 
+// `--ignore=gaps,limit`: the fields of these names are left out of the compared layouts, at any depth, for a step that
+// means to change what is reported beside the lines and not the lines.
+function withoutIgnored(value: unknown): unknown {
+  const ignored = options.get('ignore')
+  if (ignored === undefined) return value
+  const names = new Set(ignored.split(','))
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip)
+    if (v === null || typeof v !== 'object') return v
+    const out: Record<string, unknown> = {}
+    for (const [key, inner] of Object.entries(v)) if (!names.has(key)) out[key] = strip(inner)
+    return out
+  }
+  return strip(value)
+}
+
 export function compare(c: Case, a: Predictor, b: Predictor, before: Prediction, after: Prediction): Pick<Difference, 'part' | 'first'> | null {
   if ('error' in before || 'error' in after) {
     const first = firstDifference(before, after, '')
@@ -122,7 +138,7 @@ export function compare(c: Case, a: Predictor, b: Predictor, before: Prediction,
     const first = firstDifference(rangesOf(before), rangesOf(after), 'lines')
     return first === null ? null : { part: 'lines', first }
   }
-  const layout = firstDifference(rowLayout(before.layout), rowLayout(after.layout), 'layout')
+  const layout = firstDifference(withoutIgnored(rowLayout(before.layout)), withoutIgnored(rowLayout(after.layout)), 'layout')
   if (layout !== null) return { part: 'prediction', first: layout }
   const limits = firstDifference(a.limits === undefined ? null : attempt(() => a.limits!(before)), b.limits === undefined ? null : attempt(() => b.limits!(after)), 'painterLimits')
   if (limits !== null) return { part: 'limits', first: limits }
@@ -211,7 +227,7 @@ async function run(): Promise<number> {
       while (next < slices.length) {
         const slice = slices[next++]!
         const args = ['work', `--browser=${browser}`, `--predictor-a=${join(a.tree, a.predictor)}`, `--predictor-b=${join(b.tree, b.predictor)}`, `--cases=${files.join(',')}`, `--from=${slice.from}`, `--to=${slice.to}`, `--result=${slice.result}`]
-        for (const name of ['widths', 'dpr']) if (options.has(name)) args.push(`--${name}=${options.get(name)!}`)
+        for (const name of ['widths', 'dpr', 'ignore']) if (options.has(name)) args.push(`--${name}=${options.get(name)!}`)
         const proc = Bun.spawn(['bun', import.meta.path, ...args], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
         if (await proc.exited !== 0) failures.push(slice.from)
       }
