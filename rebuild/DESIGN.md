@@ -1517,6 +1517,46 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
 
+**Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
+
+Gecko, windows inside a long shaping unit (`advance.ts` `windowAt`, `windowsOf`). Every in-word recipe measures to its
+unit's end, and Gecko shapes a word of any length in one call (gfxFont.cpp:3804-3808; ShapeFragmentWithoutWordCache
+cuts only at 32,760 units, :3564-3617). Text without spaces is one unit, so the characters sent to Canvas grew with the
+square of its length. No cut inside a unit is exact by the source, so Canvas decides each one:
+
+```
+cells        = every 16 clusters of a unit of more than 32 code units; the last cell keeps what is left under two cells
+a cut holds  = no letters join across it and no mark starts its cluster,
+               au(left cell) + au(right cell) = au(both cells),
+               the pair of clusters around it has one ink box with and without ligatures (ligatureAcross),
+               groups(left cell) + groups(right cell) = groups(both cells)      groups = (au at 2px − au at 0.001px) / 120
+a window     = the cells between two cuts that hold; a cut that doesn't hold leaves its two cells in one window,
+               which is measured whole
+the windows' au must add up to au(unit), else the unit has no windows
+```
+
+A window is a unit to every recipe: the advance before it is the sum of the windows before it, and an offset inside it
+is measured against the window's end. The tests are the ones the recipes make before they call any in-word advance
+exact (the sides add up, no ligature group spans the offset), made over 16 clusters on each side of the cut. Probe
+gecko-windows W1 and W2 (pinned Firefox 156.0; 54 samples: Han, kana, Hangul, Arabic, Thai, Khmer, Burmese, Devanagari,
+Latin, Latin inside Han across a font fallback edge and an emoji sequence, in the lab's named fonts, 11 of them with
+letter spacing; every cluster boundary tried as a cut, in 16 grid phases): of 14,943 cuts tried the text rules keep
+1,110 out, 377 fail the sum, 21 the ink box and none the group count. All 13,435 that hold give the long recipe's
+W(unit) − W(suffix), and 13,135 of them the DOM's advance; the other 300 are where the long recipe misses the DOM by
+the same amount (Noto Nastaliq Urdu, whose unit Canvas measures 108 au narrower than the DOM, and an emoji's
+device-size advance, which the port corrects apart). Inside the windows of the port's own grid, 14,040 of 14,040
+offsets whose sides add up give the long recipe's value, and in all 864 walks the windows add up to the unit. Between
+joined Arabic letters the text rule decides: 3 such cuts would have passed Canvas's tests.
+
+Cost and unit: per unit of more than 32 code units, once, at its first in-word ask: 2 questions a cell (the cell alone,
+and with the cell before it), and where the sums hold 2 for the ink box and 4 for the group counts; a window of three
+cells or more is measured once more. From then on no question of the unit's offsets is longer than two cells. In pinned
+Firefox a Chinese chat message of the bench (mean 122 units) sends 2,944 units to Canvas where it sent 23,499, in 516.5
+calls where it made 478.0, and one Chinese unit of 9,428 units sends 0.23 M units where it sent 41.7 M
+(`tools/fill-counts-probe.ts`). A unit of at most 32 code units asks what it asked: tier 1 has 61,897 of 63,771 cases
+the same. In the output one number moves: an `in-word-prefix` gap's detail prints W(unit), which is the width of what
+the recipe measured in, inside a long unit the window's (39 tier cases).
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 
@@ -1598,9 +1638,9 @@ the space of a WebKit box that never reads it (§4.7).
   space, measured once as the box is made, for boxes whose white space is deferred too (`WebKitBox.spaceWidth`, §4.5;
   correctness round 5).
 - Gecko: what measuring found inside a shaping unit is kept by the unit (`GeckoUnit.inWord`, `types.ts` `InWord` and
-  `InWordEntry`: the unit's ligature group count, and per offset the advance with its reason, the optional-ligature and
-  required-group facts, the row of ligature candidates and the suffix width), made when an offset inside the unit first
-  asks. Until correctness round 5 it was the only part of Gecko's prepared paragraph, beside the context list, that is
+  `InWordEntry`: the unit's ligature group count, a long unit's windows (§4.4), and per offset the advance with its
+  reason, the optional-ligature and required-group facts, the row of ligature candidates and the suffix width), made
+  when an offset inside the unit first asks. Until correctness round 5 it was the only part of Gecko's prepared paragraph, beside the context list, that is
   written after preparation: facts of the unit's text in its text run, which no width and no line changes, and which go
   with the paragraph. They are filled on first read only because filling them in `prepare` would ask Canvas questions no
   line needs and would move first asks (`lines.ts` `groupEndSpacing` reads the records on every call instead of keeping

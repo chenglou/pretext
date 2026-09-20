@@ -261,7 +261,8 @@ export type InWordReason =
   | { kind: 'inside-ligature-row'; at: number }
   | { kind: 'between-ligatures'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
-  // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
+  // The two sides don't add up to the unit, which inside a long unit is the offset's window (`unitAu` is its width, as
+  // the gap's detail prints it). `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
   // cluster before the offset and the suffix gain from each other. 'joined-prefix': the sides add up once the suffix is
   // measured behind its own first letter, and the prefix's side is the value.
   | { kind: 'sides'; at: number; sides: 'joined' | 'joined-prefix' | 'apart' | 'cluster'; au: number; unitAu: number }
