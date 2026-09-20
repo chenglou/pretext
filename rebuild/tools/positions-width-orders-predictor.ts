@@ -1,19 +1,20 @@
 // Plain, many widths in two orders, each against a fresh paragraph, in the page: an attacker's check of what a plain Blink
 // paragraph keeps by offset (src/engines/blink/types.ts BlinkGroup; research/PROFILING-START.md, item 2).
-//   bun rebuild/tests/browser-sets.ts --browser=chrome --predictor=rebuild/lab/baselines/plain-width-orders-predictor.ts --sets=... --out=...
-// plain-other-widths-first-predictor.ts fills two other widths first and hands back the line ranges at the case's width,
-// which compare-sets.ts compares with the usual run's. That says nothing of the other widths, of another order, of a
-// width met twice, or of the pieces. Here one plain paragraph is filled at a quarter, a half, three quarters, one and a
-// half and three times the case's width and then at the case's own, narrowest first, and at each of them once more; a
-// second one widest first. At every width its fill results and its pieces must equal a paragraph's that was prepared in
-// the same page for that width alone, which has its own canvases and has read nothing back. A difference throws, so the
-// row holds the error and no lines. The lines handed back are the first paragraph's at the case's width, after every
-// other width, for compare-sets.ts --prediction=line-ranges against the usual run.
-// The paragraph and the environment come from the usual predictor's layout of the case (no-facts-predictor.ts), which
-// makes its own canvases too.
-import { fillLine, firstLine, linePieces, prepare, type Prepared } from '../../src/index.ts'
-import type { Case, LinesPrediction, PredictionLine } from '../types.ts'
-import { predict as usual } from './no-facts-predictor.ts'
+//   bun rebuild/tests/browser-sets.ts --browser=chrome --predictor=rebuild/tools/positions-width-orders-predictor.ts --sets=... --out=...
+// It sits with the tools because it calls the library's function set itself, which a lab file may not
+// (tests/independence.test.ts). lab/baselines/plain-other-widths-first-predictor.ts fills two other widths first and
+// hands back the line ranges at the case's width, which compare-sets.ts compares with the usual run's. That says nothing
+// of the other widths, of another order, of a width met twice, or of the pieces. Here one plain paragraph is filled at a
+// quarter, a half, three quarters, one and a half and three times the case's width and then at the case's own, narrowest
+// first, and at each of them once more; a second one widest first. At every width its fill results and its pieces must
+// equal a paragraph's that was prepared in the same page for that width alone, which has its own canvases and has read
+// nothing back. A difference throws, so the row holds the error and no lines. The lines handed back are the first
+// paragraph's at the case's width, after every other width, for compare-sets.ts --prediction=line-ranges against the
+// usual run. The paragraph and the environment come from the usual predictor's layout of the case
+// (lab/baselines/no-facts-predictor.ts), which makes its own canvases too.
+import { fillLine, firstLine, linePieces, prepare, type Prepared } from '../src/index.ts'
+import type { Case, LinesPrediction, PredictionLine } from '../lab/types.ts'
+import { predict as usual } from '../lab/baselines/no-facts-predictor.ts'
 
 const FACTORS = [0.25, 0.5, 0.75, 1.5, 3, 1]
 
