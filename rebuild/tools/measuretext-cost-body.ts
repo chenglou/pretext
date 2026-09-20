@@ -108,9 +108,19 @@ for (let round = 0; round < ROUNDS; round++) {
   }
   await new Promise((done) => { const ch = new MessageChannel(); ch.port1.onmessage = () => done(); ch.port2.postMessage(0); });
 }
+// For a profiler: one class alone for PARAMS.spinMs, after the page has told the driver (the shell driver only).
+let spun = 0;
+if (PARAMS.spinMs > 0 && PARAMS.spinClass !== '') {
+  const c = classes.find((x) => x.id === PARAMS.spinClass);
+  if (c === undefined) throw new Error('no class ' + PARAMS.spinClass);
+  setVariant(PARAMS.spinVariant);
+  await fetch('/spinning', { method: 'POST', body: c.id });
+  const end = performance.now() + PARAMS.spinMs;
+  while (performance.now() < end) { sink += c.run(c, c.make(c)); spun += c.n; }
+}
 setVariant(0);
 return {
-  userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: self.crossOriginIsolated === true, font: FONT, rounds: ROUNDS, unit: 'ns per call',
+  userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: self.crossOriginIsolated === true, font: FONT, rounds: ROUNDS, unit: 'ns per call', spun,
   classes: classes.map((c, k) => ({ id: c.id, callsPerSample: c.n, variant0: summary(samples[k][0]), variant1: summary(samples[k][1]), raw: samples[k] })),
   sink,
 };
@@ -192,9 +202,18 @@ for (let round = 0; round < PARAMS.rounds; round++) {
   }
   await new Promise((done) => { const ch = new MessageChannel(); ch.port1.onmessage = () => done(); ch.port2.postMessage(0); });
 }
+// For a profiler: first passes on new contexts for PARAMS.spinMs, after the page has told the driver (the shell driver
+// only).
+let spun = 0;
+if (PARAMS.spinMs > 0 && PARAMS.spinClass === '') {
+  setVariant(PARAMS.spinVariant);
+  await fetch('/spinning', { method: 'POST', body: 'replay' });
+  const end = performance.now() + PARAMS.spinMs;
+  while (performance.now() < end) { sink += play([], freshStrings()); spun += measures; }
+}
 setVariant(0);
 return {
-  userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: self.crossOriginIsolated === true, engine: env.engine,
+  userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: self.crossOriginIsolated === true, engine: env.engine, spun,
   messages: MESSAGES.length, lines, rounds: PARAMS.rounds, unit: 'ns per measureText call of the stream, the assignments inside the clock',
   stream: { measures, assignments, contexts: ids.size, units, meanUnits: units / measures, withASpace: spaced, withAUnitOver255: wide, metBeforeOnTheSameContext: repeats, lengths },
   firstPass: { variant0: summary(first[0]), variant1: summary(first[1]), raw: first },

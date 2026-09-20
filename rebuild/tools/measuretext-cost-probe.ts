@@ -16,7 +16,8 @@ import type { Probe } from '../probes/types.ts'
 import { buildChat } from '../bench/cases.ts'
 import { MICRO_BODY, REPLAY_BODY } from './measuretext-cost-body.ts'
 
-export type CostParams = { rounds: number; scale: number; messages: number }
+// spinMs, spinClass and spinVariant are the shell driver's, for a profiler: the probe never spins.
+export type CostParams = { rounds: number; scale: number; messages: number; spinMs: number; spinClass: string; spinVariant: 0 | 1 }
 
 export function costParams(): CostParams {
   const number = (name: string, fallback: number): number => {
@@ -24,7 +25,7 @@ export function costParams(): CostParams {
     if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`)
     return value
   }
-  return { rounds: number('MEASURETEXT_COST_ROUNDS', 12), scale: number('MEASURETEXT_COST_SCALE', 1), messages: number('MEASURETEXT_COST_MESSAGES', 300) }
+  return { rounds: number('MEASURETEXT_COST_ROUNDS', 12), scale: number('MEASURETEXT_COST_SCALE', 1), messages: number('MEASURETEXT_COST_MESSAGES', 300), spinMs: 0, spinClass: '', spinVariant: 0 }
 }
 
 // JSON with every unit over 127 escaped, so the page gets 8-bit strings where the characters allow, as the bench's plan
