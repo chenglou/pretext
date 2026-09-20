@@ -74,20 +74,27 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // Lifetime: the caller's, in Blink and WebKit. A call that is given none gets an empty list, and then nothing outlives its
 // prepared paragraph. A page that hands one list to every call pays for a context once per settings instead of once per
 // paragraph.
-// Gecko's contexts are one call's, whatever list the caller keeps, because a kept Firefox context can answer otherwise than
-// a context made now and no page can know when. A context resolves its family names once, at its first measurement
-// (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy family names
-// after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name it doesn't know,
-// which takes about a second here (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a font
-// group checks and is told to the DOM alone, as a reflow (SharedFontList.cpp:1057-1116, gfxPlatformFontList.cpp:3135-3165,
-// PresShell.cpp:11042-11047). So a context first used before it stays on the fallback for a family named by its Japanese
-// name, or by a legacy name like `Avenir Next Condensed Heavy`, while the DOM and a new context find the family. Nothing a
-// page can assign makes it look again: the same font string returns early, another string and back finds the old font group
-// in the context's own cache, and fontKerning or lang changed and back makes a new group once and finds that one ever after
-// (CanvasRenderingContext2D.cpp:4409-4478, :5480-5523; probes/contexts-start-up.ts S1, S2). That gives back what the list
-// bought Firefox: ×0.92 on the chat mix and ×0.75 on plain ASCII (research/PERF-LIFETIME.md).
+// Gecko's contexts are one prepared paragraph's, whatever list the caller keeps, because a kept Firefox context can answer
+// otherwise than a context made now and no page can know when. A context resolves its family names once, at its first
+// measurement (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy
+// family names after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name that
+// isn't ASCII, or of an ASCII name with a space whose front part is a family, which takes about a second here
+// (gfxPlatformFontList.cpp:1752-1781, :3063-3085). Their arrival moves no generation a font group checks and is told to
+// the DOM alone, as a reflow (SharedFontList.cpp:1057-1116, gfxPlatformFontList.cpp:3135-3165, PresShell.cpp:11042-11047).
+// So a context first used before it stays on the fallback for a family named by its Japanese name, or by a legacy name
+// like `Avenir Next Condensed Heavy`, while the DOM and a new context find the family. Nothing a page can assign makes it
+// look again: the same font string returns early, another string and back finds the old font group in the context's own
+// cache, which reset() leaves alone, and fontKerning or lang changed and back makes a new group once and finds that one
+// ever after (CanvasRenderingContext2D.cpp:4409-4478, :5480-5523; probes/contexts-start-up.ts S1, S2,
+// probes/contexts-heal-attack.ts H5). That gives back what the list bought Firefox: ×0.92 on the chat mix and ×0.75 on
+// plain ASCII (research/PERF-LIFETIME.md). It keeps the damage to the paragraphs prepared before the names arrived and
+// doesn't mend those: a prepared paragraph holds its contexts and its fills ask them again, so such a paragraph lays out
+// with the fallback until the page prepares it again, as after any font change, and one first filled after the names
+// arrived measures with two fonts, since the contexts its fill makes find the family. Here nothing tells the page when
+// (tools/contexts-heal-attack-probe.ts K1, K3). A page that names its families by their canonical English names
+// (`Hiragino Sans`, not the family's Japanese name) never meets this: such a name moved in no run (S1, H1).
 // Invalidated in WebKit alone, by one thing a page does itself: adding a FontFace that has already loaded (load() first
-// and add() after, or a FontFace made from bytes) to a document.fonts that holds no face yet. WebKit's font cache leaves
+// and add() after, or a FontFace made from bytes) to a document.fonts that holds no face. WebKit's font cache leaves
 // the page's font set out of its key while the set is empty, and the set tells a context's font about a new face before
 // the face is in it, so the kept context asks again and gets the fonts it had (FontCascadeCache.cpp:104-115,
 // CSSFontSelector.cpp:526-539, CSSFontFaceSet.cpp:203-209). It stays on the fallback until the set changes again, so a
