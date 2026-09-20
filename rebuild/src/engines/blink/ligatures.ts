@@ -25,11 +25,16 @@ export const LIGATURE_UNCERTAIN = 3
 export const LIGATURE_ASSUMED = 4
 
 // The study's switch (branch x-lam-alef): what a boundary no ligature fact settles is taken for. Only the study's
-// predictors write it (lab/baselines/cluster-default-*.ts); it is no input of the library.
+// predictors write it (tools/cluster-default/*-predictor.ts); it is no input of the library.
 // - 'letters': every letter is its own glyph cluster, which is what the port did before the study;
 // - 'lam-alef': lam and the alef after it are one cluster, with combining marks between them or not. The set is the four
-//   lam-alef ligatures Unicode encodes (U+FEF5 to U+FEFC: lam U+0644 before alef U+0622, U+0623, U+0625 and U+0627), which
-//   is HarfBuzz's own table for a font without GSUB (hb-ot-shaper-arabic-table.hh ligature_table);
+//   lam-alef ligatures Unicode encodes in Arabic Presentation Forms-B (U+FEF5 to U+FEFC: lam U+0644 before alef U+0622,
+//   U+0623, U+0625 and U+0627), the script's one required ligature: the only ligature lookup HarfBuzz makes up for a
+//   Windows-1256 font without GSUB, under rlig (hb-ot-shaper-arabic-win1256.hh:226, :261-270), which the Arabic shaper
+//   applies to every font (hb-ot-shaper-arabic.cc:224-228) and lets marks into (IgnoreMarks,
+//   hb-ot-shaper-arabic-fallback.hh:214). A font can also draw it as two contextual glyphs, which stay two clusters
+//   (Amiri, Noto Naskh Arabic). Lam before alef wasla U+0671 isn't in the set: Geeza Pro and Damascus draw it as two
+//   clusters, Arial and Tahoma as one;
 // - 'encoded-ligatures': those, and where letter spacing is 0 (it turns liga off, font_features.cc:54-86) the Latin
 //   ligatures Unicode encodes at U+FB00 to U+FB04 (ff, fi, fl, ffi, ffl) and lam lam heh where the first lam doesn't join
 //   the letter before it (the fonts that draw it as one glyph do so there alone: Arial, Tahoma, Courier New, Geeza Pro);
