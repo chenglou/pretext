@@ -22,6 +22,16 @@ research/CAPABILITY-CHECK.md. Nothing here is built, but for item 4's main part,
 
 ## The numbers we start from
 
+**Corrected on 2026-09-19, in the evening: the timed rows of the table below were taken on a loaded machine and are
+wrong for Chrome and webkit-host.** Two agents measured again on a quiet machine, independently, in alternating passes
+under the exclusive lock (research/PERF-LIFETIME.md). 10,000 chat messages from scratch, the library as it was at the
+table's run: Chrome 4.6 s on the mix and 4.0 s on plain ASCII (not 9.59 and 4.16 s); Firefox 2.76 s and 0.58 s;
+webkit-host 0.235 s and 0.195 s (not 11.7 and 8.83 s), with main's cold prepare at 0.31 s there (not 1.53 s). So
+webkit-host is far under the bar already, and what the table's reading says of it (each call three times main's, every
+new context paying for its font) was the load, not the engine. The counts in the second table don't depend on load and
+stand. Item 1's "Expected" below is corrected by the same document: in Chrome the font checks' contexts were the cost,
+not the engine's, and the item bought a fifth, not a half.
+
 One run of `rebuild/bench/chat-night.sh`, 2026-09-19, the library at the X3 merge (the last step changed no question),
 no supplied font facts, background windows. Chrome ran under load that fell during its run, so its timed rows are upper
 bounds until a quiet rerun, which the phase should take first; counts don't depend on load.
