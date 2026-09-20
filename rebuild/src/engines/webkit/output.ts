@@ -188,6 +188,8 @@ function displayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft: num
   return out
 }
 
+type InlineBox = Extract<WebKitDisplayBox, { kind: 'inline-box' }>
+
 function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft: number, alignmentOffset: number, hasContentfulInFlowContent: boolean): WebKitDisplayBox[] {
   const line = filled.line
   const runs = line.runs
@@ -197,8 +199,8 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
   // which the initial width of an inline box adds back (LBB:488-495).
   const contentLogicalWidth = p.style.rtl ? line.contentLogicalWidth : f32(line.contentLogicalWidth - hanging)
   const rootRight = f32(alignmentOffset + contentLogicalWidth)
-  // The display boxes of the inline boxes open at a run, innermost last, as indices into `out`; null where a box got none.
-  const open: (number | null)[] = []
+  // The display boxes of the inline boxes open at a run, innermost last, each one of `out`; null where a box got none.
+  const open: (InlineBox | null)[] = []
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]!
     switch (run.kind) {
@@ -228,15 +230,15 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
         const left = f32(f32(alignmentOffset + run.left) + Math.max(0, marginStart))
         let width = Math.max(0, f32(rootRight - left))
         if (!p.style.rtl) width = Math.max(0, f32(f32(rootRight + hanging) - left))
-        open.push(out.length)
-        out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + left), width, hasStartEdge: run.kind === 'inline-box-start', hasEndEdge: false })
+        const boxOut: InlineBox = { kind: 'inline-box', element: run.element, x: f32(lineLeft + left), width, hasStartEdge: run.kind === 'inline-box-start', hasEndEdge: false }
+        open.push(boxOut)
+        out.push(boxOut)
         break
       }
       case 'inline-box-end': {
         // Every inline box that ends on the line starts on it, as itself or as a line-spanning start (lines.ts newLine).
-        const index = open.pop()!
-        if (index === null) break
-        const boxOut = out[index]! as Extract<WebKitDisplayBox, { kind: 'inline-box' }>
+        const boxOut = open.pop()!
+        if (boxOut === null) break
         const marginEnd = spanEdges(p, run.element).marginEnd
         const right = f32(f32(alignmentOffset + run.left) + f32(run.width - marginEnd))
         boxOut.width = Math.max(0, f32(right - f32(boxOut.x - lineLeft)))
@@ -283,7 +285,6 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
   }
   // The display box tree: an inline box's node holds its children, and a leaf the word spacing before its box. The boxes are
   // the ones in `out`.
-  type InlineBox = Extract<WebKitDisplayBox, { kind: 'inline-box' }>
   type Node = { kind: 'inline-box'; box: InlineBox; children: Node[] } | { kind: 'leaf'; box: Exclude<WebKitDisplayBox, InlineBox>; margin: number }
   const out: WebKitDisplayBox[] = []
   const rootChildren: Node[] = []
