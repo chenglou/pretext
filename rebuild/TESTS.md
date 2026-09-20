@@ -32,9 +32,8 @@ tier 1 sends to tier 2, per gate, so "every gate is fine" never reads as done, a
 `pretext-gates-<pid>.sock` files of processes that are gone. A full run can take 30 minutes on a shared machine, so
 start it detached from anything that has a time limit. Since the same day a run takes a machine-wide turn before its
 first gate (one full run and one `--quick` run at a time, first come, first served; it says who holds the turn while it
-waits, a killed run holds nobody up, a run whose turn came still waits while an exclusive browser job, a timed
-benchmark, holds the browser lock or waits for it, and while under 30% of the machine's memory is free, and `--no-wait`
-skips every wait), and a run whose inputs equal an earlier finished
+waits, a killed run holds nobody up, a run whose turn came still waits while under 30% of the machine's memory is free,
+and `--no-wait` skips both waits), and a run whose inputs equal an earlier finished
 run's prints that run's table and last line again as a reused result, with that run's time, worktree and commit, and
 exits with its code in under a second (`--fresh` runs anyway; a run that sends cases to tier 2 is never kept, since a
 reused result doesn't write the list tier 2 reads). The key is a hash over everything a gate reads, and `gates.ts`

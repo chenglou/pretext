@@ -56,10 +56,9 @@
 // the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
 // looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
 // lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
-// numbers only go up. A run whose turn came still starts no gate while an exclusive browser job, a timed benchmark,
-// holds the browser lock or waits for it (exclusiveBrowserJobs; a run that has started is never stopped), or while under
-// 30% of the machine's memory is free, as the browser lock does, and keeps its place meanwhile. --no-wait takes no
-// ticket and waits for neither, for a human who knows better. Measured with --quick --engine=gecko, 42
+// numbers only go up. A run whose turn came still starts no gate while under 30% of the machine's memory is free, as the
+// browser lock does, and keeps its place meanwhile. --no-wait takes no ticket and asks nothing of memory, for a human who
+// knows better. Measured with --quick --engine=gecko, 42
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
 // on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
 // alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
@@ -288,73 +287,25 @@ export type Ticket = { pid: number; at: number; worktree: string; flags: string;
 const when = (ms: number): string => new Date(ms).toString().slice(4, 24)
 const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)?.[1] ?? 0)
 
-// Whether the process that wrote a ticket (or a marker) at `at` still runs. Its pid alone would not do: the machine
-// reuses pids within hours, and a killed run's ticket stays until the next run looks. So a process of that pid that
-// started after the ticket was written is another one (`ps` gives the start to the second, in UTC here, since `bun test`
-// keeps another time zone than its children; when it gives nothing to read, the ticket counts as live). And a killed run
-// whose parent never reaps it stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives
-// its state as Z.
-function livesSince(pid: number, at: number): boolean {
-  if (!processExists(pid)) return false
-  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
-  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > at)
+// Whether the run that wrote a ticket still runs. Its pid alone would not do: the machine reuses pids within hours, and
+// a killed run's ticket stays until the next run looks. So a process of that pid that started after the ticket was written
+// is another one (`ps` gives the start to the second, in UTC here, since `bun test` keeps another time zone than its
+// children; when it gives nothing to read, the ticket counts as live). And a killed run whose parent never reaps it
+// stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives its state as Z.
+function ticketLives(ticket: Ticket): boolean {
+  if (!processExists(ticket.pid)) return false
+  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
+  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > ticket.at)
 }
 
-// A file another process removes when it likes: its text, or null when it went between a listing and this read.
-function readIfThere(path: string): string | null {
+// A ticket below a run's own, or null when another waiter removed it as dead between the listing and this read.
+function readTicket(path: string): Ticket | null {
   try {
-    return readFileSync(path, 'utf8')
+    return JSON.parse(readFileSync(path, 'utf8')) as Ticket
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
   }
-}
-
-// The browser lock's folder (.artifacts/session/with-browser-lock.py, ROOT; rebuild/bench/run.ts reads it too).
-const BROWSER_LOCK = '/private/tmp/pretext-eng-20260912'
-
-// The exclusive browser jobs under the browser lock: timed benchmarks, mostly. The lock keeps other browser jobs away
-// from one and knows nothing of the gates, which fill every core: with several owners at work a timed run waited for a
-// quiet machine that never came (2026-09-19). So a run starts no gate while one holds the exclusive lock or waits for
-// it; a run that has started is never stopped. `pid` is null while a holder's owner file isn't written yet.
-// - The holder: the folder `browser-lock`, with `browser-lock.owner` beside it, { job, pid } as JSON (the main
-//   repository's checkers write the pid in a line of text). It counts as the lock script counts it: while its pid
-//   lives, or while no pid is there to read.
-// - A waiter: `browser-lock.waiting-<pid>`, { job, pid, atMs }, which the lock script writes while an exclusive job
-//   waits for the lock and removes when the job takes it or gives up. A killed waiter's marker stays, so it counts only
-//   while its process lives, as a ticket does. The script is outside the repository: one that writes no marker shows
-//   its holder only.
-export type ExclusiveJob = { job: string; pid: number | null; waits: boolean }
-
-// An owner file as the lock script reads it (owner_pid): JSON with a pid, else the first number after `pid` in the text.
-// The file is another program's, written after the lock's folder is made and not in one step.
-function lockOwner(text: string): { job: string; pid: number | null } {
-  try {
-    const owner = JSON.parse(text) as { job?: unknown; pid?: unknown }
-    if (typeof owner.pid === 'number') return { job: String(owner.job), pid: owner.pid }
-  } catch {
-    // Not JSON: a line of text, or nothing yet.
-  }
-  const pid = /pid\D{0,3}(\d+)/.exec(text)
-  return pid === null ? { job: 'its owner file names no pid yet', pid: null } : { job: 'a checker of the main repository', pid: Number(pid[1]) }
-}
-
-export function exclusiveBrowserJobs(lock: string): ExclusiveJob[] {
-  const jobs: ExclusiveJob[] = []
-  const names = existsSync(lock) ? readdirSync(lock).sort() : []
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i]!
-    if (name === 'browser-lock') {
-      const owner = lockOwner(readIfThere(join(lock, 'browser-lock.owner')) ?? '')
-      if (owner.pid === null || processExists(owner.pid)) jobs.push({ ...owner, waits: false })
-    } else if (/^browser-lock\.waiting-\d+$/.test(name)) {
-      const text = readIfThere(join(lock, name))
-      if (text === null) continue
-      const waiter = JSON.parse(text) as { job: string; pid: number; atMs: number }
-      if (livesSince(waiter.pid, waiter.atMs)) jobs.push({ job: waiter.job, pid: waiter.pid, waits: true })
-    }
-  }
-  return jobs
 }
 
 // The machine's free memory in percent, as macOS's `memory_pressure` gives it and the browser lock reads it
@@ -369,13 +320,12 @@ function freeMemoryPercent(): number {
 export const MIN_FREE_MEMORY = 30
 
 // Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
-// worktree, whose reports and logs it would write over, no exclusive browser job holds the lock in `browserLock` or waits
-// for it, and `minFreeMemory` percent of the machine's memory is free (0 asks nothing); says what it waits for while it
-// waits. True when it waited.
+// worktree, whose reports and logs it would write over, and `minFreeMemory` percent of the machine's memory is free (0
+// asks nothing); says who holds the turn, or how much memory is free, while it waits. True when it waited.
 // The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
 // moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
 // its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
-export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number, browserLock: string): Promise<boolean> {
+export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number): Promise<boolean> {
   mkdirSync(dir, { recursive: true })
   const draft = join(dir, `draft-${ticket.pid}`)
   writeFileSync(draft, JSON.stringify(ticket))
@@ -398,27 +348,20 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
     const before: Ticket[] = []
     for (let i = 0; i < numbers.length; i++) {
       const path = join(dir, `${numbers[i]!}.json`)
-      // Another waiter can remove a dead ticket between the listing and this read.
-      const text = readIfThere(path)
-      if (text === null) continue
-      const earlier = JSON.parse(text) as Ticket
-      if (!livesSince(earlier.pid, earlier.at)) rmSync(path, { force: true })
+      const earlier = readTicket(path)
+      if (earlier === null) continue
+      if (!ticketLives(earlier)) rmSync(path, { force: true })
       else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
     }
-    // What the run waits for: its turn first, and it keeps its place while it waits for the rest.
-    let text = ''
-    if (before.length > 0) {
-      const holder = before[0]!
-      text = `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
-    } else {
-      const exclusive = exclusiveBrowserJobs(browserLock)
-      if (exclusive.length > 0) text = `waiting for an exclusive browser job, a timed run that gates beside it would spoil: ${exclusive.map(job => `${job.pid === null ? 'a job' : `pid ${job.pid}`} (${job.job}) ${job.waits ? 'waits for' : 'holds'} the browser lock`).join('; ')}. --no-wait skips the wait`
-      else if (minFreeMemory > 0 && freeMemoryPercent() < minFreeMemory) text = `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
-    }
-    if (text === '') {
+    const free = before.length > 0 || minFreeMemory === 0 ? 100 : freeMemoryPercent()
+    if (before.length === 0 && free >= minFreeMemory) {
       if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)
       return said !== ''
     }
+    const holder = before[0]
+    const text = holder === undefined
+      ? `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
+      : `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
     if (text !== said) console.error(`[gates] ${text}`)
     said = text
     await Bun.sleep(500)
@@ -739,7 +682,7 @@ if (import.meta.main) {
   const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
   let key = inputsKey(REPO, run)
   let earlier = earlierRun(key)
-  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY, BROWSER_LOCK)) {
+  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
     key = inputsKey(REPO, run)
     earlier = earlierRun(key)
   }
