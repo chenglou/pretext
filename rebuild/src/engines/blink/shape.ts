@@ -67,10 +67,12 @@ export function widthOf16(raw16: number): number {
   return f32(raw16 / 65536)
 }
 
-// Below what total a Canvas total of group g's text is an exact 16.16 value. A total is the float32 of a run's integer
-// advance sum, added to the other runs' as floats (shape_result.cc:1539-1609, text_metrics.cc:222), so it is exact while
-// every partial sum fits 24 bits above its lowest set bit: below 2^24 units whatever the values are, and below 2^(24 + g)
-// units where every value is a multiple of 2^g. HarfBuzz scales a font value v to (v * x_mult + 32768) >> 16 with x_mult =
+// Below what total a Canvas total of group g's text is an exact 16.16 value: what a window around an offset may measure
+// without shrinking (windowAdjust16), so the cut search's wide window is the range being cut, whose two sides are the
+// pieces' own totals. A total is the float32 of a run's integer advance sum, added to the other runs' as floats
+// (shape_result.cc:1539-1609, text_metrics.cc:222), so it is exact while every partial sum fits 24 bits above its lowest
+// set bit: below 2^24 units whatever the values are, and below 2^(24 + g) units where every value is a multiple of 2^g.
+// HarfBuzz scales a font value v to (v * x_mult + 32768) >> 16 with x_mult =
 // (x_scale << 16) / unitsPerEm (hb-font.hh:1145-1165 at harfbuzz dfdc088c), and Blink's x_scale is the platform size in
 // 16.16, truncated (harfbuzz_face.cc:639-641), so under a power-of-two unitsPerEm every such value is a multiple of 2^g,
 // g the scale's trailing zero bits less log2(unitsPerEm): 9 for 2048 units at 16 px, 0 for any size under 1000 units.
@@ -96,7 +98,8 @@ function exactBelow16(p: BlinkPrepared, g: number): number {
   const scale = Math.trunc(f32(effectiveFontSize(f32(f32(st.font.size) * f32(p.layoutZoom))) * 65536))
   const ls16 = Math.abs(raw16Trunc(f32(st.letterSpacing * p.layoutZoom)))
   // The grain in units, a power of two; under 1 the values are rounded one by one and there is none.
-  const grain = Math.min((scale & -scale) / unitsPerEm, ls16 === 0 ? Infinity : ls16 & -ls16)
+  // No more than the 1/64 px of the no-ligature contexts' letter spacing (contexts.ts), which their totals hold.
+  const grain = Math.min((scale & -scale) / unitsPerEm, ls16 === 0 ? 1024 : ls16 & -ls16, 1024)
   return EXACT16 * Math.max(1, grain)
 }
 
@@ -688,7 +691,10 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   const p = sh.p
   const group = p.groups[g]!
   const whole = measure16(sh, g, a, b, group.start, group.end)
-  if (whole < group.exact16) {
+  // A piece stays below 256 zoomed px even where a wider total is exact (exactBelow16): every later question about an
+  // offset is then a short string, and Canvas's cost grows with the characters it shapes. Measured whole, a wide group
+  // asked 0.39 to 0.80 times the calls and sent 4 to 5 times the UTF-16 units, and a pass took longer (the cut-grain study).
+  if (whole < EXACT16) {
     cuts.push(b)
     totals.push(whole)
     zero.push(false)
