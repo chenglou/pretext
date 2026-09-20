@@ -28,6 +28,7 @@
 // - A8: A3 beside the DOM, for what A3 found about the kept list itself: a span in the same family, its width read at
 //   every reading beside the kept context's and a new context's, so it shows whether the DOM follows a family name that
 //   resolves late where a kept context doesn't.
+// - A9: A8 in a new content process of a browser that has been up 15 seconds (A6's way there).
 //
 // Per string: every change of the kept context's answer and of the new contexts', with the time of the reading that first
 // showed it. A row of one entry never changed. Counts, not times (one browser slot); a newly started browser a probe:
@@ -252,6 +253,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A8', spec: 'the contexts list: a family named by a localized name, a kept context and a new one beside the DOM over ten seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: BESIDE_DOM }],
+  }, {
+    id: 'store-attack A9', spec: 'the contexts list: A8 in a new content process of a browser that has been up 15 seconds', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: `${HOP}\n${BESIDE_DOM}` }],
   }, {
     id: 'store-attack A4', spec: 'store prototype: the library with one kept list under a changing <html lang>, beside the DOM', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundle}\n${PAGE_LANG}` }],
