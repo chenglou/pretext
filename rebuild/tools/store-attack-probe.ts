@@ -19,6 +19,10 @@
 //
 // - A5: A1 with three strings alone, so nothing else in the page can be what changes the state: the bitcoin sign, a
 //   sentence that holds it and a plain word, under the bench's list.
+// - A6: A2 in a new content process of a browser that has been up for a while, which is what a new tab is. The probe's
+//   page waits 15 seconds and sends its tab to the runner's same document under the host name `localhost`, another site
+//   than 127.0.0.1, so Firefox and Chrome load it in another process; the runner sends a restarted page its probes again
+//   (runner.ts step), and there the sweep runs. `host` in the result says which page answered.
 //
 // Per string: every change of the kept context's answer and of the new contexts', with the time of the reading that first
 // showed it. A row of one entry never changed. Counts, not times (one browser slot); a newly started browser a probe:
@@ -100,6 +104,14 @@ const NAMED = [
 const rowsOfNames = () => NAMED.map(row => [row[0], 'normal 400 32px "' + row[1] + '", monospace', 'Hamburgefonstiv 0123']);
 `
 
+const HOP = String.raw`
+if (location.hostname !== 'localhost') {
+  await new Promise(resolve => setTimeout(resolve, 15000));
+  location.replace('http://localhost:' + location.port + location.pathname + location.search);
+  await new Promise(() => {});
+}
+`
+
 const OVER_TIME = String.raw`
 const make = (font) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c.lang = 'en'; c.font = font; return c; };
 const t0 = performance.now();
@@ -121,7 +133,7 @@ for (let i = 0; i < 40; i++) {
 }
 const rows = ROWS.map((row, i) => ({ what: row[0], font: row[1], text: row[2], codePoints: Array.from(row[2]).map(ch => ch.codePointAt(0).toString(16)), kept: seen[i].kept, fresh: seen[i].fresh }));
 return {
-  userAgent: navigator.userAgent, msSinceNavigationStart: Math.round(t0), strings: ROWS.length, firstPassMs, tookMs: Math.round(performance.now() - t0),
+  userAgent: navigator.userAgent, host: location.host, msSinceNavigationStart: Math.round(t0), strings: ROWS.length, firstPassMs, tookMs: Math.round(performance.now() - t0),
   keptContextsThatChanged: rows.filter(row => row.kept.length > 1),
   freshContextsThatChanged: rows.filter(row => row.fresh.length > 1).map(row => row.what),
   rows,
@@ -189,6 +201,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A5', spec: 'store prototype: one kept context a string over ten seconds in a browser that has just started, the bitcoin sign alone', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${SAMPLES}\nconst ROWS = [['bitcoin sign, the bench list', LIST, cp(0x20bf)], ['a sentence with the bitcoin sign, the bench list', LIST, 'that is 5 ' + cp(0x20bf) + ' a month'], ['a plain word, the bench list', LIST, 'Hamburgefonstiv']];\n${OVER_TIME}` }],
+  }, {
+    id: 'store-attack A6', spec: 'store prototype: the sweep after strings that hold U+FE0E, in a new content process of a browser that has been up 15 seconds', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: `${SAMPLES}\n${HOP}\nconst ROWS = rowsOf(TEXT_PRESENTATION.concat(BLOCKS));\n${OVER_TIME}` }],
   }, {
     id: 'store-attack A4', spec: 'store prototype: the library with one kept list under a changing <html lang>, beside the DOM', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundle}\n${PAGE_LANG}` }],
