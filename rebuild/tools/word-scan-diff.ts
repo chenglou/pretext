@@ -15,7 +15,7 @@
 //
 //   bun rebuild/tools/word-scan-diff.ts --source=tier|chat-mix|chat-latin|ascii-once|languages-once|cases
 //     [--cases=<cases.ndjson>[,<more>]] [--sets=a,b] [--count=N] [--widths=own|60,150,400] [--mode=premise|proven]
-//     [--checked] [--shard=i/n] [--out=<report.json>] [--dump-texts=<texts.json>]
+//     [--overflow-wrap=break-word|normal|anywhere] [--checked] [--shard=i/n] [--out=<report.json>] [--dump-texts=<texts.json>]
 //
 // `tier` reads the recorded sets' Firefox case files (tests/sets.ts); `cases` any case files; the chat sources are the
 // bench's generator as the bench builds its paragraphs (bench/page.ts chatInputs) and the long-form corpora cut once
@@ -28,7 +28,7 @@ import { CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_LENGTH_CLASSES, CHAT_STYLE, CHA
 import { makePredictor } from '../lab/predictor-core.ts'
 import type { Case } from '../lab/types.ts'
 import { wordScanState } from '../src/engines/gecko/lines.ts'
-import { detectEnvironment, fillLine, firstLine, linePieces, prepare, type BoxEdge, type Environment, type FontDecl, type InlineNode, type LineSlot, type Paragraph, type Prepared } from '../src/index.ts'
+import { detectEnvironment, fillLine, firstLine, linePieces, prepare, type BoxEdge, type Environment, type FontDecl, type InlineNode, type LineSlot, type OverflowWrap, type Paragraph, type Prepared } from '../src/index.ts'
 import { UNKNOWN_FONT_FACTS } from '../src/model.ts'
 import { selectSets, partFiles } from '../tests/sets.ts'
 import { installStandInCanvas } from './stand-in-canvas.ts'
@@ -106,7 +106,8 @@ function cutOnce(text: string): string[] {
   return out
 }
 
-const TEXT_STYLE = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8 } as const
+// The bench's text style, and its overflow-wrap unless --overflow-wrap names another (the chat and once sources alone).
+const TEXT_STYLE = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: (options.get('overflow-wrap') ?? 'break-word') as OverflowWrap, lineBreak: 'auto', tabSize: 8 } as const
 
 function chatParagraph(content: InlineNode[]): Paragraph {
   const s = CHAT_STYLE
