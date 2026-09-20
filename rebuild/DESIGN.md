@@ -1817,8 +1817,11 @@ in real Chrome:
 | a layout at a width met before | 112.9 / 136.8 | 0 / 0.04 | 112.9 / 136.8 | 0 / 0.04 |
 | a tier case, plain path, all 67,065 without facts | 234.31 | 114.37 | | |
 
-The tier cases' ratio of asked to distinct questions goes from 3.84 to 1.87; 59,081 cases ask fewer questions and none
-asks more. What is still asked twice is below the three numbers: a cluster alone, which the pair windows of two
+In time (research/PROFILING-START.md, item 2; three alternating pairs on a quiet machine): 10,000 chat messages from
+scratch go from 4.65 to 4.29 s on the mix and from 4.00 to 3.74 s on plain ASCII, and 10,000 kept messages laid out at
+3 widths from 3.77 to 1.08 s and from 3.14 to 1.11 s. Every call that went was a repeat, which Chrome's canvas answers
+cheaply, so a resize gains most. The tier cases' ratio of asked to distinct questions goes from 3.84 to 1.87; 59,081
+cases ask fewer questions and none asks more. What is still asked twice is below the three numbers: a cluster alone, which the pair windows of two
 neighbouring offsets share (about 5 a chat message), the wide window's left side, which is also the offset's prefix
 from the last cut (5), and a piece's total, which `prepare` measured and every wide window inside the piece asks again
 (5). Each is a short repeat that Chrome answers from its canvas, and none has a number that asks for a fourth table

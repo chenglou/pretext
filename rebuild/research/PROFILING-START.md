@@ -208,6 +208,13 @@ item 6's B1b by another name: the cut's safe test, asked again as the position a
   tree 177.9 to 125.2 and 211.9 to 140.2. A layout of a kept message at a new width 112.9 to 33.7 and 136.8 to 36.2;
   at a width met before 112.9 and 136.8 to 0 and 0.04. The tier cases' plain path 234.31 to 114.37 a paragraph
   (asked to distinct 3.84 to 1.87).
+- *Time* (one exclusive stretch of three alternating pairs of the bench's headline, 1-minute load 3 to 7 after the
+  first run; `.artifacts/bench/perf-positions-20260919`). 10,000 messages from scratch: the mix 4.65 to 4.29 s, plain
+  ASCII 4.00 to 3.74 s (medians of three runs of three passes a side; a side's runs lie within 0.12 s). So the
+  expectation held in time, though not in calls: a quarter of the calls went and 7% of the time, because every call
+  that went was a repeat, which Chrome answers from its canvas. Kept, then laid out at 3 widths, one pass a run: the
+  mix 3.77 to 1.08 s (runs 2.39, 3.77 and 4.15 against 1.08, 1.07 and 1.12), plain ASCII 3.14 to 1.11 s (3.14, 2.72
+  and 3.68 against 2.02, 1.04 and 1.11).
 - *The proof.* Tier 1: 0 predictions changed, repeats only on 3 cases a configuration, 0 other or new questions. The
   function set's plain, pure and sweep checks pass on all 67,065 cases in both configurations. Chrome's tier 2 in both
   orders and both configurations: 0 status transitions, exact values where they were. The plain predictor's line
