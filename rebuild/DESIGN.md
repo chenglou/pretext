@@ -1830,7 +1830,7 @@ pure and sweep checks pass, and the sweep fills one prepared paragraph at four w
 tier 2 in both orders and both configurations shows 0 transitions; the plain predictor's line ranges and the
 other-widths-first predictor's layouts equal the usual run's on all 67,065 cases. That predictor runs the inspected
 path, which reads the kept numbers in `linePieces` alone, so `lab/baselines/plain-other-widths-first-predictor.ts`
-fills a plain paragraph at two other widths first, for the browser.
+fills a plain paragraph at two other widths first: its line ranges equal the usual run's on all 67,065 cases too.
 
 **Since correctness round 5** (2026-09-19; research/CORRECTNESS-ROUND-5.md has the cost of each fix beside the cases
 it gained). Canvas questions a paragraph over each browser's recorded cases, counted in the browser: the plain path

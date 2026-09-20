@@ -220,7 +220,8 @@ item 6's B1b by another name: the cut's safe test, asked again as the position a
   orders and both configurations: 0 status transitions, exact values where they were. The plain predictor's line
   ranges equal the usual run's on all 67,065 cases, and so do the layouts after two other widths. That predictor runs
   the inspected path, which reads the kept numbers in `linePieces` alone; the plain path has one of its own now
-  (`lab/baselines/plain-other-widths-first-predictor.ts`).
+  (`lab/baselines/plain-other-widths-first-predictor.ts`), and its line ranges equal the usual run's on all 67,065
+  cases.
 - *What is left.* 44 and 48 calls a message are still repeats by range from scratch (25 and 28 on B1b's tree): a
   cluster alone that two neighbouring pair windows share, the wide window's left side, which is the offset's prefix
   too, a piece's total that every wide window inside it asks again, and the cut's safe test. A layout at a new width
