@@ -19,8 +19,9 @@
 // range, whether it has a line box, its width and whether it overflows (the decided line's LineInfo). Reported per family:
 // paragraphs, groups, cuts, layouts, lines, the layouts with a line end within one grapheme of a cut, what differs, and a
 // few examples. A family of CUT_DETAIL and a family that differs also list the widths found, for tools/cut-fonts-cases.ts.
-// CUT_UNITS=<json: family to unitsPerEm> is the cut-grain study's form: only those families run, both sides get the
-// family's coverage of the texts as font facts, the head side its unitsPerEm too (ListedFontFacts.unitsPerEm), the widths
+// CUT_FACTS=<json: family to its ListedFontFacts with unitsPerEm> is the cut-grain study's form (the study's own script
+// reads the font files' cmap and head tables): only those families run, both sides get the facts, the head side alone the
+// unitsPerEm (ListedFontFacts.unitsPerEm), the widths
 // sit beside the BASE's cuts, and positions are compared at the base's cuts and every third offset (positionsOff).
 // CUT_CONTEXTS=shared gives each tree one list of contexts a family (a page's way) where the default is a list a paragraph.
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -103,20 +104,14 @@ const out = [];
 for (let f = 0; f < FONTS.length; f++) {
   const family = FONTS[f].startsWith('!') ? FONTS[f].slice(1) : '"' + FONTS[f] + '"';
   if (!resolves(family)) { out.push({ family: FONTS[f], resolves: false }); continue; }
-  // The cut-grain study (CUT_UNITS): both sides get the family's coverage of the texts' code points as Canvas shows it (a
-  // code point the family lacks measures the same with and without it before two generic families), and the head side
-  // its unitsPerEm too, so the head measures a wide group whole where the grain proves its total exact.
+  // The cut-grain study (CUT_FACTS): both sides get the listed family's facts (its cmap coverage says which clusters it
+  // draws), and the head side its unitsPerEm too, so the head measures a wide group whole where the grain proves its total
+  // exact. A family the file doesn't name is left out.
   let factsA, factsB;
-  if (UNITS !== null) {
-    if (UNITS[FONTS[f]] === undefined) continue;
-    const drawn = [];
-    for (let i = 0; i < CODE_POINTS.length; i++) {
-      const s = String.fromCodePoint(CODE_POINTS[i]);
-      const before = (generic) => { probeContext.font = '72px ' + family + ', ' + generic; const a = probeContext.measureText(s).width; probeContext.font = '72px ' + generic; return a !== probeContext.measureText(s).width; };
-      if (before('monospace') || before('serif')) drawn.push(CODE_POINTS[i], CODE_POINTS[i]);
-    }
-    factsA = [{ family: FONTS[f], realizes: true, coverage: drawn, ligatures: null, scriptLookups: null, unitsPerEm: null }];
-    factsB = [{ family: FONTS[f], realizes: true, coverage: drawn, ligatures: null, scriptLookups: null, unitsPerEm: UNITS[FONTS[f]] }];
+  if (FACTS !== null) {
+    if (FACTS[FONTS[f]] === undefined) continue;
+    factsA = [{ ...FACTS[FONTS[f]], unitsPerEm: null }];
+    factsB = [FACTS[FONTS[f]]];
   }
   const row = { family: FONTS[f], resolves: true, positionsCompared: 0, positionsOff: 0, wholeGroups: 0, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
   const shared = SHARED ? [[], [], []] : null;
@@ -137,8 +132,8 @@ for (let f = 0; f < FONTS.length; f++) {
     const inner = [];
     let before16 = 0;
     for (let g = 0; g < gb.groups.length; g++) {
-      const group = UNITS === null ? gb.groups[g] : ga.groups[g];
-      if (UNITS !== null) {
+      const group = FACTS === null ? gb.groups[g] : ga.groups[g];
+      if (FACTS !== null) {
         if (group.cuts.length > 2 && gb.groups[g].cuts.length === 2) row.wholeGroups++;
         for (let k = group.start + 1; k <= group.end; k++) {
           if (k < group.end && (k % 3 !== 0 && !group.cuts.includes(k))) continue;
@@ -148,7 +143,7 @@ for (let f = 0; f < FONTS.length; f++) {
       }
       row.groups++;
       if (group.cuts.length > 2) row.cutGroups++;
-      if (UNITS !== null) { /* the head has other cuts by design; positions were compared above */ }
+      if (FACTS !== null) { /* the head has other cuts by design; positions were compared above */ }
       else if (JSON.stringify(ga.groups[g].cuts) !== JSON.stringify(group.cuts)) { row.cutsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseCuts: ga.groups[g].cuts, headCuts: group.cuts }); }
       else if (JSON.stringify(ga.groups[g].prefix) !== JSON.stringify(group.prefix)) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, cuts: group.cuts, basePositions: ga.groups[g].prefix, headPositions: group.prefix }); }
       for (let i = 1; i + 1 < group.cuts.length; i++) {
@@ -273,9 +268,8 @@ export default async function cutFontsProbes(): Promise<Probe[]> {
     if (!built.success) throw new Error(`bundling failed: ${built.logs.join('\n')}`)
     bundles.push(await built.outputs[0]!.text())
   }
-  const unitsPath = process.env['CUT_UNITS']
-  const codePoints = Array.from(new Set(TEXTS.flatMap(t => Array.from(t.text, c => c.codePointAt(0)!)))).sort((x, y) => x - y)
-  const constants = `const UNITS = ${unitsPath === undefined ? 'null' : readFileSync(resolve(unitsPath), 'utf8')};\nconst CODE_POINTS = ${JSON.stringify(codePoints)};\nconst FONTS = ${readFileSync(resolve(fontsPath), 'utf8')};\nconst DETAIL = ${detailPath === undefined ? '[]' : readFileSync(resolve(detailPath), 'utf8')};\nconst TEXTS = ${JSON.stringify(TEXTS)};\nconst SIZES = ${JSON.stringify(SIZES)};\nconst SHARED = ${process.env['CUT_CONTEXTS'] === 'shared'};`
+  const factsPath = process.env['CUT_FACTS']
+  const constants = `const FACTS = ${factsPath === undefined ? 'null' : readFileSync(resolve(factsPath), 'utf8')};\nconst FONTS = ${readFileSync(resolve(fontsPath), 'utf8')};\nconst DETAIL = ${detailPath === undefined ? '[]' : readFileSync(resolve(detailPath), 'utf8')};\nconst TEXTS = ${JSON.stringify(TEXTS)};\nconst SIZES = ${JSON.stringify(SIZES)};\nconst SHARED = ${process.env['CUT_CONTEXTS'] === 'shared'};`
   return [{
     id: 'cut-fonts F1', spec: 'the cut of a wide group: the base and the head of Blink\'s port on the machine\'s font families', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundles[0]!}\n${bundles[1]!}\n${constants}\n${BODY}` }],
