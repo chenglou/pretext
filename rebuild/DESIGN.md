@@ -1919,6 +1919,17 @@ round.
 - Distinct questions and the ratios above aren't counted again yet. The offline counts cover only the cases that
   replay, until the references are recorded again.
 
+**Since the cut of a wide group asks nothing** (2026-09-19, profiling item 6's B1b; §4.4). Counted in pinned Chrome,
+the plain path from the plain predictor's rows and the lab path from tier 2's forward rows, 67,065 cases: without facts
+the plain path asks 194.39 questions a paragraph where it asked 234.31, and the lab path 709.83 where it asked 736.24
+(with facts 749.21 where it asked 775.62). On the plain path 28,754 cases ask fewer, 38,310 the same and one 2 more. The
+search was the largest class of long strings a chat message asked: in the bench's chat smoke (pinned Chrome, 200
+messages, a device pixel ratio of 2) a message from scratch goes from 302.1 calls to 199.3 on the mix and from 306.7 to
+193.6 on plain ASCII, all of it in the engine's prepare (152.7 to 49.8 on the mix); a layout at another width asks what
+it asked, and Firefox's and webkit-host's counts are the same on both trees. No line moved: tier 2 in both orders and
+both configurations, the plain predictor's run, and every field of every recorded row held against the references'
+recording (research/PROFILING-START.md, item 6).
+
 **What it costs in time.** In the lab, little in Chrome, because Chrome's per-canvas cache answers a repeat: when the
 memo went the giants' prediction took 55.3 s against 49.5 s, and tier 2 forward 82.8 s against 79.3 s, back to back on a
 quiet machine; in pinned Chrome 0 of 2.17 million questions asked again were answered differently. The plan's tripwire

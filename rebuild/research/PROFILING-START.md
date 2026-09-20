@@ -260,6 +260,37 @@ Firefox's, −15% of WebKit's at the line). What is left on the plain path, from
 The corpus those prices come from is adversarial, built from rule families aimed at these recipes, so they say nothing
 about how often ordinary text would lose a line. A recipe that goes takes its cases to the known tail by name.
 
+*B1b is built* (2026-09-19, branch `x-perf-b1b`, unmerged; DESIGN.md §4.4, "the cut of a group of 256 zoomed px or
+more"). The cut search asks Canvas nothing, which takes B1a in: there is no test left to order. It is a recipe change,
+so tier 1 can't pass before a new recording, and what holds it is the browser.
+
+- *What the search settled is a condition now.* The pieces add the adjustment a position takes at the cut. An inspected
+  paragraph asks the wide window over both pieces at each cut and reports `unsafe-to-break` there where it shows another
+  adjustment. A plain paragraph asks nothing for it. The old gap ("no offset near its middle that the pair test calls
+  safe") sat at 433 cuts of the tier cases; the new one sits at 12, in 12 cases of 4 texts, which all pass and are exact
+  before and after.
+- *Counts.* The bench's chat smoke in pinned Chrome, 200 messages, a message from scratch: 302.1 to 199.3 `measureText`
+  calls on the mix and 306.7 to 193.6 on plain ASCII, the engine's prepare alone 152.7 to 49.8; a layout at another
+  width stays at 128.7 and 123.6, since the cut search is prepare's; the lines are the same (654 and 639 at 320 px,
+  1,856 and 1,824 at the three other widths). On the tier cases the plain path asks 194.39 questions a paragraph where
+  it asked 234.31 (the plain predictor's rows, 67,065 cases: 28,754 ask fewer, 1 asks 2 more), and the lab's path
+  709.83 where it asked 736.24. Firefox and webkit-host don't run this code: their bench counts are the same on both
+  trees (110.67 and 82.14 calls a message in Firefox, 36.79 and 31.39 in webkit-host), and tier 1 shows 0 questions
+  changed there.
+- *Time.* TIMING
+- *Proof.* Tier 2 in pinned Chrome, both orders, both configurations, recorded: 0 status transitions without facts;
+  with facts 20, all on the painter's metric and none from a pass (one text, `x AVAV…AV y`: the old gap sat at every
+  cut of the word, since every offset in it kerns, and the painter's failure on that line was attributed to it; 8 rows
+  are left without a cover, 12 keep a painter limit). Exact values are unchanged (265 and 551 differing predicted
+  values before and after), the gates lost 0, and the plain predictor's line ranges equal the usual run's on all 67,065
+  cases. Field by field against the references' recording, 3,215 cases differ without facts and 1,307 with them, all
+  in gap lists but 6 cases of 2 texts (word-spaced Arabic in Geeza Pro, word-spaced Korean in Apple SD Gothic Neo)
+  that also differ inside a line's geometry: a reshape at a line start that the moved cut made or removed, a limit flag
+  beside it, and cluster advances 1/65536 px apart. No line range, width, observed value, native observation, painted
+  line or painter limit differs in any of 134,130 rows a configuration. More values are reported as predicted: the
+  scorer compared 188 more without facts and 4,506 more with them (4,524 go from limited to predicted there and 14 the
+  other way), and the differing ones stay 265 and 551.
+
 ### 7. Engine tables parsed when the module loads
 
 Every table of the three engines is decoded and parsed when its data module loads: about 3 ms and 1 MB under bun, kept
