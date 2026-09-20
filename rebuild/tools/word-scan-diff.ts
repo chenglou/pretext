@@ -15,12 +15,13 @@
 //
 //   bun rebuild/tools/word-scan-diff.ts --source=tier|chat-mix|chat-latin|ascii-once|languages-once|cases
 //     [--cases=<cases.ndjson>[,<more>]] [--sets=a,b] [--count=N] [--widths=own|60,150,400] [--mode=premise|proven]
-//     [--checked] [--shard=i/n] [--out=<report.json>]
+//     [--checked] [--shard=i/n] [--out=<report.json>] [--dump-texts=<texts.json>]
 //
 // `tier` reads the recorded sets' Firefox case files (tests/sets.ts); `cases` any case files; the chat sources are the
 // bench's generator as the bench builds its paragraphs (bench/page.ts chatInputs) and the long-form corpora cut once
 // (tools/store-real-text.ts). `--widths=own` is a case's own width, 320 for a chat source. `--checked` runs the word scan's
-// checked mode in the second pass too, which throws at the first scan that differs.
+// checked mode in the second pass too, which throws at the first scan that differs. `--dump-texts` writes the texts of
+// ascii-once or languages-once as the browser probe takes messages (tools/word-scan-probe.ts) and stops.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_LENGTH_CLASSES, CHAT_STYLE, CHAT_WIDTH, buildChat } from '../bench/cases.ts'
@@ -157,6 +158,11 @@ function inputs(): Input[] {
             more = true
           }
         }
+      }
+      const dump = options.get('dump-texts')
+      if (dump !== undefined) {
+        writeFileSync(resolve(dump), JSON.stringify(texts.slice(0, count).map(text => ({ parts: [{ code: false, text }] }))))
+        process.exit(0)
       }
       return texts.slice(0, count).map((text, i) => ({ id: `${source}-${i}`, paragraph: chatParagraph([{ kind: 'text', text }]), env, width: CHAT_WIDTH, insets: [] }))
     }
