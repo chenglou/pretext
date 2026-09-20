@@ -28,13 +28,250 @@ for a form with no named loss, then a critic. The critic's review comes first.
 - **The attack set stays as a lab family** (`lab/cases/wide-group-cuts.ts`, 2,159 variants, a tier set of 2,159 cases),
   with the critic's change to draw each variant from its own random stream, as every other generator does.
 - **Verdict: merge.** It changes recorded gap lists (750 and 343 cases, all `script-context`), so Chrome is recorded and
-  frozen again at the merge. A separate check lays the head out beside the base in every installed font family (318),
-  the test that caught the word-sum study (research/SPEC-WORD-SUM.md); the merge is pushed only if it finds no family
-  where the head is wrong and the base right.
+  frozen again at the merge.
+- **Across every installed font family** (a separate check, the test that caught the word-sum study,
+  research/SPEC-WORD-SUM.md; its report follows this reading): in the pinned Chrome at ratios 2 and 1, head and base
+  make the same cuts, positions and lines in all 318 families that resolve: 0 of 248,901 cuts and 0 of 1,151,358
+  layouts differ (936,612 of them with a line end within one grapheme of a cut), and no browser-scored case of 46,875
+  changes status. The same probe on the FIRST form shows 42,644 of 644,459 layouts differing in 196 families, so it
+  does see a wrong cut rule.
+- **What that check found in the cut both builds share** (not the rework's; a lead for the correctness backlog): the
+  pieces add up to the group in 316 of 318 families outside soft-hyphen text. Zapfino's word "Zapfino" is one
+  seven-letter ligature that the safe test's windows step over (the cut passes, the adjustment is 0, and an exact
+  window shows 42 zoomed px) or that is itself wider than 256 zoomed px (reported as `unsafe-to-break`); Marker Felt
+  misses in an unbroken run of ligatures at cuts the library already reports. Soft hyphens inside ff, fl or fi miss by
+  the known gap `soft-hyphen-shaping`, not by the cut.
 - **Leads the critic found in the base, the same in the head, not fixed here:** 209 metric failures in 195 of its
   cases that the scorer marks as not covered by a gap (spans without padding that split a ligature inside a wide
   group, words parted by U+3000 in Hoefler Text, unbroken lam-alef Arabic in Tahoma at 40px, text-indent with
   justification in Baskerville), and soft-hyphen words at a cut failing in several ways.
+
+## The reworked 256 px cut across installed fonts (branch x-b1b-fonts, 2026-09-20)
+
+### Verdict
+
+**The rework holds across all installed fonts.**
+- In pinned Chrome 153.0.8010.50, at device pixel ratios 2 and 1, the head (613ae4e) and the base (b4f276b) agree in all 318 font families that resolve.
+  - They make the same cuts, the same positions and the same lines: 0 of 248,901 cuts and 0 of 1,151,358 layouts differ.
+  - Of those layouts, 936,612 had a line end within one grapheme of a cut.
+  - On 46,875 browser-scored cases, no case changed status in either direction.
+
+**The cut both builds share is not the browser's everywhere.**
+- Outside soft-hyphen text, the pieces add up to the group in 316 of 318 families.
+- Two families miss, and both builds miss alike:
+  - Zapfino, in the word "Zapfino". It is one seven-letter ligature that the safe test's windows step over, or that is itself wider than 256 zoomed px.
+  - Marker Felt, in an unbroken run of ligatures, at cuts the library already reports as unsafe.
+- This is code the rework did not touch.
+
+### Labels
+
+- **Base**: b4f276b, the library before the rework.
+- **Head**: 613ae4e, the rework.
+- **Layout**: one paragraph at one width.
+- **Cut**: an inner entry of a group's `cuts` (shape.ts `addPieces`).
+- **Near a cut**: some line but the last ends within one grapheme of a cut.
+- **LayoutUnit**: 1/64 zoomed px, which is 1,024 of the library's 16.16 units.
+- **The seven**: the families the words study named (Euphemia UCAS, Zapfino, Diwan Thuluth, Waseem, Songti SC, Songti TC, generic serif).
+- **R/**: `~/github/pretext-rebuild/.artifacts/tests/runs/b1b-fonts-20260920/`.
+- My log is `~/github/pretext-rebuild-wt/b1b-fonts/.progress-b1b-fonts.txt`.
+
+### 1. Base against head in every family
+
+Tool: `rebuild/tools/cut-fonts-probe.ts`.
+- **Setup.**
+  - Both builds are bundled into one page of the real browser.
+  - There are 15 long paragraphs at 16 and 28 px, in every family of the words attacker's list (R/families.json).
+  - That list has 321 entries. 318 resolve: ui-serif, ui-rounded and ui-monospace don't.
+- **Widths.**
+  - 4 ordinary widths.
+  - The decided lines' own widths ±1 LayoutUnit.
+  - For up to 12 cuts a paragraph, two searched widths, each ±1 LayoutUnit:
+    - the smallest width where the first line ends at or after the cut;
+    - the smallest width where it ends after the cut.
+- **Compared.**
+  - Per group: the cuts and the positions at them.
+  - Per line: range, line box, width, overflow.
+- All these runs used unknown font facts.
+
+| run (file: R/<run>/summary.json) | ratio the page reported | contexts | paragraphs | groups cut | cuts | layouts | lines | layouts near a cut | layouts at searched widths (near a cut) | cuts differ | positions differ | layouts differ |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| fonts-dpr2 | 2 | a list a paragraph | 9,540 | 10,254 | 170,102 | 644,318 | 3,869,082 | 562,672 | 457,619 (391,340) | 0 | 0 | **0** |
+| fonts-dpr1 | 1 | a list a paragraph | 9,540 | 9,576 | 78,799 | 507,040 | 3,047,355 | 373,940 | 318,294 (233,160) | 0 | 0 | **0** |
+| fonts-shared-dpr2 | 2 | one list a family and build, a page's way | 9,540 | 10,254 | 170,102 | 644,318 | 3,869,082 | 562,672 | 457,619 (391,340) | 0 | 0 | **0** |
+
+0 errors in every run. No family differs, so there is no "by family" list.
+
+**Does the probe see a wrong cut rule?** I ran the same probe on the FIRST form of B1b (52badcb, the cut found without asking Canvas) against its parent b2d9050, at ratio 2. File: R/control-first-form-dpr2/summary.json.
+- 42,644 of 644,459 layouts differ, 37,064 of them near a cut, in 196 of 318 families.
+- Cuts differ in 1,555 groups of 312 families.
+- Most: Euphemia UCAS 1,024, Zapfino 886, American Typewriter 385, Lucida Grande 383, Skia 368, Diwan Thuluth 341.
+- Of the seven: Waseem 149; Songti SC, Songti TC and serif 0.
+- So the probe does see a wrong cut rule, and it shows none in the rework.
+
+### 2. What the browser says
+
+No family differed between the builds. So the lab ran on the seven, and on 11 ordinary families: Marker Felt, Helvetica Neue, Times New Roman, Arial, Avenir Next, Hoefler Text, Futura, Baskerville, Apple Chancery, Geeza Pro, Noto Nastaliq Urdu.
+- Cases come from `rebuild/tools/cut-fonts-cases.ts`: the probe's texts at its ordinary widths and every width it searched.
+- Runs are `lab/run.ts` with each build's predictor, then `lab/score.ts`, then R/tools/transitions.py.
+- Native observations were equal in every pair of runs (0 rows differ).
+
+| set (R/<set>/<predictor>-transitions.log) | ratio | cases | breaks pass / fail, both builds | lineCount | widths (n/a) | painter | pass to fail | fail to pass |
+|---|---|---|---|---|---|---|---|---|
+| seven-dpr2, no-facts | 2 | 10,554 | 10,183 / 371 | 10,522 / 32 | 9,850 / 333 (371) | 9,815 / 739 | 0 | 0 |
+| seven-dpr1, no-facts | 1 | 7,332 | 7,229 / 103 | 7,327 / 5 | 7,093 / 136 (103) | 7,072 / 260 | 0 | 0 |
+| extra-dpr2, no-facts | 2 | 17,112 | 16,918 / 194 | 17,098 / 14 | 16,390 / 528 (194) | 16,454 / 658 | 0 | 0 |
+| extra-dpr1, no-facts | 1 | 11,877 | 11,815 / 62 | 11,874 / 3 | 11,605 / 210 (62) | 11,625 / 252 | 0 | 0 |
+| seven-dpr2, plain | 2 | 10,554 | not observed | 10,522 / 32 | not applicable | not applicable | 0 | 0 |
+| seven-dpr1, plain | 1 | 7,332 | not observed | 7,327 / 5 | not applicable | not applicable | 0 | 0 |
+
+- Every per-case score entry is equal on both sides.
+- The scorer reads only line counts from a plain prediction. The plain predictor's lines differ between the builds in 0 of 10,554 and 0 of 7,332 rows (R/<set>/plain-predictor-lines.log).
+- Do widths on the head's own fit ±1 LayoutUnit fail more than ordinary widths? Head, no-facts, texts without soft hyphens:
+  - ordinary families, ratio 2: 0.65% of 1,232 ordinary cases against 0.80% of 14,655 beside a cut;
+  - the seven, ratio 2: 1.28% against 3.40%;
+  - the seven, ratio 1: 0.77% against 1.61%.
+
+### 3. Do the pieces add up to the group?
+
+Tool: `rebuild/tools/cut-identity-probe.ts`, on the head. The base has the same cuts and positions.
+- The library's own module prepares each paragraph, and its own `measure16` asks Canvas.
+- **Whole group.** W(group) against the last position, which is the pieces plus every cut's adjustment.
+  - A total of 256 zoomed px or more is a float32, so small differences are its step: 64 units at 8,192 px.
+- **Each cut.** d is the adjustment the library put at the cut. It is held against two other exact windows:
+  - back to the previous cut and on to the end of the next word;
+  - from the word before the cut to the next cut.
+- Files: R/identity2-dpr2 and R/identity2-dpr1, each with summary.json and summary.txt, by text.
+
+| | ratio 2 | ratio 1 |
+|---|---|---|
+| groups cut / cuts | 10,254 / 170,102 | 9,576 / 78,799 |
+| whole group: exact / under 8 / under 64 / under 1,024 / 1,024 units or more | 3,396 / 3,347 / 2,983 / 367 / 161 | 3,168 / 4,468 / 1,924 / 14 / 2 |
+| groups off by 1,024 units or more, outside the soft-hyphen text | 7: Zapfino 5, Marker Felt 2 | 2: Zapfino 1, Marker Felt 1 |
+| the same, in the soft-hyphen text | 154 groups in 153 families | 0 |
+| cuts where another exact window shows another d, outside the soft-hyphen text | 6: Zapfino 2, Marker Felt 4 | 2: Zapfino 1, Marker Felt 1 |
+| the same, in the soft-hyphen text | 2,786 cuts in 167 families | 1,254 cuts in 167 families |
+
+- In the other 13 texts, no window is off and no whole is off by a LayoutUnit, in any of the 318 families at either ratio.
+  - Those texts are kerning, prose, Arabic, Urdu, CJK with Latin, accents, Hindi, Thai, Greek and Cyrillic, mixed scripts, Hebrew, digits and the ligature prose.
+  - Euphemia UCAS is exact too: its largest difference is 32 units.
+- At ratio 2, 12 families have a cut with d other than 0 (31 cuts).
+- My first form of the probe had windows with two clusters on the far side. They gave false misses where a side held only ". ", which measured alone has no script.
+  - A scan confirms it (R/scan-2-dpr2): Avenir Next `. |ا` shows −110,100, and 0 with one letter more.
+  - The second form fixed that. The first form's outputs are R/identity-dpr2 and R/identity-dpr1.
+
+### 4. The seven families
+
+File: R/seven-table.txt.
+
+| family | ratio | cuts | layouts (near a cut) | layouts that differ: a list a paragraph / one list | cuts or positions that differ | cuts off outside soft hyphens | largest whole-group difference outside soft hyphens (units) | lab cases | breaks fail, base / head | lineCount fail | widths fail |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Euphemia UCAS | 2 | 528 | 1,906 (1,489) | 0 / 0 | 0 | 0 | 32 | 1,419 | 54 / 54 | 12 / 12 | 65 / 65 |
+| Euphemia UCAS | 1 | 244 | 1,490 (920) | 0 / not run | 0 | 0 | 12 | 993 | 36 / 36 | 4 / 4 | 49 / 49 |
+| Zapfino | 2 | 703 | 2,043 (1,863) | 0 / 0 | 0 | 2 | 4,844,422 | 1,572 | 296 / 296 | 19 / 19 | 129 / 129 |
+| Zapfino | 1 | 311 | 1,696 (1,343) | 0 / not run | 0 | 1 | 2,422,214 | 1,203 | 62 / 62 | 1 / 1 | 33 / 33 |
+| Diwan Thuluth | 2 | 443 | 1,926 (1,629) | 0 / 0 | 0 | 0 | 55 | 1,464 | 10 / 10 | 0 / 0 | 65 / 65 |
+| Diwan Thuluth | 1 | 203 | 1,454 (1,036) | 0 / not run | 0 | 0 | 55 | 984 | 1 / 1 | 0 / 0 | 30 / 30 |
+| Waseem | 2 | 468 | 2,008 (1,712) | 0 / 0 | 0 | 0 | 76 | 1,542 | 2 / 2 | 1 / 1 | 50 / 50 |
+| Waseem | 1 | 219 | 1,529 (1,123) | 0 / not run | 0 | 0 | 24 | 1,059 | 1 / 1 | 0 / 0 | 12 / 12 |
+| Songti SC | 2 | 465 | 1,992 (1,696) | 0 / 0 | 0 | 0 | 16 | 1,518 | 3 / 3 | 0 / 0 | 8 / 8 |
+| Songti SC | 1 | 213 | 1,518 (1,090) | 0 / not run | 0 | 0 | 12 | 1,032 | 1 / 1 | 0 / 0 | 4 / 4 |
+| Songti TC | 2 | 465 | 1,992 (1,696) | 0 / 0 | 0 | 0 | 16 | 1,518 | 3 / 3 | 0 / 0 | 8 / 8 |
+| Songti TC | 1 | 213 | 1,518 (1,090) | 0 / not run | 0 | 0 | 12 | 1,032 | 1 / 1 | 0 / 0 | 4 / 4 |
+| serif | 2 | 465 | 1,998 (1,701) | 0 / 0 | 0 | 0 | 16 | 1,521 | 3 / 3 | 0 / 0 | 8 / 8 |
+| serif | 1 | 214 | 1,520 (1,085) | 0 / not run | 0 | 0 | 12 | 1,029 | 1 / 1 | 0 / 0 | 4 / 4 |
+
+**Where the seven fail** (the "HEAD FAILURES" table at the end of each transitions log):
+- **Zapfino.** Exactly the texts where the identity misses:
+  - ratio 2: unbroken 69 of 76 cases at 16 px and 67 of 76 at 28 px, cjk-latin 28 px 45, ligatures 28 px 36, soft hyphens 16 and 34, digits-url 28 px 28;
+  - ratio 1: unbroken 28 px 58 of 64;
+  - where the identity holds, the unbroken text at 16 px ratio 1 fails 1 of 46.
+- **Euphemia UCAS.** Only the two texts with fallback scripts (cjk-latin, mixed-scripts), plus one Arabic case at ratio 1. Its identity is exact, so these are not the cut's.
+- The scorer marks nearly every failure as covered by a gap.
+- Not covered by any gap:
+  - some width failures in the accents text, in serif and the two Songti;
+  - the two Arabic cases under "Leads" below.
+
+### 5. Where the shared cut is wrong (for the owner; none of it is the rework's)
+
+**A. Zapfino, the word "Zapfino", with the safe test passing.**
+- Text `…fjordZapfinowaffle…` (no spaces), 16 px at ratio 2. Cuts are [0, 7, 16, 24, 33, …]; the cut at 24 is `Zapfi|no`.
+- What the search asked, from R/scan-3-dpr2/chrome-probes.json (`prepareAsked`):
+  - the range [16,33) `ordZapfinowafflec` is 24,604,832 units, not exact;
+  - the wide window [16,28) `ordZapfinowa` is 19,403,896, still not exact;
+  - `windowAdjust16` halves the left side from 16 to 20, which lands inside the word [19,26);
+  - [20,28) `apfinowa` 10,863,244 = `apfi` 4,713,348 + `nowa` 6,149,896, so the adjustment is 0;
+  - the pair window `in` is 0.
+- So the cut passes and d is 0. But the exact window [16,26) `ordZapfino` shows 2,768,243 units, which is 42 zoomed px (R/identity2-dpr2).
+- Every window with only one cluster on the far side shows 0 (R/scan-1-dpr2: `i|nowaffle…`, `ntfjordZapfi|n`). The form needs all seven letters.
+- The same happens at 28 px ratio 1, where the window is off by 2,422,212.
+- The base measured the same windows and made the same cut. The head measured nothing less here.
+
+**B. Zapfino, where the ligature alone is wider than 256 zoomed px.**
+- 28 px at ratio 2, ligatures text: cuts …53, 54, 56, 61…, so the word [54,61) is cut at 56.
+- No exact window can hold the word. The whole is off by 4,844,4xx units, which is 73.9 zoomed px.
+- The lab's first differing unit is "Zapfino": engine line 62,290 LayoutUnits against native 67,021.
+- It is reported as `unsafe-to-break` and scored as covered.
+- The same happens in cjk-latin 28 px.
+
+**C. Other reported unsafe cuts.**
+- Zapfino `of |the`: the window ` |the` shows 1,266,156, a word form after a space. The cut didn't pass, so it is reported.
+- Marker Felt `shuff|le`: pair −256,901, wider windows −543,162 and −352,321. The cut is unsafe and reported.
+
+**D. Soft hyphens. This is the known gap `soft-hyphen-shaping`, not the cut.**
+- In an 8-bit paragraph, a measured range without a space leaves SHY out. A range with a space carries U+2060 (`canvasString`).
+- R/scan-1-dpr2, Helvetica Neue at ratio 2, 28 px: ` |truf­fl` shows 55,050, and ` |truf­fles ` (ends with a space) shows 0.
+- At ratio 2, 28 px, a piece is often one word, so the whole misses by about 55,050 units per word with SHY inside ff, fl or fi.
+  - Median family's largest miss: 1,101,068 units, which is 16.8 zoomed px.
+  - Zapfino's largest: 2,385,506 units.
+- At ratio 1, every whole is within 64 units.
+- Lab break failures in the soft-hyphen text at ratio 2, 28 px: Geeza Pro 40, Noto Nastaliq Urdu 12, Helvetica Neue 8 (with 42 width failures).
+
+**Leads (both builds alike).**
+- In the Arabic text, about one case a family fails breaks at the width that puts the first line's end beside offset 102.
+  - The detail is "code point 101 space: native lines 0,1; expected 0". Line count passes.
+  - Most are covered by `float32-precision` or `unsafe-to-break`.
+  - Three have no gap on the line: Arial 28 px (ratio 2), Euphemia UCAS 16 px and Waseem 16 px (ratio 1).
+- Baskerville fails breaks in 29 cases at ratio 2 across many texts, all covered.
+
+### 6. Not run
+
+- Both builds with font facts. My probes use unknown facts, and the lab ran the no-facts and plain predictors.
+- Widths ±1/64 px around the BROWSER's fit. The lab's two-pass form was not used.
+  - My widths sit on the head's own fit ±1 LayoutUnit of the zoomed width, which is 1/128 CSS px at ratio 2.
+  - The browser then judges them in the lab.
+- Ratios other than 2 and 1, and sizes other than 16 and 28 px.
+- One list of contexts at ratio 1.
+- The plain predictor on the ordinary families.
+- The identity probe on the base. Its cuts and positions equal the head's in every group.
+- Letter or word spacing, spans, inline boxes. The texts are plain paragraphs.
+- Font tables were not read. "Seven-letter ligature" is what Canvas totals show.
+
+### 7. Problems
+
+- **The browser lock.** Other owners' exclusive jobs ran back to back, and slot jobs waited 5 to 25 minutes each time (R/*.log "waiting").
+  - I chained several runs under one Chrome slot (R/tools/chain.sh, lab-runs.sh, chain-extra-dpr1.sh). Every browser command still ran under the lock wrapper.
+- **`--device-scale-factor`.**
+  - The probe runner took the ratio from its own `--chrome-args=--force-device-scale-factor=N`.
+  - The lab on this branch has no such option. I applied the rework owner's `LAB_DSF` patch: committed on my branch (8a0e00f), uncommitted in the base scratch worktree.
+  - Every run reported the ratio that was forced.
+- The smoke of the fonts probe ran with 5 cuts a paragraph; the full runs use 12.
+- Every exit line in R/exits.log is 0 (49 lines). No browser job failed.
+- Rows of all eight lab runs are compressed with compress-rows.sh. R/ is 455 MB.
+
+### 8. Tools and state
+
+- Branch x-b1b-fonts, 8 commits after 613ae4e. Nothing is pushed or merged. `tsc` on the rebuild project exits 0.
+  - 9c49ed3: the three words tools brought over as they are.
+  - d2bab4e: `rebuild/tools/cut-fonts-probe.ts`.
+  - c89f70a: `rebuild/tools/cut-fonts-cases.ts`.
+  - 8a0e00f: lab `LAB_DSF`.
+  - b74835f, 25db270: `rebuild/tools/cut-identity-probe.ts`.
+  - d5b561a, 82e9f8d: `rebuild/tools/cut-window-scan-probe.ts`, which scans the windows around one cut and records every string asked during prepare.
+- Run scripts and summary scripts are in R/tools/.
+- The three scratch worktrees are removed with `git worktree remove`: base b4f276b, and the control's b2d9050 and 52badcb.
+  - In the base, the patch was reverted with `git apply -R`, and the `.artifacts` and `node_modules` symlinks were unlinked first.
+  - My worktree's `.artifacts` symlink is untouched.
+- The critic's worktree and run folder were only read.
 
 ## The critic's report on the B1b rework (key b1b-rework-critic, 2026-09-20)
 
