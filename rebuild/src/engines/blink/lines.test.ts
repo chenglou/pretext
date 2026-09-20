@@ -579,19 +579,19 @@ describe('blink plain and inspected paragraphs', () => {
       }
       return lines
     }
-    const plain = prepare(p, env, false)
+    const plain = prepare(p, env, false, [])
     const first = laidOut(plain, 120, false)
     asked = []
     // A width met before asks Canvas nothing, and another width gives what a fresh paragraph gives there.
     expect(laidOut(plain, 120, false)).toEqual(first)
     expect(asked.length).toBe(0)
-    for (const width of [60, 200, 85]) expect(laidOut(plain, width, false)).toEqual(laidOut(prepare(p, env, false), width, false))
-    const inspected = prepare(p, env, true)
+    for (const width of [60, 200, 85]) expect(laidOut(plain, width, false)).toEqual(laidOut(prepare(p, env, false, []), width, false))
+    const inspected = prepare(p, env, true, [])
     const firstInspected = laidOut(inspected, 120, true)
     asked = []
     expect(laidOut(inspected, 120, true)).toEqual(firstInspected)
     expect(asked.length).toBeGreaterThan(0)
-    expect(laidOut(inspected, 60, true)).toEqual(laidOut(prepare(p, env, true), 60, true))
+    expect(laidOut(inspected, 60, true)).toEqual(laidOut(prepare(p, env, true, []), 60, true))
   })
 
   test('only an inspected paragraph measures without ligatures, which no line\'s breaks read', () => {
