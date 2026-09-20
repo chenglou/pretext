@@ -481,10 +481,12 @@ browser scoring job took the machine to its swap. Nor does it start one while an
 benchmark, holds the browser lock or waits for it (`exclusiveBrowserJobs`): the lock kept other browser jobs away from
 a timed run and not the gates, which fill every core, so with several owners at work a timed run waited for a quiet
 machine that never came. The run says which job it waits for; a run that has started is never stopped, so a timed run
-still waits for the load to fall (`bench/run.ts --quiet-load`), and no new run starts meanwhile. A waiting exclusive job
-is known by a marker beside the lock, `browser-lock.waiting-<pid>`, which the lock script writes while a job waits (a
-marker whose process is gone counts for nothing; the script is outside the repository, and one that writes no marker
-shows its holder only). `--no-wait` skips every wait. Measured with `--quick --engine=gecko`,
+still waits for the load to fall (`bench/run.ts --quiet-load`), and no new run starts meanwhile. A run that a job
+under the browser lock starts (the gates timed on a quiet machine, or a step of a script that holds a browser's slot)
+doesn't wait: an exclusive job starts only once it has every lock, and that job keeps its lock until the run ends.
+A waiting exclusive job is known by a marker beside the lock, `browser-lock.waiting-<pid>`, which the lock script
+writes while a job waits (a marker whose process is gone counts for nothing; the script is outside the repository, and
+one that writes no marker shows its holder only). `--no-wait` skips every wait. Measured with `--quick --engine=gecko`,
 31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
 on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
 took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
