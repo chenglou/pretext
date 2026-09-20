@@ -544,7 +544,8 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
   const group = p.groups[g]!
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
-  const before = new Array<number>(to - from + 1).fill(-1)
+  // NaN until a unit is told: a sum can be negative under a negative spacing.
+  const before = new Array<number>(to - from + 1).fill(Number.NaN)
   const starts = new Int8Array(to - from + 1).fill(-1)
   let base = 0
   for (let a = from; a < to;) {
@@ -615,7 +616,7 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
     a = b
   }
   before[to - from] = base
-  for (let i = to - from - 1; i >= 0; i--) if (before[i]! < 0) before[i] = before[i + 1]!
+  for (let i = to - from - 1; i >= 0; i--) if (Number.isNaN(before[i]!)) before[i] = before[i + 1]!
   starts[0] = 1
   return { before, starts }
 }
