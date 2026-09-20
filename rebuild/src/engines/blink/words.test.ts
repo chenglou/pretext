@@ -74,6 +74,14 @@ describe('blink word pieces', () => {
     expect(prepare(paragraphOf('ab cd - ef gh'), env, false, []).groups[0]!.cuts).toEqual([0, 3, 11, 13])
   })
 
+  test('a quote that opens a Latin word after a Greek one takes the Greek run\'s script, so no cut parts them', () => {
+    // text_content: the Greek word is [0, 3), `"hello"` is [4, 11), `world` is [12, 17), all in one left-to-right group.
+    // The cut at 4 would measure the quote at the start of a string of its own, where Canvas gives it the script after it;
+    // the one at 12 stands, since the closing quote follows Latin letters in the paragraph and in the piece alike.
+    expect(prepare(paragraphOf('\u03b1\u03b2\u03b3 "hello" world'), env, false, []).groups[0]!.cuts).toEqual([0, 12, 17])
+    expect(prepare(paragraphOf('\u03b1\u03b2\u03b3 hello world'), env, false, []).groups[0]!.cuts).toEqual([0, 4, 10, 15])
+  })
+
   test('letter spacing keeps the group in one piece', () => {
     expect(prepare(paragraphOf('ab cd ef', 1), env, false, []).groups[0]!.cuts).toEqual([0, 8])
   })
