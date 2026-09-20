@@ -3,7 +3,7 @@
 // in turns. Bundled by the probe module; nothing here measures time.
 import { wordScanState } from '../src/engines/gecko/lines.ts'
 import { detectEnvironment, fillLine, firstLine, prepare, type Context, type Environment, type Prepared } from '../src/index.ts'
-import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
+import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type OverflowWrap, type Paragraph } from '../src/model.ts'
 
 type Part = { code: boolean; text: string }
 
@@ -13,11 +13,11 @@ function environment(): Environment {
   return detected.env
 }
 
-// bench/page.ts chatInputs: no font facts supplied.
-function paragraphOf(parts: readonly Part[]): Paragraph {
+// bench/page.ts chatInputs: no font facts supplied. The bench's overflow-wrap is break-word.
+function paragraphOf(parts: readonly Part[], overflowWrap: OverflowWrap): Paragraph {
   const font: FontDecl = { family: '"Helvetica Neue", "PingFang TC", "Geeza Pro", sans-serif', size: 16, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }
   const codeFont: FontDecl = { family: 'Menlo', size: 14, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }
-  const text = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8 } as const
+  const text = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap, lineBreak: 'auto', tabSize: 8 } as const
   const edge: BoxEdge = { margin: 0, border: 0, padding: 6 }
   const content: InlineNode[] = []
   for (let k = 0; k < parts.length; k++) {

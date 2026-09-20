@@ -7,7 +7,8 @@
 // same prepared and filled to be kept, and the 30,000 layouts at the other widths. It times the bench's fixed arithmetic
 // (bench/page.ts spin) at the start and the end.
 //
-//   WORD_SCAN_MESSAGES=<messages.json> [WORD_SCAN_ROUNDS=4] bun rebuild/probes/runner.ts --browser=firefox \
+//   WORD_SCAN_MESSAGES=<messages.json> [WORD_SCAN_ROUNDS=4] [WORD_SCAN_MODE=premise|proven] [WORD_SCAN_WRAP=break-word|normal|anywhere] \
+//     bun rebuild/probes/runner.ts --browser=firefox \
 //     --probes=rebuild/tools/word-scan-probe.ts --out=<dir> --probe-timeout-ms=900000 --stall-ms=900000
 //   (under the browser lock; --exclusive for the times)
 //
@@ -22,7 +23,7 @@ const env = lib.environment();
 const now = () => performance.now();
 const WIDTH = 320;
 const OTHER_WIDTHS = [260, 380, 440];
-const MODES = ['exact', 'premise'];
+const MODES = ['exact', MODE];
 const proto = OffscreenCanvasRenderingContext2D.prototype;
 const realMeasure = proto.measureText;
 let calls = 0, characters = 0, sink = 0;
@@ -33,7 +34,7 @@ const spinStart = spin();
 const out = [];
 const sets = Object.keys(MESSAGES);
 for (let s = 0; s < sets.length; s++) {
-  const paragraphs = MESSAGES[sets[s]].map(message => lib.paragraphOf(message.parts));
+  const paragraphs = MESSAGES[sets[s]].map(message => lib.paragraphOf(message.parts, WRAP));
   const counts = {};
   for (let m = 0; m < MODES.length; m++) {
     lib.setMode(MODES[m]);
@@ -49,7 +50,7 @@ for (let s = 0; s < sets.length; s++) {
     counts[MODES[m]] = { lines, scratch, prepared, firstResize, resizeAgain, decided: how.lines, ranges: how.ranges };
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  const times = { exact: { scratch: [], scratchOneList: [], prepareAndFill: [], relayout: [] }, premise: { scratch: [], scratchOneList: [], prepareAndFill: [], relayout: [] } };
+  const times = { exact: { scratch: [], scratchOneList: [], prepareAndFill: [], relayout: [] }, [MODE]: { scratch: [], scratchOneList: [], prepareAndFill: [], relayout: [] } };
   for (let round = 0; round < ROUNDS; round++) {
     for (let m = 0; m < MODES.length; m++) {
       const mode = MODES[round % 2 === 0 ? m : MODES.length - 1 - m];
@@ -73,7 +74,7 @@ for (let s = 0; s < sets.length; s++) {
   out.push({ set: sets[s], messages: paragraphs.length, counts, timesMs: times });
 }
 lib.setMode('premise');
-return { userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, rounds: ROUNDS, spinMs: { start: spinStart, end: spin() }, sink, sets: out };
+return { userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, rounds: ROUNDS, mode: MODE, overflowWrap: WRAP, spinMs: { start: spinStart, end: spin() }, sink, sets: out };
 `
 
 export default async function wordScanProbes(): Promise<Probe[]> {
@@ -83,8 +84,10 @@ export default async function wordScanProbes(): Promise<Probe[]> {
   if (!built.success) throw new Error(`bundling failed: ${built.logs.join('\n')}`)
   const bundle = await built.outputs[0]!.text()
   const rounds = Number(process.env['WORD_SCAN_ROUNDS'] ?? 4)
+  const mode = process.env['WORD_SCAN_MODE'] ?? 'premise'
+  const wrap = process.env['WORD_SCAN_WRAP'] ?? 'break-word'
   return [{
     id: 'word-scan W1', spec: 'speculative study: Gecko\'s word scan against the engine\'s loop, counts and times in one document', pageLang: 'en', html: '<div></div>',
-    observe: [{ kind: 'script', source: `${bundle}\nconst MESSAGES = ${readFileSync(path, 'utf8')};\nconst ROUNDS = ${rounds};\n${BODY}` }],
+    observe: [{ kind: 'script', source: `${bundle}\nconst MESSAGES = ${readFileSync(path, 'utf8')};\nconst ROUNDS = ${rounds};\nconst MODE = ${JSON.stringify(mode)};\nconst WRAP = ${JSON.stringify(wrap)};\n${BODY}` }],
   }]
 }
