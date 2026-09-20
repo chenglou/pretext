@@ -23,9 +23,10 @@ const SOCKET = process.env['PRETEXT_GATES_CORES']
 // The place of this check in gates.ts's table.
 const HOLDER = process.env['PRETEXT_GATES_HOLDER']
 
-// A request that waits for its core.
-type Ask = { granted: () => void; failed: (error: Error) => void }
-const asks = new Map<number, Ask>()
+// The requests that wait for their core, each under its number: --jobs at most. A check writes two short lines a
+// request, far under a socket's buffer, so no write is ever short.
+type Ask = { n: number; granted: () => void; failed: (error: Error) => void }
+const asks: Ask[] = []
 let lastAsk = 0
 // The requests that wait for a core or hold one. The connection keeps the process alive only while there is one, so a
 // check whose work is done ends without closing anything.
@@ -43,15 +44,11 @@ function connect(path: string): Promise<Socket> {
         data(_socket, bytes) {
           const lines = (partial + bytes.toString()).split('\n')
           partial = lines.pop()!
-          for (let i = 0; i < lines.length; i++) {
-            const n = Number(lines[i]!)
-            asks.get(n)!.granted()
-            asks.delete(n)
-          }
+          for (let i = 0; i < lines.length; i++) asks.splice(asks.findIndex(ask => ask.n === Number(lines[i]!)), 1)[0]!.granted()
         },
         close() {
-          for (const ask of asks.values()) ask.failed(new Error('gates.ts closed the cores socket before it granted a core'))
-          asks.clear()
+          for (let i = 0; i < asks.length; i++) asks[i]!.failed(new Error('gates.ts closed the cores socket before it granted a core'))
+          asks.length = 0
         },
       },
     }).catch(reject)
@@ -66,7 +63,7 @@ export async function withCore<T>(long: boolean, work: () => Promise<T>): Promis
   if (open++ === 0) socket.ref()
   try {
     await new Promise<void>((granted, failed) => {
-      asks.set(n, { granted, failed })
+      asks.push({ n, granted, failed })
       socket.write(`${n} ${long ? 'long' : 'short'} ${HOLDER}\n`)
     })
     return await work()

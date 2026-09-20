@@ -621,7 +621,8 @@ export function nextWaiter(waiting: readonly Waiter[], longFirst: boolean): numb
 // one connection, a number a request: `<n> long|short <holder>` asks, `<n> done` gives the core back, and the answer
 // `<n>` grants it. Every core of a connection that closes comes back, so a gate that dies gives its cores back by dying.
 export type Cores = { take: (holder: number) => Promise<void>; give: () => void; stop: () => void }
-type Ask = { waiter: Waiter; granted: boolean }
+// A request of a connection, under the number its process gave it.
+type Ask = { n: number; waiter: Waiter; granted: boolean }
 export function shareCores(cores: number, socketPath: string): Cores {
   const waiting: Waiter[] = []
   let free = cores
@@ -642,29 +643,29 @@ export function shareCores(cores: number, socketPath: string): Cores {
       if (ask.waiter.long) long--
     } else waiting.splice(waiting.indexOf(ask.waiter), 1)
   }
-  const server = Bun.listen<{ partial: string; asks: Map<number, Ask> }>({
+  // A connection's requests that wait for a core or hold one: --jobs at most.
+  const server = Bun.listen<{ partial: string; asks: Ask[] }>({
     unix: socketPath,
     socket: {
-      open(socket) { socket.data = { partial: '', asks: new Map() } },
+      open(socket) { socket.data = { partial: '', asks: [] } },
       // Lines can come several to a chunk, and a chunk can end inside one.
       data(socket, bytes) {
+        const asks = socket.data.asks
         const lines = (socket.data.partial + bytes.toString()).split('\n')
         socket.data.partial = lines.pop()!
         for (let i = 0; i < lines.length; i++) {
           const [n, kind, holder] = lines[i]!.split(' ')
-          if (kind === 'done') {
-            end(socket.data.asks.get(Number(n))!)
-            socket.data.asks.delete(Number(n))
-          } else {
-            const ask: Ask = { granted: false, waiter: { long: kind === 'long', holder: Number(holder), grant: () => { ask.granted = true; socket.write(`${n}\n`) } } }
-            socket.data.asks.set(Number(n), ask)
+          if (kind === 'done') end(asks.splice(asks.findIndex(ask => ask.n === Number(n)), 1)[0]!)
+          else {
+            const ask: Ask = { n: Number(n), granted: false, waiter: { long: kind === 'long', holder: Number(holder), grant: () => { ask.granted = true; socket.write(`${n}\n`) } } }
+            asks.push(ask)
             waiting.push(ask.waiter)
           }
         }
         grant()
       },
       close(socket) {
-        for (const ask of socket.data.asks.values()) end(ask)
+        for (let i = 0; i < socket.data.asks.length; i++) end(socket.data.asks[i]!)
         grant()
       },
     },
