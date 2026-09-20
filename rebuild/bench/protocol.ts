@@ -176,6 +176,8 @@ export type VariantCount = {
   // API, which the speculative Blink prototype asks where Canvas has it).
   measuredUnits: number
   textClusterCalls: number
+  // The measureText calls by what asked them, read from the call stack in the counting pass alone (page.ts askedBy).
+  askedBy: Record<string, number>
   // Lines produced by that repetition, summed over widths or messages: main's line count, the rebuild's line boxes.
   lines: number
 }

@@ -710,6 +710,23 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
 // attributes (the font string is parsed and resolved in the assignment).
 const canvasWork = { measureTextCalls: 0, measureTextMs: 0, measuredUnits: 0, textClusterCalls: 0, contexts: 0, contextMs: 0 }
 
+// What asked a measureText call, by the library function names on the call stack (the bundle isn't minified). Null
+// outside the counting pass: reading a stack costs more than the call it names.
+let askedBy: Record<string, number> | null = null
+const ASKERS: readonly (readonly [RegExp, string])[] = [
+  [/withLearnedFontFacts/, 'font checks'], [/safeToBreak|SafeToBreak/, 'safe-to-break tests'], [/clusterTable/, 'cluster tables'],
+  [/at reshape/, 'reshape totals'], [/measureGroups/, 'groups before lines'], [/offsetForPosition|positionForOffset/, 'positions'],
+]
+
+function noteAsker(): void {
+  // Deep enough for a safe-to-break test's window behind a line's fill.
+  ;(Error as unknown as { stackTraceLimit: number }).stackTraceLimit = 40
+  const stack = new Error().stack ?? ''
+  let name = 'other'
+  for (let i = 0; i < ASKERS.length && name === 'other'; i++) if (ASKERS[i]![0].test(stack)) name = ASKERS[i]![1]
+  askedBy![name] = (askedBy![name] ?? 0) + 1
+}
+
 type Restore = () => void
 
 function wrapMeasureText(proto: { measureText(text: string): TextMetrics } | undefined): Restore {
@@ -718,6 +735,7 @@ function wrapMeasureText(proto: { measureText(text: string): TextMetrics } | und
   proto.measureText = function (this: unknown, text: string): TextMetrics {
     canvasWork.measureTextCalls++
     canvasWork.measuredUnits += text.length
+    if (askedBy !== null) noteAsker()
     const start = performance.now()
     const metrics = original.call(this, text)
     canvasWork.measureTextMs += performance.now() - start
@@ -861,8 +879,10 @@ function countRow(row: RowSpec, c: Context): RowCount {
     canvasWork.measuredUnits = 0
     canvasWork.textClusterCalls = 0
     canvasWork.contexts = 0
+    askedBy = {}
     const lines = variant.run()
-    counts.push({ variant: variant.name, measureTextCalls: canvasWork.measureTextCalls, contexts: canvasWork.contexts, measuredUnits: canvasWork.measuredUnits, textClusterCalls: canvasWork.textClusterCalls, lines })
+    counts.push({ variant: variant.name, measureTextCalls: canvasWork.measureTextCalls, contexts: canvasWork.contexts, measuredUnits: canvasWork.measuredUnits, textClusterCalls: canvasWork.textClusterCalls, askedBy, lines })
+    askedBy = null
     sink += lines
   }
   const counted = rebuildRanges(row, c, 'count')
