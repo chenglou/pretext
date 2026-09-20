@@ -3,7 +3,7 @@
 //   python3 .artifacts/session/with-browser-lock.py lab-chrome -- bun rebuild/lab/run.ts --browser=chrome --cases=<file> --out=<dir>
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { bundleString, CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
@@ -295,11 +295,11 @@ function chromeUiLanguage(browserPid: number): { value: string; renderers: numbe
   return rendererLanguage(processTable(), browserPid)
 }
 
-function trash(path: string): void {
+function remove(path: string): void {
   try {
-    execFileSync('trash', [path], { stdio: 'ignore', timeout: 60_000 })
+    rmSync(path, { recursive: true, force: true })
   } catch (error) {
-    console.error(`[lab] could not trash ${path}: ${message(error)}`)
+    console.error(`[lab] could not remove ${path}: ${message(error)}`)
   }
 }
 
@@ -322,7 +322,7 @@ async function launchApp(app: string, executable: string, marker: string, profil
       await stopProcess(owned)
       // Helpers can hold the profile for a moment after the main process exits.
       await Bun.sleep(1_000)
-      trash(profile)
+      remove(profile)
     },
   }
 }

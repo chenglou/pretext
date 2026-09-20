@@ -3,7 +3,7 @@
 //   python3 .artifacts/session/with-browser-lock.py probes-chrome -- bun rebuild/probes/runner.ts --browser=chrome --probes=<file>
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { basename, extname, join, resolve } from 'node:path'
 import { createBrowserSession, getAvailablePort } from '../../scripts/browser-automation.ts'
@@ -312,11 +312,11 @@ async function waitForPid(executable: string, marker: string): Promise<number | 
   return null
 }
 
-function trash(path: string): void {
+function remove(path: string): void {
   try {
-    execFileSync('trash', [path], { stdio: 'ignore', timeout: 60_000 })
+    rmSync(path, { recursive: true, force: true })
   } catch (error) {
-    console.error(`[probes] could not trash ${path}: ${message(error)}`)
+    console.error(`[probes] could not remove ${path}: ${message(error)}`)
   }
 }
 
@@ -328,7 +328,7 @@ async function closeLaunched(pid: number, profile: string): Promise<void> {
   await stopProcess(pid)
   // Helpers can hold the profile for a moment after the main process exits.
   await Bun.sleep(1_000)
-  trash(profile)
+  remove(profile)
 }
 
 // The lab's pinned Chrome (lab/browser-build.ts), headed, in its own profile under .artifacts/profiles, started through LaunchServices without
@@ -350,7 +350,7 @@ async function launchChrome(url: string): Promise<Session> {
   ])
   const pid = await waitForPid(`${app!.path}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`)
   if (pid === null) {
-    trash(profile)
+    remove(profile)
     throw new Error('Could not find the launched Chrome process')
   }
   let cdp: Cdp | null = null
@@ -525,7 +525,7 @@ async function launchFirefox(url: string): Promise<Session> {
   openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank'])
   const pid = await waitForPid(`${app!.path}/Contents/MacOS/firefox`, ` --profile ${profile} `)
   if (pid === null) {
-    trash(profile)
+    remove(profile)
     throw new Error('Could not find the launched Firefox process')
   }
   let bidi: Bidi | null = null

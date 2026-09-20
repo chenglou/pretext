@@ -9,13 +9,13 @@
 //     [--browser=chrome|firefox|webkit-host|all] [--config=no-facts|facts] [--predictor-a=<path in the tree>] [--predictor-b=...]
 //     [--widths=60,150,400] [--dpr=2] [--limit=N] [--jobs=N] [--out=<report.json>]
 //
-// `--b` is this checkout when left out; a commit is read with `git archive` into a scratch folder that goes to the Trash
+// `--b` is this checkout when left out; a commit is read with `git archive` into a scratch folder that is removed
 // at the end. `--widths` lays every case out at each of those widths instead of its own. Exit 0 when every case is the
 // same in both trees, 1 when one differs; each differing case is named with its first differing field, grouped by field.
 // The answers are the stand-in's, so a difference says the two trees don't compute the same thing from the same answers,
 // and equality says nothing about a browser: that stays tier 1's and tier 2's.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PredictEnv } from '../lab/predictor-core.ts'
@@ -45,7 +45,7 @@ const options = new Map<string, string>()
 const scratch: string[] = []
 
 function finish(code: number): never {
-  if (scratch.length > 0) execFileSync('trash', scratch)
+  for (let i = 0; i < scratch.length; i++) rmSync(scratch[i]!, { recursive: true, force: true })
   process.exit(code)
 }
 

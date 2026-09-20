@@ -32,7 +32,7 @@
 // from the case alone. One process took nine minutes over the 67,072 case lines of Chrome's set files. --limit counts
 // cases across the files, so with it one process scans them all.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PredictEnv } from '../lab/predictor-core.ts'
@@ -88,7 +88,7 @@ if (existsSync(tree) && statSync(tree).isDirectory()) {
 }
 const shape = readFileSync(join(scratch, SHAPE), 'utf8')
 if (shape.split(ANCHOR).length !== 2) {
-  execFileSync('trash', [scratch])
+  rmSync(scratch, { recursive: true, force: true })
   throw new Error(`${SHAPE} of ${tree} doesn't hold the scan's anchor once: ${ANCHOR}`)
 }
 writeFileSync(join(scratch, SHAPE), shape.replace(ANCHOR, `${ANCHOR}\n${TAP}`))
@@ -109,7 +109,7 @@ else {
   })())
   await Promise.all(workers)
   if (failed.length > 0) {
-    execFileSync('trash', [scratch])
+    rmSync(scratch, { recursive: true, force: true })
     throw new Error(`The scan failed on ${failed.sort().join(', ')}`)
   }
   for (let i = 0; i < files.length; i++) {
@@ -121,7 +121,7 @@ else {
     for (let k = 0; k < part.twins.length; k++) report.twins.push(part.twins[k]!)
   }
 }
-execFileSync('trash', [scratch])
+rmSync(scratch, { recursive: true, force: true })
 console.log(`[twin-scan] ${report.cases} cases${page ? ', a file one page with one list of contexts' : ''}: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
 for (const entry of report.twins.slice(0, 12)) console.log(`  ${entry.id} ${entry.family}: ${entry.twins.map(twin => `${JSON.stringify(twin.text)} on context ${twin.context}, ${twin.first} first, ${twin.asks} asks`).join('; ')}`)
 const out = options.get('out')

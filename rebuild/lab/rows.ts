@@ -3,7 +3,7 @@
 // compressed file can never look like a missing run, or make a tool ask for `zstd -d` by hand. rows.test.ts holds the rules,
 // and checks that no other lab or tests file opens a rows file on its own.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
@@ -49,7 +49,7 @@ export async function* readLines(path: string): AsyncGenerator<string> {
 }
 
 // A plain file with `path`'s rows, for tools that read rows by byte offset (score.ts indexRows, readRowAt): the file itself,
-// or a decompressed copy in a temporary folder, which release() sends to the Trash. The copy also goes when the process
+// or a decompressed copy in a temporary folder, which release() removes. The copy also goes when the process
 // exits without releasing it.
 export function plainRows(path: string): { path: string; release: () => void } {
   const file = mustExist(path)
@@ -61,7 +61,7 @@ export function plainRows(path: string): { path: string; release: () => void } {
   const release = (): void => {
     if (released) return
     released = true
-    execFileSync('trash', [dir], { stdio: 'ignore' })
+    rmSync(dir, { recursive: true, force: true })
   }
   process.once('exit', release)
   return { path: plain, release }

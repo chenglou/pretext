@@ -1184,7 +1184,7 @@ Sessions stay in the background and never activate a window.
 
 The page navigates itself. Apart from opening Chrome's window, no remote debugging protocol is used. The driver
 closes the browser it opened (Chrome and Firefox get SIGTERM, then SIGKILL; webkit-host gets 2 s to exit by itself
-first) and moves their profiles to the Trash. It launches once and never retries.
+first) and removes their profiles. It launches once and never retries.
 
 ## Pinned browsers
 
@@ -1254,7 +1254,7 @@ was visible during `dev-all` and partly hidden during the family file; the drive
 - The selected cases are cut into N runs of neighbours in file order with about equal text length (N defaults to the
   browser's lock slots: 3, and 1 for installed Safari). Each shard writes `<out>/shards/<k>/` like any run.
 - When every shard is ok, the rows are joined in shard order into `<out>/<browser>-rows.ndjson` (and measurement records
-  into `<out>/<browser>-measurements.ndjson.zst`), the shards' own rows go to the Trash, and `<out>/<browser>-run.json` sums
+  into `<out>/<browser>-measurements.ndjson.zst`), the shards' own rows are removed, and `<out>/<browser>-run.json` sums
   the shards' records, in the shape `run.ts` writes, so `score.ts`, `derive.ts` and the gates read the folder like any run.
   It refuses shards that ran another build, other given languages or another library bundle. A failed shard fails the run;
   nothing is joined and nothing runs again.

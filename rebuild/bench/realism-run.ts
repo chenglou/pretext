@@ -17,7 +17,7 @@
 // Background windows only, the pinned copies and webkit-host, as run.ts launches them. It doesn't take the browser lock.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { loadavg } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/browser-build.ts'
@@ -150,7 +150,7 @@ async function launchApp(app: string, executable: string, marker: string, profil
         await Bun.sleep(100)
       }
       await Bun.sleep(1_000)
-      execFileSync('trash', [profile], { stdio: 'ignore', timeout: 60_000 })
+      rmSync(profile, { recursive: true, force: true })
     },
   }
 }

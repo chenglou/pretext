@@ -25,7 +25,7 @@
 // else a missing verdict stays an error.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -177,11 +177,11 @@ async function waitForPid(executable: string, marker: string): Promise<number | 
   return null
 }
 
-function trash(path: string): void {
+function remove(path: string): void {
   try {
-    execFileSync('trash', [path], { stdio: 'ignore', timeout: 60_000 })
+    rmSync(path, { recursive: true, force: true })
   } catch (error) {
-    console.error(`[bugs] could not trash ${path}: ${String(error)}`)
+    console.error(`[bugs] could not remove ${path}: ${String(error)}`)
   }
 }
 
@@ -192,7 +192,7 @@ function openApp(app: string, appArgs: string[]): void {
 async function closeLaunched(pid: number, profile: string): Promise<void> {
   await stopProcess(pid)
   await Bun.sleep(1_000)
-  trash(profile)
+  remove(profile)
 }
 
 async function launchChrome(url: string, runId: string): Promise<Session> {
@@ -206,7 +206,7 @@ async function launchChrome(url: string, runId: string): Promise<Session> {
   ])
   const pid = await waitForPid(`${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`)
   if (pid === null) {
-    trash(profile)
+    remove(profile)
     throw new Error('Could not find the launched Chrome process')
   }
   const session: Session = { close: () => closeLaunched(pid, profile) }
@@ -276,7 +276,7 @@ async function launchFirefox(url: string, runId: string): Promise<Session> {
   openApp(app, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank'])
   const pid = await waitForPid(`${app}/Contents/MacOS/firefox`, ` --profile ${profile} `)
   if (pid === null) {
-    trash(profile)
+    remove(profile)
     throw new Error('Could not find the launched Firefox process')
   }
   const session: Session = { close: () => closeLaunched(pid, profile) }

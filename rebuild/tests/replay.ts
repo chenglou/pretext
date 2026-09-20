@@ -90,7 +90,7 @@
 // - giants (paragraphs over 50,000 units) are in no recorded set.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { installReplay, newSiteTally, NewQuestion, readMeasurements, type PageFacts, type SiteCount, type SiteTally } from '../lab/measurements.ts'
@@ -589,7 +589,7 @@ async function pack(): Promise<number> {
     else results[index] = JSON.parse(readFileSync(result, 'utf8')) as typeof results[number]
   })
   if (failures.length > 0) fail(`packing failed for ${failures.join(', ')}`)
-  for (let i = 0; i < parts.length; i++) execFileSync('trash', [join(dir, 'inputs', `.part-${i}.json`)])
+  for (let i = 0; i < parts.length; i++) rmSync(join(dir, 'inputs', `.part-${i}.json`))
   const manifest: InputsManifest = {
     format: INPUTS_FORMAT, browser, config, predictor: PREDICTORS[config], build: run.build, bundles: [...new Set(parts.map(part => part.record.bundleSha256 ?? 'not recorded'))].sort(),
     recordedFrom: relative(REPO, runsDir), sets: {}, cases: 0, calls: 0,
@@ -923,7 +923,7 @@ async function compare(dir: string, inputs: InputsManifest, against: 'reference'
     const sorted = (counts: Map<string, SiteCount>): SiteRow[] => rowsOf(counts).sort((a, b) => b.repeats - a.repeats || b.asks - a.asks || (a.site < b.site ? -1 : 1))
     report.sites = { sites: sorted(sites), under: sorted(under) }
   }
-  execFileSync('trash', [scratch])
+  rmSync(scratch, { recursive: true, force: true })
   return report
 }
 
@@ -961,10 +961,10 @@ async function freeze(): Promise<number> {
   await takeWritersTurn()
   const started = Date.now()
   const staging = join(dir, '.reference-new')
-  if (existsSync(staging)) execFileSync('trash', [staging])
+  rmSync(staging, { recursive: true, force: true })
   const report = await compare(dir, inputs, questionsOnly ? 'reference' : null, Object.keys(inputs.sets), staging)
   if (questionsOnly && report.counts.predictionChanged + report.counts.newQuestion > 0) {
-    execFileSync('trash', [staging])
+    rmSync(staging, { recursive: true, force: true })
     console.error(`[replay] not frozen: ${report.counts.predictionChanged} predictions differ from the reference of ${before!.commit.slice(0, 12)} and ${report.counts.newQuestion} cases ask a question the record lacks. --questions-only never freezes a prediction again; \`check\` names the cases`)
     return 1
   }
@@ -976,7 +976,7 @@ async function freeze(): Promise<number> {
     sets: report.emitted, cases: report.counts.cases, ledger: ledgerHashes(dir),
   }
   writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  if (before !== null) execFileSync('trash', [join(dir, 'reference')])
+  if (before !== null) rmSync(join(dir, 'reference'), { recursive: true, force: true })
   execFileSync('mv', [staging, join(dir, 'reference')])
   // The repository pins the reference of the default folder only; a trial folder (--dir) pins nothing.
   const pinned = join(REPO, `rebuild/tests/reference/${browser}-${config}.json`)

@@ -299,7 +299,7 @@ Sessions stay in the background and never activate a window. The driver launches
   section describes it). The driver spawns it with the probe URL and a 1200 x 900 window. It never touches the user's
   Safari, never activates, and exits when the page's title is `probes done` or when the driver exits.
 
-The driver closes Chrome and Firefox (SIGTERM, then SIGKILL) and moves their profiles to the Trash. webkit-host gets 2 s
+The driver closes Chrome and Firefox (SIGTERM, then SIGKILL) and removes their profiles. webkit-host gets 2 s
 to exit by itself, then SIGTERM and SIGKILL. The page server takes the first free port from 3002.
 
 ## Page protocol

@@ -24,7 +24,7 @@
 // is reported `frozen differs`, a broken bundle or replay), and its paragraph is painted with the reference's layout.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { basename, join, relative, resolve } from 'node:path'
 import { installReplay, NewQuestion } from '../lab/measurements.ts'
@@ -77,7 +77,7 @@ async function bundle(): Promise<number> {
     texts[config] = (await built.outputs[0]!.text()).replaceAll(tree, '<frozen>')
     pin.bundles[config] = { sha256: sha256(texts[config]), bytes: Buffer.byteLength(texts[config]) }
   }
-  execFileSync('trash', [tree])
+  rmSync(tree, { recursive: true, force: true })
   if (pinned !== null && CONFIGS.some(config => pinned.bundles[config].sha256 !== pin.bundles[config].sha256)) {
     fail(`${commit.slice(0, 12)} built with bun ${Bun.version} isn't the pinned bundle (built with bun ${pinned.bun}): --force pins this one`)
   }
@@ -274,7 +274,7 @@ async function check(browser: TierBrowser, config: Config): Promise<number> {
     }
   }
   report.counts.paintingDiffers = report.paintingDiffers.length
-  execFileSync('trash', [scratch])
+  rmSync(scratch, { recursive: true, force: true })
   const out = resolve(options.get('out') ?? join(REPO, `.artifacts/tests/painter-diff/${basename(REPO)}/${browser}-${config}.json`))
   mkdirSync(resolve(out, '..'), { recursive: true })
   writeFileSync(out, `${JSON.stringify(report, null, 1)}\n`)

@@ -26,8 +26,7 @@
 // `--head` can be a tree whose kept values check themselves (a scratch patch that measures at every read and throws where
 // the kept number differs): a throw is reported as a difference.
 // Exit 0 when nothing differs, 1 when something does, 2 on a failure of the tool.
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Case, LayoutPrediction } from '../lab/types.ts'
@@ -291,7 +290,7 @@ async function run(): Promise<number> {
     total.calls.head += result.calls.head
     total.differences.push(...result.differences)
   }
-  execFileSync('trash', [dir])
+  rmSync(dir, { recursive: true, force: true })
   console.log(`[positions-attack] ${options.get('canvas') ?? 'stand-in'} Canvas, ${config}, mutate ${options.get('mutate') ?? 'none'}: ${total.cases} cases (${total.skipped} skipped), ${total.layouts} layouts of head's kept paragraphs compared with base's fresh ones: ${total.differences.length} cases differ (${Math.round((Date.now() - started) / 100) / 10} s)`)
   console.log(`  eight fresh layouts a case, plain and inspected: base asks ${(total.calls.base / Math.max(1, total.cases)).toFixed(1)} calls a case, head ${(total.calls.head / Math.max(1, total.cases)).toFixed(1)}`)
   const byPass = new Map<string, number>()

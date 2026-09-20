@@ -13,11 +13,10 @@
 //   process history. Compare such rows with a run of the whole set through score.ts --native-compare.
 // - Each shard writes <out>/shards/<k>/ like any run. When every shard is ok, the rows are joined in shard order into
 //   <out>/<browser>-rows.ndjson (and the measurement records of --record-measurements into
-//   <out>/<browser>-measurements.ndjson.zst; zstd frames join by concatenation), the shards' rows go to the Trash, and
+//   <out>/<browser>-measurements.ndjson.zst; zstd frames join by concatenation), the shards' rows are removed, and
 //   <out>/<browser>-run.json sums the shards' records. It refuses shards that ran another build, other given languages or
 //   another library bundle. A failed shard fails the whole run and nothing is joined or run again.
-import { execFileSync } from 'node:child_process'
-import { closeSync, createReadStream, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, createReadStream, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { BrowserKind, Case } from './types.ts'
 
@@ -155,7 +154,7 @@ await concatenate(rowsPath, rowFiles)
 const recordFiles = records.flatMap(record => record.measurements === null ? [] : [record.measurements.file])
 const measurementsPath = join(outDir, `${browser}-measurements.ndjson.zst`)
 if (recordFiles.length > 0) await concatenate(measurementsPath, recordFiles)
-for (const file of [...rowFiles, ...recordFiles]) execFileSync('trash', [file], { stdio: 'ignore', timeout: 60_000 })
+for (const file of [...rowFiles, ...recordFiles]) rmSync(file)
 
 const sum = (pick: (record: RunRecord) => Record<string, number>): Record<string, number> => {
   const out: Record<string, number> = {}
