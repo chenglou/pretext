@@ -1,7 +1,8 @@
 // Every way a KEPT Canvas context can answer otherwise than a context made now, for the same settings and string, in a
-// browser that has just started (src/index.ts prepare keeps a page's contexts in Blink and WebKit; research/PERF-CONTEXT-STORE.md
-// §3.7 found Firefox's kept contexts on the fallback font for families named by a localized name). Raw Canvas beside the
-// DOM, no library. One probe a browser launch; the runner launches the pinned browser anew for every run.
+// browser that has just started (src/index.ts prepare keeps a page's contexts in Blink and WebKit;
+// research/PERF-CONTEXT-STORE.md §3.7 found Firefox's kept contexts on the fallback font for families named by a localized
+// name). Raw Canvas beside the DOM, no library. One probe a browser launch; the runner launches the pinned browser anew
+// for every run.
 //
 // - S1: 11 font declarations, each with one context per way of touching it, all made before anything is measured, read
 //   every 250 ms for ten seconds beside a new context and a DOM span. The declarations: families by their English name, by

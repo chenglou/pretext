@@ -11,8 +11,8 @@
 //   A third list is the one the page starts anew right after its own add(), which is WebKit's contract.
 //
 // One probe a browser launch:
-//   python3 .artifacts/session/with-browser-lock.py contexts-start-up-lib --browser=firefox -- bun rebuild/probes/runner.ts \
-//     --browser=firefox --probes=rebuild/tools/contexts-start-up-probe.ts --only="L1" --out=<dir>
+//   python3 .artifacts/session/with-browser-lock.py contexts-start-up-lib --browser=firefox -- \
+//     bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/tools/contexts-start-up-probe.ts --only="L1" --out=<dir>
 import { join } from 'node:path'
 import type { Probe } from '../probes/types.ts'
 
