@@ -190,6 +190,43 @@ never short-circuit a raise that adds a new range (canonical lists make a repeat
 Chrome answers a repeat from its per-canvas cache, so dropping repeats can't change an answer: tier 1 repeats only or
 dropped only, then tier 2 both orders and the other-widths-first predictor.
 
+*Built (2026-09-19, branch `x-perf-positions`; DESIGN.md §4.6 has the structure and §4.7 the counts).* First the
+measurement, because the expectation above was about the fill alone. A repeat was counted by the range `measure16` is
+asked for (`tools/positions-study.ts` offline, `tools/positions-probe.ts` in real Chrome over the bench's first 1,000
+messages). Of a plain ASCII message's 282 calls, 116 ask a range again: 33 inside `prepare`, 36 inside one line, 36 in
+a fill for what `prepare` asked, 11 for what an earlier line asked. The mix: 143 of 322, as 38, 48, 42 and 14. The tier
+cases' plain path: 131 of 194, as 18, 81, 17 and 14. So tables with the paragraph's lifetime can take 41% and 44% of a
+chat message's calls from scratch, not only a share of the fill's; tables with a fill's lifetime, (a), only 13% and
+15%, and (a) as built on `ra-x2-blink-alt-positions`, adapted, took 4% and 6%. The repeats inside `prepare` are
+item 6's B1b by another name: the cut's safe test, asked again as the position at the cut.
+- *What was built.* (b) alone, in its smallest form: per offset of a shaping group, the position and the pair and wide
+  adjustments of the group's own shaping call, 48 lines in `engines/blink` (`shape.ts` 29, `types.ts` 14, `index.ts`
+  5), read and written only by reads that raise no gap. A reshape's adjustments aren't kept (another call's range),
+  the no-ligature ones aren't asked on the plain path, and the safe-to-break flags are read from the two adjustments.
+  An inspected paragraph measures as before, so every line's gaps hold what its reads raise.
+- *Calls in real Chrome.* From scratch 281.9 to 210.5 a plain ASCII message and 322.1 to 227.3 on the mix; on B1b's
+  tree 177.9 to 125.2 and 211.9 to 140.2. A layout of a kept message at a new width 112.9 to 33.7 and 136.8 to 36.2;
+  at a width met before 112.9 and 136.8 to 0 and 0.04. The tier cases' plain path 234.31 to 114.37 a paragraph
+  (asked to distinct 3.84 to 1.87).
+- *Time* (one exclusive stretch of three alternating pairs of the bench's headline, 1-minute load 3 to 7 after the
+  first run; `.artifacts/bench/perf-positions-20260919`). 10,000 messages from scratch: the mix 4.65 to 4.29 s, plain
+  ASCII 4.00 to 3.74 s (medians of three runs of three passes a side; a side's runs lie within 0.12 s). So the
+  expectation held in time, though not in calls: a quarter of the calls went and 7% of the time, because every call
+  that went was a repeat, which Chrome answers from its canvas. Kept, then laid out at 3 widths, one pass a run: the
+  mix 3.77 to 1.08 s (runs 2.39, 3.77 and 4.15 against 1.08, 1.07 and 1.12), plain ASCII 3.14 to 1.11 s (3.14, 2.72
+  and 3.68 against 2.02, 1.04 and 1.11).
+- *The proof.* Tier 1: 0 predictions changed, repeats only on 3 cases a configuration, 0 other or new questions. The
+  function set's plain, pure and sweep checks pass on all 67,065 cases in both configurations. Chrome's tier 2 in both
+  orders and both configurations: 0 status transitions, exact values where they were. The plain predictor's line
+  ranges equal the usual run's on all 67,065 cases, and so do the layouts after two other widths. That predictor runs
+  the inspected path, which reads the kept numbers in `linePieces` alone; the plain path has one of its own now
+  (`lab/baselines/plain-other-widths-first-predictor.ts`), and its line ranges equal the usual run's on all 67,065
+  cases.
+- *What is left.* 44 and 48 calls a message are still repeats by range from scratch (25 and 28 on B1b's tree): a
+  cluster alone that two neighbouring pair windows share, the wide window's left side, which is the offset's prefix
+  too, a piece's total that every wide window inside it asks again, and the cut's safe test. A layout at a new width
+  still asks 34 to 37 questions, 20 to 24 of them new to the paragraph, where Firefox asks 28.
+
 ### 3. Gecko: the fill on CJK and Arabic
 
 *What.* Inside a shaping unit Gecko's port finds the advance before an offset as `W(unit) − W(suffix)`, one Canvas

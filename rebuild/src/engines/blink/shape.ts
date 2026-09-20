@@ -527,11 +527,27 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number, noLigatures: boolean = false): number {
   const p = sh.p
   if (k <= lo || k >= hi) return 0
+  const kept = !noLigatures && keepsByOffset(sh, g, lo, hi) ? p.groups[g]!.pair16 : null
+  if (kept !== null && !Number.isNaN(kept[k - lo]!)) return kept[k - lo]!
   let a = clusterStartAtOrBefore(p, k - 1, lo)
   while (a > lo && holdsNoBase(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
   let b = clusterEndAfter(p, k, hi)
   while (b < hi && holdsNoBase(p, k, b)) b = clusterEndAfter(p, b, hi)
-  return measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+  const d = measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+  if (kept !== null) kept[k - lo] = d
+  return d
+}
+
+// Whether what a call over [lo, hi) of group g measures at an offset is kept by offset for every later read, at any width
+// (BlinkGroup.prefix16, pair16, wide16). Two conditions:
+// - the call is the group's own, the paragraph's shaping. An adjustment depends on the call's range as well as on the offset
+//   (a reshape's windows stop at its edges and join there by other rules), and a reshape's range follows the line;
+// - the read raises no gap: every read of a plain paragraph, and linePieces' on an inspected one. A read under a gap list
+//   measures, because each measurement raises its range's gaps into the list of the line that reads (gaps.ts measuredRange),
+//   and a value read back would leave them out of a list that doesn't have them yet.
+function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
+  const group = sh.p.groups[g]!
+  return sh.gaps === null && lo === group.start && hi === group.end
 }
 
 // The adjustment across offset k inside a shaping call over [lo, hi) of group g: what the text before k and the text after
@@ -570,8 +586,16 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
 
 // windowAdjust16 for an offset the layout asks about: within the piece of the paragraph's group that holds k, or the two
 // pieces around a cut; within a reshape, the call. Whatever it shows, the two sides shaped apart differ from the call, which
-// is what HarfBuzz's unsafe-to-break flag means (hb-buffer.hh:517-527), so the safe test reads it.
+// is what HarfBuzz's unsafe-to-break flag means (hb-buffer.hh:517-527), so the safe test reads it. Nothing asks it of the
+// group's own call before the group's cuts are made (measureGroups), so there it is a fact of the offset (keepsByOffset).
 export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
+  if (k <= lo || k >= hi || !keepsByOffset(sh, g, lo, hi)) return measuredAdjust16(sh, g, k, lo, hi)
+  const kept = sh.p.groups[g]!.wide16
+  if (Number.isNaN(kept[k - lo]!)) kept[k - lo] = measuredAdjust16(sh, g, k, lo, hi)
+  return kept[k - lo]!
+}
+
+function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
   if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
@@ -738,6 +762,8 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   if (k >= group.end) return group.prefixAtCut[group.prefixAtCut.length - 1]! - group.startTrim16 - group.endTrim16
   k = clusterStartAtOrBefore(p, k, group.start)
   if (k <= group.start) return 0
+  const kept = keepsByOffset(sh, g, group.start, group.end) ? group.prefix16 : null
+  if (kept !== null && !Number.isNaN(kept[k - group.start]!)) return kept[k - group.start]!
   const cuts = group.cuts
   let lo = 0
   let hi = cuts.length - 1
@@ -751,6 +777,7 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
   const base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
+  if (kept !== null) kept[k - group.start] = base - group.startTrim16
   return base - group.startTrim16
 }
 
