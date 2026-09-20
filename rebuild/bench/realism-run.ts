@@ -5,7 +5,7 @@
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
 //     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
 // --page=store serves store-page.ts instead (the store prototype's counts and times, one list of contexts a pass); --passes=0
-//   leaves its timed part out.
+//   leaves its timed part out, and --other-tree=<checkout> times that checkout's library in the same document, in turns.
 // --device-scale-factor: Chrome's --force-device-scale-factor=N at launch. A forced ratio is a real one: Blink lays out at
 //   it, where a DevTools-emulated one lays out at zoom 1 (rebuild/probes/blink-probes.ts). In Firefox the profile's
 //   layout.css.devPixelsPerPx, which sets the app units of a device pixel as a screen's ratio does.
@@ -15,8 +15,8 @@
 // Background windows only, the pinned copies and webkit-host, as run.ts launches them. It doesn't take the browser lock.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { loadavg } from 'node:os'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { loadavg, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/browser-build.ts'
 import { buildChat, buildLanguages, CHAT_CODE_FONT, CHAT_CODE_PADDING, CHAT_STYLE, CHAT_WIDTH } from './cases.ts'
@@ -75,7 +75,15 @@ const HTML = `<!doctype html><html lang="${CHAT_STYLE.lang}"><head><meta charset
 let settle: { resolve: (result: RealismResult) => void; reject: (error: Error) => void } | null = null
 const completion = new Promise<RealismResult>((resolve, reject) => { settle = { resolve, reject } })
 
-const built = await Bun.build({ entrypoints: [join(BENCH_DIR, `${page}-page.ts`)], target: 'browser', format: 'esm', minify: false })
+// The store page starts from an entry written for the run: it hands the page another checkout's library, or none.
+const otherTree = args.get('other-tree') ?? null
+if (otherTree !== null && page !== 'store') throw new Error('--other-tree is the store page\'s')
+const entryDir = mkdtempSync(join(tmpdir(), 'pretext-store-entry-'))
+const entry = join(entryDir, 'entry.ts')
+writeFileSync(entry, otherTree === null
+  ? `import { start } from ${JSON.stringify(join(BENCH_DIR, 'store-page.ts'))}\nstart(null)\n`
+  : `import { prepare, firstLine, fillLine } from ${JSON.stringify(join(resolve(otherTree), 'rebuild/src/index.ts'))}\nimport { start } from ${JSON.stringify(join(BENCH_DIR, 'store-page.ts'))}\nstart({ label: 'other tree', prepare, firstLine, fillLine })\n`)
+const built = await Bun.build({ entrypoints: [page === 'store' ? entry : join(BENCH_DIR, 'realism-page.ts')], target: 'browser', format: 'esm', minify: false })
 if (!built.success) throw new Error(built.logs.map(String).join('\n'))
 const bundle = await built.outputs[0]!.text()
 
@@ -287,6 +295,13 @@ if (result !== null && page === 'store') {
     console.log(`[store] ${browser} ${set.id}: scratch ${set.scratchMs.map(seconds).join(', ')} s; kept ${seconds(set.keepMs)} s, 3 widths ${seconds(set.resizeMs)} s, again ${seconds(set.resizeAgainMs)} s; `
       + `a message ${(set.scratch.calls / set.messages).toFixed(1)} calls, a layout at a new width ${(set.resize.calls / set.messages / 3).toFixed(1)}, again ${(set.resizeAgain.calls / set.messages / 3).toFixed(1)}; `
       + `stored ${set.stored.widths} widths, ${set.stored.inkBoxes} ink boxes; ${set.lines} lines, hashes ${set.scratchRangesHash} ${set.resizeRangesHash}`)
+  }
+  for (let l = 0; l < stored.libraries.length; l++) {
+    const library = stored.libraries[l]!
+    for (let s = 0; s < library.sets.length; s++) {
+      const set = library.sets[s]!
+      console.log(`[store] ${library.label} ${set.id}: scratch ${set.scratchMs.map(ms => (ms / 1000).toFixed(3)).join(', ')} s; kept ${(set.keepMs / 1000).toFixed(3)} s, 3 widths ${(set.resizeMs / 1000).toFixed(3)} s, again ${(set.resizeAgainMs / 1000).toFixed(3)} s`)
+    }
   }
   console.log(`[store] spin ${stored.spinMs.start.toFixed(1)} / ${stored.spinMs.end.toFixed(1)} ms; load ${loadStart.toFixed(1)} to ${loadavg()[0]!.toFixed(1)}; ${outPath}`)
 } else if (result !== null) {

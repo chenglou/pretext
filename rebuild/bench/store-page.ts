@@ -1,6 +1,9 @@
 // Browser side of the store prototype's measurements (realism-run.ts --page=store): what a page with one list of Canvas
 // contexts asks of Canvas, with whatever the tree's measure/canvas.ts keeps on a context. The same page runs on the tree
-// without the store and on the tree with it, so the two are held against each other by their results.
+// without the store and on the tree with it, so the two are held against each other by their results. With
+// realism-run.ts --other-tree=<checkout> the timed part also runs that checkout's library in the same document, the two
+// taking turns inside every pass (the other first on even passes, this tree's first on odd ones), so whatever else loads
+// the machine loads both: `libraries` has each one's times, and `sets` is this tree's.
 // Timed part (plan.passes > 0): every set from scratch in count mode, one list a pass, the sets taking turns, after an
 // untimed warm-up; then, once a set, every message prepared, filled at the plan's width and kept, and then filled at
 // the three other widths twice (page.ts's resize case).
@@ -45,6 +48,9 @@ export type StoreSetResult = {
   stored: { widths: number; inkBoxes: number; units: number; unitsAboveLatin1: number; largestContext: number }
 }
 
+// The function set as the page uses it, of this tree's library or another checkout's.
+export type Library = { label: string; prepare: typeof prepare; firstLine: typeof firstLine; fillLine: typeof fillLine }
+
 export type StoreResult = {
   runId: string
   userAgent: string
@@ -56,6 +62,7 @@ export type StoreResult = {
   bounds: number[]
   checkpoints: number[]
   sets: StoreSetResult[]
+  libraries: { label: string; sets: { id: string; scratchMs: number[]; keepMs: number; resizeMs: number; resizeAgainMs: number }[] }[]
 }
 
 const runId = new URLSearchParams(location.search).get('run') ?? ''
@@ -121,10 +128,10 @@ function paragraphsOf(plan: RealismPlan, messages: readonly RealismMessage[]): P
 
 let rangeHash = 0x811c9dc5
 // Every line of a prepared paragraph at a width; returns its line boxes and hashes every line's source range.
-function fill(prepared: Prepared, width: number): number {
+function fill(library: Library, prepared: Prepared, width: number): number {
   let lineBoxes = 0
-  for (let start = firstLine(prepared); start !== null;) {
-    const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+  for (let start = library.firstLine(prepared); start !== null;) {
+    const filled = library.fillLine(prepared, start, { width, left: 0, right: 0 })
     if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
     rangeHash = Math.imul(rangeHash ^ filled.start, 0x01000193)
     rangeHash = Math.imul(rangeHash ^ filled.end, 0x01000193)
@@ -198,7 +205,8 @@ function storedIn(contexts: Context[]): StoreSetResult['stored'] {
   return stored
 }
 
-async function main(): Promise<void> {
+// `other`: another checkout's library for the timed part, or null (realism-run.ts writes the entry that hands it over).
+export async function main(other: Library | null): Promise<void> {
   const response = await fetch(`/api/plan?run=${encodeURIComponent(runId)}`)
   if (!response.ok) throw new Error(`/api/plan: ${response.status} ${await response.text()}`)
   const plan = await response.json() as RealismPlan
@@ -218,51 +226,73 @@ async function main(): Promise<void> {
   }
   let spinStart = 0
   let spinEnd = 0
+  const mine: Library = { label: 'this tree', prepare, firstLine, fillLine }
+  const libraries: Library[] = other === null ? [mine] : [other, mine]
+  const timed: StoreResult['libraries'] = libraries.map(library => ({
+    label: library.label, sets: plan.sets.map(set => ({ id: set.id, scratchMs: [], keepMs: 0, resizeMs: 0, resizeAgainMs: 0 })),
+  }))
   if (plan.passes > 0) {
-    for (let s = 0; s < paragraphs.length; s++) {
-      const contexts: Context[] = []
-      for (let i = 0; i < Math.min(500, paragraphs[s]!.length); i++) sink += fill(prepare(paragraphs[s]![i]!, env, false, contexts), plan.width)
+    for (let l = 0; l < libraries.length; l++) {
+      for (let s = 0; s < paragraphs.length; s++) {
+        const contexts: Context[] = []
+        for (let i = 0; i < Math.min(500, paragraphs[s]!.length); i++) sink += fill(libraries[l]!, libraries[l]!.prepare(paragraphs[s]![i]!, env, false, contexts), plan.width)
+      }
     }
     spin()
     spinStart = spin()
     for (let pass = 0; pass < plan.passes; pass++) {
       for (let turn = 0; turn < plan.sets.length; turn++) {
         const s = (turn + pass) % plan.sets.length
-        document.title = `store pass ${pass + 1}/${plan.passes} ${plan.sets[s]!.id}`
         const list = paragraphs[s]!
-        const contexts: Context[] = []
-        let lines = 0
-        const start = performance.now()
-        for (let i = 0; i < list.length; i++) lines += fill(prepare(list[i]!, env, false, contexts), plan.width)
-        results[s]!.scratchMs.push(performance.now() - start)
-        results[s]!.lines = lines
-        sink += lines
-        await yieldTask()
+        for (let k = 0; k < libraries.length; k++) {
+          const l = pass % 2 === 0 ? k : libraries.length - 1 - k
+          const library = libraries[l]!
+          document.title = `store pass ${pass + 1}/${plan.passes} ${plan.sets[s]!.id} ${library.label}`
+          const contexts: Context[] = []
+          let lines = 0
+          const start = performance.now()
+          for (let i = 0; i < list.length; i++) lines += fill(library, library.prepare(list[i]!, env, false, contexts), plan.width)
+          timed[l]!.sets[s]!.scratchMs.push(performance.now() - start)
+          results[s]!.lines = lines
+          sink += lines
+          await yieldTask()
+        }
       }
     }
     for (let s = 0; s < plan.sets.length; s++) {
-      document.title = `store kept ${plan.sets[s]!.id}`
       const list = paragraphs[s]!
-      const contexts: Context[] = []
-      const kept: Prepared[] = []
-      let start = performance.now()
-      for (let i = 0; i < list.length; i++) {
-        const prepared = prepare(list[i]!, env, false, contexts)
-        sink += fill(prepared, plan.width)
-        kept.push(prepared)
+      for (let k = 0; k < libraries.length; k++) {
+        const l = s % 2 === 0 ? k : libraries.length - 1 - k
+        const library = libraries[l]!
+        document.title = `store kept ${plan.sets[s]!.id} ${library.label}`
+        const contexts: Context[] = []
+        const kept: Prepared[] = []
+        let start = performance.now()
+        for (let i = 0; i < list.length; i++) {
+          const prepared = library.prepare(list[i]!, env, false, contexts)
+          sink += fill(library, prepared, plan.width)
+          kept.push(prepared)
+        }
+        timed[l]!.sets[s]!.keepMs = performance.now() - start
+        await yieldTask()
+        start = performance.now()
+        for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(library, kept[i]!, RESIZE_WIDTHS[w]!)
+        timed[l]!.sets[s]!.resizeMs = performance.now() - start
+        await yieldTask()
+        start = performance.now()
+        for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(library, kept[i]!, RESIZE_WIDTHS[w]!)
+        timed[l]!.sets[s]!.resizeAgainMs = performance.now() - start
+        await yieldTask()
       }
-      results[s]!.keepMs = performance.now() - start
-      await yieldTask()
-      start = performance.now()
-      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(kept[i]!, RESIZE_WIDTHS[w]!)
-      results[s]!.resizeMs = performance.now() - start
-      await yieldTask()
-      start = performance.now()
-      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(kept[i]!, RESIZE_WIDTHS[w]!)
-      results[s]!.resizeAgainMs = performance.now() - start
-      await yieldTask()
     }
     spinEnd = spin()
+    const own = timed[timed.length - 1]!
+    for (let s = 0; s < results.length; s++) {
+      results[s]!.scratchMs = own.sets[s]!.scratchMs
+      results[s]!.keepMs = own.sets[s]!.keepMs
+      results[s]!.resizeMs = own.sets[s]!.resizeMs
+      results[s]!.resizeAgainMs = own.sets[s]!.resizeAgainMs
+    }
   }
   if (plan.counts) {
     wrapCanvas()
@@ -283,7 +313,7 @@ async function main(): Promise<void> {
           next++
         }
         const prepared = prepare(list[i]!, env, false, contexts)
-        lines += fill(prepared, plan.width)
+        lines += fill(mine, prepared, plan.width)
         kept.push(prepared)
       }
       result.upTo.push(workSince(before))
@@ -294,12 +324,12 @@ async function main(): Promise<void> {
       await yieldTask()
       rangeHash = 0x811c9dc5
       const beforeResize = workNow()
-      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(kept[i]!, RESIZE_WIDTHS[w]!)
+      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(mine, kept[i]!, RESIZE_WIDTHS[w]!)
       result.resize = workSince(beforeResize)
       result.resizeRangesHash = rangeHash >>> 0
       await yieldTask()
       const beforeAgain = workNow()
-      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(kept[i]!, RESIZE_WIDTHS[w]!)
+      for (let w = 0; w < RESIZE_WIDTHS.length; w++) for (let i = 0; i < kept.length; i++) sink += fill(mine, kept[i]!, RESIZE_WIDTHS[w]!)
       result.resizeAgain = workSince(beforeAgain)
       result.contextsHeld = contexts.length
       result.stored = storedIn(contexts)
@@ -309,7 +339,7 @@ async function main(): Promise<void> {
   const result: StoreResult = {
     runId, userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: window.crossOriginIsolated,
     visibility: document.visibilityState, hardwareConcurrency: navigator.hardwareConcurrency, spinMs: { start: spinStart, end: spinEnd },
-    bounds: STORE_BOUNDS, checkpoints: CHECKPOINTS, sets: results,
+    bounds: STORE_BOUNDS, checkpoints: CHECKPOINTS, sets: results, libraries: timed,
   }
   const posted = await fetch('/api/result', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(result) })
   if (!posted.ok) throw new Error(`/api/result: ${posted.status}`)
@@ -323,6 +353,8 @@ function reportFatal(error: unknown): void {
   void fetch('/api/fatal', { method: 'POST', body: JSON.stringify({ runId, message: text }) })
 }
 
-window.addEventListener('error', event => reportFatal(event.error ?? event.message))
-window.addEventListener('unhandledrejection', event => reportFatal(event.reason))
-main().catch(reportFatal)
+export function start(other: Library | null): void {
+  window.addEventListener('error', event => reportFatal(event.error ?? event.message))
+  window.addEventListener('unhandledrejection', event => reportFatal(event.reason))
+  main(other).catch(reportFatal)
+}
