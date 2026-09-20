@@ -30,7 +30,14 @@ painter differential replay a group of shards a process, which took a third off 
 byte for byte; the lab README has the numbers. Since the fresh-eyes follow-up the run's last line names how many cases
 tier 1 sends to tier 2, per gate, so "every gate is fine" never reads as done, and a run first removes the
 `pretext-gates-<pid>.sock` files of processes that are gone. A full run can take 30 minutes on a shared machine, so
-start it detached from anything that has a time limit.
+start it detached from anything that has a time limit. Since the same day a run takes a machine-wide turn before its
+first gate (one full run and one `--quick` run at a time, first come, first served; it says who holds the turn while it
+waits, a killed run holds nobody up, and `--no-wait` skips the queue), and a run whose inputs equal an earlier finished
+run's prints that run's table and last line again as a reused result, with that run's time, worktree and commit, and
+exits with its code in about a second (`--fresh` runs anyway). The key covers every file of the working tree that git
+doesn't ignore, the installed packages, the frozen references as `check` reads them, the painter's frozen bundles,
+Chrome's set files, the flags that choose gates and bun's version; the lab README and the file's header have what it
+leaves out and why, and the measurements.
 
 **State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
 and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier
