@@ -1,9 +1,11 @@
-// The x-lam-alef study's predictor: no supplied font facts (no-facts-predictor.ts), with the Blink port's default for the
-// boundaries no ligature fact settles at 'canvas-lam-alef' (src/engines/blink/ligatures.ts `study`).
-//   bun rebuild/lab/run.ts --predictor=rebuild/lab/baselines/cluster-default-canvas-lam-alef-predictor.ts ...
+// A predictor of the x-lam-alef study: no supplied font facts, as lab/baselines/no-facts-predictor.ts, with the Blink
+// port's default for the boundaries no ligature fact settles at 'canvas-lam-alef'
+// (src/engines/blink/ligatures.ts `study`). It sits outside the lab because it reaches into an engine, which no file of
+// the lab may (tests/independence.test.ts).
+//   bun rebuild/lab/run.ts --predictor=rebuild/tools/cluster-default/canvas-lam-alef-predictor.ts ...
 import { study } from '../../src/engines/blink/ligatures.ts'
 import { UNKNOWN_FONT_FACTS } from '../../src/model.ts'
-import { makePredictor } from '../predictor-core.ts'
+import { makePredictor } from '../../lab/predictor-core.ts'
 
 study.clusterDefault = 'canvas-lam-alef'
 
