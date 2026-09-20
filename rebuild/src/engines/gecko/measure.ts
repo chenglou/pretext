@@ -160,10 +160,12 @@ export function textRunScripts(text: string, start: number, end: number, is8bit:
   return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy' }]
 }
 
-function scriptAt(text: string, i: number): string {
+// The script of the character at `i` of text read up to `end`: a surrogate pair that `end` cuts is a lone surrogate, as it
+// is to the itemizer (scriptRunLimits).
+function scriptAt(text: string, i: number, end: number): string {
   const u = text.charCodeAt(i)
   if (u < 0x02ea) return fastLatin(u) ? 'Latn' : 'Zyyy'
-  return scriptOf(isSurrogatePair(u, text.charCodeAt(i + 1)) ? combine(u, text.charCodeAt(i + 1)) : u)
+  return scriptOf(i + 1 < end && isSurrogatePair(u, text.charCodeAt(i + 1)) ? combine(u, text.charCodeAt(i + 1)) : u)
 }
 
 // The script context a piece [tStart, tEnd) of a word unit needs: the DOM itemizer merges Common characters into the
@@ -181,16 +183,16 @@ function scriptContextFor(text: string, runs: ScriptRun[], runStart: number, tSt
   // the script of the piece's first character that has one: Common characters before it join its run, and a bracket
   // takes a script only from a run that has one (scriptRunLimits).
   let alone = 'Zyyy'
-  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(text, i)
+  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(text, i, tEnd)
   if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
   const limit = runs[k]!.limit
   for (let i = tStart - 1; i >= from; i--) {
-    if (scriptAt(text, i) !== domScript) continue
+    if (scriptAt(text, i, text.length) !== domScript) continue
     if ((text.charCodeAt(i) & 0xfc00) === 0xdc00 && i > from) return { text: text.slice(i - 1, i + 1), before: true }
     return { text: text[i]!, before: true }
   }
   for (let i = tEnd; i < limit; i++) {
-    if (scriptAt(text, i) !== domScript) continue
+    if (scriptAt(text, i, text.length) !== domScript) continue
     if (isSurrogatePair(text.charCodeAt(i), text.charCodeAt(i + 1))) return { text: text.slice(i, i + 2), before: false }
     return { text: text[i]!, before: false }
   }
