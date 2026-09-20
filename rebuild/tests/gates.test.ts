@@ -184,6 +184,19 @@ test('a ticket whose pid is now a younger process\'s is dead: pids come round ag
   expect(readdirSync(queue)).toEqual(['2.json'])
 })
 
+test('a killed run that its parent never reaps is a zombie, which signal 0 still finds: its turn goes on', async () => {
+  const queue = join(shared, 'zombie')
+  // The shell starts the run and becomes a `sleep`, which never waits for its child.
+  const parent = Bun.spawn(['sh', '-c', `bun "$0" "$1" holder 60000 '' holder & exec sleep 60`, TURN, queue], { stdout: 'ignore', stderr: 'ignore' })
+  await soon(() => textOf(`${queue}.log`).includes('start holder'))
+  const holder = (JSON.parse(readFileSync(join(queue, '1.json'), 'utf8')) as { pid: number }).pid
+  process.kill(holder, 'SIGKILL')
+  await soon(() => Bun.spawnSync(['ps', '-o', 'stat=', '-p', String(holder)]).stdout.toString().startsWith('Z'))
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false })).toBe(false)
+  expect(readdirSync(queue)).toEqual(['2.json'])
+  parent.kill('SIGKILL')
+}, 120000)
+
 // ---- Reuse ----
 
 test('the key of a run\'s inputs: every file of the working tree, the frozen references and the flags that choose gates; not --cores', () => {

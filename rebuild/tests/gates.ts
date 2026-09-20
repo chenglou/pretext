@@ -52,7 +52,8 @@
 // logs), first come, first served, and while it waits it says who holds the turn and how many wait before it. Nothing
 // is ever taken over, so nothing is timed: a ticket is dead when its pid is gone, or is a process that started after
 // the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
-// looks); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
+// looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
+// lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
 // numbers only go up. --no-wait takes no ticket, for a human who knows better. Measured with --quick --engine=gecko, 42
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
 // on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
@@ -299,11 +300,12 @@ const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)
 // Whether the run that wrote a ticket still runs. Its pid alone would not do: the machine reuses pids within hours, and
 // a killed run's ticket stays until the next run looks. So a process of that pid that started after the ticket was written
 // is another one (`ps` gives the start to the second, in UTC here, since `bun test` keeps another time zone than its
-// children; when it gives nothing to read, the ticket counts as live).
+// children; when it gives nothing to read, the ticket counts as live). And a killed run whose parent never reaps it
+// stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives its state as Z.
 function ticketLives(ticket: Ticket): boolean {
   if (!processExists(ticket.pid)) return false
-  const started = Bun.spawnSync(['ps', '-o', 'lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString()
-  return !(Date.parse(`${started} UTC`) > ticket.at)
+  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
+  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > ticket.at)
 }
 
 // A ticket below a run's own, or null when another waiter removed it as dead between the listing and this read.
