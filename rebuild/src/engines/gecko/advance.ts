@@ -53,39 +53,16 @@ function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
 // - Where the sides don't add up, the value is the stand-in the font's pair kerning asks for, and the reason names it.
 export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): InWordAdvance {
   if (t >= run.tEnd) return { au: run.totalAdvance, standIn: null }
-  const unit = p.units[p.unitOf[t]!]!
+  const unit = windowAt(p, run, p.units[p.unitOf[t]!]!, t)
   if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
   const entry = entryAt(unit, t)
-  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t, entry, true)
-  else if (entry.unrefined !== null) entry.advance = sidesAdvance(p, run, unit, t, entry, entry.unrefined, true)
+  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
   return entry.advance
-}
-
-// The advance before t as a break scan's fit test takes it on a plain paragraph: without the questions that only place a
-// pair's adjustment or a joined letter's form on one side of t (sidesAdvance), which move the advance by no more than what
-// crosses t. advanceSlack is that bound, in au either way, 0 where the advance is whole. The scan asks for the whole
-// advance where the bound reaches its fit test, and the line's own edges always take it (lines.ts breakAndMeasureText), so
-// a plain paragraph's lines are the inspected one's; text whose words fit their lines asks none of those questions.
-export function roughAdvanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
-  if (t >= run.tEnd) return run.totalAdvance
-  const unit = p.units[p.unitOf[t]!]!
-  if (t === unit.tStart) return unit.startAdvance
-  const entry = entryAt(unit, t)
-  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t, entry, false)
-  return entry.advance.au
-}
-
-export function advanceSlack(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
-  if (t >= run.tEnd) return 0
-  const unit = p.units[p.unitOf[t]!]!
-  const entry = unit.inWord === null || t === unit.tStart ? null : unit.inWord.offsets[t - unit.tStart] ?? null
-  // Two au more than what crosses t: each glyph's rounding moves a told share by one.
-  return entry === null || entry.unrefined === null ? 0 : Math.abs(entry.unrefined.across) + 2
 }
 
 // What measuring found inside a unit (GeckoUnit.inWord), made when its first offset asks.
 function inWordOf(unit: GeckoUnit): InWord {
-  if (unit.inWord === null) unit.inWord = { groups: null, offsets: new Array<InWordEntry | null>(unit.tEnd - unit.tStart).fill(null) }
+  if (unit.inWord === null) unit.inWord = { groups: null, offsets: new Array<InWordEntry | null>(unit.tEnd - unit.tStart).fill(null), windows: null }
   return unit.inWord
 }
 
@@ -93,9 +70,109 @@ function entryAt(unit: GeckoUnit, t: number): InWordEntry {
   const offsets = inWordOf(unit).offsets
   const known = offsets[t - unit.tStart] ?? null
   if (known !== null) return known
-  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null, unrefined: null }
+  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
   offsets[t - unit.tStart] = entry
   return entry
+}
+
+// A window's clusters. A string size the port chose, not engine data: every question inside a window is at most two
+// windows long, and a cut costs eight questions.
+const WINDOW_CLUSTERS = 16
+
+// The unit the recipes below measure offset t in: the shaping unit, or in a long one its window around t. Gecko shapes a
+// word of any length in one call (gfxFont.cpp:3804-3808; ShapeFragmentWithoutWordCache cuts only at 32,760 units,
+// :3564-3617), so every recipe here measures to the unit's end, and the characters sent to Canvas grow with the square
+// of a unit's length: text without spaces is one unit. Where Canvas shows that nothing in the shaping crosses a cut
+// (windowsOf), the text between two cuts measures alone as it does in the unit, which is all a recipe needs of a unit.
+function windowAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): GeckoUnit {
+  if (unit.tEnd - unit.tStart <= 2 * WINDOW_CLUSTERS) return unit
+  const inWord = inWordOf(unit)
+  if (inWord.windows === null) inWord.windows = windowsOf(p, run, unit)
+  const windows = inWord.windows
+  if (windows.length === 0) return unit
+  let low = 0
+  let high = windows.length - 1
+  while (low < high) {
+    const mid = (low + high + 1) >> 1
+    if (windows[mid]!.tStart <= t) low = mid
+    else high = mid - 1
+  }
+  return windows[low]!
+}
+
+// The windows of a long unit, made when its first offset asks; none where no cut holds. Cuts are tried at every 16th
+// cluster start, the last cell keeping what is left under two cells. A cut holds where Canvas shows what the recipes
+// below ask of any offset whose advance they call exact, over the cells on its two sides:
+// - no letters join across it (joinsAcross), and no mark starts its cluster (inWordAdvance, 'mark-starts-cluster');
+// - the two cells measured alone add up to the two measured together, so no kerning, contextual form or ligature that a
+//   total shows crosses it;
+// - no optional ligature as wide as its parts spans it (ligatureAcross), and the two cells hold as many ligature groups
+//   apart as together (groupsIn), so no group that required forms made spans it.
+// A cut that doesn't hold leaves its two cells in one window, measured whole. The windows must add up to the unit, which
+// ties every cut to the unit's own shaping. A unit of 2^18 px or more, whose width Canvas no longer gives to the app
+// unit (gaps.ts wideUnit), has windows only where its float width is exact all the same (1,400 Han characters at 200px).
+function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoUnit[] {
+  // Canvas can't count the groups of a unit that starts inside a cluster (inWordAdvance).
+  if (p.clusterStart[unit.tStart] === 0) return []
+  // A right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override):
+  // HarfBuzz shapes it reversed or not by what its whole buffer holds (shapedReversed: digits without a letter stay left
+  // to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM
+  // shapes the unit, and places its pair adjustments on the other glyph. Such a unit keeps the long questions.
+  let k = 0
+  while (run.scriptRuns[k]!.limit <= unit.tStart) k++
+  if ((run.level & 1) === 0 && RTL_SCRIPTS.has(run.scriptRuns[k]!.script)) return []
+  let clusters = 0
+  for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
+  const grid: number[] = []
+  let c = 0
+  for (let k = unit.tStart; k < unit.tEnd; k++) {
+    if (p.clusterStart[k] === 0) continue
+    if (c % WINDOW_CLUSTERS === 0 && clusters - c >= WINDOW_CLUSTERS) grid.push(k)
+    c++
+  }
+  grid.push(unit.tEnd)
+  if (grid.length < 3) return []
+  const own = run.contexts.own
+  const windows: GeckoUnit[] = []
+  const close = (tStart: number, tEnd: number, canvasAu: number, before: number): void => {
+    windows.push({
+      kind: 'word', tStart, tEnd, canvasAu, au: canvasAu + p.correctionPrefix[tEnd]! - p.correctionPrefix[tStart]!,
+      startAdvance: unit.startAdvance + before + p.correctionPrefix[tStart]! - p.correctionPrefix[unit.tStart]!,
+      inWord: { groups: null, offsets: new Array<InWordEntry | null>(tEnd - tStart).fill(null), windows: [] },
+    })
+  }
+  // The open window: its start, the unit's Canvas au before it, and its own.
+  let start = unit.tStart
+  let before = 0
+  let au = rangeAu(own, run, p.tUnits, grid[0]!, grid[1]!)
+  // The cell before the cut, alone: its au and its ligature groups.
+  let left = au
+  let leftGroups: number | null = null
+  for (let i = 1; i + 1 < grid.length; i++) {
+    const g = grid[i]!
+    const right = rangeAu(own, run, p.tUnits, g, grid[i + 1]!)
+    const both = rangeAu(own, run, p.tUnits, grid[i - 1]!, grid[i + 1]!)
+    let rightGroups: number | null = null
+    let holds = left + right === both && generalCategory(codePointAtT(p, g))[0] !== 'M' && !joinsAcross(p, unit, g) && !ligatureAcross(p, run, unit, g)
+    if (holds) {
+      leftGroups ??= groupsIn(p, run, grid[i - 1]!, g, '', '')
+      rightGroups = groupsIn(p, run, g, grid[i + 1]!, '', '')
+      holds = leftGroups + rightGroups === groupsIn(p, run, grid[i - 1]!, grid[i + 1]!, '', '')
+    }
+    if (holds) {
+      close(start, g, au, before)
+      before += au
+      start = g
+      au = right
+    } else {
+      au = start === grid[i - 1]! ? both : rangeAu(own, run, p.tUnits, start, grid[i + 1]!)
+    }
+    left = right
+    leftGroups = rightGroups
+  }
+  if (windows.length === 0 || before + au !== unit.canvasAu) return []
+  close(start, unit.tEnd, au, before)
+  return windows
 }
 
 const ZWJ = '\u200d'
@@ -110,7 +187,7 @@ function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: nu
   return entry.suffixAu
 }
 
-function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, entry: InWordEntry, whole: boolean): InWordAdvance {
+function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): InWordAdvance {
   if (p.clusterStart[t] === 0) {
     // Inside a grapheme cluster: a soft hyphen breaks there (GetHyphenationBreaks), and a text node can start there.
     // HarfBuzz keeps a mark in a cluster of its own unless the font merges it (HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS,
@@ -230,22 +307,19 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
-  return sidesAdvance(p, run, unit, t, entry, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver }, whole)
+  return sidesAdvance(p, run, unit, t, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver })
 }
 
 // The advance before t from its two measured sides. Two recipes ask more where the sides don't add up, each to put what
-// crosses t on one side of it: a kerned pair's placement and a joined suffix's font range (below). A break scan on a plain
-// paragraph leaves them out (`whole` false) and keeps the sides on the offset's record, and whoever needs the whole
-// advance finishes from them (advanceBefore, roughAdvanceBefore).
-function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, entry: InWordEntry, s: InWordSides, whole: boolean): InWordAdvance {
+// crosses t on one side of it: a kerned pair's placement and a joined suffix's font range (below).
+function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, s: InWordSides): InWordAdvance {
   const { a, across, prefixAu, suffixAu, reversed, leftOver } = s
   const joiner = s.joined ? ZWJ : ''
   let sides = s.sides
   const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
-  entry.unrefined = !whole && across !== 0 && !reversed && !leftOver && (s.joined || pairFactDescribes(run, t)) ? s : null
   // Which glyph of a pair carries its adjustment: the fact, or where it isn't given what Canvas told of the pair at t.
   let placement = pairKerningAt(run, t)
-  if (whole && across !== 0 && joiner === '' && !reversed && !leftOver) {
+  if (across !== 0 && joiner === '' && !reversed && !leftOver) {
     // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
     // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
     const share = pairKernedShare(p, run, unit, a, t, across)
@@ -266,7 +340,7 @@ function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: n
   // 26 cuts; of the 24 whose sides don't add up 18 add up this way, the prefix's side is the DOM's advance at 16 of them
   // and 3 au off at 2, and W(unit) − W(U+200D suffix) is the DOM's at none; Arabic under Georgia, 7 of 7. Two questions
   // a joined offset whose sides don't add up.
-  if (whole && joiner !== '' && across !== 0 && !reversed && !leftOver) {
+  if (joiner !== '' && across !== 0 && !reversed && !leftOver) {
     const first = (p.tUnits[t]! & 0xfc00) === 0xd800 && t + 1 < unit.tEnd ? 2 : 1
     let letter = ''
     for (let k = t; k < t + first; k++) letter += String.fromCharCode(p.tUnits[k]!)
@@ -604,7 +678,10 @@ function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numb
 }
 
 // The ligature group over cluster boundary t, or null where no group spans it.
-export function groupAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+export function groupAround(p: GeckoPrepared, run: GeckoTextRun, whole: GeckoUnit, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+  // No group spans a window's start (windowsOf).
+  const unit = windowAt(p, run, whole, t)
+  if (t === unit.tStart) return null
   const row = rowAround(p, run, unit, t)
   if (row === null) return null
   for (let k = 0; k + 1 < row.edges.length; k++) {
@@ -701,22 +778,28 @@ function rowContinues(p: GeckoPrepared, pattern: { positions: readonly (readonly
 // lam-meem and lam lam heh, U+0E24 U+0E32 in Thonburi); Arial's optional Allah ligature measures 761 au with ligatures and
 // 957 without.
 function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, joiner: string): boolean {
-  const spaced = letterSpacedContext(p.contexts, run.contexts)
-  const off = noLigaturesContext(p.contexts, run.contexts)
-  const groups = (tStart: number, tEnd: number, before: string, after: string): number =>
-    (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
   // The unit's own count is the same at every offset, so the unit keeps it.
   const inWord = inWordOf(unit)
   if (inWord.groups === null) {
     let clusters = 0
     for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
-    inWord.groups = { counted: groups(unit.tStart, unit.tEnd, '', ''), clusters }
+    inWord.groups = { counted: groupsIn(p, run, unit.tStart, unit.tEnd, '', ''), clusters }
   }
   const inUnit = inWord.groups.counted
   if (inUnit === inWord.groups.clusters) return false
   // U+200D before the suffix is a cluster of its own, which the joiner measured alone counts too.
+  const spaced = letterSpacedContext(p.contexts, run.contexts)
+  const off = noLigaturesContext(p.contexts, run.contexts)
   const joinerGroups = joiner === '' ? 0 : (Math.round(width(spaced, joiner) * CANVAS_AU_PER_PX) - Math.round(width(off, joiner) * CANVAS_AU_PER_PX)) / (2 * CANVAS_AU_PER_PX)
-  return groups(unit.tStart, t, '', joiner) + groups(t, unit.tEnd, joiner, '') - joinerGroups !== inUnit
+  return groupsIn(p, run, unit.tStart, t, '', joiner) + groupsIn(p, run, t, unit.tEnd, joiner, '') - joinerGroups !== inUnit
+}
+
+// The ligature groups Canvas counts in [tStart, tEnd) (groupAcross): its au at 2px of letter spacing less its au at
+// 0.001px, over 2px.
+function groupsIn(p: GeckoPrepared, run: GeckoTextRun, tStart: number, tEnd: number, before: string, after: string): number {
+  const spaced = letterSpacedContext(p.contexts, run.contexts)
+  const off = noLigaturesContext(p.contexts, run.contexts)
+  return (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
 }
 
 // hb_script_get_horizontal_direction's right-to-left scripts (hb-common.cc, Chromium 152's HarfBuzz copy), by ISO 15924 tag;

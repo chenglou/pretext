@@ -5,8 +5,9 @@ the profiling and optimization phase starts from, in the order I would take the 
 buy from the numbers we have and what could make it unsafe. It collects research/BENCH-NIGHT.md ("The real pass"),
 DESIGN.md §4.7, research/RECIPE-COSTS.md and RECIPE-COSTS-BROWSER.md, research/ARCHITECTURE-PLAN-2.md §10 and
 research/CAPABILITY-CHECK.md. Nothing here is built, but for item 4's main part, which landed in correctness round 5
-(2026-09-19), and item 1, built in its smaller form the same day; that round also added item 8. Expected gains are
-arithmetic over one benchmark run, not results.
+(2026-09-19), and item 1, built in its smaller form the same day; that round also added item 8. Items 2 and 3 were
+built and merged on 2026-09-20, and item 8's trade was measured and settled with item 3 (the plain scan in its simple
+form). Expected gains are arithmetic over one benchmark run, not results.
 
 ## The bar, and the rule for what may come back
 
@@ -234,14 +235,158 @@ question per offset the break scan consults, each over the rest of the unit. Tex
 the characters sent to Canvas grow with the square of its length. The plan's §10 has the candidate: windows inside long
 units (44.6 M characters sent became 0.34 M on 9,000 Chinese units). It changes the recipe, so it asks new questions.
 
-*Expected.* Firefox's mix is 2.63 s against 0.61 s for plain ASCII, and 12% of messages are CJK or Arabic: most of
-the 2 s between them. It is what puts Firefox under the bar on the mix, and it bounds the accepted worst case (a
-9,428-unit Chinese paragraph took about 11 s on its first layout).
+**Built, unmerged, on branch `x-perf-gecko-fill` (2026-09-19).** The recipe, its cut rule and its probe are in DESIGN.md
+§4.4 ("Recipe added in the profiling phase"); what follows is what was found, what it buys and how it is held.
 
-*What could make it unsafe.* A window must start where shaping can't reach across: cluster starts alone aren't enough
-where a font kerns or substitutes across them, which is the reason the recipe measures to the unit's end. It needs the
-in-word probe's method again (gecko-port F15) on windowed strings, a new recording, and tier 2 in both configurations
-(with facts Gecko's positions are predicted values, so the exact-value status blocks a wrong one).
+*What was found first.*
+- The cost is CJK, not Arabic. By the bench's own table by kind (Firefox, 1,000 messages of the mix, an earlier quiet
+  run, `.artifacts/bench/perf-lifetime-20260919/night-1/firefox-bench.md`): a CJK message took 2.58 ms and 478 calls, a
+  Latin one 66 µs and 81 calls, an Arabic one 123 µs and 47 calls. The 8% of messages that are CJK were 73% of the mix's
+  time; Arabic messages were 2.5%. Arabic text has spaces, so its units are words.
+- Gecko doesn't shape CJK in pieces. A word of more than 32 characters skips the word cache and goes whole to one
+  shaping call (gfxFont.cpp:3804-3808), which is cut only at 32,760 units (:3564-3617). CJK scripts turn kerning off
+  (gfxHarfBuzzShaper.cpp:1405-1438), not ligatures or contextual forms. So no cut inside a unit is exact by
+  construction, for any script.
+- So a cut is exact by Canvas or it isn't made. The rule is made of the tests the in-word recipes already make before
+  they call an advance exact, over 16 clusters on each side of the cut: the two sides add up, the pair of clusters at the
+  cut has one ink box with and without ligatures, the ligature group counts add up; text rules keep out a cut between
+  joined letters and before a mark that starts a cluster; and the windows of a unit must add up to the unit. A cut
+  that fails leaves its cells in one window, and a unit where nothing holds keeps the long questions. No script class
+  is named anywhere: Thai, Khmer, Burmese and Devanagari get windows where Canvas agrees, and a long URL does too.
+- Probe `gecko-windows` (the in-word probe's method; `.artifacts/probes/perf-gecko-fill-20260919/windows-2`): 54
+  samples over eleven script and font-edge classes, every cluster boundary tried as a cut. All 13,435 cuts that hold
+  give the long recipe's value, and so do all 14,040 offsets inside windows whose sides add up. Against the DOM the two
+  recipes agree or miss together (13,135 of the 13,435; the rest are Noto Nastaliq Urdu and an emoji's device-size
+  advance). 377 cuts fail the sum (kerned Latin pairs, Arabic), 21 the ink box (`fi` in Helvetica Neue), none the group
+  count.
+
+*Counts* (pinned Firefox, `tools/fill-counts-probe.ts`, the first 1,000 messages of each set from scratch at 320 px;
+runs `counts-before-1` and `counts-after-1` beside the probe's; lines equal in both, 3,407 and 3,043):
+
+| per message | calls before | calls after | units sent before | units sent after |
+|---|---:|---:|---:|---:|
+| CJK (81 messages, mean 122 units) | 478.01 | 516.53 | 23,499 | 2,944 |
+| Arabic (58) | 47.29 | 47.29 | 161 | 161 |
+| Latin with a URL (57) | 189.63 | 207.96 | 1,227 | 1,153 |
+| plain Latin (551) | 80.97 | 80.97 | 239 | 239 |
+| the mix | 120.44 | 124.63 | 2,188 | 519 |
+| plain ASCII set | 78.35 | 78.35 | 232 | 232 |
+| one Chinese unit of 9,428 units | 37,316 | 40,658 | 41.68 M | 0.23 M |
+
+A window costs questions (8 a cut), so calls rise 8% on CJK while the units sent fall to an eighth. The other kinds
+hold no unit of more than 32 code units but a URL.
+
+*Time.* The bench's headline in pinned Firefox, a background window, 10,000 messages from scratch
+(`bench/run.ts --smoke --messages=1000 --phase-passes=3 --scenarios=chat --headline=10000`): the base and the branch in
+three alternating pairs inside one exclusive stretch of 5 minutes, the 1-minute load average 7.5 at the first run and
+3.7 to 5.8 after it. A run's number is the median of its 3 passes; below, the median of the 3 runs and their range
+(`.artifacts/bench/perf-gecko-fill-20260919/A`, `A-summary.txt`).
+
+| Firefox, 10,000 messages from scratch | before | after |
+|---|---:|---:|
+| the mix | 2,559 ms (2,535 to 2,626) | 1,037 ms (1,033 to 1,042) |
+| plain ASCII | 597 ms (583 to 607) | 582 ms (574 to 587) |
+
+| per message, the instrumented pass over 1,000 messages, µs | before | after |
+|---|---:|---:|
+| CJK | 2,492 | 493 |
+| plain Latin | 62 | 62 |
+| Arabic | 112 | 115 |
+| Latin with a URL | 145 | 137 |
+| Latin with an emoji, with curly quotes, with a code span, app text | 88, 77, 104, 109 | 87, 76, 104, 108 |
+
+One Chinese unit of 9,428 units, its first layout at 320 px, timed once in each tree in two sittings, both on a loaded
+machine (1-minute load about 50; `counts-before-1` and `counts-after-1`, `counts-timed-base` and `counts-timed-head`):
+12.0 s and 10.4 s before, 0.16 s and 0.11 s after, 475 lines both. At 3,000 units 1.19 and 1.09 s before, 0.04 s
+after; at 1,000 units 0.14 and 0.12 s before, 0.03 and 0.01 s after: the cost grows with the length now, not with its
+square. The nine giants' time can't move, since 8 of them ask the same calls: a timed stretch of two alternating pairs
+was spoiled by other owners' load rising from 3.6 to 51 during it (the rows' prediction time over the nine, in run
+order: base 8.27 s, branch 8.89 s, base 9.35 s, branch 10.94 s; `giants-timed-*`).
+
+Firefox's mix is at 1.04 s against the 2 s bar, 0.41 of what it was, and plain ASCII doesn't move. What is left of the
+mix by kind (time a message times messages, the instrumented pass): CJK 36% (it was 74%), plain Latin 31%, Latin with a
+URL 7%, Arabic, curly quotes and code spans 6% each, emoji 5%, app text 3%.
+
+
+*How it is held.* It asks new questions, so tier 1 exits 4: 1,872 cases ask a question the record lacks and 2 ask
+others, 0 predictions change, and 61,897 of 63,771 cases are the same (units of at most 32 code units ask what they
+asked). Recorded in pinned Firefox, both orders, both configurations
+(`.artifacts/tests/runs/perf-gecko-fill-20260919/no-facts`, `facts`): 0 status transitions against the frozen ledgers,
+exact values not worse (239 and 742 differing predicted values, 112 and 100 rect counts, as before), the gate passes
+with lost 0. Case by case against the reference recording (`compare-sets.ts --prediction=without-measure`, both orders):
+without facts 0 native observations differ and 39 cases differ in a prediction, each in one number of an
+`in-word-prefix` gap's detail (W(unit) is now the window's width); with facts the same 39, and 74 cases that are
+marked history-dependent in the frozen ledger and ask unchanged questions (the process's two font states; the same
+count as between two usual runs, research/PERF-LIFETIME.md). The plain predictor's run differs from the usual run in
+120 native observations and 14 line ranges, the reference's own numbers at the correctness round 5 merge, every one
+marked history-dependent and none among the changed cases. The nine giants hold words and no long unit in Firefox:
+their predictions equal the base's on the lab path and the plain path, 8 ask the same calls and the English one 1,050
+more of 843,386. `windows.test.ts` pins the rule: a kerned pair across a cut and a ligature as wide as its parts across
+a cut keep their cells in one window, and the lines are the glyph records' at every width of a sweep.
+
+*Not done offline:* the function set's plain and pure checks skip the 1,872 cases until a recording with the new
+questions is packed; the plain predictor's browser run covers plain against inspected on them.
+
+*At the merge:* record Firefox's two references again on the merged tree (both orders, `--record`), pack and freeze
+both, stage the seeds (lost 0 here). Nothing to accept in the citation ledger.
+
+*What is left of the item.* A CJK message still asks 517 questions where a Latin one asks 81: per offset the ink box
+test of the pair (2), the suffix and the cluster alone. They are short now; fewer of them is another recipe (cluster
+sums where a window's clusters add up, research/PERF-STORE-STUDY.md section 8), not this one.
+
+*Reviewed (2026-09-20), by a second pair of eyes on the same branch.* DESIGN.md §4.4 has what was found about the cut
+rule; here is the rest.
+- The source. Every citation above holds in the pinned source. Three paths the item hadn't read change nothing: a font
+  whose space takes part in shaping has its whole run shaped in one call (gfxFont.cpp:3757-3761, the port's existing
+  gap); the CoreText shaper is off by preference (`gfx.font_rendering.coretext.enabled`), so Apple's AAT fonts go
+  through HarfBuzz as well; and in system fallback a character takes the previous character's font where that font has
+  it (gfxTextRun.cpp:3559-3569), a reach no test beside a cut can see, which the rule's last line holds: the windows
+  must add up to the unit. A unit also ends at a script run's limit (`prepare.ts` `initTextRun`), so Japanese text,
+  which changes script every few characters, has short units and no windows; the item's CJK is Chinese, and Thai,
+  Lao, Khmer, Burmese and Tibetan are the other writing without spaces.
+- The cut rule, attacked with the port itself in pinned Firefox (`tools/windows-attack-probe.ts`, 531 paragraphs without
+  spaces, 106,457 cluster starts; the same samples as 1,566 lab cases; two runs without windows equal everywhere): no
+  line, no exact advance and no drift, in any class but one. A right-to-left script under a direction override is shaped
+  reversed or not by what HarfBuzz's whole buffer holds, so Canvas shapes a window of digits alone the other way round
+  than the DOM shapes the unit: 32 advances, a line's width and one native break (Hebrew letters and sixty digits under
+  U+202D, 24px Arial, 384px: line 1 ends at 30 without windows, as natively, and at 31 with them). Such a unit now has
+  no windows (`windowsOf`, `windows-reversed.test.ts`); with that, the lab set has no scorer transition against the
+  port without windows. No tier case is of that kind: none of the 2,909 with a stretch of 33 units without white space
+  holds a bidi control, so the recordings above stand. Stand-ins aren't always the long recipe's inside a window (4 of
+  14,288 Arabic offsets, DESIGN.md §4.4).
+- What it buys elsewhere, from the same probe's counts (units sent to Canvas, without windows and with them): Han
+  1.48 M and 0.24 M over 36 samples of 33 to 400 units, Thai 1.04 M and 0.17 M, Devanagari 1.78 M and 0.25 M, Khmer
+  0.34 M and 0.07 M, Burmese 0.53 M and 0.10 M, nine units of 1,200 to 2,400 units 25.3 M and 0.68 M; calls rise 4%
+  over the whole probe (950,962 to 984,419). A rule for Han, kana and Hangul alone would need a script list the rule
+  doesn't have now, and would leave Thai and its neighbours with the square.
+- The counts above, run again from both trees (`.artifacts/probes/perf-gecko-fill-20260919/attack/counts-base`,
+  `counts-item3`, `counts-simple`): every count the same, to the last unit sent (41,684,832 and 231,696 for the long
+  unit), and item 8's 132.85 and 87.73.
+- The window's size (the counts probe, a CJK message's calls and units sent): 4 clusters 641.00 and 2,209, 8 clusters
+  558.14 and 2,460, 12 clusters 529.44 and 2,700, 16 clusters 516.53 and 2,944, 24 clusters 502.14 and 3,453,
+  32 clusters 494.80 and 3,950 (`counts-k4` to `counts-k32`; scratch patches beside the review's tools). By the two
+  trees' own numbers a call costs about 0.4 µs and a unit about 0.1 µs there (478 calls and 23,499 units in 2,492 µs,
+  517 and 2,944 in 493 µs), which puts 8 to 16 clusters within 6% of each other on a CJK message and 32 clusters 18%
+  over: 16 stays.
+- Windows for Han, kana and Hangul alone (`counts-cjk`, 7 lines more): the same CJK message, a URL back at its 189.63
+  calls and 1,227 units, the mix 123.56 calls and 523 units against 124.63 and 519. It buys nothing on the chat mix,
+  needs a script list the rule doesn't have, and leaves Thai and its neighbours with the square.
+- A smaller cost for the same windows, not built: one ligature group count of the whole unit, the precheck
+  `groupAcross` makes of any unit. Where it equals the clusters, no cut needs its group test and every window's count
+  is known (6 lines; `variant-seed-on-0edcd64.patch` beside the review's tools). A CJK message then asks 477.37 calls
+  and sends 2,297 units (516.53 and 2,944 with the branch, 478.01 and 23,499 without windows), the mix 120.68 and 453,
+  the long unit 37,150 and 175,484; about 16% of a CJK message's time by the prices above. The port itself gives the
+  same advances, reasons, windows and lines with it on all 531 samples of the review's probe (`dump-seed-1`). It asks
+  other questions, so it wants the merge's recording; taken before that recording it costs no second one.
+- Time. The bench's driver runs only as the lock wrapper's own child unless its lock override is passed, which the
+  review's session wasn't allowed to pass, so a stretch of alternating bench runs wasn't possible. The review timed
+  another way: `tools/fill-ab-probe.ts` runs the headline for several checkouts inside one page, in alternating order,
+  under one exclusive acquisition, so that whatever the machine does it does to every checkout. Ten rounds
+  (`.artifacts/bench/perf-gecko-fill-20260919/attack/AB-2`; the 1-minute load was 37 to 48 from other owners' offline
+  work, which the machine's cores absorbed: the numbers are within 4 to 8% of the quiet ones above): the mix 2,654 ms
+  before and 1,125 ms after, −1,505 ms in the median round (−1,438 to −1,585 over the ten, −57%); plain ASCII 598 and
+  608 ms, +8 ms in the median round with rounds on both sides of 0. Five rounds at a load of 8 to 11 (`AB-1`) gave
+  −58% on the mix.
 
 ### 4. WebKit: the space of a box measured as the box is made (done), and box constants
 
@@ -306,7 +451,7 @@ and a per-engine entry so a page loads one port (the plan's §9 left a loader ou
 first: 3 ms once may not be worth a branch. Dropping the reverse tables and rule source `rbbi.ts` never reads is bundle
 size, not time.
 
-### 8. Gecko's lazy plain scan: complexity against about 31 questions a chat message
+### 8. Gecko's lazy plain scan: complexity against 8 to 9 questions a chat message (measured: about 40 ms per 10,000)
 
 *What.* Not a speed-up to build: a trade correctness round 5 made, which this phase may take back. Gecko asks Canvas
 which glyph of a kerned pair carries the adjustment (DESIGN.md §4.4). `overflow-wrap: break-word` makes every cluster
@@ -319,7 +464,8 @@ that only place what crosses it, and asks them where the bound reaches a fit tes
 *The trade.* It is the most intricate part of the Gecko port. It made a record's value depend on who asked first, and
 the round's critic found a real hole in it (fixed, with a unit test built from a constructed paragraph). That a plain
 paragraph's lines equal the inspected one's rests on a bound argument plus the plain check, the sweep and the plain
-predictor's browser runs. The simpler form reads every candidate whole and costs about 31 questions a chat message in
+predictor's browser runs. The simpler form reads every candidate whole and costs 8 to 9 questions a chat message (measured below; about 31 in
+the round's first build) in
 Firefox, which already meets the bar on plain ASCII and whose cost on the mix is the CJK and Arabic fill (item 3). The
 maintainer may prefer the simpler form.
 
@@ -330,6 +476,51 @@ two probes' medians). Item 1 was built without one, because a kept answer goes s
 the library can't see that. With that home the simple form's cost is the 3 to 8 questions of each kerned candidate, and
 the comparison should be run again. Note that the cost depends on the width: a paragraph that asks nothing at one width
 can ask the probe pairs at another, and the chat smoke measures one width a message.
+
+*Measured (2026-09-20, branch `x-perf-gecko-fill`; nothing of it is in the library).* The simpler form was built as a
+scratch patch: the lazy scan taken out of `advance.ts`, `lines.ts` and `types.ts`, 15 lines added and 61 removed, with
+`lazy-scan.test.ts` (76 lines) and one case of `gecko.test.ts` to go with it. Four trees were held against each other:
+the base and item 3's branch, each with the lazy scan and without.
+
+- Counts (pinned Firefox, the first 1,000 messages of each set, `tools/fill-counts-probe.ts`; lines equal everywhere):
+  the simple form asks 128.66 questions a message on the mix where the lazy one asks 120.44 (+8.2), and 87.73 against
+  78.35 on plain ASCII (+9.4); with item 3, 132.85 against 124.63 on the mix. The +31 above was the cost of the round's
+  first build in a 200-message smoke. Today's pair placement asks its probe pairs only where a pair's own total doesn't
+  tell, so the simple form costs 8 to 9 questions a message.
+- Time (the bench's headline in pinned Firefox, 10,000 messages from scratch, the four trees in 3 alternating rounds
+  inside one exclusive stretch of 7 minutes, 1-minute load 4.4 to 7.7; a run's number is the median of its 3 passes;
+  `.artifacts/bench/perf-gecko-fill-20260919/CD`, `CD-summary.txt`). Plain ASCII: 587 ms lazy against 630 ms simple
+  before item 3 (+43 ms, +7%; the three rounds +44, +34 and +44), and 596 against 629 ms with item 3 (+33 ms, +6%; two
+  rounds +33 and +38, the third held an outlier run). On the mix the difference is inside the runs' spread: 2,617
+  against 2,669 ms before item 3 (+52 ms, +2%), and with item 3 1,098 against 1,196 ms with rounds of +98 and +20 ms.
+  By the ASCII number and the instrumented pass (a plain Latin message 64 µs against 72 before item 3, 65 against 68
+  with it) it is about 40 to 50 ms there too, 4 to 5% of the mix's 1.04 s.
+- So the intricate form buys about 40 ms per 10,000 chat messages in Firefox: 6 to 7% of plain ASCII, 2% of the mix
+  before item 3 and 4 to 5% with it. Firefox is 3.4 times under the 2 s bar on plain ASCII and 1.9 times on the mix
+  with item 3, with either form.
+
+*Recommendation: the simpler form.* The lazy scan buys 4 µs a message in an engine that is 1.9 to 3.4 times under the
+bar with or without it, and it pays with the port's most intricate code, a record whose value depends on who asked first
+and one of the two accepted exceptions to "nothing writes a prepared paragraph after `prepare`" (DESIGN.md §4.6).
+Without it `rebuild/src` is 46 lines shorter, and a plain paragraph's lines equal the inspected one's because both read
+the same advances, not by a bound argument.
+
+*Taken on the branch, as its last commits* (the code with its tests and registry entry, then the documents), so that a
+merge can leave them out. What holds it: the unit tests; the quick gates (tier 1 as for item 3, 0 predictions changed;
+plain and pure 61,899 pass, 0 fail, item 3's 1,872 cases skipped); the sweep in both configurations, 63,771 pass; in
+pinned Firefox, both orders and both configurations, 0 status transitions, exact values as before and the gate
+passing; without facts, against item 3's own run, every row equal with its counts of Canvas work but 7 rows of one
+reversed part, all marked history-dependent, so the inspected path didn't move; the plain predictor's run against that
+usual run, 0 line ranges and 0 native observations differing over 63,771 cases
+(`.artifacts/tests/runs/perf-gecko-fill-20260919/simple-*`, `compare-simple-*`).
+
+*Reviewed (2026-09-20).* The same in-page alternating runs (item 3's review, `AB-2`, ten rounds) hold the trade: plain
+ASCII 608 ms lazy and 663 ms simple with item 3, +26 ms in the median round and more in every one of the ten (+13 to
++87); 598 and 640 ms without item 3, +40 ms in the median round, more in nine of ten. On the mix +30 and +23 ms. So
+25 to 45 ms per 10,000 messages, 4 to 7% of plain ASCII, as measured above, and Firefox's mix stays near 1.1 to 1.2 s
+with both changes. The reviewer agrees with the simpler form: the port itself gives the same advances, reasons and
+lines with it on all 531 samples of the windows' probe, plain and inspected, and the lab set run with it has no scorer
+transition against the port at the phase's start.
 
 ### 9. Later, with numbers only
 

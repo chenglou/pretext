@@ -9221,7 +9221,7 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "recipe",
-   "statement": "U+200D at the start of a Canvas string takes the font group's first valid font, and the letter after it takes that font only where the font has the letter, so a joined suffix that a fallback font draws is a font range of its own, shaped without the U+200D, in its word-initial form; where the two U+200D sides of an offset between joined letters don't add up to the unit, the suffix is measured once more behind its own first letter, U+200C and U+200D, less that letter and U+200C, and where the prefix's side and that value add up to the unit, the prefix's side is the advance; it stays a stand-in under in-word-prefix (reason joined-prefix); two questions a joined offset whose sides don't add up, asked where the whole advance is needed (gecko/lines/plain-scan-rough-candidates)",
+   "statement": "U+200D at the start of a Canvas string takes the font group's first valid font, and the letter after it takes that font only where the font has the letter, so a joined suffix that a fallback font draws is a font range of its own, shaped without the U+200D, in its word-initial form; where the two U+200D sides of an offset between joined letters don't add up to the unit, the suffix is measured once more behind its own first letter, U+200C and U+200D, less that letter and U+200C, and where the prefix's side and that value add up to the unit, the prefix's side is the advance; it stays a stand-in under in-word-prefix (reason joined-prefix); two questions a joined offset whose sides don't add up",
    "source": "gfxTextRun.cpp:3609-3613, :3311-3325; engines/gecko/advance.ts sidesAdvance",
    "probes": [
     "gecko-mainfacts M2"
@@ -9313,7 +9313,7 @@
    "engine": "gecko",
    "area": "lines",
    "kind": "recipe",
-   "statement": "on a plain paragraph a break scan reads its own candidates inside a word without the questions that only put a kerned pair's adjustment or a joined suffix's form on one side of the offset (roughAdvanceBefore), which leaves the advance within what crosses the offset plus 2 au of the whole one (advanceSlack); where that bound reaches the fit test, or the hyphenated one, the scan asks for the whole advance; the scan's start, the frame's end and the chosen break take whole advances; the scan keeps what it read at its last candidate in a local and reads that as the next candidate's start, because the offset's record can become whole in between (a ligature group's start that inWordAdvance asks for); an inspected paragraph reads everything whole, so a plain paragraph asks a subset of its questions and gives its lines",
+   "statement": "on a plain paragraph a break scan reads its own candidates inside a word without the questions that only put a kerned pair's adjustment or a joined suffix's form on one side of the offset (roughAdvanceBefore), which leaves the advance within what crosses the offset plus 2 au of the whole one (advanceSlack); where that bound reaches the fit test, or the hyphenated one, the scan asks for the whole advance; the scan's start, the frame's end and the chosen break take whole advances; the scan keeps what it read at its last candidate in a local and reads that as the next candidate's start, because the offset's record can become whole in between (a ligature group's start that inWordAdvance asks for); an inspected paragraph reads everything whole, so a plain paragraph asks a subset of its questions and gives its lines [removed: the lazy plain scan went in the profiling phase (research/PROFILING-START.md item 8): it bought about 40 ms per 10,000 chat messages in Firefox, and a plain paragraph's break scan reads every candidate whole, as an inspected one does]",
    "source": "no engine source, the port's own structure: engines/gecko/lines.ts breakAndMeasureText, scanAdvance; engines/gecko/advance.ts roughAdvanceBefore, advanceSlack, sidesAdvance; DESIGN.md §4.6; research/CORRECTNESS-ROUND-5.md, the critic's section 2",
    "probes": [],
    "tests": [
@@ -9321,6 +9321,28 @@
     "src/engines/gecko/lazy-scan.test.ts :: plain and inspected lines over a sweep of widths"
    ],
    "declaredBy": "gecko owner (correctness round 5, 2026-09-19); the local is the round's critic's fix",
+   "audit": null,
+   "status": "removed",
+   "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/windows-in-long-units",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures, and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it; a unit of a right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override) has no windows: HarfBuzz shapes it reversed or not by what its whole buffer holds (digits without a letter stay left to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit",
+   "source": "gfxFont.cpp:3804-3808, :3564-3617 (a word of any length is shaped in one call, cut only at 32,760 units, so no cut is exact by construction and Canvas decides each); engines/gecko/advance.ts windowAt, windowsOf; DESIGN.md §4.4; research/PROFILING-START.md item 3; hb-ot-shape.cc:588-645; engines/gecko/advance.ts shapedReversed",
+   "probes": [
+    "gecko-windows W1: all 13,435 cuts that hold, of 14,943 tried over 54 samples in 16 grid phases, give W(unit) − W(suffix), and 13,135 the DOM's advance, the other 300 where the long recipe misses it by the same amount",
+    "gecko-windows W2: inside the windows of the port's grid 14,040 of 14,040 offsets whose sides add up give the long recipe's value",
+    "lab set of tools/windows-attack-cases.ts (the item's review): with windows in such a unit, Hebrew letters and sixty digits under U+202D in 24px Arial broke a line one cluster late in pinned Firefox, where the long recipe gives the native break"
+   ],
+   "tests": [
+    "src/engines/gecko/windows.test.ts :: a kerned pair across a cut keeps its two cells in one window, and the lines are the glyph records",
+    "src/engines/gecko/windows.test.ts :: a ligature as wide as its parts across a cut keeps its two cells in one window",
+    "src/engines/gecko/windows-reversed.test.ts :: a right-to-left script in a left-to-right run has no windows, and its offsets are measured as in the reversed unit"
+   ],
+   "declaredBy": "gecko owner (profiling item 3, 2026-09-19); no windows under a direction override is the item's reviewer's fix (2026-09-20)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9919,12 +9941,13 @@
   "blink/measure/contexts-per-storage": "2ee9fa98354d304c",
   "blink/measure/spaces-stay-in-neutral-latin-range": "926ef39f88f66cae",
   "webkit/measure/code-path-per-measured-string": "2eb2d7c0778db0f0",
-  "gecko/measure/joined-suffix-behind-its-letter": "c8084c17830b4b42",
+  "gecko/measure/joined-suffix-behind-its-letter": "57fe741723d29a31",
   "gecko/measure/pair-placement-from-rounding": "c826473485f534f5",
   "gecko/measure/probe-pairs-per-context": "b476b49a91f6535a",
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
-  "gecko/lines/plain-scan-rough-candidates": "c9077d0fc9a44d32",
+  "gecko/lines/plain-scan-rough-candidates": "5098cc53f534eeef",
+  "gecko/measure/windows-in-long-units": "0d7277856f9e8826",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848"
  }
 }

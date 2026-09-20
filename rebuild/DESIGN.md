@@ -66,10 +66,9 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
   keeps what measuring found inside it (§4.6). Since profiling item 2 a Blink shaping group keeps by offset what its
   own shaping call measured for a read that raises no gap: positions, and the adjustments across an offset (§4.6).
   Since correctness round 5 a Gecko prepared paragraph also keeps what
-  Canvas told of each context's pair placement (on the same record since the fresh-eyes follow-up), and an offset's
-  record inside a unit can hold its advance without two recipes' questions until a line's edge or a fit test asks for
-  them, so that record's value can move once, from the rough advance to the whole one; both were accepted as
-  exceptions and are written down in §4.6.
+  Canvas told of each context's pair placement (on the same record since the fresh-eyes follow-up), an accepted
+  exception written down in §4.6. The round's other exception, an offset's record that could hold a rough advance
+  before the whole one, went with the lazy plain scan in the profiling phase (§4.6).
 - Nothing handed to the caller aliases prepared data: a line start is plain data, and pieces are made for their line
   (research/INCREMENTAL-API-READING.md §4; its appendix lists every prepared fact that reads across a forced break or
   over the whole text, which is what a later incremental API has to know).
@@ -1056,12 +1055,10 @@ where it may be wrong.
   `engines/blink/limits.ts` holds the limits, and only `gaps.ts` and `inspect.ts` call it.
 - Gecko's decided line keeps what its fill raised and the in-word stand-in offsets its break scans consulted, across both
   passes of a redo; `inspectLine` reports from them. What a plain paragraph doesn't ask: the characters of placed frames,
-  the space-in-shaping windows, a letter-spaced unit's group count at 2px, the positions a stand-in tab rests on, and,
-  for a break candidate inside a word, the questions that only put a kerned pair's adjustment or a joined suffix's form
-  on one side of it (`advance.ts` `roughAdvanceBefore`, §4.4): the scan asks them where the candidate is within that
-  amount of a fit test, and a line's and a frame's edges always do. So the questions a plain fill asks depend on the
-  width: a candidate within a pair's adjustment of a fit test asks the context's probe pairs once (a median of 24 and
-  of 30 questions over the two probes' fonts), and the same paragraph at another width may ask none of them.
+  the space-in-shaping windows, a letter-spaced unit's group count at 2px and the positions a stand-in tab rests on. A
+  break candidate inside a word is read whole on both paths, with the questions that put a kerned pair's adjustment or
+  a joined suffix's form on one side of it (§4.4); until the profiling phase a plain scan left those out where no fit
+  test was near (§4.6).
 
 **Nothing in the library counts or logs what it asks of Canvas.** A row's `measure` is the lab adapter's own count of
 the contexts a layout made and its `measureText` calls, taken on the page's Canvas classes (`lab/predictor-core.ts`,
@@ -1485,9 +1482,6 @@ It stays a stand-in under `in-word-prefix`: probe gecko-mainfacts M2 has the pre
 at 16 of 18 such offsets and 3 au off at 2. Unit: per offset between joined letters whose two U+200D sides don't add
 up, 2 questions.
 
-Both Gecko recipes only move what crosses an offset to one side of it. So a plain paragraph's break scan reads its own
-candidates without them and asks where they could change a fit (§4.6), and ordinary text asks none of it.
-
 Gecko, a boundary U+00A0: `au(U+00A0)`, as the space is `au(' ')`. The DOM shapes it as a word of its own, the character
 itself (gfxFont.cpp:3317-3330, :3834-3861), with the space glyph only where the font has no glyph for it
 (gfxHarfBuzzShaper.cpp:113-118). Probe M4: 43 of 249 styles give it another advance than the space (16px Hoefler Text
@@ -1521,6 +1515,72 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 `pairBefore16`'s. Cost: the same three strings, one of them longer; no count moved in the 66,328 tier cases without
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
+
+**Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
+
+Gecko, windows inside a long shaping unit (`advance.ts` `windowAt`, `windowsOf`). Every in-word recipe measures to its
+unit's end, and Gecko shapes a word of any length in one call (gfxFont.cpp:3804-3808; ShapeFragmentWithoutWordCache
+cuts only at 32,760 units, :3564-3617). Text without spaces is one unit, so the characters sent to Canvas grew with the
+square of its length. No cut inside a unit is exact by the source, so Canvas decides each one:
+
+```
+cells        = every 16 clusters of a unit of more than 32 code units; the last cell keeps what is left under two cells
+a cut holds  = no letters join across it and no mark starts its cluster,
+               au(left cell) + au(right cell) = au(both cells),
+               the pair of clusters around it has one ink box with and without ligatures (ligatureAcross),
+               groups(left cell) + groups(right cell) = groups(both cells)      groups = (au at 2px − au at 0.001px) / 120
+a window     = the cells between two cuts that hold; a cut that doesn't hold leaves its two cells in one window,
+               which is measured whole
+the windows' au must add up to au(unit), else the unit has no windows
+```
+
+A window is a unit to every recipe: the advance before it is the sum of the windows before it, and an offset inside it
+is measured against the window's end. One kind of unit has no windows: a right-to-left script in a left-to-right run,
+a number in Arabic text or letters under a direction override. HarfBuzz shapes it reversed or not by what its whole
+buffer holds (a buffer of digits without a letter stays left to right, hb-ot-shape.cc:588-645; `shapedReversed`), so
+where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit. With windows there, Hebrew letters and sixty digits under U+202D
+in 24px Arial broke a line one cluster late in pinned Firefox, where the long recipe gives the native break (the item's
+review, lab set of `tools/windows-attack-cases.ts`; `windows-reversed.test.ts`).
+
+The tests are the ones the recipes make before they call any in-word advance exact (the sides add up, no ligature
+group spans the offset), made over 16 clusters on each side of the cut. Probe
+gecko-windows W1 and W2 (pinned Firefox 156.0; 54 samples: Han, kana, Hangul, Arabic, Thai, Khmer, Burmese, Devanagari,
+Latin, Latin inside Han across a font fallback edge and an emoji sequence, in the lab's named fonts, 11 of them with
+letter spacing; every cluster boundary tried as a cut, in 16 grid phases): of 14,943 cuts tried the text rules keep
+1,110 out, 377 fail the sum, 21 the ink box and none the group count. All 13,435 that hold give the long recipe's
+W(unit) − W(suffix), and 13,135 of them the DOM's advance; the other 300 are where the long recipe misses the DOM by
+the same amount (Noto Nastaliq Urdu, whose unit Canvas measures 108 au narrower than the DOM, and an emoji's
+device-size advance, which the port corrects apart). Inside the windows of the port's own grid, 14,040 of 14,040
+offsets whose sides add up give the long recipe's value, and in all 864 walks the windows add up to the unit. Between
+joined Arabic letters the text rule decides: 3 such cuts would have passed Canvas's tests.
+
+Cost and unit: per unit of more than 32 code units, once, at its first in-word ask: 2 questions a cell (the cell alone,
+and with the cell before it), and where the sums hold 2 for the ink box and 4 for the group counts; a window of three
+cells or more is measured once more. From then on no question of the unit's offsets is longer than two cells. In pinned
+Firefox a Chinese chat message of the bench (mean 122 units) sends 2,944 units to Canvas where it sent 23,499, in 516.5
+calls where it made 478.0, and one Chinese unit of 9,428 units sends 0.23 M units where it sent 41.7 M
+(`tools/fill-counts-probe.ts`). A unit of at most 32 code units asks what it asked: tier 1 has 61,897 of 63,771 cases
+the same. In the output one number moves: an `in-word-prefix` gap's detail prints W(unit), which is the width of what
+the recipe measured in, inside a long unit the window's (39 tier cases).
+
+The item's review (2026-09-20) held the port with windows against the port without them in pinned Firefox, the port
+itself and not the rule as page script: `tools/windows-attack-probe.ts`, 531 paragraphs without spaces and 106,457
+cluster starts in the classes a cut is most likely to be wrong in (fonts that kern and substitute across clusters,
+fallback edges and characters that take the previous character's font, variation selectors, emoji, U+200D and U+200C,
+letter spacing, synthetic bold, sizes off Canvas's grid, Arabic with marks, tatweel and digits, scripts written without
+spaces, units of 2,400 units and of more than 2^18 px), and the same samples as a lab set of 1,566 cases
+(`tools/windows-attack-cases.ts`). Two runs without windows are equal in everything. With windows no line differs, plain
+or inspected, no exact advance differs, the longest units' advances are equal to their last offset, so nothing drifts
+with the number of windows, and every window start is the DOM's advance wherever the sample's Canvas widths are the
+DOM's. What differs:
+- One Latin offset (16px Helvetica Neue) that the long recipe holds as a stand-in 1 au off is exact with windows, and
+  the DOM's.
+- A stand-in isn't always the long recipe's. Inside a window an offset whose sides don't add up takes W(window) less
+  W(the window's suffix), and in a font whose shaping reaches far that is another number: 4 of 14,288 Arabic offsets
+  (DecoType Naskh 3, Diwan Thuluth 1), under the same `in-word-prefix` gap, neither value the DOM's. No tier case shows
+  it.
+- A unit under a direction override (above): 32 advances, a line's width and one native break, which is why such a
+  unit has no windows.
 
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
@@ -1630,9 +1690,9 @@ placement. Nothing is asked earlier than the engine needs it, but for the space 
   space, measured once as the box is made, for boxes whose white space is deferred too (`WebKitBox.spaceWidth`, §4.5;
   correctness round 5).
 - Gecko: what measuring found inside a shaping unit is kept by the unit (`GeckoUnit.inWord`, `types.ts` `InWord` and
-  `InWordEntry`: the unit's ligature group count, and per offset the advance with its reason, the optional-ligature and
-  required-group facts, the row of ligature candidates and the suffix width), made when an offset inside the unit first
-  asks. Until correctness round 5 it was the only part of Gecko's prepared paragraph, beside the context list, that is
+  `InWordEntry`: the unit's ligature group count, a long unit's windows (§4.4), and per offset the advance with its
+  reason, the optional-ligature and required-group facts, the row of ligature candidates and the suffix width), made
+  when an offset inside the unit first asks. Until correctness round 5 it was the only part of Gecko's prepared paragraph, beside the context list, that is
   written after preparation: facts of the unit's text in its text run, which no width and no line changes, and which go
   with the paragraph. They are filled on first read only because filling them in `prepare` would ask Canvas questions no
   line needs and would move first asks (`lines.ts` `groupEndSpacing` reads the records on every call instead of keeping
@@ -1643,15 +1703,10 @@ placement. Nothing is asked earlier than the engine needs it, but for the space 
 
   Correctness round 5 added two more parts that are written after preparation. Its critic asked that they be written
   down here as exceptions, and the orchestrator accepted both (2026-09-19; research/CORRECTNESS-ROUND-5.md, the critic's
-  section 6). What they hold are facts of the paragraph's text and fonts, which no width changes; they are made when
-  first asked, and they go with the paragraph. A width does decide when they are made, and for the first one which of
-  two values a record holds at a given moment.
-  - `InWordEntry.unrefined`: an offset's record keeps its two measured sides while its advance lacks what only a chosen
-    edge asks, the pair-placement and joined-suffix questions of §4.4. A plain paragraph's break scan took the advance
-    so (below). Whoever needs the whole advance finishes it from the kept sides (`advanceBefore`), and the field is null
-    again. So which of the two values a record holds follows who asked first, and a value read twice can differ: a
-    break scan keeps what it read at its last candidate in a local (`lines.ts` `pendingRead`), because the record can
-    become whole before the next candidate reads it as its start.
+  section 6). One is left. The other, `InWordEntry.unrefined`, kept an offset's two measured sides while its advance
+  lacked the questions of §4.4 that only a chosen edge asked, so a record's value followed who asked first; it went
+  with the lazy plain scan (below). What the one that is left holds is a fact of the paragraph's fonts, which no width
+  changes; it is made when first asked, and it goes with the paragraph.
   - `RunContexts.pairPlacement`: what Canvas told of a context's pair placement (`types.ts` `PairPlacement`), null
     until an offset at a kerned pair asks: the placement, the probe letters that told it with their widths alone
     (`tellers`, `tellerAu`), and the clusters Canvas showed to be drawn by the probe letters' face, or didn't
@@ -1676,30 +1731,19 @@ placement. Nothing is asked earlier than the engine needs it, but for the space 
 No measured value is found by its string, so a string that recurs in a paragraph is measured at each occurrence (§4.7).
 The one thing found by a string is a verdict and not a width: Gecko's same-face lists above.
 
-**Gecko's lazy plain scan** (correctness round 5; `lines.ts` `breakAndMeasureText`, `advance.ts` `roughAdvanceBefore`
-and `advanceSlack`). Gecko's two recipes for an offset whose sides don't add up (§4.4) only move what crosses the offset
-to one side of it. So the advance without them is within what crosses the offset plus 2 au of the whole advance; the
-2 au is each glyph's rounding, a bound that asks more and never accepts more. On a plain paragraph a break scan reads
-its own candidates without those questions and asks for the whole advance where the bound reaches the fit test or the
-hyphenated one. The scan's start, the frame's end and the chosen break always take whole advances. An earlier candidate
-is read as the scan read it then, from the local above, so the running width's terms cancel. An inspected paragraph
-reads everything whole, because its gaps need to know what was told. So the plain path asks a subset of the inspected
-path's questions, and its lines are the inspected path's by the bound.
-
-It exists for cost. `overflow-wrap: break-word` makes every cluster of each line's first word a break candidate, so
-without the lazy scan ordinary chat text paid for pair placement: the bench's chat mix went from 110.67 to 141.49
-questions a message and plain Latin from 82.15 to 116.79. With it both are where they were, and the tier corpus pays
-0.51 questions a paragraph (§4.7).
-
-It is the most intricate part of the Gecko port, and it is a structure of the port's own, not a browser rule. The
-round's critic found a real hole in it: a ligature group that reaches past the frame's end and starts at a kerned or
-joined offset the scan had read without the questions made that offset's record whole between two reads, and a
-constructed paragraph's plain lines differed from its inspected ones at 22 of 901 widths. The local fixes it, and
-`engines/gecko/lazy-scan.test.ts` fails without it. No recorded case has that shape, so that a plain paragraph's lines
-equal the inspected one's rests on the bound argument, on the function set's plain check and sweep, and on the plain
-predictor's browser runs (TESTS.md, "Tiers"). The simpler form reads every candidate whole on both paths and costs
-about 31 more Canvas questions a chat message. The maintainer may prefer it; the orchestrator accepted the lazy form
-with this note, and research/PROFILING-START.md lists the trade among the things profiling may revisit.
+**Gecko's lazy plain scan, taken out in the profiling phase** (research/PROFILING-START.md, item 8). Correctness
+round 5 made a plain paragraph's break scan read a candidate inside a word without the two recipes' questions that
+only move what crosses the offset to one side of it (§4.4), within a bound, and ask for the whole advance where the
+bound reached a fit test; the scan's start, the frame's end and the chosen break always took whole advances. It
+existed for cost: `overflow-wrap: break-word` makes every cluster of each line's first word a break candidate. It was
+the most intricate part of the Gecko port, a structure of the port's own and not a browser rule; it made a record's
+value depend on who asked first, and the round's critic found a real hole in it (fixed with a local and a unit test).
+Measured in the profiling phase, it bought about 40 ms per 10,000 chat messages in Firefox (6 to 7% of plain ASCII at
+0.59 s; 8 to 9 questions a message, not the 31 of the round's first build), in the engine that is furthest under the
+bar. So it went: a plain paragraph's scan reads every candidate whole, as an inspected one does, the plain path asks a
+subset of the inspected path's questions because it runs the same reads and leaves out only what gaps and inspection
+ask, and its lines are the inspected path's because both read the same advances. `rebuild/src` is 46 lines shorter,
+and `lazy-scan.test.ts` went with it.
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
@@ -1959,13 +2003,16 @@ round.
   message, and its Arabic messages from 45.75 to 23.08. The measured string's code path adds 2 questions a string in
   the two tier cases it touches (22 and 9 calls a paragraph). The facts row's plain path comes from a plain predictor
   with facts kept outside the repository, because the lab has none.
-- Gecko: pair placement, the joined suffix and a boundary U+00A0 (§4.4). With the lazy plain scan (§4.6) the plain
-  path pays 0.51 questions a paragraph on the tier corpus, which is built to break inside words: 2,822 of 63,771 cases
-  ask more, by 11.8 on average and by 1,032 at most (a word of 134 letters cut at every letter), and 121 ask fewer (the
-  two states of one browser process). The bench's chat mix stays at 110.67 questions a message and plain Latin at
-  82.15; without the lazy scan they were 141.49 and 116.79. The plain predictor runs without facts only, so the facts
-  row has no plain number; offline, over the 59,211 cases that replay at both commits, it is 55.53 before and 55.08
-  after. The cost depends on the width (§2.8).
+- Gecko: pair placement, the joined suffix and a boundary U+00A0 (§4.4). With the round's lazy plain scan (§4.6) the
+  plain path paid 0.51 questions a paragraph on the tier corpus, which is built to break inside words: 2,822 of 63,771
+  cases asked more, by 11.8 on average and by 1,032 at most (a word of 134 letters cut at every letter), and 121 asked
+  fewer (the two states of one browser process). The bench's chat mix stayed at 110.67 questions a message and plain
+  Latin at 82.15; the round's first build had them at 141.49 and 116.79. The plain predictor runs without facts only,
+  so the facts row has no plain number; offline, over the 59,211 cases that replay at both commits, it is 55.53 before
+  and 55.08 after. Since the profiling phase took the lazy scan out, the bench's first 1,000 messages ask 128.66
+  questions a message on the mix where they asked 120.44, and 87.73 where they asked 78.35 on plain ASCII (pinned
+  Firefox, `tools/fill-counts-probe.ts`; with item 3's windows the mix is at 132.85); the tier corpus's plain number
+  wasn't counted again.
 - Blink: the pair window asks other strings, not more. 486 questions more in all 67,065 cases; no count moved in the
   66,328 cases without a cluster of an ignorable character and a mark, and the 737 with one go from 784.69 to 785.35.
   No bench job was run: 0 of 49,275 strings of the bench's chat sets hold such a cluster.
@@ -2811,7 +2858,8 @@ its own first letter, and measures a boundary U+00A0 as itself; WebKit takes the
 string and measures a box's space once; Blink's pair window reaches past a cluster of only default-ignorable characters
 and marks (§4.4). Main's true passes that still fail without facts went from 202 to 76 in Firefox and from 263 to 252
 in webkit-host, and stayed 344 in Chrome, where no sound Canvas recipe exists (§5). Two exceptions to §4.6 were accepted
-with it, and Gecko's lazy plain scan came with a note for the maintainer (§4.6).
+with it, and Gecko's lazy plain scan came with a note for the maintainer; the profiling phase measured the scan and
+took it out, and one of the two exceptions with it (§4.6).
 
 **The fresh-eyes follow-up** (2026-09-19; research/FRESH-EYES-REVIEW.md, SHARED-CHANGES.md). A reviewer who hadn't
 worked on the code read the library against the engineering guide, and three owners and a critic took up what it

@@ -206,6 +206,10 @@ export type InWord = {
   // an offset several times (the scan, the measured edges, the redo, its placement and its inspection), and the next line
   // and another width consult it again.
   offsets: (InWordEntry | null)[]
+  // A long unit's windows in text order (advance.ts windowsOf): stretches between cuts that Canvas showed nothing crosses,
+  // each a unit of its own to every recipe, with `startAdvance` the advance before it. null until an offset asks, and
+  // for ever in a unit of at most 32 code units; empty on a window and where no cut held.
+  windows: GeckoUnit[] | null
 }
 
 // What measuring found about one offset inside a shaping unit, each part null until something asks for it.
@@ -220,9 +224,6 @@ export type InWordEntry = {
   advance: InWordAdvance | null
   // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
   suffixAu: number | null
-  // The offset's two sides, kept while `advance` lacks what only a chosen edge asks (advance.ts roughAdvanceBefore): a
-  // break scan on a plain paragraph took it so. null once the advance is whole, and where nothing was left out.
-  unrefined: InWordSides | null
 }
 
 // The two sides of an offset inside a unit as inWordAdvance measured them: `a` the start of the cluster before it (of its
@@ -257,7 +258,8 @@ export type InWordReason =
   | { kind: 'inside-ligature-row'; at: number }
   | { kind: 'between-ligatures'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
-  // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
+  // The two sides don't add up to the unit, which inside a long unit is the offset's window (`unitAu` is its width, as
+  // the gap's detail prints it). `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
   // cluster before the offset and the suffix gain from each other. 'joined-prefix': the sides add up once the suffix is
   // measured behind its own first letter, and the prefix's side is the value.
   | { kind: 'sides'; at: number; sides: 'joined' | 'joined-prefix' | 'apart' | 'cluster'; au: number; unitAu: number }

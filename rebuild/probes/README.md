@@ -26,6 +26,23 @@ may read the DOM freely; this is research, not the library.
   `gecko-slot-indent.ts` (F5), `gecko-rtl-rects.ts` (F6), `gecko-round2.ts` (F7 to F9), `gecko-round2b.ts` (F10 to F12),
   `gecko-round3.ts` (F13 to F19), `gecko-round4.ts` (F20 to F27); `webkit-followups.ts`, `webkit-round3.ts`,
   `webkit-round4.ts`. The Gecko sets from round 2 on return `checks`, so they give facts.
+- `gecko-windows.ts` (W1, W2; profiling item 3, 2026-09-19): the cut rule of Gecko's windows inside long shaping units
+  (DESIGN.md §4.4), run by the in-word probe's method on long strings without spaces in eleven script and font-edge
+  classes, every cluster boundary tried as a cut: every accepted cut and every offset inside a window against the DOM's
+  advances and the long recipe's. Its header has the command; the run is under
+  `.artifacts/probes/perf-gecko-fill-20260919/windows-2`.
+- `../tools/windows-attack-probe.ts` (A1; the review of profiling item 3, 2026-09-20; it runs the library, so it lives
+  beside `tools/fill-counts-probe.ts`): where `gecko-windows.ts` runs the cut rule as page script, this one runs the
+  port of the tree it is bundled from: 531 samples, each one paragraph without
+  spaces, in the classes a cut is most likely to be wrong in (fonts that kern and substitute across clusters, fallback
+  edges and fonts that stick to the previous character's font, variation selectors, emoji, U+200D and U+200C, letter
+  spacing, synthetic bold, sizes off Canvas's grid, Arabic with marks, tatweel and digits, direction overrides, scripts
+  written without spaces, units of 2,400 units and of 2^18 px). It gives the advance before every cluster start with
+  its reason's kind, the windows, the lines at widths beside window edges, plain and inspected, the DOM's advances and
+  what was sent to Canvas. A run from a tree without windows and one from a tree with them are held against each other
+  by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
+  `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
+  `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
 - The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
   (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
   (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in

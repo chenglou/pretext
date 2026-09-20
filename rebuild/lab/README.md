@@ -332,7 +332,8 @@ supplied font facts, and a critic then read the three branches, merged them in a
   glyph; a joined suffix that a fallback font draws is measured behind its own first letter; a boundary U+00A0 is
   measured as itself; `paragraphGaps` hands out copies. A plain paragraph's break scan leaves the first two recipes'
   questions out until a fit test or an edge needs them (DESIGN.md §4.6, "Gecko's lazy plain scan"). The critic found a
-  hole in that scan and fixed it with 9 lines and `engines/gecko/lazy-scan.test.ts`, merged as its own commit.
+  hole in that scan and fixed it with 9 lines and `engines/gecko/lazy-scan.test.ts`, merged as its own commit. (The
+  profiling phase measured the scan and took it out with its test: research/PROFILING-START.md item 8.)
 - **WebKit** (`.artifacts/tests/runs/cr5-webkit`, `.artifacts/session/cr5-webkit`): the font code path of a width is
   the measured string's, for the letter-spaced ligature recipe and for `control-character-width`; a box's space is
   measured once as the box is made.
