@@ -375,6 +375,31 @@ with tier 1 at 0 predictions and 0 questions changed on the six references (the 
   list) and `tools/contexts-heal-attack-probe.ts` (K1 to K3: a paragraph prepared at the start of a Firefox that has
   just started and kept).
 
+**The Gecko port's own JavaScript** (2026-09-20; DESIGN.md §4.7; research/PERF-JS-PROFILE.md). Three changes of the
+port's own code that ask Canvas the same strings on the same contexts in the same order: tier 1 shows 0 predictions
+and 0 questions changed in both of Firefox's configurations.
+
+- *What tier 1 couldn't see.* The first form of the largest change read the script a piece itemizes to alone one unit
+  past the piece, so a text run that ends with a lone high surrogate, where the next run starts with the low one, asked
+  Canvas another string. No recorded case holds a surrogate pair cut by a text-run boundary, so every tier stayed
+  green. The review's differential found it on 4 of 3,358 built paragraphs.
+- *New unit test*, `src/engines/gecko/split-pair.test.ts`, on a stand-in Canvas: a Han character and a lone high
+  surrogate in one node, the low surrogate in a span with another font; the first text run is Han, and the lone
+  surrogate is measured behind a character of the run's script and never alone. It passes on the library before the
+  changes and with the fix, and fails on the change as first built.
+- *New tool*, `tools/prof-critic-attack.ts`: two checkouts in lockstep over the stand-in Canvas, on paragraphs built
+  for the edges of the changed functions (99 edge texts in 5 styles, surrogate pairs cut by node boundaries, per-span
+  spacing, bidi, tabs, only spaces, every break mode, a 100,000-unit paragraph, seeded random trees). It compares every
+  context made, attribute set and string measured, in order; the prepared paragraph field by field after `prepare` and
+  after every fill; every fill result with its pieces and inspection; and every exported function of
+  `engines/gecko/props.ts` over all of Unicode. Three one-token mutants were each caught. Equality there says the two
+  checkouts compute the same from the same answers and ask the same; the stand-in's answers aren't Firefox's.
+- *Timing tools* (measurement only; each file's header has its use): `tools/prof-probe.ts` with `tools/prof-entry.ts`
+  (checkouts and modes taking turns inside one Firefox page, on the real Canvas and on a stand-in that answers the n-th
+  call with the n-th recorded answer), `tools/prof-bun.ts` (the same loops under bun's CPU profiler) and
+  `tools/prof-critic-probe.ts` (every checkout in a fresh page every round, the browser's share from a Canvas that asks
+  every question k times, and three stand-ins held against each other).
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
