@@ -27,6 +27,18 @@
 // Per row and way: every change of the answer with the time of the reading that first showed it. A list of one entry
 // never changed.
 //
+// What they showed (2026-09-20, pinned browsers, one run each; runs under .artifacts/probes/contexts-heal/attack):
+// - H1, Firefox: 9 of the 22 names are late names here, and the context kept from the start stays on the fallback for each:
+//   `Avenir Next Demi Bold`, `Avenir Heavy`, `ヒラギノ角ゴ ProN W3`, `ヒラギノ角ゴ Pro W3`, `ヒラギノ角ゴ ProN`, `ヒラギノ明朝 ProN`,
+//   `游ゴシック体`, `华文黑体`, `黑体-简`. A new context and the DOM found them at 764 ms. 6 names resolve from the start and 7
+//   name nothing on this Mac. Chrome: no answer of the 22 changed.
+// - H2, Firefox: the kept context, the same string and another string and back all stay on the fallback.
+// - H3: Chrome's and Firefox's kept contexts follow the FontFace with a new context and the DOM (2,275 and 2,310 ms).
+//   webkit-host's stays on the installed font, as for any loaded FontFace added to a font set that holds no face.
+// - H4, webkit-host: the kept context stays on the fallback, so the case is a set that holds no face, not only a set
+//   before its first face.
+// - H5, Firefox: both ways stay on the fallback for all four late names.
+//
 // Run under the browser lock, from the worktree:
 //   python3 .artifacts/session/with-browser-lock.py contexts-heal-attack --browser=firefox -- bun rebuild/probes/runner.ts \
 //     --browser=firefox --probes=rebuild/probes/contexts-heal-attack.ts --only="H1" --probe-timeout-ms=60000 --out=<dir>

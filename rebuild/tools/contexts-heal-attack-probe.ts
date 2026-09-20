@@ -15,6 +15,17 @@
 //   the two break the word differently, the second measures with two fonts: its first context on the fallback, the
 //   contexts its fill made on the family.
 //
+// What they showed (2026-09-20, pinned Firefox, two runs each of K1 and K3, one of K2; runs under
+// .artifacts/probes/contexts-heal/attack):
+// - K1: the kept paragraph stays at six lines for all eight seconds, at a width that is new at every reading. The DOM and a
+//   paragraph prepared now have three from 1,360 and 701 ms on. So Gecko's one-prepare list keeps the late names' damage
+//   to the paragraphs prepared before they arrived, and doesn't mend those.
+// - K2: the same, six lines at the end where the DOM has five. Its first fill, 9 ms in, had made all three contexts.
+// - K3: the paragraph first filled after the names arrived breaks the word at 1 9 17 25 33 41 49 53: eight lines, the
+//   first of one character. The one filled at once gives 8 16 24 32 40 48 53, the fallback's answer, and a paragraph
+//   prepared now 8 19 32 43 51 53 with the DOM's six lines (9 22 34 46 53 and five for the legacy name). Its contexts go
+//   from one to three at that fill. Under the family's English name all three agree.
+//
 // One probe a browser launch:
 //   python3 .artifacts/session/with-browser-lock.py contexts-heal-attack-lib --browser=firefox -- \
 //     bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/tools/contexts-heal-attack-probe.ts --only="K1" --out=<dir>
