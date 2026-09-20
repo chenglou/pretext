@@ -1,6 +1,6 @@
 // compare-rows.ts --prediction=line-ranges: a run that predicts line ranges alone against a run of engine layouts.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compareRowFiles, comparisonExit, lineRanges } from './compare-rows.ts'
@@ -8,7 +8,7 @@ import { abcd, abcdExpected, abcdNative, at, blink, native, row } from './row-fi
 import type { LabRow } from './types.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'compare-rows-test-'))
-afterAll(() => { Bun.spawnSync(['trash', dir]) })
+afterAll(() => { rmSync(dir, { recursive: true, force: true }) })
 
 function rowsFile(name: string, rows: LabRow[]): string {
   const path = join(dir, name)
