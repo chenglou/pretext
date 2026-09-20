@@ -13,7 +13,7 @@
 //    pass with the real Canvas less that. The phase timers (the font checks, the engine's prepare, the fill) run under
 //    both the real Canvas and the Map.
 //
-//   OWN_JS_TREES="base=<checkout>,head=<checkout>" OWN_JS_ROUNDS=15 OWN_JS_MESSAGES=10000 OWN_JS_KEPT=10000 \
+//   OWN_JS_TREES="base=<checkout>,head=<checkout>" OWN_JS_ROUNDS=15 OWN_JS_MESSAGES=10000 OWN_JS_KEPT=10000 [OWN_JS_LANGUAGE=th] \
 //   python3 .artifacts/session/with-browser-lock.py <job> --browser=all --exclusive -- \
 //     bun rebuild/probes/runner.ts --browser=webkit-host --isolated --probes=rebuild/tools/own-js-probe.ts --out=<dir> \
 //       --probe-timeout-ms=1500000 --stall-ms=1500000
@@ -24,7 +24,7 @@
 // 1 ms without it in WebKit and Firefox), which the `timed` method needs.
 import { join } from 'node:path'
 import type { Probe } from '../probes/types.ts'
-import { buildChat } from '../bench/cases.ts'
+import { buildChat, buildLanguages } from '../bench/cases.ts'
 
 const BODY = String.raw`
 const WIDTH = 320;
@@ -238,7 +238,11 @@ export default async function ownJsProbes(): Promise<Probe[]> {
     if (!built.success) throw new Error(`bundling ${trees[i]!} failed: ${built.logs.join('\n')}`)
     libs += `${await built.outputs[0]!.text()}\nLIBS.push({ label: ${JSON.stringify(trees[i]!.slice(0, at))}, lib: globalThis.ownJs });\n`
   }
-  const sets = { mix: buildChat('mix', messages), latin: buildChat('latin', messages) }
+  // OWN_JS_LANGUAGE=th: one language of bench/cases.ts buildLanguages in place of the chat sets, for what a script costs.
+  const language = process.env['OWN_JS_LANGUAGE'] ?? ''
+  const sets: Record<string, { parts: { code: boolean; text: string }[] }[]> = language === ''
+    ? { mix: buildChat('mix', messages), latin: buildChat('latin', messages) }
+    : { [language]: buildLanguages(messages * 11).filter(message => message.language === language).map(message => ({ parts: [{ code: false, text: message.text }] })) }
   return [{
     id: 'own-js T1', spec: 'the profiling phase: Canvas against the library\'s own JavaScript on the chat headline, and checkouts in alternating rounds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${libs}const SETS = ${JSON.stringify(sets)};\nconst ROUNDS = ${rounds};\nconst PASSES = ${passes};\nconst KEPT = ${kept};\n${BODY}` }],
