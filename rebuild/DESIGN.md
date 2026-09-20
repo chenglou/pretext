@@ -1774,9 +1774,11 @@ and `lazy-scan.test.ts` went with it.
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
 Blink word cache with them. Everything else a call keeps is local to it: the declarations it resolved, each once under
-its language, compared field by field; and the questions it asked with Canvas's answers, because checks share questions
-(the two generics alone, a family's list at the probe size, which the primary family check and the fixed-pitch check
-both read, and which declarations of several sizes share). No engine needs that list of questions for correctness, since
+its language, compared field by field; a declaration's contexts, each found once under its family list and size, since
+one declaration's checks ask a dozen questions under four lists (the profiling phase: 12 lookups a chat message became
+4, about 0.3 µs a message of 11 in webkit-host); and the questions it asked with Canvas's answers, because checks share
+questions (the two generics alone, a family's list at the probe size, which the primary family check and the fixed-pitch
+check both read, and which declarations of several sizes share). No engine needs that list of questions for correctness, since
 a question asked again gets the same answer; it is kept because deleting it only adds Canvas calls (without it 4,692
 Chrome and 27,014 webkit-host cases without facts repeat a font-check question; Gecko's checks ask nothing). The Canvas
 checks of engine detection (§1.4) make their own contexts. The checks run before the engine and don't know whether the
