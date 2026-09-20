@@ -542,9 +542,10 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number): number {
+// `whole` is the measured total of [from, to), which the caller has or measures.
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number): number {
   const p = sh.p
-  let whole = measure16(sh, g, from, to, lo, hi)
+  if (k <= from || k >= to) return 0
   let a = from
   let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
@@ -574,13 +575,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
 export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi)
+  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   let i = 0
   while (i + 1 < cuts.length && cuts[i + 1]! <= k) i++
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
   const to = cuts[i + 1] ?? group.end
-  return windowAdjust16(sh, g, k, from, to, lo, hi)
+  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
