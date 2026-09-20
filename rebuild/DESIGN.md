@@ -1697,15 +1697,21 @@ run word by word, a boundary space is a glyph of its own and nothing is shaped a
 advance before a shaping unit's start is the sum of the units before it, which `prepare` measured. A plain paragraph's
 break scan whose every candidate sits at a unit's start is therefore decided from those sums, walked unit by unit, with
 the engine's own tests; it asks Canvas nothing, as the engine's loop asks nothing there, and it skips the loop's work per
-character. It refuses a scan that starts, ends, trims or would break inside a unit, a text run with a soft hyphen and
-`break-spaces`, and the engine's loop decides those. A unit can hold candidates inside itself (a natural break after a
+character. It refuses a scan that starts, ends, trims or would break inside a unit, `break-spaces`, and a scan that
+reaches a unit a removed soft hyphen stands in or before, and the engine's loop decides those. A unit can hold candidates inside itself (a natural break after a
 hyphen or between Han characters; under `overflow-wrap` every cluster of the line's first word, which is what a chat
 message's fill asks Canvas about today). In mode `proven` such a scan is refused. In mode `premise`, the branch's
 default, the walk passes over them where the unit's end fits, on a premise that no engine source gives and Canvas isn't
 asked for: the advance before an offset inside a word is never more than the advance before the word's end. A detailed
 glyph's advance is signed and nothing clamps it (gfxHarfBuzzShaper.cpp:1699-1719), so a font can break it, and
 `word-scan.test.ts` holds the shape that does. Firefox's recorded answers hold 1,229,216 advances inside words and none
-breaks it (`tools/word-scan-census-library.ts`). `wordScanState.checked` decides every such scan by the engine's loop too
+breaks it; 46 lie below their word's start, where a ligature is narrower than its parts (14px "Courier New" draws reh
+yeh alef lam as one glyph), so the walk also refuses a unit whose inner advances the port takes from a prefix's own
+width (`advance.ts` `advancesAreSuffixes`; `tools/word-scan-census-library.ts` counts both). In Firefox, 10,000 plain
+ASCII chat messages from scratch go from 0.60 to 0.25 s (0.46 to 0.19 s with one list of contexts) and their 30,000
+layouts at three other widths from 0.65 to 0.11 s, with 84.9 and 23.7 `measureText` calls a message; the mix goes from
+2.65 to 2.25 s and from 0.68 to 0.19 s, its Chinese messages left to the engine's loop (two sittings of four
+alternating pairs in one document, `tools/word-scan-probe.ts`). `wordScanState.checked` decides every such scan by the engine's loop too
 and throws on a difference; the function set's plain check passes with it on all 63,771 recorded Firefox cases in both
 configurations. A unit keeps one byte of what it holds inside itself (`GeckoPrepared.unitInner`). It is not merged: whether
 the premise is acceptable under the charter is the maintainer's call.
