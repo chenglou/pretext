@@ -26,8 +26,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from']
-const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--measure-first] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
+const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from', 'chrome-args']
+const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--measure-first] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>] [--chrome-args=<switches>]'
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
@@ -230,6 +230,8 @@ const build = readBuild(browser)
 // The browser process's languages (languages.ts): launch arguments and prefs, the OS settings read before launch, and the
 // given facts the page passes to predict(). Chrome's application locale is read from its renderers at the first step.
 // Chrome may launch under other languages than this Mac's (languages.ts ChromeLanguages); both options go together.
+// Extra Chrome switches separated by spaces, as the probe runner takes them (--enable-blink-features=... for a flagged API).
+const chromeArgs = (args.get('chrome-args') ?? '').split(/\s+/).filter(arg => arg.length > 0)
 const chromeAppleLanguages = args.get('chrome-apple-languages')
 const chromeAcceptLanguages = args.get('chrome-accept-languages')
 if ((chromeAppleLanguages === undefined) !== (chromeAcceptLanguages === undefined)) fail('--chrome-apple-languages and --chrome-accept-languages go together')
@@ -341,7 +343,7 @@ async function launchChrome(url: string): Promise<Session> {
     `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
-    ...languages.launch!.arguments,
+    ...languages.launch!.arguments, ...chromeArgs,
   ])
   // Known before the window opens, so the page's first step can read the renderers (chromeUiLanguage).
   chromePid = session.pid

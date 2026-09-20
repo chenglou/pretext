@@ -3,7 +3,7 @@
 //   bun rebuild/tests/browser-sets.ts --browser=chrome|firefox|webkit-host --out=<dir> [--config=no-facts|facts]
 //     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record] [--measure-first]
 //     [--ids-file=<file>] [--reference=<ledger dir>] [--allow=<difference>[,...]] [--baseline=<gate file>]
-//     [--seed --staging=<dir>] [--rerun-failed] [--predictor=<file> [--shuffle=<seed>]]
+//     [--seed --staging=<dir>] [--rerun-failed] [--predictor=<file> [--shuffle=<seed>]] [--chrome-args=<switches>]
 //
 // Don't wrap it in the browser lock: every browser job takes the lock itself. What it does, in order:
 // 1. Reads the build of the app it will launch (the pinned copy of Chrome or Firefox, the system WebKit for webkit-host)
@@ -69,7 +69,7 @@ for (const raw of process.argv.slice(2)) {
   if (match === null) fail(`Unknown argument ${raw}`)
   const name = match[1]!
   if (['both-orders', 'record', 'seed', 'rerun-failed', 'measure-first'].includes(name) && match[2] === undefined) flags.add(name)
-  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging', 'predictor', 'shuffle'].includes(name) && match[2] !== undefined) options.set(name, match[2])
+  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging', 'predictor', 'shuffle', 'chrome-args'].includes(name) && match[2] !== undefined) options.set(name, match[2])
   else fail(`Unknown argument ${raw}`)
 }
 const browser = options.get('browser') as TierBrowser | undefined
@@ -162,6 +162,9 @@ function runJob(job: Job): Promise<number> {
   mkdirSync(job.dir, { recursive: true })
   const args = [LOCK, `sets-${browser}-${config}-${job.name}`, '--max-wait-min=240', '--', 'bun', 'rebuild/lab/run.ts', `--browser=${browser}`, `--cases=${job.cases}`, `--out=${job.dir}`,
     `--order=${job.order === 'reverse' ? 'reverse' : shuffle === undefined ? 'file' : `shuffle:${shuffle}`}`, `--predictor=${join(REPO, predictor)}`, ...job.set.runArgs, ...moreRunArgs]
+  // Extra Chrome switches for a flagged API (run.ts --chrome-args). Not part of the sets' protocol: a study's run reads its
+  // transitions against the usual reference knowingly.
+  if (options.get('chrome-args') !== undefined) args.push(`--chrome-args=${options.get('chrome-args')}`)
   if (flags.has('record') && job.order === 'forward') args.push('--record-measurements')
   const out = createWriteStream(join(job.dir, 'run.log'))
   const from = Date.now()

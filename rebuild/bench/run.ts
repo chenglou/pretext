@@ -40,10 +40,10 @@ function message(error: unknown): string {
 const USAGE = 'Usage: bun rebuild/bench/run.ts --browser=chrome|firefox|safari|webkit-host [--foreground] [--smoke] [--out=<dir>] '
   + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--samples=N] '
   + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--headline=N] [--headline-passes=N] [--phase-passes=N] '
-  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--allow-battery] [--allow-no-lock]'
+  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--chrome-args=<switches>] [--allow-battery] [--allow-no-lock]'
 const FLAGS = ['foreground', 'smoke', 'allow-battery', 'allow-no-lock']
 const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
-  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms']
+  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms', 'chrome-args']
 const flags = new Set<string>()
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -56,6 +56,8 @@ for (const raw of process.argv.slice(2)) {
   if (match === null || !VALUES.includes(match[1]!)) fail(`Unknown argument ${raw}. ${USAGE}`)
   args.set(match[1]!, match[2]!)
 }
+// Extra Chrome switches separated by spaces, as the probe runner takes them (--enable-blink-features=... for a flagged API).
+const chromeArgs = (args.get('chrome-args') ?? '').split(/\s+/).filter(arg => arg.length > 0)
 const browserArg = args.get('browser')
 if (browserArg !== 'chrome' && browserArg !== 'firefox' && browserArg !== 'safari' && browserArg !== 'webkit-host') fail(`--browser is required. ${USAGE}`)
 const browser: BrowserKind = browserArg
@@ -458,7 +460,7 @@ async function launchChrome(url: string): Promise<Session> {
   const app = CHROME_APP()
   // CHROME_PIN_ARGS keeps the copy out of Chrome's updater (lab README, "Pinned browsers").
   const common = [`--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
-    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900']
+    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900', ...chromeArgs]
   if (foreground) return await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [...common, '--new-window', url])
   const session = await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     ...common, '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
