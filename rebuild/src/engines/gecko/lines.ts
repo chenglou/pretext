@@ -212,11 +212,11 @@ const startsUnit = (p: GeckoPrepared, run: GeckoTextRun, t: number): boolean => 
 // more than the advance before the word's end (no suffix of a shaped word has a negative advance; a detailed glyph's
 // advance is signed and nothing clamps it, gfxHarfBuzzShaper.cpp:1699-1719). Then every inner candidate fits, none
 // aborts, and the last of them is the scan's last break until a later candidate is accepted; a scan that would break at
-// it is left to the loop, since the edge's advance is asked of Canvas. Letter spacing and a trimmable space inside the
-// unit would enter the inner tests, so they leave it to the loop, and so does a unit whose inner advances the port takes
-// from a prefix's width (advance.ts advancesAreSuffixes): what is left of the premise is that Canvas measures no suffix
-// below nothing and no suffix narrower than the share of a pair's adjustment it holds. An inspected paragraph never
-// comes here, so its lines are the loop's.
+// it is left to the loop, since the edge's advance is asked of Canvas. Letter spacing, negative word spacing and a
+// trimmable space inside the unit would enter the inner tests, so they leave it to the loop, and so does a unit whose
+// inner advances the port takes from a prefix's width (advance.ts advancesAreSuffixes): what is left of the premise is
+// that Canvas measures no suffix below nothing and no suffix narrower than the share of a pair's adjustment it holds.
+// An inspected paragraph never comes here, so its lines are the loop's.
 function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number, aWidth: number, suppress: 'none' | 'initial',
   canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean, wantTrimmable: boolean, priorityIn: number): Measured | null {
   const run = prov.run
@@ -267,7 +267,15 @@ function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: 
       if (p.isSpace[i] === 1) space = true
     }
     if (natural >= 0 || (wrapping >= 0 && breakPriority <= WORD_WRAP_BREAK)) {
-      if (prov.letterSpacingAu !== 0 || space || unitsAdvance(p, prov, aStart, unit.tEnd, true) > aWidth || !advancesAreSuffixes(p, run, unit)) return null
+      // The loop adds each character's spacing to its advance (gfxTextRun.cpp:1139-1151), so an inner candidate fits where
+      // the unit's end does only if no suffix of the unit holds negative spacing. A word holds word spacing where a space
+      // is no boundary: U+0020 or U+00A0 before a join control (IsBoundarySpace refuses a space before any cluster
+      // extender, gfxFont.cpp:3317-3323; word spacing goes to a space unless a combining sequence tail follows, which
+      // leaves the join controls out, nsTextFrame.cpp:879-898, :4215-4225, nsTextFrameUtils.cpp:24-30), and U+00A0 isn't
+      // trimmable (nsTextFrame.cpp:904-913). Without letter spacing every character of a frame takes the frame's one
+      // word spacing or none, so the unit's spacing is negative exactly where a suffix's is.
+      if (prov.letterSpacingAu !== 0 || space || p.scanSpacingPrefix[unit.tEnd]! < p.scanSpacingPrefix[t]! ||
+        unitsAdvance(p, prov, aStart, unit.tEnd, true) > aWidth || !advancesAreSuffixes(p, run, unit)) return null
       // The first natural break ends word wrapping, so the last candidate accepted is the last natural break where
       // the unit has one.
       lastBreak = natural >= 0 ? natural : wrapping
