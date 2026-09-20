@@ -22,7 +22,7 @@ import {
   isDefaultIgnorable, isEastAsianPunctuation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
-  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
+  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, objectAt, spanAt, type GeckoElement, type GeckoFrame,
   type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
   type RunContexts, type ScriptRun,
 } from './types.js'
@@ -860,14 +860,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   }
 
   // 6. Spacing after each character (GetSpacingInternal, nsTextFrame.cpp:4089-4295, letter-spacing model 0).
-  const runOfT = new Int32Array(T)
-  const frameStartOfT = new Int32Array(T)
-  for (let k = 0; k < frames.length; k++) {
-    for (let t = frames[k]!.tStart; t < frames[k]!.tEnd; t++) {
-      runOfT[t] = frames[k]!.run
-      frameStartOfT[t] = frames[k]!.tStart
-    }
-  }
   const spacingPrefix = new Int32Array(T + 1)
   const scanSpacingPrefix = new Int32Array(T + 1)
   // CalcTabWidths asks GetSpacingInternal for one character at a time (nsTextFrame.cpp:4345-4347), and the base search goes
@@ -877,12 +869,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   let anyTab = false
   for (let r = 0; r < builds.length; r++) anyTab ||= builds[r]!.hasTab
   const tabSpacingPrefix = anyTab ? new Int32Array(T + 1) : null
-  for (let r = 0; r < builds.length; r++) {
-    const b = builds[r]!
-    for (let t = b.tStart; t < b.tEnd; t++) {
-      const run = runOfT[t]!
-      const leaf = leaves[run]!
-      const style = leaf.style
+  for (let k = 0; k < frames.length; k++) {
+    const f = frames[k]!
+    const b = builds[f.textRun]!
+    const run = f.run
+    const leaf = leaves[run]!
+    const style = leaf.style
+    for (let t = f.tStart; t < f.tEnd; t++) {
       let spacing = 0
       let scanSpacing = 0
       let tabSpacing = 0
@@ -898,7 +891,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           // starts a text node (fresh c-7421ac03d17f9f11: U+0652 starting a span after its seen takes the span's 60 au of
           // letter spacing in 14px Geeza Pro, where the seen's cluster takes none).
           let base = t
-          while (base > frameStartOfT[t]! && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
+          while (base > f.tStart && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
           let cp = tUnits[base]!
           if (base + 1 < b.tEnd && isSurrogatePair(cp, tUnits[base + 1]!)) cp = combine(cp, tUnits[base + 1]!)
           // The frame's width comes from MeasureText, which asks for spacing one glyph run at a time (gfxTextRun.cpp:809-829,
@@ -952,7 +945,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         // IsCSSWordSpacingSpace on the original character (nsTextFrame.cpp:880-898).
         const s = tSource[t]!
         const ch = text.charCodeAt(s)
-        const f = frames[holderOfSource(frames, s)]!
         if (((ch === 0x20 || ch === 0xa0) && !isSpaceCombiningSequenceTail(text, s + 1, f.end)) ||
           ((ch === 0x0d || ch === 0x09) && !style.whiteSpaceIsSignificant) || (ch === 0x0a && !style.newlineIsSignificant)) {
           spacing += ws
