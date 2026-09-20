@@ -1,11 +1,11 @@
 // A web font that finishes loading after a Canvas context was made (research/PROFILING-START.md, item 1, "Staleness"). A
-// measurer that outlives paragraphs (src/measure/font-checks.ts Measurer) keeps contexts and font-check answers, both
-// facts of the fonts a page has. What this probe asks of each browser's OffscreenCanvas:
+// page's list of contexts outlives paragraphs (src/index.ts prepare), and a context's fonts are a fact of the fonts the
+// page has. What this probe asks of each browser's OffscreenCanvas:
 // - L1: whether a context whose font was assigned before the family existed measures with the family once it has loaded
 //   (the font string is never assigned again, as in measure/canvas.ts contextFor);
 // - L2: whether that holds for a string the context measured before the load too, or whether the context answers it from
 //   what it shaped then (Chrome keeps shaped words per canvas, specs/blink-canvas.md §1.7);
-// - L3: what a context made after the load measures, which is what a new measurer's contexts measure.
+// - L3: what a context made after the load measures, which is what a new list's contexts measure.
 // One script observation; raw widths only, and the verdicts are written by hand.
 //
 // Verdicts, 2026-09-19, pinned Chrome 153.0.8010.50, pinned Firefox 156.0 and webkit-host 22625.1.29.11.27
@@ -15,12 +15,13 @@
 //   the fallback for both strings (432.07 before and after, 604.90 for the unseen string), and still does after the same
 //   font string is assigned again; assigning another font string and then the first one again makes it 327.79.
 // - L3: a context made after the load measures with the family in all three.
-// So in WebKit a kept context is stale after a font loads, and in every engine a font check's kept answer and a prepared
-// paragraph's widths are: the caller makes a new measurer where it prepares its paragraphs again after its fonts change.
+// So in WebKit a kept context is stale after a font loads, and in every engine a prepared paragraph's widths are: a page
+// prepares its paragraphs again after its fonts change, and in WebKit it starts a new list of contexts for them. The font
+// checks keep nothing across calls, so in Chrome and Firefox the next prepare on the old list sees the loaded font.
 //
 // Run under the browser lock (from the worktree):
-//   python3 .artifacts/session/with-browser-lock.py measurer-font-load -- bun rebuild/probes/runner.ts --browser=chrome \
-//     --probes=rebuild/probes/measurer-font-load.ts --out=.artifacts/probes/measurer/font-load
+//   python3 .artifacts/session/with-browser-lock.py contexts-font-load -- bun rebuild/probes/runner.ts --browser=chrome \
+//     --probes=rebuild/probes/contexts-font-load.ts --out=<dir>
 import type { Probe } from './types.ts'
 
 const SOURCE = `
@@ -59,7 +60,7 @@ const SOURCE = `
 `
 
 const probes: Probe[] = [{
-  id: 'measurer-font-load',
+  id: 'contexts-font-load',
   spec: 'PROFILING-START item 1, staleness',
   pageLang: 'en',
   browsers: ['chrome', 'safari', 'firefox'],

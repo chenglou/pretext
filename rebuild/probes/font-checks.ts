@@ -53,7 +53,7 @@ const style = d => ({
 const block = (d, content) => ({ ...style(d), content, lang: 'en', direction: 'ltr', lineHeight: 20, textIndent: 0, textAlign: 'start' });
 const learn = paragraph => {
   made = 0; asked = [];
-  const facts = lib.withLearnedFontFacts(paragraph, checks, lib.newMeasurer()).font.facts;
+  const facts = lib.withLearnedFontFacts(paragraph, checks, []).font.facts;
   return { facts, calls: asked.length, contexts: made, log: asked };
 };
 const domWidth = (font, html, extra) => {

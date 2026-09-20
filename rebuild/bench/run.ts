@@ -326,7 +326,7 @@ async function handle(request: Request): Promise<Response> {
       switch (part.kind) {
         case 'headline':
           chat.headlines.push(part.result)
-          console.log(`[bench] ${browser} headline ${part.result.set}, ${part.result.messages} messages from scratch: rebuild ${part.result.rebuildScratchMs.map(formatMs).join(', ')}; with one measurer a pass ${part.result.rebuildKeepingMs.map(formatMs).join(', ')}; main ${part.result.mainColdMs.map(formatMs).join(', ')}`)
+          console.log(`[bench] ${browser} headline ${part.result.set}, ${part.result.messages} messages from scratch: rebuild ${part.result.rebuildScratchMs.map(formatMs).join(', ')}; with one list of contexts a pass ${part.result.rebuildKeepingMs.map(formatMs).join(', ')}; main ${part.result.mainColdMs.map(formatMs).join(', ')}`)
           break
         case 'headline-resize':
           chat.headlineResizes.push(part.result)
@@ -334,7 +334,7 @@ async function handle(request: Request): Promise<Response> {
           break
         case 'phases':
           chat.phases.push(part.result)
-          console.log(`[bench] ${browser} phases ${part.result.set}${part.result.keeping ? ', one measurer a pass' : ''}: font checks ${formatMs(part.result.checks.ms)}, engine prepare ${formatMs(part.result.prepare.ms)}, fill ${formatMs(part.result.fill.ms)} over ${part.result.messages} messages`)
+          console.log(`[bench] ${browser} phases ${part.result.set}${part.result.keeping ? ', one list of contexts a pass' : ''}: font checks ${formatMs(part.result.checks.ms)}, engine prepare ${formatMs(part.result.prepare.ms)}, fill ${formatMs(part.result.fill.ms)} over ${part.result.messages} messages`)
           break
       }
       return Response.json({ kind: 'ok' })

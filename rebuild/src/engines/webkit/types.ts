@@ -159,8 +159,8 @@ export type WebKitPrepared = {
   runStarts: number[]
   items: WebKitItem[]
   // The Canvas contexts the paragraph makes its own in, one per distinct settings (measure/canvas.ts): the caller's list, a
-  // page's or this paragraph's alone (measure/font-checks.ts Measurer). The paragraph's are all made while it is prepared;
-  // the boxes and the box facts hold the ones they measure in. A world shares its paragraph's.
+  // page's or this paragraph's alone (index.ts prepare). The paragraph's are all made while it is prepared; the boxes and
+  // the box facts hold the ones they measure in. A world shares its paragraph's.
   contexts: Context[]
   // What the paragraph keeps only for inspectLine and paragraphGaps; null on a paragraph prepared plain, which computes no
   // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts, history.ts). Nothing else says

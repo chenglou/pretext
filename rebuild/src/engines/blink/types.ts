@@ -176,8 +176,8 @@ export type BlinkPrepared = {
   // Per text_content unit, its shaping group, or -1.
   groupOfUnit: Int32Array
   // The Canvas contexts the paragraph makes its own in, one per settings (measure/canvas.ts contextFor): the caller's list,
-  // a page's or this paragraph's alone (measure/font-checks.ts Measurer). The styles' contexts are references into it,
-  // styles with equal settings share a context, and it grows when a segmented paragraph first asks a one-byte string.
+  // a page's or this paragraph's alone (index.ts prepare). The styles' contexts are references into it, styles with equal
+  // settings share a context, and it grows when a segmented paragraph first asks a one-byte string.
   canvases: Context[]
   // Null on a paragraph prepared plain: it gives lines and their pieces, computes no gap, no limit, no glyph cluster and no
   // offset mapping, and asks Canvas nothing that only those read; inspectLine and paragraphGaps throw on it.

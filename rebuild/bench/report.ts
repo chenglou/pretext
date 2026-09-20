@@ -161,7 +161,7 @@ function renderChat(out: string[], context: ContextReport, chat: ChatReport): vo
       const main = median(headline.mainColdMs)
       out.push(`| ${headline.set} | rebuild scratch, count | ${headline.rebuildScratchMs.map(formatMs).join(', ')} | ${formatMs(rebuild)} | ${formatMs(rebuild / headline.messages)} | ${ratio(rebuild, main)} | ${count(headline.lines.rebuild)} |`)
       const keeping = median(headline.rebuildKeepingMs)
-      out.push(`| | rebuild scratch, count, one measurer a pass | ${headline.rebuildKeepingMs.map(formatMs).join(', ')} | ${formatMs(keeping)} | ${formatMs(keeping / headline.messages)} | ${ratio(keeping, main)} | ${count(headline.lines.rebuildKeeping)} |`)
+      out.push(`| | rebuild scratch, count, one list of contexts a pass | ${headline.rebuildKeepingMs.map(formatMs).join(', ')} | ${formatMs(keeping)} | ${formatMs(keeping / headline.messages)} | ${ratio(keeping, main)} | ${count(headline.lines.rebuildKeeping)} |`)
       out.push(`| | main cold | ${headline.mainColdMs.map(formatMs).join(', ')} | ${formatMs(main)} | ${formatMs(main / headline.messages)} | | ${count(headline.lines.main)} |`)
     }
     if (chat.headlineResizes.length > 0) {
@@ -174,7 +174,7 @@ function renderChat(out: string[], context: ContextReport, chat: ChatReport): vo
         const resize = chat.headlineResizes[h]!
         const layouts = resize.messages * resize.widths.length
         out.push(`| ${resize.set} | rebuild, count | ${formatMs(resize.rebuildPrepareAndFillMs)} | ${formatMs(resize.rebuildResizeMs)} | ${formatMs(resize.rebuildResizeMs / layouts)} |`)
-        out.push(`| | rebuild, count, one measurer | ${formatMs(resize.rebuildKeepingPrepareAndFillMs)} | ${formatMs(resize.rebuildKeepingResizeMs)} | ${formatMs(resize.rebuildKeepingResizeMs / layouts)} |`)
+        out.push(`| | rebuild, count, one list of contexts | ${formatMs(resize.rebuildKeepingPrepareAndFillMs)} | ${formatMs(resize.rebuildKeepingResizeMs)} | ${formatMs(resize.rebuildKeepingResizeMs / layouts)} |`)
         out.push(`| | main | ${formatMs(resize.mainPrepareAndLayoutMs)} | ${formatMs(resize.mainResizeMs)} | ${formatMs(resize.mainResizeMs / layouts)} |`)
       }
     }
@@ -183,7 +183,7 @@ function renderChat(out: string[], context: ContextReport, chat: ChatReport): vo
     const phases = chat.phases[p]!
     const whole = addTotals(addTotals(phases.checks, phases.prepare), phases.fill)
     out.push('')
-    out.push(`### Phases, ${phases.set}${phases.keeping ? ', one measurer a pass' : ''}: where the rebuild's from-scratch time goes (${count(phases.messages)} messages, median of ${phases.passes} instrumented passes)`)
+    out.push(`### Phases, ${phases.set}${phases.keeping ? ', one list of contexts a pass' : ''}: where the rebuild's from-scratch time goes (${count(phases.messages)} messages, median of ${phases.passes} instrumented passes)`)
     out.push('')
     out.push('| Phase | Per message | Share | Inside measureText | measureText calls per message | Making contexts | Contexts per message | Outside Canvas |')
     out.push('|---|---:|---:|---:|---:|---:|---:|---:|')
@@ -329,18 +329,18 @@ function chatCells(report: BenchReport, setId: ChatSetId): Map<string, string> {
     cells.set('D. share of from scratch: inside measureText / making contexts / outside Canvas', `${share(whole.measureTextMs, whole.ms)} / ${share(whole.contextMs, whole.ms)} / ${share(whole.ms - whole.measureTextMs - whole.contextMs, whole.ms)}`)
     cells.set('D. font checks: measureText calls and contexts per message', `${perLayout(phases.checks.measureTextCalls, phases.messages)} and ${perLayout(phases.checks.contexts, phases.messages)}`)
   }
-  // E: one measurer for the set's messages, made inside the timing (rebuild/src/measure/font-checks.ts Measurer).
-  timed('E. from scratch with one measurer for the set, per message', 'rebuild scratch, count, page keeps both')
+  // E: one list of contexts for the set's messages, started inside the timing (rebuild/src/index.ts prepare).
+  timed('E. from scratch with one list of contexts for the set, per message', 'rebuild scratch, count, page keeps both')
   counted('E. measureText calls per message', 'rebuild scratch, count, page keeps both', 'measureTextCalls')
   counted('E. contexts made per message', 'rebuild scratch, count, page keeps both', 'contexts')
   const keepsBoth = variant('rebuild scratch, count, page keeps both')
-  if (scratch !== undefined && keepsBoth !== undefined) cells.set('E against A: one measurer over a measurer a message', ratio(keepsBoth.stats.medianMs, scratch.stats.medianMs))
+  if (scratch !== undefined && keepsBoth !== undefined) cells.set('E against A: one list of contexts over a list a message', ratio(keepsBoth.stats.medianMs, scratch.stats.medianMs))
   if (headline !== undefined) {
     const keeping = median(headline.rebuildKeepingMs)
-    cells.set(`E. headline: ${count(headline.messages)} messages from scratch with one measurer a pass`, `${formatMs(keeping)} (${formatMs(keeping / headline.messages)} per message; passes ${headline.rebuildKeepingMs.map(formatMs).join(', ')})`)
+    cells.set(`E. headline: ${count(headline.messages)} messages from scratch with one list of contexts a pass`, `${formatMs(keeping)} (${formatMs(keeping / headline.messages)} per message; passes ${headline.rebuildKeepingMs.map(formatMs).join(', ')})`)
   }
-  timed('E. the font checks alone get the measurer, per message', 'rebuild scratch, count, page keeps checks')
-  timed('E. the engine\'s contexts alone come from it, per message', 'rebuild scratch, count, page keeps contexts')
+  timed('E. the font checks\' contexts alone come from the list, per message', 'rebuild scratch, count, page keeps checks')
+  timed('E. the engine\'s contexts alone come from the list, per message', 'rebuild scratch, count, page keeps contexts')
   const firstKeeping = row?.variants.find(entry => entry.variant.startsWith('rebuild first resize') && entry.variant.endsWith('page keeps both'))
   if (firstKeeping !== undefined) cells.set('E. first layout at a new width, shared contexts, per layout', `${formatMs(firstKeeping.stats.medianMs / (firstKeeping.layouts ?? 1))} (whole set ${formatMs(firstKeeping.stats.medianMs)})`)
   if (resize !== undefined) {

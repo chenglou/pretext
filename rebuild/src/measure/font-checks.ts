@@ -68,13 +68,15 @@
 // engines/gecko/advance.ts `pairKernedShare`), and the others are whole sets where a check answers one string at a time
 // (research/FACTS-FREE.md).
 //
-// One call resolves one paragraph: each distinct declaration under its language is resolved once, which is local to the
-// call, and a question is asked of Canvas once, since checks share questions (the two generics alone, a family's list at
-// the probe size); the questions and their contexts are the caller's (Measurer below), so a page can pay for them once
-// per declaration instead of once per paragraph. The checks measure at 16px whatever the declaration's size,
-// except the two sizes of check 4: font matching doesn't read the size, so declarations of several sizes share their
-// questions, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their contexts are their
-// own (`partition`), so no engine measurement shares a Blink word cache with them.
+// One call resolves one paragraph, and what it works out is local to the call (Resolution below): each distinct
+// declaration under its language is resolved once, and a question is asked of Canvas once, since checks share questions
+// (the two generics alone, a family's list at the probe size). The contexts alone are the caller's (index.ts prepare has
+// their lifetime): with a page's list the next call finds its contexts made and asks them its questions again, because an
+// answer is a fact of the fonts the page has, and nothing here could tell that a kept one had changed. The checks measure
+// at 16px whatever the declaration's size, except the two sizes of check 4: font matching doesn't read the size, so
+// declarations of several sizes share their questions, and Blink's totals are exact 16.16 values below 256 px
+// (specs/blink-canvas.md §1.5). Their contexts are their own (`partition`), so no engine measurement shares a Blink word
+// cache with them.
 //
 // The checks measure in the engine's own kind of context (FontChecks.textRendering): in Blink `textRendering =
 // 'optimizeLegibility'`, as engines/blink/contexts.ts styleContexts does. Blink's font cache keys a platform font by the
@@ -112,35 +114,13 @@ const LINEAR_SAMPLE = 'Hamburgefonstiv'
 // CSS Fonts 4 generic family keywords, which name a family only unquoted.
 const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong']
 
-// What measuring keeps across paragraphs: the Canvas contexts, the engine's and the checks' in one list, each found by
-// its settings (canvas.ts contextFor), and the checks' questions with Canvas's answers, each found by its context and its
-// string. Both are facts of the fonts a page has. No fact of a declaration is kept: a call works its declarations' facts out
-// again from the answers, because a fact also depends on what the paragraph's text asks and on the layout zoom.
-//
-// Lifetime: the caller's. prepare makes one per call when it is given none, and then nothing outlives a prepared
-// paragraph. A page that makes one and hands it to every prepare pays for a context and a check's question once per font
-// declaration instead of once per paragraph.
-// Invalidated by what makes a prepared paragraph stale too, and by nothing else: the fonts a page has changing (a web
-// font that finishes loading). The library reads nothing of the document, so it can't know; the caller makes a new one
-// where it prepares its paragraphs again. A context is found by every setting that reaches Canvas and an answer by its
-// context, so the environment, the language and the text can't make either stale.
-// Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
-// partition: a handful of contexts per declaration) and a dozen probe strings per checks' context, and by MAX_CONTEXTS:
-// settings that don't repeat (an animated letter spacing, a size per paragraph) would grow the lists without end, and
-// every search with them, so a call that finds more contexts than that starts the measurer over. Prepared paragraphs hold
-// their contexts by reference and keep theirs. Such a page gains nothing from a measurer and loses little: at the bound
-// a search costs about a tenth of a Blink prepare on the stand-in Canvas. What a kept canvas holds inside the browser is
-// the browser's to bound: Chrome keeps at most 32,768 strings and 32,768 words per canvas and drops the least recently
-// used half when either fills (frame_shape_cache.cc:12-16, :93-104), WebKit and Gecko keep measured words per font.
-export type Measurer = {
+// What one call reads and keeps while it resolves a paragraph's declarations: the caller's contexts, which the checks'
+// are made in and found in, and the call's own, few enough to compare one by one: the questions asked so far with Canvas's
+// answers, and the declarations resolved so far, each under the language its checks measured in.
+type Resolution = {
   contexts: Context[]
   asked: { context: Context; text: string; width: number }[]
-}
-
-const MAX_CONTEXTS = 1024
-
-export function newMeasurer(): Measurer {
-  return { contexts: [], asked: [] }
+  resolved: { font: FontDecl; lang: string; learned: FontDecl }[]
 }
 
 // A family name as CSS writes it; a generic keyword stands for itself, as in FontFacts.primaryFamily.
@@ -170,14 +150,14 @@ export type FontChecks = {
   textRendering: CanvasTextRendering
 }
 
-type Probe = { measurer: Measurer; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
+type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
 
 function width(p: Probe, family: string, size: number, text: string): number {
-  const context = contextFor(p.measurer.contexts, {
+  const context = contextFor(p.resolution.contexts, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
     textRendering: p.textRendering, direction: 'ltr', partition: 'font-checks',
   })
-  const asked = p.measurer.asked
+  const asked = p.resolution.asked
   for (let i = 0; i < asked.length; i++) if (asked[i]!.context === context && asked[i]!.text === text) return asked[i]!.width
   const measured = canvasWidth(context, text)
   asked.push({ context, text, width: measured })
@@ -269,9 +249,9 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 
 // The facts of one declaration as the engine gets them: each supplied fact, else the check's answer where this engine
 // reads the fact and the paragraph's text can ask for it (FontChecks; each port says why it reads what it reads).
-function learnedFacts(measurer: Measurer, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
+function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
-  const p: Probe = { measurer, textRendering: checks.textRendering, font, lang }
+  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang }
   const scaling = checks.opticalSizeAxis
   const asksHyphen = given.mapsHyphen === null && checks.mapsHyphen && needs.hyphen
   const asksPitch = given.monospace === null && checks.monospace
@@ -314,19 +294,15 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
 }
 
 // The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
-export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, measurer: Measurer): Paragraph {
-  if (measurer.contexts.length > MAX_CONTEXTS) {
-    measurer.contexts.length = 0
-    measurer.asked.length = 0
-  }
+export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, contexts: Context[]): Paragraph {
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
-  // The declarations resolved so far, each under the language its checks measured in: a few, compared one by one.
-  const resolved: { font: FontDecl; lang: string; learned: FontDecl }[] = []
+  const resolution: Resolution = { contexts, asked: [], resolved: [] }
   const learn = (font: FontDecl, elementLang: string): FontDecl => {
     const lang = checks.contextTakesLang ? elementLang : ''
+    const resolved = resolution.resolved
     for (let i = 0; i < resolved.length; i++) if (resolved[i]!.lang === lang && sameDeclaration(resolved[i]!.font, font)) return resolved[i]!.learned
-    const learned = { ...font, facts: learnedFacts(measurer, checks, font, lang, needs) }
+    const learned = { ...font, facts: learnedFacts(resolution, checks, font, lang, needs) }
     resolved.push({ font, lang, learned })
     return learned
   }

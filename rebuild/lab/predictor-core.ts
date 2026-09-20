@@ -27,7 +27,7 @@ import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geo
 import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
 import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
-import { fillLine, firstLine, linePieces, newMeasurer, paragraphGaps, prepare, type Measurer } from '../src/index.ts'
+import { fillLine, firstLine, linePieces, paragraphGaps, prepare, type Context } from '../src/index.ts'
 import {
   NO_BOX_EDGE, type FillResultOf, type FontDecl, type FontFacts, type InlineNode, type LineInspectionOf, type LinePieces, type LineSlot as LayoutSlot,
   type Paragraph as LayoutParagraph, type TextStyle,
@@ -220,13 +220,13 @@ function fillLines<Start, Line, Refused, Geometry, Facts>(engine: Engine<Start, 
 // the library's painter over the filled lines with the engine's painting rules, which are paired here, where the engine's
 // types are known. `otherWidthsFirst` fills the paragraph at those widths before, with the same calls, and keeps nothing
 // of them: what an application does that lays one prepared paragraph out at several widths, which Chrome's per-canvas
-// cache of shaped words could show (specs/blink-canvas.md §1.7). `measurer` is the document's where the predictor keeps
-// one (makePredictor); the usual predictors hand prepare none, so every case makes its own contexts and asks its own font
-// checks, and a case's record stays what one paragraph asks (research/PROFILING-START.md, "Records are per case").
-function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], measurer: Measurer | undefined): Pick<LayoutPrediction, 'layout' | 'painter'> {
+// cache of shaped words could show (specs/blink-canvas.md §1.7). `contexts` is the document's list where the predictor
+// keeps one (makePredictor); the usual predictors hand prepare none, so every case makes its own contexts, and a case's
+// record stays what one paragraph asks (research/PROFILING-START.md, "Records are per case").
+function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: Context[] | undefined): Pick<LayoutPrediction, 'layout' | 'painter'> {
   countCanvasWork()
   const before = { ...canvasWork }
-  const prepared = prepare(paragraph, env, true, measurer)
+  const prepared = prepare(paragraph, env, true, contexts)
   const fill = <Start, Line, Refused, Geometry, Facts>(engine: Engine<Start, Line, Refused, Geometry, Facts>) => {
     for (let i = 0; i < otherWidthsFirst.length; i++) fillLines(engine, otherWidthsFirst[i]!, insets)
     const { lines, belowFloats, painted } = fillLines(engine, width, insets)
@@ -268,10 +268,10 @@ function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: nu
 
 // The line ranges of a plain paragraph: the lines with a line box, which are the lines a LinesPrediction lists (types.ts).
 // Nothing is inspected, so this is the path an application runs, with the Canvas questions of that path alone.
-function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], measurer: Measurer | undefined): LinesPrediction {
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], contexts: Context[] | undefined): LinesPrediction {
   countCanvasWork()
   const callsBefore = canvasWork.calls
-  const prepared = prepare(paragraph, env, false, measurer)
+  const prepared = prepare(paragraph, env, false, contexts)
   const lines: PredictionLine[] = []
   let row = 0
   for (let start = firstLine(prepared); start !== null;) {
@@ -296,12 +296,12 @@ function plainLines(paragraph: LayoutParagraph, env: Environment, width: number,
 }
 
 // `otherWidthFactors`: see layoutParagraph's `otherWidthsFirst`; the widths are these factors of the case's.
-// `pageMeasurer`: one measurer for every case the document lays out, as an application that makes one per page holds it
-// (src/measure/font-checks.ts Measurer): the document's cases share their Canvas contexts and the font checks' answers.
-// The page loads a context's fixture fonts before its first case (README.md, "Page protocol"), so the measurer's first
-// context is made after them.
-export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageMeasurer: boolean = false): Predictor {
-  const measurer = pageMeasurer ? newMeasurer() : undefined
+// `pageContexts`: one list of Canvas contexts for every case the document lays out, as an application that keeps one per
+// page holds it (src/index.ts prepare): the document's cases share their contexts, and every case asks its font checks
+// of Canvas again. The page loads a context's fixture fonts before its first case (README.md, "Page protocol"), so the
+// list's first context is made after them.
+export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageContexts: boolean = false): Predictor {
+  const contexts: Context[] | undefined = pageContexts ? [] : undefined
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
@@ -309,7 +309,7 @@ export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly nu
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
       const paragraph = layoutInput(c, e.engine, factsFor)
       const width = c.paragraph.width
-      return { paragraph, width, ...layoutParagraph(paragraph, e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor), measurer) }
+      return { paragraph, width, ...layoutParagraph(paragraph, e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor), contexts) }
     },
     // One element per line with a line box.
     paint(_c, prediction, host) {
@@ -329,14 +329,14 @@ type PlainPredictor = {
   paint: (c: Case, prediction: LinesPrediction, host: HTMLElement) => null
 }
 
-export function makePlainPredictor(factsFor: FactsFor, pageMeasurer: boolean = false): PlainPredictor {
-  const measurer = pageMeasurer ? newMeasurer() : undefined
+export function makePlainPredictor(factsFor: FactsFor, pageContexts: boolean = false): PlainPredictor {
+  const contexts: Context[] | undefined = pageContexts ? [] : undefined
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
       if ('error' in e) return e
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
-      return plainLines(layoutInput(c, e.engine, factsFor), e, c.paragraph.width, c.inline?.lineSlots ?? [], measurer)
+      return plainLines(layoutInput(c, e.engine, factsFor), e, c.paragraph.width, c.inline?.lineSlots ?? [], contexts)
     },
     paint: () => null,
   }

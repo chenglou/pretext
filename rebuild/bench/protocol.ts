@@ -190,15 +190,15 @@ export type ChatHeadline = {
   set: ChatSetId
   messages: number
   rebuildScratchMs: number[]
-  // The rebuild from scratch with one measurer for the pass's messages, made inside the timing (Kept 'both').
+  // The rebuild from scratch with one list of contexts for the pass's messages, started inside the timing (Kept 'both').
   rebuildKeepingMs: number[]
   mainColdMs: number[]
   lines: { rebuild: number; rebuildKeeping: number; main: number }
 }
 
-// What a page's measurer serves in a variant that keeps one across messages (rebuild/src/measure/font-checks.ts Measurer):
-// both halves of prepare(), which is prepare() handed the measurer, or one half alone while the other gets the call's own,
-// which shows what each half's share of the gain is.
+// What a page's list of Canvas contexts serves in a variant that keeps one across messages (rebuild/src/index.ts prepare):
+// both halves of prepare(), which is prepare() handed the list, or one half alone, the font checks' contexts or the
+// engine's, while the other gets the call's own, which shows what each half's share of the gain is.
 export type Kept = 'both' | 'checks' | 'contexts'
 
 // The resize case on the headline set, once: every message prepared and filled at `ChatPlan.width` (timed as
@@ -210,7 +210,7 @@ export type ChatHeadlineResize = {
   widths: number[]
   rebuildPrepareAndFillMs: number
   rebuildResizeMs: number
-  // The same on paragraphs prepared with one measurer, which share their Canvas contexts.
+  // The same on paragraphs prepared with one list of contexts, which share their Canvas contexts.
   rebuildKeepingPrepareAndFillMs: number
   rebuildKeepingResizeMs: number
   mainPrepareAndLayoutMs: number
@@ -227,7 +227,7 @@ export type PhaseTotals = { ms: number; measureTextMs: number; measureTextCalls:
 // font checks (measure/font-checks.ts withLearnedFontFacts), the engine's prepare, and fillLine over every line.
 export type ChatPhases = {
   set: ChatSetId
-  // Whether every pass made one measurer for its messages; false: every message its own.
+  // Whether every pass started one list of contexts for its messages; false: every message its own.
   keeping: boolean
   messages: number
   passes: number

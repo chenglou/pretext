@@ -71,17 +71,17 @@ function paragraphOf(message: ChatMessage): Paragraph {
 
 function withFontChecks(paragraph: Paragraph, env: Environment): Paragraph {
   switch (env.engine) {
-    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env))
-    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks)
-    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks)
+    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env), [])
+    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, [])
+    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks, [])
   }
 }
 
 function prepareChecked(checked: Paragraph, env: Environment): Prepared {
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, false) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, false) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, false) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, false, []) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, false, []) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, false, []) }
   }
 }
 
