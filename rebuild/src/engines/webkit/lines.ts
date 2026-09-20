@@ -211,14 +211,15 @@ function expandRun(p: WebKitPrepared, run: TextRun, item: WebKitTextItem, width:
   run.textLength += length
 }
 
-function updateTrailingContent(L: Layout, line: Line, item: WebKitTextItem, width: number, oldContentLogicalWidth: number): void {
+// `run` is the line's last run, which holds the item.
+function updateTrailingContent(L: Layout, line: Line, run: TextRun, item: WebKitTextItem, width: number, oldContentLogicalWidth: number): void {
   line.trailingSoftHyphenWidth = null
   const style = L.p.boxes[item.box]!.style
   const isTrimmable = item.isWhitespace && !preservesSpacesAndTabs(style)
   if (isTrimmable) {
     // TrimmableTrailingContent::addFullyTrimmableContent (IL:723-732)
     const offset = f32(f32(line.contentLogicalWidth - oldContentLogicalWidth) - width)
-    line.trimmable = { runIndex: line.trimmable === null ? line.runs.length - 1 : line.trimmable.runIndex, offset, width: f32(offset + width) }
+    line.trimmable = { run: line.trimmable === null ? run : line.trimmable.run, offset, width: f32(offset + width) }
   } else {
     line.trimmable = null
   }
@@ -256,10 +257,11 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     || shapingBoundary !== null || last.shapingBoundary !== null ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
   let contentLogicalRight: number
+  // The item's run: the one it expands, or one of its own.
+  const run = expanded ?? textRun(p, item, f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0)), width, shapingBoundary)
   if (expanded === null) {
-    const left = f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0))
-    line.runs.push(textRun(p, item, left, width, shapingBoundary))
-    contentLogicalRight = f32(left + width)
+    line.runs.push(run)
+    contentLogicalRight = f32(run.left + width)
   } else if (box.letterSpacing >= 0) {
     expandRun(p, expanded, item, width)
     contentLogicalRight = f32(expanded.left + expanded.width)
@@ -277,23 +279,26 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     contentLogicalRight = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
   line.contentLogicalWidth = Math.max(oldContentLogicalWidth, contentLogicalRight)
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
+  updateTrailingContent(L, line, run, item, width, oldContentLogicalWidth)
 }
 
-// Line::appendTextFast (IL:483-556), the simple builder's variant: its line holds text runs alone while it is filled.
+// Line::appendTextFast (IL:483-556), the simple builder's variant: its line holds text runs alone while it is filled. The
+// source asks the last run for its trailing white space and its layout box whatever the run is, and a run that isn't text
+// has neither, so the item gets a run of its own after one, as in appendText.
 function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: number): void {
   const p = L.p
   const box = p.boxes[item.box]!
-  const last = line.runs[line.runs.length - 1] as TextRun | undefined
-  const willCollapseCompletely = item.isWhitespace && !preservesSpacesAndTabs(box.style) && (last === undefined || hasCollapsibleTrailingWhitespace(last))
+  const last = line.runs[line.runs.length - 1]
+  const willCollapseCompletely = item.isWhitespace && !preservesSpacesAndTabs(box.style) && (last === undefined || (last.kind === 'text' && hasCollapsibleTrailingWhitespace(last)))
   if (willCollapseCompletely) return
   // The run the item expands, or null where it needs a run of its own.
-  const expanded = last === undefined || hasCollapsedTrailingWhitespace(last) || last.box !== item.box || isZeroWidthSpaceSeparator(p, item) ? null : last
+  const expanded = last === undefined || last.kind !== 'text' || hasCollapsedTrailingWhitespace(last) || last.box !== item.box || isZeroWidthSpaceSeparator(p, item) ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
+  // The item's run: the one it expands, or one of its own.
+  const run = expanded ?? textRun(p, item, lastRunLogicalRight(line), width, null)
   if (expanded === null) {
-    const left = lastRunLogicalRight(line)
-    line.runs.push(textRun(p, item, left, width, null))
-    line.contentLogicalWidth = f32(left + width)
+    line.runs.push(run)
+    line.contentLogicalWidth = f32(run.left + width)
   } else if (box.letterSpacing >= 0) {
     expandRun(p, expanded, item, width)
     line.contentLogicalWidth = f32(expanded.left + expanded.width)
@@ -303,7 +308,7 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
     expandRun(p, expanded, item, width)
     line.contentLogicalWidth = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
+  updateTrailingContent(L, line, run, item, width, oldContentLogicalWidth)
 }
 
 // Line::appendInlineBoxStart (IL:289-315).
@@ -382,9 +387,9 @@ function addTrailingHyphen(line: Line, width: number): void {
 // Line::Run::removeTrailingWhitespace (IL:963-987).
 function handleTrailingTrimmableContent(L: Layout, line: Line): void {
   if (line.trimmable === null || line.runs.length === 0) return
-  const index = line.trimmable.runIndex
   // The trimmable run is text that ends with the trimmable white space (IL:753, :965).
-  const run = line.runs[index] as TextRun
+  const run = line.trimmable.run
+  const index = line.runs.indexOf(run)
   let whitespaceWidth = run.trailingWhitespace!.width
   if (run.lastNonWhitespaceContentStart !== null && L.p.style.rtl) {
     const box = L.p.boxes[run.box]!
@@ -454,10 +459,12 @@ function handleTrailingHangingContent(line: Line, lineWidth: number, isLastForma
 
 // ---- ContinuousContent (ICB:917-1004, InlineContentBreaker.h:84-147) ----
 
-type ContentRun = { item: ContentItem; offset: number; contentWidth: number; shapingBoundary: 'start' | 'end' | null }
+// A run of text is a ContentRun<WebKitTextItem>: what the breaker breaks, and all the simple builder's content holds.
+type ContentRun<Item extends ContentItem = ContentItem> = { item: Item; offset: number; contentWidth: number; shapingBoundary: 'start' | 'end' | null }
+type TextContentRun = ContentRun<WebKitTextItem>
 
-type Content = {
-  runs: ContentRun[]
+type Content<Item extends ContentItem = ContentItem> = {
+  runs: ContentRun<Item>[]
   logicalWidth: number
   leadingTrimmableWidth: number
   trailingTrimmableWidth: number
@@ -472,7 +479,7 @@ type Content = {
   hasTextContentSpanningBoxes: boolean
 }
 
-function newContent(): Content {
+function newContent<Item extends ContentItem = ContentItem>(): Content<Item> {
   return {
     runs: [], logicalWidth: 0, leadingTrimmableWidth: 0, trailingTrimmableWidth: 0, hangingContentWidth: null, hasTextContent: false,
     isFullyTrimmable: false, hasTrailingWordSeparator: false, hasShapedContent: false, lastTextRunIndex: null, lastInlineBoxIndex: null,
@@ -541,8 +548,9 @@ function appendTextContent(L: Layout, c: Content, item: WebKitTextItem, width: n
 // ---- InlineContentBreaker (ICB) ----
 
 // InlineContentBreaker::PartialRun and Result (InlineContentBreaker.h:45-72). A hyphen width comes with hyphens: auto, which
-// the model doesn't have; the trailing soft hyphen's is the line's (Line::trailingSoftHyphenWidth).
-type PartialRun = { length: number; logicalWidth: number }
+// the model doesn't have; the trailing soft hyphen's is the line's (Line::trailingSoftHyphenWidth). `item` is the text item
+// the partial run is the left part of, the trailing run's.
+type PartialRun = { item: WebKitTextItem; length: number; logicalWidth: number }
 type PartialTrailingContent = { trailingRunIndex: number; partialRun: PartialRun | null }
 type BreakResult =
   | { action: 'keep' | 'wrap' | 'wrap-with-hyphen' | 'revert-to-last-wrap-opportunity' | 'revert-to-last-non-overflowing-wrap-opportunity'; isEndOfLine: boolean }
@@ -580,13 +588,12 @@ function hasLeadingTextContent(c: Content): boolean {
   return false
 }
 
-function nextTextRunIndex(runs: ContentRun[], start: number): number | null {
-  for (let i = start + 1; i < runs.length; i++) if (runs[i]!.item.kind === 'text') return i
-  return null
-}
-
-function firstTextRunIndex(runs: ContentRun[]): number | null {
-  for (let i = 0; i < runs.length; i++) if (runs[i]!.item.kind === 'text') return i
+// The text item of the next text run after `start`, or null.
+function nextTextItem(runs: ContentRun[], start: number): WebKitTextItem | null {
+  for (let i = start + 1; i < runs.length; i++) {
+    const item = runs[i]!.item
+    if (item.kind === 'text') return item
+  }
   return null
 }
 
@@ -625,9 +632,13 @@ function wordBreakBehavior(s: WebKitStyle, hasWrapOpportunityAtPreviousPosition:
   return 'none'
 }
 
+function isTextRun(run: ContentRun): run is TextContentRun {
+  return run.item.kind === 'text'
+}
+
 // isBreakableRun (ICB:353-362): text whose own style allows wrapping.
-function isBreakableRun(L: Layout, run: ContentRun): boolean {
-  return run.item.kind === 'text' && L.p.boxes[run.item.box]!.style.wrap
+function isBreakableRun(L: Layout, run: ContentRun): run is TextContentRun {
+  return isTextRun(run) && L.p.boxes[run.item.box]!.style.wrap
 }
 
 // firstCharacterBreakRespectingLineStartProhibitions (ICB:139-158). U16_FWD_1 gets the item length as its limit while the
@@ -639,7 +650,7 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
   if (box.is8Bit) {
     // One code unit of 8-bit text (:143-157; gap string-storage).
     emergencyBreakIn8BitText(L.gaps, box, item, firstLength)
-    return { length: firstLength, logicalWidth: firstWidth }
+    return { item, length: firstLength, logicalWidth: firstWidth }
   }
   let breakPosition = firstLength
   let breakWidth = firstWidth
@@ -649,12 +660,11 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
     breakWidth = itemWidth(L.p, item, item.start, item.start + next, contentLogicalRight)
     breakPosition = next
   }
-  return { length: breakPosition, logicalWidth: breakWidth }
+  return { item, length: breakPosition, logicalWidth: breakWidth }
 }
 
 // lastValidBreakingPosition (ICB:364-403)
-function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number): number | null {
-  const item = runs[index]!.item as WebKitTextItem
+function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number, item: WebKitTextItem): number | null {
   const text = textOf(L, item)
   const lineBreak = L.p.boxes[item.box]!.style.lineBreak
   const inside = (): number | null => {
@@ -664,9 +674,8 @@ function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number)
     }
     return null
   }
-  const nextIndex = nextTextRunIndex(runs, index)
-  if (nextIndex !== null) {
-    const next = runs[nextIndex]!.item as WebKitTextItem
+  const next = nextTextItem(runs, index)
+  if (next !== null) {
     const canBreakAtRunBoundary = next.isWhitespace ? L.p.boxes[next.box]!.style.collapse !== 'break-spaces' : canBreakBefore(textOf(L, next).charCodeAt(next.start), lineBreak)
     return canBreakAtRunBoundary ? item.end : inside()
   }
@@ -677,26 +686,25 @@ function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number)
 }
 
 // midWordBreak (ICB:405-430)
-function midWordBreak(L: Layout, run: ContentRun, logicalLeft: number, availableWidth: number): PartialRun | null {
-  const item = run.item as WebKitTextItem
+function midWordBreak(L: Layout, run: TextContentRun, logicalLeft: number, availableWidth: number): PartialRun | null {
+  const item = run.item
   const text = textOf(L, item)
   const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
   if (!wb.length || wb.length === item.end - item.start) return null
   const lineBreak = L.p.boxes[item.box]!.style.lineBreak
-  if (canBreakBefore(text.charCodeAt(item.start + wb.length), lineBreak)) return { length: wb.length, logicalWidth: wb.logicalWidth }
+  if (canBreakBefore(text.charCodeAt(item.start + wb.length), lineBreak)) return { item, length: wb.length, logicalWidth: wb.logicalWidth }
   let right = item.start + wb.length
   for (; right > item.start; right--) {
     right = codePointStart(text, item.start, right)
     if (canBreakBefore(text.charCodeAt(right), lineBreak)) break
   }
   if (right === item.start) return null
-  return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
+  return { item, length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
 }
 
-// InlineContentBreaker::tryBreakingTextRun (ICB:502-641)
-function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOverflowingRun: boolean, logicalLeft: number, availableWidth: number, st: LineStatus): PartialRun | null {
-  const run = runs[index]!
-  const item = run.item as WebKitTextItem
+// InlineContentBreaker::tryBreakingTextRun (ICB:502-641). `run` is runs[index], a breakable run (isBreakableRun).
+function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, run: TextContentRun, isOverflowingRun: boolean, logicalLeft: number, availableWidth: number, st: LineStatus): PartialRun | null {
+  const item = run.item
   const length = item.end - item.start
   const lineHasRoomForContent = availableWidth > 0
   const style = L.p.boxes[item.box]!.style
@@ -712,7 +720,7 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOver
           const wb = midWordBreak(L, run, logicalLeft, availableWidth)
           if (wb !== null) return wb
         }
-        if (canBreakBefore(text.charCodeAt(item.start), lineBreak)) return { length: 0, logicalWidth: 0 }
+        if (canBreakBefore(text.charCodeAt(item.start), lineBreak)) return { item, length: 0, logicalWidth: 0 }
         // firstBreakablePosition (:542-558): U16_FWD_1 with the item length as its limit, as in the source.
         if (st.hasContent) return null
         let right = item.start
@@ -720,25 +728,25 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOver
           right = forwardOneCodePoint(text, right, length)
           if (canBreakBefore(text.charCodeAt(right), lineBreak)) {
             if (right === item.end) return null
-            return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
+            return { item, length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
           }
         }
         return null
       }
-      const position = lastValidBreakingPosition(L, runs, index)
+      const position = lastValidBreakingPosition(L, runs, index, item)
       if (position === null) return null
-      return { length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft) }
+      return { item, length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft) }
     }
     case 'arbitrary': {
       if (length === 0) return null
       if (!isOverflowingRun) {
-        if (nextTextRunIndex(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
-        if (length > 1) return { length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft) }
+        if (nextTextItem(runs, index) !== null) return { item, length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
+        if (length > 1) return { item, length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft) }
         return null
       }
-      if (!lineHasRoomForContent) return { length: 0, logicalWidth: 0 }
+      if (!lineHasRoomForContent) return { item, length: 0, logicalWidth: 0 }
       const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
-      return { length: wb.length, logicalWidth: wb.logicalWidth }
+      return { item, length: wb.length, logicalWidth: wb.logicalWidth }
     }
   }
 }
@@ -770,7 +778,7 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
   const overflowingRun = runs[overflowingRunIndex]!
   if (isBreakableRun(L, overflowingRun)) {
     const available = Math.max(0, f32(st.availableWidth - nonOverflowing))
-    const partial = tryBreakingTextRun(L, runs, overflowingRunIndex, true, f32(st.contentLogicalRight + nonOverflowing), available, st)
+    const partial = tryBreakingTextRun(L, runs, overflowingRunIndex, overflowingRun, true, f32(st.contentLogicalRight + nonOverflowing), available, st)
     if (partial !== null) {
       if (partial.length) return { runIndex: overflowingRunIndex, breakingPosition: { runIndex: overflowingRunIndex, trailingContent: { overflows: false, partialRun: partial } } }
       const trailing = findTrailingRunIndexBeforeBreakableRun(runs, overflowingRunIndex)
@@ -787,10 +795,9 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
     previousContentWidth = f32(previousContentWidth - spaceRequired(run))
     if (!isBreakableRun(L, run)) continue
     const available = Math.max(0, f32(st.availableWidth - previousContentWidth))
-    const partial = tryBreakingTextRun(L, runs, index, false, f32(st.contentLogicalRight + previousContentWidth), available, st)
+    const partial = tryBreakingTextRun(L, runs, index, run, false, f32(st.contentLogicalRight + previousContentWidth), available, st)
     if (partial === null) continue
-    const item = run.item as WebKitTextItem
-    if (partial.length === item.end - item.start) {
+    if (partial.length === run.item.end - run.item.start) {
       let trailingInlineBoxEnd: number | null = null
       for (let k = index + 1; k <= overflowingRunIndex; k++) {
         const kind = runs[k]!.item.kind
@@ -809,7 +816,7 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
   for (let index = overflowingRunIndex + 1; index < runs.length; index++) {
     const run = runs[index]!
     if (isBreakableRun(L, run)) {
-      const partial = tryBreakingTextRun(L, runs, index, true, f32(st.contentLogicalRight + nextContentWidth), 0, st)
+      const partial = tryBreakingTextRun(L, runs, index, run, true, f32(st.contentLogicalRight + nextContentWidth), 0, st)
       if (partial !== null) {
         if (partial.length) return { runIndex: overflowingRunIndex, breakingPosition: { runIndex: index, trailingContent: { overflows: true, partialRun: partial } } }
         const trailing = findTrailingRunIndexBeforeBreakableRun(runs, index)
@@ -849,8 +856,10 @@ function processOverflowingContent(L: Layout, c: Content, st: LineStatus): Break
       if (trailing === null) {
         // Not even the first glyph fits (:214-251).
         if (st.hasContent) return result('wrap', true)
-        const leadingTextRunIndex = firstTextRunIndex(c.runs)!
-        const item = c.runs[leadingTextRunIndex]!.item as WebKitTextItem
+        // The leading text run, which the content has (hasTextContent).
+        let leadingTextRunIndex = 0
+        let item = c.runs[0]!.item
+        while (item.kind !== 'text') item = c.runs[++leadingTextRunIndex]!.item
         const firstLength = firstUserPerceivedCharacterLength(L.p, item)
         if (item.end - item.start > firstLength) {
           const partial = firstCharacterBreakRespectingLineStartProhibitions(L, item, st.contentLogicalRight)
@@ -928,6 +937,11 @@ function lineStatus(line: Line, availableWidth: number, lineHasContent: boolean,
 }
 
 // ---- TextOnlySimpleLineBuilder (TOS) ----
+// The simple builder's content is text items and line breaks alone: content.ts chooses it for such content, and the range
+// based builder runs it between the one span's start and end. That is known of the paragraph's builder, not of its item
+// list, which holds any item and which LineBuilder reads whole once the paragraph meets floats. So where this builder reads
+// an item of a candidate, or of the line so far, by its index, it says the item is text, as the source's downcasts do: a
+// line break ends the line, and every item before it is text.
 
 // A line builder's state. `measuredEnd` is the item index past the last item the builder read a width or a break opportunity
 // of: the line's content and the candidate content that ended the line. `shapedCarry` says the width carried to the next line
@@ -994,15 +1008,15 @@ function revertToLastNonOverflowingItem(b: Builder): number {
   return 0
 }
 
-// TOS:343-421
-function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
+// TOS:343-421. The simple builder's candidate content is runs of text alone.
+function handleOverflowingTextContent(b: Builder, c: Content<WebKitTextItem>): SimpleResult {
   const L = b.L
   const available = simpleAvailableWidth(b)
   let r = result('keep', false)
   if (c.logicalWidth > available) r = processInlineContent(L, c, lineStatus(b.line, available, hasContent(b.line), b.wrapOpportunityList.length > 0))
   switch (r.action) {
     case 'keep':
-      for (let i = 0; i < c.runs.length; i++) appendTextFast(L, b.line, c.runs[i]!.item as WebKitTextItem, c.runs[i]!.contentWidth)
+      for (let i = 0; i < c.runs.length; i++) appendTextFast(L, b.line, c.runs[i]!.item, c.runs[i]!.contentWidth)
       if (hasContent(b.line)) b.wrapOpportunityList.push(c.runs[c.runs.length - 1]!.item)
       return simpleResult(r.isEndOfLine, c.runs.length)
     case 'wrap':
@@ -1012,10 +1026,10 @@ function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
       return simpleResult(true)
     case 'break': {
       const t = r.partialTrailingContent
-      for (let i = 0; i < t.trailingRunIndex; i++) appendTextFast(L, b.line, c.runs[i]!.item as WebKitTextItem, c.runs[i]!.contentWidth)
+      for (let i = 0; i < t.trailingRunIndex; i++) appendTextFast(L, b.line, c.runs[i]!.item, c.runs[i]!.contentWidth)
       const committed = t.trailingRunIndex + 1
       const trailing = c.runs[t.trailingRunIndex]!
-      const item = trailing.item as WebKitTextItem
+      const item = trailing.item
       if (t.partialRun === null) {
         appendTextFast(L, b.line, item, trailing.contentWidth)
         return simpleResult(true, committed)
@@ -1043,7 +1057,7 @@ function simpleCommitCandidateContent(b: Builder, start: number, end: number, lo
     if (hasContent(b.line)) b.wrapOpportunityList.push(items[end - 1] as WebKitTextItem)
     return simpleResult(false, end - start)
   }
-  const c = newContent()
+  const c = newContent<WebKitTextItem>()
   let index = start
   if (hasLeadingPartialContent) {
     appendTextContent(L, c, b.partialLeadingTextItem!, measuredItemWidth(L, b.partialLeadingTextItem!, lastRunLogicalRight(b.line)))
@@ -1069,6 +1083,7 @@ function consumeTrailingLineBreak(b: Builder, r: SimpleResult, index: number): b
 function placedInlineItemEnd(b: Builder, placedCount: number, overflowingContentLength: number): Position {
   if (!overflowingContentLength) return { index: b.rangeStart + placedCount, offset: 0 }
   const index = b.rangeStart + placedCount - 1
+  // Only a text item is split, so a line that ends inside an item ends inside text.
   const item = b.L.p.items[index] as WebKitTextItem
   return { index, offset: item.end - item.start - overflowingContentLength }
 }
@@ -1094,12 +1109,12 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
   const isAtSoftWrapOpportunityOrContentEnd = (item: WebKitTextItem): boolean => {
     if (item.isWhitespace) return true
     const next = items[nextIndex]
-    if (nextIndex >= b.rangeEnd || next === undefined || isLineBreakItem(next)) return true
-    const nextText = next as WebKitTextItem
-    if (nextText.isWhitespace) return hasWrapOpportunityBeforeWhitespace
-    if (item.box === nextText.box) return true
+    // The next item is a line break where it isn't text, as in the loop below.
+    if (nextIndex >= b.rangeEnd || next === undefined || next.kind !== 'text') return true
+    if (next.isWhitespace) return hasWrapOpportunityBeforeWhitespace
+    if (item.box === next.box) return true
     const prevBox = L.p.boxes[item.box]!
-    const nextBox = L.p.boxes[nextText.box]!
+    const nextBox = L.p.boxes[next.box]!
     return breakInBetween(L, prevBox, nextBox)
   }
   const process = (): boolean => {
@@ -1140,7 +1155,8 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
   const items = L.p.items
   let candidateEnd = b.rangeStart
   let candidateWidth = 0
-  let trailingLineBreakIndex: number | null = null
+  // The line break that ends the content, which is the item before nextIndex.
+  let trailingLineBreak: LineBreakItem | null = null
   let nextIndex = b.rangeStart
   let isEndOfLine = false
   while (!isEndOfLine) {
@@ -1148,16 +1164,17 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
     if (item.kind === 'text') {
       candidateWidth = f32(candidateWidth + measuredItemWidth(L, item, candidateWidth))
       candidateEnd++
-    } else {
-      trailingLineBreakIndex = nextIndex
+    } else if (isLineBreakItem(item)) {
+      // The source tests for the line break too, and its other branch is ASSERT_NOT_REACHED (TOS:283-288).
+      trailingLineBreak = item
     }
     nextIndex++
     b.measuredEnd = Math.max(b.measuredEnd, nextIndex)
-    isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreakIndex !== null
+    isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreak !== null
   }
-  if (trailingLineBreakIndex !== null && candidateEnd === b.rangeStart) {
-    appendLineBreak(b.line, items[trailingLineBreakIndex] as LineBreakItem)
-    const end = { index: trailingLineBreakIndex + 1, offset: 0 }
+  if (trailingLineBreak !== null && candidateEnd === b.rangeStart) {
+    appendLineBreak(b.line, trailingLineBreak)
+    const end = { index: nextIndex, offset: 0 }
     return { end, overflowLogicalWidth: null }
   }
   const r = simpleCommitCandidateContent(b, b.rangeStart, candidateEnd, candidateWidth)
@@ -1235,7 +1252,9 @@ function isAtSoftWrapOpportunity(L: Layout, previous: WebKitTextItem | AtomicIte
 // InlineFormattingUtils::nextWrapOpportunity (IFU:456-544)
 function nextWrapOpportunity(b: Builder, startIndex: number): number {
   const items = b.L.p.items
-  let previousIndex: number | null = null
+  // The text or atomic item before, and where it sits.
+  let previous: WebKitTextItem | AtomicItem | null = null
+  let previousIndex = startIndex
   for (let index = startIndex; index < b.rangeEnd; index++) {
     const item = items[index]!
     if (isLineBreakItem(item) || item.kind === 'word-break-opportunity') {
@@ -1243,11 +1262,11 @@ function nextWrapOpportunity(b: Builder, startIndex: number): number {
       return index
     }
     if (item.kind === 'inline-box-start' || item.kind === 'inline-box-end') continue
-    if (previousIndex === null) {
+    if (previous === null) {
+      previous = item
       previousIndex = index
       continue
     }
-    const previous = items[previousIndex] as WebKitTextItem | AtomicItem
     if (isAtSoftWrapOpportunity(b.L, previous, item)) {
       if (previousIndex + 1 === index && (previous.kind !== 'text' || item.kind !== 'text')) return index
       // The opportunity sits at the first inline box start that is still open at `index` (:523-541).
@@ -1259,6 +1278,7 @@ function nextWrapOpportunity(b: Builder, startIndex: number): number {
       }
       return stack.length === 0 ? index : stack[0]!
     }
+    previous = item
     previousIndex = index
   }
   return b.rangeEnd
@@ -1313,15 +1333,17 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
     right = f32(right + w)
     index++
   }
-  let trailingSoftHyphenIndex: number | null = null
+  // The item that ends the content so far, where it is text with a trailing soft hyphen.
+  let trailingSoftHyphen: WebKitTextItem | null = null
   for (; index < endIndex; index++) {
     const item = items[index]!
+    trailingSoftHyphen = null
     switch (item.kind) {
       case 'text': {
         const w = measuredItemWidth(L, item, f32(L.contentEdgeOffset + right))
         appendTextContent(L, candidate.content, item, w)
         right = f32(right + f32(w + (item.isWordSeparator ? L.p.boxes[item.box]!.style.wordSpacing : 0)))
-        trailingSoftHyphenIndex = item.hasTrailingSoftHyphen ? index : null
+        if (item.hasTrailingSoftHyphen) trailingSoftHyphen = item
         break
       }
       case 'inline-box-start':
@@ -1341,15 +1363,10 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
         break
     }
   }
-  // setTrailingSoftHyphenWidth (:1154-1165): the hyphen counts in the fit test when only text follows the soft hyphen.
-  if (trailingSoftHyphenIndex !== null) {
-    let onlyText = true
-    for (let k = trailingSoftHyphenIndex; k < endIndex; k++) if (items[k]!.kind !== 'text') onlyText = false
-    if (onlyText) {
-      const shy = items[trailingSoftHyphenIndex] as WebKitTextItem
-      candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, shy.box))
-    }
-  }
+  // setTrailingSoftHyphenWidth (:1154-1165): the hyphen counts in the fit test when only text follows the soft hyphen. The
+  // source keeps the index of the last text item where that has a soft hyphen, and looks for another kind of item from there
+  // to the end; no text follows the last text item, so only text follows exactly where that item ends the content.
+  if (trailingSoftHyphen !== null) candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, trailingSoftHyphen.box))
   candidate.hasTrailingSoftWrapOpportunity = hasTrailingSoftWrapOpportunity(b, endIndex)
   applyShapingIfNeeded(L, candidate.content)
   return candidate
@@ -1360,13 +1377,21 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
 function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   const p = L.p
   const runs = c.runs
-  type Entry = { type: 'content' | 'break' | 'keep'; index: number }
+  // A content entry is a run of text that isn't white space, with its item.
+  type ContentEntry = { type: 'content'; index: number; item: WebKitTextItem }
+  type Entry = ContentEntry | { type: 'break' | 'keep'; index: number }
   const contentList: Entry[] = []
   for (let index = 0; index < runs.length; index++) {
     const item = runs[index]!.item
-    let type: Entry['type']
+    let type: 'break' | 'keep'
     switch (item.kind) {
-      case 'text': type = item.isWhitespace ? 'break' : 'content'; break
+      case 'text':
+        if (!item.isWhitespace) {
+          contentList.push({ type: 'content', index, item })
+          continue
+        }
+        type = 'break'
+        break
       case 'atomic': type = 'break'; break
       case 'inline-box-start':
       case 'inline-box-end': {
@@ -1377,7 +1402,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         break
       }
     }
-    if (type !== 'content' && (contentList.length === 0 || contentList[contentList.length - 1]!.type === type)) continue
+    if (contentList.length === 0 || contentList[contentList.length - 1]!.type === type) continue
     contentList.push({ type, index })
   }
   while (contentList.length > 0 && contentList[contentList.length - 1]!.type !== 'content') contentList.pop()
@@ -1385,12 +1410,12 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   // lastFontCascade (ILB:862): the root style's until a content run gives its own, and nothing compares it before one does.
   let lastFontBox: WebKitBox | null = null
-  let leading: number | null = null
+  let leading: ContentEntry | null = null
   let trailing: number | null = null
   let hasBoundaryBetween = false
   const reset = () => { leading = null; trailing = null; hasBoundaryBetween = false }
   const commit = () => {
-    if (leading !== null && trailing !== null && hasBoundaryBetween) ranges.push([leading, trailing])
+    if (leading !== null && trailing !== null && hasBoundaryBetween) ranges.push([leading.index, trailing])
     reset()
   }
   for (let k = 0; k < contentList.length; k++) {
@@ -1402,17 +1427,17 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         if (leading !== null) hasBoundaryBetween = true
         break
       case 'content': {
-        const item = runs[entry.index]!.item as WebKitTextItem
+        const item = entry.item
         const box = p.boxes[item.box]!
         const isEligibleText = !box.simpleFontCodePath && item.level % 2 === 1 && item.level <= 125
         if (leading === null) {
-          if (isEligibleText) leading = entry.index
+          if (isEligibleText) leading = entry
           lastFontBox = box
         } else if (hasBoundaryBetween) {
           // FontCascade equality: the box's Canvas settings (font, letter spacing), which one context stands for, and word
           // spacing and locale.
           const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.style.wordSpacing === lastFontBox.style.wordSpacing
-          if (isEligibleText && sameFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index
+          if (isEligibleText && sameFont && p.boxes[leading.item.box]!.locale === box.locale) trailing = entry.index
           else reset()
         } else if (!isEligibleText) {
           reset()
@@ -1449,15 +1474,16 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   if (first >= second || second >= runs.length) return
   runs[first]!.shapingBoundary = 'start'
   runs[second]!.shapingBoundary = 'end'
-  const firstBox = L.p.boxes[(runs[first]!.item as WebKitTextItem).box]!
+  // The range's runs of text, the first of which is runs[first], and the text of each.
+  const textRuns: TextContentRun[] = []
   const texts: string[] = []
-  const indices: number[] = []
   for (let index = first; index <= second; index++) {
-    const item = runs[index]!.item
-    if (item.kind !== 'text') continue
-    texts.push(L.p.boxes[item.box]!.text.slice(item.start, item.end))
-    indices.push(index)
+    const run = runs[index]!
+    if (!isTextRun(run)) continue
+    textRuns.push(run)
+    texts.push(L.p.boxes[run.item.box]!.text.slice(run.item.start, run.item.end))
   }
+  const firstBox = L.p.boxes[textRuns[0]!.item.box]!
   let suffix = ''
   let following = 0
   let followingJoins = false
@@ -1474,16 +1500,16 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
       const additions = 2 * (text.length + suffix.length) + 5
       if (Math.abs(alone - share) <= additions * 2 ** (Math.floor(Math.log2(total)) - 24)) share = alone
     }
-    runs[indices[k]!]!.contentWidth = Math.max(0, share)
+    textRuns[k]!.contentWidth = Math.max(0, share)
     suffix = text + suffix
     following = total
     followingJoins = joins
   }
   let shapedContentWidth = 0
-  for (let k = 0; k < indices.length; k++) shapedContentWidth = f32(shapedContentWidth + runs[indices[k]!]!.contentWidth)
+  for (let k = 0; k < textRuns.length; k++) shapedContentWidth = f32(shapedContentWidth + textRuns[k]!.contentWidth)
   c.logicalWidth = shapedContentWidth
   c.hasShapedContent = true
-  shapedAcrossInlineBoxes(L.gaps, L.p, runs[indices[0]!]!.item as WebKitTextItem, runs[indices[indices.length - 1]!]!.item as WebKitTextItem)
+  shapedAcrossInlineBoxes(L.gaps, L.p, textRuns[0]!.item, textRuns[textRuns.length - 1]!.item)
 }
 
 // LineBuilder::applyShapingIfNeeded (ILB:969-979); TextShapingAcrossInlineBoxes is on by default
@@ -1503,20 +1529,21 @@ function shapePartialLineCandidate(L: Layout, c: Content, trailingRunIndex: numb
     const boundary = runs[index]!.shapingBoundary
     if (boundary === null) continue
     if (boundary === 'start') return
+    // The last run of text kept, then the range's start before it. A shaping boundary sits on a run of text
+    // (applyShapingOnRunRange), so the other runs are passed over.
     let endPosition: number | null = null
     for (let i = trailingRunIndex + 1; i-- > 0;) {
       const run = runs[i]!
-      if (endPosition === null && run.item.kind === 'text') endPosition = i
-      if (run.shapingBoundary === 'start') {
-        if (endPosition === null) return
-        if (endPosition === i) {
-          run.shapingBoundary = null
-          if (i < trailingRunIndex) run.contentWidth = measuredItemWidth(L, run.item as WebKitTextItem, 0)
-          return
-        }
-        applyShapingOnRunRange(L, c, [i, endPosition])
+      if (!isTextRun(run)) continue
+      endPosition ??= i
+      if (run.shapingBoundary !== 'start') continue
+      if (endPosition === i) {
+        run.shapingBoundary = null
+        if (i < trailingRunIndex) run.contentWidth = measuredItemWidth(L, run.item, 0)
         return
       }
+      applyShapingOnRunRange(L, c, [i, endPosition])
+      return
     }
     return
   }
@@ -1554,13 +1581,12 @@ function commitCandidateContent(b: Builder, content: Content, partial: PartialTr
   const endOfNonPartialContent = partial !== null ? Math.min(partial.trailingRunIndex, runs.length) : runs.length
   for (let i = 0; i < endOfNonPartialContent; i++) appendRun(runs[i]!, i)
   if (partial === null) return
-  const trailing = runs[partial.trailingRunIndex]!
   if (partial.partialRun !== null) {
-    const item = trailing.item as WebKitTextItem
+    const item = partial.partialRun.item
     appendText(L, b.line, leftPart(item, partial.partialRun.length), partial.partialRun.logicalWidth, shapingBoundaryStart !== null ? 'end' : null)
     if (item.level !== DEFAULT_BIDI_LEVEL) b.line.hasNonDefaultBidiLevelRun = true
   } else {
-    appendRun(trailing, partial.trailingRunIndex)
+    appendRun(runs[partial.trailingRunIndex]!, partial.trailingRunIndex)
   }
 }
 
@@ -1641,7 +1667,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
       commitCandidateContent(b, candidate.content, t)
       const committed = t.trailingRunIndex + 1
       if (t.partialRun === null) return lineBuilderResult(true, committed)
-      const item = runs[t.trailingRunIndex]!.item as WebKitTextItem
+      const item = t.partialRun.item
       b.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, committed, false, item.end - item.start - t.partialRun.length, overflowWidthAsLeadingForNextLine(runs, r))
     }
@@ -1732,6 +1758,7 @@ function placeInlineAndFloatContent(b: Builder, start: Position): { end: Positio
     end = { index: b.rangeStart + placed, offset: 0 }
   } else {
     const index = b.rangeStart + placed - 1
+    // Only a text item is split, so a line that ends inside an item ends inside text.
     const item = L.p.items[index] as WebKitTextItem
     end = { index, offset: item.end - item.start - partialTrailingContentLength }
   }
@@ -1866,7 +1893,8 @@ export function textIndent(p: WebKitPrepared, start: WebKitLineStart): number {
 type Placed = { line: Line; end: Position; overflowLogicalWidth: number | null; carriedFromShaping: boolean; isLastLineOrLineEndsWithForcedLineBreak: boolean; measuredEnd: number }
 
 // The rest of the item the line before split. InlineTextItem::right (InlineTextItem.cpp:65-71) keeps the carried width as the
-// stored width.
+// stored width. Only a text item is split, so a start with an offset stands inside text, which a line start, an index and
+// an offset as the lab's rows keep them (geometry.ts), doesn't say.
 function partialLeadingTextItem(p: WebKitPrepared, start: WebKitLineStart): WebKitTextItem | null {
   if (start.previousLine === null || start.offset === 0) return null
   const item = p.items[start.itemIndex] as WebKitTextItem
@@ -1874,7 +1902,8 @@ function partialLeadingTextItem(p: WebKitPrepared, start: WebKitLineStart): WebK
 }
 
 // hasInlineBoxesOnly (RangeBasedLineBuilder.cpp:51-78): one line of the inline box runs, no content, eligible spans have no
-// decoration.
+// decoration. Every item is an inline box start or end, which is known of the paragraph's builder and not of its item list
+// (content.ts rangeInlineLayout).
 function placeInlineBoxesOnly(p: WebKitPrepared, start: WebKitLineStart): Placed {
   const line = newLine([])
   for (let i = 0; i < p.items.length; i++) line.runs.push(elementRun(p.items[i] as InlineBoxItem, 0, 0))
@@ -1900,7 +1929,8 @@ function placeWithSimpleBuilder(L: Layout, start: WebKitLineStart, rangeBased: b
   if (rangeBased) {
     // insertLeadingInlineBoxRun and appendTrailingInlineBoxRunIfNeeded (RangeBasedLineBuilder.cpp:106-126): the span's
     // start run on the first formatted line, a spanning start on later ones, and its end run at the content width on
-    // the line that places the last content.
+    // the line that places the last content. The first and the last item are the span's start and end, which is known
+    // of the paragraph's builder and not of its item list (content.ts rangeInlineLayout).
     const leading = items[0] as InlineBoxItem
     b.line.runs.unshift(start.isFirstFormattedLine ? elementRun(leading, 0, 0) : { kind: 'spanning-inline-box-start', element: leading.element, left: 0, width: 0, level: OPAQUE_BIDI_LEVEL })
     if (reachesRangeEnd) b.line.runs.push(elementRun(items[items.length - 1] as InlineBoxItem, b.line.contentLogicalWidth, 0))

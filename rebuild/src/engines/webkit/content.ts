@@ -324,10 +324,12 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
 function rangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): 'inline-boxes-only' | 'range-based' | null {
   const items = p.items
   if (items.length === 0) return null
-  const isEmptyContent = items.length % 2 === 0 && inlineBoxes === items.length / 2
   const first = items[0]!
   const last = items[items.length - 1]!
-  const isFullyNestedContent = inlineBoxes === 1 && first.kind === 'inline-box-start' && last.kind === 'inline-box-end' && items.length > 2
+  // Content of either kind starts with an inline box start: inline boxes alone do, as the tree is walked.
+  if (first.kind !== 'inline-box-start') return null
+  const isEmptyContent = items.length % 2 === 0 && inlineBoxes === items.length / 2
+  const isFullyNestedContent = inlineBoxes === 1 && last.kind === 'inline-box-end' && items.length > 2
   if (!isEmptyContent && !isFullyNestedContent) return null
   // hasDecorationOrBreak (:147-160): the leading inline box starts' margin, border and padding.
   for (let i = 0; i < items.length; i++) {
@@ -340,7 +342,7 @@ function rangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBr
   }
   if (isEmptyContent) return 'inline-boxes-only'
   if (!textAndLineBreakOnly || reordering) return null
-  const span = p.elements[(first as { element: number }).element]!
+  const span = p.elements[first.element]!
   if (span.kind !== 'span') return null
   if (span.style.textAlign !== p.style.textAlign) return null
   return isEligibleForSimplifiedInlineLayoutByStyle(p.style) && isEligibleForSimplifiedInlineLayoutByStyle(span.style) ? 'range-based' : null

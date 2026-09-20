@@ -276,7 +276,7 @@ describe.skipIf(!existsSync(resolve(WORK, 'webkit-answers.jsonl')))('groundwork 
         excluded++
         return
       }
-      const p = prepareWebKit(paragraph(parts.map(part => [part, 'text'] as [string, FlatNode]), {
+      const p = prepareWebKit(paragraph(parts.map((part): [string, FlatNode] => [part, 'text']), {
         whiteSpace: request.whiteSpace, wordBreak: request.wordBreak, direction: request.direction, lang: request.lang ?? 'en',
       }), env, true)
       const actual = opportunities(p)

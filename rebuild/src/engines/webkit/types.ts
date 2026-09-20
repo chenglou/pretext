@@ -262,9 +262,9 @@ export type Line = {
   runs: LineRun[]
   contentLogicalWidth: number
   // TrimmableTrailingContent with fully trimmable content (InlineLine.h:264-286): the first trimmable run, the offset of the
-  // trimmable content from it, and the trimmable width. Partially trimmable content comes from text-spacing trim, which the
-  // model doesn't have.
-  trimmable: { runIndex: number; offset: number; width: number } | null
+  // trimmable content from it, and the trimmable width. The run is one of `runs`, a run of text, where the source keeps its
+  // index. Partially trimmable content comes from text-spacing trim, which the model doesn't have.
+  trimmable: { run: TextRun; offset: number; width: number } | null
   // The unit TrimmableTrailingContent::remove took out of its run (IL:963-987): still in the box's content, in no run.
   trimmedUnit: { box: number; offset: number; level: number } | null
   // HangingContent's trailing white space (IsConditional::WhenFollowedByForcedLineBreak).

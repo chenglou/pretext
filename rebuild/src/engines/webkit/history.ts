@@ -195,41 +195,45 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
     }
     if (item.isWhitespace && preserve && structure !== null) {
       // The run of this box's adjacent white-space items of one level: the cached structure, then the own bidi splits.
-      let last = i
-      while (last + 1 < p.items.length) {
-        const following = p.items[last + 1]!
-        if (following.kind !== 'text' || following.box !== boxIndex || !following.isWhitespace || following.level !== item.level || following.start !== (p.items[last] as WebKitTextItem).end) break
-        last++
+      // `ownRun` is the run's own items, from p.items[i] on, and `worldRun` the world's.
+      const ownRun: WebKitTextItem[] = [item]
+      let runEnd = item.end
+      while (i + ownRun.length < p.items.length) {
+        const following = p.items[i + ownRun.length]!
+        if (following.kind !== 'text' || following.box !== boxIndex || !following.isWhitespace || following.level !== item.level || following.start !== runEnd) break
+        ownRun.push(following)
+        runEnd = following.end
       }
-      const runEnd = (p.items[last] as WebKitTextItem).end
       const ends = whitespaceEnds(text, item.start, runEnd, structure, preservesNewline(box.style))
       for (let k = 0; k < extra.length; k++) if (extra[k]! > item.start && extra[k]! < runEnd && !ends.includes(extra[k]!)) ends.push(extra[k]!)
       ends.sort((a, b) => a - b)
       const first = items.length
+      const worldRun: WebKitTextItem[] = []
       let from = item.start
       for (let k = 0; k < ends.length; k++) {
         const to = ends[k]!
         const isWordSeparator = text.charCodeAt(from) !== 0x09
-        items.push({ ...item, start: from, end: to, isWordSeparator, width: width(item, from, to) })
-        boxItems++
+        worldRun.push({ ...item, start: from, end: to, isWordSeparator, width: width(item, from, to) })
         from = to
       }
-      let ownMatches = ends.length === last - i + 1
-      for (let own = i, k = first; own <= last; own++) {
-        const ownItem = p.items[own] as WebKitTextItem
-        while (k + 1 < items.length && (items[k + 1] as WebKitTextItem).start <= ownItem.start) k++
-        const worldItem = items[k] as WebKitTextItem
+      let ownMatches = worldRun.length === ownRun.length
+      for (let own = 0, k = 0; own < ownRun.length; own++) {
+        const ownItem = ownRun[own]!
+        while (k + 1 < worldRun.length && worldRun[k + 1]!.start <= ownItem.start) k++
+        const worldItem = worldRun[k]!
         if (worldItem.start !== ownItem.start || worldItem.end !== ownItem.end || worldItem.isWordSeparator !== ownItem.isWordSeparator) ownMatches = false
-        if (own > i) {
-          itemIndex.push(k)
+        if (own > 0) {
+          itemIndex.push(first + k)
           changed.push(false)
         }
       }
+      for (let k = 0; k < worldRun.length; k++) items.push(worldRun[k]!)
+      boxItems += worldRun.length
       if (!ownMatches) {
         differs = true
-        for (let own = i; own <= last; own++) changed[own] = true
+        for (let own = 0; own < ownRun.length; own++) changed[i + own] = true
       }
-      i = last
+      i += ownRun.length - 1
       continue
     }
     const ends: number[] = []
@@ -365,6 +369,7 @@ function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: Web
   if (own.kind !== 'text') return { ...start, itemIndex: index }
   const position = own.start + start.offset
   const items = world.prepared.items
+  // A world maps a text item to the text item that holds its start (historyWorld), which a list of indices doesn't say.
   let first = items[index] as WebKitTextItem
   if (first.start > own.start) return null
   while (first.end <= position) {
