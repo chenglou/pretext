@@ -1516,6 +1516,28 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
 
+Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `passesSafeTest`, `measureGroups`;
+`gaps.ts` `unsafeCut`; profiling item 6). A Canvas total is an exact 16.16 value only below 256 zoomed px, so a wider
+group is measured in pieces, and the pieces add up to the group only where the two sides of a cut change nothing in
+each other. So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
+both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
+cut, and the pair window over one cluster on each side. The cut is the offset nearest the middle beside a space that
+passes, else the nearest other offset that passes, else the nearest grapheme boundary, reported as `unsafe-to-break`
+(§5). The search tries the offsets beside a space first, from the middle outward, and the others only once all of those
+failed. An offset beside a space that passes wins over every other offset, so this finds the cut that trying every
+offset in one turn finds, as the search did until 2026-09-20, and it asks about no offset that can't win: in ordinary
+text the middle falls inside a word, and the test of that offset was one test of two a cut. What a position takes at a
+cut (`positionAdjust16`) is the 0 the search measured, where it measured it: the pair window's at a cut that passed,
+and before white space the wide window's where both sides of the cut are one piece, since the window `adjust16` takes
+between the cuts around an offset is then the search's own. Elsewhere it is asked once the cuts are known. Unit: per
+cut, the wide window's strings (its total after each shrink, and its two sides) and the pair window's 3. The test stays
+because two forms that asked less moved lines (research/PROFILING-START.md, item 6). A cut picked without asking
+Canvas, with the pair window's adjustment added there, moved lines in 1,158 of 22,536 cases built to sit at a cut, in
+Futura, Baskerville, Zapfino and Apple Chancery: between `ff` and `i` the pair window, measured alone, shows an `fi`
+ligature that the group never forms. The wide window's adjustment added there instead still moved 37 lines that the
+search gets right, all Zapfino at 40px, whose forms reach past a window of 256 zoomed px. The test keeps a cut off such
+offsets, and no set of the tiers held one such text before the set `wide-group-cuts` (lab README, "Test tiers").
+
 **Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
 
 Gecko, windows inside a long shaping unit (`advance.ts` `windowAt`, `windowsOf`). Every in-word recipe measures to its
@@ -2018,6 +2040,17 @@ round.
   No bench job was run: 0 of 49,275 strings of the bench's chat sets hold such a cluster.
 - Distinct questions and the ratios above aren't counted again yet. The offline counts cover only the cases that
   replay, until the references are recorded again.
+
+**Since the cut search tries the offsets beside a space first** (2026-09-20, profiling item 6; §4.4). Counted in pinned
+Chrome with the bench's chat smoke (200 messages, no timing), a message from scratch asks 243.8 `measureText` calls
+where it asked 302.1 on the mix, and 239.0 where it asked 306.7 on plain ASCII, at a device pixel ratio of 2; at a ratio
+of 1, 182.9 for 209.5 and 177.2 for 208.3; at 3, 295.6 for 386.8 and 288.6 for 391.0. All of it is in the engine's
+prepare (152.7 to 94.3 on the mix at a ratio of 2); a layout at another width asks what it asked, and the lines are the
+same in every run. On the tier cases the plain path asks 213.43 questions a paragraph where it asked 234.31 (the
+function set's plain check under the replay, 67,065 cases), and every question it asks is one the old search asked: tier
+1 replays every case, with 0 questions the record lacks. A form that asked nothing for a cut came to 199.3 and 193.6
+calls a message and 194.39 questions a paragraph, and moved lines (§4.4): what is left of the difference is the safe
+test of the offset that wins, which is what keeps the cut off an offset where shaping crosses it.
 
 **What it costs in time.** In the lab, little in Chrome, because Chrome's per-canvas cache answers a repeat: when the
 memo went the giants' prediction took 55.3 s against 49.5 s, and tier 2 forward 82.8 s against 79.3 s, back to back on a

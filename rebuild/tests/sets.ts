@@ -55,6 +55,10 @@ export const SETS: readonly TestSet[] = [
   // One run of 13 or more brackets after Latin and after Arabic in one Amiri style (lab/cases/twins.ts): the only set where
   // the Blink port asks the same characters as a one-byte and as a two-byte string in one paragraph (tools/twin-scan.ts).
   one('twins', 'development', `${A}/lab/cases/twins.ndjson`, ['chrome']),
+  // Lines that end within half a px of the browser's fit in texts whose cuts of a shaping group of 256 zoomed px or more
+  // fall where shaping crosses them (lab/cases/wide-group-cuts.ts): one case of each of its 2,159 variants. The only set
+  // that holds ligatures, contextual forms and kerning at such a cut; Blink's port alone cuts a group.
+  one('wide-group-cuts', 'development', `${A}/lab/cases/wide-group-cuts.ndjson`, ['chrome']),
   { name: 'suite-sample', group: 'development', parts: [0, 1, 2, 3].map(k => `${A}/lab/final-20260916/cases/suite-sample-part${k}.ndjson`), runArgs: [], browsers: ALL },
   one('families', 'families', `${DERIVED}/{browser}/families/final/family-cases.ndjson`),
   one('features', 'families', `${DERIVED}/{browser}/features/final/family-cases.ndjson`),
