@@ -213,7 +213,7 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
-export type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
+export type CanvasString = { s: string; units: number[]; twoByte: boolean; leftOut: boolean }
 
 export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false): CanvasString {
   let codes: number[] = []
@@ -257,8 +257,8 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
   const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: Int32Array.from([-1, ...units]), twoByte, leftOut }
-  return { s: forced ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte, leftOut }
+  if (prefixed) return { s: '\u2060' + s, units: [-1, ...units], twoByte, leftOut }
+  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte, leftOut }
 }
 
 // IsWordDelimiter<true> over the string as NormalizeSpacesAndMaybeBidi leaves it (plain_text_node.cc:26-91): U+0020, TAB and
