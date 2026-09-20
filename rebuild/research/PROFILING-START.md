@@ -258,9 +258,13 @@ three alternating pairs inside one exclusive stretch of 5 minutes, the 1-minute 
 | Latin with a URL | 145 | 137 |
 | Latin with an emoji, with curly quotes, with a code span, app text | 88, 77, 104, 109 | 87, 76, 104, 108 |
 
-One Chinese unit of 9,428 units, its first layout at 320 px, timed once in each tree on a loaded machine (1-minute load
-about 50; `counts-before-1`, `counts-after-1`): 12.0 s before, 0.16 s after, 475 lines both. At 3,000 units 1.19 s and
-0.04 s, at 1,000 units 0.14 s and 0.03 s: the cost grows with the length now, not with its square.
+One Chinese unit of 9,428 units, its first layout at 320 px, timed once in each tree in two sittings, both on a loaded
+machine (1-minute load about 50; `counts-before-1` and `counts-after-1`, `counts-timed-base` and `counts-timed-head`):
+12.0 s and 10.4 s before, 0.16 s and 0.11 s after, 475 lines both. At 3,000 units 1.19 and 1.09 s before, 0.04 s
+after; at 1,000 units 0.14 and 0.12 s before, 0.03 and 0.01 s after: the cost grows with the length now, not with its
+square. The nine giants' time can't move, since 8 of them ask the same calls: a timed stretch of two alternating pairs
+was spoiled by other owners' load rising from 3.6 to 51 during it (the rows' prediction time over the nine, in run
+order: base 8.27 s, branch 8.89 s, base 9.35 s, branch 10.94 s; `giants-timed-*`).
 
 Firefox's mix is at 1.04 s against the 2 s bar, 0.41 of what it was, and plain ASCII doesn't move. What is left of the
 mix by kind (time a message times messages, the instrumented pass): CJK 36% (it was 74%), plain Latin 31%, Latin with a
