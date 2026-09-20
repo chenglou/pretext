@@ -1519,25 +1519,25 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
 
-Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `measureGroups`; `gaps.ts`
-`cutAdjustment`; profiling item 6, research/RECIPE-COSTS.md B1b). A Canvas total is an exact 16.16 value only below 256
-zoomed px, so a wider group is measured in pieces. Its prefixes are the sums of the pieces' totals plus, at each cut,
-the adjustment a position takes there (`positionAdjust16`: the wide window's before white space, the pair window's
-elsewhere). The cut is found without asking Canvas: the offset nearest the middle beside a space where glyph clusters
-part and no letters join, else the nearest such offset, else the nearest grapheme boundary. Until 2026-09-19 the search
-asked: it took the wide window and the pair window at candidate after candidate until one beside a space showed no
-adjustment in either. That was 12.1% of Chrome's calls on the tier cases and a third of a chat message's at a device
-pixel ratio of 2, where 256 zoomed px is about 22 characters and nearly every message is cut, and it bought no line
-(§4.7). What the search settled is a condition now. The pieces and the adjustment added at a cut are the group's
-shaping only where that adjustment is all the shaping did across the cut, so an inspected paragraph asks the wide
-window over both pieces at every cut and reports `unsafe-to-break` at the cut where it shows another adjustment than
-the one added, or where clusters don't part or letters join (§5). Before white space the adjustment added is the wide
-window's own, so only a cut elsewhere can report. A plain paragraph asks nothing for it, and its lines are the inspected
-paragraph's, since both add the same adjustment. Only a line that holds a cut, or starts or ends at one, can be off by
-what the cut missed: every position after the cut in the group holds the same sum, so it cancels in a later line's
-width, and the gap's range is the cut's offset. Unit: per cut, the 3 strings of the pair window, or the wide window's 4
-or more before white space. Two things follow the cuts and so moved with them: the prefix of an offset is measured from
-the last cut before it, and the wide window of an offset ends at the cuts around it (`adjust16`).
+Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `measureGroups`; `gaps.ts` `cutAdjustment`;
+profiling item 6, research/RECIPE-COSTS.md B1b). A Canvas total is an exact 16.16 value only below 256 zoomed px, so a
+wider group is measured in pieces. Its prefixes are the sums of the pieces' totals plus, at each cut, the adjustment a
+position takes there (`positionAdjust16`: the wide window's before white space, the pair window's elsewhere). The cut is
+found without asking Canvas: the offset nearest the middle beside a space where glyph clusters part and no letters join,
+else the nearest such offset, else the nearest grapheme boundary. Until 2026-09-19 the search asked: it took the wide
+window and the pair window at candidate after candidate until one beside a space showed no adjustment in either. That
+was 17% of the plain path's questions on the tier cases and a third of a chat message's at a device pixel ratio of 2,
+where 256 zoomed px is about 22 characters and nearly every message is cut, and it bought no line (§4.7). What the
+search settled is a condition now. The pieces and the adjustment added at a cut are the group's shaping only where that
+adjustment is all the shaping did across the cut, so an inspected paragraph asks the wide window over both pieces at
+every cut and reports `unsafe-to-break` at the cut where it shows another adjustment than the one added, or where
+clusters don't part or letters join (§5). Before white space the adjustment added is the wide window's own, so where
+clusters part and nothing joins only a cut elsewhere can report. A plain paragraph asks nothing for it, and its lines
+are the inspected paragraph's, since both add the same adjustment. Only a line that holds a cut, or starts or ends at
+one, can be off by what the cut missed: every position after the cut in the group holds the same sum, so it cancels in a
+later line's width, and the gap's range is the cut's offset. Unit: per cut, the 3 strings of the pair window, or the
+wide window's 4 or more before white space. Two things follow the cuts and so moved with them: the prefix of an offset
+is measured from the last cut before it, and the wide window of an offset ends at the cuts around it (`adjust16`).
 
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
