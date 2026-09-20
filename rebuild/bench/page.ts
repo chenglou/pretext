@@ -890,7 +890,9 @@ function medianTotals(passes: readonly PhaseTotals[]): PhaseTotals {
 
 type KindTotals = ChatPhases['byKind'][number]
 
-// `keeping`: every pass starts one list of contexts for its messages (prepare() handed a page's); otherwise every message its own.
+// `keeping`: every pass starts one list of contexts for its messages and hands it to both halves, which is prepare() handed a
+// page's list in Blink and WebKit; in Firefox prepare() never shares (src/index.ts prepare), so there this table shows what a
+// shared list would cost, not what a page gets. Otherwise every message its own.
 function chatPhases(c: Context, chat: ChatPlan, setIndex: number, keeping: boolean): ChatPhases {
   const inputs = chatInputs(c, chat.sets[setIndex]!.id, chat.timed)
   const env = c.env
