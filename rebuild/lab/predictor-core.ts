@@ -102,7 +102,7 @@ function treeWithFacts(nodes: readonly CaseInlineNode[], engine: EngineName, fix
   return out
 }
 
-function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutParagraph {
+export function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutParagraph {
   const paragraph = c.paragraph
   const fixtures = c.fontFixtures ?? []
   const style = (font: CaseFont, letterSpacing: number, wordSpacing: number): TextStyle => ({
