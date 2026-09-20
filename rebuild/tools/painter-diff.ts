@@ -36,7 +36,7 @@ import { CONFIGS, PREDICTORS, TIER_BROWSERS, selectSets, type Config, type TierB
 import { RecordingDocument, UnmodelledDom, recordedPainting } from './recording-document.ts'
 
 const REPO = resolve(import.meta.dir, '../..')
-const FROZEN_DIR = join(REPO, '.artifacts/tests/painter-frozen')
+export const FROZEN_DIR = join(REPO, '.artifacts/tests/painter-frozen')
 const PIN_PATH = join(import.meta.dir, 'painter-frozen.json')
 type Pin = { format: 'pretext-painter-frozen/1'; commit: string; bun: string; bundles: Record<Config, { sha256: string; bytes: number }> }
 

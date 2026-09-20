@@ -483,15 +483,13 @@ average; the full run took 16 minutes with those two beside it and other owners'
 
 A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
 reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
-1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over every
-tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, so uncommitted edits count,
-and under `rebuild/` also what git ignores but for `.check`, which the gates write: tsc, the unit tests and the citation
-ledger read its folders whole, and the root `.gitignore` names `dist` and `site` wherever they are;
-the `package.json` of every installed package; the frozen references of the run's browsers as `check` reads them under
-`.artifacts/tests/reference` (the tracked pins in `rebuild/tests/reference` are copies that `check` never reads): every
-file by its bytes but the 725 MB of shards, whose hashes the manifests hold and tier 1 checks, by size and time; without
-`--quick` the painter's frozen bundles and, for Blink, Chrome's set files; the engines and `--quick`, bun's version and
-the OS release. `--cores` isn't in it: no report depends on it. A result is kept only when every gate has one, no
+1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over everything a
+gate reads, and `gates.ts` says what that is once, beside what reads it. `inputsKey` hashes what every gate reads (the
+working tree with its uncommitted edits, the installed packages, the flags that choose gates, bun's version and the OS
+release) and says what it leaves out and why (`--cores`: no report depends on it). What a gate reads of `.artifacts`
+(a frozen reference as `check` reads it, the painter's frozen bundles, Chrome's set files) is the gate's `reads` list,
+set where the gate is made (`gatesOf`), and the key walks those lists, so a new gate's input is in the key by being
+named there. A result is kept only when every gate has one, no
 gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
 run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
 not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which

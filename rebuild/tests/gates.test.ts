@@ -1,9 +1,12 @@
 // What gates.ts makes of each gate's exit code and report, its queue and the key of a kept result. These run no gate.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
+import { dirname, extname, join, relative } from 'node:path'
+import { FROZEN_DIR } from '../tools/painter-diff.ts'
+import { citationsVerdict, closingLine, functionSetVerdict, gatesOf, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
+import { referenceDir } from './replay.ts'
+import { CONFIGS, REPO, TIER_BROWSERS } from './sets.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -238,12 +241,13 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   const run = (...args: string[]): Run => runOf(['--engine=gecko', ...args]) as Run
   const keys = [inputsKey(repo, run('--quick'))]
   // Each change gives a key no earlier state had.
-  const changes = (change: () => void): void => {
+  const changesFor = (of: Run, change: () => void): void => {
     change()
-    const key = inputsKey(repo, run('--quick'))
+    const key = inputsKey(repo, of)
     expect(keys).not.toContain(key)
     keys.push(key)
   }
+  const changes = (change: () => void): void => changesFor(run('--quick'), change)
   expect(inputsKey(repo, run('--quick'))).toBe(keys[0]!)
   changes(() => write('rebuild/src/a.ts', 'export const a = 2\n'))
   changes(() => write('rebuild/src/untracked.ts', ''))
@@ -251,6 +255,9 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   changes(() => write('rebuild/src/dist/ignored.test.ts', ''))
   changes(() => unlinkSync(join(repo, 'rebuild/src/a.ts')))
   changes(() => write('package.json', '{}'))
+  changes(() => write('bun.lock', ''))
+  // A tracked pin of a frozen reference is a file of the tree.
+  changes(() => write('rebuild/tests/reference/firefox-facts.json', '{}'))
   changes(() => write('node_modules/typescript/package.json', '{"version":"6.0.3"}'))
   changes(() => write('.artifacts/tests/reference/firefox-no-facts/inputs/manifest.json', '{"sets":{ }}'))
   changes(() => write('.artifacts/tests/reference/firefox-facts/inputs/unfaithful.json', '{"cases":{"smoke/c-1":"x"}}'))
@@ -258,6 +265,7 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   // A shard goes in by name, size and time: the manifests hold its hash, and tier 1 checks it.
   changes(() => write(shard, 'shar'))
   changes(() => utimesSync(join(repo, shard), new Date(2026, 0, 1), new Date(2026, 0, 1)))
+  changes(() => renameSync(join(repo, shard), join(repo, shard.replace('part0-000', 'part0-001'))))
   const last = keys[keys.length - 1]!
   // What this run's gates don't read: an ignored file outside rebuild, what the gates write, another engine's reference,
   // the painter's frozen bundle with --quick.
@@ -281,7 +289,29 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   write('.artifacts/lab/cases/twins.ndjson', '{}\n')
   expect(blink()).not.toBe(before[0]!)
   expect([blink('--quick'), inputsKey(repo, run())]).toEqual([before[1]!, before[2]!])
+  // The key walks the gates' `reads`, so whatever a gate names there is in it: a new file in each folder named, and a
+  // byte more in each file, moves the key of a run with that gate.
+  const all = runOf([]) as Run
+  const named = [...new Set(gatesOf(all.engines, all.quick).flatMap(gate => gate.reads))]
+  expect(named.length).toBeGreaterThan(30)
+  for (let i = 0; i < named.length; i++) changesFor(all, () => write(extname(named[i]!) === '' ? `${named[i]!}/planted` : named[i]!, `planted ${i}\n`))
 }, 120000)
+
+test('the paths a gate\'s `reads` name are the tools\' own: replay.ts\'s reference folder and painter-diff.ts\'s frozen bundles, which gates.ts can\'t import (it must start on a tree whose library doesn\'t load)', () => {
+  const gates = gatesOf(['blink', 'webkit', 'gecko'], false)
+  const reads = (name: string): string[] => gates.find(gate => gate.name === name)!.reads
+  for (let b = 0; b < TIER_BROWSERS.length; b++) for (let c = 0; c < CONFIGS.length; c++) {
+    const pair = `${TIER_BROWSERS[b]!} ${CONFIGS[c]!}`
+    const reference = ['inputs', 'reference', 'ledger'].map(part => relative(REPO, join(referenceDir(TIER_BROWSERS[b]!, CONFIGS[c]!), part)))
+    expect(reads(`tier 1 ${pair}`)).toEqual(reference)
+    expect(reads(`plain ${pair}`)).toEqual(reference)
+    expect(reads(`pure ${pair}`)).toEqual(reference)
+    expect(reads(`sweep ${pair}`)).toEqual(reference)
+    expect(reads(`painter ${pair}`)).toEqual([...reference, relative(REPO, FROZEN_DIR)])
+  }
+  // Tier 0 and the citation ledger read the tree alone.
+  expect(gates.filter(gate => gate.reads.length === 0).map(gate => gate.name.split(' ')[0]!)).toEqual(['tsc', 'tsc', 'tsc', 'tsc', 'tsc', 'tsc', 'unit', 'citations'])
+})
 
 test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
   const row = (as: number, tier2: number): Row => ({ gate: 'a gate', exit: as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: 'a-gate.log' })

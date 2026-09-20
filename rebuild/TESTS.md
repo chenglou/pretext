@@ -36,10 +36,10 @@ waits, a killed run holds nobody up, a run whose turn came still waits while und
 and `--no-wait` skips both waits), and a run whose inputs equal an earlier finished
 run's prints that run's table and last line again as a reused result, with that run's time, worktree and commit, and
 exits with its code in under a second (`--fresh` runs anyway; a run that sends cases to tier 2 is never kept, since a
-reused result doesn't write the list tier 2 reads). The key covers every file of the working tree that git doesn't
-ignore and every file under `rebuild/` but `.check`, the installed packages, the frozen references as `check` reads
-them, the painter's frozen bundles, Chrome's set files, the flags that choose gates and bun's version; the lab README
-and the file's header have what it leaves out and why, and the measurements.
+reused result doesn't write the list tier 2 reads). The key is a hash over everything a gate reads, and `gates.ts`
+says what that is once, beside what reads it: what every gate reads (the working tree, the installed packages, the
+flags that choose gates) at `inputsKey`, with what it leaves out and why, and what a gate reads of `.artifacts` in the
+gate's `reads` list where the gate is made (`gatesOf`), which the key walks; the lab README has the measurements.
 
 **State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
 and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier

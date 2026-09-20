@@ -65,34 +65,11 @@
 // Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
 // result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
 // the orchestrator run the gates on one tree); --fresh runs anyway and replaces the result. A key that misses an input
-// would hide a failure, so the key (inputsKey) is a sha256 over everything a gate reads:
-// - every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
-//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
-//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
-//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
-//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
-//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
-//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself;
-// - what is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
-//   worktree installed it;
-// - the frozen references of the run's browsers, .artifacts/tests/reference/<browser>-<config>: every file under
-//   inputs/, reference/ and ledger/ by its bytes, but the shards (*.zst, 725 MB) by name, size and modification time.
-//   `check` reads that folder and never the tracked pins in rebuild/tests/reference (freeze copies
-//   reference/manifest.json there; the six are equal today), so the pins alone would not do. The manifests hold every
-//   shard's sha256 and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept),
-//   so a kept result's shards were the manifests', and a shard written since has another time.
-//   inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned by nothing. browser/ isn't read (check
-//   --against=reference);
-// - without --quick, the painter differential's frozen bundles (.artifacts/tests/painter-frozen; the tool checks them
-//   against rebuild/tools/painter-frozen.json on every run, exit 2 otherwise) and, for Blink, Chrome's set files, which
-//   the twin scan reads and nothing pins (the inputs' manifests hold the hashes they had when recorded);
-// - the engines and --quick, bun's version and revision, the OS release.
-// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
-// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
-// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
-// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
-// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
-// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
+// would hide a failure, so the key is a sha256 over everything a gate reads, and what that is is said once, beside
+// what reads it: every gate reads the working tree and what is installed, which inputsKey hashes and lists, with what
+// it leaves out and why (--cores, what git holds, what unit tests read outside the repository); and what a gate reads
+// of .artifacts (a frozen reference, the painter's frozen bundles, Chrome's set files) is the gate's `reads` list, set
+// where the gate is made (gatesOf), which the key walks. A new gate's input goes in its `reads`.
 // A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
 // the run's exit code), no case goes to tier 2 and the key is the same after the run as before it: a tree edited, or a
 // reference frozen again, under the run keeps nothing. A reused result is the table and gates.json, not the gates'
@@ -109,7 +86,7 @@
 import { closeSync, existsSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { cpus, release, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
-import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
+import { CONFIGS, REPO, SETS, partFiles, partPaths, type Config, type TierBrowser } from './sets.ts'
 
 const ENGINES = ['blink', 'webkit', 'gecko'] as const
 type EngineName = typeof ENGINES[number]
@@ -134,6 +111,10 @@ type Gate = {
   atMost?: number
   // The report the gate writes, or null when its log is all there is.
   report: string | null
+  // What the gate reads beside the working tree, which every gate reads: files and folders of .artifacts, as paths from
+  // the top of the working tree. The key of a kept result walks these lists (inputsKey), so a gate's input is in the key
+  // by being named here, where the gate is made (gatesOf).
+  reads: string[]
   read: (code: number, report: unknown, log: string) => Verdict | Tier1Verdict
 }
 // `tier2`: the cases the gate sends to tier 2, which only a tier 1 gate does.
@@ -385,17 +366,36 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
 
 // ---- A result a key ----
 
-// What `check` reads of a frozen reference's folder; browser/ is for `pack` and --against=browser.
-const REFERENCE_PARTS = ['inputs', 'reference', 'ledger']
-
-// The files under a folder, in order; none when it isn't there (a recording can leave no ledger).
-function filesUnder(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
+// The files under a folder, in order, or the file itself; none when it isn't there (a recording can leave no ledger).
+function filesUnder(path: string): string[] {
+  const entry = statSync(path, { throwIfNoEntry: false })
+  if (entry === undefined) return []
+  if (entry.isFile()) return [path]
+  return readdirSync(path, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
 }
 
-// One hash over everything a gate of this run reads (the file comment lists it, and what is left out and why). `repo` is
-// the working tree, with its .artifacts.
+// One hash over everything a gate of this run reads: a key that misses an input would hide a failure. `repo` is the
+// working tree, with its .artifacts.
+// - The engines and --quick, which choose the gates (gatesOf), bun's version and revision, the OS release.
+// - Every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
+//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
+//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
+//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
+//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
+//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
+//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself.
+// - What is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
+//   worktree installed it.
+// - What a gate reads of .artifacts: its `reads` list, which says why where the gate is made (gatesOf). Every file by
+//   its bytes, but a shard (*.zst, 725 MB) by name, size and modification time: the manifests hold every shard's sha256
+//   and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept), so a kept
+//   result's shards were the manifests', and a shard written since has another time.
+// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
+// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
+// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
+// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
+// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
+// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
 export function inputsKey(repo: string, run: Run): string {
   const hash = new Bun.CryptoHasher('sha256')
   const addFile = (path: string): void => {
@@ -422,22 +422,16 @@ export function inputsKey(repo: string, run: Run): string {
     const packages = name.startsWith('@') ? readdirSync(join(modules, name)).sort().map(inner => join(name, inner)) : [name]
     for (let k = 0; k < packages.length; k++) addFile(join(modules, packages[k]!, 'package.json'))
   }
-  for (let e = 0; e < run.engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) for (let p = 0; p < REFERENCE_PARTS.length; p++) {
-    const files = filesUnder(join(repo, `.artifacts/tests/reference/${BROWSER_OF[run.engines[e]!]}-${CONFIGS[c]!}`, REFERENCE_PARTS[p]!))
+  // Several gates read one frozen reference: once each.
+  const reads = [...new Set(gatesOf(run.engines, run.quick).flatMap(gate => gate.reads))].sort()
+  for (let r = 0; r < reads.length; r++) {
+    const files = filesUnder(join(repo, reads[r]!))
     for (let i = 0; i < files.length; i++) {
       if (!files[i]!.endsWith('.zst')) addFile(files[i]!)
       else {
         const shard = statSync(files[i]!)
         hash.update(`${relative(repo, files[i]!)}\0${shard.size} ${shard.mtimeMs}\0`)
       }
-    }
-  }
-  if (!run.quick) {
-    const frozen = filesUnder(join(repo, '.artifacts/tests/painter-frozen'))
-    for (let i = 0; i < frozen.length; i++) addFile(frozen[i]!)
-    if (run.engines.includes('blink')) {
-      const sets = SETS.filter(set => set.browsers.includes('chrome'))
-      for (let i = 0; i < sets.length; i++) for (let k = 0; k < sets[i]!.parts.length; k++) addFile(join(repo, sets[i]!.parts[k]!.replaceAll('{browser}', 'chrome')))
     }
   }
   return hash.digest('hex')
@@ -488,45 +482,59 @@ function unitTestFiles(leftOut: readonly EngineName[]): string[] {
   return out.sort()
 }
 
-function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
+export function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
   const gates: Gate[] = []
   for (let i = 0; i < TSC_PROJECTS.length; i++) {
     const project = TSC_PROJECTS[i]!
     gates.push({
-      name: `tsc ${project}`, sharded: false, report: null, read: (code, _report, log) => tscVerdict(code, log),
+      name: `tsc ${project}`, sharded: false, report: null, reads: [], read: (code, _report, log) => tscVerdict(code, log),
       parts: [['x', 'tsc', '--noEmit', '-p', `${project}/tsconfig.json`, '--incremental', '--tsBuildInfoFile', join(TSC_STATE, `${project.replaceAll('/', '_')}.tsbuildinfo`)]],
     })
   }
   // A process a test file: two files take most of the unit tests' time, and one process runs the files one after another.
   const leftOut = quick && engines.length === 1 ? ENGINES.filter(name => name !== engines[0]) : []
   const tests = unitTestFiles(leftOut)
-  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, parts: tests.map(file => ['test', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
+  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, reads: [], parts: tests.map(file => ['test', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
   if (!quick) {
     const citations = join(OUT, 'citations.json')
-    gates.push({ name: 'citations', sharded: false, report: citations, parts: [['rebuild/tools/citations.ts', 'check', `--out=${citations}`]], read: (code, report, log) => citationsVerdict(code, report as CitationsReport | null, log) })
+    gates.push({ name: 'citations', sharded: false, report: citations, reads: [], parts: [['rebuild/tools/citations.ts', 'check', `--out=${citations}`]], read: (code, report, log) => citationsVerdict(code, report as CitationsReport | null, log) })
     if (engines.includes('blink')) {
       const twins = join(OUT, 'twin-scan.json')
-      const cases = SETS.filter(set => set.browsers.includes('chrome')).flatMap(set => partFiles(set, 'chrome'))
+      // Chrome's set files, which nothing pins: the inputs' manifests hold the hashes they had when recorded.
+      const sets = SETS.filter(set => set.browsers.includes('chrome'))
       // A process a case file: 19 files, and the four largest hold half the cases.
-      gates.push({ name: 'twin scan', sharded: true, atMost: 4, report: twins, parts: [['rebuild/tools/twin-scan.ts', `--cases=${cases.join(',')}`, `--out=${twins}`]], read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log) })
+      gates.push({
+        name: 'twin scan', sharded: true, atMost: 4, report: twins, reads: sets.flatMap(set => partPaths(set, 'chrome')), parts: [['rebuild/tools/twin-scan.ts', `--cases=${sets.flatMap(set => partFiles(set, 'chrome')).join(',')}`, `--out=${twins}`]],
+        read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log),
+      })
     }
   }
-  const each = (add: (browser: TierBrowser, config: Config, check: string) => void): void => {
-    for (let e = 0; e < engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) add(BROWSER_OF[engines[e]!], CONFIGS[c]!, `rebuild/tests/.check/${BROWSER_OF[engines[e]!]}-${CONFIGS[c]!}`)
+  // A gate a browser and configuration replays that pair's frozen reference, replay.ts's referenceDir: what `check` reads
+  // of it is inputs/, reference/ and ledger/ (browser/ is for `pack` and --against=browser). `check` reads that folder
+  // and never the tracked pins in rebuild/tests/reference (freeze copies reference/manifest.json there; the six are
+  // equal today), so the pins alone would not do, and inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned
+  // by nothing.
+  const each = (add: (browser: TierBrowser, config: Config, check: string, reference: string[]) => void): void => {
+    for (let e = 0; e < engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) {
+      const pair = `${BROWSER_OF[engines[e]!]}-${CONFIGS[c]!}`
+      add(BROWSER_OF[engines[e]!], CONFIGS[c]!, `rebuild/tests/.check/${pair}`, ['inputs', 'reference', 'ledger'].map(part => `.artifacts/tests/reference/${pair}/${part}`))
+    }
   }
-  each((browser, config, check) => gates.push({
-    name: `tier 1 ${browser} ${config}`, sharded: true, report: join(REPO, check, 'check-report.json'), parts: [['rebuild/tests/replay.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
+  each((browser, config, check, reference) => gates.push({
+    name: `tier 1 ${browser} ${config}`, sharded: true, report: join(REPO, check, 'check-report.json'), reads: reference, parts: [['rebuild/tests/replay.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
     read: (code, report) => tier1Verdict(code, report as Tier1Report | null),
   }))
-  const functionSet = (name: string): void => each((browser, config, check) => gates.push({
-    name: `${name} ${browser} ${config}`, sharded: true, report: join(REPO, check, `${name}-report.json`), parts: [['rebuild/tests/function-set.ts', name, `--browser=${browser}`, `--config=${config}`]],
+  const functionSet = (name: string): void => each((browser, config, check, reference) => gates.push({
+    name: `${name} ${browser} ${config}`, sharded: true, report: join(REPO, check, `${name}-report.json`), reads: reference, parts: [['rebuild/tests/function-set.ts', name, `--browser=${browser}`, `--config=${config}`]],
     read: (code, report, log) => functionSetVerdict(name, code, report as FunctionSetReport | null, log),
   }))
   functionSet('plain')
   functionSet('pure')
   if (!quick) {
-    each((browser, config) => gates.push({
-      name: `painter ${browser} ${config}`, sharded: true, report: join(REPO, '.artifacts/tests/painter-diff', basename(REPO), `${browser}-${config}.json`), parts: [['rebuild/tools/painter-diff.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
+    // The painter differential's frozen bundles, painter-diff.ts's FROZEN_DIR: the tool checks them against
+    // rebuild/tools/painter-frozen.json on every run (exit 2 otherwise).
+    each((browser, config, _check, reference) => gates.push({
+      name: `painter ${browser} ${config}`, sharded: true, report: join(REPO, '.artifacts/tests/painter-diff', basename(REPO), `${browser}-${config}.json`), reads: [...reference, '.artifacts/tests/painter-frozen'], parts: [['rebuild/tools/painter-diff.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
       read: (code, report, log) => painterVerdict(code, report as PainterReport | null, log),
     }))
     functionSet('sweep')
