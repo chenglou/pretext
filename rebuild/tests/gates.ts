@@ -1,7 +1,7 @@
 // The offline gates in one command (rebuild/lab/README.md, "Test tiers"): every check that needs no browser, run side by
 // side, with every exit code read from the child process itself and one table at the end.
 //
-//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait]
+//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait] [--fresh]
 //
 // --quick is what to run after every small edit: tier 0 (`bunx tsc --noEmit` over the six projects, and the unit tests),
 // tier 1 for the engine's browser in both configurations, and the function set's plain and pure checks for that browser.
@@ -58,12 +58,45 @@
 // first and costs a run alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run
 // don't wait for each other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
 //
+// Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
+// result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
+// the orchestrator run the gates on one tree); --fresh runs anyway and replaces the result. A key that misses an input
+// would hide a failure, so the key (inputsKey) is a sha256 over everything a gate reads:
+// - every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
+//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
+//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Of what git ignores, the gates
+//   read node_modules and .artifacts and write the rest (.check, and tsc's state, which tsc keys by content itself);
+// - what is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
+//   worktree installed it;
+// - the frozen references of the run's browsers, .artifacts/tests/reference/<browser>-<config>: every file under
+//   inputs/, reference/ and ledger/ by its bytes, but the shards (*.zst, 725 MB) by name, size and modification time.
+//   `check` reads that folder and never the tracked pins in rebuild/tests/reference (freeze copies
+//   reference/manifest.json there; the six are equal today), so the pins alone would not do. The manifests hold every
+//   shard's sha256 and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept),
+//   so a kept result's shards were the manifests', and a shard written since has another time.
+//   inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned by nothing. browser/ isn't read (check
+//   --against=reference);
+// - without --quick, the painter differential's frozen bundles (.artifacts/tests/painter-frozen; the tool checks them
+//   against rebuild/tools/painter-frozen.json on every run, exit 2 otherwise) and, for Blink, Chrome's set files, which
+//   the twin scan reads and nothing pins (the inputs' manifests hold the hashes they had when recorded);
+// - the engines and --quick, bun's version and revision, the OS release.
+// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
+// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
+// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
+// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
+// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
+// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
+// A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
+// the run's exit code) and the key is the same after the run as before it: a tree edited, or a reference frozen again,
+// under the run keeps nothing. Results are <key>.json in .artifacts/tests/gates/results, the last 50. The key takes
+// about a second for the full form and half a second for one engine's --quick.
+//
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
 // missing or doesn't fit. It prints the errors `bunx tsc --noEmit -p <project>` prints and exits 0 when that does; with
 // errors tsc exits 2 when it found them in this run and 1 when it kept them from the last one.
-import { closeSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { cpus, tmpdir } from 'node:os'
+import { closeSync, existsSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { cpus, release, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
 
@@ -73,7 +106,7 @@ const BROWSER_OF: Record<EngineName, TierBrowser> = { blink: 'chrome', webkit: '
 const TSC_PROJECTS = ['rebuild', 'rebuild/lab', 'rebuild/tests', 'rebuild/probes', 'rebuild/lab/cases', 'rebuild/bench']
 const OUT = join(REPO, 'rebuild/tests/.check/gates')
 const TSC_STATE = join(REPO, 'node_modules/.cache/pretext-gates')
-// The queue's tickets: in the .artifacts folder every worktree shares.
+// The queue's tickets and the kept results: in the .artifacts folder every worktree shares.
 const SHARED = join(REPO, '.artifacts/tests/gates')
 
 // What a gate's result counts as toward the exit code: 0 is fine for a pure refactoring.
@@ -233,13 +266,14 @@ export function removeStaleSockets(dir: string): number[] {
 // ---- A run ----
 
 // What the arguments ask for, or what is wrong with them.
-export type Run = { engines: EngineName[]; quick: boolean; cores: number; wait: boolean }
+export type Run = { engines: EngineName[]; quick: boolean; cores: number; wait: boolean; fresh: boolean }
 export function runOf(args: readonly string[]): Run | string {
-  const run: Run = { engines: [...ENGINES], quick: false, cores: Math.max(1, cpus().length - 2), wait: true }
+  const run: Run = { engines: [...ENGINES], quick: false, cores: Math.max(1, cpus().length - 2), wait: true, fresh: false }
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!
     if (arg === '--quick') run.quick = true
     else if (arg === '--no-wait') run.wait = false
+    else if (arg === '--fresh') run.fresh = true
     else if (arg.startsWith('--engine=')) run.engines = arg === '--engine=all' ? [...ENGINES] : ENGINES.filter(name => name === arg.slice('--engine='.length))
     else if (arg.startsWith('--cores=')) run.cores = Number(arg.slice('--cores='.length))
     else return `Unknown argument ${arg}`
@@ -321,6 +355,80 @@ export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
     said = text
     await Bun.sleep(500)
   }
+}
+
+// ---- A result a key ----
+
+// What `check` reads of a frozen reference's folder; browser/ is for `pack` and --against=browser.
+const REFERENCE_PARTS = ['inputs', 'reference', 'ledger']
+
+// The files under a folder, in order; none when it isn't there (a recording can leave no ledger).
+function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
+}
+
+// One hash over everything a gate of this run reads (the file comment lists it, and what is left out and why). `repo` is
+// the working tree, with its .artifacts.
+export function inputsKey(repo: string, run: Run): string {
+  const hash = new Bun.CryptoHasher('sha256')
+  const addFile = (path: string): void => {
+    // A tracked file can be deleted in the working tree.
+    const content = existsSync(path) ? readFileSync(path) : null
+    hash.update(`${relative(repo, path)}\0${content === null ? 'gone' : content.length}\0`)
+    if (content !== null) hash.update(content)
+  }
+  hash.update(`${run.engines.join(',')} ${run.quick ? 'quick' : 'full'}; bun ${Bun.version} ${Bun.revision}; ${process.platform} ${release()}\0`)
+  // An empty list from a git that failed would be a key that reads no file of the tree.
+  const tree = Bun.spawnSync(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repo })
+  if (tree.exitCode !== 0) throw new Error(`git ls-files failed in ${repo}: ${tree.stderr.toString()}`)
+  const tracked = tree.stdout.toString().split('\0')
+  for (let i = 0; i < tracked.length; i++) if (tracked[i] !== '') addFile(join(repo, tracked[i]!))
+  const modules = join(repo, 'node_modules')
+  const installed = readdirSync(modules).sort()
+  for (let i = 0; i < installed.length; i++) {
+    const name = installed[i]!
+    if (name.startsWith('.')) continue
+    const packages = name.startsWith('@') ? readdirSync(join(modules, name)).sort().map(inner => join(name, inner)) : [name]
+    for (let k = 0; k < packages.length; k++) addFile(join(modules, packages[k]!, 'package.json'))
+  }
+  for (let e = 0; e < run.engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) for (let p = 0; p < REFERENCE_PARTS.length; p++) {
+    const files = filesUnder(join(repo, `.artifacts/tests/reference/${BROWSER_OF[run.engines[e]!]}-${CONFIGS[c]!}`, REFERENCE_PARTS[p]!))
+    for (let i = 0; i < files.length; i++) {
+      if (!files[i]!.endsWith('.zst')) addFile(files[i]!)
+      else {
+        const shard = statSync(files[i]!)
+        hash.update(`${relative(repo, files[i]!)}\0${shard.size} ${shard.mtimeMs}\0`)
+      }
+    }
+  }
+  if (!run.quick) {
+    const frozen = filesUnder(join(repo, '.artifacts/tests/painter-frozen'))
+    for (let i = 0; i < frozen.length; i++) addFile(frozen[i]!)
+    if (run.engines.includes('blink')) {
+      const sets = SETS.filter(set => set.browsers.includes('chrome'))
+      for (let i = 0; i < sets.length; i++) for (let k = 0; k < sets[i]!.parts.length; k++) addFile(join(repo, sets[i]!.parts[k]!.replaceAll('{browser}', 'chrome')))
+    }
+  }
+  return hash.digest('hex')
+}
+
+// A finished run as it is kept for reuse: when and where it ran, and what it printed.
+export type Kept = { key: string; at: number; worktree: string; commit: string; dirty: boolean; seconds: number; exit: number; rows: Row[] }
+
+export function keptResult(dir: string, key: string): Kept | null {
+  const path = join(dir, `${key}.json`)
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as Kept : null
+}
+
+// Keeps a result under its key, in one step, so a reader never sees half a file, and drops all but the last 50.
+export function keepResult(dir: string, kept: Kept): void {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `draft-${process.pid}`), `${JSON.stringify(kept, null, 1)}\n`)
+  renameSync(join(dir, `draft-${process.pid}`), join(dir, `${kept.key}.json`))
+  // Two runs can finish at once: a result the other one dropped counts as the oldest.
+  const results = readdirSync(dir).filter(name => name.endsWith('.json')).map(name => ({ name, at: statSync(join(dir, name), { throwIfNoEntry: false })?.mtimeMs ?? 0 })).sort((a, b) => b.at - a.at)
+  for (let i = 50; i < results.length; i++) rmSync(join(dir, results[i]!.name), { force: true })
 }
 
 // ---- The gates of a run ----
@@ -484,12 +592,27 @@ function printTable(rows: readonly Row[]): void {
 if (import.meta.main) {
   const run = runOf(process.argv.slice(2))
   if (typeof run === 'string') {
-    console.error(`[gates] ${run}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait]`)
+    console.error(`[gates] ${run}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait] [--fresh]`)
     process.exit(2)
   }
   mkdirSync(OUT, { recursive: true })
   mkdirSync(TSC_STATE, { recursive: true })
-  if (run.wait) await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick })
+  // An earlier run of the same inputs answers at once, before the queue; and after a wait again, since the run this
+  // one waited for may have been of the same tree (an owner, its critic and the orchestrator start together).
+  const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
+  let key = inputsKey(REPO, run)
+  let earlier = earlierRun(key)
+  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick })) {
+    key = inputsKey(REPO, run)
+    earlier = earlierRun(key)
+  }
+  if (earlier !== null) {
+    writeFileSync(join(OUT, 'gates.json'), `${JSON.stringify(earlier.rows, null, 2)}\n`)
+    printTable(earlier.rows)
+    console.log(`Reused result: no gate ran now. A run with the same inputs finished on ${when(earlier.at)} in ${earlier.worktree}, at commit ${earlier.commit}${earlier.dirty ? ' with uncommitted changes' : ''}; the logs are that worktree's, and --fresh runs the gates anyway`)
+    console.log(`Reused result of ${when(earlier.at)}: ${closingLine(earlier.rows, earlier.seconds, earlier.exit)}`)
+    process.exit(earlier.exit)
+  }
   const started = Date.now()
   const gates = gatesOf(run.engines, run.quick)
   console.error(`[gates] ${gates.length} gates${run.quick ? ' (quick)' : ''} for ${run.engines.join(', ')} on ${run.cores} cores; logs in ${relative(REPO, OUT)}`)
@@ -499,6 +622,13 @@ if (import.meta.main) {
   printTable(rows)
   let exit = 0
   for (let i = 0; i < rows.length; i++) exit = worse(exit, rows[i]!.as)
+  // Kept for reuse only when every gate knows its result, and the inputs are what they were when the run started.
+  if (rows.some(row => row.as === 2)) console.error('[gates] not kept for reuse: a gate\'s tool failed')
+  else if (inputsKey(REPO, run) !== key) console.error('[gates] not kept for reuse: the inputs changed under the run')
+  else {
+    const git = (...args: string[]): string => Bun.spawnSync(['git', ...args], { cwd: REPO }).stdout.toString().trim()
+    keepResult(join(SHARED, 'results'), { key, at: Date.now(), worktree: REPO, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '', seconds, exit, rows })
+  }
   console.log(closingLine(rows, seconds, exit))
   process.exit(exit)
 }
