@@ -101,17 +101,17 @@ function forEachDictionaryRange(rules: BreakRules, text: string, start: number, 
   }
 }
 
+// The word segmenter of every dictionary range, made at the first one and kept for the page's life, as the decoded tables
+// are: making one costs about four times what segmenting a short range does (JavaScriptCore, 2026-09-20). It is fixed
+// data: it holds the process's default locale, which a page doesn't see change, and nothing of any text.
+let wordSegmenter: Intl.Segmenter | null = null
+
 // The engines' boundaries inside an engine range, from JSC's Intl.Segmenter word granularity over that range, which runs
 // the same libicucore dictionaries (DESIGN.md §6.3, specs/webkit-gaps.md §4.2). The engines never stop before a
 // combining mark of their script (dictbe.cpp "Never stop before a combining mark", fMarkSet), and the range end is never a
 // boundary ("Don't return a break for the end of the dictionary range"). Against libicucore's line iterator over the
 // groundwork's 1,556 SA texts this differs only where a range starts with a mark (breaks.test.ts), which the paragraph
 // reports as dictionary-breaks-stand-in.
-// The word segmenter of every dictionary range, made at the first one and kept for the page's life, as the decoded tables
-// are: making one costs about four times what segmenting a short range does (JavaScriptCore, 2026-09-20). It is fixed
-// data: it holds the process's default locale, which a page doesn't see change, and nothing of any text.
-let wordSegmenter: Intl.Segmenter | null = null
-
 function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, text: string, start: number, end: number, isBoundary: Uint8Array): void {
   switch (source.kind) {
     case 'intl-segmenter-word':
