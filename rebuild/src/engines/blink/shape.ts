@@ -689,7 +689,7 @@ function holdsScript(p: BlinkPrepared, from: number, to: number): boolean {
 //   word before or after it, where the string holds the characters that give it its script;
 // - the style has no letter spacing: Canvas gives a character spacing by the script its own segmenter gives the measured
 //   string, and the recorded answers of right-to-left text differ between a whole and its words by whole spacings there
-//   (tools/words-identity.ts: 1,482 of 2,078 positions, against 0 of 325,399 without letter spacing).
+//   (tools/words-identity.ts: 1,482 of 2,078 positions, against 0 of 316,645 without letter spacing).
 function wordCuts(p: BlinkPrepared, g: number): number[] {
   const group = p.groups[g]!
   const cuts: number[] = []
