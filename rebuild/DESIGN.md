@@ -1682,6 +1682,11 @@ asks (a soft hyphen, joining letters) and on the layout zoom, and an answer depe
   Chrome 4.79 s and 5.08 s to 3.82 s and 4.08 s on the mix, 4.11 s to 3.49 s on plain ASCII; Firefox 2.63 s to 2.41 s
   and 0.62 s to 0.45 s; webkit-host 0.25 s to 0.14 s and 0.19 s to 0.10 s. Kept paragraphs no longer keep about eleven
   canvases a message alive in Chrome.
+- *What it costs.* In Chrome, kept paragraphs of the plain ASCII set that share their contexts lay out again more
+  slowly: 49 µs to 62 µs a layout at a width they have met and 59 µs to 64 µs at a new one (the first quiet run's timed
+  rows, 1,000 messages; the second run and the 10,000-message pass move the same way), and the mix doesn't move.
+  Nobody has found why. What is known: a page's canvas holds every paragraph's strings, and Chrome drops strings from
+  a canvas's cache past 32,768 and at frame switches (frame_shape_cache.cc:29-43, :93-104).
 
 ### 4.7 What removing the memo cost
 
