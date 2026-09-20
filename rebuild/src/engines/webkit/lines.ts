@@ -630,6 +630,10 @@ function wordBreakBehavior(s: WebKitStyle, hasWrapOpportunityAtPreviousPosition:
   return 'none'
 }
 
+function isTextRun(run: ContentRun): run is TextContentRun {
+  return run.item.kind === 'text'
+}
+
 // isBreakableRun (ICB:353-362): text whose own style allows wrapping.
 function isBreakableRun(L: Layout, run: ContentRun): run is TextContentRun {
   return run.item.kind === 'text' && L.p.boxes[run.item.box]!.style.wrap
@@ -1363,13 +1367,21 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
 function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   const p = L.p
   const runs = c.runs
-  type Entry = { type: 'content' | 'break' | 'keep'; index: number }
+  // A content entry is a run of text that isn't white space, with its item.
+  type ContentEntry = { type: 'content'; index: number; item: WebKitTextItem }
+  type Entry = ContentEntry | { type: 'break' | 'keep'; index: number }
   const contentList: Entry[] = []
   for (let index = 0; index < runs.length; index++) {
     const item = runs[index]!.item
-    let type: Entry['type']
+    let type: 'break' | 'keep'
     switch (item.kind) {
-      case 'text': type = item.isWhitespace ? 'break' : 'content'; break
+      case 'text':
+        if (!item.isWhitespace) {
+          contentList.push({ type: 'content', index, item })
+          continue
+        }
+        type = 'break'
+        break
       case 'atomic': type = 'break'; break
       case 'inline-box-start':
       case 'inline-box-end': {
@@ -1380,7 +1392,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         break
       }
     }
-    if (type !== 'content' && (contentList.length === 0 || contentList[contentList.length - 1]!.type === type)) continue
+    if (contentList.length === 0 || contentList[contentList.length - 1]!.type === type) continue
     contentList.push({ type, index })
   }
   while (contentList.length > 0 && contentList[contentList.length - 1]!.type !== 'content') contentList.pop()
@@ -1388,12 +1400,12 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   // lastFontCascade (ILB:862): the root style's until a content run gives its own, and nothing compares it before one does.
   let lastFontBox: WebKitBox | null = null
-  let leading: number | null = null
+  let leading: ContentEntry | null = null
   let trailing: number | null = null
   let hasBoundaryBetween = false
   const reset = () => { leading = null; trailing = null; hasBoundaryBetween = false }
   const commit = () => {
-    if (leading !== null && trailing !== null && hasBoundaryBetween) ranges.push([leading, trailing])
+    if (leading !== null && trailing !== null && hasBoundaryBetween) ranges.push([leading.index, trailing])
     reset()
   }
   for (let k = 0; k < contentList.length; k++) {
@@ -1405,17 +1417,17 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         if (leading !== null) hasBoundaryBetween = true
         break
       case 'content': {
-        const item = runs[entry.index]!.item as WebKitTextItem
+        const item = entry.item
         const box = p.boxes[item.box]!
         const isEligibleText = !box.simpleFontCodePath && item.level % 2 === 1 && item.level <= 125
         if (leading === null) {
-          if (isEligibleText) leading = entry.index
+          if (isEligibleText) leading = entry
           lastFontBox = box
         } else if (hasBoundaryBetween) {
           // FontCascade equality: the box's Canvas settings (font, letter spacing), which one context stands for, and word
           // spacing and locale.
           const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.style.wordSpacing === lastFontBox.style.wordSpacing
-          if (isEligibleText && sameFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index
+          if (isEligibleText && sameFont && p.boxes[leading.item.box]!.locale === box.locale) trailing = entry.index
           else reset()
         } else if (!isEligibleText) {
           reset()
@@ -1452,15 +1464,16 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   if (first >= second || second >= runs.length) return
   runs[first]!.shapingBoundary = 'start'
   runs[second]!.shapingBoundary = 'end'
-  const firstBox = L.p.boxes[(runs[first]!.item as WebKitTextItem).box]!
+  // The range's runs of text, the first of which is runs[first], and the text of each.
+  const textRuns: TextContentRun[] = []
   const texts: string[] = []
-  const indices: number[] = []
   for (let index = first; index <= second; index++) {
-    const item = runs[index]!.item
-    if (item.kind !== 'text') continue
-    texts.push(L.p.boxes[item.box]!.text.slice(item.start, item.end))
-    indices.push(index)
+    const run = runs[index]!
+    if (!isTextRun(run)) continue
+    textRuns.push(run)
+    texts.push(L.p.boxes[run.item.box]!.text.slice(run.item.start, run.item.end))
   }
+  const firstBox = L.p.boxes[textRuns[0]!.item.box]!
   let suffix = ''
   let following = 0
   let followingJoins = false
@@ -1477,16 +1490,16 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
       const additions = 2 * (text.length + suffix.length) + 5
       if (Math.abs(alone - share) <= additions * 2 ** (Math.floor(Math.log2(total)) - 24)) share = alone
     }
-    runs[indices[k]!]!.contentWidth = Math.max(0, share)
+    textRuns[k]!.contentWidth = Math.max(0, share)
     suffix = text + suffix
     following = total
     followingJoins = joins
   }
   let shapedContentWidth = 0
-  for (let k = 0; k < indices.length; k++) shapedContentWidth = f32(shapedContentWidth + runs[indices[k]!]!.contentWidth)
+  for (let k = 0; k < textRuns.length; k++) shapedContentWidth = f32(shapedContentWidth + textRuns[k]!.contentWidth)
   c.logicalWidth = shapedContentWidth
   c.hasShapedContent = true
-  shapedAcrossInlineBoxes(L.gaps, L.p, runs[indices[0]!]!.item as WebKitTextItem, runs[indices[indices.length - 1]!]!.item as WebKitTextItem)
+  shapedAcrossInlineBoxes(L.gaps, L.p, textRuns[0]!.item, textRuns[textRuns.length - 1]!.item)
 }
 
 // LineBuilder::applyShapingIfNeeded (ILB:969-979); TextShapingAcrossInlineBoxes is on by default
@@ -1506,20 +1519,21 @@ function shapePartialLineCandidate(L: Layout, c: Content, trailingRunIndex: numb
     const boundary = runs[index]!.shapingBoundary
     if (boundary === null) continue
     if (boundary === 'start') return
+    // The last run of text kept, then the range's start before it. A shaping boundary sits on a run of text
+    // (applyShapingOnRunRange), so the other runs are passed over.
     let endPosition: number | null = null
     for (let i = trailingRunIndex + 1; i-- > 0;) {
       const run = runs[i]!
-      if (endPosition === null && run.item.kind === 'text') endPosition = i
-      if (run.shapingBoundary === 'start') {
-        if (endPosition === null) return
-        if (endPosition === i) {
-          run.shapingBoundary = null
-          if (i < trailingRunIndex) run.contentWidth = measuredItemWidth(L, run.item as WebKitTextItem, 0)
-          return
-        }
-        applyShapingOnRunRange(L, c, [i, endPosition])
+      if (!isTextRun(run)) continue
+      endPosition ??= i
+      if (run.shapingBoundary !== 'start') continue
+      if (endPosition === i) {
+        run.shapingBoundary = null
+        if (i < trailingRunIndex) run.contentWidth = measuredItemWidth(L, run.item, 0)
         return
       }
+      applyShapingOnRunRange(L, c, [i, endPosition])
+      return
     }
     return
   }
