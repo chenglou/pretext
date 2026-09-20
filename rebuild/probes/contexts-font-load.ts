@@ -18,6 +18,9 @@
 // So in WebKit a kept context is stale after a font loads, and in every engine a prepared paragraph's widths are: a page
 // prepares its paragraphs again after its fonts change, and in WebKit it starts a new list of contexts for them. The font
 // checks keep nothing across calls, so in Chrome and Firefox the next prepare on the old list sees the loaded font.
+// Since then (2026-09-20): this probe's route, a FontFace made from bytes, loaded, then added to a font set that holds no
+// face, is the one route WebKit's kept contexts miss (probes/contexts-start-up.ts W1 to W10 has the others), and Gecko's
+// prepare makes its contexts anew whatever list it is handed, for family names Firefox learns late (src/index.ts prepare).
 //
 // Run under the browser lock (from the worktree):
 //   python3 .artifacts/session/with-browser-lock.py contexts-font-load -- bun rebuild/probes/runner.ts --browser=chrome \
