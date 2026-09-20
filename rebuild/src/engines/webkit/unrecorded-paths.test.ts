@@ -51,7 +51,7 @@ function boxRow(box: WebKitDisplayBox): unknown[] {
 }
 
 function layout(p: Sized, insets: Insets[] = []): { range: [number, number]; hasLineBox: boolean; boxes: unknown[][]; gaps: string[] }[] {
-  const prepared = prepare(p, env, true)
+  const prepared = prepare(p, env, true, [])
   const { lines } = everyLine({
     first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
   }, p.width, insets)
