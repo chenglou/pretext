@@ -184,9 +184,9 @@ const PORT = String.raw`
   const hidden = Object.getOwnPropertyDescriptor(TextMetrics.prototype, 'getTextClusters');
   if (hidden === undefined) return { error: 'TextMetrics.prototype has no getTextClusters: run Chrome with --enable-blink-features=ExtendedTextMetrics' };
   delete TextMetrics.prototype.getTextClusters;
-  const before = await import('data:text/javascript;base64,' + LIBRARY);
+  const before = (await import('data:text/javascript;base64,' + LIBRARY)).library;
   Object.defineProperty(TextMetrics.prototype, 'getTextClusters', hidden);
-  const after = await import('data:text/javascript;base64,' + LIBRARY_AGAIN);
+  const after = (await import('data:text/javascript;base64,' + LIBRARY_AGAIN)).library;
   if (before.hasTextClusters || !after.hasTextClusters) return { error: 'the two bundles read the feature test as ' + before.hasTextClusters + ' and ' + after.hasTextClusters };
   const detected = before.detectEnvironment({ engine: 'blink', build: BUILD, contentLanguage: null, uiLanguage: null });
   if (detected.kind !== 'supported') return { error: 'unsupported environment: ' + JSON.stringify(detected) };
@@ -198,7 +198,7 @@ const PORT = String.raw`
   const getTextClusters = TextMetrics.prototype.getTextClusters;
   TextMetrics.prototype.getTextClusters = function (...rest) { clusterCalls++; return getTextClusters.apply(this, rest); };
   const LU = 1024;
-  const configs = [['facts', before.fontFactsFor, after.fontFactsFor], ['no-facts', () => before.UNKNOWN_FONT_FACTS, () => after.UNKNOWN_FONT_FACTS]];
+  const configs = [['facts', before.fontFactsFor, after.fontFactsFor], ['no-facts', () => before.unknownFontFacts, () => after.unknownFontFacts]];
   const out = { dpr: devicePixelRatio, cases: CASES.length, configs: {} };
   for (const [config, factsBefore, factsAfter] of configs) {
     const contextsBefore = [], contextsAfter = [];
