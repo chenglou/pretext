@@ -302,7 +302,8 @@ export type GeckoPrepared = {
   items: GeckoItem[]
   elements: GeckoElement[]
   textRuns: GeckoTextRun[]
-  // Per transformed code unit.
+  // The transformed text, which every question to Canvas is a slice of (measure.ts rangeAu), and the same per code unit.
+  tText: string
   tUnits: Uint16Array
   tSource: Int32Array
   breakFlags: Uint8Array

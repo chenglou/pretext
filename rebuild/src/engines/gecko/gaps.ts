@@ -190,7 +190,7 @@ export function runEnded(test: SpaceTest | null, end: number): void {
 // unit's groups (probe gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer,
 // Canvas doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
 export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick<GeckoTextRun, 'contexts' | 'scriptRuns' | 'tStart'>,
-  leaf: number, letterSpacing: number, tUnits: Uint16Array, tSource: Int32Array, clusterStart: Uint8Array, spacingPrefix: Int32Array, t: number, e: number, w: number): void {
+  leaf: number, letterSpacing: number, tText: string, tSource: Int32Array, clusterStart: Uint8Array, spacingPrefix: Int32Array, t: number, e: number, w: number): void {
   if (sink === null || letterSpacing === 0) return
   let clusters = 0
   let spaced = false
@@ -199,7 +199,7 @@ export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick
     if (spacingPrefix[k + 1] !== spacingPrefix[k]) spaced = true
   }
   if (spaced) {
-    const wide = rangeAu(letterSpacedContext(contexts, run.contexts), run, tUnits, t, e)
+    const wide = rangeAu(letterSpacedContext(contexts, run.contexts), run, tText, t, e)
     const groups = (wide - w) / (2 * CANVAS_AU_PER_PX)
     if (groups !== clusters) {
       sink.push({ gap: 'glyph-clusters', run: leaf, detail: `Canvas letter spacing counts ${groups} ligature groups in a unit of ${clusters} clusters, and the DOM spaces by ligature group starts (nsTextFrame.cpp:3860-3873)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })

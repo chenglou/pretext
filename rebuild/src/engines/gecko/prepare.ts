@@ -788,6 +788,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   breakerOps.push({ kind: 'reset', trailingOn })
   const T = tr.count
   const tUnits = tr.tUnits.slice(0, T)
+  let tText = ''
+  for (let t = 0; t < T; t++) tText += String.fromCharCode(tUnits[t]!)
   const tSource = tr.tSource.slice(0, T)
   const sourceT = tr.sourceT
   const nextT = new Int32Array(n + 1)
@@ -798,7 +800,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const g: Glyphs = { units: tUnits, breakFlags: new Uint8Array(T), clusterStart: new Uint8Array(T).fill(1), isSpace: new Uint8Array(T), kind: new Uint8Array(T) }
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
-    b.scriptRuns = textRunScripts(tUnits, b.tStart, b.tEnd, b.is8bit)
+    b.scriptRuns = textRunScripts(tText, b.tStart, b.tEnd, b.is8bit)
     initTextRun(g, b.tStart, b.tEnd, b.is8bit, b.scriptRuns, b.units)
   }
   // The emergency break after a hyphen is set inside one shaped word (SetupClusterBoundaries, gfxFont.cpp:741-753), and
@@ -1033,7 +1035,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           // font's, where Georgia's is 261 au).
           const last = units.length > 0 ? units[units.length - 1]! : null
           if (last !== null && last.kind === 'word' && last.tEnd === t && tUnits[t - 1] === 0x200d) {
-            w = rangeAu(context, run, tUnits, last.tStart, t + 1) - last.canvasAu
+            w = rangeAu(context, run, tText, last.tStart, t + 1) - last.canvasAu
           }
           unit = { kind, tStart: t, tEnd: e, canvasAu: w, au: w, startAdvance: advance, inWord: null }
           gaps.spaceMeasured(spaces, w)
@@ -1044,8 +1046,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           unit = { kind, tStart: t, tEnd: e, canvasAu: 0, au: 0, startAdvance: advance, inWord: null }
           break
         case 'word': {
-          const w = rangeAu(context, run, tUnits, t, e)
-          gaps.letterSpacedGroups(sink, contexts, run, firstRun, firstLeaf.letterSpacingAu, tUnits, tSource, g.clusterStart, spacingPrefix, t, e, w)
+          const w = rangeAu(context, run, tText, t, e)
+          gaps.letterSpacedGroups(sink, contexts, run, firstRun, firstLeaf.letterSpacingAu, tText, tSource, g.clusterStart, spacingPrefix, t, e, w)
           let total = w
           if (!b.is8bit) {
             // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
@@ -1057,8 +1059,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             // fresh 1260 and 1920 au in both; pinned 1020 au in Arial and 1260 au in Apple Color Emoji, DOM 1020 au).
             const deviceContext = contextFor(contexts, { ...settings, font: canvasFont(font, devSize) })
             const emojiFontContext = (size: number) => contextFor(contexts, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
-            let word = ''
-            for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
+            const word = tText.slice(t, e)
             const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
             for (let c = 0; c + 1 < boundaries.length; c++) {
               const cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
@@ -1174,7 +1175,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
 
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
-    elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
+    elements, textRuns, tText, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
     spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }

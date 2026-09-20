@@ -58,7 +58,7 @@ const fastLatin = (ch: number) => ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a)
 
 // gfxScriptItemizer (gfxScriptItemizer.cpp:60-243), run boundaries only.
 const PAREN_STACK_DEPTH = 32
-export function scriptRunLimits(units: Uint16Array, start: number, end: number): ScriptRun[] {
+export function scriptRunLimits(text: string, start: number, end: number): ScriptRun[] {
   const limits: ScriptRun[] = []
   const parenChar = new Int32Array(PAREN_STACK_DEPTH)
   const parenScript: string[] = new Array<string>(PAREN_STACK_DEPTH).fill('Zyyy')
@@ -71,14 +71,14 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
     let scriptCode = 'Zyyy'
     while (scriptLimit < end) {
       const startOfChar = scriptLimit
-      let ch = units[scriptLimit]!
+      let ch = text.charCodeAt(scriptLimit)
       let sc: string
       if (ch < 0x02ea) {
         sc = fastLatin(ch) ? 'Latn' : 'Zyyy'
       } else {
-        if (scriptLimit < end - 1 && isSurrogatePair(ch, units[scriptLimit + 1]!)) {
+        if (scriptLimit < end - 1 && isSurrogatePair(ch, text.charCodeAt(scriptLimit + 1))) {
           scriptLimit++
-          ch = combine(units[startOfChar]!, units[scriptLimit]!)
+          ch = combine(text.charCodeAt(startOfChar), text.charCodeAt(scriptLimit))
         }
         sc = scriptOf(ch)
       }
@@ -148,29 +148,29 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
 // (.artifacts/probes/gecko/round2): ` 7:00-9:00` in 18px bold "Apple SD Gothic Neo" under lang="ko" kerns `7:` and `-9` as
 // an 8-bit node (5184 au) and doesn't within a 16-bit text run (4969 au), where Common resolves to Hangul and CJK scripts
 // turn kerning off (gfxHarfBuzzShaper.cpp:1405-1438).
-export function textRunScripts(units: Uint16Array, start: number, end: number, is8bit: boolean): ScriptRun[] {
+export function textRunScripts(text: string, start: number, end: number, is8bit: boolean): ScriptRun[] {
   let allCommonOrLatin = true
-  for (let i = start; i < end; i++) if (units[i]! >= 0x02ea) { allCommonOrLatin = false; break }
-  if (!allCommonOrLatin) return scriptRunLimits(units, start, end)
+  for (let i = start; i < end; i++) if (text.charCodeAt(i) >= 0x02ea) { allCommonOrLatin = false; break }
+  if (!allCommonOrLatin) return scriptRunLimits(text, start, end)
   let hasLetter = false
   for (let i = start; i < end && !hasLetter; i++) {
-    const u = units[i]!
+    const u = text.charCodeAt(i)
     hasLetter = is8bit ? (u & 0xdf) <= 0x5a : fastLatin(u)
   }
   return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy' }]
 }
 
-function scriptAt(units: Uint16Array, i: number): string {
-  const u = units[i]!
+function scriptAt(text: string, i: number): string {
+  const u = text.charCodeAt(i)
   if (u < 0x02ea) return fastLatin(u) ? 'Latn' : 'Zyyy'
-  return scriptOf(isSurrogatePair(u, units[i + 1] ?? 0) ? combine(u, units[i + 1]!) : u)
+  return scriptOf(isSurrogatePair(u, text.charCodeAt(i + 1)) ? combine(u, text.charCodeAt(i + 1)) : u)
 }
 
 // The script context a piece [tStart, tEnd) of a word unit needs: the DOM itemizer merges Common characters into the
 // script run around them (gfxScriptItemizer.cpp:60-243), and HarfBuzz shapes with that run's script (CJK runs without
 // kern, gfxHarfBuzzShaper.cpp:1405-1438). When the piece measured alone itemizes to another script, a character of the
 // DOM's script from the same script run, before or after the piece, gives Canvas that script.
-function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: number, tStart: number, tEnd: number):
+function scriptContextFor(text: string, runs: ScriptRun[], runStart: number, tStart: number, tEnd: number):
   { text: string; before: boolean } | null {
   let from = runStart
   let k = 0
@@ -181,20 +181,18 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
   // the script of the piece's first character that has one: Common characters before it join its run, and a bracket
   // takes a script only from a run that has one (scriptRunLimits).
   let alone = 'Zyyy'
-  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(units, i)
+  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(text, i)
   if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
   const limit = runs[k]!.limit
   for (let i = tStart - 1; i >= from; i--) {
-    if (scriptAt(units, i) !== domScript) continue
-    const u = units[i]!
-    if ((u & 0xfc00) === 0xdc00 && i > from) return { text: String.fromCharCode(units[i - 1]!, u), before: true }
-    return { text: String.fromCharCode(u), before: true }
+    if (scriptAt(text, i) !== domScript) continue
+    if ((text.charCodeAt(i) & 0xfc00) === 0xdc00 && i > from) return { text: text.slice(i - 1, i + 1), before: true }
+    return { text: text[i]!, before: true }
   }
   for (let i = tEnd; i < limit; i++) {
-    if (scriptAt(units, i) !== domScript) continue
-    const u = units[i]!
-    if (isSurrogatePair(u, units[i + 1] ?? 0)) return { text: String.fromCharCode(u, units[i + 1]!), before: false }
-    return { text: String.fromCharCode(u), before: false }
+    if (scriptAt(text, i) !== domScript) continue
+    if (isSurrogatePair(text.charCodeAt(i), text.charCodeAt(i + 1))) return { text: text.slice(i, i + 2), before: false }
+    return { text: text[i]!, before: false }
   }
   // An 8-bit text run is Latin without a Latin letter (textRunScripts), and Canvas's 16-bit string itemizes Latin only with
   // one: a letter of its own gives it that script. Probe gecko-port F8: `a 7:00-9:00` less `a ` in 18px bold "Apple SD Gothic
@@ -210,11 +208,9 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (advance.ts).
 // The Canvas context is the text run's own, or another of its record: another letter spacing, a larger size
 // (types.ts RunContexts).
-export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' | 'tStart'>, units: Uint16Array,
+export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' | 'tStart'>, text: string,
   tStart: number, tEnd: number, before = '', after = ''): number {
-  let piece = before
-  for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
-  piece += after
+  let piece = before + text.slice(tStart, tEnd) + after
   // Canvas gives a string of one character, or of one surrogate pair, a direction of its own: right to left for the bidi
   // classes R and AL, else left to right, whatever ctx.direction says (nsBidiPresUtils::ProcessText and ProcessSimpleRun,
   // nsBidiPresUtils.cpp:2180-2190, :2395-2414). The DOM shapes the character at its resolved level, so a neutral at an odd
@@ -240,14 +236,13 @@ export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' |
   // gecko-port F4 (.artifacts/probes/gecko/font-matching): `a WJ U+0301 ZWSP U+0308 U+093E b` in 16px Arial is 1329 au whole
   // as in the DOM, where `U+0308 U+093E b` alone and after ZWSP measure 1429 au; `x U+2028 U+202F` gives U+202F 0 au whole
   // as in the DOM and 192 au alone.
-  if (tStart > run.tStart && tStart < tEnd && isInvalidChar16(units[tStart - 1]!) && (isClusterExtender(units[tStart]!) || units[tStart] === 0x202f)) {
+  if (tStart > run.tStart && tStart < tEnd && isInvalidChar16(text.charCodeAt(tStart - 1)) && (isClusterExtender(text.charCodeAt(tStart)) || text.charCodeAt(tStart) === 0x202f)) {
     let from = run.tStart
     for (let k = 0; k < run.scriptRuns.length && run.scriptRuns[k]!.limit <= tStart; k++) from = run.scriptRuns[k]!.limit
-    let prefix = ''
-    for (let k = from; k < tStart; k++) prefix += String.fromCharCode(units[k]!)
+    const prefix = text.slice(from, tStart)
     return w(prefix + piece) - w(prefix)
   }
-  const script = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
+  const script = scriptContextFor(text, run.scriptRuns, run.tStart, tStart, tEnd)
   if (script === null) return w(piece)
   return script.before ? w(script.text + ' ' + piece) - w(script.text + ' ') : w(piece + ' ' + script.text) - w(' ' + script.text)
 }

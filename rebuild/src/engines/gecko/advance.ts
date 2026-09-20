@@ -25,8 +25,7 @@ function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
   while (a > unit.tStart && p.clusterStart[a] === 0) a--
   let b = t + 1
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
-  let pair = ''
-  for (let k = a; k < b; k++) pair += String.fromCharCode(p.tUnits[k]!)
+  const pair = p.tText.slice(a, b)
   const on = bounds(run.contexts.own, pair)
   const off = bounds(noLigaturesContext(p.contexts, run.contexts), pair)
   return on.width !== off.width || on.left !== off.left || on.right !== off.right
@@ -144,14 +143,14 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
   // The open window: its start, the unit's Canvas au before it, and its own.
   let start = unit.tStart
   let before = 0
-  let au = rangeAu(own, run, p.tUnits, grid[0]!, grid[1]!)
+  let au = rangeAu(own, run, p.tText, grid[0]!, grid[1]!)
   // The cell before the cut, alone: its au and its ligature groups.
   let left = au
   let leftGroups: number | null = null
   for (let i = 1; i + 1 < grid.length; i++) {
     const g = grid[i]!
-    const right = rangeAu(own, run, p.tUnits, g, grid[i + 1]!)
-    const both = rangeAu(own, run, p.tUnits, grid[i - 1]!, grid[i + 1]!)
+    const right = rangeAu(own, run, p.tText, g, grid[i + 1]!)
+    const both = rangeAu(own, run, p.tText, grid[i - 1]!, grid[i + 1]!)
     let rightGroups: number | null = null
     let holds = left + right === both && generalCategory(codePointAtT(p, g))[0] !== 'M' && !joinsAcross(p, unit, g) && !ligatureAcross(p, run, unit, g)
     if (holds) {
@@ -165,7 +164,7 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
       start = g
       au = right
     } else {
-      au = start === grid[i - 1]! ? both : rangeAu(own, run, p.tUnits, start, grid[i + 1]!)
+      au = start === grid[i - 1]! ? both : rangeAu(own, run, p.tText, start, grid[i + 1]!)
     }
     left = right
     leftGroups = rightGroups
@@ -183,7 +182,7 @@ const ZWNJ = '\u200c'
 // `withCluster`). Whichever comes first asks Canvas, and the other reads it here.
 function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): number {
   const entry = entryAt(unit, t)
-  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd)
+  if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.contexts.own, run, p.tText, t, unit.tEnd)
   return entry.suffixAu
 }
 
@@ -228,7 +227,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // in the unit. 20px "Myanmar MN": U+1038 alone is 982 au, a 649 au dotted circle and the 333 au the DOM gives it after
   // U+1004 U+102B (probe gecko-port F23). The value is the prefix's width, which ends before the mark, and a stand-in.
   if (generalCategory(codePointAtT(p, t))[0] === 'M') {
-    const prefixAu = rangeAu(run.contexts.own, run, p.tUnits, unit.tStart, t)
+    const prefixAu = rangeAu(run.contexts.own, run, p.tText, unit.tStart, t)
     return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'mark-starts-cluster', at: p.tSource[t]! } }
   }
   const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
@@ -236,7 +235,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   // characters as a group of their own when it measures the unit alone and as part of the space before them when a script
   // context stands in front (rangeAu), so its ligature groups can't be counted, and its positions stay stand-ins.
   if (p.clusterStart[unit.tStart] === 0) {
-    const inner = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
+    const inner = rangeAu(run.contexts.own, run, p.tText, t, unit.tEnd, joiner, '')
     return { au: unit.startAdvance + unit.canvasAu - inner + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'unit-starts-inside-cluster', at: p.tSource[t]! } }
   }
   // A ligature group over t: the DOM gives a range edge inside it the group's advance in equal shares per started cluster,
@@ -277,7 +276,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   const row = rowAround(p, run, unit, t)
   const leftOver = row !== null && row.unconfirmed
   const reversed = shapedReversed(p, run, unit, t)
-  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
+  const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.contexts.own, run, p.tText, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
@@ -292,7 +291,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   }
   if (joiner !== '' || reversed || before === 'R' || before === 'D' || before === 'L' || before === 'C') {
     // The two sides as the unit shapes them: with U+200D at the cut between joined letters.
-    prefixAu = rangeAu(run.contexts.own, run, p.tUnits, unit.tStart, t, '', joiner)
+    prefixAu = rangeAu(run.contexts.own, run, p.tText, unit.tStart, t, '', joiner)
     across = unit.canvasAu - prefixAu - suffixAu
     sides = joiner !== '' ? 'joined' : 'apart'
   } else {
@@ -303,7 +302,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
     // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
     const withCluster = a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
-    across = withCluster - suffixAu - rangeAu(run.contexts.own, run, p.tUnits, a, t)
+    across = withCluster - suffixAu - rangeAu(run.contexts.own, run, p.tText, a, t)
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
@@ -342,9 +341,7 @@ function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: n
   // a joined offset whose sides don't add up.
   if (joiner !== '' && across !== 0 && !reversed && !leftOver) {
     const first = (p.tUnits[t]! & 0xfc00) === 0xd800 && t + 1 < unit.tEnd ? 2 : 1
-    let letter = ''
-    for (let k = t; k < t + first; k++) letter += String.fromCharCode(p.tUnits[k]!)
-    const behindLetter = rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, letter + ZWNJ + ZWJ, '') - rangeAu(run.contexts.own, run, p.tUnits, t, t + first, '', ZWNJ)
+    const behindLetter = rangeAu(run.contexts.own, run, p.tText, t, unit.tEnd, p.tText.slice(t, t + first) + ZWNJ + ZWJ, '') - rangeAu(run.contexts.own, run, p.tText, t, t + first, '', ZWNJ)
     if (prefixAu + behindLetter === unit.canvasAu) sides = 'joined-prefix'
   }
   const standIn: InWordReason | null = leftOver ? { kind: 'between-ligatures', at: p.tSource[t]! }
@@ -402,9 +399,9 @@ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a
   let b1 = b
   if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
   for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return { after: null, placement: fact }
-  const pairAu = rangeAu(run.contexts.own, run, p.tUnits, a, b)
-  const firstAu = rangeAu(run.contexts.own, run, p.tUnits, a, t)
-  const secondAu = rangeAu(run.contexts.own, run, p.tUnits, t, b)
+  const pairAu = rangeAu(run.contexts.own, run, p.tText, a, b)
+  const firstAu = rangeAu(run.contexts.own, run, p.tText, a, t)
+  const secondAu = rangeAu(run.contexts.own, run, p.tText, t, b)
   const alone = pairAu - firstAu - secondAu
   if (fact === 'first-advance') return { after: alone === R ? 0 : null, placement: fact }
   if (Math.abs(alone - R) > 2) return { after: null, placement: fact }
@@ -412,7 +409,7 @@ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a
   // The fractions, from the run's context at 2^k times its font size.
   const large = largeContext(p, run)
   if (large === null) return { after: null, placement: fact }
-  const w = (from: number, to: number): number => rangeAu(large.context, run, p.tUnits, from, to) / large.scale
+  const w = (from: number, to: number): number => rangeAu(large.context, run, p.tText, from, to) / large.scale
   const pair = w(a, b)
   const first = w(a, t)
   const second = w(t, b)
@@ -428,17 +425,11 @@ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a
   // the face that draws it, so it counts for this pair only where Canvas shows that face draws this pair too (sameFace).
   if (own !== null || alone === 0) return { after: null, placement: null }
   const asked = askedPlacement(p, run)
-  if (asked.placement === null || !(sameFace(run, asked, textOf(p, a, t), firstAu) || sameFace(run, asked, textOf(p, t, b), secondAu))) return { after: null, placement: null }
+  if (asked.placement === null || !(sameFace(run, asked, p.tText.slice(a, t), firstAu) || sameFace(run, asked, p.tText.slice(t, b), secondAu))) return { after: null, placement: null }
   // The told placement must give this pair's R where the fractions let it be computed.
   if (asked.placement === 'first-advance') return { after: alone === R && (placed.first === null || placed.first === R) ? 0 : null, placement: asked.placement }
   if (placed.halves !== null) return { after: placed.halves.total === R ? placed.halves.after : null, placement: asked.placement }
   return { after: R % 2 === 0 ? R / 2 : null, placement: asked.placement }
-}
-
-function textOf(p: GeckoPrepared, from: number, to: number): string {
-  let s = ''
-  for (let k = from; k < to; k++) s += String.fromCharCode(p.tUnits[k]!)
-  return s
 }
 
 // floor(x + 0.5), or null where x is within `reach` au of a tie.
@@ -799,7 +790,7 @@ function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: nu
 function groupsIn(p: GeckoPrepared, run: GeckoTextRun, tStart: number, tEnd: number, before: string, after: string): number {
   const spaced = letterSpacedContext(p.contexts, run.contexts)
   const off = noLigaturesContext(p.contexts, run.contexts)
-  return (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
+  return (rangeAu(spaced, run, p.tText, tStart, tEnd, before, after) - rangeAu(off, run, p.tText, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
 }
 
 // hb_script_get_horizontal_direction's right-to-left scripts (hb-common.cc, Chromium 152's HarfBuzz copy), by ISO 15924 tag;
