@@ -110,7 +110,7 @@ export type AtomicItem = ItemBase & { type: 'atomic'; element: number }
 export type InlineItem = TextItem | ControlItem | TagItem | AtomicItem
 
 // What one getTextClusters call per measured string told of a range inside a shaping call (shape.ts clusterTable).
-export type ClusterTable = { before: number[]; starts: Uint8Array }
+export type ClusterTable = { before: number[]; starts: Int8Array }
 
 // The text of one HarfBuzzShaper::Shape call over consecutive text items (inline_node.cc:1551-1796). Measured whole while
 // below 256 zoomed px, else in pieces (shape.ts explains the model).

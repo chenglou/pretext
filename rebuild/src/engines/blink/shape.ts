@@ -513,7 +513,8 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 
 // What one getTextClusters call per measured string tells of text_content [from, to) inside a shaping call (speculative:
 // measure/canvas.ts hasTextClusters): `before[i]` is the 16.16 advance sum before the glyph cluster that holds unit
-// from + i, in the call's own shaping, `before[to - from]` the total, and `starts[i]` whether a cluster starts at the unit.
+// from + i, in the call's own shaping, `before[to - from]` the total, and `starts[i]` whether a cluster starts at the unit
+// (1), goes on (0), or Canvas told nothing of it (-1: a unit left out of the string, or what follows an unreported cluster).
 // The strings, contexts, script segments, word spacing and letter spacing difference are measure16's, and so are the gaps
 // raised. A cluster's advance is the distance to the next left edge, so the sums follow logical order in either direction.
 // Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a default-ignorable character where
@@ -527,7 +528,7 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   const before = new Array<number>(to - from + 1).fill(-1)
-  const starts = new Uint8Array(to - from + 1)
+  const starts = new Int8Array(to - from + 1).fill(-1)
   let base = 0
   for (let a = from; a < to;) {
     let b = to
@@ -571,7 +572,7 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
             break
           }
           before[t - from] = base + sum * contexts.scale + wordSpacing16(p, group.style, a, t) + extra
-          if (u === s) starts[t - from] = 1
+          starts[t - from] = u === s ? 1 : 0
         }
         sum += advance[c]!
       }
@@ -843,11 +844,11 @@ export function toldClusterStart(sh: Shaper, g: number, k: number, lo: number, h
   const group = sh.p.groups[g]!
   if (lo === group.start && hi === group.end) {
     const told = toldInGroup(sh, g, k)
-    return told === null ? null : told.table.starts[k - group.cuts[told.piece]!] === 1
+    return told === null || told.table.starts[k - group.cuts[told.piece]!]! < 0 ? null : told.table.starts[k - group.cuts[told.piece]!] === 1
   }
   if (k <= lo || k >= hi) return null
   const table = clusterTable(sh, g, lo, hi, lo, hi)
-  return table === null ? null : table.starts[k - lo] === 1
+  return table === null || table.starts[k - lo]! < 0 ? null : table.starts[k - lo] === 1
 }
 
 // The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
