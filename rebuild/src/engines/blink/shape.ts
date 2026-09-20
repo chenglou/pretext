@@ -690,11 +690,20 @@ function holdsScript(p: BlinkPrepared, from: number, to: number): boolean {
 // - the style has no letter spacing: Canvas gives a character spacing by the script its own segmenter gives the measured
 //   string, and the recorded answers of right-to-left text differ between a whole and its words by whole spacings there
 //   (tools/words-identity.ts: 1,482 of 2,078 positions, against 0 of 316,645 without letter spacing).
+// - the group holds none of the default-ignorable characters canvasString writes in two ways, left out of a one-byte
+//   string and as U+2060 in a two-byte one (SHY, ZWSP, LRM, RLM, U+202A..U+202E, U+FEFF; gap soft-hyphen-shaping). A piece
+//   with its space is a two-byte string and a word alone can be a one-byte one, so word cuts would change which way each
+//   word of such a group is measured. The group keeps the cuts it has without them.
 function wordCuts(p: BlinkPrepared, g: number): number[] {
   const group = p.groups[g]!
   const cuts: number[] = []
   if (p.styles[group.style]!.letterSpacing !== 0) return cuts
   const text = p.text
+  for (let i = group.start; i < group.end; i++) {
+    switch (text.charCodeAt(i)) {
+      case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff: return cuts
+    }
+  }
   // The start of the word before the space run.
   let wordStart = group.start
   for (let c = group.start + 1; c < group.end; c++) {

@@ -82,6 +82,10 @@ describe('blink word pieces', () => {
     expect(prepare(paragraphOf('\u03b1\u03b2\u03b3 hello world'), env, false, []).groups[0]!.cuts).toEqual([0, 4, 10, 15])
   })
 
+  test('a soft hyphen anywhere in the group keeps the cuts it has without word cuts', () => {
+    expect(prepare(paragraphOf('ab cd\u00adef gh'), env, false, []).groups[0]!.cuts).toEqual([0, 11])
+  })
+
   test('letter spacing keeps the group in one piece', () => {
     expect(prepare(paragraphOf('ab cd ef', 1), env, false, []).groups[0]!.cuts).toEqual([0, 8])
   })
