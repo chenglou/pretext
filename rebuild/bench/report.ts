@@ -331,7 +331,7 @@ function chatCells(report: BenchReport, setId: ChatSetId): Map<string, string> {
 }
 
 function renderChatSummary(out: string[], reports: readonly BenchReport[]): void {
-  const sets: ChatSetId[] = ['mix', 'latin']
+  const sets: ChatSetId[] = ['mix', 'latin', 'real']
   let mixShown = false
   for (let s = 0; s < sets.length; s++) {
     const perReport = reports.map(report => chatCells(report, sets[s]!))

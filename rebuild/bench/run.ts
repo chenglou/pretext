@@ -9,8 +9,8 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { loadavg } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from '../lab/browser-build.ts'
-import { buildContexts, describeChat, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
-import type { BrowserKind, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
+import { buildContexts, CHAT_SETS, DEFAULT_CHAT_SETS, describeChat, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
+import type { BrowserKind, ChatPlan, ChatPost, ChatSetId, ContextDonePost, ContextPlan, CountsPost, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
 import { formatMs, renderMarkdown, type BenchReport, type ChatReport, type ContextReport, type LockState, type MachineSnapshot } from './report.ts'
 
 const BENCH_DIR = import.meta.dir
@@ -38,11 +38,11 @@ function message(error: unknown): string {
 // ---- Arguments ----
 
 const USAGE = 'Usage: bun rebuild/bench/run.ts --browser=chrome|firefox|safari|webkit-host [--foreground] [--smoke] [--out=<dir>] '
-  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--samples=N] '
+  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--chat-sets=mix,latin,real] [--samples=N] '
   + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--headline=N] [--headline-passes=N] [--phase-passes=N] '
   + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--device-scale-factor=N] [--allow-battery] [--allow-no-lock]'
 const FLAGS = ['foreground', 'smoke', 'allow-battery', 'allow-no-lock']
-const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
+const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'chat-sets', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
   'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms', 'device-scale-factor']
 const flags = new Set<string>()
 const args = new Map<string, string>()
@@ -83,6 +83,7 @@ function positiveInteger(name: string, fallback: number): number {
 const scripts: Script[] = list('scripts', SCRIPTS)
 const sizes: SizeClass[] = list('sizes', SIZES)
 const scenarios: Scenario[] = list('scenarios', SCENARIOS)
+const chatSets: ChatSetId[] = args.has('chat-sets') ? list('chat-sets', CHAT_SETS) : DEFAULT_CHAT_SETS.slice()
 const settings: Settings = {
   samples: positiveInteger('samples', smoke ? 3 : 40),
   minSamples: positiveInteger('min-samples', smoke ? 2 : 10),
@@ -215,7 +216,7 @@ if (foreground) console.warn(`[bench] load average ${machineStart.loadAverage}; 
 
 // ---- Plan ----
 
-const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount, chat: { timed: messageCount, headline, headlinePasses, phasePasses } })
+const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount, chat: { sets: chatSets, timed: messageCount, headline, headlinePasses, phasePasses } })
 if (contexts.length === 0) fail('No rows selected')
 const totalRows = contexts.reduce((sum, context) => sum + context.rows.length, 0)
 

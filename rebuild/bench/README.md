@@ -108,6 +108,7 @@ python3 .artifacts/session/with-browser-lock.py bench-smoke-chrome -- bun rebuil
 ```
 
 Options: `--scripts=latin,cjk,arabic,mixed`, `--sizes=tiny,sentence,paragraph,long,corpus`, `--scenarios=cold,sweep,many,chat`,
+`--chat-sets=mix,latin,real` (default `mix,latin`),
 `--samples=N` (default 40), `--min-samples=N` (10), `--warmup=N` (3), `--min-sample-ms=N` (10), `--budget-ms=N` (20000 per
 row), `--messages=N` (1000; the many rows' messages and the chat rows' timed messages), `--headline=N` (0: the chat
 context's headline passes lay out this many messages, and 0 leaves them out), `--headline-passes=N` (3), `--phase-passes=N`
@@ -219,8 +220,8 @@ common case beside the mix. The report prints these shares for the messages it r
 one reading. The Latin kinds read The Great Gatsby and the masonry demo's 1,904 short posts in turn (about 510,000 units:
 10,000 messages read them twice, with other slices the second time), `cjk` reads Chinese, Japanese and Korean in turn, and
 `arabic` reads Arabic (كتاب البخلاء), Hebrew and Urdu in turn. `app-mixed` has no long text and stays the mix's. The
-first 1,000 have a mean of 117 units and a median of 60. The set isn't a row of `run.ts`: `realism-run.ts` lays it out
-beside the other two ("Realism").
+first 1,000 have a mean of 117 units and a median of 60. A run has the first two sets; `--chat-sets=mix,latin,real` gives
+it a `chat/real` row, headline and phase pass too, and `realism-run.ts` lays the three out beside each other ("Realism").
 
 **One declaration for every message**, as an app sets one font on its bubbles: 16px `"Helvetica Neue", "PingFang TC",
 "Geeza Pro", sans-serif`, line height 20 px, `white-space: normal`, `overflow-wrap: break-word`, `lang="en"`, left to

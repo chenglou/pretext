@@ -1,7 +1,7 @@
 // The bench's inputs stay in their size classes and deterministic, and the statistics are the documented ones.
 //   bun test rebuild/bench
 import { describe, expect, test } from 'bun:test'
-import { buildChat, buildContexts, buildInput, buildMessages, CHAT_KIND_SHARES, CHAT_LENGTH_CLASSES, CHAT_SETS, chatText, describeChat, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
+import { buildChat, buildContexts, buildInput, buildMessages, CHAT_KIND_SHARES, CHAT_LENGTH_CLASSES, CHAT_SETS, chatText, DEFAULT_CHAT_SETS, describeChat, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
 import { median, quantile, summarize } from './stats.ts'
 
 describe('cases', () => {
@@ -29,7 +29,7 @@ describe('cases', () => {
   })
 
   test('contexts hold one row per size per scenario and one many row, then the chat context', () => {
-    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10, chat: { timed: 10, headline: 25, headlinePasses: 1, phasePasses: 1 } })
+    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10, chat: { sets: DEFAULT_CHAT_SETS, timed: 10, headline: 25, headlinePasses: 1, phasePasses: 1 } })
     expect(contexts.length).toBe(SCRIPTS.length + 1)
     for (let c = 0; c < SCRIPTS.length; c++) expect(contexts[c]!.rows.length).toBe(2 * SIZES.length + 1)
     expect(SWEEP_WIDTHS.length).toBe(20)

@@ -160,7 +160,9 @@ export const CHAT_CODE_FONT: ChatPlan['codeFont'] = { family: 'Menlo', size: 14,
 export const CHAT_CODE_PADDING = 6
 export const CHAT_WIDTH = 320
 export const CHAT_RESIZE_WIDTHS: readonly number[] = [260, 380, 440]
-export const CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin']
+// Every set, and the ones a run has unless --chat-sets names others: 'real' is a third row and a third headline for who asks.
+export const CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin', 'real']
+export const DEFAULT_CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin']
 
 // The mix, by kind. Shares sum to 1.
 export const CHAT_KIND_SHARES: readonly (readonly [ChatKind, number])[] = [
@@ -416,13 +418,14 @@ export function describeChat(messages: readonly ChatMessage[]): ChatMixSummary {
   return summary
 }
 
-export type ChatOptions = { timed: number; headline: number; headlinePasses: number; phasePasses: number }
+export type ChatOptions = { sets: readonly ChatSetId[]; timed: number; headline: number; headlinePasses: number; phasePasses: number }
 
 export function buildChatPlan(options: ChatOptions): ChatPlan {
   const count = Math.max(options.timed, options.headline)
   return {
     codeFont: CHAT_CODE_FONT, codeMainFont: `${CHAT_CODE_FONT.size}px ${CHAT_CODE_FONT.family}`, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH,
-    resizeWidths: CHAT_RESIZE_WIDTHS.slice(), sets: CHAT_SETS.map(id => ({ id, messages: buildChat(id, count) })), ...options,
+    resizeWidths: CHAT_RESIZE_WIDTHS.slice(), sets: options.sets.map(id => ({ id, messages: buildChat(id, count) })), timed: options.timed, headline: options.headline,
+    headlinePasses: options.headlinePasses, phasePasses: options.phasePasses,
   }
 }
 
@@ -452,7 +455,7 @@ export function buildContexts(options: { scripts: readonly Script[]; sizes: read
     if (rows.length > 0) contexts.push({ style: STYLES[script], rows, chat: null })
   }
   if (options.scenarios.includes('chat')) {
-    contexts.push({ style: CHAT_STYLE, rows: CHAT_SETS.map(set => ({ kind: 'chat', id: `chat/${set}`, set })), chat: buildChatPlan(options.chat) })
+    contexts.push({ style: CHAT_STYLE, rows: options.chat.sets.map(set => ({ kind: 'chat', id: `chat/${set}`, set })), chat: buildChatPlan(options.chat) })
   }
   return contexts
 }
