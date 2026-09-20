@@ -16,7 +16,7 @@
 // brackets alone) are left out (addLcov says why). A function no replay calls is one range, from its first line with code
 // to its last. A file that no replay loads has no record and is listed by name. The painter (src/paint.ts paintLines)
 // needs a DOM and never runs here; painterLimits does.
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import * as ts from 'typescript'
 import { checkDir, defaultJobs, dirtyFiles, readInputs, referenceDir, runShardJobs, shardJobs } from './replay.ts'
@@ -235,7 +235,7 @@ if (import.meta.main) {
         addLcov(coverage, readFileSync(join(`${job.result}.coverage`, 'lcov.info'), 'utf8'), linesOf)
         cases += job.shard.cases
       }
-      Bun.spawnSync(['trash', scratch])
+      rmSync(scratch, { recursive: true, force: true })
       ran.push(config)
     }
     if (ran.length === 0) fail(`${browser}: no replay folder with inputs`)

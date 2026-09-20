@@ -35,7 +35,7 @@
 //
 // It reads the replay folders' inputs and nothing else of them, and keeps its shards' results and its report in
 // rebuild/tests/.check/<browser>-<config>, as replay.ts does.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { installReplay, NewQuestion, type PageFacts } from '../lab/measurements.ts'
 import type { LayoutPrediction } from '../lab/types.ts'
@@ -326,7 +326,7 @@ async function run(check: Check, browser: TierBrowser, config: Config, options: 
   }
   report.counts.problems = report.problems.length
   report.counts.skipped = report.skipped.length
-  Bun.spawnSync(['trash', scratch])
+  rmSync(scratch, { recursive: true, force: true })
   const out = join(checkDir(browser, config), `${check}-report.json`)
   mkdirSync(checkDir(browser, config), { recursive: true })
   writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`)
