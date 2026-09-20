@@ -2422,6 +2422,8 @@ rebuild/
     twin-scan.ts                             counts the cases that ask one Blink context the same characters in both storages
     store-study.ts store-*-probe.ts          the store study (research/STORE-STUDY.md): what the chat messages ask of Canvas,
                                              offline, and four probes that time or check it in the browsers
+    store-key-check.ts store-real-text.ts    checks on the store study: a key with two recorded answers, and a store's hit
+                                             rates on long-form text used once
     webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
     index.ts        prepare, firstLine, fillLine, linePieces, inspectLine, paragraphGaps: the dispatch over the engines'
