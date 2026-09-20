@@ -107,13 +107,19 @@ function forEachDictionaryRange(rules: BreakRules, text: string, start: number, 
 // boundary ("Don't return a break for the end of the dictionary range"). Against libicucore's line iterator over the
 // groundwork's 1,556 SA texts this differs only where a range starts with a mark (breaks.test.ts), which the paragraph
 // reports as dictionary-breaks-stand-in.
+// The word segmenter of every dictionary range, made at the first one and kept for the page's life, as the decoded tables
+// are: making one costs about four times what segmenting a short range does (JavaScriptCore, 2026-09-20). It is fixed
+// data: it holds the process's default locale, which a page doesn't see change, and nothing of any text.
+let wordSegmenter: Intl.Segmenter | null = null
+
 function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, text: string, start: number, end: number, isBoundary: Uint8Array): void {
   switch (source.kind) {
     case 'intl-segmenter-word':
       forEachDictionaryRange(rules, text, start, end, (engine, rangeStart, rangeEnd) => {
         if (tooShortForTwoWords(engine, text, rangeStart, rangeEnd)) return
         const range = text.slice(rangeStart, rangeEnd)
-        const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'word' }).segment(range))
+        wordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+        const segments = Array.from(wordSegmenter.segment(range))
         for (let k = 1; k < segments.length; k++) {
           if (!isDictionaryMark(range.codePointAt(segments[k]!.index)!)) isBoundary[rangeStart + segments[k]!.index] = 1
         }
