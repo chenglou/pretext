@@ -74,6 +74,10 @@ const classes = new Map<string, Class>()
 let asked = 0
 let distinctKeys = 0
 let stoppedAtNewQuestion = 0
+const stoppedBySet: Record<string, number> = {}
+// Distinct keys that are Latin-1 only, by the partition of the context they were asked of: in a `16bit` context such a key
+// names a forced slice (engines/blink/shape.ts canvasString).
+const latin1KeysByPartition: Record<string, number> = {}
 let predictionErrors = 0
 let current = -1
 let currentSet = ''
@@ -111,6 +115,7 @@ function settingsOf(context: { settings: Settings }): string {
     answer[slot] = value
     firstCase[slot] = current
     distinctKeys++
+    if (latin1Only(key)) latin1KeysByPartition[context.settings.partition] = (latin1KeysByPartition[context.settings.partition] ?? 0) + 1
     return
   }
   if (used[slot] === 2 || answer[slot] === value) return
@@ -154,7 +159,10 @@ for (let n = 0; n < sets.length; n++) {
         const hook = predictor.predict(input.case, { browser: input.browser, build: input.build.engine, languages: input.languages })
         if ('error' in hook) predictionErrors++
       } catch (error) {
-        if (error instanceof NewQuestion) stoppedAtNewQuestion++
+        if (error instanceof NewQuestion) {
+          stoppedAtNewQuestion++
+          stoppedBySet[currentSet] = (stoppedBySet[currentSet] ?? 0) + 1
+        }
         else predictionErrors++
       } finally {
         replay.restore()
@@ -166,7 +174,7 @@ for (let n = 0; n < sets.length; n++) {
 execFileSync('trash', [scratch])
 
 const report = {
-  browser, config, cases: cases.length, questionsThatReachedCanvas: asked, distinctKeys, tableSlots: SIZE, stoppedAtNewQuestion, predictionErrors,
+  browser, config, cases: cases.length, questionsThatReachedCanvas: asked, distinctKeys, tableSlots: SIZE, stoppedAtNewQuestion, stoppedBySet, predictionErrors, latin1KeysByPartition,
   keysWithTwoAnswers: [...classes].map(([name, entry]) => ({ class: name, keys: entry.keys, bySet: entry.bySet, examples: entry.examples })),
 }
 const text = `${JSON.stringify(report, null, 1)}\n`
