@@ -90,7 +90,7 @@
 // - giants (paragraphs over 50,000 units) are in no recorded set.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { installReplay, newSiteTally, NewQuestion, readMeasurements, type PageFacts, type SiteCount, type SiteTally } from '../lab/measurements.ts'
@@ -976,8 +976,13 @@ async function freeze(): Promise<number> {
     sets: report.emitted, cases: report.counts.cases, ledger: ledgerHashes(dir),
   }
   writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  if (before !== null) rmSync(join(dir, 'reference'), { recursive: true, force: true })
-  execFileSync('mv', [staging, join(dir, 'reference')])
+  // The replaced reference steps aside in one rename and goes only once the new one is in its place: a removal that
+  // fails halfway leaves a whole reference, and a reader outside the gates' turn never meets half a folder.
+  const replaced = join(dir, '.reference-old')
+  rmSync(replaced, { recursive: true, force: true })
+  if (before !== null) renameSync(join(dir, 'reference'), replaced)
+  renameSync(staging, join(dir, 'reference'))
+  rmSync(replaced, { recursive: true, force: true })
   // The repository pins the reference of the default folder only; a trial folder (--dir) pins nothing.
   const pinned = join(REPO, `rebuild/tests/reference/${browser}-${config}.json`)
   const pins = options.get('dir') === undefined
