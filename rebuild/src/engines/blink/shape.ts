@@ -24,7 +24,7 @@
 // joining-technology there.
 import { width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
-import { collapsesWhiteSpace, stringOfUnits } from './content.js'
+import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
 import { isSegmentEdge } from './emoji.js'
@@ -247,7 +247,10 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
     codes = keptCodes
     units = keptUnits
   }
-  const s = stringOfUnits(codes)
+  // One String.fromCharCode call where the units fit its arguments, which is every string but a long text's: no copy.
+  let s = ''
+  if (codes.length <= 4096) s = String.fromCharCode(...codes)
+  else for (let i = 0; i < codes.length; i += 4096) s += String.fromCharCode(...codes.slice(i, i + 4096))
   // A segmented paragraph's Latin-1-only string is 16-bit when V8 slices it, from 13 code units on; a Latin range keeps the
   // one Latin segment of an 8-bit string. A shorter range the paragraph shapes under another script gets U+2060 before it,
   // which makes the string 16-bit without a glyph or a script (the ignorables probe above: U+2060 alone measures 0, and
