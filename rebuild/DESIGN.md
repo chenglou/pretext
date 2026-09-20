@@ -46,7 +46,7 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 | Data | What it holds | Made by | Lives as long as | Depends on the width |
 |---|---|---|---|---|
 | Input | the `Paragraph` tree (§1.1), the `Environment` (§1.4), a `LineSlot { width, left, right }` per line (§2.9) | the caller | the caller's scope | the slot only |
-| List of contexts | the Canvas contexts a page has made, each found by its settings (§4.6, "A page's list of contexts"); nothing derived from them | the caller, as an empty array; `prepare` starts one per call when it is given none | the page, in WebKit until its fonts change; or one `prepare` call | no |
+| List of contexts | the Canvas contexts a page has made, each found by its settings (§4.6, "A page's list of contexts"); nothing derived from them | the caller, as an empty array; `prepare` starts one per call when it is given none, and at every call in Gecko | the page, in Blink and in WebKit until the page adds a loaded FontFace; one prepared paragraph in Gecko, and wherever none is handed over | no |
 | Prepared paragraph | the engine's content, items, styles and break data, the widths it knows before filling lines, references to the Canvas contexts it measures in (§4.6), the environment, and `inspect`: a record on a paragraph prepared for inspection, null on a plain one | `prepare` | the caller keeps it | no: one prepared paragraph serves any width |
 | Line start | where the next line starts: small plain data that names positions in the prepared paragraph's lists and holds nothing of it (§2.7) | `firstLine`, a fill result's `next` | the caller's scope; it survives JSON | no |
 | Decided line | the engine's own record of one filled line (Blink's `LineInfo` with its results, WebKit's closed `Line` with its rect, Gecko's last reflow pass), and on an inspected paragraph the gaps its filling raised, in order | `fillLine` | the caller's scope; counting lines drops it | yes |
@@ -1620,8 +1620,9 @@ as a key (research/BLINK-STRING-STORAGE.md). Measuring the same text in the same
 all three engines (Blink returns its cached node for the whole string; WebKit and Gecko shape the same way), so asking
 again can't change a result, only cost a call (§4.7).
 
-`prepare` takes the list of contexts (below, "A page's list of contexts"), a page's or one call's; no other function
-does. A prepared paragraph keeps the list it was made with, which serves every line filled from it, at any width, and
+`prepare` takes the list of contexts (below, "A page's list of contexts"), a page's or one call's, and in Gecko starts
+its own whatever it is handed; no other function does.
+A prepared paragraph keeps the list it was made with, which serves every line filled from it, at any width, and
 the records that measure hold their contexts by reference:
 
 - Blink: a style holds its contexts (`types.ts` `StyleContexts`: shaping LTR and RTL, the same two without ligatures, and
@@ -1770,17 +1771,45 @@ kept contexts. A prototype also kept the checks' questions with Canvas's answers
 alone pays nearly as much and that the kept answers were the one part that went stale silently
 (research/PERF-LIFETIME.md), so this smaller form was built.
 
-- *Lifetime.* The caller's: a page's, or one call's. A call that is given none starts an empty list, and then nothing
-  outlives a prepared paragraph, which is what the lab's usual predictors do, so a recorded case stays what one
-  paragraph asks and tier 1 stays sound per case. A page keeps one array and hands it to every `prepare`.
-- *What invalidates it.* Only webkit-host's contexts, after the page's fonts change. Probe `contexts-font-load`
-  (2026-09-19): Chrome's and Firefox's OffscreenCanvas contexts measure with a family that loaded after their font was
-  assigned, strings they had measured before included; webkit-host's keep measuring the fallback, until another font
-  string is assigned. So in Chrome and Firefox the next `prepare` on the old list sees the loaded font, in the checks'
-  answers and in the engine's widths alike. In WebKit a page starts a new list where it prepares its paragraphs again
-  after its fonts change, which main's cache asks of its caller too; the library reads nothing of the document, so it
-  can't know. Paragraphs prepared before the load are stale in every engine, as they always were. What doesn't
-  invalidate it:
+- *Lifetime.* The caller's, in Blink and WebKit: a page's, or one call's. A call that is given none starts an empty
+  list, and then nothing outlives a prepared paragraph, which is what the lab's usual predictors do, so a recorded case
+  stays what one paragraph asks and tier 1 stays sound per case. A page keeps one array and hands it to every
+  `prepare`. Gecko's contexts are one prepared paragraph's whatever the caller hands over (since 2026-09-20 `index.ts`
+  `prepare` starts a list of its own there, for the checks and the port): a kept Firefox context can answer otherwise
+  than a new one, and no page can know when (the next bullet; research/CONTEXTS-HEAL.md has the study and its review).
+- *What invalidates it.* In Chrome nothing: a canvas font asks the page's font selector for its fallback list again
+  once the list was marked invalid, and the DOM uses the same list. In WebKit one thing a page does itself: adding a
+  FontFace that has already loaded (`load()` first and `add()` after, or a FontFace made from bytes) to a
+  `document.fonts` that holds no face. WebKit's font cache leaves the page's font set out of its key while the set is
+  empty, and the set tells a context's font about a new face before the face is in it, so the kept context asks again
+  and gets the fonts it had; it stays on the fallback until the set changes again, or another font string is assigned.
+  A set that held a face and was emptied is the same case (add, delete, add a loaded face again is stale too), and so
+  is an installed family that a loaded FontFace of the same name takes over (probe `contexts-heal-attack` H4, H3). A
+  page that adds loaded faces starts a new list after it, where it prepares its paragraphs again, which main's cache
+  asks of its caller too; the library reads nothing of the document, so it can't know. A FontFace added before it
+  loads, an `@font-face` rule, and a face added to a set that holds one reach a kept WebKit context by themselves
+  (probe `contexts-start-up` W1 to W10, 2026-09-20). Probe `contexts-font-load` (2026-09-19) is the first of those
+  routes, a FontFace made from bytes, loaded, then added: Chrome's and Firefox's OffscreenCanvas contexts measure with
+  a family that loaded after their font was assigned, strings they had measured before included; webkit-host's keep
+  measuring the fallback, until another font string is assigned. So in Chrome the next `prepare` on the old list sees
+  the loaded font, in the checks' answers and in the engine's widths alike. A web font reaches a kept Firefox context
+  too; what doesn't is a family name Firefox learns late. In Firefox a context resolves its family names at its first
+  measurement, and Firefox reads the fonts' localized and legacy family names after start-up (8 s in, 60 s on Windows,
+  or from the first ask, about a second's work on the lab's machine). Their arrival moves no generation a font group
+  checks and reaches the DOM alone, as a reflow. A context first used before it stays on the fallback for
+  `"ヒラギノ角ゴシック"` or `"Avenir Next Condensed Heavy"` for as long as it lives, and nothing a page can assign makes
+  it look again, `reset()` and a resize included (probe `contexts-start-up` S1, S2, `contexts-heal-attack` H5;
+  `tools/contexts-start-up-probe.ts` L1 shows the kept list of the tree before the rule at 6 lines beside the DOM's 3).
+  That is why Gecko has no page's list. It gives back ×0.92 on the chat mix and ×0.75 on plain ASCII. It keeps the
+  damage to the paragraphs prepared before the names arrived and doesn't mend those. A prepared paragraph holds its
+  contexts and its fills ask them again, so such a paragraph lays out with the fallback until the page prepares it
+  again (`tools/contexts-heal-attack-probe.ts` K1: 6 lines where the DOM has 3), and one first filled after the names
+  arrived measures with two fonts, since the contexts its fill makes find the family (K3: a word broken after its
+  first character). Nothing tells a page when. A page that names its families by their canonical English names never
+  meets this: of 22 names from common font lists, 9 are late names on the lab's Mac, `"ヒラギノ角ゴ ProN W3"` among them
+  (`probes/contexts-heal-attack.ts` H1), and no English canonical name moved in any run. Both engines' cases are in
+  the platform ledger (platform-bugs/LEDGER.md, entries 15 and 16). Paragraphs prepared before a font change are stale
+  in every engine, as they always were. What doesn't invalidate it:
   - The document's language. Blink's and Gecko's contexts get an explicit `lang`, one of the settings a context is
     found by, and WebKit's has none. Probe `contexts-page-lang`: in all three browsers a context made before `<html
     lang>` changed measures what one made after it measures. In Firefox a context whose `lang` is '' follows the
@@ -1796,10 +1825,12 @@ alone pays nearly as much and that the kept answers were the one part that went 
     measures the same at every factor. Not probed: a real move between displays and the browser's own zoom, which the
     emulation stands in for.
 - *What bounds it.* The distinct settings a page measures with: about 8 contexts per font declaration in Blink and 3 in
-  WebKit and Gecko (a plain paragraph; `tools/contexts-bound.ts`). The chat mix holds 24 contexts in Chrome, 13 in
-  Firefox and 11 in webkit-host for 1,000 messages, and on the tier sets a document's list makes 1.81 contexts a case in
-  Chrome, 0.42 in Firefox and 0.20 in webkit-host, where a list a case makes 15.75, 4.62 and 7.77, for the same
-  `measureText` calls (736.24, 120.23 and 85.90 a case without facts, inspected). Settings that never repeat (an
+  WebKit and Gecko (a plain paragraph; `tools/contexts-bound.ts`). The chat mix holds 24 contexts in Chrome and 11 in
+  webkit-host for 1,000 messages, and Firefox holds none (its 13 were the page's before 2026-09-20), and on the tier
+  sets a document's list makes 1.81 contexts a case in Chrome, 0.42 in Firefox and 0.20 in webkit-host, where a list a
+  case makes 15.75, 4.62 and 7.77, for the same `measureText` calls (736.24, 120.23 and 85.90 a case without facts,
+  inspected; Firefox's 0.42 is from before 2026-09-20, and a document's list there now makes what a list a case
+  makes). Settings that never repeat (an
   animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so `prepare`,
   which sees both of the list's users, empties a list longer than 512 contexts; prepared paragraphs hold theirs by
   reference and keep them. The number comes from the search's cost: a lookup compares
@@ -1842,7 +1873,8 @@ alone pays nearly as much and that the kept answers were the one part that went 
   turns in one document). On a quiet machine the prototype's review measured this form as a variant of the bench page
   (2026-09-19, research/PERF-LIFETIME.md, the review's §4): Chrome 4.60 s to 3.70 s on the mix and 4.01 s to 3.35 s on
   plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox, whose checks ask nothing, 2.76 s to 2.51 s
-  and 0.58 s to 0.46 s. This form's own run (2026-09-20, `.artifacts/bench/contexts-20260919/two`, five alternating
+  and 0.58 s to 0.46 s, which Gecko gave back on 2026-09-20 (above, "What invalidates it").
+  This form's own run (2026-09-20, `.artifacts/bench/contexts-20260919/two`, five alternating
   pairs) ran while other work kept the machine about twice as slow as that, the bench's fixed arithmetic at 47 to 61 ms
   where a quiet run has 27 to 29, so its ratios count and its times don't: Chrome 6.34 s to 4.76 s on the mix (medians;
   the pairs ×0.63 to ×1.00) and 8.30 s to 7.09 s on plain ASCII (×0.82 to ×0.94); webkit-host 283 ms to 166 ms and 260
