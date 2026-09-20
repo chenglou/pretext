@@ -429,7 +429,10 @@ After the freeze the full offline gates exit 0 on the frozen tree (39 gates, no 
 "A page's list of contexts"; research/PROFILING-START.md, item 1; research/PERF-LIFETIME.md has the prototype that also
 kept the font checks' answers, and its review). The lab's usual predictors hand `prepare` none, so every case makes its
 own contexts and a case's record stays what one paragraph asks: the references, the seeds and tier 1 are untouched by
-it. What holds a page's list (`.artifacts/tests/runs/contexts-20260919`, `.artifacts/bench/contexts-20260919`):
+it. Since 2026-09-20 Gecko's `prepare` makes its contexts anew whatever list it is handed (DESIGN.md §4.6, "What
+invalidates it"), so in Firefox a page predictor's run is a usual run, and the bench's one-list rows measure there what
+a list a message measures. What holds a page's list (`.artifacts/tests/runs/contexts-20260919`,
+`.artifacts/bench/contexts-20260919`):
 
 - **Three predictors** under `baselines/`, `page-contexts-predictor.ts`, `page-contexts-facts-predictor.ts` and
   `page-contexts-plain-predictor.ts`: the usual three with one list for every case a document lays out
