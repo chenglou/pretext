@@ -117,7 +117,9 @@ type Gate = {
   report: string | null
   // What the gate reads beside the working tree, which every gate reads: files and folders of .artifacts, as paths from
   // the top of the working tree. The key of a kept result walks these lists (inputsKey), so a gate's input is in the key
-  // by being named here, where the gate is made (gatesOf).
+  // by being named here, where the gate is made (gatesOf). Every *.zst under a path named here goes in by its name, size
+  // and time, not its bytes, which is sound for a frozen reference's shards alone, whose hashes the manifests hold: a
+  // gate that reads another *.zst needs it in the key by its bytes.
   reads: string[]
   read: (code: number, report: unknown, log: string) => Verdict | Tier1Verdict
 }
