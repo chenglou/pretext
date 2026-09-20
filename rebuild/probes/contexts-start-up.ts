@@ -19,10 +19,14 @@
 // - S3: S1 with three more declarations, each a web font that arrives four seconds in, by three routes at once: a FontFace
 //   made from bytes and added, a FontFace with a URL added and then loaded, an @font-face rule that a span uses. In Firefox
 //   the page's font set changing is also what brings S1's stale contexts back.
-// - W1 to W8: one route alone in a document of its own, two seconds in, with a span in the family (W1 bytes, W2 URL, W3
+// - W1 to W10: one route alone in a document of its own, two seconds in, with a span in the family (W1 bytes, W2 URL, W3
 //   rule) and without any DOM text in it (W4, W5, W6), which is a page that paints with Canvas or prepares before it
 //   renders. probes/contexts-font-load.ts is W4's case. W7 and W8 are a fourth route with and without the span: a
 //   FontFace with a URL that is loaded first and added after, which is how most pages that load fonts by script do it.
+//   W9 is W8 in a page whose font set already holds another face, and W10 is W8 with a second face of another family
+//   loaded and added right after the first: WebKit's font cache leaves the page's font set out of its key while the set
+//   is empty, and the set tells its listeners about a new face before the face is in it (FontCascadeCache.cpp:104-115,
+//   CSSFontSelector.cpp:526-539, CSSFontFaceSet.cpp:203-209), so only the first face of a page should go unseen.
 // - T1: what each way costs beside making a context, a loop per way, the ways taking turns over five rounds. Times, so
 //   read the ratios between ways; `spinMs` is a fixed arithmetic loop of its own before and after each font, which shows
 //   a machine whose load changed during the run.
@@ -57,6 +61,7 @@ const WEB_ROWS = {
   url: ['a web font, a FontFace with a URL added and then loaded', '"Late Url", monospace', 'en', LATIN],
   rule: ['a web font, an @font-face rule', '"Late Rule", monospace', 'en', LATIN],
   loaded: ['a web font, a FontFace with a URL loaded and then added', '"Late Loaded", monospace', 'en', LATIN],
+  second: ['a web font, a second FontFace loaded and then added right after the first', '"Late Second", monospace', 'en', LATIN],
 };
 const fontOf = (row, size) => 'normal 400 ' + size + 'px ' + row[1];
 `
@@ -65,6 +70,11 @@ const OVER_TIME = String.raw`
 const make = (row) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c.lang = row[2]; c.font = fontOf(row, 32); return c; };
 const WAYS = ['kept', 'sameString', 'otherAndBack', 'otherAndBackLate', 'kerning', 'kerningLate', 'lang', 'langLate', 'spacing', 'kerningAndNewSpelling', 'firstMeasuredLate'];
 const LATE_MS = 5000;
+if (EARLY_FACE) {
+  const early = new FontFace('Early Other', 'url(/fonts/amiri.ttf?early-other)');
+  await early.load();
+  document.fonts.add(early);
+}
 const t0 = performance.now();
 const contexts = ROWS.map(row => WAYS.map(() => make(row)));
 const spellings = ROWS.map(() => 0);
@@ -118,6 +128,11 @@ const startFonts = async () => {
     const loaded = new FontFace('Late Loaded', 'url(/fonts/amiri.ttf?late-loaded)');
     await loaded.load();
     document.fonts.add(loaded);
+  }
+  if (ROUTES.includes('second')) {
+    const second = new FontFace('Late Second', 'url(/fonts/amiri.ttf?late-second)');
+    await second.load();
+    document.fonts.add(second);
   }
   if (ROUTES.includes('rule')) {
     const style = document.createElement('style');
@@ -186,9 +201,9 @@ for (let f = 0; f < FONTS.length; f++) {
 return out;
 `
 
-function overTime(rows: string, waitedMs: number, routes: string[], fontsAtMs: number, withSpans: boolean): string {
+function overTime(rows: string, waitedMs: number, routes: string[], fontsAtMs: number, withSpans: boolean, earlyFace = false): string {
   const wait = waitedMs === 0 ? '' : 'await new Promise(resolve => setTimeout(resolve, WAITED_MS));'
-  return `${ROWS}\nconst ROWS = ${rows};\nconst WAITED_MS = ${waitedMs};\nconst ROUTES = ${JSON.stringify(routes)};\nconst FONTS_AT_MS = ${fontsAtMs};\nconst WITH_SPANS = ${withSpans};\n${wait}\n${OVER_TIME}`
+  return `${ROWS}\nconst ROWS = ${rows};\nconst WAITED_MS = ${waitedMs};\nconst ROUTES = ${JSON.stringify(routes)};\nconst FONTS_AT_MS = ${fontsAtMs};\nconst WITH_SPANS = ${withSpans};\nconst EARLY_FACE = ${earlyFace};\n${wait}\n${OVER_TIME}`
 }
 
 const ROUTE_NAMES = ['bytes', 'url', 'rule']
@@ -217,6 +232,13 @@ for (let i = 0; i < 2; i++) {
     observe: [{ kind: 'script', source: overTime('[WEB_ROWS.loaded]', 0, ['loaded'], 2000, i === 0) }],
   })
 }
+probes.push({
+  id: 'contexts-start-up W9', spec: 'one web font two seconds in, route loaded, without DOM text, in a page whose font set already holds another face', pageLang: 'en', html: '<div></div>',
+  observe: [{ kind: 'script', source: overTime('[WEB_ROWS.loaded]', 0, ['loaded'], 2000, false, true) }],
+}, {
+  id: 'contexts-start-up W10', spec: 'two web fonts two seconds in, each loaded and then added, one after the other, without DOM text', pageLang: 'en', html: '<div></div>',
+  observe: [{ kind: 'script', source: overTime('[WEB_ROWS.loaded, WEB_ROWS.second]', 0, ['loaded', 'second'], 2000, false) }],
+})
 probes.push({
   id: 'contexts-start-up T1', spec: 'what each way of touching a kept context costs beside making a context', pageLang: 'en', html: '<div></div>',
   observe: [{ kind: 'script', source: TIMING }],
