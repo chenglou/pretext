@@ -277,7 +277,15 @@ so tier 1 can't pass before a new recording, and what holds it is the browser.
   709.83 where it asked 736.24. Firefox and webkit-host don't run this code: their bench counts are the same on both
   trees (110.67 and 82.14 calls a message in Firefox, 36.79 and 31.39 in webkit-host), and tier 1 shows 0 questions
   changed there.
-- *Time.* TIMING
+- *Time.* The bench's headline (10,000 chat messages from scratch, 3 passes a run, pinned Chrome, background window, AC
+  power), the tree before and the tree after taking turns, four pairs in two exclusive stretches of 9 minutes at a
+  1-minute load of 2.9 to 6.0, the page's fixed arithmetic at 27 to 29 ms throughout. The mix: 4.58 s before (the four
+  runs' medians 4.50 to 4.59 s) and 3.24 s after (3.13 to 3.61 s). Plain ASCII: 4.00 s (3.98 to 4.05 s) and 2.99 s (2.87
+  to 3.05 s). Main's cold batch in the same pages didn't move (0.31 and 0.32 s, 0.19 and 0.19 s). So the item takes 29%
+  off the mix and 25% off plain ASCII, and it doesn't reach the bar by itself. With item 1's measured saving (0.92 s
+  and 0.65 s, research/PERF-LIFETIME.md) the two would come to about 2.3 s on both sets if they add, which is a sum and
+  not a run; the store study's sum of two probes had 1.8 to 2.0 s and 2.0 to 2.4 s. A kept paragraph laid out at three
+  other widths was measured once a run and not in turns (2.2 to 4.2 s on either tree): the counts say it didn't move.
 - *Proof.* Tier 2 in pinned Chrome, both orders, both configurations, recorded: 0 status transitions without facts;
   with facts 20, all on the painter's metric and none from a pass (one text, `x AVAV…AV y`: the old gap sat at every
   cut of the word, since every offset in it kerns, and the painter's failure on that line was attributed to it; 8 rows
