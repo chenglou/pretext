@@ -3,7 +3,7 @@
 // slices of the checked-in long-form corpora (corpora/*.txt), with the bench's chat lengths, under the stand-in Canvas.
 //
 //   bun rebuild/tools/store-real-text.ts --engine=blink|webkit|gecko --set=ascii-once|languages-once|bench-latin|bench-mix
-//     [--count=N] [--device-pixel-ratio=2] [--out=<report.json>]
+//     [--count=N] [--device-pixel-ratio=2] [--widths=320,260,380,440] [--checked=yes] [--out=<report.json>]
 //
 // - ascii-once: the bench's ASCII source (en-gatsby-opening, made printable ASCII as bench/cases.ts does), cut once from
 //   start to end: about 2,600 messages, no unit of text in two messages.
@@ -14,12 +14,18 @@
 // A question is a context's assigned settings and a string, as in tools/store-study.ts. Per block of messages it counts
 // the asks and the ones new to the page, split by the string's length (1 or 2 units, 3 to 16, over 16), since the
 // study's claim is that short strings repeat across messages and long ones don't.
+// --widths: every message is prepared once and filled at each width in turn, the first as from scratch and the others as a
+// kept paragraph laid out again; the report's `layouts` has the asks, the units sent and the strings new to the page of
+// each. For Blink the report also tallies every filled line by the script at its start and by how its candidate was found
+// (shape.ts wordsCheck: from words, or why it was left to the search), and the messages all of whose lines were found
+// without the search; --checked=yes holds every candidate found from words against the search and throws on a difference.
 // --device-pixel-ratio: the study counted at 2. Blink measures at the zoomed size and cuts a group into pieces below 256
 // zoomed px, so its asks a message grow with the ratio.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { blinkFontChecks } from '../src/engines/blink/checks.ts'
 import * as blink from '../src/engines/blink/index.ts'
+import * as blinkShape from '../src/engines/blink/shape.ts'
 import { geckoFontChecks } from '../src/engines/gecko/checks.ts'
 import * as gecko from '../src/engines/gecko/index.ts'
 import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
@@ -219,7 +225,7 @@ const page = new Map<string, Set<string>>()
 const EDGES = [100, 500, 1000, 1500, 2000, 2500, 5000, 10000]
 const blocks: Block[] = []
 let block = newBlock(0)
-onCall = (settings, text) => {
+const onCallOfBlocks = () => (settings: string, text: string): void => {
   let strings = page.get(settings)
   if (strings === undefined) {
     strings = new Set()
@@ -232,10 +238,43 @@ onCall = (settings, text) => {
   block.fresh[kind]!++
   block.freshUnits[kind]! += text.length
 }
+// Blink's tallies of how each line's candidate was found; a tree without them has no `wordsCheck`.
+const wordsCheck = (blinkShape as { wordsCheck?: { on: boolean; log: string[] | null; lines: Map<string, number> } }).wordsCheck
+if (wordsCheck !== undefined && engine === 'blink') {
+  wordsCheck.log = []
+  wordsCheck.on = options.get('checked') === 'yes'
+}
+const searchedLines = (): number => {
+  let n = 0
+  if (wordsCheck !== undefined) for (const [key, count] of wordsCheck.lines) if (!key.endsWith('|no search') && !key.endsWith('|words')) n += count
+  return n
+}
+const widths = (options.get('widths') ?? String(CHAT_WIDTH)).split(',').map(Number)
+const layouts = widths.map(width => ({ width, asks: 0, units: 0, fresh: 0, freshUnits: 0 }))
+let layout = layouts[0]!
+const blockCall = onCallOfBlocks()
+onCall = (settings, text) => {
+  const known = page.get(settings)?.has(text) === true
+  layout.asks++
+  layout.units += text.length
+  if (!known) {
+    layout.fresh++
+    layout.freshUnits += text.length
+  }
+  blockCall(settings, text)
+}
+let withoutSearch = 0
 let units = 0
 for (let i = 0; i < messages.length; i++) {
   units += messages[i]!.length
-  fillAll(prepareMessage(messages[i]!), CHAT_WIDTH)
+  const searchedBefore = searchedLines()
+  layout = layouts[0]!
+  const prepared = prepareMessage(messages[i]!)
+  for (let w = 0; w < widths.length; w++) {
+    layout = layouts[w]!
+    fillAll(prepared, widths[w]!)
+  }
+  if (searchedLines() === searchedBefore) withoutSearch++
   if (EDGES.includes(i + 1) || i + 1 === messages.length) {
     block.to = i + 1
     blocks.push(block)
@@ -245,6 +284,9 @@ for (let i = 0; i < messages.length; i++) {
 
 const report = {
   engine, set, devicePixelRatio: Number(options.get('device-pixel-ratio') ?? 2), messages: messages.length, unitsOfText: units,
+  layouts: layouts.map(l => ({ width: l.width, asksPerMessage: l.asks / messages.length, unitsPerMessage: l.units / messages.length, newToThePagePerMessage: l.fresh / messages.length, newUnitsPerMessage: l.freshUnits / messages.length })),
+  messagesWithoutSearch: wordsCheck === undefined ? null : withoutSearch,
+  lines: wordsCheck === undefined ? null : [...wordsCheck.lines].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ script: Number(key.slice(0, key.indexOf('|'))), candidate: key.slice(key.indexOf('|') + 1), lines: count })),
   blocks: blocks.map(b => {
     const over = b.to - b.from
     const asks = b.asks[0]! + b.asks[1]! + b.asks[2]!
