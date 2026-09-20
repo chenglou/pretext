@@ -1319,15 +1319,17 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
     right = f32(right + w)
     index++
   }
-  let trailingSoftHyphenIndex: number | null = null
+  // The item that ends the content so far, where it is text with a trailing soft hyphen.
+  let trailingSoftHyphen: WebKitTextItem | null = null
   for (; index < endIndex; index++) {
     const item = items[index]!
+    trailingSoftHyphen = null
     switch (item.kind) {
       case 'text': {
         const w = measuredItemWidth(L, item, f32(L.contentEdgeOffset + right))
         appendTextContent(L, candidate.content, item, w)
         right = f32(right + f32(w + (item.isWordSeparator ? L.p.boxes[item.box]!.style.wordSpacing : 0)))
-        trailingSoftHyphenIndex = item.hasTrailingSoftHyphen ? index : null
+        if (item.hasTrailingSoftHyphen) trailingSoftHyphen = item
         break
       }
       case 'inline-box-start':
@@ -1347,15 +1349,10 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
         break
     }
   }
-  // setTrailingSoftHyphenWidth (:1154-1165): the hyphen counts in the fit test when only text follows the soft hyphen.
-  if (trailingSoftHyphenIndex !== null) {
-    let onlyText = true
-    for (let k = trailingSoftHyphenIndex; k < endIndex; k++) if (items[k]!.kind !== 'text') onlyText = false
-    if (onlyText) {
-      const shy = items[trailingSoftHyphenIndex] as WebKitTextItem
-      candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, shy.box))
-    }
-  }
+  // setTrailingSoftHyphenWidth (:1154-1165): the hyphen counts in the fit test when only text follows the soft hyphen. The
+  // source keeps the index of the last text item where that has a soft hyphen, and looks for another kind of item from there
+  // to the end; no text follows the last text item, so only text follows exactly where that item ends the content.
+  if (trailingSoftHyphen !== null) candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, trailingSoftHyphen.box))
   candidate.hasTrailingSoftWrapOpportunity = hasTrailingSoftWrapOpportunity(b, endIndex)
   applyShapingIfNeeded(L, candidate.content)
   return candidate
