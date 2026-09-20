@@ -12,7 +12,7 @@ import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { isTrimmableChar, pxToAu } from './prepare.js'
 import { isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript } from './props.js'
 import {
-  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt,
+  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, UNIT_SOFT_HYPHEN, KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt,
   type GeckoEdgeItem, type GeckoObjectItem, type GeckoPrepared, type GeckoTextRun, type GeckoUnit,
 } from './types.js'
 
@@ -236,7 +236,10 @@ function lastInnerCandidate(p: GeckoPrepared, unit: GeckoUnit, natural: boolean,
 // (gfxTextRun.cpp:1095-1112), so the scan ends at the first candidate that doesn't fit. What can't be decided here is
 // refused, and the engine's loop decides it:
 // - a scan that starts or ends inside a unit, or trims from inside one, reads an advance inside a unit;
-// - soft hyphens and break-spaces add candidates this walk doesn't list.
+// - break-spaces adds candidates this walk doesn't list, and so does a unit that a removed soft hyphen stands in or
+//   before, where the walk stops: a hyphenation break tests the fit with the hyphen's width and aborts without it
+//   (gfxTextRun.cpp:1090-1112). The loop ends at the first candidate that doesn't fit, so a soft hyphen after the scan's
+//   end is never reached by either.
 // A unit can hold candidates inside itself: natural breaks (after a hyphen, between Han characters), and while no normal
 // break was accepted every cluster start under overflow-wrap, or the emergency break after a hyphen
 // (gfxTextRun.cpp:1071-1078). Their advances are Canvas questions. In mode 'proven' such a scan is refused. In mode
@@ -254,7 +257,6 @@ function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: 
   const run = prov.run
   const end = aStart + aMaxLength
   if (isBreakSpaces) return 'break-spaces'
-  if (run.hasShy) return 'soft-hyphen'
   if (!startsUnit(p, run, aStart)) return 'starts-inside-unit'
   if (!startsUnit(p, run, end)) return 'ends-inside-unit'
   let breakPriority = priorityIn
@@ -268,6 +270,8 @@ function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: 
   for (let k = aStart < end ? p.unitOf[aStart]! : p.units.length; k < p.units.length && p.units[k]!.tStart < end; k++) {
     const unit = p.units[k]!
     const t = unit.tStart
+    const inner = p.unitInner[k]!
+    if ((inner & UNIT_SOFT_HYPHEN) !== 0) return 'soft-hyphen'
     if (t > aStart || suppress === 'none') {
       const atBreak = p.breakFlags[t] === BREAK_NORMAL
       const wordWrapping = (canWordWrap || (canWhitespaceWrap && p.breakFlags[t] === BREAK_EMERGENCY_WRAP)) && p.clusterStart[t] === 1 &&
@@ -290,7 +294,6 @@ function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: 
         }
       }
     }
-    const inner = p.unitInner[k]!
     const wrapsInside = breakPriority <= WORD_WRAP_BREAK &&
       ((canWordWrap && (inner & INNER_CLUSTER) !== 0) || (canWhitespaceWrap && (inner & INNER_EMERGENCY) !== 0))
     if ((inner & INNER_NATURAL) !== 0 || wrapsInside) {

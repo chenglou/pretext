@@ -275,13 +275,16 @@ export type PairPlacement = {
 }
 
 // What a shaping unit holds after its first character, as bits of GeckoPrepared.unitInner: a natural break opportunity, a
-// cluster start, an emergency break after a hyphen at a cluster start; and whether a word holds a trimmable space
-// anywhere (U+3000, or a space before a cluster extender). The word scan (lines.ts wordScan) reads them to know which
-// break candidates lie inside a unit, where an advance is a Canvas question.
+// cluster start, an emergency break after a hyphen at a cluster start; and, anywhere in it, whether a word holds a
+// trimmable space (U+3000, or a space before a cluster extender) and whether a removed soft hyphen stands before one of
+// its characters, its first included (a hyphenation break, lines.ts hyphenSoft). The word scan (lines.ts wordScan) reads
+// them to know which break candidates lie inside a unit, where an advance is a Canvas question, and which units it
+// leaves to the engine's loop.
 export const INNER_NATURAL = 1
 export const INNER_CLUSTER = 2
 export const INNER_EMERGENCY = 4
 export const INNER_SPACE = 8
+export const UNIT_SOFT_HYPHEN = 16
 
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0

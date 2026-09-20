@@ -22,7 +22,7 @@ import {
   isDefaultIgnorable, isEastAsianPunctuation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
-  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
+  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, UNIT_SOFT_HYPHEN, KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
   type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
   type RunContexts, type ScriptRun,
 } from './types.js'
@@ -1166,6 +1166,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   for (let u = 0; u < units.length; u++) {
     const unit = units[u]!
     let inner = unit.kind === 'word' && g.isSpace[unit.tStart] === 1 ? INNER_SPACE : 0
+    for (let t = unit.tStart; t < unit.tEnd; t++) if (tSource[t]! > 0 && text.charCodeAt(tSource[t]! - 1) === 0xad) inner |= UNIT_SOFT_HYPHEN
     for (let t = unit.tStart + 1; t < unit.tEnd; t++) {
       if (g.breakFlags[t] === BREAK_NORMAL) inner |= INNER_NATURAL
       if (g.clusterStart[t] === 1) inner |= g.breakFlags[t] === BREAK_EMERGENCY_WRAP ? INNER_CLUSTER | INNER_EMERGENCY : INNER_CLUSTER
