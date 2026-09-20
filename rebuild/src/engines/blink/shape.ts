@@ -756,6 +756,12 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
       : passesSafeTest(sh, g, starts[i]!, starts[i - 1]!, starts[i + 1]!, whole))
   }
   passes.push(true)
+  // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
+  // cuts around it) is the one that just showed 0.
+  for (let i = 1; i + 1 < starts.length && keepsByOffset(sh, g, group.start, group.end); i++) {
+    if (passes[i - 1]! && passes[i]! && passes[i + 1]! && word16[i - 1]! < EXACT16 && word16[i]! < EXACT16 && !holdsNoScript(p, starts[i - 1]!, starts[i]!) &&
+      !holdsNoScript(p, starts[i]!, starts[i + 1]!)) group.wide16[starts[i]! - group.start] = 0
+  }
   for (let i = 0; i + 1 < starts.length;) {
     let j = i + 1
     while (!passes[j]!) j++
