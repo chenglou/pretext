@@ -40,10 +40,10 @@ function message(error: unknown): string {
 const USAGE = 'Usage: bun rebuild/bench/run.ts --browser=chrome|firefox|safari|webkit-host [--foreground] [--smoke] [--out=<dir>] '
   + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--samples=N] '
   + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--headline=N] [--headline-passes=N] [--phase-passes=N] '
-  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--allow-battery] [--allow-no-lock]'
+  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--device-scale-factor=N] [--allow-battery] [--allow-no-lock]'
 const FLAGS = ['foreground', 'smoke', 'allow-battery', 'allow-no-lock']
 const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
-  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms']
+  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms', 'device-scale-factor']
 const flags = new Set<string>()
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -104,6 +104,11 @@ const phasePasses = positiveInteger('phase-passes', smoke ? 1 : 3)
 const quietLoad = args.has('quiet-load') ? positiveInteger('quiet-load', 1) : null
 const quietWaitMin = positiveInteger('quiet-wait-min', 15)
 const stallMs = positiveInteger('stall-ms', 20 * 60_000)
+// --device-scale-factor=N: the page's device pixel ratio, forced at launch: Chrome's --force-device-scale-factor, Firefox's
+// layout.css.devPixelsPerPx. Blink measures at the zoomed size, so what the rebuild asks of Canvas in Chrome grows with the
+// ratio (README.md, "Chat"); the reports' rows record the ratio the page saw.
+const scaleFactor = args.get('device-scale-factor') ?? null
+if (scaleFactor !== null && browser !== 'chrome' && browser !== 'firefox') fail('--device-scale-factor is for --browser=chrome and --browser=firefox; Safari and webkit-host have the screen\'s ratio')
 const runId = randomUUID()
 const startedAt = new Date()
 const stamp = startedAt.toISOString().replace(/[:.]/g, '-')
@@ -458,7 +463,7 @@ async function launchChrome(url: string): Promise<Session> {
   const app = CHROME_APP()
   // CHROME_PIN_ARGS keeps the copy out of Chrome's updater (lab README, "Pinned browsers").
   const common = [`--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
-    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900']
+    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900', ...(scaleFactor === null ? [] : [`--force-device-scale-factor=${scaleFactor}`])]
   if (foreground) return await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [...common, '--new-window', url])
   const session = await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     ...common, '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
@@ -522,6 +527,7 @@ function launchFirefox(url: string): Promise<Session> {
     // Firefox updates the bundle it runs from; these keep the pinned copy at its build.
     ...FIREFOX_PIN_PREFS,
   ]
+  if (scaleFactor !== null) prefs.push(['layout.css.devPixelsPerPx', scaleFactor])
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   const app = FIREFOX_APP()
   return launchApp(app, `${app}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile, ['--new-instance', '--profile', profile, url])

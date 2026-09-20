@@ -112,7 +112,8 @@ Options: `--scripts=latin,cjk,arabic,mixed`, `--sizes=tiny,sentence,paragraph,lo
 row), `--messages=N` (1000; the many rows' messages and the chat rows' timed messages), `--headline=N` (0: the chat
 context's headline passes lay out this many messages, and 0 leaves them out), `--headline-passes=N` (3), `--phase-passes=N`
 (3, smoke 1), `--quiet-load=N` and `--quiet-wait-min=N` (above; off unless given, 15), `--stall-ms=N` (fail after this
-long without a page request, default 20 minutes), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
+long without a page request, default 20 minutes), `--device-scale-factor=N` (Chrome and Firefox: the page's device pixel
+ratio, forced at launch; "Chat" says why it matters), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
 
 ## Inputs
 
@@ -291,6 +292,15 @@ aren't given, because the machine was busy):
 Main makes no context in a batch: it keeps one for the page. Every page had a device pixel ratio of 2, which is why
 Blink's font checks run at all for text without a soft hyphen or joining letters: check 4 asks whether the primary family
 scales linearly to the zoomed size.
+
+**The device pixel ratio.** The headline is read at the ratio of the screen the window opened on, 2 on this Mac's displays.
+Most phones have 3 and most office monitors 1, and what the rebuild asks of Canvas in Chrome follows the ratio: Blink
+measures at the zoomed size, a Canvas total is an exact 16.16 value only below 256 px, and the port cuts a wider group into
+pieces (`engines/blink/shape.ts` `addPieces`), so a message has two to three times the pieces at 3 that it has at 1, and at 1
+check 4 isn't asked at all. `measureText` calls a message from scratch in Chrome 153 over the headline's 10,000 messages
+(`realism-run.ts`, 2026-09-19): 233 (mix) and 211 (ASCII) at a ratio of 1, 336 and 311 at 2, 427 and 400 at 3, with 4.8, 11.2
+and 11.2 contexts. Firefox's calls are the same at 1 and 3. `--device-scale-factor=3` runs any row at a phone's ratio;
+give the headline at the ratio it is claimed for.
 
 ## Realism
 
