@@ -543,8 +543,9 @@ function appendTextContent(L: Layout, c: Content, item: WebKitTextItem, width: n
 // ---- InlineContentBreaker (ICB) ----
 
 // InlineContentBreaker::PartialRun and Result (InlineContentBreaker.h:45-72). A hyphen width comes with hyphens: auto, which
-// the model doesn't have; the trailing soft hyphen's is the line's (Line::trailingSoftHyphenWidth).
-type PartialRun = { length: number; logicalWidth: number }
+// the model doesn't have; the trailing soft hyphen's is the line's (Line::trailingSoftHyphenWidth). `item` is the text item
+// the partial run is the left part of, the trailing run's.
+type PartialRun = { item: WebKitTextItem; length: number; logicalWidth: number }
 type PartialTrailingContent = { trailingRunIndex: number; partialRun: PartialRun | null }
 type BreakResult =
   | { action: 'keep' | 'wrap' | 'wrap-with-hyphen' | 'revert-to-last-wrap-opportunity' | 'revert-to-last-non-overflowing-wrap-opportunity'; isEndOfLine: boolean }
@@ -640,7 +641,7 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
   if (box.is8Bit) {
     // One code unit of 8-bit text (:143-157; gap string-storage).
     emergencyBreakIn8BitText(L.gaps, box, item, firstLength)
-    return { length: firstLength, logicalWidth: firstWidth }
+    return { item, length: firstLength, logicalWidth: firstWidth }
   }
   let breakPosition = firstLength
   let breakWidth = firstWidth
@@ -650,7 +651,7 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
     breakWidth = itemWidth(L.p, item, item.start, item.start + next, contentLogicalRight)
     breakPosition = next
   }
-  return { length: breakPosition, logicalWidth: breakWidth }
+  return { item, length: breakPosition, logicalWidth: breakWidth }
 }
 
 // lastValidBreakingPosition (ICB:364-403)
@@ -682,14 +683,14 @@ function midWordBreak(L: Layout, run: TextContentRun, logicalLeft: number, avail
   const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
   if (!wb.length || wb.length === item.end - item.start) return null
   const lineBreak = L.p.boxes[item.box]!.style.lineBreak
-  if (canBreakBefore(text.charCodeAt(item.start + wb.length), lineBreak)) return { length: wb.length, logicalWidth: wb.logicalWidth }
+  if (canBreakBefore(text.charCodeAt(item.start + wb.length), lineBreak)) return { item, length: wb.length, logicalWidth: wb.logicalWidth }
   let right = item.start + wb.length
   for (; right > item.start; right--) {
     right = codePointStart(text, item.start, right)
     if (canBreakBefore(text.charCodeAt(right), lineBreak)) break
   }
   if (right === item.start) return null
-  return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
+  return { item, length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
 }
 
 // InlineContentBreaker::tryBreakingTextRun (ICB:502-641). `run` is runs[index], a breakable run (isBreakableRun).
@@ -710,7 +711,7 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, run: T
           const wb = midWordBreak(L, run, logicalLeft, availableWidth)
           if (wb !== null) return wb
         }
-        if (canBreakBefore(text.charCodeAt(item.start), lineBreak)) return { length: 0, logicalWidth: 0 }
+        if (canBreakBefore(text.charCodeAt(item.start), lineBreak)) return { item, length: 0, logicalWidth: 0 }
         // firstBreakablePosition (:542-558): U16_FWD_1 with the item length as its limit, as in the source.
         if (st.hasContent) return null
         let right = item.start
@@ -718,25 +719,25 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, run: T
           right = forwardOneCodePoint(text, right, length)
           if (canBreakBefore(text.charCodeAt(right), lineBreak)) {
             if (right === item.end) return null
-            return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
+            return { item, length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
           }
         }
         return null
       }
       const position = lastValidBreakingPosition(L, runs, index, item)
       if (position === null) return null
-      return { length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft) }
+      return { item, length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft) }
     }
     case 'arbitrary': {
       if (length === 0) return null
       if (!isOverflowingRun) {
-        if (nextTextItem(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
-        if (length > 1) return { length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft) }
+        if (nextTextItem(runs, index) !== null) return { item, length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
+        if (length > 1) return { item, length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft) }
         return null
       }
-      if (!lineHasRoomForContent) return { length: 0, logicalWidth: 0 }
+      if (!lineHasRoomForContent) return { item, length: 0, logicalWidth: 0 }
       const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
-      return { length: wb.length, logicalWidth: wb.logicalWidth }
+      return { item, length: wb.length, logicalWidth: wb.logicalWidth }
     }
   }
 }
@@ -1553,13 +1554,12 @@ function commitCandidateContent(b: Builder, content: Content, partial: PartialTr
   const endOfNonPartialContent = partial !== null ? Math.min(partial.trailingRunIndex, runs.length) : runs.length
   for (let i = 0; i < endOfNonPartialContent; i++) appendRun(runs[i]!, i)
   if (partial === null) return
-  const trailing = runs[partial.trailingRunIndex]!
   if (partial.partialRun !== null) {
-    const item = trailing.item as WebKitTextItem
+    const item = partial.partialRun.item
     appendText(L, b.line, leftPart(item, partial.partialRun.length), partial.partialRun.logicalWidth, shapingBoundaryStart !== null ? 'end' : null)
     if (item.level !== DEFAULT_BIDI_LEVEL) b.line.hasNonDefaultBidiLevelRun = true
   } else {
-    appendRun(trailing, partial.trailingRunIndex)
+    appendRun(runs[partial.trailingRunIndex]!, partial.trailingRunIndex)
   }
 }
 
@@ -1640,7 +1640,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
       commitCandidateContent(b, candidate.content, t)
       const committed = t.trailingRunIndex + 1
       if (t.partialRun === null) return lineBuilderResult(true, committed)
-      const item = runs[t.trailingRunIndex]!.item as WebKitTextItem
+      const item = t.partialRun.item
       b.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, committed, false, item.end - item.start - t.partialRun.length, overflowWidthAsLeadingForNextLine(runs, r))
     }
