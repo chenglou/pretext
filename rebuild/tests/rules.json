@@ -798,9 +798,9 @@
    "tests": [
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the pieces add up to the group: the cut moves off an offset where the two sides change each other",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the search asks about no offset inside a word while an offset beside a space passes",
-    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured",
+    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > a cut between two words that passed asks nothing after the tests: the adjustment a position takes there is the 0 they measured",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > an inspected paragraph reports the cut of a group where no offset passes",
-    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the pieces are the ones named, and the window between the cuts around the cut is asked after them",
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)",
     "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the adjustment at the cut is the one its own window shows, not the 0 of the search"
    ],
    "audit": "blink E4, B8",

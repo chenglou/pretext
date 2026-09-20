@@ -116,9 +116,8 @@ export type BlinkGroup = {
   end: number
   style: number
   rtl: boolean
-  // [start, ends of the pieces below 256 zoomed px..., end]: the windows' edges (shape.ts adjust16).
-  windows: number[]
-  // [start, ends of those pieces' words..., end], which holds every entry of `windows`: what a position is summed from.
+  // [start, piece ends..., end]. A piece is a word with its trailing space where the offset after the space passed the
+  // safe test, else what addPieces cut below 256 zoomed px (shape.ts addWordPieces).
   cuts: number[]
   // 16.16 advance sum before each cut, including the pair adjustment at that cut, without HanKerning edge trims.
   prefixAtCut: number[]

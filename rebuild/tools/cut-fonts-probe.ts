@@ -60,7 +60,7 @@ function firstEnd(prepared, width) {
 function groupsOf(prepared) {
   const p = prepared.state
   const groups = []
-  for (let g = 0; g < p.groups.length; g++) groups.push({ start: p.groups[g].start, end: p.groups[g].end, cuts: p.groups[g].cuts, prefix: p.groups[g].prefixAtCut, windows: p.groups[g].windows ?? p.groups[g].cuts })
+  for (let g = 0; g < p.groups.length; g++) groups.push({ start: p.groups[g].start, end: p.groups[g].end, cuts: p.groups[g].cuts, prefix: p.groups[g].prefixAtCut })
   return { text: p.text, groups }
 }
 
@@ -122,29 +122,24 @@ for (let f = 0; f < FONTS.length; f++) {
       const group = gb.groups[g];
       row.groups++;
       if (group.cuts.length > 2) row.cutGroups++;
-      // The head's cuts hold the words' too (shape.ts addWords): its windows' edges are held against the base's cuts, the
-      // positions at those against the base's, and at every other cut of the head, and at the space before it, the position
-      // the head sums against the one the base measures from its last cut.
-      const baseCuts = ga.groups[g].cuts, basePrefix = ga.groups[g].prefix;
-      const headAt = new Map();
-      for (let i = 0; i < group.cuts.length; i++) headAt.set(group.cuts[i], group.prefix[i]);
-      if (JSON.stringify(baseCuts) !== JSON.stringify(group.windows)) { row.cutsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseCuts, headWindows: group.windows }); }
-      else {
-        let same = true;
-        for (let i = 0; i < baseCuts.length; i++) if (headAt.get(baseCuts[i]) !== basePrefix[i]) same = false;
-        if (!same) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, cuts: baseCuts, basePositions: basePrefix, headCuts: group.cuts, headPositions: group.prefix }); }
+      // The head cuts a group into words first (shape.ts addWordPieces), so the two trees' cuts differ where words are
+      // shorter than 256 zoomed px. What must not differ is a position: at every inner cut of either tree, and at the space
+      // before it, the advance sum each tree gives (groupPrefix16), which the head sums from words and the base measures
+      // from its last cut.
+      const baseCuts = ga.groups[g].cuts;
+      if (JSON.stringify(baseCuts) !== JSON.stringify(group.cuts)) row.cutsDiffer++;
+      if (ga.groups[g].prefix[baseCuts.length - 1] !== group.prefix[group.cuts.length - 1]) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseTotal: ga.groups[g].prefix[baseCuts.length - 1], headTotal: group.prefix[group.cuts.length - 1] }); }
+      const edges = new Set();
+      for (let i = 1; i + 1 < baseCuts.length; i++) edges.add(baseCuts[i]);
+      for (let i = 1; i + 1 < group.cuts.length; i++) { edges.add(group.cuts[i]); if (!baseCuts.includes(group.cuts[i])) row.wordCuts++; }
+      for (const k of Array.from(edges)) if (text.charCodeAt(k - 1) === 0x20) edges.add(k - 1);
+      for (const k of edges) {
+        const pa = A.position16(a, g, k), pb = B.position16(b, g, k);
+        row.wordEdges++;
+        if (pa !== pb) { row.wordEdgesDiffer++; if (row.examples.length < 6) row.examples.push({ text: TEXTS[t].name, size, group: g, edge: k, around: text.slice(Math.max(0, k - 12), k + 12), base16: pa, head16: pb }); }
       }
       for (let i = 1; i + 1 < group.cuts.length; i++) {
         const k = group.cuts[i];
-        if (!baseCuts.includes(k)) {
-          row.wordCuts++;
-          const edges = text.charCodeAt(k - 1) === 0x20 ? [k, k - 1] : [k];
-          for (let e = 0; e < edges.length; e++) {
-            const pa = A.position16(a, g, edges[e]), pb = B.position16(b, g, edges[e]);
-            row.wordEdges++;
-            if (pa !== pb) { row.wordEdgesDiffer++; if (row.examples.length < 6) row.examples.push({ text: TEXTS[t].name, size, group: g, edge: edges[e], around: text.slice(Math.max(0, k - 12), k + 12), base16: pa, head16: pb }); }
-          }
-        }
         row.cuts++;
         inner.push([g, k, before16]);
         if (sameText) for (let o = 0; o <= text.length; o++) if (Math.abs(index[o] - index[k]) <= 1) near[o] = 1;

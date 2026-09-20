@@ -610,8 +610,8 @@ export function lastCutAtOrBefore(cuts: number[], k: number): number {
 function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.windows.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
-  const cuts = group.windows
+  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  const cuts = group.cuts
   const i = lastCutAtOrBefore(cuts, k)
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
   const to = cuts[i + 1] ?? group.end
@@ -668,13 +668,14 @@ function wordHoldsSoftHyphen(p: BlinkPrepared, k: number, end: number): boolean 
 // the cut at its end is a 0 the search measured (positionAdjust16): the pair window's at a cut that passed the safe test,
 // and before white space the wide window's, which is the search's own window where both sides of the cut are one piece
 // (adjust16 takes it between the cuts around an offset).
-function addPieces(sh: Shaper, g: number, a: number, b: number, windows: number[], cuts: number[], totals: number[], zero: boolean[]): void {
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[]): void {
   const p = sh.p
   const group = p.groups[g]!
   const whole = measure16(sh, g, a, b, group.start, group.end)
   if (whole < EXACT16) {
-    windows.push(b)
-    addWords(sh, g, a, b, whole, cuts, totals, zero)
+    cuts.push(b)
+    totals.push(whole)
+    zero.push(false)
     return
   }
   const mid = a + ((b - a) >> 1)
@@ -693,7 +694,6 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, windows: number[
   }
   if (boundary < 0) {
     uncutCluster(sh.gaps, p, g, a, b)
-    windows.push(b)
     cuts.push(b)
     totals.push(whole)
     zero.push(false)
@@ -704,46 +704,55 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, windows: number[
     k = boundary
     unsafeCut(sh.gaps, p, g, k)
   }
-  const first = windows.length
-  addPieces(sh, g, a, k, windows, cuts, totals, zero)
+  const first = cuts.length
+  addPieces(sh, g, a, k, cuts, totals, zero)
   const at = cuts.length - 1
-  const leftIsOnePiece = windows.length === first + 1
-  addPieces(sh, g, k, b, windows, cuts, totals, zero)
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (leftIsOnePiece && windows.length === first + 2))
+  addPieces(sh, g, k, b, cuts, totals, zero)
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
 }
 
-// The words of a piece [a, b) below 256 zoomed px, whose measured total is `whole`: the piece is cut on by the test that
-// cut it off, at the offset after a U+0020 nearest its middle where clusters part, nothing joins, the pair window shows 0
-// and the two sides measure what the range measures, which is the wide window's 0 with the range as its window
-// (windowAdjust16 shrinks no window whose total is exact). The two sides are the children's totals, so every total above a
-// word is a Canvas total that its parts were held against, and the piece's total and the positions at its two ends stay
-// what they were. A space that doesn't pass is no cut: its two words stay one range, measured as before. The cuts go to
-// `cuts` with the pieces' own, since a position reads the last cut before it (groupPrefix16), and not to the windows'
-// edges: the adjustment across an offset is still taken inside the piece, or between the pieces around it (adjust16).
+// The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, and is measured
+// once with its trailing space, which is what a page's words repeat. The offset between two words is a cut where it
+// passes the safe test with the two words as the wide window: the two measured together are what they measure apart, and
+// the pair window shows 0 (where the two are 256 zoomed px or more, the test as addPieces makes it). A space that doesn't
+// pass is no cut. What is left between two cuts and isn't one word below 256 zoomed px (words whose space didn't pass, a
+// long word, text without spaces) is cut as before (addPieces). So no range of 256 zoomed px or more is measured whole
+// where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
 // In an unsegmented paragraph a word that holds SHY isn't cut from the text before it: there a string without a space
-// leaves SHY out and a string with one carries U+2060 (canvasString), so the cut would change how the prefixes of the
-// word are written.
-function addWords(sh: Shaper, g: number, a: number, b: number, whole: number, cuts: number[], totals: number[], zero: boolean[]): void {
+// leaves SHY out and a string with one carries U+2060 (canvasString), so the cut would change how the word's prefixes are
+// written.
+function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], zero: boolean[]): void {
   const p = sh.p
   const group = p.groups[g]!
-  const mid = a + ((b - a) >> 1)
-  for (let d = 0; mid - d > a || mid + d < b; d++) {
-    for (let side = d === 0 ? 1 : 0; side < 2; side++) {
-      const c = side === 0 ? mid - d : mid + d
-      if (c <= a || c >= b || p.text.charCodeAt(c - 1) !== 0x20 || isWhiteSpace(p.text.charCodeAt(c)) || !isClusterBoundary(p, c) || joinsAcross(p, c, group.start, group.end)) continue
-      if (!p.segmented && wordHoldsSoftHyphen(p, c, b)) continue
-      const left = measure16(sh, g, a, c, group.start, group.end)
-      const right = measure16(sh, g, c, b, group.start, group.end)
-      if (left + right !== whole || pairAdjust16(sh, g, c, group.start, group.end) !== 0) continue
-      addWords(sh, g, a, c, left, cuts, totals, zero)
-      zero[cuts.length - 1] = true
-      addWords(sh, g, c, b, right, cuts, totals, zero)
-      return
-    }
+  const starts = [group.start]
+  for (let k = group.start + 1; k < group.end; k++) {
+    if (p.text.charCodeAt(k - 1) !== 0x20 || isWhiteSpace(p.text.charCodeAt(k)) || !isClusterBoundary(p, k) || joinsAcross(p, k, group.start, group.end)) continue
+    if (p.segmented || !wordHoldsSoftHyphen(p, k, group.end)) starts.push(k)
   }
-  cuts.push(b)
-  totals.push(whole)
-  zero.push(false)
+  starts.push(group.end)
+  const word16: number[] = []
+  for (let i = 0; i + 1 < starts.length; i++) word16.push(measure16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
+  const passes = [true]
+  for (let i = 1; i + 1 < starts.length; i++) {
+    const whole = measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end)
+    passes.push(whole < EXACT16
+      ? whole === word16[i - 1]! + word16[i]! && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0
+      : passesSafeTest(sh, g, starts[i]!, starts[i - 1]!, starts[i + 1]!, whole))
+  }
+  passes.push(true)
+  for (let i = 0; i + 1 < starts.length;) {
+    let j = i + 1
+    while (!passes[j]!) j++
+    if (j === i + 1 && word16[i]! < EXACT16) {
+      cuts.push(starts[j]!)
+      totals.push(word16[i]!)
+      zero.push(false)
+    } else {
+      addPieces(sh, g, starts[i]!, starts[j]!, cuts, totals, zero)
+    }
+    zero[cuts.length - 1] = true
+    i = j
+  }
 }
 
 // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
@@ -754,14 +763,12 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
-    const windows = [group.start]
     const cuts = [group.start]
     const totals: number[] = []
     const zero = [false]
-    addPieces(sh, g, group.start, group.end, windows, cuts, totals, zero)
+    addWordPieces(sh, g, cuts, totals, zero)
     const prefix = [0]
     for (let i = 0; i < totals.length; i++) prefix.push(prefix[i]! + totals[i]!)
-    group.windows = windows
     group.cuts = cuts
     group.prefixAtCut = prefix
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.

@@ -25,6 +25,7 @@ import type { Probe } from '../probes/types.ts'
 const ENTRY = (tree: string, name: string): string => `
 import { detectEnvironment, fillLine, firstLine, prepare } from '${tree}/rebuild/src/index.ts'
 import { UNKNOWN_FONT_FACTS } from '${tree}/rebuild/src/model.ts'
+import { LineBreaker } from '${tree}/rebuild/src/engines/blink/line-breaker.ts'
 
 function environment() {
   const detected = detectEnvironment({ engine: 'blink', build: null, contentLanguage: null, uiLanguage: null })
@@ -42,7 +43,26 @@ function fill(prepared, width) {
   return lines
 }
 
-globalThis.${name} = { environment, fill, facts: UNKNOWN_FONT_FACTS, prepare: (paragraph, env, contexts) => prepare(paragraph, env, false, contexts) }
+// How each line found its candidate, where the tree has LineBreaker.wordCandidate: from the cuts' positions, without a
+// search (no position was read), or by the search, with the negative number that says why.
+const outcomes = []
+const fromCuts = LineBreaker.prototype.wordCandidate
+function tallyLines(prepared, width, tally) {
+  if (fromCuts === undefined) return
+  LineBreaker.prototype.wordCandidate = function (...args) { const found = fromCuts.apply(this, args); outcomes.push(found); return found }
+  for (let start = firstLine(prepared); start !== null;) {
+    outcomes.length = 0
+    const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+    let reason = 0, found = false
+    for (let i = 0; i < outcomes.length; i++) { if (outcomes[i] >= 0) found = true; else if (outcomes[i] < -1 && reason === 0) reason = outcomes[i] }
+    tally.lines++
+    if (reason !== 0) { tally.searched++; tally.reasons[reason] = (tally.reasons[reason] ?? 0) + 1 } else if (found) tally.cuts++; else tally.noSearch++
+    start = filled.next
+  }
+  LineBreaker.prototype.wordCandidate = fromCuts
+}
+
+globalThis.${name} = { environment, fill, tallyLines, facts: UNKNOWN_FONT_FACTS, prepare: (paragraph, env, contexts) => prepare(paragraph, env, false, contexts) }
 `
 
 const BODY = String.raw`
@@ -86,7 +106,7 @@ const spin = () => { const start = performance.now(); let x = 0; for (let i = 0;
 const report = { userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, messages: MESSAGES, pairs: PAIRS, spinMs: [spin()], sets: [] };
 for (let s = 0; s < SETS.length; s++) {
   const paragraphs = [paragraphsOf(TREES[0], SETS[s].messages), paragraphsOf(TREES[1], SETS[s].messages)];
-  const set = { set: SETS[s].id, pairs: [], counts: [], lines: [] };
+  const set = { set: SETS[s].id, pairs: [], counts: [], lineTallies: [], lines: [] };
   for (let pair = 0; pair < PAIRS; pair++) {
     const row = [null, null];
     for (let turn = 0; turn < 2; turn++) {
@@ -117,6 +137,9 @@ for (let s = 0; s < SETS.length; s++) {
     }
     proto.measureText = original;
     set.counts.push(marks);
+    const tally = { lines: 0, cuts: 0, noSearch: 0, searched: 0, reasons: {} };
+    for (let w = 0; w < RESIZE.length + 1; w++) for (let i = 0; i < kept.length; i++) tree.tallyLines(kept[i], w === 0 ? WIDTH : RESIZE[w - 1], tally);
+    set.lineTallies.push(tally);
   }
   report.sets.push(set);
   report.spinMs.push(spin());
