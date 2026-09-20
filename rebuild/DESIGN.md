@@ -56,13 +56,15 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 - A value derived from a line is computed in the scope that asks for it and is never stored on the line: nothing writes
   a decided line after `fillLine` returns it, and `linePieces` and `inspectLine` give the same result twice and in either
   order (`tests/function-set.ts pure`).
-- Nothing writes a prepared paragraph after `prepare`, with four exceptions. All are facts of the text and its fonts,
+- Nothing writes a prepared paragraph after `prepare`, with five exceptions. All are facts of the text and its fonts,
   which no width and no line changes, filled on first read only because asking earlier would ask Canvas questions no
   line needs and would move the order of first asks; they go with the paragraph. The list of contexts grows where a
   recipe first asks in a context of its own (Blink's one-byte contexts in a segmented paragraph, §4.2; the contexts of
   Gecko's in-word recipes, §4.6, each kept from then on by the record its text runs share). A Blink style keeps two
   lazy answers (those one-byte contexts, and whether Canvas shapes its font word by word; §3). A Gecko shaping unit
-  keeps what measuring found inside it (§4.6). Since correctness round 5 a Gecko prepared paragraph also keeps what
+  keeps what measuring found inside it (§4.6). Since profiling item 2 a Blink shaping group keeps by offset what its
+  own shaping call measured for a read that raises no gap: positions, and the adjustments across an offset (§4.6).
+  Since correctness round 5 a Gecko prepared paragraph also keeps what
   Canvas told of each context's pair placement (on the same record since the fresh-eyes follow-up), and an offset's
   record inside a unit can hold its advance without two recipes' questions until a line's edge or a fit test asks for
   them, so that record's value can move once, from the rough advance to the whole one; both were accepted as
@@ -91,8 +93,9 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 
 **What stays possible.** Two capabilities would reshape the core if they were added late, so the ports keep their seams
 (research/DEMO-COVERAGE.md, research/CAPABILITY-CHECK.md): a line's break is found without building fragments or
-geometry, and a layout at another width asks Canvas nothing new in the common case (§2.9; Blink asks its positions
-again at every fill, which is cost, §4.7); and each port's "next break opportunity" and "close the line here" stay
+geometry, and a layout at another width asks Canvas nothing new in the common case (§2.9; a plain Blink paragraph
+keeps the positions its lines asked for, so a width it has met asks nothing and another width asks what is new to it,
+§4.6); and each port's "next break opportunity" and "close the line here" stay
 callable outside the greedy line loop, with a line start that can be made from a source offset. No API is built for
 either yet.
 
@@ -1582,9 +1585,10 @@ serves every line filled from it, at any width. The records that measure hold th
   where a word or a cluster asks, and the block's context for tabs once per paragraph.
 
 What a port needs twice it keeps as a value in a plain place: a local, a value handed from the step that measured it to
-the step that uses it, a field set where `prepare` already measures, and in Gecko one record per offset, on the offset's
-shaping unit, and one per Canvas context for pair placement. Nothing is asked earlier than the engine needs it, but for
-the space of a WebKit box that never reads it (§4.7).
+the step that uses it, a field set where `prepare` already measures, in Blink three numbers per offset on the offset's
+shaping group, and in Gecko one record per offset, on the offset's shaping unit, and one per Canvas context for pair
+placement. Nothing is asked earlier than the engine needs it, but for the space of a WebKit box that never reads it
+(§4.7).
 
 - Blink: a piece's measured total goes from the cut search to the group's prefixes, which are sums of those totals
   (`shape.ts` `addPieces`); `windowAdjust16` takes its window's total from its caller; `floatWidthOfParts` measures a
@@ -1592,6 +1596,31 @@ the space of a WebKit box that never reads it (§4.7).
   a cluster edge is measured once; and `shape.ts` `offsetForPosition` keeps the positions at `low` and past `high` in
   two locals, the only indices its binary search comes back to. The last two need gap lists that don't follow how often
   a range is raised (§5).
+
+  Since profiling item 2 (2026-09-19; research/PROFILING-START.md) a shaping group also keeps, per offset, what its
+  own shaping call measured there (`types.ts` `BlinkGroup.prefix16`, `pair16`, `wide16`): the advance sum before the
+  offset (`shape.ts` `groupPrefix16`), and the pair window's and the wide window's adjustment across it
+  (`pairAdjust16`, `adjust16`). Blink has every character's position and safe-to-break flag once a group is shaped
+  (`character_position_`, shape_result.h); the port pays Canvas questions for each, and the break search, the
+  safe-to-break tests, an item's edges and a view's edges ask about the same offsets, in one fill, on the next line
+  and at every other width. So an entry is written by the first read and read back by every later one. The
+  safe-to-break test keeps nothing of its own: it reads the two adjustments. It is the fifth part of a prepared
+  paragraph that is written after preparation, and the argument is the others': facts of the group's text and fonts,
+  which no width and no line changes. A width decides only which entries exist.
+  - *Lifetime:* the prepared paragraph's. *Invalidated by:* nothing, like the totals `prepare` measures: they hold
+    for the fonts the paragraph was prepared with.
+  - *Key:* the offset, in the group's own shaping call alone (`shape.ts` `keepsByOffset`). An adjustment depends on
+    the call's range as well as on the offset: a line-edge reshape is a call of its own, its windows stop at its
+    edges and its range follows the line, so what it measures is kept nowhere. Nothing asks the wide window of the
+    group's call before the group's cuts are made, so there it is a fact of the offset too. The no-ligature
+    adjustments are an inspected paragraph's alone and aren't kept.
+  - *Bound:* three 8-byte numbers per UTF-16 unit of the group, made with it: about 2.8 KB for a chat message of 116
+    units.
+  - *Who reads it:* a read that raises no gap, which is every read of a plain paragraph and `linePieces` on an
+    inspected one. A read under a gap list measures again: every `measure16` raises its range's gaps into the list of
+    the line that reads (§5), and a value read back would leave them out of a list that doesn't hold them yet.
+    Canonical lists make a repeated raise harmless, never a missing one. So the inspected path asks what it asked,
+    and the plain path asks a subset of it, as before.
 - WebKit: `mergedGlyphs` totals a string once in the count context; `controlIsAdjusted` asks the letter before a control
   once; `lineHyphenWidth` measures the hyphen once and hands the total to the `hyphen-glyph` test
   (`gaps.ts` `hyphenWidthRead`); the coverage test of `makeBox` asks each code point once; and a box keeps its single
@@ -1752,12 +1781,53 @@ read. The second went in correctness round 5 (below). Two candidates for a store
   outside the unit: a script context's character from elsewhere in the run (`measure.ts` `scriptContextFor`), or the
   font-matching prefix, which depends on the text before the unit.
 - **Per-fill positions and safe flags kept on the item's shape result**, as Blink's own `ShapeResult` keeps character
-  positions (specs/blink-RESULTS.md, "Re-architecture X2"). It is built unmerged on branch `ra-x2-blink-alt-positions`,
-  read back on plain paragraphs only: the plain path's ratio of asked to distinct questions went from 4.11 to 2.95
-  without facts there, and tier 1 and the plain and pure checks passed. The branch and its numbers are of the step before
-  gap lists became canonical. The plain path now starts from 3.84, and a handed-out gap list no longer regroups when a
-  measurement is left out (§5), so the reason for reading the positions back on plain paragraphs only is gone; nobody
-  has tried it on an inspected one.
+  positions (specs/blink-RESULTS.md, "Re-architecture X2"). It was built unmerged on branch
+  `ra-x2-blink-alt-positions`, read back on plain paragraphs only, at the step before gap lists became canonical: the
+  plain path's ratio of asked to distinct questions went from 4.11 to 2.95 without facts there. Profiling item 2 took
+  its idea with the prepared paragraph's lifetime instead of a fill's (below; §4.6), because a fill's lifetime answers
+  a third of what the paragraph's does and nothing at another width. An inspected paragraph still measures again:
+  a canonical list doesn't regroup when a measurement is left out (§5), but a line's list would miss the ranges
+  another line raised.
+
+**Since profiling item 2** (2026-09-19; research/PROFILING-START.md, item 2). Where Blink's repeats happen was counted
+by the range `measure16` is asked for, not by the string, in real Chrome over the chat bench's first 1,000 messages
+(`tools/positions-probe.ts`) and offline over 51,489 recorded tier cases on the plain path (`tools/positions-study.ts`).
+A range asked again inside one prepared paragraph, per chat message from scratch, plain ASCII and the mix:
+
+| The range was asked before in | the same `prepare` | the same line | `prepare`, now a fill | an earlier line | nowhere |
+|---|---:|---:|---:|---:|---:|
+| a plain ASCII message, 281.9 calls | 33.2 | 35.7 | 35.8 | 11.0 | 166.2 |
+| a message of the mix, 322.1 calls | 38.4 | 48.3 | 42.5 | 13.6 | 179.5 |
+| a tier case, 194.5 calls | 18.3 | 81.2 | 17.3 | 14.0 | 63.7 |
+
+So 7 in 10 of a chat message's repeats are asked by a fill, and half of those were first asked by `prepare` or by an
+earlier line, which a structure with a fill's lifetime can't answer. The repeats inside `prepare` are the cut's safe
+test asked again as the position at the cut; profiling item 6's B1b takes the safe test away, and 4 a message are left.
+By what is asked again, plain ASCII and the mix: the pair window at an offset already computed is 54% and 60% of the
+repeats, the wide window 31% and 26%, a position's prefix from the last cut 12% and 12%, a piece's total 3% and 3%.
+The font checks and the line-edge reshapes repeat nothing in chat (a reshape repeats 0.2 questions a tier case), and
+this path asks no window without ligatures. What is kept is §4.6's three numbers per offset. Canvas questions, counted
+in real Chrome:
+
+| | before | after | with B1b: before | after |
+|---|---:|---:|---:|---:|
+| a chat message from scratch, plain ASCII | 281.9 | 210.5 | 177.9 | 125.2 |
+| a chat message from scratch, the mix | 322.1 | 227.3 | 211.9 | 140.2 |
+| a layout of a kept message at a new width, plain ASCII / the mix | 112.9 / 136.8 | 33.7 / 36.2 | 112.9 / 136.8 | 34.8 / 37.1 |
+| a layout at a width met before | 112.9 / 136.8 | 0 / 0.04 | 112.9 / 136.8 | 0 / 0.04 |
+| a tier case, plain path, all 67,065 without facts | 234.31 | 114.37 | | |
+
+The tier cases' ratio of asked to distinct questions goes from 3.84 to 1.87; 59,081 cases ask fewer questions and none
+asks more. What is still asked twice is below the three numbers: a cluster alone, which the pair windows of two
+neighbouring offsets share (about 5 a chat message), the wide window's left side, which is also the offset's prefix
+from the last cut (5), and a piece's total, which `prepare` measured and every wide window inside the piece asks again
+(5). Each is a short repeat that Chrome answers from its canvas, and none has a number that asks for a fourth table
+yet. Tier 1 shows repeats only on 3 cases in each configuration (`linePieces` on an inspected paragraph); the plain,
+pure and sweep checks pass, and the sweep fills one prepared paragraph at four widths, plain and inspected; Chrome's
+tier 2 in both orders and both configurations shows 0 transitions; the plain predictor's line ranges and the
+other-widths-first predictor's layouts equal the usual run's on all 67,065 cases. That predictor runs the inspected
+path, which reads the kept numbers in `linePieces` alone, so `lab/baselines/plain-other-widths-first-predictor.ts`
+fills a plain paragraph at two other widths first, for the browser.
 
 **Since correctness round 5** (2026-09-19; research/CORRECTNESS-ROUND-5.md has the cost of each fix beside the cases
 it gained). Canvas questions a paragraph over each browser's recorded cases, counted in the browser: the plain path
