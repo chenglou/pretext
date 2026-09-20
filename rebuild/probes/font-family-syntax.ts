@@ -1,10 +1,11 @@
 // Font-family lists as CSS syntax (rebuild/src/font-family.ts): whether the browser's own CSS parser, for an element's
-// style and for a Canvas font, reads a comma inside a string, escapes, runs of white space, U+00A0, keyword case and an
-// unclosed string the way the library's one parser does, and rejects the lists it throws on. Every observation is a width
-// of `mmmmiiii` at 40px beside the widths of reference families, so a family is known by what it draws: a list that
-// resolves to the monospace generic measures as `monospace`, one that names Courier New as `"Courier New"`, a name no font
-// has as the browser's default font does, and a declaration the parser rejects leaves the host's Georgia (DOM) or the
-// context's font unset (Canvas). Returns `checks` (name, measured, expected, ok) and the raw rows.
+// style and for a Canvas font, reads a comma inside a string, escapes, runs of white space, U+00A0 and U+3000, keyword
+// case, an empty string, and an unclosed string or a last backslash with what follows it, the way the library's one
+// parser does, and rejects the lists it throws on. Every observation is a width of `mmmmiiii` at 40px beside the widths
+// of reference families, so a family is known by what it draws: a list that resolves to the monospace generic measures
+// as `monospace`, one that names Courier New as `"Courier New"`, a name no font has as the browser's default font does,
+// and a declaration the parser rejects leaves the host's Georgia (DOM) or the context's font unset (Canvas). Returns
+// `checks` (name, measured, expected, ok) and the raw rows.
 //
 // Which names an engine takes for its keywords is no syntax and no check here: `classification` records, per list, the
 // reference it measures as. On 2026-09-19 a quoted "system-ui" drew the system UI font in Chrome 153 and webkit-host, in
@@ -20,6 +21,7 @@ const spec = 'font-family-syntax 2026-09-19'
 
 const SOURCE = String.raw`
 const NBSP = String.fromCharCode(0xa0);
+const IDEOGRAPHIC_SPACE = String.fromCharCode(0x3000);
 const SAMPLE = 'mmmmiiii';
 host.style.fontFamily = 'Georgia';
 const span = document.createElement('span');
@@ -98,12 +100,19 @@ takes('identifiers join with one space', 'Courier    New', 'courierNew');
 takes('identifiers across a tab and a newline', 'Courier\t\nNew', 'courierNew');
 takes('an escaped space inside a string', '"Courier\\20New"', 'courierNew');
 takes('an escaped space between identifiers', 'Courier\\ New', 'courierNew');
+takes('a backslash before a comma takes the comma into the name', 'Probe No Such\\, monospace', 'noSuchFamily');
 takes('a family name in another case', '"courier NEW"', 'courierNew');
 takes('white space around a name and its comma', '  "Courier New"  ,  monospace  ', 'courierNew');
 takes('no space after the comma', '"Probe No Such Family","Courier New"', 'courierNew');
 takes('U+00A0 is part of an identifier, not white space', 'Courier' + NBSP + 'New', 'noSuchFamily');
+takes('U+3000 is part of an identifier, not white space', IDEOGRAPHIC_SPACE + 'Courier New', 'noSuchFamily');
 takes('an unclosed string runs to the end', '"Courier New', 'courierNew');
+takes('a last backslash in an unclosed string adds nothing', '"Courier New\\', 'courierNew');
+takes('an unclosed string takes a comma and a generic after it into its name', '"Probe No Such, monospace', 'noSuchFamily');
+takes('a last backslash after an identifier adds U+FFFD to the name', 'Courier New\\', 'noSuchFamily');
 takes('an escaped quote inside a string', '"Probe \\"No\\" Such Family", monospace', 'monospace');
+takes('an escaped newline inside a string adds nothing', '"Courier \\\nNew"', 'courierNew');
+takes('an empty string is a family, and the next one draws', '"", monospace', 'monospace');
 rejects('an empty family between commas', '"Courier New",,monospace');
 rejects('a comma at the end', '"Courier New",');
 rejects('an identifier after a string', '"Courier New" bold');

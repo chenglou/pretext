@@ -44,14 +44,17 @@ may read the DOM freely; this is research, not the library.
 
 - `font-family-syntax.ts`: whether each browser's own CSS parser, for an element's style and for a Canvas font, reads a
   font-family list the way the library's one parser does (`src/font-family.ts`): a comma inside a string, escapes, runs of
-  white space, U+00A0, keyword case, an unclosed string, and the lists CSS rejects. It returns `checks`, and beside them
-  `classification`: which reference a list measures as where that is the engine's choice of keywords and not syntax (a
-  quoted `"system-ui"`, `BlinkMacSystemFont` in small letters, `-apple-system` quoted). On 2026-09-19 all 95 checks held in
-  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`). It doesn't hold the six lists the
-  fresh-eyes follow-up's critic probed: an escaped newline in a string, a last backslash, an unclosed string and a
-  backslash that take a comma and a generic after them into the name, U+3000, and an empty string. That probe isn't
-  tracked (`.artifacts/probes/critic-family-edges/`: 34 of 34 checks in Chrome 153 and in Firefox 156, webkit-host not
-  run).
+  white space, U+00A0 and U+3000, keyword case, an empty string, an unclosed string or a last backslash with what follows
+  it, and the lists CSS rejects. It returns `checks`, and beside them `classification`: which reference a list measures
+  as where that is the engine's choice of keywords and not syntax (a quoted `"system-ui"`, `BlinkMacSystemFont` in small
+  letters, `-apple-system` quoted). On 2026-09-19 all 123 checks held in Chrome 153, Firefox 156 and webkit-host
+  (`.artifacts/probes/font-family-syntax/`). Seven of its lists came after the fresh-eyes follow-up: the six its critic
+  had probed in Chrome and Firefox alone (an escaped newline in a string, a last backslash in an unclosed string, an
+  unclosed string and a backslash that take a comma and a generic after them into the name, U+3000, an empty string), and
+  a last backslash after an identifier, which adds U+FFFD to the name. They hold in webkit-host too, so the parser's rule
+  that a family the list leaves open at its end is its name as a closed string holds in all three: whatever is written
+  after the open form joins the name. webkit-host's Canvas font drops the empty string when it is read back (`40px
+  monospace` for `"", monospace`), and draws the same.
 
 - `blink-sysui-spellings.ts`: how Chrome's DOM reads other spellings of its two system font names. One probe,
   meaningful alone in a fresh browser at DPR 2; it returns `checks`. On 2026-09-19 in the pinned Chrome (20 of 20
