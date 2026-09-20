@@ -9326,6 +9326,26 @@
    "replacedBy": []
   },
   {
+   "id": "gecko/measure/windows-in-long-units",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures, and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it",
+   "source": "gfxFont.cpp:3804-3808, :3564-3617 (a word of any length is shaped in one call, cut only at 32,760 units, so no cut is exact by construction and Canvas decides each); engines/gecko/advance.ts windowAt, windowsOf; DESIGN.md §4.4; research/PROFILING-START.md item 3",
+   "probes": [
+    "gecko-windows W1: all 13,435 cuts that hold, of 14,943 tried over 54 samples in 16 grid phases, give W(unit) − W(suffix), and 13,135 the DOM's advance, the other 300 where the long recipe misses it by the same amount",
+    "gecko-windows W2: inside the windows of the port's grid 14,040 of 14,040 offsets whose sides add up give the long recipe's value"
+   ],
+   "tests": [
+    "src/engines/gecko/windows.test.ts :: a kerned pair across a cut keeps its two cells in one window, and the lines are the glyph records",
+    "src/engines/gecko/windows.test.ts :: a ligature as wide as its parts across a cut keeps its two cells in one window"
+   ],
+   "declaredBy": "gecko owner (profiling item 3, 2026-09-19)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
    "id": "blink/content/box-fragment-of-an-inline-box-without-text",
    "engine": "blink",
    "area": "content",
@@ -9925,6 +9945,7 @@
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
   "gecko/lines/plain-scan-rough-candidates": "c9077d0fc9a44d32",
+  "gecko/measure/windows-in-long-units": "d887b852b59bab0a",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848"
  }
 }
