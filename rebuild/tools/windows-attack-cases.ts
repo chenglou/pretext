@@ -1,4 +1,5 @@
-// A lab set from the samples of probe gecko-windows-attack: each sample, one paragraph of one text node without spaces,
+// A lab set from the samples of tools/windows-attack-probe.ts (probe id gecko-windows-attack): each sample, one
+// paragraph of one text node without spaces,
 // at widths that put breaks beside window edges. For full-width text 16 clusters are 16 times the font size, so at that
 // width every line ends at a cut, one px under it a line ends one cluster before, and the third width walks the breaks
 // through every phase of the grid. Run the set in pinned Firefox from a tree without windows inside long shaping units
@@ -7,7 +8,7 @@
 //
 //   bun rebuild/tools/windows-attack-cases.ts <out.ndjson>
 import { writeFileSync } from 'node:fs'
-import { samples } from '../probes/gecko-windows-attack.ts'
+import { samples } from './windows-attack-probe.ts'
 
 const FIXTURES = ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Shantell Sans']
 const out = process.argv[2]

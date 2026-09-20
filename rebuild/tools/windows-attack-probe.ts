@@ -14,11 +14,11 @@
 // tatweel and digits, scripts written without spaces, and units long or wide enough to show a drift.
 //
 // Run, from each tree: python3 .artifacts/session/with-browser-lock.py <job> --browser=firefox -- \
-//   bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/probes/gecko-windows-attack.ts --out=<out> \
+//   bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/tools/windows-attack-probe.ts --out=<out> \
 //     --probe-timeout-ms=900000 --stall-ms=900000
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Probe } from './types.ts'
+import type { Probe } from '../probes/types.ts'
 
 export type Sample = { id: string; cls: string; family: string; size: number; weight: number; style: 'normal' | 'italic'; lang: string; direction: 'ltr' | 'rtl'; letterSpacing: number; text: string }
 
@@ -279,7 +279,7 @@ try {
 `
 
 export default async function probes(): Promise<Probe[]> {
-  const built = await Bun.build({ entrypoints: [join(import.meta.dir, 'gecko-windows-attack-entry.ts')], target: 'browser', format: 'iife', minify: false })
+  const built = await Bun.build({ entrypoints: [join(import.meta.dir, 'windows-attack-probe-entry.ts')], target: 'browser', format: 'iife', minify: false })
   if (!built.success) throw new Error(`bundling failed: ${built.logs.join('\n')}`)
   const bundle = await built.outputs[0]!.text()
   return [{

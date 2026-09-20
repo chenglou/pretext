@@ -1,4 +1,4 @@
-// Holds two runs of probe gecko-windows-attack against each other, sample by sample: a run from a tree without windows
+// Holds two runs of tools/windows-attack-probe.ts (probe id gecko-windows-attack) against each other, sample by sample: a run from a tree without windows
 // inside long shaping units and a run from a tree with them (or two runs of one tree, as a control for what Firefox's
 // process moves by itself). Per class of samples: offsets whose advance differs, with which of the two is the DOM's;
 // offsets whose stand-in reason kind differs (exact on one side only, or another kind); lines that differ, plain and

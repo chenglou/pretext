@@ -1,4 +1,4 @@
-// The page side of probes/gecko-windows-attack.ts: the Gecko port of the tree this is bundled from, behind one function
+// The page side of tools/windows-attack-probe.ts: the Gecko port of the tree this is bundled from, behind one function
 // that prepares a paragraph of one text node and reads the advance before every cluster start, then fills lines at
 // widths that put breaks beside the 16th, 32nd and 48th cluster. Nothing here reads the DOM.
 import { detectEnvironment } from '../src/index.ts'

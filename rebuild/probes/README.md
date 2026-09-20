@@ -31,8 +31,9 @@ may read the DOM freely; this is research, not the library.
   classes, every cluster boundary tried as a cut: every accepted cut and every offset inside a window against the DOM's
   advances and the long recipe's. Its header has the command; the run is under
   `.artifacts/probes/perf-gecko-fill-20260919/windows-2`.
-- `gecko-windows-attack.ts` (A1; the review of profiling item 3, 2026-09-20): where `gecko-windows.ts` runs the cut
-  rule as page script, this one runs the port of the tree it is bundled from: 531 samples, each one paragraph without
+- `../tools/windows-attack-probe.ts` (A1; the review of profiling item 3, 2026-09-20; it runs the library, so it lives
+  beside `tools/fill-counts-probe.ts`): where `gecko-windows.ts` runs the cut rule as page script, this one runs the
+  port of the tree it is bundled from: 531 samples, each one paragraph without
   spaces, in the classes a cut is most likely to be wrong in (fonts that kern and substitute across clusters, fallback
   edges and fonts that stick to the previous character's font, variation selectors, emoji, U+200D and U+200C, letter
   spacing, synthetic bold, sizes off Canvas's grid, Arabic with marks, tatweel and digits, direction overrides, scripts
