@@ -10,11 +10,28 @@ corrects the report. Nothing here is merged.
 The orchestrator's decision below was built, reviewed and merged: `prepare(paragraph, env, inspect, contexts: Context[] = [])`
 takes a plain list of Canvas contexts; there is no `Measurer` type, and the font checks ask Canvas again at every
 `prepare`, on the kept contexts. Library code +15 −13 lines in five files.
-- **Lifetime, invalidation, bound:** the list is the caller's (a page's, or one call's when nothing is passed). A kept
-  context heals by itself after a web font loads in Chrome and Firefox; webkit-host's doesn't, so there the caller makes
-  a new list after the page's fonts change. `prepare` empties a list longer than 512 contexts (a lookup costs 4 to 7 ns a
-  settings record compared; the cliff is about 60 font declarations used in turn in Chrome, past which a page pays what
-  it paid before the list; with 10,000 distinct declarations the list never holds more than 514).
+- **Lifetime, invalidation, bound:** the list is the caller's in Blink and WebKit (a page's, or one call's when nothing
+  is passed). Chrome's kept contexts follow every font change by themselves. webkit-host's miss one: a FontFace that
+  has already loaded (`load()` first and `add()` after, or a FontFace made from bytes) added to a `document.fonts` that
+  holds no face. WebKit's contract is: a page that adds loaded faces starts a new list after it, where it prepares its
+  paragraphs again. A FontFace added before it loads, an `@font-face` rule and a face added to a set that holds one
+  reach a kept WebKit context by themselves. `prepare` empties a list longer than 512 contexts (a lookup costs 4 to 7
+  ns a settings record compared; the cliff is about 60 font declarations used in turn in Chrome, past which a page pays
+  what it paid before the list; with 10,000 distinct declarations the list never holds more than 514).
+- **Gecko keeps no list (2026-09-20).** In a Firefox that has just started, a context first measured before Firefox has
+  read the fonts' localized and legacy family names stays on the fallback font for as long as it lives, while the DOM
+  and a new context find the family about a second later. The same font string, another string and back, `reset()`, and
+  a changed `fontKerning` or `lang` don't make it look again (a per-context cache hands the old font group back), and no
+  event tells a page. So `prepare` makes Gecko's contexts anew at every call, whatever list it is handed: they are one
+  prepared paragraph's. That gives back the list's Firefox gain, the ×0.92 on the mix and ×0.75 to ×0.80 on plain ASCII
+  below (2.51 to 2.76 s and 0.46 to 0.58 s per 10,000 messages). What the rule doesn't mend: a prepared paragraph holds
+  its contexts and its fills ask them again, so a paragraph prepared before the names arrived lays out with the fallback
+  until the page prepares it again, and one first filled afterwards measures with two fonts; nothing tells a page when.
+  A page that names its families by their canonical English names never meets this. What would get the list back:
+  Firefox telling Canvas font groups about `font-info-updated`. research/CONTEXTS-HEAL.md has the study and its review;
+  probes `probes/contexts-start-up.ts`, `probes/contexts-heal-attack.ts`, `tools/contexts-start-up-probe.ts` and
+  `tools/contexts-heal-attack-probe.ts`; runs under `.artifacts/probes/contexts-heal`; the two browser cases are entries
+  15 and 16 of platform-bugs/LEDGER.md.
 - **Proof (tier 2, case by case against the usual run):** Chrome 0 differences in 134,130 rows in both orders in each
   configuration, 0 of 67,065 shuffled, 0 on the plain path, page-wide twin scan 0 of 67,072; webkit-host 0 of 127,974 in
   each configuration; Firefox 0 with facts and 7 cases without, all history-dependent in the frozen ledger, each equal to
@@ -53,7 +70,10 @@ takes a plain list of Canvas contexts; there is no `Measurer` type, and the font
   Chrome and Firefox measures with the loaded font by itself, and the kept answers stay wrong for as long as the page
   lives. **The orchestrator's decision: build the smaller form.** `prepare` takes a plain list of contexts; there is no
   `Measurer` type and nothing derived is kept. Only webkit-host then needs a contract (make a new list after the page's
-  fonts change), which main's cache needs too. It still has to go through tier 2 before it merges.
+  fonts change), which main's cache needs too. It still has to go through tier 2 before it merges. **Corrected on
+  2026-09-20: not only webkit-host.** A kept Firefox context stays stale for a family name Firefox learns after
+  start-up, so Gecko keeps no list, and webkit-host's contract is narrower than "the page's fonts change" ("What
+  landed" above; research/CONTEXTS-HEAL.md).
 - **Next by number:** Chrome's questions (about 280 to 320 calls a message; research/PERF-STORE-STUDY.md has the
   smallest change that cuts them), then Firefox's fill on CJK and Arabic.
 - Not probed by anyone: a change of devicePixelRatio or zoom under kept contexts.
@@ -200,6 +220,8 @@ What follows:
 **A font that loads later.** Their probe's recorded widths match the report: Chrome and Firefox old contexts go from 433.48 to 327.79, webkit-host's stays at 432.07 until another font string is assigned.
 
 One consequence the report doesn't draw. In Chrome and Firefox a kept context heals by itself. The kept answers are what stays wrong. A page that forgets to make a new measurer then gets right widths with wrong font facts (primary family, hyphen, fixed pitch) for as long as it lives. Before the change the next `prepare` healed everything. With the contexts list alone, Chrome and Firefox heal on the next `prepare` again, and only webkit-host needs the contract. That is the argument for the smaller form.
+
+(Added on 2026-09-20, not the reviewer's: this holds for a font that loads later. A family name Firefox learns after start-up is another route, and there a kept Firefox context stays stale, so Gecko keeps no list: "What landed" above and research/CONTEXTS-HEAL.md.)
 
 **The document's language.** New probe `rebuild/probes/measurer-page-lang.ts`, in the three pinned browsers. Contexts are made under `<html lang="en">` with `lang` assigned as '', en, ja, zh-CN and sr, then the page goes to ja.
 - In all three browsers every old context measures what a context made after the change measures, for strings it had measured and strings it hadn't. So the claim stands.

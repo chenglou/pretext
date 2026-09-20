@@ -6,11 +6,12 @@
 // shaping of a word wins (specs/blink-canvas.md §1.7), so engines keep texts that could shape differently apart with
 // `partition`, and a context is never reused across settings.
 //
-// The list of contexts is the caller's: one prepare's alone, or a page's, which every prepare of the page adds to and finds
-// its contexts in (index.ts prepare has the lifetime). A prepared paragraph keeps the list it was made with, and the
-// records that measure hold their contexts by reference. With a page's list a canvas has shaped what the page's earlier
-// paragraphs asked of it, and not only this paragraph's strings. That changes no answer while equal settings mean equal
-// shaping and `partition` keeps apart the strings that Chrome would shape differently on one canvas.
+// The list of contexts is the caller's: one prepare's alone, or in Blink and WebKit a page's, which every prepare of the
+// page adds to and finds its contexts in (index.ts prepare has the lifetime, and why Gecko's list is always one
+// prepare's). A prepared paragraph keeps the list it was made with, and the records that measure hold their contexts by
+// reference. With a page's list a canvas has shaped what the page's earlier paragraphs asked of it, and not only this
+// paragraph's strings. That changes no answer while equal settings mean equal shaping and `partition` keeps apart the
+// strings that Chrome would shape differently on one canvas.
 //
 // `width` and `bounds` always ask Canvas: nothing here stores an answer, counts a call or logs one. Within a context,
 // measuring the same text again returns the same bits in all three engines (Blink returns the cached node for the whole

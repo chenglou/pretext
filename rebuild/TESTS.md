@@ -361,6 +361,20 @@ questions (`.artifacts/tests/runs/b1b-rework-20260920`):
   passed every tier and moved lines in 1,158 of the 22,536 cases the set is drawn from. It is in `sets.ts`, and since
   the recording at its merge (2026-09-20) Chrome's references, ledgers and seeds hold it: 69,224 cases a reference.
 
+**Since 2026-09-20** Gecko's `prepare` makes its contexts anew whatever list it is handed (DESIGN.md §4.6, "What
+invalidates it"; research/CONTEXTS-HEAL.md), so in Firefox a page predictor's run is a usual run. The quick gates exit 0
+with tier 1 at 0 predictions and 0 questions changed on the six references (the lab passes no list).
+
+- *New unit test* in `src/measure/font-checks.test.ts`: a family that contexts learn only at their first use shows in
+  Gecko's next call though the caller keeps one list, and the caller's list stays empty; the control, WebKit with a
+  kept list, stays on the fallback while a new list finds the family. It fails with the rule undone.
+- *New probes* (measurement only; probes/README.md has each): `probes/contexts-start-up.ts` (S1 to S3, W1 to W10, T1:
+  kept Canvas contexts beside new ones and the DOM in a browser that has just started, late web fonts by four routes,
+  and what each way of touching a context costs), `probes/contexts-heal-attack.ts` (H1 to H5, its second reading), and
+  the two that run the library, `tools/contexts-start-up-probe.ts` (L1, L2: one kept list beside the DOM and a new
+  list) and `tools/contexts-heal-attack-probe.ts` (K1 to K3: a paragraph prepared at the start of a Firefox that has
+  just started and kept).
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
@@ -446,7 +460,7 @@ Terms:
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/function-set.ts`, `stand-in-canvas.ts`; `rebuild/tests/coverage-map.ts`, `coverage-map.shard.ts`, `coverage-map/` | The function set's checks (plain, pure, sweep), and the lines of `rebuild/src` no replay runs, per engine |
 | `rebuild/tools/citations.ts`, `painter-diff.ts`, `twin-scan.ts`, `two-trees.ts` with `stand-in-canvas.ts` | The citation and prose ledger, the painter differential, the twin scan, and two checkouts on the same cases under a stand-in Canvas (`two-trees.test.ts` covers a plain predictor's line ranges against a layout: only the layout's lines that have a line box count) |
-| `rebuild/lab/baselines/page-contexts-*.ts`, `browser-sets.ts --shuffle=<seed>`, `rebuild/tools/twin-scan.ts --page`, `rebuild/tools/contexts-bound.ts`, `rebuild/probes/contexts-*.ts` | A page's list of Canvas contexts (DESIGN.md §4.6): predictors that keep one list a document, a third order for them, the twin scan over a case file as one page, what searching the list costs and where its bound is a cliff, and the probes of what could make a kept context stale (a font that loads later, `<html lang>`, the device scale factor) |
+| `rebuild/lab/baselines/page-contexts-*.ts`, `browser-sets.ts --shuffle=<seed>`, `rebuild/tools/twin-scan.ts --page`, `rebuild/tools/contexts-bound.ts`, `rebuild/probes/contexts-*.ts` | A page's list of Canvas contexts (DESIGN.md §4.6): predictors that keep one list a document, a third order for them, the twin scan over a case file as one page, what searching the list costs and where its bound is a cliff, and the probes of what could make a kept context stale (a font that loads later, `<html lang>`, the device scale factor, and since 2026-09-20 a browser that has just started, with `rebuild/tools/contexts-start-up-probe.ts` and `rebuild/tools/contexts-heal-attack-probe.ts` running the library beside the DOM) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
 | `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (20 tests; one ties the joining-script test to the Blink port's joining types, two hold the checks' contexts to the engine's own text rendering), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |

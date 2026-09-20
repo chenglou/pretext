@@ -269,6 +269,13 @@ paragraphs for B (about 11 live canvases a message in Chrome where every message
 canvases pays for collections that trace them: on 2026-09-19 Chrome's timed row gave 857 ms against 329 ms for 1,000
 messages of the mix where the headline gave 4.79 s against 3.82 s for 10,000.
 
+In Firefox `prepare()` makes its contexts anew whatever list it is handed (`rebuild/src/index.ts` `prepare`, since
+2026-09-20; DESIGN.md §4.6, "What invalidates it", has why: a kept Firefox context can stay on the fallback font for a
+family name Firefox learns after start-up). So there E's `page keeps both` rows and the one-list headline measure what
+a list a message measures: a 200-message smoke of 2026-09-20 made 3.73 (mix) and 3.22 (latin) contexts a message with
+no list and the same with `page keeps both`. `page keeps checks` and `page keeps contexts` call the two halves
+themselves, so they still share a list in Firefox, as the study they were built for did.
+
 **The headline** (`--headline=10000`): the first 10,000 messages of each set from scratch, once a pass, `--headline-passes`
 times, the rebuild in count mode with a list of contexts a message, the rebuild with one list a pass (E) and main's cold
 batch taking turns, in forward order on even passes and in reverse on odd ones, with every pass's time in the report. So
@@ -290,7 +297,10 @@ attributes (the font string is parsed and resolved there). What is left of a pha
 measurement; in the fill it is the line breaking. The same numbers are summed by message kind. Two `performance.now()`
 calls surround every Canvas call in this pass, so it runs slower than the timed rows, and a phase with many calls looks
 larger than it is: read the shares here, the totals in the timed rows, and the font checks' cost from A against D. The
-wrappers come off again before the headline's resize case.
+wrappers come off again before the headline's resize case. The phases pass with one list hands the list to the two
+halves itself, so in Firefox its table still shows a shared list, which no page gets: it says what a shared list would
+cost there (0.6% and 0.4% of the time making contexts in the smoke of 2026-09-20, where `prepare()` handed a list makes
+3.73 and 3.22 contexts a message), not what a page gets.
 
 Calls and contexts per message in the 200-message smokes of 2026-09-19 (they don't depend on the machine's load; times
 aren't given, because the machine was busy):

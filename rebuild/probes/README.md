@@ -113,6 +113,24 @@ may read the DOM freely; this is research, not the library.
   10,000, 20,000 and 40,000 contexts (`K4`), the chat bench's shape of work on a page whose style or layout is dirty
   (`K5`), and the first `measureText` of kept contexts after their web font loads (`K6`). Same prefs, same lock rules.
 
+- `contexts-start-up.ts` (S1 to S3, W1 to W10, T1; 2026-09-20): every way a kept Canvas context can answer otherwise
+  than a context made now, raw Canvas beside the DOM, one probe a browser launch. S1 to S3 read 11 to 14 font
+  declarations for ten seconds in a browser that has just started, each with a context per way of touching it. W1 to
+  W10 bring one web font in by four routes, with and without DOM text in the family, into a font set that holds no face
+  and into one that holds a face. T1 times each way beside making a context. Verdicts: Firefox's kept contexts stay on
+  the fallback for family names it learns after start-up and nothing assigned heals them; webkit-host's miss only a
+  loaded FontFace added to a font set that holds no face; Chrome's follow everything. Runs under
+  `.artifacts/probes/contexts-heal`; research/CONTEXTS-HEAL.md has the study.
+- `../tools/contexts-start-up-probe.ts` (L1, L2; it runs the library, so it lives beside `tools/fill-counts-probe.ts`):
+  the library with one kept list beside the DOM and a new list, for the late names in a browser that has just started
+  and across a loaded FontFace being added.
+- `contexts-heal-attack.ts` (H1 to H5, 2026-09-20): the second reading of `contexts-start-up.ts`. Which names pages
+  write are late names in Firefox (9 of 22), that a used `local()` rule, `reset()` and a resize don't bring a kept
+  Firefox context back, an installed family taken over by a loaded FontFace, and WebKit's case after the font set was
+  emptied. Runs under `.artifacts/probes/contexts-heal/attack`.
+- `../tools/contexts-heal-attack-probe.ts` (K1 to K3): a paragraph prepared at the start of a Firefox that has just
+  started and kept. It stays on the fallback, and first filled after the names arrived it measures with two fonts.
+
 ## Running
 
 Every command that drives a browser runs under the shared browser lock, one browser per locked job. `runner.ts`

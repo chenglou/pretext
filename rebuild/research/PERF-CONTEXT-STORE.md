@@ -27,9 +27,9 @@ The attacker's review comes first.
 - **A finding about the merged list of contexts itself, not the store:** in a newly started Firefox, a context made in
   the browser's first second for a family named by its localized name (`"ヒラギノ角ゴシック"`, `"苹方-简"`) stays on
   the fallback font, while the DOM and a context made a second later resolve the name (4 of 4 runs; a new tab of a
-  running browser doesn't show it). So "only webkit-host's kept contexts need a contract" does not hold there. It is
-  being studied separately; until then the contract reads: make a new list after the page's fonts change, and in Firefox
-  don't keep a list made in the browser's first seconds.
+  running browser doesn't show it). So "only webkit-host's kept contexts need a contract" does not hold there. It was
+  studied (2026-09-20): Gecko keeps no list, and WebKit's contract is narrower than "the page's fonts change"
+  (research/PERF-LIFETIME.md, "What landed"; research/CONTEXTS-HEAL.md).
 - Also found: under `<html lang="ja">`, content with `lang=""` is 2 lines in Firefox's DOM and 3 by the library (Gecko's
   context with an empty `lang` follows the page's language where the DOM doesn't): a wrong line count, known before as a
   behaviour only.
