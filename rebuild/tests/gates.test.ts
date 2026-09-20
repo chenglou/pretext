@@ -124,7 +124,7 @@ const TURN = join(shared, 'turn.ts')
 writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
 import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
 const [queue, name, hold, flags, worktree, minFreeMemory] = process.argv.slice(2)
-await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' }, Number(minFreeMemory ?? 0))
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick', writes: flags === '--writes' }, Number(minFreeMemory ?? 0))
 appendFileSync(queue + '.log', 'start ' + name + '\\n')
 await Bun.sleep(Number(hold))
 appendFileSync(queue + '.log', 'end ' + name + '\\n')
@@ -168,6 +168,31 @@ test('a run waits its turn behind the live runs of its kind and of its worktree,
   late.kill('SIGKILL')
   await soon(() => log().includes('start same'))
   same.kill('SIGKILL')
+}, 120000)
+
+test('a job that writes the references (replay.ts pack and freeze) waits for every live run, and every later run waits for it', async () => {
+  const queue = join(shared, 'queue-writes')
+  const start = (name: string, flags: string) => Bun.spawn(['bun', TURN, queue, name, '60000', flags, name], { stdout: 'ignore', stderr: Bun.file(join(shared, `writes-${name}.err`)) })
+  const log = (): string => textOf(`${queue}.log`)
+  const said = (name: string): string => textOf(join(shared, `writes-${name}.err`))
+  const full = start('full', '')
+  await soon(() => log().includes('start full'))
+  const quick = start('quick', '--quick')
+  await soon(() => log().includes('start quick'))
+  const writer = start('writer', '--writes')
+  await soon(() => said('writer').includes(`pid ${full.pid} holds it`) && said('writer').includes('; runs waiting before this one: 1.'))
+  full.kill('SIGKILL')
+  // The --quick run reads the references too.
+  await soon(() => said('writer').includes(`pid ${quick.pid} holds it`))
+  expect(log()).not.toContain('start writer')
+  const later = start('later', '')
+  await soon(() => said('later').includes(`pid ${quick.pid} holds it`) || said('later').includes(`pid ${writer.pid} holds it`))
+  quick.kill('SIGKILL')
+  await soon(() => log().includes('start writer') && said('later').includes(`pid ${writer.pid} holds it`))
+  expect(log()).not.toContain('start later')
+  writer.kill('SIGKILL')
+  await soon(() => log().includes('start later'))
+  later.kill('SIGKILL')
 }, 120000)
 
 test('runs that ask at the same moment get a ticket each and never run together', async () => {

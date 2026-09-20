@@ -512,7 +512,10 @@ on a busier machine, where one took 113 s), one after the other through the queu
 took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
 never takes fewer cores instead of waiting. A `--quick` run and a full run don't wait for each other: beside a full run
 the `--quick` run took 123 s (185 s on 8 cores) at load averages up to 58, where its wait would be six minutes on
-average; the full run took 16 minutes with those two beside it and other owners' jobs.
+average; the full run took 16 minutes with those two beside it and other owners' jobs. `replay.ts pack` and `freeze`
+take a ticket in the same queue, as a job that writes: they replace the frozen references every worktree's gates read,
+so they wait for every run before them and every run after them waits for them (on 2026-09-20 a pack removed input
+shards under another worktree's sweep, which failed with ENOENT).
 
 A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
 reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
