@@ -8,11 +8,12 @@
 // integers; letter spacing is the context's.
 //
 // A group's advances come from one Canvas call while the total is below 256 zoomed px, where Canvas totals are exact 16.16
-// values (blink-canvas §1.5). A wider group is halved at an offset the pair test calls safe (blink-gaps §3.6 L4). The
-// paragraph position of an offset k inside a piece is the piece prefix measured alone plus the adjustment HarfBuzz made
-// between the clusters on both sides of k, d = R(xy) − R(x) − R(y), the part the glyph before k carries: all of it as GPOS
-// first-glyph pair values put it, or d >> 1 where the kern and kerx pair machine applies it (blink-gaps §3.4-§3.5,
-// FontFacts.pairKerning; unsafe-to-break at line edges where the fact isn't given).
+// values (blink-canvas §1.5). A wider group is cut near its middle, beside a space where it has one, and its pieces add the
+// adjustment measured across each cut (addPieces, measureGroups; blink-gaps §3.6 L4). The paragraph position of an offset
+// k inside a piece is the piece prefix measured alone plus the adjustment HarfBuzz made between the clusters on both sides
+// of k, d = R(xy) − R(x) − R(y), the part the glyph before k carries: all of it as GPOS first-glyph pair values put it, or
+// d >> 1 where the kern and kerx pair machine applies it (blink-gaps §3.4-§3.5, FontFacts.pairKerning; unsafe-to-break at
+// line edges where the fact isn't given).
 //
 // Every shaping call carries up to 5 code points of text_content on each side as context
 // (case_mapping_harfbuzz_buffer_filler.cc:32-43, hb-buffer.hh:109-111), and Arabic joining reads it
