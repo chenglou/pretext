@@ -471,7 +471,9 @@ before its first gate: a numbered ticket in `.artifacts/tests/gates/queue`, whic
 step, first come, first served. A full run waits for the full runs before it and a `--quick` run for the `--quick` runs
 before it, and either for a run of its own worktree, whose reports and logs it would write over; while it waits it says
 who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
-nobody up, so a killed run needs no cleaning, and `--no-wait` skips the queue. Measured with `--quick --engine=gecko`,
+nobody up, so a killed run needs no cleaning. A run whose turn came still starts no gate while under 30% of the
+machine's memory is free, the browser lock's floor, and keeps its place meanwhile: on 2026-09-19 two full runs beside a
+browser scoring job took the machine to its swap. `--no-wait` skips both waits. Measured with `--quick --engine=gecko`,
 31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
 on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
 took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run

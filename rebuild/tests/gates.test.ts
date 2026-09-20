@@ -118,8 +118,8 @@ afterAll(() => { Bun.spawnSync(['trash', shared]) })
 const TURN = join(shared, 'turn.ts')
 writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
 import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
-const [queue, name, hold, flags, worktree] = process.argv.slice(2)
-await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' })
+const [queue, name, hold, flags, worktree, minFreeMemory] = process.argv.slice(2)
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' }, Number(minFreeMemory ?? 0))
 appendFileSync(queue + '.log', 'start ' + name + '\\n')
 await Bun.sleep(Number(hold))
 appendFileSync(queue + '.log', 'end ' + name + '\\n')
@@ -180,7 +180,7 @@ test('a ticket whose pid is now a younger process\'s is dead: pids come round ag
   const queue = join(shared, 'pid-again')
   mkdirSync(queue)
   writeFileSync(join(queue, '1.json'), JSON.stringify({ pid: process.pid, at: Date.now() - 3600000, worktree: 'gone', flags: '', quick: false }))
-  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false })).toBe(false)
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false }, 0)).toBe(false)
   expect(readdirSync(queue)).toEqual(['2.json'])
 })
 
@@ -192,9 +192,24 @@ test('a killed run that its parent never reaps is a zombie, which signal 0 still
   const holder = (JSON.parse(readFileSync(join(queue, '1.json'), 'utf8')) as { pid: number }).pid
   process.kill(holder, 'SIGKILL')
   await soon(() => Bun.spawnSync(['ps', '-o', 'stat=', '-p', String(holder)]).stdout.toString().startsWith('Z'))
-  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false })).toBe(false)
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false }, 0)).toBe(false)
   expect(readdirSync(queue)).toEqual(['2.json'])
   parent.kill('SIGKILL')
+}, 120000)
+
+test('a run whose turn came still starts no gate while too little of the machine\'s memory is free, and keeps its place', async () => {
+  const queue = join(shared, 'memory')
+  // No machine has 101% of its memory free, so the first run waits for ever; the second waits behind it.
+  const first = Bun.spawn(['bun', TURN, queue, 'first', '0', '', 'one', '101'], { stdout: 'ignore', stderr: 'pipe' })
+  await soon(() => existsSync(join(queue, '1.json')))
+  const second = Bun.spawn(['bun', TURN, queue, 'second', '0', '', 'two', '0'], { stdout: 'ignore', stderr: 'pipe' })
+  await soon(() => existsSync(join(queue, '2.json')))
+  await Bun.sleep(1500)
+  expect(textOf(`${queue}.log`)).toBe('')
+  first.kill('SIGKILL')
+  await soon(() => textOf(`${queue}.log`).includes('end second'))
+  expect(await new Response(first.stderr).text()).toContain("waiting for memory: under 101% of the machine's memory is free")
+  expect(await new Response(second.stderr).text()).toContain('waiting for a turn')
 }, 120000)
 
 // ---- Reuse ----

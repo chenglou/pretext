@@ -54,7 +54,9 @@
 // the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
 // looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
 // lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
-// numbers only go up. --no-wait takes no ticket, for a human who knows better. Measured with --quick --engine=gecko, 42
+// numbers only go up. A run whose turn came still starts no gate while under 30% of the machine's memory is free, as the
+// browser lock does, and keeps its place meanwhile. --no-wait takes no ticket and asks nothing of memory, for a human who
+// knows better. Measured with --quick --engine=gecko, 42
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
 // on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
 // alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
@@ -321,12 +323,24 @@ function readTicket(path: string): Ticket | null {
   }
 }
 
+// The machine's free memory in percent, as macOS's `memory_pressure` gives it and the browser lock reads it
+// (.artifacts/session/with-browser-lock.py, which starts no browser job under 30% either).
+function freeMemoryPercent(): number {
+  return Number(/free percentage: (\d+)%/.exec(Bun.spawnSync(['memory_pressure']).stdout.toString())![1])
+}
+
+// A run starts no gate while less of the machine's memory is free: every gate's children load a group of recorded cases,
+// and several heavy jobs at once took the machine to its swap on 2026-09-19. It keeps its place while it waits, so the
+// runs behind it wait too.
+export const MIN_FREE_MEMORY = 30
+
 // Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
-// worktree, whose reports and logs it would write over; says who holds the turn while it waits. True when it waited.
+// worktree, whose reports and logs it would write over, and `minFreeMemory` percent of the machine's memory is free (0
+// asks nothing); says who holds the turn, or how much memory is free, while it waits. True when it waited.
 // The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
 // moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
 // its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
-export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
+export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number): Promise<boolean> {
   mkdirSync(dir, { recursive: true })
   const draft = join(dir, `draft-${ticket.pid}`)
   writeFileSync(draft, JSON.stringify(ticket))
@@ -354,12 +368,15 @@ export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
       if (!ticketLives(earlier)) rmSync(path, { force: true })
       else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
     }
-    if (before.length === 0) {
+    const free = before.length > 0 || minFreeMemory === 0 ? 100 : freeMemoryPercent()
+    if (before.length === 0 && free >= minFreeMemory) {
       if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)
       return said !== ''
     }
-    const holder = before[0]!
-    const text = `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
+    const holder = before[0]
+    const text = holder === undefined
+      ? `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
+      : `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
     if (text !== said) console.error(`[gates] ${text}`)
     said = text
     await Bun.sleep(500)
@@ -622,7 +639,7 @@ if (import.meta.main) {
   const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
   let key = inputsKey(REPO, run)
   let earlier = earlierRun(key)
-  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick })) {
+  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
     key = inputsKey(REPO, run)
     earlier = earlierRun(key)
   }
