@@ -8,6 +8,7 @@
 # its round-trip sizes, so every case meets the document history it met then. A finished run is skipped. A stall stops
 # the chunk with exit 3 and leaves the rows written so far; small chunks stall after 30 s without page activity, corpus
 # chunks (one paragraph of up to 270,000 units a round trip) after 600 s.
+# Env: CASES_FILE runs another case file under the chunk's name (real-text, rerun-file, rerun-reverse); ORDER=reverse.
 set -u
 CASES=.artifacts/research-20260916/census/cases/chunks
 OUT=.artifacts/census-20260919
@@ -22,9 +23,9 @@ for kind in rebuild main; do
   if [ -f "$out/$browser-run.json" ] && grep -q '"status": "ok"' "$out/$browser-run.json"; then echo "skip $out"; continue; fi
   mkdir -p "$out"
   if [ "$kind" = rebuild ]; then
-    set -- --predictor=rebuild/lab/baselines/no-facts-predictor.ts --stall-ms=$stall
+    set -- --predictor=rebuild/lab/baselines/no-facts-predictor.ts --stall-ms=$stall --order=${ORDER:-file}
   else
-    set -- --predictor=rebuild/lab/baselines/main-predictor.ts --predict-only --stall-ms=$stall
+    set -- --predictor=rebuild/lab/baselines/main-predictor.ts --predict-only --stall-ms=$stall --order=${ORDER:-file}
   fi
   echo "== $(date +%T) $browser $chunk $kind"
   bun rebuild/lab/run.ts --browser="$browser" --cases="$cases" --out="$out" --chunk=$size "$@" > "$out/run.log" 2>&1

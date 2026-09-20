@@ -1,5 +1,5 @@
 // The calibration tables, counted from census.ts's per-case records.
-//   bun rebuild/tools/census/tables.ts [--out=<dir>]   # <dir>/calibration.json, <dir>/tables.txt (Markdown)
+//   bun rebuild/tools/census/tables.ts [--out=<dir>]   # <dir>/calibration.json, <dir>/tables.txt and tables-full.txt (Markdown)
 // Every count is over one browser's records (<dir>/<browser>/<chunk>/cases.ndjson). The columns:
 // - cases: records of the family; observed: those whose line count the scorer could compare (the rebuild's lineCount status
 //   isn't `unobserved`). Main and the rebuild are compared on observed cases only.
@@ -9,9 +9,11 @@
 //   of the rebuild's failure has a gap that covers it (score.ts "Covered failures").
 // - wrong lines: the rebuild fails lineCount or breaks; families sort by it, then by failed widths.
 // - right count, wrong breaks: main's line count passes and its visible-breaks diagnostic fails (research/MAIN-TRIAGE.md).
-// Set aside (webkit-host): cases the census of 2026-09-17 found to lay out differently in a fresh document
-// (history/webkit-host/history.json) and the known tail's webkit/page-history cases. They're counted apart.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+// Set aside as page history, and counted apart: a case whose native view in either short fresh rerun (chunks rerun-file and
+// rerun-reverse, census.ts rerun-cases) differs from the one the long document gave; and in webkit-host the cases the census
+// of 2026-09-17 found that way (history/webkit-host/history.json) and the known tail's webkit/page-history cases. Only cases
+// where the rebuild fails lineCount or breaks were run again, so a pass that depends on history is not found.
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readLines } from '../../lab/rows.ts'
 
@@ -123,16 +125,45 @@ function tableRow(name: string, c: Counts): string {
   return `| ${name} | ${c.cases} | ${c.observed} | ${rate(c.mainPass, c.observed)} | ${rate(c.rebuildPass, c.observed)} | ${rate(c.breaksPass, c.breaksObserved)} | ${rate(c.widthsPass, c.widthsObserved)} | ${c.mainFailRebuildPass} | ${c.mainPassRebuildFail} (${c.mainPassRebuildFailCovered}) | ${c.wrongLines} (${c.wrongLinesCovered}) | ${c.rightCountWrongBreaks} |`
 }
 
-function familyTable(families: Map<string, Counts>, total: Counts): string {
+// Every family worst first. `fold` sums the families where the rebuild fails nothing (no wrong lines, no failed width) into
+// one row, for the document; tables-full.txt keeps every row.
+function familyTable(families: Map<string, Counts>, total: Counts, fold: boolean): string {
   const names = [...families.keys()].sort((a, b) => {
     const x = families.get(a)!
     const y = families.get(b)!
     return y.wrongLines - x.wrongLines || y.widthsFail - x.widthsFail || (a < b ? -1 : 1)
   })
   const lines = [HEADER]
-  for (let i = 0; i < names.length; i++) lines.push(tableRow(`\`${names[i]!.replace(/^suite\//, '')}\``, families.get(names[i]!)!))
+  const rest = emptyCounts()
+  let folded = 0
+  for (let i = 0; i < names.length; i++) {
+    const c = families.get(names[i]!)!
+    if (fold && c.wrongLines === 0 && c.widthsFail === 0) {
+      folded++
+      for (let f = 0; f < FIELDS.length; f++) rest[FIELDS[f]!] += c[FIELDS[f]!]
+    } else {
+      lines.push(tableRow(`\`${names[i]!.replace(/^suite\//, '')}\``, c))
+    }
+  }
+  if (folded > 0) lines.push(tableRow(`${folded} families where the rebuild fails nothing`, rest))
   lines.push(tableRow('**all**', total))
   return lines.join('\n')
+}
+
+// The mean of the families' pass rates, each family counting once whatever its size.
+function familyMeans(families: Map<string, Counts>): string {
+  const sums = [0, 0, 0, 0]
+  const counted = [0, 0, 0, 0]
+  for (const c of families.values()) {
+    const parts = [[c.mainPass, c.observed], [c.rebuildPass, c.observed], [c.breaksPass, c.breaksObserved], [c.widthsPass, c.widthsObserved]]
+    for (let k = 0; k < parts.length; k++) {
+      if (parts[k]![1] === 0) continue
+      sums[k]! += parts[k]![0]! / parts[k]![1]!
+      counted[k]!++
+    }
+  }
+  const mean = (k: number): string => pct(sums[k]!, counted[k]!)
+  return `- Every family counting once (the mean of ${families.size} family pass rates): main ${mean(0)}; the rebuild lineCount ${mean(1)}, breaks ${mean(2)}, widths ${mean(3)}.`
 }
 
 function headlines(c: Counts): string[] {
@@ -179,16 +210,16 @@ async function thenRecords(): Promise<Map<string, Then>> {
   return out
 }
 
-async function thenNative(browser: string): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
+async function thenNative(browser: string): Promise<Map<string, { lines: number; key: string }>> {
+  const out = new Map<string, { lines: number; key: string }>()
   const dir = join(OUT, browser)
   const chunks = existsSync(dir) ? readdirSync(dir).sort() : []
   for (let c = 0; c < chunks.length; c++) {
     const path = join(dir, chunks[c]!, 'then.ndjson')
     if (!existsSync(path)) continue
     for await (const line of readLines(path)) {
-      const t = JSON.parse(line) as { id: string; native: { key: string } }
-      out.set(t.id, t.native.key)
+      const t = JSON.parse(line) as { id: string; native: { lines: number; key: string } }
+      out.set(t.id, t.native)
     }
   }
   return out
@@ -207,22 +238,62 @@ function movesTable(moves: Record<string, Moves>): string {
 
 // ---- Main ----
 
-const aside = setAsideIds()
+const wrongLines = (r: Record_): boolean => r.rebuild.lineCount === 'fail' || r.rebuild.breaks === 'fail'
+const mainOnly = (r: Record_): boolean => r.main.lineCount === 'pass' && r.rebuild.lineCount === 'fail'
+
+const knownAside = setAsideIds()
 const then = await thenRecords()
 const json: Record<string, unknown> = { generatedAt: new Date().toISOString(), fields: FIELDS }
 const text: string[] = []
+const full: string[] = []
 for (let b = 0; b < BROWSERS.length; b++) {
   const browser = BROWSERS[b]!
   const all = await records(browser, chunk => chunk !== 'real-text' && !chunk.startsWith('rerun'))
   if (all.length === 0) continue
+
+  // The reruns: which failures are the long document's history, and which stay in short fresh documents.
+  const byId = new Map<string, Record_>()
+  for (let i = 0; i < all.length; i++) byId.set(all[i]!.id, all[i]!)
+  const forward = await records(browser, chunk => chunk === 'rerun-file')
+  const reverse = new Map<string, Record_>()
+  for (const r of await records(browser, chunk => chunk === 'rerun-reverse')) reverse.set(r.id, r)
+  const aside = new Set<string>(browser === 'webkit-host' ? knownAside : [])
+  const rerun = { cases: 0, historyDependent: 0, historyDependentRightInBoth: 0, historyDependentMainOnlyThen: 0, historyDependentMainOnlyInBoth: 0, stable: 0, stableWrongInBoth: 0, stableRightInBoth: 0, stableMainOnlyThen: 0, stableMainOnlyInBoth: 0 }
+  for (let i = 0; i < forward.length; i++) {
+    const a = forward[i]!
+    const z = reverse.get(a.id)
+    const r = byId.get(a.id)
+    if (z === undefined || r === undefined) continue
+    rerun.cases++
+    const right = !wrongLines(a) && !wrongLines(z)
+    const mainOnlyInBoth = mainOnly(a) && mainOnly(z)
+    if (a.native.key !== r.native.key || z.native.key !== r.native.key) {
+      aside.add(a.id)
+      rerun.historyDependent++
+      if (right) rerun.historyDependentRightInBoth++
+      if (mainOnly(r)) rerun.historyDependentMainOnlyThen++
+      if (mainOnlyInBoth) rerun.historyDependentMainOnlyInBoth++
+    } else {
+      rerun.stable++
+      if (wrongLines(a) && wrongLines(z)) rerun.stableWrongInBoth++
+      if (right) rerun.stableRightInBoth++
+      if (mainOnly(r)) rerun.stableMainOnlyThen++
+      if (mainOnlyInBoth) rerun.stableMainOnlyInBoth++
+    }
+  }
+
   const kept: Record_[] = []
   const apart: Record_[] = []
-  for (let i = 0; i < all.length; i++) (browser === 'webkit-host' && aside.has(all[i]!.id) ? apart : kept).push(all[i]!)
+  for (let i = 0; i < all.length; i++) (aside.has(all[i]!.id) ? apart : kept).push(all[i]!)
   const suite = tally(kept)
   const asideTally = tally(apart)
   const whole = tally(all)
-  text.push(`## ${browser}: main's suite, ${all.length} cases${apart.length > 0 ? ` (${apart.length} set aside as page history)` : ''}`, '', ...headlines(suite.total), '', difficulty(suite.total), '', familyTable(suite.families, suite.total), '')
+  text.push(`## ${browser}: main's suite, ${all.length} cases${apart.length > 0 ? ` (${apart.length} set aside as page history)` : ''}`, '', ...headlines(suite.total), familyMeans(suite.families), '', difficulty(suite.total), '', familyTable(suite.families, suite.total, true), '')
+  full.push(`## ${browser}: main's suite, every family`, '', familyTable(suite.families, suite.total, false), '')
   if (apart.length > 0) text.push(`### ${browser}: the ${apart.length} cases set aside`, '', HEADER, tableRow('set aside', asideTally.total), tableRow('suite with them', whole.total), '')
+  if (rerun.cases > 0) text.push(`### ${browser}: the rebuild's wrong lines, run again in short fresh documents (${rerun.cases} cases, both orders)`, '',
+    `- Native view differs from the long document's in either rerun (page history, set aside): ${rerun.historyDependent}. The rebuild has the right lines in both reruns on ${rerun.historyDependentRightInBoth} of them; main passed and the rebuild failed line count on ${rerun.historyDependentMainOnlyThen} in the long document and on ${rerun.historyDependentMainOnlyInBoth} in both reruns.`,
+    `- Same native view in both reruns: ${rerun.stable}. The rebuild's lines are wrong in both reruns on ${rerun.stableWrongInBoth} and right in both on ${rerun.stableRightInBoth}; main passed and the rebuild failed line count on ${rerun.stableMainOnlyThen} in the long document and on ${rerun.stableMainOnlyInBoth} in both reruns.`, '')
 
   // Then and now, on the cases both days hold. A status that isn't pass counts as fail unless it is unobserved.
   const nativeThen = await thenNative(browser)
@@ -231,6 +302,7 @@ for (let b = 0; b < BROWSERS.length; b++) {
   let joined = 0
   let nativeCompared = 0
   let nativeMoved = 0
+  let nativeLinesMoved = 0
   const bump = (name: string, a: Status, z: Status): string => {
     const key = a === 'unobserved' || z === 'unobserved' ? 'u' : `${a === 'pass' ? 'p' : 'f'}${z === 'pass' ? 'p' : 'f'}`
     const m = moves[name] ??= {}
@@ -242,9 +314,13 @@ for (let b = 0; b < BROWSERS.length; b++) {
     const t = then.get(`${browser} ${r.id}`)
     if (t === undefined) continue
     joined++
-    const keyThen = nativeThen.get(r.id)
-    const sameNative = keyThen === undefined ? null : keyThen === r.native.key
-    if (sameNative !== null) { nativeCompared++; if (!sameNative) nativeMoved++ }
+    const nativeWas = nativeThen.get(r.id)
+    const sameNative = nativeWas === undefined ? null : nativeWas.key === r.native.key
+    if (nativeWas !== undefined) {
+      nativeCompared++
+      if (nativeWas.key !== r.native.key) nativeMoved++
+      if (nativeWas.lines !== r.native.lines) nativeLinesMoved++
+    }
     for (let m = 0; m < METRICS.length; m++) {
       const key = bump(`rebuild ${METRICS[m]}`, t.rebuild[METRICS[m]!], r.rebuild[METRICS[m]!])
       if (sameNative === true) bump(`rebuild ${METRICS[m]}, same native view`, t.rebuild[METRICS[m]!], r.rebuild[METRICS[m]!])
@@ -258,18 +334,33 @@ for (let b = 0; b < BROWSERS.length; b++) {
   }
   const movedNames = [...movedFamilies.keys()].sort((x, y) => movedFamilies.get(y)!.fp + movedFamilies.get(y)!.pf - movedFamilies.get(x)!.fp - movedFamilies.get(x)!.pf)
   text.push(`### ${browser}: 2026-09-17 against today, ${joined} cases held on both days`, '',
-    nativeCompared === 0 ? 'Native views of 2026-09-17 weren\'t read.' : `Native views compared on ${nativeCompared} cases: ${nativeMoved} differ.`, '', movesTable(moves), '',
+    nativeCompared === 0 ? 'Native views of 2026-09-17 weren\'t read.' : `Native views compared on ${nativeCompared} cases: ${nativeMoved} differ, ${nativeLinesMoved} of them in the number of lines.`, '', movesTable(moves), '',
     `Line-count moves by family (fail → pass, pass → fail): ${movedNames.slice(0, 25).map(n => `\`${n.replace(/^suite\//, '')}\` ${movedFamilies.get(n)!.fp}, ${movedFamilies.get(n)!.pf}`).join('; ')}${movedNames.length > 25 ? `; and ${movedNames.length - 25} more families` : ''}.`, '')
 
+  // The cases main passes and the rebuild gets wrong, as a list, with the gaps their rows name.
+  const gapNames = new Map<string, number>()
+  const listed: string[] = []
+  for (let i = 0; i < kept.length; i++) {
+    const r = kept[i]!
+    if (r.rebuild.lineCount === 'unobserved' || r.main.lineCount !== 'pass' || !wrongLines(r)) continue
+    listed.push(JSON.stringify(r))
+    for (let g = 0; g < r.gaps.length; g++) gapNames.set(r.gaps[g]!, (gapNames.get(r.gaps[g]!) ?? 0) + 1)
+  }
+  mkdirSync(join(OUT, 'main-only'), { recursive: true })
+  writeFileSync(join(OUT, 'main-only', `${browser}.ndjson`), listed.join('\n') + '\n')
+  const gapList = [...gapNames.keys()].sort((x, y) => gapNames.get(y)! - gapNames.get(x)!)
+  text.push(`Gaps named on the ${listed.length} cases main passes and the rebuild gets wrong (a case can name several; \`main-only/${browser}.ndjson\` lists the cases): ${gapList.map(g => `${g} ${gapNames.get(g)}`).join(', ')}.`, '')
+
   const real = tally(await records(browser, chunk => chunk === 'real-text'))
-  if (real.total.cases > 0) text.push(`### ${browser}: real paragraphs, ${real.total.cases} cases`, '', ...headlines(real.total), '', familyTable(real.families, real.total), '')
+  if (real.total.cases > 0) text.push(`### ${browser}: real paragraphs, ${real.total.cases} cases`, '', ...headlines(real.total), '', familyTable(real.families, real.total, false), '')
 
   json[browser] = {
-    suite: { total: suite.total, families: Object.fromEntries(suite.families) }, setAside: asideTally.total, suiteWithSetAside: whole.total,
-    thenAndNow: { joined, nativeCompared, nativeMoved, moves, families: Object.fromEntries(movedFamilies) },
+    suite: { total: suite.total, families: Object.fromEntries(suite.families) }, setAside: asideTally.total, suiteWithSetAside: whole.total, rerun,
+    thenAndNow: { joined, nativeCompared, nativeMoved, nativeLinesMoved, moves, families: Object.fromEntries(movedFamilies) },
     realText: { total: real.total, families: Object.fromEntries(real.families) },
   }
 }
 writeFileSync(join(OUT, 'calibration.json'), JSON.stringify(json, null, 1) + '\n')
 writeFileSync(join(OUT, 'tables.txt'), text.join('\n') + '\n')
+writeFileSync(join(OUT, 'tables-full.txt'), full.join('\n') + '\n')
 console.log(`wrote ${join(OUT, 'calibration.json')} and ${join(OUT, 'tables.txt')}`)

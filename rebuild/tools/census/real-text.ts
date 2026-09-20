@@ -1,5 +1,5 @@
 // A small set of real paragraphs for the calibration table: the long-form corpora main keeps in corpora/, cut at their
-// own line ends, up to 24 paragraphs a corpus taken evenly through the text, each at three widths, styled the way main's
+// own line ends, up to 60 paragraphs a corpus taken evenly through the text, each at six widths, styled the way main's
 // canaries style that corpus (corpora/sources.json: font stack, size, line height, language, direction).
 //   bun rebuild/tools/census/real-text.ts <cases.ndjson>
 // A paragraph counts from 40 UTF-16 units, so headings and one-word lines stay out. One family a corpus: real/<corpus id>.
@@ -10,8 +10,8 @@ import { join } from 'node:path'
 type Source = { id: string; language: string; direction: 'ltr' | 'rtl'; output: string; font_family: string; font_size_px: number; line_height_px: number }
 
 const ROOT = join(import.meta.dir, '../../..')
-const WIDTHS = [320, 480, 720]
-const PER_CORPUS = 24
+const WIDTHS = [240, 320, 400, 480, 600, 720]
+const PER_CORPUS = 60
 const MIN_UNITS = 40
 
 const sources = JSON.parse(readFileSync(join(ROOT, 'corpora/sources.json'), 'utf8')) as Source[]

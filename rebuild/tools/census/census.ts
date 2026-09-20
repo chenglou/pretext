@@ -2,10 +2,14 @@
 // counted (tables.ts).
 //   bun rebuild/tools/census/census.ts chunk <browser> <chunk> [--out=<dir>]   # <dir>/<browser>/<chunk>/cases.ndjson
 //   bun rebuild/tools/census/census.ts then <browser> <chunk> [--out=<dir>]    # <dir>/<browser>/<chunk>/then.ndjson
+//   bun rebuild/tools/census/census.ts rerun-cases <browser> [--out=<dir>]     # <dir>/rerun/<browser>-cases.ndjson
 // `chunk` streams the chunk's rows (run-chunk.sh: native observation + today's library, no supplied font facts) and takes
 // main's prediction of the same case from its --predict-only rows (score.ts withNativeRow), so both are scored against one
 // native observation with the lab's scorer. `then` reads the census rows of 2026-09-17 for the same chunk and records each
 // case's native view of that day, so a case whose browser layout moved since can be told from one whose prediction moved.
+// `rerun-cases` writes the cases to run again in short fresh documents, in file order and reversed (chunks rerun-file and
+// rerun-reverse), to tell a wrong prediction from a native layout that depends on the long document's history: every suite
+// case of at most 1,000 units where the rebuild fails lineCount or breaks.
 //
 // A record:
 // - rebuild: the scorer's status of lineCount, breaks, widths and painter for today's library;
@@ -16,7 +20,7 @@
 // - native: the native line count and a hash of the native view (every code point and node rect's x, width and native line), the same hash
 //   `then` writes for the rows of 2026-09-17.
 import { createHash } from 'node:crypto'
-import { closeSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
 import { readLines, plainRows } from '../../lab/rows.ts'
 import { indexRows, nativeView, readRowAt, rowText, scoreRow, withNativeRow, type MetricName } from '../../lab/score.ts'
@@ -90,6 +94,27 @@ async function thenStep(browser: string, chunk: string): Promise<void> {
   console.log(`${browser} ${chunk}: ${rows} native views of 2026-09-17`)
 }
 
+async function rerunCases(browser: string): Promise<void> {
+  const wanted = new Set<string>()
+  const chunks = readdirSync(join(OUT, browser)).sort()
+  mkdirSync(join(OUT, 'rerun'), { recursive: true })
+  const out = openSync(join(OUT, 'rerun', `${browser}-cases.ndjson`), 'w')
+  for (let c = 0; c < chunks.length; c++) {
+    const records = join(OUT, browser, chunks[c]!, 'cases.ndjson')
+    if (!chunks[c]!.startsWith('chunk') || !existsSync(records)) continue
+    for await (const line of readLines(records)) {
+      const r = JSON.parse(line) as { id: string; rebuild: { lineCount: string; breaks: string } }
+      if (r.rebuild.lineCount === 'fail' || r.rebuild.breaks === 'fail') wanted.add(r.id)
+    }
+    for await (const line of readLines(join(THEN, 'cases/chunks', `${chunks[c]}.ndjson`))) {
+      if (wanted.has((JSON.parse(line) as { id: string }).id)) writeSync(out, line + '\n')
+    }
+  }
+  closeSync(out)
+  console.log(`${browser}: ${wanted.size} cases to run again`)
+}
+
 if (mode === 'chunk' && browser !== undefined && chunk !== undefined) await chunkStep(browser, chunk)
+else if (mode === 'rerun-cases' && browser !== undefined) await rerunCases(browser)
 else if (mode === 'then' && browser !== undefined && chunk !== undefined) await thenStep(browser, chunk)
-else throw new Error('Usage: bun rebuild/tools/census/census.ts chunk|then <browser> <chunk> [--out=<dir>]')
+else throw new Error('Usage: bun rebuild/tools/census/census.ts chunk|then <browser> <chunk> [--out=<dir>] | rerun-cases <browser> [--out=<dir>]')
