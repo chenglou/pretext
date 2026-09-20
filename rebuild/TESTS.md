@@ -358,8 +358,8 @@ questions (`.artifacts/tests/runs/b1b-rework-20260920`):
   before white space between two pieces asks Canvas nothing about it).
 - *A new set, `wide-group-cuts`* (2,159 Chrome cases; lab README, "The sets"): lines that end within half a px of the
   browser's fit in texts whose cuts fall where shaping crosses them. No other set held such a text: the form built first
-  passed every tier and moved lines in 1,158 of the 22,536 cases the set is drawn from. It is in `sets.ts`; tier 1
-  skips it and the ledgers and seeds lack it until the next recording.
+  passed every tier and moved lines in 1,158 of the 22,536 cases the set is drawn from. It is in `sets.ts`, and since
+  the recording at its merge (2026-09-20) Chrome's references, ledgers and seeds hold it: 69,224 cases a reference.
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts

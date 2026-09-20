@@ -577,9 +577,8 @@ without asking Canvas moved lines in real Chrome (1,158 cases at a device pixel 
 and 2 of the 61 a second form moved), where the other 67,065 tier cases held no such text
 (research/PROFILING-START.md, item 6). The pass-1 rows behind the case file are in
 `.artifacts/tests/runs/b1b-rework-20260920/extended/pass1` (Chrome 153.0.8010.50, a device pixel ratio of 2); another
-browser build or another set of installed fonts needs pass 1 again. The set joined after the references it would sit
-in were frozen, so tier 1 skips it and the ledgers and seeds lack it until the next recording. The twin scan finds 0
-on it.
+browser build or another set of installed fonts needs pass 1 again. Chrome's references, ledgers and seeds hold the set
+since the recording at its merge (2026-09-20). The twin scan finds 0 on it.
 
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
