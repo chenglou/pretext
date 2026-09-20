@@ -258,6 +258,12 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   expect(inputsKey(repo, run('--cores=3'))).toBe(full)
   write('.artifacts/tests/painter-frozen/facts.js', '// frozen\n')
   expect(inputsKey(repo, run())).not.toBe(full)
+  // Chrome's set files, which the twin scan reads and nothing pins: in the full key with Blink, and in no other.
+  const blink = (...args: string[]): string => inputsKey(repo, runOf(['--engine=blink', ...args]) as Run)
+  const before = [blink(), blink('--quick'), inputsKey(repo, run())]
+  write('.artifacts/lab/cases/twins.ndjson', '{}\n')
+  expect(blink()).not.toBe(before[0]!)
+  expect([blink('--quick'), inputsKey(repo, run())]).toEqual([before[1]!, before[2]!])
 })
 
 test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
