@@ -181,7 +181,8 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
   if (isCommonScript(domScript)) return null
   // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851), whose first script run takes
   // the script of the piece's first character that has one: Common characters before it join its run, and a bracket
-  // takes a script only from a run that has one (scriptRunLimits).
+  // takes a script only from a run that has one (scriptRunLimits). The itemizer reads Hiragana as Katakana, so a run's
+  // script is never 'Hira', and a Hiragana piece in a 'Kana' run itemizes alone to the run's script.
   let alone = 'Zyyy'
   for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(units, i, tEnd)
   if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
