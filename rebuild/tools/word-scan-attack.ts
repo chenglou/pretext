@@ -217,7 +217,8 @@ function words(): string {
     text += chance(0.85) ? pick(pool) : pick(LATIN_DRAWN)
   }
   if (chance(0.2)) text += pick(SPACES)
-  return text
+  // A drawn U+00A0 can meet a word that starts with a join control.
+  return spacedNbsp ? text : text.replaceAll(`${NBSP}${ZWJ}`, `${NBSP}x${ZWJ}`).replaceAll(`${NBSP}${ZWNJ}`, `${NBSP}x${ZWNJ}`)
 }
 
 function fontDecl(): FontDecl {
