@@ -19,7 +19,7 @@ export const LB_SA = 24
 const runs = new Uint32Array(decodeBase64(blinkCharPropsBase64).slice().buffer)
 const scriptRuns = new Uint32Array(decodeBase64(blinkScriptPropsBase64).slice().buffer)
 
-function propsOf(cp: number): number {
+function searchProps(cp: number): number {
   let lo = 0
   let hi = runs.length - 1
   while (lo < hi) {
@@ -28,6 +28,33 @@ function propsOf(cp: number): number {
     else hi = mid - 1
   }
   return runs[lo]! & 0x7ff
+}
+
+function searchScriptProps(cp: number): number {
+  let lo = 0
+  let hi = scriptRuns.length / 2 - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (scriptRuns[2 * mid]! <= cp) lo = mid
+    else hi = mid - 1
+  }
+  return scriptRuns[2 * lo + 1]!
+}
+
+// Both values of every code point below U+3000 (the scripts written with letters, and General Punctuation), read by
+// index. Every string the port measures reads several: the joining types at its two edges, the marks beside an offset,
+// the script of its first characters. Made from the runs when the module loads, in under a millisecond, and kept like
+// them: 72 KB.
+const FLAT = 0x3000
+const flatProps = new Uint16Array(FLAT)
+const flatScriptProps = new Uint32Array(FLAT)
+for (let cp = 0; cp < FLAT; cp++) {
+  flatProps[cp] = searchProps(cp)
+  flatScriptProps[cp] = searchScriptProps(cp)
+}
+
+function propsOf(cp: number): number {
+  return cp < FLAT ? flatProps[cp]! : searchProps(cp)
 }
 
 // u_getIntPropertyValue(cp, UCHAR_LINE_BREAK).
@@ -74,14 +101,7 @@ export const USCRIPT_INVALID_CODE = -1, USCRIPT_COMMON = 0, USCRIPT_INHERITED = 
   USCRIPT_HIRAGANA = 20, USCRIPT_KATAKANA = 22, USCRIPT_LATIN = 25, USCRIPT_KATAKANA_OR_HIRAGANA = 54
 
 function scriptPropsOf(cp: number): number {
-  let lo = 0
-  let hi = scriptRuns.length / 2 - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (scriptRuns[2 * mid]! <= cp) lo = mid
-    else hi = mid - 1
-  }
-  return scriptRuns[2 * lo + 1]!
+  return cp < FLAT ? flatScriptProps[cp]! : searchScriptProps(cp)
 }
 
 // uscript_getScript.
