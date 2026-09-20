@@ -88,8 +88,9 @@
 // same files there and no step of the rebuild writes them, so run with --fresh after changing one.
 // A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
 // the run's exit code) and the key is the same after the run as before it: a tree edited, or a reference frozen again,
-// under the run keeps nothing. Results are <key>.json in .artifacts/tests/gates/results, the last 50. The key takes
-// about a second for the full form and half a second for one engine's --quick.
+// under the run keeps nothing. Results are <key>.json in .artifacts/tests/gates/results, the last 50. The key takes a
+// quarter of a second for the full form and a tenth for one engine's --quick at a load average of 30, and 1.2 and 0.5 s
+// at 60.
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is

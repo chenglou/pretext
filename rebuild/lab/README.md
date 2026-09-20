@@ -480,8 +480,8 @@ where its wait would be six minutes on average; the full run took 16 minutes wit
 jobs.
 
 A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
-reused result with that run's time, worktree and commit, and exits with its code, in 0.3 s for one engine's `--quick`
-and about a second for the full form; `--fresh` runs anyway and replaces the result. The key is a sha256 over every
+reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
+1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over every
 tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, so uncommitted edits count;
 the `package.json` of every installed package; the frozen references of the run's browsers as `check` reads them under
 `.artifacts/tests/reference` (the tracked pins in `rebuild/tests/reference` are copies that `check` never reads): every
