@@ -1530,8 +1530,15 @@ the windows' au must add up to au(unit), else the unit has no windows
 ```
 
 A window is a unit to every recipe: the advance before it is the sum of the windows before it, and an offset inside it
-is measured against the window's end. The tests are the ones the recipes make before they call any in-word advance
-exact (the sides add up, no ligature group spans the offset), made over 16 clusters on each side of the cut. Probe
+is measured against the window's end. One kind of unit has no windows: a right-to-left script in a left-to-right run,
+which a direction override makes. HarfBuzz shapes it reversed or not by what its whole buffer holds (a buffer of digits
+without a letter stays left to right, hb-ot-shape.cc:588-645; `shapedReversed`), so Canvas can shape a window of digits
+alone the other way round than the DOM shapes the unit. With windows there, Hebrew letters and sixty digits under U+202D
+in 24px Arial broke a line one cluster late in pinned Firefox, where the long recipe gives the native break (the item's
+review, lab set of `tools/windows-attack-cases.ts`; `windows-reversed.test.ts`).
+
+The tests are the ones the recipes make before they call any in-word advance exact (the sides add up, no ligature
+group spans the offset), made over 16 clusters on each side of the cut. Probe
 gecko-windows W1 and W2 (pinned Firefox 156.0; 54 samples: Han, kana, Hangul, Arabic, Thai, Khmer, Burmese, Devanagari,
 Latin, Latin inside Han across a font fallback edge and an emoji sequence, in the lab's named fonts, 11 of them with
 letter spacing; every cluster boundary tried as a cut, in 16 grid phases): of 14,943 cuts tried the text rules keep
