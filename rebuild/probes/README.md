@@ -143,6 +143,9 @@ Options:
   DPR, not for accuracy runs.
 - `--allow-safari-frontmost`: Safari only, no value. Skips the wait for Safari to leave the front (approved by the
   maintainer on 2026-09-16); the probe window then opens over the user's windows.
+- `--isolated`: no value. Serves the page cross-origin isolated (the headers `bench/run.ts` sends), which gives it the
+  browser's finest timer: 20 µs in webkit-host and Firefox and 5 µs in Chrome, where a page without them sees whole
+  milliseconds in Firefox and WebKit. For probes that time something.
 - `--dry-run`: validate the probes and print the document count without launching anything.
 
 The runner exits nonzero when anything goes wrong at run level: invalid probes, a launch or page failure, a stall, a

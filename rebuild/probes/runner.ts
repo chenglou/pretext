@@ -27,8 +27,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--dry-run]'
-const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'dry-run']
+const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--isolated] [--dry-run]'
+const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'isolated', 'dry-run']
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
@@ -768,7 +768,10 @@ process.on('SIGTERM', () => stopRun(new Error('Terminated')))
 try {
   mkdirSync(outDir, { recursive: true })
   const bundle = await buildBundle()
-  const noStore = { 'cache-control': 'no-store' }
+  // --isolated: the page is cross-origin isolated, which gives it the browser's finest timer (bench/run.ts does the same).
+  const noStore = args.has('isolated')
+    ? { 'cache-control': 'no-store', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin' }
+    : { 'cache-control': 'no-store' }
   const fetchHandler = async (request: Request): Promise<Response> => {
     lastActivity = Date.now()
     const url = new URL(request.url)
