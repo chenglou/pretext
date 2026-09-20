@@ -799,7 +799,9 @@
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the pieces add up to the group: the cut moves off an offset where the two sides change each other",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the search asks about no offset inside a word while an offset beside a space passes",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured",
-    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > an inspected paragraph reports the cut of a group where no offset passes"
+    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > an inspected paragraph reports the cut of a group where no offset passes",
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the pieces are the ones named, and the window between the cuts around the cut is asked after them",
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the adjustment at the cut is the one its own window shows, not the 0 of the search"
    ],
    "audit": "blink E4, B8",
    "status": "current",
@@ -9397,7 +9399,7 @@
   "blink/shape/pair-adjustment-on-glyph-before": "3b213a5b57f6f38c",
   "blink/shape/default-ignorables-skipped-in-pair": "96d034c241466ec6",
   "blink/shape/unsafe-to-break-offsets": "fb4eda318eb1bc5f",
-  "blink/shape/wide-group-halved": "24d522734cfc8d7d",
+  "blink/shape/wide-group-halved": "8d73fd3ef1a1e93a",
   "blink/shape/position-from-prefix-and-pair": "605aaf4ca7fe3fd3",
   "blink/units/lu-ceil": "2d78919fc6f234fc",
   "blink/units/available-width-trunc": "38df67f9347d8fc0",
