@@ -1921,17 +1921,16 @@ round.
 - Distinct questions and the ratios above aren't counted again yet. The offline counts cover only the cases that
   replay, until the references are recorded again.
 
-**Since the cut search tries the offsets beside a space first** (2026-09-20, profiling item 6; §4.4). Counted in
-pinned Chrome with the bench's chat smoke (200 messages, no timing), a message from scratch asks 243.8 `measureText`
-calls where it asked 302.1 on the mix, and 239.0 where it asked 306.7 on plain ASCII, at a device pixel
-ratio of 2; at a ratio of 1, 182.9 for 209.5 and 177.2 for 208.3; at 3, 295.6 for 386.8 and
-288.6 for 391.0. All of it is in the engine's prepare (152.7 to 94.3 on the mix at a ratio of 2); a
-layout at another width asks what it asked, and the lines are the same in every run. On the tier cases the plain path
-asks 213.43 questions a paragraph where it asked 234.31 (the function set's plain check under the replay, 67,065
-cases), and every question it asks is one the old search asked: tier 1 replays every case, with 0 questions the record
-lacks. A form that asked nothing for a cut came to 199.3 and 193.6 calls a message and 194.39 questions a paragraph, and
-moved lines (§4.4): what is left of the difference is the safe test of the offset that wins, which is what keeps the
-cut off an offset where shaping crosses it.
+**Since the cut search tries the offsets beside a space first** (2026-09-20, profiling item 6; §4.4). Counted in pinned
+Chrome with the bench's chat smoke (200 messages, no timing), a message from scratch asks 243.8 `measureText` calls
+where it asked 302.1 on the mix, and 239.0 where it asked 306.7 on plain ASCII, at a device pixel ratio of 2; at a ratio
+of 1, 182.9 for 209.5 and 177.2 for 208.3; at 3, 295.6 for 386.8 and 288.6 for 391.0. All of it is in the engine's
+prepare (152.7 to 94.3 on the mix at a ratio of 2); a layout at another width asks what it asked, and the lines are the
+same in every run. On the tier cases the plain path asks 213.43 questions a paragraph where it asked 234.31 (the
+function set's plain check under the replay, 67,065 cases), and every question it asks is one the old search asked: tier
+1 replays every case, with 0 questions the record lacks. A form that asked nothing for a cut came to 199.3 and 193.6
+calls a message and 194.39 questions a paragraph, and moved lines (§4.4): what is left of the difference is the safe
+test of the offset that wins, which is what keeps the cut off an offset where shaping crosses it.
 
 **What it costs in time.** In the lab, little in Chrome, because Chrome's per-canvas cache answers a repeat: when the
 memo went the giants' prediction took 55.3 s against 49.5 s, and tier 2 forward 82.8 s against 79.3 s, back to back on a
