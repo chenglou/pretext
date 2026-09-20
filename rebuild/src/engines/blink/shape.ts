@@ -532,7 +532,20 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
   while (a > lo && holdsNoBase(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
   let b = clusterEndAfter(p, k, hi)
   while (b < hi && holdsNoBase(p, k, b)) b = clusterEndAfter(p, b, hi)
-  return measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+  return measure16(sh, g, a, b, lo, hi, noLigatures) - spaceOrRange16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+}
+
+// measure16 of [a, k), where a plain paragraph keeps one answer for the group: a lone U+0020 of a style without letter
+// spacing in the group's own call is the same string on the same context wherever it stands (it joins nothing, takes
+// word spacing past index 0, and U+2028 makes its string 16-bit under every script).
+function spaceOrRange16(sh: Shaper, g: number, a: number, k: number, lo: number, hi: number, noLigatures: boolean): number {
+  const p = sh.p
+  const group = p.groups[g]!
+  if (sh.gaps !== null || noLigatures || k !== a + 1 || a === 0 || p.text.charCodeAt(a) !== 0x20 || lo !== group.start || hi !== group.end || p.styles[group.style]!.letterSpacing !== 0) {
+    return measure16(sh, g, a, k, lo, hi, noLigatures)
+  }
+  if (Number.isNaN(group.space16)) group.space16 = measure16(sh, g, a, k, lo, hi)
+  return group.space16
 }
 
 // The adjustment across offset k inside a shaping call over [lo, hi) of group g: what the text before k and the text after
@@ -542,9 +555,8 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number = measure16(sh, g, from, to, lo, hi)): number {
   const p = sh.p
-  let whole = measure16(sh, g, from, to, lo, hi)
   let a = from
   let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
@@ -580,6 +592,8 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
   while (i + 1 < cuts.length && cuts[i + 1]! <= k) i++
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
   const to = cuts[i + 1] ?? group.end
+  // A window that is one piece: a plain paragraph kept the piece's total when it was measured (BlinkGroup.totals).
+  if (sh.gaps === null && cuts[i] !== k && i < group.totals.length) return windowAdjust16(sh, g, k, from, to, lo, hi, group.totals[i]!)
   return windowAdjust16(sh, g, k, from, to, lo, hi)
 }
 
@@ -595,11 +609,14 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
 // Where the two windows differ and the offset isn't before white space, the position is a stand-in (limits.ts positionLimit, and
 // unsafe-to-break at a line edge taken from it). Heuristic, registered in CHARTER.md's known deviations.
 export function positionAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
-  const p = sh.p
   if (k <= lo || k >= hi) return 0
+  return takesWideWindow(sh.p, k, lo, hi) ? adjust16(sh, g, k, lo, hi) : pairAdjust16(sh, g, k, lo, hi)
+}
+
+// Whether the position of offset k takes the wide window's adjustment: before white space that no letters join across.
+function takesWideWindow(p: BlinkPrepared, k: number, lo: number, hi: number): boolean {
   const c = p.text.charCodeAt(k)
-  if ((c === 0x20 || c === 0xa0 || c === 0x3000) && !joinsAcross(p, k, lo, hi)) return adjust16(sh, g, k, lo, hi)
-  return pairAdjust16(sh, g, k, lo, hi)
+  return (c === 0x20 || c === 0xa0 || c === 0x3000) && !joinsAcross(p, k, lo, hi)
 }
 
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
@@ -710,15 +727,19 @@ export function measureGroups(sh: Shaper): void {
     group.prefixAtCut = prefix
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window).
     const positions = [0]
+    const adjusts = [0]
     let sorted = true
+    group.totals = totals
     for (let i = 1; i < cuts.length - 1; i++) {
       const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       cutAdjustment(sh.gaps, sh, g, cuts[i]!, d)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
+      adjusts.push(d)
       positions.push(prefix[i]! - d + adjustBefore16(sh, g, d, cuts[i]!, group.start, group.end) - group.startTrim16)
       if (positions[i]! < positions[i - 1]!) sorted = false
     }
     group.positionAtCut = positions
+    group.adjustAtCut = adjusts
     group.cutsSorted = sorted
     group.wordEnds = new Int32Array(cuts.length - 1).fill(-1)
     for (let i = 0; i + 1 < cuts.length; i++) {
@@ -930,8 +951,10 @@ function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
       // What a plain paragraph keeps at a cut (types.ts BlinkGroup).
       const at = sh.gaps === null ? cutIndexAt(group, k) : -1
       if (at >= 0 && group.safeAtCut[at]! >= 0) return group.safeAtCut[at] === 1
-      const safe = isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
-        pairAdjust16(sh, sr.group, k, group.start, group.end) === 0
+      // At a cut whose position took the pair window (positionAdjust16), that window's answer is the cut's adjustment.
+      const pairKnown = at > 0 && !takesWideWindow(sh.p, k, group.start, group.end)
+      const safe = isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && (!pairKnown || group.adjustAtCut[at] === 0) &&
+        adjust16(sh, sr.group, k, group.start, group.end) === 0 && (pairKnown || pairAdjust16(sh, sr.group, k, group.start, group.end) === 0)
       if (at >= 0) group.safeAtCut[at] = safe ? 1 : 0
       return safe
     }

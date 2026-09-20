@@ -60,7 +60,7 @@ function shapingGroups(p: BlinkPrepared): void {
       end = it.end
       last = j
     }
-    const group: BlinkGroup = { start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, positionAtCut: [], cutsSorted: false, wordEnds: new Int32Array(0), positionAtWordEnd: new Float64Array(0), safeAtCut: new Int8Array(0) }
+    const group: BlinkGroup = { start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, positionAtCut: [], adjustAtCut: [], totals: [], space16: NaN, cutsSorted: false, wordEnds: new Int32Array(0), positionAtWordEnd: new Float64Array(0), safeAtCut: new Int8Array(0) }
     p.groupOfUnit.fill(p.groups.length, group.start, group.end)
     p.groups.push(group)
     index = last

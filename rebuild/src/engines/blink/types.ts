@@ -129,6 +129,13 @@ export type BlinkGroup = {
   // The 16.16 advance sum before each cut as a position reads it: prefixAtCut less the part of the cut's adjustment that
   // the glyph after the cut carries, less the start trim.
   positionAtCut: number[]
+  // The adjustment measureGroups added at each cut (0 at the group's start).
+  adjustAtCut: number[]
+  // Each piece's measured total.
+  totals: number[]
+  // A U+0020 of the group measured alone, NaN until a pair window asks for it: the same string on the same context at
+  // every cut after a space.
+  space16: number
   // Whether the cuts' positions never run backwards, which the search over them needs (line-breaker.ts wordCandidate).
   cutsSorted: boolean
   // Per piece, the offset where its trailing spaces start, or -1 for a piece without any; and the advance sum before that
