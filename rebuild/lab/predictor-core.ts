@@ -19,6 +19,7 @@
 // ui-language.
 import * as blink from '../src/engines/blink/index.ts'
 import { blinkPaintRules } from '../src/engines/blink/paint-rules.ts'
+import { wordsCheck } from '../src/engines/blink/shape.ts'
 import * as gecko from '../src/engines/gecko/index.ts'
 import { geckoPaintRules } from '../src/engines/gecko/paint-rules.ts'
 import * as webkit from '../src/engines/webkit/index.ts'
@@ -329,8 +330,12 @@ type PlainPredictor = {
   paint: (c: Case, prediction: LinesPrediction, host: HTMLElement) => null
 }
 
-export function makePlainPredictor(factsFor: FactsFor, pageContexts: boolean = false): PlainPredictor {
+// `checkedWords` turns on Blink's checked run (src/engines/blink/shape.ts wordsCheck): every candidate a plain line finds from
+// the positions at the edges of words is held against the search over every offset, and a difference throws, so the case's
+// row holds the error in place of its line ranges.
+export function makePlainPredictor(factsFor: FactsFor, pageContexts: boolean = false, checkedWords: boolean = false): PlainPredictor {
   const contexts: Context[] | undefined = pageContexts ? [] : undefined
+  if (checkedWords) wordsCheck.on = true
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
