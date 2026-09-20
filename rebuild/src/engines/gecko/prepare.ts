@@ -14,7 +14,7 @@ import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogate
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
-  BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
+  BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_NORMAL, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
   LineBreakerState, type BreakSink,
 } from './linebreak.js'
 import {
@@ -22,7 +22,7 @@ import {
   isDefaultIgnorable, isEastAsianPunctuation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
-  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
+  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
   type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
   type RunContexts, type ScriptRun,
 } from './types.js'
@@ -1161,6 +1161,18 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   }
   const correctionPrefix = new Int32Array(T + 1)
   for (let t = 0; t < T; t++) correctionPrefix[t + 1] = correctionPrefix[t]! + correction[t]!
+  // What each unit holds inside itself, for the word scan (types.ts INNER_NATURAL; lines.ts wordScan).
+  const unitInner = new Uint8Array(units.length)
+  for (let u = 0; u < units.length; u++) {
+    const unit = units[u]!
+    let inner = unit.kind === 'word' && g.isSpace[unit.tStart] === 1 ? INNER_SPACE : 0
+    for (let t = unit.tStart + 1; t < unit.tEnd; t++) {
+      if (g.breakFlags[t] === BREAK_NORMAL) inner |= INNER_NATURAL
+      if (g.clusterStart[t] === 1) inner |= g.breakFlags[t] === BREAK_EMERGENCY_WRAP ? INNER_CLUSTER | INNER_EMERGENCY : INNER_CLUSTER
+      if (g.isSpace[t] === 1) inner |= INNER_SPACE
+    }
+    unitInner[u] = inner
+  }
 
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) reads the space, the letter spacing and the word spacing from the
   // containing block, and tab-size from the text frame (lines.ts computeTabs).
@@ -1183,7 +1195,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, unitInner, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
 

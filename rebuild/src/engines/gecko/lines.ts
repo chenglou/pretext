@@ -12,8 +12,8 @@ import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { isTrimmableChar, pxToAu } from './prepare.js'
 import { isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript } from './props.js'
 import {
-  KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt, type GeckoEdgeItem, type GeckoObjectItem, type GeckoPrepared,
-  type GeckoTextRun,
+  INNER_CLUSTER, INNER_EMERGENCY, INNER_NATURAL, INNER_SPACE, KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt,
+  type GeckoEdgeItem, type GeckoObjectItem, type GeckoPrepared, type GeckoTextRun, type GeckoUnit,
 } from './types.js'
 
 const SHY = 0x00ad
@@ -185,12 +185,175 @@ export type Measured = {
   breakPriority: number
 }
 
-// gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
+// How a plain paragraph's break scans are decided, and what the word scan counted: set and read by tests and tools, and
+// nothing in the library reads the counts.
+// - `mode`: 'exact' decides every scan by the engine's loop (charScan). 'proven' lets the word scan decide the scans whose
+//   every candidate sits at a shaping unit's start. 'premise' lets it also pass over a unit's inner candidates where the
+//   unit's end fits, on the premise wordScan names.
+// - `checked`: every scan the word scan decides is decided by the engine's loop too, and a difference throws.
+// - `proven`, `premise`: the scans the word scan decided, by whether it used the premise; `refused`: the others, by reason.
+export const wordScanState = {
+  mode: 'premise' as 'exact' | 'proven' | 'premise', checked: false, proven: 0, premise: 0, refused: {} as Record<string, number>,
+}
+
+// Why the word scan leaves a scan to the engine's loop.
+type Refusal = 'break-spaces' | 'soft-hyphen' | 'starts-inside-unit' | 'ends-inside-unit' | 'trim-inside-unit' | 'inner-candidates' |
+  'inner-letter-spacing' | 'inner-space' | 'unit-overflows' | 'breaks-inside-unit'
+
+// The glyph advance before a shaping unit's start, or the run's end: what advanceBefore gives there, which asks nothing.
+function unitStartAdvance(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
+  return t >= run.tEnd ? run.totalAdvance : p.units[p.unitOf[t]!]!.startAdvance
+}
+
+// The scan's running width from a to b, both unit starts: scanAdvance's terms.
+function unitsAdvance(p: GeckoPrepared, prov: Provider, a: number, b: number): number {
+  return unitStartAdvance(p, prov.run, b) - unitStartAdvance(p, prov.run, a) + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
+}
+
+// Where the trimmable white space before t starts, as the loop counts it from aStart; t where there is none.
+function trimStartBefore(p: GeckoPrepared, aStart: number, t: number, wantTrimmable: boolean): number {
+  let from = t
+  if (wantTrimmable) while (from > aStart && p.isSpace[from - 1] === 1) from--
+  return from
+}
+
+const startsUnit = (p: GeckoPrepared, run: GeckoTextRun, t: number): boolean => t >= run.tEnd || p.units[p.unitOf[t]!]!.tStart === t
+
+// The last break candidate inside a unit whose inner candidates were all accepted: its last natural break where it has
+// one, since the first one ends word wrapping, else its last cluster start that word wrapping takes.
+function lastInnerCandidate(p: GeckoPrepared, unit: GeckoUnit, natural: boolean, canWordWrap: boolean): number {
+  let i = unit.tEnd - 1
+  while (natural ? p.breakFlags[i] !== BREAK_NORMAL : p.clusterStart[i] === 0 || (!canWordWrap && p.breakFlags[i] !== BREAK_EMERGENCY_WRAP)) i--
+  return i
+}
+
+// BreakAndMeasureText decided from the shaping units' advances alone: the same loop, walked unit by unit. Gecko shapes a
+// text run word by word (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900: a boundary space is a glyph of its own and
+// nothing is shaped across it), so the advance before a unit's start is the sum of the units before it, which `prepare`
+// measured, and a candidate there asks Canvas nothing. The loop's state at such a candidate is a function of those sums:
+// its running width is the advance from aStart (the pending advances telescope), its trimmable advance the run of spaces
+// before it, and with manual hyphens off the test that accepts a candidate and the test that aborts the scan are one
+// (gfxTextRun.cpp:1095-1112), so the scan ends at the first candidate that doesn't fit. What can't be decided here is
+// refused, and the engine's loop decides it:
+// - a scan that starts or ends inside a unit, or trims from inside one, reads an advance inside a unit;
+// - soft hyphens and break-spaces add candidates this walk doesn't list.
+// A unit can hold candidates inside itself: natural breaks (after a hyphen, between Han characters), and while no normal
+// break was accepted every cluster start under overflow-wrap, or the emergency break after a hyphen
+// (gfxTextRun.cpp:1071-1078). Their advances are Canvas questions. In mode 'proven' such a scan is refused. In mode
+// 'premise' the walk passes over them where the unit's end fits, on this PREMISE, which no engine source gives and Canvas
+// isn't asked for: the advance before an offset inside a word is never more than the advance before the word's end (no
+// suffix of a shaped word has a negative advance; a detailed glyph's advance is signed and nothing clamps it,
+// gfxHarfBuzzShaper.cpp:1699-1719). Then every inner candidate fits, none aborts, and the last of them is the scan's last
+// break until a later candidate is accepted; a scan that would break at it is refused, since the edge's advance is
+// asked of Canvas. Letter spacing and a trimmable space inside the unit would enter the inner tests, so they refuse.
+function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number, aWidth: number, suppress: 'none' | 'initial',
+  canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean, wantTrimmable: boolean, priorityIn: number): Measured | Refusal {
+  const run = prov.run
+  const end = aStart + aMaxLength
+  if (isBreakSpaces) return 'break-spaces'
+  if (run.hasShy) return 'soft-hyphen'
+  if (!startsUnit(p, run, aStart)) return 'starts-inside-unit'
+  if (!startsUnit(p, run, end)) return 'ends-inside-unit'
+  let breakPriority = priorityIn
+  let lastBreak = -1
+  // The unit whose inner candidates were the last accepted, -1 where the last break is a unit's start.
+  let lastBreakUnit = -1
+  let lbChars = 0
+  let lbAdvance = 0
+  let usedPremise = false
+  let aborted = false
+  for (let k = aStart < end ? p.unitOf[aStart]! : p.units.length; k < p.units.length && p.units[k]!.tStart < end; k++) {
+    const unit = p.units[k]!
+    const t = unit.tStart
+    if (t > aStart || suppress === 'none') {
+      const atBreak = p.breakFlags[t] === BREAK_NORMAL
+      const wordWrapping = (canWordWrap || (canWhitespaceWrap && p.breakFlags[t] === BREAK_EMERGENCY_WRAP)) && p.clusterStart[t] === 1 &&
+        breakPriority <= WORD_WRAP_BREAK
+      if (atBreak || wordWrapping) {
+        const trimStart = trimStartBefore(p, aStart, t, wantTrimmable)
+        if (!startsUnit(p, run, trimStart)) return 'trim-inside-unit'
+        const width = unitsAdvance(p, prov, aStart, t)
+        const trimmableAdvance = trimStart < t ? unitsAdvance(p, prov, trimStart, t) : 0
+        if (lastBreak < 0 || width - trimmableAdvance <= aWidth) {
+          lastBreak = t
+          lastBreakUnit = -1
+          lbChars = t - trimStart
+          lbAdvance = trimmableAdvance
+          breakPriority = atBreak ? NORMAL_BREAK : WORD_WRAP_BREAK
+        }
+        if (width - trimmableAdvance > aWidth) {
+          aborted = true
+          break
+        }
+      }
+    }
+    const inner = p.unitInner[k]!
+    const wrapsInside = breakPriority <= WORD_WRAP_BREAK &&
+      ((canWordWrap && (inner & INNER_CLUSTER) !== 0) || (canWhitespaceWrap && (inner & INNER_EMERGENCY) !== 0))
+    if ((inner & INNER_NATURAL) !== 0 || wrapsInside) {
+      if (wordScanState.mode === 'proven') return 'inner-candidates'
+      if (prov.letterSpacingAu !== 0) return 'inner-letter-spacing'
+      if ((inner & INNER_SPACE) !== 0) return 'inner-space'
+      if (unitsAdvance(p, prov, aStart, unit.tEnd) > aWidth) return 'unit-overflows'
+      usedPremise = true
+      lastBreak = lastInnerCandidate(p, unit, (inner & INNER_NATURAL) !== 0, canWordWrap)
+      lastBreakUnit = k
+      lbChars = 0
+      lbAdvance = 0
+      breakPriority = (inner & INNER_NATURAL) !== 0 ? NORMAL_BREAK : WORD_WRAP_BREAK
+    }
+  }
+  let charsFit = -1
+  let trimmableChars = 0
+  let trimmableAdvance = 0
+  if (!aborted) {
+    const trimStart = trimStartBefore(p, aStart, end, wantTrimmable)
+    if (!startsUnit(p, run, trimStart)) return 'trim-inside-unit'
+    trimmableChars = end - trimStart
+    trimmableAdvance = trimStart < end ? unitsAdvance(p, prov, trimStart, end) : 0
+    if (unitsAdvance(p, prov, aStart, end) - trimmableAdvance <= aWidth || lastBreak < 0) charsFit = aMaxLength
+  }
+  if (charsFit < 0) {
+    if (lastBreakUnit >= 0) return 'breaks-inside-unit'
+    charsFit = lastBreak - aStart
+    trimmableChars = lbChars
+    trimmableAdvance = lbAdvance
+  }
+  if (usedPremise) wordScanState.premise++
+  else wordScanState.proven++
+  return {
+    charsFit, advance: rangeAdvance(p, prov, aStart, aStart + charsFit, null), trimmableChars, trimmableAdvance, usedHyphenation: false,
+    lastBreak: charsFit === aMaxLength && lastBreak >= 0 ? lastBreak - aStart : null, breakPriority,
+  }
+}
+
+// A plain paragraph's scan: the word scan where it decides, the engine's loop where it refuses, and both where checked.
 function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number,
   aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
   wantTrimmable: boolean, priorityIn: number, consulted: number[] | null): Measured {
+  aMaxLength = Math.min(aMaxLength, prov.run.tEnd - aStart)
+  if (consulted !== null || wordScanState.mode === 'exact') return charScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn, consulted)
+  const fast = wordScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn)
+  if (typeof fast === 'string') {
+    wordScanState.refused[fast] = (wordScanState.refused[fast] ?? 0) + 1
+    return charScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn, consulted)
+  }
+  if (wordScanState.checked) {
+    const exact = charScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn, consulted)
+    if (exact.charsFit !== fast.charsFit || exact.advance !== fast.advance || exact.trimmableChars !== fast.trimmableChars ||
+      exact.trimmableAdvance !== fast.trimmableAdvance || exact.usedHyphenation !== fast.usedHyphenation || exact.lastBreak !== fast.lastBreak ||
+      exact.breakPriority !== fast.breakPriority) {
+      throw new Error(`gecko: the word scan differs from the engine's loop at ${aStart}, length ${aMaxLength}, width ${aWidth}: ${JSON.stringify(fast)} against ${JSON.stringify(exact)}`)
+    }
+  }
+  return fast
+}
+
+// gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
+function charScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number,
+  aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
+  wantTrimmable: boolean, priorityIn: number, consulted: number[] | null): Measured {
   const run = prov.run
-  aMaxLength = Math.min(aMaxLength, run.tEnd - aStart)
   const end = aStart + aMaxLength
   const haveHyphenation = run.hasShy
   const hyphenWidth = run.hyphenAu + prov.letterSpacingAu // GetHyphenWidth (nsTextFrame.cpp:4388-4399)

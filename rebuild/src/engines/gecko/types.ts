@@ -274,6 +274,15 @@ export type PairPlacement = {
   otherFace: string[]
 }
 
+// What a shaping unit holds after its first character, as bits of GeckoPrepared.unitInner: a natural break opportunity, a
+// cluster start, an emergency break after a hyphen at a cluster start; and whether a word holds a trimmable space
+// anywhere (U+3000, or a space before a cluster extender). The word scan (lines.ts wordScan) reads them to know which
+// break candidates lie inside a unit, where an advance is a Canvas question.
+export const INNER_NATURAL = 1
+export const INNER_CLUSTER = 2
+export const INNER_EMERGENCY = 4
+export const INNER_SPACE = 8
+
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0
 export const WORD_WRAP_BREAK = 1
@@ -316,6 +325,8 @@ export type GeckoPrepared = {
   correctionPrefix: Int32Array
   unitOf: Int32Array
   units: GeckoUnit[]
+  // Per unit: the INNER_ bits above, from the glyph flags of the characters after its first.
+  unitInner: Uint8Array
   // Per source offset: the transformed index of that character, or -1 when TransformText skipped it.
   sourceT: Int32Array
   // Per source offset (length + 1): the first transformed index at or after it (gfxSkipCharsIterator).
