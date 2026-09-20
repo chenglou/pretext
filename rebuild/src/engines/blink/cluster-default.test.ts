@@ -78,10 +78,12 @@ describe('blink cluster default', () => {
     expect(linesOf(BEH + LAM + ALEF + BEH, 25)).toEqual([[0, 2], [2, 4]])
   })
 
-  // beh, lam, lam, heh at 25px. One cluster of three letters never fits, so the line after beh overflows: Blink then takes the
-  // next break opportunity, a grapheme boundary inside the glyph (is_overflow, shaping_line_breaker.cc:402-409).
-  test('encoded-ligatures: lam lam heh is one cluster', () => {
+  // alef, lam, lam, heh at 25px (alef doesn't join the lam after it). One cluster of three letters never fits, so the line
+  // after alef overflows: Blink then takes the next break opportunity, a grapheme boundary inside the glyph (is_overflow,
+  // shaping_line_breaker.cc:402-409). After beh the first lam joins, and no font here draws the three as one glyph.
+  test('encoded-ligatures: lam lam heh is one cluster where the first lam starts a joined run', () => {
     study.clusterDefault = 'encoded-ligatures'
-    expect(linesOf(BEH + LAM + LAM + HEH, 25)).toEqual([[0, 1], [1, 2], [2, 4]])
+    expect(linesOf(ALEF + LAM + LAM + HEH, 25)).toEqual([[0, 1], [1, 2], [2, 4]])
+    expect(linesOf(BEH + LAM + LAM + HEH, 25)).toEqual([[0, 2], [2, 4]])
   })
 })

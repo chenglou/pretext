@@ -9,7 +9,7 @@
 import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
 import { raw16Of } from './contexts.js'
-import { isMark } from './props.js'
+import { isMark, joiningType } from './props.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
 
@@ -31,7 +31,8 @@ export const LIGATURE_ASSUMED = 4
 //   lam-alef ligatures Unicode encodes (U+FEF5 to U+FEFC: lam U+0644 before alef U+0622, U+0623, U+0625 and U+0627), which
 //   is HarfBuzz's own table for a font without GSUB (hb-ot-shaper-arabic-table.hh ligature_table);
 // - 'encoded-ligatures': those, and where letter spacing is 0 (it turns liga off, font_features.cc:54-86) the Latin
-//   ligatures Unicode encodes at U+FB00 to U+FB04 (ff, fi, fl, ffi, ffl) and lam lam heh;
+//   ligatures Unicode encodes at U+FB00 to U+FB04 (ff, fi, fl, ffi, ffl) and lam lam heh where the first lam doesn't join
+//   the letter before it (the fonts that draw it as one glyph do so there alone: Arial, Tahoma, Courier New, Geeza Pro);
 // - 'canvas-lam-alef': 'lam-alef' where the style's Canvas context measures lam, alef otherwise than lam, U+200D, alef
 //   (the Arabic shaper's ligating features don't skip a U+200D, hb-ot-shaper-arabic.cc:209-231), else 'letters'.
 export type ClusterDefault = 'letters' | 'lam-alef' | 'encoded-ligatures' | 'canvas-lam-alef'
@@ -66,6 +67,16 @@ function basesEnd(text: string, at: number, limit: number, wanted: readonly ((cp
   return at
 }
 
+// Whether the letter at text offset k joins the letter before it inside [start, k): that one is dual-joining, left-joining
+// or join-causing, with transparent characters between them skipped (Unicode 9.2, rules R1 to R7).
+function joinsBefore(text: string, k: number, start: number): boolean {
+  for (let i = k - 1; i >= start; i--) {
+    const type = joiningType(text.charCodeAt(i))
+    if (type !== 5) return type === 1 || type === 3 || type === 4
+  }
+  return false
+}
+
 // Marks the boundaries inside the sequences of group [start, end) that the study's default takes for one glyph cluster,
 // where no fact speaks about the boundary before the sequence's last letter.
 function assumedClusters(p: BlinkPrepared, group: BlinkGroup, st: BlinkStyle): void {
@@ -78,7 +89,7 @@ function assumedClusters(p: BlinkPrepared, group: BlinkGroup, st: BlinkStyle): v
     const unit = text.charCodeAt(k)
     let end = -1
     if (unit === LAM) {
-      if (others) end = basesEnd(text, k + 1, group.end, [cp => cp === LAM, cp => cp === HEH])
+      if (others && !joinsBefore(text, k, group.start)) end = basesEnd(text, k + 1, group.end, [cp => cp === LAM, cp => cp === HEH])
       if (end < 0) end = basesEnd(text, k + 1, group.end, [isLigatingAlef])
       if (end >= 0 && variant === 'canvas-lam-alef' && !canvasLigatesLamAlef(st)) end = -1
     } else if (unit === 0x66 && others) {
