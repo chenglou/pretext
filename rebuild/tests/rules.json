@@ -9257,7 +9257,7 @@
    "id": "gecko/measure/probe-pairs-per-context",
    "engine": "gecko",
    "area": "measure",
-   "kind": "recipe",
+   "kind": "heuristic",
    "statement": "where an offset's own pair doesn't tell, 16 probe pairs of printable ASCII that many Latin fonts kern and none ligates (AV VA AT TA AW WA To Ty T. LT Vo Yo Wa y, r, P, with spaces between them here, in that order: a probe-string choice, not font data) are measured alone in the run's context and strike placements out together; HarfBuzz chooses between GPOS and the kern or kerx machine once per face, script and language, and the recipe takes it that a face places all its Latin pairs one way, which the source doesn't guarantee for a kerx table that holds both subtable kinds or for a GPOS second value record (none of 1,008 installed faces does otherwise); the first pair that kerns names the face, a later pair counts only where it shares a letter with those that counted, and the probe ends when one placement is left, or none, or at a pair whose letters alone don't measure as the larger size predicts; asked once per Canvas context of a prepared paragraph, by whichever offset needs it first, and kept on the record the context's text runs share (RunContexts.pairPlacement); three questions a pair that doesn't kern, six a pair that does, none for a pair that shares no letter",
    "source": "hb-ot-shape.cc:131-187; engines/gecko/advance.ts PROBE_PAIRS, askedPlacement; research/MAIN-FACTS-ANALYSIS.md (the critic's offline study of 1,008 faces)",
    "probes": [
@@ -9267,7 +9267,7 @@
    "tests": [
     "src/engines/gecko/gecko.test.ts :: a probe pair tells for the pairs of the face that draws it, and for no other (hb-ot-shape.cc:131-187; probes gecko-mainfacts M1, M5)"
    ],
-   "declaredBy": "gecko owner (correctness round 5, 2026-09-19)",
+   "declaredBy": "gecko owner (correctness round 5, 2026-09-19); kind by the fresh-eyes review (2026-09-19): that a face places all its Latin pairs one way is an inference no Canvas question closes",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9943,7 +9943,7 @@
   "webkit/measure/code-path-per-measured-string": "2eb2d7c0778db0f0",
   "gecko/measure/joined-suffix-behind-its-letter": "57fe741723d29a31",
   "gecko/measure/pair-placement-from-rounding": "c826473485f534f5",
-  "gecko/measure/probe-pairs-per-context": "b476b49a91f6535a",
+  "gecko/measure/probe-pairs-per-context": "4e44b8e06ec6d4e7",
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
   "gecko/lines/plain-scan-rough-candidates": "5098cc53f534eeef",

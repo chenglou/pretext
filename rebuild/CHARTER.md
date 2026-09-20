@@ -164,7 +164,9 @@ heuristic, or named here.
   (`measure/sides-add-up-is-exact`) holds to the app unit only: 6 passing Noto Nastaliq Urdu cases hold a position 1 au
   off (probe F22; F15 1,013 of 1,015). The suffix-side in-word recipe for clusters without joining forms
   (`measure/suffix-side-recipe`) has a probe verdict (F26, 567 of 567 offsets) and no source reading. A font's `rtla`
-  lookups on a lone character at an odd level aren't predicted or named.
+  lookups on a lone character at an odd level aren't predicted or named. The 16 probe pairs of correctness round 5
+  (`measure/probe-pairs-per-context`) rest on "a face places all its Latin pairs one way", which no Canvas question
+  closes and the source doesn't guarantee (below, under `pairKerning`; none of 1,008 installed faces does otherwise).
 - WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
   difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
   R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.
