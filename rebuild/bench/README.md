@@ -114,7 +114,8 @@ row), `--messages=N` (1000; the many rows' messages and the chat rows' timed mes
 context's headline passes lay out this many messages, and 0 leaves them out), `--headline-passes=N` (3), `--phase-passes=N`
 (3, smoke 1), `--quiet-load=N` and `--quiet-wait-min=N` (above; off unless given, 15), `--stall-ms=N` (fail after this
 long without a page request, default 20 minutes), `--device-scale-factor=N` (Chrome and Firefox: the page's device pixel
-ratio, forced at launch; "Chat" says why it matters), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
+ratio, forced at launch; "Chat" says why it matters; the report states the page's ratio, and a forced ratio the page
+doesn't have is an environment violation), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
 
 ## Inputs
 

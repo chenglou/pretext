@@ -288,6 +288,10 @@ function checkSnapshot(id: string, when: string, snap: { visibility: string; foc
 
 let baseUrl = ''
 let firstSnapshot: { devicePixelRatio: number; innerWidth: number; innerHeight: number } | null = null
+// The report's ratio. A function, since at the top level the compiler still reads the variable as the null it began with.
+function pageDevicePixelRatio(): number | null {
+  return firstSnapshot === null ? null : firstSnapshot.devicePixelRatio
+}
 
 async function handle(request: Request): Promise<Response> {
   lastActivity = Date.now()
@@ -313,7 +317,10 @@ async function handle(request: Request): Promise<Response> {
       rowsDone++
       checkSnapshot(row.id, 'start', row.start)
       checkSnapshot(row.id, 'end', row.end)
-      firstSnapshot ??= row.start
+      if (firstSnapshot === null) {
+        firstSnapshot = row.start
+        if (scaleFactor !== null && row.start.devicePixelRatio !== Number(scaleFactor)) violations.push(`--device-scale-factor=${scaleFactor} didn't take: the page's devicePixelRatio is ${row.start.devicePixelRatio}`)
+      }
       const snaps = [row.start, row.end]
       for (let i = 0; i < snaps.length; i++) {
         const snap = snaps[i]!
@@ -676,6 +683,7 @@ try {
       rebuildSrcSha256: treeHash(join(REPO, 'rebuild/src')),
     },
     bundleBytes: bundle.length,
+    devicePixelRatio: { page: pageDevicePixelRatio(), forced: scaleFactor },
     environmentViolations: violations,
     contexts: reports,
   }

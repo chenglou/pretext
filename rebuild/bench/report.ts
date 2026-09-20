@@ -68,7 +68,11 @@ export type BenchReport = {
   lock: { start: LockState; end: LockState | null }
   source: { head: string; status: string[]; srcSha256: string; rebuildSrcSha256: string }
   bundleBytes: number
-  // Rows whose page wasn't visible and focused at their start or end (foreground mode), or whose DPR or viewport changed.
+  // The page's devicePixelRatio at the first row (null when no row came), and the --device-scale-factor that forced it (null:
+  // the screen's). What the rebuild asks of Canvas in Chrome follows it (README.md, "Chat"). Absent before 2026-09-20.
+  devicePixelRatio?: { page: number | null; forced: string | null }
+  // Rows whose page wasn't visible and focused at their start or end (foreground mode), or whose DPR or viewport changed,
+  // and a forced device pixel ratio the page didn't have.
   environmentViolations: string[]
   contexts: ContextReport[]
 }
@@ -219,6 +223,7 @@ export function renderMarkdown(report: BenchReport): string {
   const end = report.machine.end
   out.push(`- Power at start: ${cell(report.machine.start.power)}; at end: ${end === null ? 'n/a' : cell(end.power)}`)
   out.push(`- Power mode: ${cell(report.machine.start.powerMode)}`)
+  if (report.devicePixelRatio !== undefined) out.push(`- Device pixel ratio: ${report.devicePixelRatio.page ?? 'n/a'} (${report.devicePixelRatio.forced === null ? 'the screen\'s' : `forced with --device-scale-factor=${report.devicePixelRatio.forced}`})`)
   const quiet = report.machine.quietWait ?? null
   out.push(`- Load average at start ${report.machine.start.loadAverage}, at end ${end === null ? 'n/a' : end.loadAverage}${quiet === null ? '' : `; waited ${formatMs(quiet.waitedMs)} for a 1-minute load under ${quiet.below}, which it ${quiet.reached ? 'reached' : 'did not reach'}`}`)
   const others = [...new Set([...report.machine.start.otherJobs, ...(end === null ? [] : end.otherJobs)])]
