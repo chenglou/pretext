@@ -57,8 +57,7 @@
 // looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
 // lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
 // numbers only go up. A run whose turn came still starts no gate while an exclusive browser job, a timed benchmark,
-// holds the browser lock or waits for it (exclusiveBrowserJobs; a run that has started is never stopped, and a run that
-// a job under the browser lock starts doesn't wait, since that job's lock waits for the run), or while under
+// holds the browser lock or waits for it (exclusiveBrowserJobs; a run that has started is never stopped), or while under
 // 30% of the machine's memory is free, as the browser lock does, and keeps its place meanwhile. --no-wait takes no
 // ticket and waits for neither, for a human who knows better. Measured with --quick --engine=gecko, 42
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
@@ -358,23 +357,6 @@ export function exclusiveBrowserJobs(lock: string): ExclusiveJob[] {
   return jobs
 }
 
-// A process's parent; `ps` gives nothing for a pid that is gone, which reads as 0.
-const parentOf = (pid: number): number => Number(Bun.spawnSync(['ps', '-o', 'ppid=', '-p', String(pid)]).stdout.toString())
-
-// Whether a process above `pid` (its parent, that one's parent, and so on) holds a lock of the folder, the exclusive
-// lock or a browser's slot: the run is part of a job under the browser lock then, its command or a script of it.
-function underTheBrowserLock(lock: string, pid: number): boolean {
-  const above: number[] = []
-  for (let at = parentOf(pid); at > 1; at = parentOf(at)) above.push(at)
-  const names = existsSync(lock) ? readdirSync(lock) : []
-  for (let i = 0; i < names.length; i++) {
-    if (!/^browser-lock(-.+)?\.owner$/.test(names[i]!)) continue
-    const owner = lockOwner(readIfThere(join(lock, names[i]!)) ?? '')
-    if (owner.pid !== null && above.includes(owner.pid)) return true
-  }
-  return false
-}
-
 // The machine's free memory in percent, as macOS's `memory_pressure` gives it and the browser lock reads it
 // (.artifacts/session/with-browser-lock.py, which starts no browser job under 30% either).
 function freeMemoryPercent(): number {
@@ -410,11 +392,6 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
     }
   }
   unlinkSync(draft)
-  // A run that a job under the browser lock starts (the gates timed on a quiet machine, or a step of a script that goes
-  // on to a browser) waits for no exclusive job: the job keeps its lock until this run ends, and an exclusive job starts
-  // only once it has every lock, so each would wait for the other for ever, and every browser job behind them too. A
-  // job has its lock before its command starts and until it ends, so this is asked once.
-  const underTheLock = underTheBrowserLock(browserLock, ticket.pid)
   let said = ''
   for (;;) {
     const numbers = readdirSync(dir).map(ticketNumber).filter(n => n > 0 && n < mine).sort((a, b) => a - b)
@@ -434,7 +411,7 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
       const holder = before[0]!
       text = `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
     } else {
-      const exclusive = underTheLock ? [] : exclusiveBrowserJobs(browserLock)
+      const exclusive = exclusiveBrowserJobs(browserLock)
       if (exclusive.length > 0) text = `waiting for an exclusive browser job, a timed run that gates beside it would spoil: ${exclusive.map(job => `${job.pid === null ? 'a job' : `pid ${job.pid}`} (${job.job}) ${job.waits ? 'waits for' : 'holds'} the browser lock`).join('; ')}. --no-wait skips the wait`
       else if (minFreeMemory > 0 && freeMemoryPercent() < minFreeMemory) text = `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
     }
