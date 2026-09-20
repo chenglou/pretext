@@ -42,6 +42,8 @@ export type RealismSetResult = {
   // UTF-16 units of every string given to measureText.
   unitsSent: number
   contexts: number
+  // Every line's source range of the counting pass, hashed in order (0 without the pass).
+  lineRangesHash: number
   byLabel: RealismLabelCount[]
 }
 
@@ -131,6 +133,23 @@ function scratch(paragraph: Paragraph, env: Environment, width: number): number 
   return lineBoxes
 }
 
+// The same in the counting pass, where every line's source range also goes into `rangeHash` (FNV-1a over the numbers), so
+// two trees, or two ratios, can be held against each other line by line.
+let rangeHash = 0x811c9dc5
+function scratchCounted(paragraph: Paragraph, env: Environment, width: number): number {
+  const prepared = prepare(paragraph, env, false)
+  let lineBoxes = 0
+  for (let start = firstLine(prepared); start !== null;) {
+    const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+    if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
+    rangeHash = Math.imul(rangeHash ^ filled.start, 0x01000193)
+    rangeHash = Math.imul(rangeHash ^ filled.end, 0x01000193)
+    if (filled.hasLineBox) lineBoxes++
+    start = filled.next
+  }
+  return lineBoxes
+}
+
 const canvasWork = { measureTextCalls: 0, unitsSent: 0, contexts: 0 }
 // Messages of every set laid out before the first timed pass.
 const WARM_UP = 500
@@ -163,7 +182,7 @@ async function main(): Promise<void> {
   for (let s = 0; s < plan.sets.length; s++) {
     const set = plan.sets[s]!
     paragraphs.push(paragraphsOf(plan, set.messages))
-    results.push({ id: set.id, messages: set.messages.length, units: 0, scratchMs: [], lines: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, byLabel: [] })
+    results.push({ id: set.id, messages: set.messages.length, units: 0, scratchMs: [], lines: 0, measureTextCalls: 0, unitsSent: 0, contexts: 0, lineRangesHash: 0, byLabel: [] })
   }
   // Untimed, so every timed pass is of compiled code, as the bench's headline passes are after its timed rows.
   for (let s = 0; s < paragraphs.length; s++) for (let i = 0; i < Math.min(WARM_UP, paragraphs[s]!.length); i++) sink += scratch(paragraphs[s]![i]!, env, plan.width)
@@ -190,10 +209,11 @@ async function main(): Promise<void> {
     const messages = plan.sets[s]!.messages
     const list = paragraphs[s]!
     const result = results[s]!
+    rangeHash = 0x811c9dc5
     for (let i = 0; i < list.length; i++) {
       const before = { ...canvasWork }
       const start = performance.now()
-      const lines = scratch(list[i]!, env, plan.width)
+      const lines = scratchCounted(list[i]!, env, plan.width)
       const ms = performance.now() - start
       const label = messages[i]!.label
       let entry = result.byLabel.find(item => item.label === label)
@@ -215,6 +235,7 @@ async function main(): Promise<void> {
       result.unitsSent += canvasWork.unitsSent - before.unitsSent
       result.contexts += canvasWork.contexts - before.contexts
     }
+    results[s]!.lineRangesHash = rangeHash >>> 0
     await yieldTask()
   }
   const result: RealismResult = {
