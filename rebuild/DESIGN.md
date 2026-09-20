@@ -2108,24 +2108,39 @@ most of them the runtime font checks', and webkit-host 5.4 for its 41 calls a me
 has since taken away (§4.6); Firefox spent 88% in the fill, carried by CJK and Arabic messages.
 research/PROFILING-START.md starts from there.
 
-**The Blink port's own JavaScript** (the profiling phase, 2026-09-20). Until then every item removed Canvas questions,
-and nobody had profiled the port's own code. `tools/js-profile.ts` takes a JS CPU profile in pinned Chrome through the
-DevTools Profiler domain, times checkouts in turns in one page, and runs the same passes with every Canvas answer free:
-a pass's answers are recorded once and handed back in order, so the code runs the path it runs on the real Canvas.
-10,000 chat messages from scratch with one list of contexts a pass, at the profiling phase's first merges: 72% of the
-samples are inside `measureText`, 25% in the port's own code and 2% in collections (3.45 s on the mix, 3.23 s on plain
-ASCII); with free answers a pass takes 0.68 s and 0.62 s, a fifth of the time, which no removal of questions can beat.
-The two numbers differ by what a native call costs on its JavaScript side, which a free answer doesn't pay. Seven
-tenths of the own time is making a question (`shape.ts` `measure16` and under: the joining test at both edges, the
-string, the context), 40 µs of a message's 94 in `canvasString` alone; paragraph analysis is 11 µs, the line loop 8 µs,
-the cut search's own code 4 µs and the font checks' 3 µs. Three changes that ask Canvas the same strings on the same
-contexts in the same order (tier 1: 0 predictions and 0 questions changed; the pass's questions hash the same in
-Chrome) took 34 µs a message, in twelve alternating rounds each: the list of text offsets a Canvas string hands out is
-the array it built, where it was copied into a typed array that nothing reads on a plain paragraph without letter
-spacing (24 µs); properties below U+3000 are read by index (6 µs; `props.ts`, §3); and a string of code units is built
-in one `String.fromCharCode` call where they fit one, without a copy of the list (4 µs). From scratch 3.45 s became
-3.10 s on the mix and 3.23 s became 2.89 s on plain ASCII, 10,000 kept messages at 3 widths 1.11 s became 0.99 s and
-0.98 s became 0.86 s, and the pass with free answers 0.68 s became 0.41 s and 0.62 s became 0.36 s.
+**The Blink port's own JavaScript** (the profiling phase, 2026-09-20; research/PERF-JS-PROFILE.md has the profile and
+its review by a second pair of eyes). Until then every item removed Canvas questions, and nobody had profiled the port's
+own code. `tools/js-profile.ts` takes a JS CPU profile in pinned Chrome through the DevTools Profiler domain, times
+checkouts in turns in one page, and runs the same passes with every Canvas answer free: a pass's answers are recorded
+once and handed back in order, so the code runs the path it runs on the real Canvas. The profile is of the tree at the
+profiling phase's first merges, before the cut search tried the offsets beside a space first (above), where a message of
+the mix asked 238 questions and not 196. There 10,000 chat messages from scratch with one list of contexts a pass took
+3.45 s on the mix and 3.23 s on plain ASCII: 72% of the samples were inside `measureText`, 25% in the port's own code
+and 2% in collections, and with free answers a pass took 0.68 s and 0.62 s, a fifth of the time. The two numbers differ
+by what a native call costs on its JavaScript side, which a free answer doesn't pay; the review's two other methods, the
+pass's questions asked again alone without the port and a stopwatch around every call, both put Canvas at 76 to 78% of a
+pass, between the profile's 72% and the four fifths that free answers leave. A pass with free answers is the port's own
+JavaScript at that number of questions, and not a floor that no removal of questions can beat: own code goes with the
+questions, about 0.15 µs each with the three changes below in, and the cut search's change alone took their pass with
+free answers from 0.42 s to 0.35 s on the mix. Seven tenths of the own time was making a question (`shape.ts`
+`measure16` and under: the joining test at both edges, the string, the context), 40 µs of a message's 94 in
+`canvasString` alone; paragraph analysis was 11 µs, the line loop 8 µs, the cut search's own code 4 µs and the font
+checks' 3 µs.
+
+Three changes that ask Canvas the same strings on the same contexts in the same order (tier 1: 0 predictions and 0
+questions changed; the pass's questions hash the same in Chrome; the review's dump of every question, with how V8 stores
+its string, is byte-equal on 520 edge texts and 18 giants) took 34 µs a message on that tree and 26 µs on the tree they
+landed on, which has fewer questions to make, by the review's fresh page per measurement in twelve rounds (each change's
+two numbers below are the mix's on the two trees): the list of text offsets a Canvas string hands out is the array it
+built, where it was copied into a typed array that nothing reads on a plain paragraph without letter spacing (24 and 21
+µs); properties below U+3000 are read by index (6 and 4 µs; `props.ts`, §3); and a Canvas string is built in one
+`String.fromCharCode` call where its units fit one, without a copy of the list (4 and 2.5 µs). The third was measured in
+a form that built the paragraph's text through the same function, in `content.ts`. It stays inside `canvasString`: tier
+1's string storage rule watches `shape.ts` for the code that builds every Canvas string (`replay.ts` `STORAGE_PATHS`),
+the gain is per question and the text is built once a paragraph, and three timed runs couldn't tell the two forms apart.
+On the tree they landed on, from scratch 2.68 s became 2.41 s on the mix and 2.43 s became 2.17 s on plain ASCII, 10,000
+kept messages at 3 widths 1.09 s became 0.94 s and 0.97 s became 0.84 s, and the pass with free answers 0.55 s became
+0.35 s and 0.49 s became 0.29 s. After them Canvas is 82 to 87% of a pass.
 
 ## 5. Gaps
 
