@@ -85,13 +85,17 @@ function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff
 }
 
-// From `start`, the longest slice of at most `max` units ending at a boundary, trimmed. When no boundary lies past
+// From `start`, the end of the longest slice of at most `max` units ending at a boundary. When no boundary lies past
 // start + min, the slice ends at start + min, moved off a surrogate pair.
-function excerpt(source: string, start: number, min: number, max: number): string {
+function excerptEnd(source: string, start: number, min: number, max: number): number {
   let end = Math.min(source.length, start + max)
   while (end > start + min && !BOUNDARY.test(source[end - 1]!)) end--
   if (end < source.length && isHighSurrogate(source.charCodeAt(end - 1))) end++
-  return source.slice(start, end).trim()
+  return end
+}
+
+function excerpt(source: string, start: number, min: number, max: number): string {
+  return source.slice(start, excerptEnd(source, start, min, max)).trim()
 }
 
 // The first unit after the next boundary at or after `offset`, past white space.
@@ -216,7 +220,35 @@ function chatSlice(rng: ReturnType<typeof createRng>, source: string, min: numbe
   return excerpt(source, start, min, max)
 }
 
-function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMessage | null {
+// The 'real' set's texts: the long-form corpora and the masonry demo's 1,904 short posts, each read once from its start, a
+// message after the other, so no unit of a text is in two messages of one reading. A kind with several texts takes them
+// in turn. A text that ends is read again from its start, where the lengths drawn differ, so its slices do. The Latin
+// kinds share the readings of the two English texts (about 510,000 units: 10,000 messages read them twice). 'app-mixed'
+// has no long text and stays the mix's slices of corpora/mixed-app-text.txt.
+type RealText = { text: string; at: number }
+type RealTexts = { latin: RealText[]; cjk: RealText[]; arabic: RealText[]; next: { latin: number; cjk: number; arabic: number } }
+
+function realTexts(): RealTexts {
+  const read = (ids: string[], joiner: string): RealText => ({ text: flow(ids.map(corpus).join('\n'), joiner), at: 0 })
+  const posts = JSON.parse(readFileSync(resolve(import.meta.dir, '../../pages/demos/masonry/shower-thoughts.json'), 'utf8')) as string[]
+  return {
+    latin: [read(['en-gatsby-opening'], ' '), { text: flow(posts.join('\n'), ' '), at: 0 }],
+    cjk: [read(['zh-zhufu', 'zh-guxiang'], ''), read(['ja-rashomon', 'ja-kumo-no-ito'], ''), read(['ko-sonagi', 'ko-unsu-joh-eun-nal'], ' ')],
+    arabic: [read(['ar-al-bukhala'], ' '), read(['he-masaot-binyamin-metudela'], ' '), read(['ur-chughd'], ' ')],
+    next: { latin: 0, cjk: 0, arabic: 0 },
+  }
+}
+
+function realSlice(real: RealTexts, script: 'latin' | 'cjk' | 'arabic', min: number, max: number): string {
+  const texts = real[script]
+  const source = texts[real.next[script]++ % texts.length]!
+  if (source.at + min >= source.text.length) source.at = 0
+  const start = alignStart(source.text, source.at)
+  source.at = excerptEnd(source.text, start, min, max)
+  return source.text.slice(start, source.at).trim()
+}
+
+function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind, real: RealTexts | null): ChatMessage | null {
   const sources = getChatSources()
   const r = rng.next()
   let lengths = CHAT_LENGTH_CLASSES[CHAT_LENGTH_CLASSES.length - 1]!
@@ -227,9 +259,20 @@ function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMes
       break
     }
   }
-  const source = kind === 'cjk' ? sources.cjk : kind === 'arabic' ? sources.arabic : kind === 'latin-smart' ? sources.latinSmart : kind === 'app-mixed' ? rng.pick(sources.app) : sources.latin
   // A length anywhere in the class, so lengths don't pile up at the class edges.
-  const text = chatSlice(rng, source, lengths.min, lengths.min + rng.int(lengths.max - lengths.min + 1))
+  const max = lengths.min + rng.int(lengths.max - lengths.min + 1)
+  let text: string
+  if (real === null || kind === 'app-mixed') {
+    const source = kind === 'cjk' ? sources.cjk : kind === 'arabic' ? sources.arabic : kind === 'latin-smart' ? sources.latinSmart : kind === 'app-mixed' ? rng.pick(sources.app) : sources.latin
+    text = chatSlice(rng, source, lengths.min, max)
+  } else {
+    switch (kind) {
+      case 'cjk': text = realSlice(real, 'cjk', lengths.min, max); break
+      case 'arabic': text = realSlice(real, 'arabic', lengths.min, max); break
+      case 'latin-smart': text = realSlice(real, 'latin', lengths.min, max); break
+      case 'latin': case 'latin-emoji': case 'latin-url': case 'latin-code': text = toAscii(realSlice(real, 'latin', lengths.min, max)).trim(); break
+    }
+  }
   if (text.length === 0) return null
   const plain = (whole: string): ChatMessage => ({ kind, parts: [{ code: false, text: whole }] })
   switch (kind) {
@@ -253,13 +296,14 @@ function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMes
 }
 
 // The first `count` messages of a set's stream, so a longer set starts with the shorter one. 'latin' is the mix's 'latin'
-// kind alone, from a stream of its own.
+// kind alone, from a stream of its own. 'real' is the mix's kinds, shares and lengths over texts read once (realTexts).
 export function buildChat(set: ChatSetId, count: number): ChatMessage[] {
   const rng = createRng(`rebuild-bench-chat-${set}`)
+  const real = set === 'real' ? realTexts() : null
   const out: ChatMessage[] = []
   while (out.length < count) {
     let kind: ChatKind = 'latin'
-    if (set === 'mix') {
+    if (set !== 'latin') {
       const r = rng.next()
       for (let i = 0, edge = 0; i < CHAT_KIND_SHARES.length; i++) {
         edge += CHAT_KIND_SHARES[i]![1]
@@ -269,7 +313,7 @@ export function buildChat(set: ChatSetId, count: number): ChatMessage[] {
         }
       }
     }
-    const message = chatMessage(rng, kind)
+    const message = chatMessage(rng, kind, real)
     if (message !== null) out.push(message)
   }
   return out

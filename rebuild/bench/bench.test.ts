@@ -68,6 +68,26 @@ describe('chat', () => {
     expect(mix.withUrl).toBeGreaterThan(0)
   })
 
+  test('the real set starts with its shorter self, holds the mix\'s kinds near their shares, and reads its English texts once in 4,000 messages', () => {
+    const long = buildChat('real', 4000)
+    expect(buildChat('real', 500)).toEqual(long.slice(0, 500))
+    const real = describeChat(long)
+    for (let k = 0; k < CHAT_KIND_SHARES.length; k++) {
+      const [kind, share] = CHAT_KIND_SHARES[k]!
+      expect(Math.abs(real.byKind.find(entry => entry.kind === kind)!.messages / real.messages - share)).toBeLessThan(0.02)
+    }
+    // No two long plain-ASCII messages are the same text, which random slices of one text can't promise.
+    const seen = new Set<string>()
+    for (let i = 0; i < long.length; i++) {
+      const text = chatText(long[i]!)
+      expect(text.trim().length).toBeGreaterThan(0)
+      expect(text.includes('\n')).toBe(false)
+      if (long[i]!.kind !== 'latin' || text.length < 40) continue
+      expect(seen.has(text)).toBe(false)
+      seen.add(text)
+    }
+  })
+
   test('the latin set is printable ASCII in one part', () => {
     const latin = buildChat('latin', 2000)
     for (let i = 0; i < latin.length; i++) {

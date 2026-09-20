@@ -213,6 +213,14 @@ Of the first 1,000 of the mix, 73% are printable ASCII, 7% hold an emoji, 9% CJK
 span and 0.2% a soft hyphen. `chat/latin` is the `latin` kind alone from a stream of its own, with the same lengths: the
 common case beside the mix. The report prints these shares for the messages it ran.
 
+**A third set, `real`**, holds the mix's kinds, shares and lengths over text that isn't sliced at random (`cases.ts`
+`realTexts`): every text is read once from its start, a message after the other, so no unit of text is in two messages of
+one reading. The Latin kinds read The Great Gatsby and the masonry demo's 1,904 short posts in turn (about 510,000 units:
+10,000 messages read them twice, with other slices the second time), `cjk` reads Chinese, Japanese and Korean in turn, and
+`arabic` reads Arabic (كتاب البخلاء), Hebrew and Urdu in turn. `app-mixed` has no long text and stays the mix's. The
+first 1,000 have a mean of 117 units and a median of 60. The set isn't a row of `run.ts`: `realism-run.ts` lays it out
+beside the other two ("Realism").
+
 **One declaration for every message**, as an app sets one font on its bubbles: 16px `"Helvetica Neue", "PingFang TC",
 "Geeza Pro", sans-serif`, line height 20 px, `white-space: normal`, `overflow-wrap: break-word`, `lang="en"`, left to
 right, 320 px wide; the resize case lays the same messages out at 260, 380 and 440 px. No font facts are supplied: every
