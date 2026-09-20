@@ -413,6 +413,15 @@ first and two accepted exceptions to "nothing writes a prepared paragraph after 
 `rebuild/src` is 46 lines shorter, and a plain paragraph's lines equal the inspected one's because both read the same
 advances, not by a bound argument.
 
+*Taken on the branch, as its last commits* (the code with its tests and registry entry, then the documents), so that a
+merge can leave them out. What holds it: the unit tests; the quick gates (tier 1 as for item 3, 0 predictions changed;
+plain and pure 61,899 pass, 0 fail, item 3's 1,872 cases skipped); the sweep without facts, 63,771 pass; in pinned
+Firefox without facts, both orders, 0 status transitions and the gate passing, and against item 3's own run every row
+equal with its counts of Canvas work but 7 rows of one reversed part, all marked history-dependent, so the inspected
+path didn't move; the plain predictor's run against that usual run, 0 line ranges and 0 native observations differing
+over 63,771 cases (`.artifacts/tests/runs/perf-gecko-fill-20260919/simple-*`, `compare-simple-*`). Not finished: the
+run with facts, which exercises the inspected path alone, and the sweep with facts.
+
 ### 9. Later, with numbers only
 
 From the plan's §10, not started and not ranked here: a bounded store for strings that recur across paragraphs (the API
