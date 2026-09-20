@@ -6,7 +6,7 @@ import { isSegmentEdge } from './emoji.js'
 import { LIGATURE_NONE } from './ligatures.js'
 import {
   adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, joinsAcross, pairAdjust16,
-  positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, type ShapeResult, type Shaper, type View,
+  positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, toldPrefix16, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 
 // Whether the port knows where offset k sits inside a shaping call over [lo, hi) of group g, and the condition it rests on
@@ -29,6 +29,10 @@ import {
 export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: number): GapName | null {
   const p = sh.p
   if (k <= lo || k >= hi) return null
+  // Where getTextClusters tells the position (shape.ts toldPrefix16), the call's own shaping placed k: at its glyph
+  // cluster's start, with every adjustment on the glyph that carries it. What the measured string can't vouch for is
+  // raised where it is measured (gaps.ts measuredRange).
+  if (toldPrefix16(sh, g, k, lo, hi) !== null) return null
   // Inside a grapheme at a character HarfBuzz doesn't mark a continuation, one cluster or two by the font's lookups.
   if (startsClusterInsideGrapheme(p, k)) return 'glyph-clusters'
   k = clusterStartAtOrBefore(p, k, lo)
@@ -63,6 +67,7 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
 export function pairPlacementUnknown(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
   const p = sh.p
   if (p.styles[p.groups[g]!.style]!.font.facts.pairKerning !== null) return false
+  if (toldPrefix16(sh, g, k, lo, hi) !== null) return false
   if (k <= lo || k >= hi || !isClusterBoundary(p, k) || isSegmentEdge(p, k) || joinsAcross(p, k, lo, hi)) return false
   return adjustmentSide(sh, g, k, lo, hi) === 'pair' && positionAdjust16(sh, g, k, lo, hi) !== 0
 }

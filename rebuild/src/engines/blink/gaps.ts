@@ -22,7 +22,7 @@ import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, sc
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
   joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
-  startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
+  startsClusterInsideGrapheme, toldClusterStart, toldPrefix16, type CanvasString, type Part, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'
 
@@ -610,7 +610,8 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   // shows whether the adjustment is a kern alone.
   // Where the declaration's ligature facts say no ligature covers k (ligatures.ts), what liga, clig and calt change there is
   // a contextual form, which no fact places.
-  const ligatureFree = p.ligature[k] === LIGATURE_NONE
+  // Where getTextClusters tells that a glyph cluster starts at k (shape.ts toldClusterStart), no ligature covers it.
+  const ligatureFree = p.ligature[k] === LIGATURE_NONE || toldClusterStart(sh, g, k, group.start, group.end) === true
   const contextual = pair !== 0 && isClusterBoundary(p, k) && style.letterSpacing === 0 && pairAdjust16(sh, g, k, group.start, group.end, true) !== pair
   if (contextual && !ligatureFree) addGap(gaps, 'glyph-clusters', run, LIGATURE_DETAIL, at)
   // A joining edge is reshaped; the reshape's measurement reports joining-technology or unsafe-to-break. Joining letters
@@ -623,7 +624,9 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   if (d !== 0 || wide !== 0) {
     // Which glyph carries the adjustment decides the position; FontFacts.pairKerning gives it for a kern between the two
     // clusters next to k, and nothing does for an adjustment that reads a longer context (positionAdjust16).
-    if (fromPosition && (style.font.facts.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
+    // getTextClusters tells the position with the adjustment where the shaping put it (shape.ts toldPrefix16).
+    const told = toldPrefix16(sh, g, k, group.start, group.end) !== null
+    if (fromPosition && !told && (style.font.facts.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
     return
   }
   if (p.graphemeStarts[k] !== 1 || isSpaceLB(p.text.charCodeAt(k - 1)) || isSpaceLB(p.text.charCodeAt(k))) return
@@ -696,6 +699,8 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
       for (let k = Math.max(contentEnd, group.start + 1); k < end; k++) {
         // A boundary the ligature facts settle is predicted: a ligature's cluster takes one position, and none forms elsewhere.
         if (!isClusterBoundary(p, k) || p.ligature[k] === LIGATURE_NONE) continue
+        // A position getTextClusters told is the glyph's own, as Blink gives it to every character of the glyph.
+        if (toldPrefix16(sh, g, k, group.start, group.end) !== null) continue
         const d = pairAdjust16(sh, g, k, group.start, group.end)
         if (pairAdjust16(sh, g, k, group.start, group.end, true) !== d) {
           addGap(gaps, 'glyph-clusters', runAt(p, k), LIGATURE_DETAIL, sourceOffsetAt(p, k))

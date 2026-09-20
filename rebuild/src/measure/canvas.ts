@@ -80,3 +80,27 @@ export function bounds(context: Context, text: string): { width: number; left: n
   const metrics = context.ctx.measureText(text)
   return { width: metrics.width, left: metrics.actualBoundingBoxLeft, right: metrics.actualBoundingBoxRight }
 }
+
+// TextMetrics.getTextClusters (text_metrics.idl at Chrome 153, behind the runtime flag ExtendedTextMetrics): where each
+// glyph cluster of the measured string starts, and its x in the string's own shaping. The one feature test, so the same
+// build runs with the flag and without it; speculative, since a shipped library can't rest on a flag.
+type TextCluster = { start: number; x: number }
+type ClusterMetrics = TextMetrics & { getTextClusters(options: { align: CanvasTextAlign }): TextCluster[] }
+
+export const hasTextClusters: boolean = typeof TextMetrics !== 'undefined' && 'getTextClusters' in TextMetrics.prototype
+
+// The string's total and, per cluster Canvas reports, its first code unit and its left edge, in the order Canvas gives
+// them. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944). An x is a distance from the
+// context's alignment point, which is the string's right end in an RTL context (text_metrics.cc:113-126, 534-539), so
+// only differences of them mean anything to a caller.
+export function clusters(context: Context, text: string): { width: number; starts: number[]; xs: number[] } {
+  const metrics = context.ctx.measureText(text) as ClusterMetrics
+  const list = metrics.getTextClusters({ align: 'left' })
+  const starts: number[] = []
+  const xs: number[] = []
+  for (let i = 0; i < list.length; i++) {
+    starts.push(list[i]!.start)
+    xs.push(list[i]!.x)
+  }
+  return { width: metrics.width, starts, xs }
+}

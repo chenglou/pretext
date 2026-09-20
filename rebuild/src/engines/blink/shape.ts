@@ -23,7 +23,7 @@
 // joined forms on one-letter lines, Geeza Pro doesn't). Canvas can't tell the two apart, so the font declaration says
 // which (FontFacts.joining); when it doesn't, the edge is measured as an AAT font gives it and the layout reports
 // joining-technology there.
-import { width as canvasWidth } from '../../measure/canvas.js'
+import { clusters as canvasClusters, hasTextClusters, width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
@@ -37,7 +37,7 @@ import {
   isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
+import type { BlinkGroup, BlinkPrepared, ClusterTable, ComputedStyle, InlineItem, StyleContexts } from './types.js'
 
 const f32 = Math.fround
 // Float32 holds every 16.16 integer below 2^24, 256 px.
@@ -403,9 +403,9 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
-function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
+function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array | null, ls16: number, count: number = cs.units.length): number {
   let adjust = 0
-  for (let u = 0; u < cs.units.length; u++) {
+  for (let u = 0; u < count; u++) {
     const t = cs.units[u]!
     if (t < 0) continue
     const c = p.text.charCodeAt(t)
@@ -509,6 +509,81 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
   let e = k + 1
   while (e < max && !isClusterBoundary(p, e)) e++
   return e
+}
+
+// What one getTextClusters call per measured string tells of text_content [from, to) inside a shaping call (speculative:
+// measure/canvas.ts hasTextClusters): `before[i]` is the 16.16 advance sum before the glyph cluster that holds unit
+// from + i, in the call's own shaping, `before[to - from]` the total, and `starts[i]` whether a cluster starts at the unit.
+// The strings, contexts, script segments, word spacing and letter spacing difference are measure16's, and so are the gaps
+// raised. A cluster's advance is the distance to the next left edge, so the sums follow logical order in either direction.
+// Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a default-ignorable character where
+// the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at the next cluster's start;
+// any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
+// position. Null where Canvas has no getTextClusters, or where a total isn't an exact 16.16 value.
+export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
+  if (!hasTextClusters || from >= to) return null
+  const p = sh.p
+  const group = p.groups[g]!
+  const st = p.styles[group.style]!
+  const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
+  const before = new Array<number>(to - from + 1).fill(-1)
+  const starts = new Uint8Array(to - from + 1)
+  let base = 0
+  for (let a = from; a < to;) {
+    let b = to
+    if (p.segmented) {
+      b = a + 1
+      while (b < to && (p.scripts[b] === p.scripts[b - 1] || (p.text.charCodeAt(b) & 0xfc00) === 0xdc00)) b++
+    }
+    const cs = canvasString(p, a, b, joinedAtEdge(p, g, a, callStart, callEnd), joinedAtEdge(p, g, b, callStart, callEnd), p.scripts[a]!, spacesStay(p, group.style, a, b))
+    const contexts = contextsOf(p, group.style, cs.twoByte)
+    const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
+    measuredRange(sh.gaps, p, g, a, b, callStart, callEnd, cs, scripts)
+    let total = wordSpacing16(p, group.style, a, b) + (ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16))
+    if (cs.s.length > 0) {
+      const found = canvasClusters(group.rtl ? contexts.rtl : contexts.ltr, cs.s)
+      const width16 = Math.round(found.width * 65536)
+      if (width16 >= EXACT16) return null
+      const n = found.starts.length
+      // Left edges from the string's left end: Canvas counts them from the alignment point (measure/canvas.ts clusters).
+      let origin = 0
+      for (let i = 0; i < n; i++) origin = Math.min(origin, found.xs[i]!)
+      const x16: number[] = []
+      for (let i = 0; i < n; i++) x16.push(Math.round((found.xs[i]! - origin) * 65536))
+      const visual: number[] = []
+      for (let i = 0; i < n; i++) visual.push(i)
+      visual.sort((i, j) => x16[i]! - x16[j]!)
+      const advance = new Array<number>(n)
+      for (let v = 0; v < n; v++) advance[visual[v]!] = (v + 1 < n ? x16[visual[v + 1]!]! : width16) - x16[visual[v]!]!
+      const logical = visual.slice().sort((i, j) => found.starts[i]! - found.starts[j]!)
+      let sum = 0
+      for (let l = 0; l < n; l++) {
+        const c = logical[l]!
+        const s = found.starts[c]!
+        const end = l + 1 < n ? found.starts[logical[l + 1]!]! : cs.s.length
+        const extra = ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16, s)
+        for (let u = s; u < end; u++) {
+          const t = cs.units[u]!
+          if (t < 0) continue
+          // An unreported default-ignorable cluster of no advance takes the next cluster's start, and so does what follows it.
+          if (u > s && isClusterBoundary(p, t) && isDefaultIgnorableHarfBuzz(cs.s.codePointAt(u)!)) {
+            starts[t - from] = 1
+            break
+          }
+          before[t - from] = base + sum * contexts.scale + wordSpacing16(p, group.style, a, t) + extra
+          if (u === s) starts[t - from] = 1
+        }
+        sum += advance[c]!
+      }
+      total += width16 * contexts.scale
+    }
+    base += total
+    a = b
+  }
+  before[to - from] = base
+  for (let i = to - from - 1; i >= 0; i--) if (before[i]! < 0) before[i] = before[i + 1]!
+  starts[0] = 1
+  return { before, starts }
 }
 
 // d at offset k inside a shaping call over [lo, hi) of group g: the adjustment between the clusters on both sides of k
@@ -719,11 +794,69 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   }
 }
 
+// The piece of group g that holds offset k, as an index into its cuts.
+function pieceOf(group: BlinkGroup, k: number): number {
+  const cuts = group.cuts
+  let lo = 0
+  let hi = cuts.length - 2
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (cuts[mid]! <= k) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
+// What getTextClusters tells of offset k inside the paragraph's shaping of group g (clusterTable), or null: one table per
+// piece, made when a position inside the piece is first asked and kept by the group, since it is a fact of the text and
+// its fonts that no width changes. A piece's own start rests on the adjustment added at its cut, which no table holds.
+function toldInGroup(sh: Shaper, g: number, k: number): { table: ClusterTable; piece: number } | null {
+  if (!hasTextClusters) return null
+  const group = sh.p.groups[g]!
+  if (k <= group.start || k >= group.end) return null
+  const piece = pieceOf(group, k)
+  if (group.cuts[piece] === k) return null
+  let table = group.clusterTables[piece]
+  if (table === undefined) {
+    table = clusterTable(sh, g, group.cuts[piece]!, group.cuts[piece + 1]!, group.start, group.end)
+    group.clusterTables[piece] = table
+  }
+  return table === null ? null : { table, piece }
+}
+
+// The 16.16 advance sum before offset k inside a shaping call over [lo, hi) of group g where getTextClusters tells it,
+// without the HanKerning trim at the call's start: the paragraph's own call through the group's tables, another call (a
+// reshape) through a table of its own, which the caller keeps where it asks more than once (callPrefix16).
+export function toldPrefix16(sh: Shaper, g: number, k: number, lo: number, hi: number): number | null {
+  const group = sh.p.groups[g]!
+  if (lo === group.start && hi === group.end) {
+    const told = toldInGroup(sh, g, k)
+    return told === null ? null : group.prefixAtCut[told.piece]! + told.table.before[k - group.cuts[told.piece]!]!
+  }
+  if (k <= lo || k >= hi) return null
+  const table = clusterTable(sh, g, lo, hi, lo, hi)
+  return table === null ? null : table.before[k - lo]!
+}
+
+// Whether getTextClusters tells that a glyph cluster starts at offset k of the call, or null where it tells nothing.
+export function toldClusterStart(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean | null {
+  const group = sh.p.groups[g]!
+  if (lo === group.start && hi === group.end) {
+    const told = toldInGroup(sh, g, k)
+    return told === null ? null : told.table.starts[k - group.cuts[told.piece]!] === 1
+  }
+  if (k <= lo || k >= hi) return null
+  const table = clusterTable(sh, g, lo, hi, lo, hi)
+  return table === null ? null : table.starts[k - lo] === 1
+}
+
 // The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
 export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   const p = sh.p
   const group = p.groups[g]!
   if (k >= group.end) return group.prefixAtCut[group.prefixAtCut.length - 1]! - group.startTrim16 - group.endTrim16
+  const told = toldPrefix16(sh, g, k, group.start, group.end)
+  if (told !== null) return told - group.startTrim16
   k = clusterStartAtOrBefore(p, k, group.start)
   if (k <= group.start) return 0
   const cuts = group.cuts
@@ -925,7 +1058,8 @@ export function offsetForPosition(sh: Shaper, sr: ShapeResult, x: number, before
 
 // The result of LineBreaker::ShapeText over [start, end) of group g (line_breaker.cc:2044-2064): its own shaping call,
 // with the HanKerning trims its edges got and its width.
-export type ReshapeCall = { group: number; start: number; end: number; startTrim16: number; endTrim16: number; width16: number }
+// `clusters` is what getTextClusters told of the call (clusterTable), made when a position inside it is first asked.
+export type ReshapeCall = { group: number; start: number; end: number; startTrim16: number; endTrim16: number; width16: number; clusters?: ClusterTable | null }
 
 // A ShapeResultView part (RunInfoPart, shape_result_view.h:160-260): the glyphs of text_content [start, end) in the item's
 // shape result or in a reshape, with Blink's bookkeeping, which decides what a later view of the view takes: `index`
@@ -956,6 +1090,10 @@ function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   if (k <= call.start) return 0
   if (k >= call.end) return call.width16
   const p = sh.p
+  if (hasTextClusters) {
+    if (call.clusters === undefined) call.clusters = clusterTable(sh, call.group, call.start, call.end, call.start, call.end)
+    if (call.clusters !== null) return call.clusters.before[k - call.start]! - call.startTrim16
+  }
   k = clusterStartAtOrBefore(p, k, call.start)
   if (k <= call.start) return 0
   const pair = adjustBefore16(sh, call.group, positionAdjust16(sh, call.group, k, call.start, call.end), k, call.start, call.end)

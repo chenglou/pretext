@@ -109,6 +109,9 @@ export type TagItem = ItemBase & { type: 'open-tag' | 'close-tag'; element: numb
 export type AtomicItem = ItemBase & { type: 'atomic'; element: number }
 export type InlineItem = TextItem | ControlItem | TagItem | AtomicItem
 
+// What one getTextClusters call per measured string told of a range inside a shaping call (shape.ts clusterTable).
+export type ClusterTable = { before: number[]; starts: Uint8Array }
+
 // The text of one HarfBuzzShaper::Shape call over consecutive text items (inline_node.cc:1551-1796). Measured whole while
 // below 256 zoomed px, else in pieces (shape.ts explains the model).
 export type BlinkGroup = {
@@ -123,6 +126,9 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
+  // What getTextClusters told of each piece (shape.ts toldInGroup), filled when a position inside the piece is first
+  // asked: undefined until then, null where Canvas tells nothing. Empty for good where Canvas has no getTextClusters.
+  clusterTables: (ClusterTable | null | undefined)[]
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
