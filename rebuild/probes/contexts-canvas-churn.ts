@@ -1,6 +1,6 @@
 // What a page's well-filled canvases cost a page that still makes short-lived ones (a review's check of
 // research/PROFILING-START.md item 1). The bench's 'page keeps contexts' form (bench/page.ts prepareKeeping: the engine's
-// contexts are the page's, the font checks make their own for every message) ran slower than a measurer a message on the
+// contexts are the page's, the font checks make their own for every message) ran slower than a list a message on the
 // chat mix in Chrome, which makes more contexts: 1.59 s against 1.09 s for 1,000 messages, where keeping both took 0.31 s
 // (.artifacts/bench/perf-lifetime-review-20260919/run-1). The guess this probe tests: a canvas that has answered tens of
 // thousands of distinct strings holds them (Chrome: up to 32,768 strings and 32,768 words a canvas,
@@ -17,11 +17,11 @@
 // canvas-churn): the guess doesn't hold. 2,000 short-lived canvases take 35 and 34 ms with no filled canvas alive, 66 and
 // 34 with one, 31 and 40 with two, 28 and 28 with four, 38 and 36 with eight, and 37 and 42 with eight empty ones beside
 // them. So the bench form's slowness is still unexplained; it is a form no caller of prepare() can reach, since prepare
-// hands one measurer to the checks and the engine alike.
+// hands one list to the checks and the engine alike.
 //
 // Run alone on the machine (from the worktree):
-//   python3 .artifacts/session/with-browser-lock.py measurer-canvas-churn --browser=all --exclusive -- bun rebuild/probes/runner.ts \
-//     --browser=chrome --probes=rebuild/probes/measurer-canvas-churn.ts --out=.artifacts/probes/measurer/canvas-churn
+//   python3 .artifacts/session/with-browser-lock.py contexts-canvas-churn --browser=all --exclusive -- bun rebuild/probes/runner.ts \
+//     --browser=chrome --probes=rebuild/probes/contexts-canvas-churn.ts --out=<dir>
 import type { Probe } from './types.ts'
 
 const SOURCE = `
@@ -70,8 +70,8 @@ const SOURCE = `
 `
 
 const probes: Probe[] = [{
-  id: 'measurer-canvas-churn',
-  spec: 'PROFILING-START item 1: a page measurer beside canvases made per message',
+  id: 'contexts-canvas-churn',
+  spec: 'PROFILING-START item 1: a page\'s kept canvases beside canvases made per message',
   pageLang: 'en',
   browsers: ['chrome'],
   html: '<div id="t"></div>',

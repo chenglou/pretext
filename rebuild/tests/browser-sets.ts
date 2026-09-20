@@ -38,7 +38,7 @@
 // nothing more. Its rows aren't the reference's kind of prediction, so no ledger is built, no transition is read and the
 // gate doesn't run: compare-sets.ts compares the run with a usual one, case by case (--prediction=line-ranges for line
 // ranges against layouts). --shuffle=<seed> runs its forward jobs in run.ts's seeded shuffled order: a third order for a
-// predictor whose answers could follow what a document's cases asked before (baselines/page-measurer-predictor.ts);
+// predictor whose answers could follow what a document's cases asked before (baselines/page-contexts-predictor.ts);
 // compare-sets.ts pairs rows by case id.
 //
 // --ids-file runs only the listed cases (tier 1 routes cases here): each part's subset keeps the part's order, but not

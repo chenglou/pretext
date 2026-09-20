@@ -1,12 +1,12 @@
-// `<html lang>` changing while a measurer lives (research/PROFILING-START.md, item 1, "Staleness"; a review's check of
-// src/measure/font-checks.ts Measurer, whose comment says the document's language can't make a kept context stale because
-// every context gets an explicit `ctx.lang`). measure/canvas.ts contextFor assigns `lang` and then `font` once, when the
-// context is made, and a measurer keeps the context for the page's life. What this probe asks of each browser's
+// `<html lang>` changing while a page's list of contexts lives (research/PROFILING-START.md, item 1, "Staleness"; a
+// review's check of the claim that the document's language can't make a kept context stale because every context gets
+// an explicit `ctx.lang`). measure/canvas.ts contextFor assigns `lang` and then `font` once, when the context is made,
+// and a page's list keeps the context for the page's life (src/index.ts prepare). What this probe asks of each browser's
 // OffscreenCanvas:
 // - G1: whether a context with an explicit `lang` ('' included, which is what a block with lang="" gets) measures a
 //   string it had measured, and one it hadn't, as before once `<html lang>` has changed;
 // - G2: whether a context made after the change with the same assignments measures what the old one does. A difference
-//   is a width a page's measurer gets and a measurer a call doesn't;
+//   is a width a page's list gets and a list a call doesn't;
 // - G3, the control: a context whose `lang` was never assigned, made before and after, which shows whether the page
 //   language moves these widths at all in this browser.
 // One script observation; raw widths only. `serif` at 32px: Chrome resolves a generic family by language, so Latin text
@@ -16,7 +16,7 @@
 // page-lang), `<html lang>` from en to ja, `Hello, world` 161.31px under en and 187.01px under ja in Chrome:
 // - G1, G2: in all three browsers every old context measures what a context made after the change measures, for the
 //   strings it had measured and the ones it hadn't, under every `lang` tried ('', en, ja, zh-CN, sr). So the document's
-//   language gives a page's measurer nothing a measurer a call doesn't get.
+//   language gives a page's list nothing a list a call doesn't get.
 // - Chrome: no context with an assigned `lang` moves, '' included, which measures as en does here.
 // - Firefox: a context whose `lang` is '' follows `<html lang>` on every call (161.73px, then 186.97px), exactly as one
 //   never assigned does; an old one and a new one agree because both follow the document. Gecko's port gives a context
@@ -25,8 +25,8 @@
 // - G3: the control moves in Chrome for a new context only (the old one keeps en, blink-canvas H13) and in Firefox for both.
 //
 // Run under the browser lock (from the worktree):
-//   python3 .artifacts/session/with-browser-lock.py measurer-page-lang -- bun rebuild/probes/runner.ts --browser=chrome \
-//     --probes=rebuild/probes/measurer-page-lang.ts --out=.artifacts/probes/measurer/page-lang
+//   python3 .artifacts/session/with-browser-lock.py contexts-page-lang -- bun rebuild/probes/runner.ts --browser=chrome \
+//     --probes=rebuild/probes/contexts-page-lang.ts --out=<dir>
 import type { Probe } from './types.ts'
 
 const SOURCE = `
@@ -65,7 +65,7 @@ const SOURCE = `
 `
 
 const probes: Probe[] = [{
-  id: 'measurer-page-lang',
+  id: 'contexts-page-lang',
   spec: 'PROFILING-START item 1, staleness: the document language',
   pageLang: 'en',
   browsers: ['chrome', 'safari', 'firefox'],

@@ -12,11 +12,13 @@
 //
 //   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N] [--page]
 //
-// --page scans a case file as one page that keeps one measurer (lab/baselines/page-measurer-predictor.ts): every case of
-// the file shares its Canvas contexts with the ones before it, whatever their page language, so a twin is one run of
-// characters any two cases of the file ask one context in both storages. It is listed under the case that asked the
+// --page scans a case file as one page that keeps one list of contexts (lab/baselines/page-contexts-predictor.ts): every
+// case of the file shares its Canvas contexts with the ones before it, whatever their page language, so a twin is one run
+// of characters any two cases of the file ask one context in both storages. It is listed under the case that asked the
 // second storage. With per-paragraph contexts the partition by storage had to hold inside a paragraph; with a page's it
-// has to hold across paragraphs (research/PROFILING-START.md, item 1).
+// has to hold across paragraphs (research/PROFILING-START.md, item 1). prepare empties a list that has grown past its
+// bound (src/index.ts), and a place in the list then names another context: that can list a twin that isn't one and can't
+// hide one, since a context that left the list is asked nothing by later cases.
 //
 // It works on a scratch copy of the tree's rebuild/src and rebuild/lab with one line added to measure16, after its
 // raw16Of call, which notes the context, the string and canvasString's `twoByte`. The anchor is that call's text: the scan
@@ -43,7 +45,7 @@ const SHAPE = 'rebuild/src/engines/blink/shape.ts'
 const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)'
 // The port holds its contexts by reference; a context's place in the paragraph's list names it here.
 const TAP = '  ;(globalThis as { twinScan?: Array<[number, string, boolean]> }).twinScan?.push([p.canvases.indexOf(context), cs.s, cs.twoByte])'
-const PAGE_PREDICTOR = 'rebuild/lab/baselines/page-measurer-predictor.ts'
+const PAGE_PREDICTOR = 'rebuild/lab/baselines/page-contexts-predictor.ts'
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
 const ENV: PredictEnv = { browser: 'chrome', build: '153.0.8010.50', languages: { engine: 'blink', uiLanguage: 'zh-CN' } }
 
@@ -119,7 +121,7 @@ else {
   }
 }
 execFileSync('trash', [scratch])
-console.log(`[twin-scan] ${report.cases} cases${page ? ', a file one page with one measurer' : ''}: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
+console.log(`[twin-scan] ${report.cases} cases${page ? ', a file one page with one list of contexts' : ''}: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
 for (const entry of report.twins.slice(0, 12)) console.log(`  ${entry.id} ${entry.family}: ${entry.twins.map(twin => `${JSON.stringify(twin.text)} on context ${twin.context}, ${twin.first} first, ${twin.asks} asks`).join('; ')}`)
 const out = options.get('out')
 if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(report, null, 1)}\n`)
@@ -130,7 +132,7 @@ async function scan(scratch: string, files: readonly string[]): Promise<void> {
   const asked: Array<[number, string, boolean]> = []
   ;(globalThis as { twinScan?: typeof asked }).twinScan = asked
   // Per context and string: the storages asked, in order. A case's own, or with --page the process's, whose predictor keeps
-  // one measurer, so a context's place in its list names it across cases.
+  // one list of contexts, so a context's place in it names it across cases.
   let byQuestion = new Map<string, { context: number; text: string; storages: boolean[] }>()
   for (const file of files) for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
     if (line === '' || report.cases >= limit) continue
