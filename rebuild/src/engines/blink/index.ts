@@ -62,7 +62,7 @@ function shapingGroups(p: BlinkPrepared): void {
     }
     const length = end - s.start
     const group: BlinkGroup = {
-      start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0,
+      start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, windows: [], cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0,
       prefix16: new Float64Array(length).fill(NaN), pair16: new Float64Array(length).fill(NaN), wide16: new Float64Array(length).fill(NaN),
     }
     p.groupOfUnit.fill(p.groups.length, group.start, group.end)

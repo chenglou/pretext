@@ -96,17 +96,23 @@ describe('blink cuts of a wide group', () => {
     expect(asked.includes('xx')).toBe(true)
   })
 
-  test('a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured', () => {
+  test('a cut that passed asks nothing across it after its pieces: the adjustment a position takes there is the 0 the search measured', () => {
     // After a space the pair window's; before one the wide window's, which between two pieces is the search's own window.
+    // What is asked after the last piece is that piece's own words (addWords).
+    const acrossAfterPieces = (text: string): boolean => {
+      const last = text.slice(19).replaceAll(' ', LS)
+      for (let i = asked.indexOf(last) + 1; i < asked.length; i++) if (!last.includes(asked[i]!)) return true
+      return false
+    }
     asked = []
     prepare(paragraphIn('Mono'), env, false, [])
-    expect(asked[asked.length - 1]).toBe(TEXT.slice(19).replaceAll(' ', LS))
+    expect(acrossAfterPieces(TEXT)).toBe(false)
     asked = []
     prepare(paragraphIn('Mono', BEFORE_SPACE), env, false, [])
-    expect(asked[asked.length - 1]).toBe(BEFORE_SPACE.slice(19).replaceAll(' ', LS))
+    expect(acrossAfterPieces(BEFORE_SPACE)).toBe(false)
     asked = []
     prepare(paragraphIn('Every'), env, false, [])
-    expect(asked[asked.length - 1]).not.toBe(TEXT.slice(19).replaceAll(' ', LS))
+    expect(acrossAfterPieces(TEXT)).toBe(true)
   })
 
   test('an inspected paragraph reports the cut of a group where no offset passes', () => {
