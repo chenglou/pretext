@@ -25,7 +25,7 @@
 import { width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { collapsesWhiteSpace } from './content.js'
-import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
+import { NO_LIGATURES_SPACING_PX, effectiveFontSize, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
 import { isSegmentEdge } from './emoji.js'
 import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
@@ -65,6 +65,39 @@ function raw16Trunc(px: number): number {
 // ShapeResult::width_ after position data: the float of the exact 16.16 total (shape_result.cc:2230).
 export function widthOf16(raw16: number): number {
   return f32(raw16 / 65536)
+}
+
+// Below what total a Canvas total of group g's text is an exact 16.16 value. A total is the float32 of a run's integer
+// advance sum, added to the other runs' as floats (shape_result.cc:1539-1609, text_metrics.cc:222), so it is exact while
+// every partial sum fits 24 bits above its lowest set bit: below 2^24 units whatever the values are, and below 2^(24 + g)
+// units where every value is a multiple of 2^g. HarfBuzz scales a font value v to (v * x_mult + 32768) >> 16 with x_mult =
+// (x_scale << 16) / unitsPerEm (hb-font.hh:1145-1165 at harfbuzz dfdc088c), and Blink's x_scale is the platform size in
+// 16.16, truncated (harfbuzz_face.cc:639-641), so under a power-of-two unitsPerEm every such value is a multiple of 2^g,
+// g the scale's trailing zero bits less log2(unitsPerEm): 9 for 2048 units at 16 px, 0 for any size under 1000 units.
+// Glyph advances come from Core Text through Skia, truncated to 16.16 (skia_text_metrics.cc:207-211); that they have the
+// grain is measured, not ported (probe blink-grain G1). Known only where the facts name the font of every cluster of the
+// group with its unitsPerEm (ListedFontFacts), the style is measured at the zoomed size, and the letter spacing Canvas
+// adds per cluster has the grain too.
+function exactBelow16(p: BlinkPrepared, g: number): number {
+  const group = p.groups[g]!
+  const st = p.styles[group.style]!
+  const fonts = st.font.facts.fonts
+  if (fonts === undefined || st.measuresAtCssSize) return EXACT16
+  // The largest unitsPerEm among the fonts that draw the group: the one that leaves the least grain.
+  let unitsPerEm = 1
+  for (let k = group.start, last = -2; k < group.end; k++) {
+    const f = p.fontRun[k]!
+    if (f === last) continue
+    last = f
+    const units = f < 0 ? null : fonts[f]!.unitsPerEm ?? null
+    if (units === null || (units & (units - 1)) !== 0) return EXACT16
+    unitsPerEm = Math.max(unitsPerEm, units)
+  }
+  const scale = Math.trunc(f32(effectiveFontSize(f32(f32(st.font.size) * f32(p.layoutZoom))) * 65536))
+  const ls16 = Math.abs(raw16Trunc(f32(st.letterSpacing * p.layoutZoom)))
+  // The grain in units, a power of two; under 1 the values are rounded one by one and there is none.
+  const grain = Math.min((scale & -scale) / unitsPerEm, ls16 === 0 ? Infinity : ls16 & -ls16)
+  return EXACT16 * Math.max(1, grain)
 }
 
 // What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
@@ -569,7 +602,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   while (nearB < to && holdsNoBase(p, k, nearB)) nearB = clusterEndAfter(p, nearB, hi)
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
-  while (whole >= EXACT16 && (a < nearA || b > nearB)) {
+  while (whole >= p.groups[g]!.exact16 && (a < nearA || b > nearB)) {
     if (a < nearA && (k - a >= b - k || b <= nearB)) {
       let next = clusterStartAtOrBefore(p, a + ((k - a + 1) >> 1), lo)
       if (next <= a) next = clusterEndAfter(p, a, hi)
@@ -655,7 +688,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   const p = sh.p
   const group = p.groups[g]!
   const whole = measure16(sh, g, a, b, group.start, group.end)
-  if (whole < EXACT16) {
+  if (whole < group.exact16) {
     cuts.push(b)
     totals.push(whole)
     zero.push(false)
@@ -699,6 +732,7 @@ export function measureGroups(sh: Shaper): void {
   const p = sh.p
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
+    group.exact16 = exactBelow16(p, g)
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)

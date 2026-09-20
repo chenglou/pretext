@@ -123,6 +123,9 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
+  // Below what total a Canvas total of the group's text is an exact 16.16 value (shape.ts exactBelow16): 2^24 units, or more
+  // where the font facts give the grain of every value. A fact of the group's fonts and size, made with the cuts.
+  exact16: number
   // What measuring found per offset from `start` in the group's own shaping call, NaN until it is first asked: the 16.16
   // advance sum before the offset (shape.ts groupPrefix16), and the pair window's and the wide window's adjustment across
   // it (pairAdjust16, adjust16), which positions and safe-to-break tests both read. Blink's ShapeResult keeps the same per

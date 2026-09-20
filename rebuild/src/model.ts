@@ -98,6 +98,13 @@ export type ListedFontFacts = {
   // else follows the script (the shaper, the direction, fallback positioning) isn't covered. null: not known, or the
   // engine doesn't shape this font with HarfBuzz.
   scriptLookups: readonly (readonly string[])[] | null
+  // The font's units per em (head.unitsPerEm), given only for a font whose horizontal values all reach the shaper as whole
+  // font units scaled by one factor: no 'trak' table, and no variation in use that moves advances. Blink reads it: every
+  // value HarfBuzz scales is then a multiple of 2^g 16.16 units, g the trailing zero bits of the scale less log2 of a
+  // power-of-two unitsPerEm (hb-font.hh:1145-1165), and a Canvas total of such values is exact below 2^(24 + g) units
+  // (shape.ts exactBelow16). Glyph advances come from Core Text, which no source describes: that they follow is measured,
+  // not proven (the cut-grain study). Left out or null: not known, and totals are exact below 256 zoomed px only.
+  unitsPerEm?: number | null
 }
 
 export type LigatureFacts = {

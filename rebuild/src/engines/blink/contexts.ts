@@ -11,7 +11,7 @@ export const NO_LIGATURES_SPACING_PX = 0.015625
 
 // FontDescription::EffectiveFontSize (font_description.cc:271-282): the size a platform font is made at and cached under,
 // the computed size floored to 1/100 px in float32.
-function effectiveFontSize(computed: number): number {
+export function effectiveFontSize(computed: number): number {
   return f32(Math.floor(f32(computed * 100)) / 100)
 }
 
