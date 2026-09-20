@@ -46,7 +46,7 @@ const options = new Map<string, string>()
 const given = process.argv.slice(2)
 // The hidden command `work` runs one slice of the cases.
 const isWork = given[0] === 'work'
-for (let i = isWork ? 1 : 0; i < given.length; i++) {
+for (let i = isWork ? 1 : 0; import.meta.main && i < given.length; i++) {
   const match = /^--([a-z-]+)=(.*)$/s.exec(given[i]!)
   if (match === null) throw new Error(`Unknown argument ${given[i]!}`)
   options.set(match[1]!, match[2]!)
@@ -73,7 +73,7 @@ const WIDE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Ha
 const LETTER = /^\p{L}$/u
 const SETTINGS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction', 'fontStretch', 'fontVariantCaps', 'textAlign', 'textBaseline']
 
-type Variant = 'fine' | 'across' | 'backwards'
+export type Variant = 'fine' | 'across' | 'backwards'
 type Kind = 'none' | 'wide' | 'space' | 'letter' | 'other'
 const kinds = new Map<number, Kind>()
 function kindOf(cp: number, ch: string): Kind {
@@ -129,7 +129,7 @@ function fineWidth(variant: Variant, size: number, seed: number, text: string, l
   return total / UNIT
 }
 
-function installVariant(variant: Variant, env: PageFacts): { restore: () => void } {
+export function installVariant(variant: Variant, env: PageFacts): { restore: () => void } {
   const fonts = new Map<string, { size: number; seed: number }>()
   class Context {
     values = new Map<string, string>()
@@ -344,5 +344,7 @@ async function run(): Promise<void> {
   if (options.get('out') !== undefined) writeFileSync(resolve(options.get('out')!), `${JSON.stringify(report, null, 1)}\n`)
 }
 
-if (isWork) await work()
-else await run()
+if (import.meta.main) {
+  if (isWork) await work()
+  else await run()
+}
