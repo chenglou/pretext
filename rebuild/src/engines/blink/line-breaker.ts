@@ -835,11 +835,13 @@ export class LineBreaker {
   // - The word's end e isn't past x: the offset found is e, the space, since the next offset is the next cut, past x.
   // - It is past x: the offset found lies in [u0, e), and ShapeLine reads three things of it, the same for each of them
   //   when the word holds no white space, no soft hyphen, no character HanKerning may trim at a line end, and no break
-  //   opportunity after its start: that it isn't white space, the break opportunity at or before it, and that it lies
-  //   after every safe offset the reshape loop tries (shaping_line_breaker.cc:365-420). So u0 stands for it. When the
-  //   word starts the line it overflows, and the next opportunity depends on the offset: that stays the search's.
-  // What this rests on beyond the search's own sorted positions: nothing but the two reads above, which the checked run
-  // (shape.ts wordsCheck) holds against the search line by line.
+  //   opportunity after its start: whether HanKerning may trim it (shaping_line_breaker.cc:345-347), that it isn't white
+  //   space and the break opportunity at or before it (:392-395), and, in the port alone, that it lies after every safe
+  //   offset the reshape loop tries. So u0 stands for it. When the word starts the line it overflows, and the next
+  //   opportunity is looked for from the offset itself (:405-407): that stays the search's.
+  // The search's premise is sorted positions, which holds while no glyph cluster has a negative advance. What the words
+  // show of it is checked (wordCandidateOf: the cuts, the word's end between its two cuts, no negative spacing); inside
+  // words it is taken from the search, and the checked run (shape.ts wordsCheck) holds every candidate against it.
   wordCandidate(sr: ShapeResult, start: number, x: number): number {
     const sh = this.sh
     if (sh.gaps !== null) return -1
