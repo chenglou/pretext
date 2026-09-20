@@ -120,6 +120,12 @@ at nearly the same gain and found the kept answers to be the one part that goes 
 is passed, and keeps nothing else: the font checks ask Canvas again at every `prepare`, on the kept contexts. Library
 code: 15 lines added and 13 removed in five files (`index.ts`, `measure/font-checks.ts` and the three engines' prepare).
 
+*Since 2026-09-20 Gecko keeps no list* (research/CONTEXTS-HEAL.md; DESIGN.md §4.6, "What invalidates it"). A kept
+Firefox context stays on the fallback font for a family name Firefox learns after start-up, nothing a page can assign
+makes it look again and no event tells a page, so Gecko's `prepare` makes its contexts anew whatever list it is handed.
+Firefox's gain below is given back (2.51 s to 2.76 s on the mix and 0.46 s to 0.58 s on plain ASCII, so Firefox is at
+2.76 s on the mix against the bar), and what below counts on a page's list in Gecko no longer has one.
+
 *What it bought.* 10,000 chat messages from scratch, a list a message against one list a pass, taking turns in one
 document on a quiet machine (measured by the prototype's review as a variant of the bench page,
 research/PERF-LIFETIME.md, the review's §4; this form's own run, `.artifacts/bench/contexts-20260919/two`, was taken
@@ -543,7 +549,11 @@ research/CAPABILITY-CHECK.md found no door closed and three cheap openers. They 
    atomic box with its element index. It opens rich-note and markdown-chat on `paintLines`.
 3. **A contexts list handed to `prepare`**: done as item 1 above, `prepare(paragraph, env, inspect, contexts)` with a
    plain array. The font checks don't outlive one prepare, by decision. The API phase decides how an application holds
-   the list, and what it is told about starting a new one after its fonts change (WebKit alone needs it).
+   the list, and what it is told about starting a new one: in WebKit after the page adds a FontFace that has already
+   loaded, and in Gecko nothing, since Gecko's `prepare` makes its own contexts whatever list it is handed (since
+   2026-09-20; DESIGN.md §4.6, "What invalidates it"). It also decides where a page is told to name its families by
+   their canonical English names, which is what keeps a Firefox paragraph prepared in the browser's first seconds
+   right (research/CONTEXTS-HEAL.md).
 
 Also for that phase, from the fresh-eyes follow-up (2026-09-19): **a font-family list read once, at the library's
 boundary**. One parser reads the list today (`src/font-family.ts`), but where a port happens to need a name: Blink per
