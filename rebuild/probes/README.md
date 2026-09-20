@@ -26,6 +26,11 @@ may read the DOM freely; this is research, not the library.
   `gecko-slot-indent.ts` (F5), `gecko-rtl-rects.ts` (F6), `gecko-round2.ts` (F7 to F9), `gecko-round2b.ts` (F10 to F12),
   `gecko-round3.ts` (F13 to F19), `gecko-round4.ts` (F20 to F27); `webkit-followups.ts`, `webkit-round3.ts`,
   `webkit-round4.ts`. The Gecko sets from round 2 on return `checks`, so they give facts.
+- `gecko-windows.ts` (W1, W2; profiling item 3, 2026-09-19): the cut rule of Gecko's windows inside long shaping units
+  (DESIGN.md §4.4), run by the in-word probe's method on long strings without spaces in eleven script and font-edge
+  classes, every cluster boundary tried as a cut: every accepted cut and every offset inside a window against the DOM's
+  advances and the long recipe's. Its header has the command; the run is under
+  `.artifacts/probes/perf-gecko-fill-20260919/windows-2`.
 - The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
   (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
   (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in
