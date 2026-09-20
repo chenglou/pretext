@@ -260,7 +260,7 @@ for (let b = 0; b < BROWSERS.length; b++) {
   const reverse = new Map<string, Record_>()
   for (const r of await records(browser, chunk => chunk === 'rerun-reverse')) reverse.set(r.id, r)
   const aside = new Set<string>(browser === 'webkit-host' ? knownAside : [])
-  const rerun = { cases: 0, historyDependent: 0, historyDependentRightInBoth: 0, historyDependentMainOnlyThen: 0, historyDependentMainOnlyInBoth: 0, stable: 0, stableWrongInBoth: 0, stableRightInBoth: 0, stableMainOnlyThen: 0, stableMainOnlyInBoth: 0 }
+  const rerun = { cases: 0, historyDependent: 0, historyDependentRightInBoth: 0, historyDependentRightInOne: 0, historyDependentMainPassInBoth: 0, historyDependentMainPassInOne: 0, historyDependentMainOnlyThen: 0, historyDependentMainOnlyInBoth: 0, stable: 0, stableWrongInBoth: 0, stableRightInBoth: 0, stableMainOnlyThen: 0, stableMainOnlyInBoth: 0 }
   for (let i = 0; i < forward.length; i++) {
     const a = forward[i]!
     const z = reverse.get(a.id)
@@ -273,6 +273,10 @@ for (let b = 0; b < BROWSERS.length; b++) {
       aside.add(a.id)
       rerun.historyDependent++
       if (right) rerun.historyDependentRightInBoth++
+      else if (!wrongLines(a) || !wrongLines(z)) rerun.historyDependentRightInOne++
+      const mainPasses = (a.main.lineCount === 'pass' ? 1 : 0) + (z.main.lineCount === 'pass' ? 1 : 0)
+      if (mainPasses === 2) rerun.historyDependentMainPassInBoth++
+      if (mainPasses === 1) rerun.historyDependentMainPassInOne++
       if (mainOnly(r)) rerun.historyDependentMainOnlyThen++
       if (mainOnlyInBoth) rerun.historyDependentMainOnlyInBoth++
     } else {
@@ -294,7 +298,7 @@ for (let b = 0; b < BROWSERS.length; b++) {
   full.push(`## ${browser}: main's suite, every family`, '', familyTable(suite.families, suite.total, Infinity), '')
   if (apart.length > 0) text.push(`### ${browser}: the ${apart.length} cases set aside`, '', HEADER, tableRow('set aside', asideTally.total), tableRow('suite with them', whole.total), '')
   if (rerun.cases > 0) text.push(`### ${browser}: the rebuild's wrong lines, run again in short fresh documents (${rerun.cases} cases, both orders)`, '',
-    `- Native view differs from the long document's in either rerun (page history, set aside): ${rerun.historyDependent}. The rebuild has the right lines in both reruns on ${rerun.historyDependentRightInBoth} of them; main passed and the rebuild failed line count on ${rerun.historyDependentMainOnlyThen} in the long document and on ${rerun.historyDependentMainOnlyInBoth} in both reruns.`,
+    `- Native view differs from the long document's in either rerun (page history, set aside): ${rerun.historyDependent}. The rebuild has the right lines in both reruns on ${rerun.historyDependentRightInBoth} of them, in one on ${rerun.historyDependentRightInOne} and in neither on ${rerun.historyDependent - rerun.historyDependentRightInBoth - rerun.historyDependentRightInOne}; main's line count passes in both on ${rerun.historyDependentMainPassInBoth}, in one on ${rerun.historyDependentMainPassInOne} and in neither on ${rerun.historyDependent - rerun.historyDependentMainPassInBoth - rerun.historyDependentMainPassInOne}; main passed and the rebuild failed line count on ${rerun.historyDependentMainOnlyThen} in the long document and on ${rerun.historyDependentMainOnlyInBoth} in both reruns.`,
     `- Same native view in both reruns: ${rerun.stable}. The rebuild's lines are wrong in both reruns on ${rerun.stableWrongInBoth} and right in both on ${rerun.stableRightInBoth}; main passed and the rebuild failed line count on ${rerun.stableMainOnlyThen} in the long document and on ${rerun.stableMainOnlyInBoth} in both reruns.`, '')
 
   // Then and now, on the cases both days hold. A status that isn't pass counts as fail unless it is unobserved.
