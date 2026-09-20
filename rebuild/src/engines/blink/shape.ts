@@ -537,7 +537,7 @@ function hasNoAdvance(cp: number): boolean {
 // raised. Chrome leaves a 16-bit string's clusters of no advance out (shape_result.cc:943-944): a character without an
 // advance (hasNoAdvance) where the port's rules start a cluster, which Canvas doesn't report, is such a cluster and sits at
 // the next cluster's start; any other unreported unit continues the cluster before it. A unit left out of an 8-bit string sits at the next unit's
-// position. Null where Canvas has no getTextClusters.
+// position. Null where Canvas has no getTextClusters, or where a cluster formed across a character the string left out.
 export function clusterTable(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): ClusterTable | null {
   if (!hasTextClusters || from >= to) return null
   const p = sh.p
@@ -591,6 +591,10 @@ export function clusterTable(sh: Shaper, g: number, from: number, to: number, ca
         const c = logical[l]!
         const s = found.starts[c]!
         const end = l + 1 < n ? found.starts[logical[l + 1]!]! : cs.s.length
+        // A cluster over a character the string left out (canvasString, an 8-bit paragraph's soft hyphen) formed in Canvas
+        // across a character the paragraph shapes between its letters: `f` SHY `fi` is one `ffi` ligature in Shantell Sans's
+        // Canvas string and three clusters natively. Such a string tells nothing of the call.
+        if (cs.leftOut) for (let u = s; u + 1 < end; u++) if (cs.units[u]! >= 0 && cs.units[u + 1]! >= 0 && cs.units[u + 1] !== cs.units[u]! + 1) return null
         const extra = ls16 === 0 ? 0 : letterSpacingDifference16(p, cs, scripts, ls16, s)
         for (let u = s; u < end; u++) {
           const t = cs.units[u]!
