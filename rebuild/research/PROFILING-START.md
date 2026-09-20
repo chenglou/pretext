@@ -322,10 +322,25 @@ rule; here is the rest.
   0.34 M and 0.07 M, Burmese 0.53 M and 0.10 M, nine units of 1,200 to 2,400 units 25.3 M and 0.68 M; calls rise 4%
   over the whole probe (950,962 to 984,419). A rule for Han, kana and Hangul alone would need a script list the rule
   doesn't have now, and would leave Thai and its neighbours with the square.
-- The window's size (pinned Firefox, the counts probe on the same 1,000 messages, a CJK message): 8 clusters 558.14
-  calls and 2,460 units, 16 clusters 516.53 and 2,944. By the two trees' own numbers a call costs about 0.4 µs and a
-  unit about 0.1 µs there (478 calls and 23,499 units in 2,492 µs, 517 and 2,944 in 493 µs), so 8 clusters would be
-  about 6% under 16 on a CJK message, 2% of the mix: not worth another recording.
+- The counts above, run again from both trees (`.artifacts/probes/perf-gecko-fill-20260919/attack/counts-base`,
+  `counts-item3`, `counts-simple`): every count the same, to the last unit sent (41,684,832 and 231,696 for the long
+  unit), and item 8's 132.85 and 87.73.
+- The window's size (the counts probe, a CJK message's calls and units sent): 4 clusters 641.00 and 2,209, 8 clusters
+  558.14 and 2,460, 12 clusters 529.44 and 2,700, 16 clusters 516.53 and 2,944, 24 clusters 502.14 and 3,453,
+  32 clusters 494.80 and 3,950 (`counts-k4` to `counts-k32`; scratch patches beside the review's tools). By the two
+  trees' own numbers a call costs about 0.4 µs and a unit about 0.1 µs there (478 calls and 23,499 units in 2,492 µs,
+  517 and 2,944 in 493 µs), which puts 8 to 16 clusters within 6% of each other on a CJK message and 32 clusters 18%
+  over: 16 stays.
+- Windows for Han, kana and Hangul alone (`counts-cjk`, 7 lines more): the same CJK message, a URL back at its 189.63
+  calls and 1,227 units, the mix 123.56 calls and 523 units against 124.63 and 519. It buys nothing on the chat mix,
+  needs a script list the rule doesn't have, and leaves Thai and its neighbours with the square.
+- A smaller cost for the same windows, not built: one ligature group count of the whole unit, the precheck
+  `groupAcross` makes of any unit. Where it equals the clusters, no cut needs its group test and every window's count
+  is known (6 lines; `variant-seed-on-0edcd64.patch` beside the review's tools). A CJK message then asks 477.37 calls
+  and sends 2,297 units (516.53 and 2,944 with the branch, 478.01 and 23,499 without windows), the mix 120.68 and 453,
+  the long unit 37,150 and 175,484; about 16% of a CJK message's time by the prices above. The port itself gives the
+  same advances, reasons, windows and lines with it on all 531 samples of the review's probe (`dump-seed-1`). It asks
+  other questions, so it wants the merge's recording; taken before that recording it costs no second one.
 - Time. The bench's driver runs only as the lock wrapper's own child unless its lock override is passed, which the
   review's session wasn't allowed to pass, so a stretch of alternating bench runs wasn't possible. The review timed
   another way: `tools/fill-ab-probe.ts` runs the headline for several checkouts inside one page, in alternating order,
