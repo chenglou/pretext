@@ -373,7 +373,8 @@ that only place what crosses it, and asks them where the bound reaches a fit tes
 *The trade.* It is the most intricate part of the Gecko port. It made a record's value depend on who asked first, and
 the round's critic found a real hole in it (fixed, with a unit test built from a constructed paragraph). That a plain
 paragraph's lines equal the inspected one's rests on a bound argument plus the plain check, the sweep and the plain
-predictor's browser runs. The simpler form reads every candidate whole and costs about 31 questions a chat message in
+predictor's browser runs. The simpler form reads every candidate whole and costs 8 to 9 questions a chat message (measured below; about 31 in
+the round's first build) in
 Firefox, which already meets the bar on plain ASCII and whose cost on the mix is the CJK and Arabic fill (item 3). The
 maintainer may prefer the simpler form.
 

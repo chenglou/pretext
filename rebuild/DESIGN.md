@@ -1706,7 +1706,9 @@ constructed paragraph's plain lines differed from its inspected ones at 22 of 90
 `engines/gecko/lazy-scan.test.ts` fails without it. No recorded case has that shape, so that a plain paragraph's lines
 equal the inspected one's rests on the bound argument, on the function set's plain check and sweep, and on the plain
 predictor's browser runs (TESTS.md, "Tiers"). The simpler form reads every candidate whole on both paths and costs
-about 31 more Canvas questions a chat message. The maintainer may prefer it; the orchestrator accepted the lazy form
+8 to 9 more Canvas questions a chat message, about 40 ms per 10,000 messages in Firefox (measured in the profiling
+phase, research/PROFILING-START.md item 8; the 31 questions above were the round's first build). The maintainer may
+prefer it; the orchestrator accepted the lazy form
 with this note, and research/PROFILING-START.md lists the trade among the things profiling may revisit.
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. What a call
