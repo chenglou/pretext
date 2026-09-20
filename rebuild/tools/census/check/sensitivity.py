@@ -68,7 +68,7 @@ for path in sorted(glob.glob(f'{THEN}/cases/chunks/c*.ndjson')):
         del p['width'], p['direction']
         styled = json.dumps([case['pageLang'], p], sort_keys=True)
         text_key[case['id']] = styled
-        template = ''.join('�' if unicodedata.category(ch) in ('Cc', 'Cf') else ch for ch in text)
+        template = ''.join(chr(0xFFFD) if unicodedata.category(ch) in ('Cc', 'Cf') else ch for ch in text)
         runs = [dict(run, text='') for run in p['runs']]
         template_key[case['id']] = json.dumps([case['pageLang'], dict(p, runs=runs), template], sort_keys=True)
 
@@ -106,6 +106,16 @@ for browser in ['chrome', 'firefox', 'webkit-host']:
     heads(f'near copies: each styled text once ({groups} texts)', kept, weight)
     weight, groups = once(kept, template_key)
     heads(f'near copies: each template once ({groups} templates)', kept, weight)
+    # The family mean, with the U+XXXX copies counted as the census does (one family a character and position), as three
+    # families (start, middle, end) and as one.
+    for label, name_of in [('as the census counts it', lambda f: f), ('U+XXXX families as three', lambda f: re.sub(r'U\+[0-9A-F]{4,6}', 'U+XXXX', f)), ('U+XXXX families as one', lambda f: re.sub(r'U\+[0-9A-F]{4,6}/.*', 'U+XXXX', f))]:
+        groups_of = collections.defaultdict(lambda: [0, 0, 0])
+        for r in kept:
+            g = groups_of[name_of(r['family'])]
+            g[0] += 1
+            g[1] += main_right(r)
+            g[2] += r['rebuild']['lineCount'] == 'pass'
+        print(f'  every family counting once, {label} ({len(groups_of)} families): main {pct(sum(g[1] / g[0] for g in groups_of.values()), len(groups_of))}; rebuild lineCount {pct(sum(g[2] / g[0] for g in groups_of.values()), len(groups_of))}')
     no_long = [r for r in kept if r['chunk'].startswith('chunk')]
     heads(f'without the long paragraphs ({len(kept) - len(no_long)} cases over 1,000 units)', no_long)
 
