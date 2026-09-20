@@ -211,14 +211,15 @@ function expandRun(p: WebKitPrepared, run: TextRun, item: WebKitTextItem, width:
   run.textLength += length
 }
 
-function updateTrailingContent(L: Layout, line: Line, item: WebKitTextItem, width: number, oldContentLogicalWidth: number): void {
+// `run` is the line's last run, which holds the item.
+function updateTrailingContent(L: Layout, line: Line, run: TextRun, item: WebKitTextItem, width: number, oldContentLogicalWidth: number): void {
   line.trailingSoftHyphenWidth = null
   const style = L.p.boxes[item.box]!.style
   const isTrimmable = item.isWhitespace && !preservesSpacesAndTabs(style)
   if (isTrimmable) {
     // TrimmableTrailingContent::addFullyTrimmableContent (IL:723-732)
     const offset = f32(f32(line.contentLogicalWidth - oldContentLogicalWidth) - width)
-    line.trimmable = { runIndex: line.trimmable === null ? line.runs.length - 1 : line.trimmable.runIndex, offset, width: f32(offset + width) }
+    line.trimmable = { run: line.trimmable === null ? run : line.trimmable.run, offset, width: f32(offset + width) }
   } else {
     line.trimmable = null
   }
@@ -256,10 +257,11 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     || shapingBoundary !== null || last.shapingBoundary !== null ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
   let contentLogicalRight: number
+  // The item's run: the one it expands, or one of its own.
+  const run = expanded ?? textRun(p, item, f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0)), width, shapingBoundary)
   if (expanded === null) {
-    const left = f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0))
-    line.runs.push(textRun(p, item, left, width, shapingBoundary))
-    contentLogicalRight = f32(left + width)
+    line.runs.push(run)
+    contentLogicalRight = f32(run.left + width)
   } else if (box.letterSpacing >= 0) {
     expandRun(p, expanded, item, width)
     contentLogicalRight = f32(expanded.left + expanded.width)
@@ -277,7 +279,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     contentLogicalRight = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
   line.contentLogicalWidth = Math.max(oldContentLogicalWidth, contentLogicalRight)
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
+  updateTrailingContent(L, line, run, item, width, oldContentLogicalWidth)
 }
 
 // Line::appendTextFast (IL:483-556), the simple builder's variant: its line holds text runs alone while it is filled.
@@ -290,10 +292,11 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
   // The run the item expands, or null where it needs a run of its own.
   const expanded = last === undefined || hasCollapsedTrailingWhitespace(last) || last.box !== item.box || isZeroWidthSpaceSeparator(p, item) ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
+  // The item's run: the one it expands, or one of its own.
+  const run = expanded ?? textRun(p, item, lastRunLogicalRight(line), width, null)
   if (expanded === null) {
-    const left = lastRunLogicalRight(line)
-    line.runs.push(textRun(p, item, left, width, null))
-    line.contentLogicalWidth = f32(left + width)
+    line.runs.push(run)
+    line.contentLogicalWidth = f32(run.left + width)
   } else if (box.letterSpacing >= 0) {
     expandRun(p, expanded, item, width)
     line.contentLogicalWidth = f32(expanded.left + expanded.width)
@@ -303,7 +306,7 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
     expandRun(p, expanded, item, width)
     line.contentLogicalWidth = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
+  updateTrailingContent(L, line, run, item, width, oldContentLogicalWidth)
 }
 
 // Line::appendInlineBoxStart (IL:289-315).
@@ -382,9 +385,9 @@ function addTrailingHyphen(line: Line, width: number): void {
 // Line::Run::removeTrailingWhitespace (IL:963-987).
 function handleTrailingTrimmableContent(L: Layout, line: Line): void {
   if (line.trimmable === null || line.runs.length === 0) return
-  const index = line.trimmable.runIndex
   // The trimmable run is text that ends with the trimmable white space (IL:753, :965).
-  const run = line.runs[index] as TextRun
+  const run = line.trimmable.run
+  const index = line.runs.indexOf(run)
   let whitespaceWidth = run.trailingWhitespace!.width
   if (run.lastNonWhitespaceContentStart !== null && L.p.style.rtl) {
     const box = L.p.boxes[run.box]!
