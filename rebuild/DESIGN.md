@@ -1120,8 +1120,9 @@ source range. It makes no fragment, no Blink item and no WebKit display box, and
   so every break decision is the builder's. Under a block of `break-spaces` (around one span that collapses spaces) a
   word before white space is no candidate of its own, so the stretch isn't taken there. It is a second path through
   one stretch of the fill, taken for its price: the builder spent about 50 ns an item on bookkeeping where a sum takes
-  6, and in webkit-host 10,000 plain ASCII chat messages went from 104 to 90 ms from scratch and a layout of a kept
-  message from 2.0 to 0.95 µs (the mix: 146 to 134 ms, 2.8 to 1.8 µs).
+  6, and in webkit-host 10,000 plain ASCII chat messages went from 106 to 92 ms from scratch and a layout of a kept
+  message from 2.06 to 0.95 µs (the mix: 142 to 138 ms, 2.7 to 1.7 µs; fresh pages that hold one library each,
+  research/PERF-JS-PROFILE.md, the WebKit critic's section 1).
 - Gecko's decided line is the start, the band, the last pass's spans as reflow left them, the next position and, inspected,
   the gaps the passes raised with the in-word stand-in offsets they consulted. `fillLine` (`lines.ts`) runs the passes
   alone. `placement.ts` makes its own placed records from the line's reflowed spans (`lines.ts` `Reflowed`,
@@ -2312,8 +2313,9 @@ the same data, and `env.dictionaryBreaks` says which is available.
   ranges that start with a combining mark (`dictionary-breaks-stand-in`). The port makes one segmenter at the first
   dictionary range and keeps it for the page's life (`engines/webkit/breaks.ts` `wordSegmenter`), as it keeps its decoded
   tables: it is fixed data, the process's default locale and nothing of any text. Making one per range cost about four
-  times what segmenting a short range does (7.8 µs against 1.9 µs under JavaScriptCore, 2026-09-20), and 1,000 Thai chat
-  messages went from 42.6 to 18.6 µs a message of the port's own JavaScript with the same segmentations.
+  times what segmenting a short range does (7.8 µs against 1.9 µs under JavaScriptCore, 2026-09-20), and in webkit-host
+  1,000 Thai chat messages went from 46.2 to 20.1 µs a message with the same segmentations
+  (research/PERF-JS-PROFILE.md).
 - **Gecko**: Firefox's `Intl.Segmenter` word granularity uses ICU4X's word segmenter, and layout's per-word LSTM breaks
   equaled it on 54,589 of 54,589 SA positions (specs/gecko-text.md §10). Gecko feeds one space-delimited word at a time,
   split by language. Probe gecko-text H25 confirms it in installed Firefox 156.
