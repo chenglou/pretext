@@ -206,6 +206,10 @@ export type InWord = {
   // an offset several times (the scan, the measured edges, the redo, its placement and its inspection), and the next line
   // and another width consult it again.
   offsets: (InWordEntry | null)[]
+  // A long unit's windows in text order (advance.ts windowsOf): stretches between cuts that Canvas showed nothing crosses,
+  // each a unit of its own to every recipe, with `startAdvance` the advance before it. null until an offset asks; empty
+  // on a window, in a unit of at most 32 code units, and where no cut held.
+  windows: GeckoUnit[] | null
 }
 
 // What measuring found about one offset inside a shaping unit, each part null until something asks for it.
