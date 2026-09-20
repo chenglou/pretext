@@ -638,7 +638,7 @@ function isTextRun(run: ContentRun): run is TextContentRun {
 
 // isBreakableRun (ICB:353-362): text whose own style allows wrapping.
 function isBreakableRun(L: Layout, run: ContentRun): run is TextContentRun {
-  return run.item.kind === 'text' && L.p.boxes[run.item.box]!.style.wrap
+  return isTextRun(run) && L.p.boxes[run.item.box]!.style.wrap
 }
 
 // firstCharacterBreakRespectingLineStartProhibitions (ICB:139-158). U16_FWD_1 gets the item length as its limit while the
