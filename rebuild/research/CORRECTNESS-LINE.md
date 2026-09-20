@@ -159,7 +159,7 @@ I changed nothing in the repository. The main tree and the scratch clone are bot
 - **Optional: block on a rise in limited values.** Differing limited values rose in 0 cases on every HEAD, no-op and painter run here, so a rise could get its own exit code without false alarms. That would close the Firefox headline blind spot.
 
 ## The committed line
-- **Commits.** The six commits from `feb3937` to `af50a11` carry no attribution line and no mention of Claude.
+- **Commits.** The six commits from `feb3937` to `af50a11` carry no attribution line.
 - **Commit the references name.** All six pinned manifests name `6b21b68`, not HEAD. Between `6b21b68` and HEAD, `git diff` lists only docs, the pins, `known-tail.json` and `probes/measure-first.ts`. Between `feb3937` (the recording) and HEAD, nothing under `rebuild/src` or `rebuild/lab` differs but the README.
 - **Pins by hash.** Each pinned manifest is byte-equal to its `reference/manifest.json`. All 480 reference shards, all 480 input shards, the input manifests and both ledger hashes match in each of the six. No case is unfaithful and none has a log disagreement.
 - **Library bundle.** A fresh clone at HEAD builds bundle `1545f944f502`, the one the no-facts references recorded.
