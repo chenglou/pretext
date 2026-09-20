@@ -22,7 +22,7 @@ import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import { measureGroups, type Shaper } from './shape.js'
+import { measureGroups, wordsCheck, type Shaper } from './shape.js'
 import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
 
 export { paragraphGaps } from './gaps.js'
@@ -184,7 +184,12 @@ export type BlinkFillResult = FillResultOf<BlinkLineStart, BlinkFilledLine, Blin
 // fragment or item is made here.
 export function fillLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkFillResult {
   const gaps: GapSink = p.inspect === null ? null : []
+  if (wordsCheck.log !== null) wordsCheck.log.length = 0
   const info = new LineBreaker({ p, gaps }, start, slot).nextLine()
+  if (wordsCheck.log !== null && gaps === null) {
+    const key = `${start.textOffset < p.text.length ? p.scripts[start.textOffset]! : -1}|${wordsCheck.log.length === 0 ? 'no search' : wordsCheck.log.join(' + ')}`
+    wordsCheck.lines.set(key, (wordsCheck.lines.get(key) ?? 0) + 1)
+  }
   // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
   // opportunity (inline_layout_algorithm.cc:1341-1367), which lays the same line out again.
   if (info.hasOverflow && info.availableWidth !== lengthLU(slot.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {

@@ -111,6 +111,14 @@ export type LineInfo = {
 // the break opportunity before `offset`; one that failed, the text from the line's end.
 export type EndTest = { fits: true; offset: number; from: number } | { fits: false; offset: number }
 
+// Why wordCandidateOf leaves a candidate to the search, by its negative result less one; the study's tallies read them
+// (shape.ts wordsCheck.log).
+const WORD_CANDIDATE_REASONS = [
+  'cuts that run backwards, or negative spacing', 'a cut inside a word starts the unit', 'a soft hyphen or a HanKerning close mark in the word',
+  'white space starts the unit', 'more than a word and one space between two cuts', 'a word end outside its two cuts', 'a cut inside a word ends the unit',
+  'the line\'s first word overflows', 'a break opportunity inside the overflowing word', 'a tab run', 'a right-to-left item',
+]
+
 // shaping_line_breaker.cc:38-41: SP, TAB, LF and U+3000.
 function isSpaceSLB(c: number): boolean {
   return c === 0x20 || c === 0x09 || c === 0x0a || c === 0x3000
@@ -834,15 +842,12 @@ export class LineBreaker {
   // (shape.ts wordsCheck) holds against the search line by line.
   wordCandidate(sr: ShapeResult, start: number, x: number): number {
     const sh = this.sh
-    if (sh.gaps !== null || sr.kind !== 'group' || sr.rtl) return -1
+    if (sh.gaps !== null) return -1
     // The search's two ends read no position.
     if (x <= 0 || Math.fround(x / 64) >= widthOf16(sr.width16)) return -1
-    const found = this.wordCandidateOf(sr, start, x)
-    if (found < 0) {
-      wordsCheck.searched++
-      return -1
-    }
-    wordsCheck.words++
+    const found = sr.kind !== 'group' ? -10 : sr.rtl ? -11 : this.wordCandidateOf(sr, start, x)
+    if (wordsCheck.log !== null) wordsCheck.log.push(found < 0 ? WORD_CANDIDATE_REASONS[-found - 1]! : 'words')
+    if (found < 0) return -1
     if (wordsCheck.on) {
       const exact = offsetForPosition(sh, sr, x)
       const same = this.char(found) === 0x20 ? exact === found : exact >= found && !isSpaceSLB(this.char(exact)) && this.allWordUnits(found, exact)
@@ -890,24 +895,25 @@ export class LineBreaker {
     }
     const u0 = at < first ? start : cuts[at]!
     const u1 = Math.min(sr.end, cuts[at < first ? first : at + 1]!)
-    if (u0 !== start && this.char(u0 - 1) !== 0x20) return -1
+    if (u0 !== start && this.char(u0 - 1) !== 0x20) return -2
     let e = u0
     while (e < u1) {
       const c = this.char(e)
       if (isSpaceSLB(c) || isSpaceLB(c)) break
-      if (c === 0xad || maybeHanKerningClose(c)) return -1
+      if (c === 0xad || maybeHanKerningClose(c)) return -3
       e++
     }
-    if (e === u0) return -1
+    if (e === u0) return -4
     if (e < u1) {
-      if (this.char(e) !== 0x20 || e + 1 !== u1) return -1
+      if (this.char(e) !== 0x20 || e + 1 !== u1) return -5
       const position = positionForOffset(sh, sr, e)
-      if (position < positionForOffset(sh, sr, u0) || position > positionForOffset(sh, sr, u1)) return -1
+      if (position < positionForOffset(sh, sr, u0) || position > positionForOffset(sh, sr, u1)) return -6
       if (position <= x) return e
     } else if (u1 !== sr.end) {
-      return -1
+      return -7
     }
-    if (u0 === start || this.iterator.nextBreakablePosition(u0 + 1, e) !== e) return -1
+    if (u0 === start) return -8
+    if (this.iterator.nextBreakablePosition(u0 + 1, e) !== e) return -9
     return u0
   }
 

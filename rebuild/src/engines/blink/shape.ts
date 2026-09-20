@@ -973,8 +973,11 @@ export function positionForOffset(sh: Shaper, sr: ShapeResult, k: number): numbe
 
 // The checked run of the candidate found from words (line-breaker.ts wordCandidate): with `on`, every such candidate is
 // held against offsetForPosition's and a difference throws; the tests' runs set it (PRETEXT_WORDS_CHECKED=1 under bun).
-// `words` and `searched` count the candidates found from words and the ones left to the search, on plain paragraphs.
-export const wordsCheck = { on: typeof process !== 'undefined' && process.env['PRETEXT_WORDS_CHECKED'] === '1', words: 0, searched: 0 }
+// `log`, when a study sets it to a list, takes every candidate's outcome on a plain paragraph: 'words', or why it was left
+// to the search; `lines` then tallies each filled line by the script at its start and its outcomes (index.ts fillLine).
+export const wordsCheck: { on: boolean; log: string[] | null; lines: Map<string, number> } = {
+  on: typeof process !== 'undefined' && process.env['PRETEXT_WORDS_CHECKED'] === '1', log: null, lines: new Map(),
+}
 
 // CachedOffsetForPosition (shape_result.cc:2261-2323), returning an absolute text_content offset. `before` keeps the search
 // below that offset, for a caller that knows an exact position there lies past x (ShapeLine's out-of-order stand-ins).
