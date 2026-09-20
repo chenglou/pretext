@@ -9330,7 +9330,7 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "recipe",
-   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures, and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it; a unit of a right-to-left script in a left-to-right run, which a direction override makes, has no windows: HarfBuzz shapes it reversed or not by what its whole buffer holds (digits without a letter stay left to right), so Canvas can shape a window of digits alone the other way round than the DOM shapes the unit",
+   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures, and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it; a unit of a right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override) has no windows: HarfBuzz shapes it reversed or not by what its whole buffer holds (digits without a letter stay left to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit",
    "source": "gfxFont.cpp:3804-3808, :3564-3617 (a word of any length is shaped in one call, cut only at 32,760 units, so no cut is exact by construction and Canvas decides each); engines/gecko/advance.ts windowAt, windowsOf; DESIGN.md §4.4; research/PROFILING-START.md item 3; hb-ot-shape.cc:588-645; engines/gecko/advance.ts shapedReversed",
    "probes": [
     "gecko-windows W1: all 13,435 cuts that hold, of 14,943 tried over 54 samples in 16 grid phases, give W(unit) − W(suffix), and 13,135 the DOM's advance, the other 300 where the long recipe misses it by the same amount",
@@ -9947,7 +9947,7 @@
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
   "gecko/lines/plain-scan-rough-candidates": "5098cc53f534eeef",
-  "gecko/measure/windows-in-long-units": "6606bc77393217f0",
+  "gecko/measure/windows-in-long-units": "0d7277856f9e8826",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848"
  }
 }

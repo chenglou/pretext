@@ -114,10 +114,10 @@ function windowAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numbe
 function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoUnit[] {
   // Canvas can't count the groups of a unit that starts inside a cluster (inWordAdvance).
   if (p.clusterStart[unit.tStart] === 0) return []
-  // A right-to-left script in a left-to-right run, which a direction override makes: HarfBuzz shapes it reversed or not
-  // by what its whole buffer holds (shapedReversed: digits without a letter stay left to right), so Canvas can shape a
-  // window of digits alone the other way round than the DOM shapes the unit, and place its pair adjustments on the other
-  // glyph. Such a unit keeps the long questions.
+  // A right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override):
+  // HarfBuzz shapes it reversed or not by what its whole buffer holds (shapedReversed: digits without a letter stay left
+  // to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM
+  // shapes the unit, and places its pair adjustments on the other glyph. Such a unit keeps the long questions.
   let k = 0
   while (run.scriptRuns[k]!.limit <= unit.tStart) k++
   if ((run.level & 1) === 0 && RTL_SCRIPTS.has(run.scriptRuns[k]!.script)) return []

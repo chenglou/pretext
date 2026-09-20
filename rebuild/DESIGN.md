@@ -1531,9 +1531,9 @@ the windows' au must add up to au(unit), else the unit has no windows
 
 A window is a unit to every recipe: the advance before it is the sum of the windows before it, and an offset inside it
 is measured against the window's end. One kind of unit has no windows: a right-to-left script in a left-to-right run,
-which a direction override makes. HarfBuzz shapes it reversed or not by what its whole buffer holds (a buffer of digits
-without a letter stays left to right, hb-ot-shape.cc:588-645; `shapedReversed`), so Canvas can shape a window of digits
-alone the other way round than the DOM shapes the unit. With windows there, Hebrew letters and sixty digits under U+202D
+a number in Arabic text or letters under a direction override. HarfBuzz shapes it reversed or not by what its whole
+buffer holds (a buffer of digits without a letter stays left to right, hb-ot-shape.cc:588-645; `shapedReversed`), so
+where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit. With windows there, Hebrew letters and sixty digits under U+202D
 in 24px Arial broke a line one cluster late in pinned Firefox, where the long recipe gives the native break (the item's
 review, lab set of `tools/windows-attack-cases.ts`; `windows-reversed.test.ts`).
 
