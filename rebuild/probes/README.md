@@ -43,6 +43,14 @@ may read the DOM freely; this is research, not the library.
   by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
   `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
   `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
+- `../tools/word-scan-probe.ts` (T1, F1; Gecko's word scan, 2026-09-20, branch `x-words2-gecko`; it runs the library,
+  several of them in one document: the tree's own, the export of another commit, or an edited copy from
+  `tools/word-scan-variants.ts`). `WORD_SCAN_PROBE=timed` lays the bench's chat messages out from scratch and at three
+  new widths, the libraries in turns and the order turned every round, then counts `measureText` calls and hashes
+  every line's range per library; it wants the exclusive lock. `WORD_SCAN_PROBE=fonts` holds the tree's library
+  against the engine's loop over 131 installed font families, which is the word scan's premise on real Canvas
+  answers; a Firefox slot is enough. Its header has the commands; the runs are under
+  `.artifacts/bench/words2-gecko-20260920` and `.artifacts/tests/runs/words2-gecko-20260920/fonts-probe`.
 - The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
   (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
   (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in

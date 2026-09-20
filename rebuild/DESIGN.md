@@ -1771,6 +1771,39 @@ subset of the inspected path's questions because it runs the same reads and leav
 ask, and its lines are the inspected path's because both read the same advances. `rebuild/src` is 46 lines shorter,
 and `lazy-scan.test.ts` went with it.
 
+**Gecko's word scan** (2026-09-20, branch `x-words2-gecko`, not merged: it rests on a premise that is the maintainer's
+to accept or refuse; `lines.ts` `wordScan`, research/SPEC-WORD-SUM.md). Gecko shapes a text run word by word, a boundary
+space is a glyph of its own and nothing is shaped across it (gfxFont.cpp:3708-3900), so the advance before a shaping
+unit's start is the sum of the units before it, which `prepare` measured. A plain paragraph's break scan is walked unit
+by unit with the engine's own tests at the units' starts, which ask Canvas nothing; what it can't decide it leaves to
+the engine's loop (`charScan`, the port of `BreakAndMeasureText` as it was): a scan that starts, ends, trims or would
+break inside a unit, `break-spaces`, and a unit that a removed soft hyphen stands in or before. A unit can hold
+candidates inside itself: a natural break after a hyphen or between Han characters, and under `overflow-wrap:
+break-word` every cluster of a line's first word, which is what a chat message's fill asks Canvas about. The walk passes
+over them where the unit's end fits, on a **premise** that no engine source gives and Canvas isn't asked for: the
+advance before an offset inside a word is never more than the advance before the word's end (no suffix of a shaped word
+has a negative advance). A glyph's advance is signed and nothing clamps it (gfxHarfBuzzShaper.cpp:1692-1721), so a font
+can break it, silently on a plain paragraph, and `word-scan.test.ts` holds the shape that does. What the engine does
+give is checked, not believed: the loop adds each character's spacing inside the word (gfxTextRun.cpp:1139-1151), so
+the walk leaves a unit under letter spacing, a unit that holds a trimmable space, and a unit whose spacing is negative
+to the loop (word spacing reaches U+00A0 before a join control, which is inside a word and isn't trimmable:
+`word-scan-spacing.test.ts`), and a unit whose inner advances the port takes from a prefix's own width (`advance.ts`
+`advancesAreSuffixes`). An inspected paragraph never takes the word scan, so the lab's path is the engine's loop, and
+the function set's plain check holds every plain line against it. Nothing is kept: no mode, no count, nothing on the
+prepared paragraph (what a unit holds inside is read from the glyph flags of the units a scan visits). The checked
+mode, where both scans run and a difference throws, the loop alone and the form without the premise are edited copies
+of the library that a tool makes outside it (`tools/word-scan-variants.ts`). In Firefox 156, 10,000 chat messages
+against the library before it, eight alternating pairs in one document with the page's fixed arithmetic at 27 to 29 ms
+(`tools/word-scan-probe.ts`; `.artifacts/bench/words2-gecko-20260920/timed-bw-1`): from scratch plain ASCII goes from
+0.67 to 0.25 s, the mix from 1.10 to 0.72 s and the real set from 1.13 to 0.66 s; their 30,000 layouts at three new
+widths from 0.64 to 0.12 s, 0.74 to 0.19 s and 0.74 to 0.19 s; `measureText` calls a message from 94.5 to 23.9, 131.9
+to 67.1 and 123.9 to 53.9, and a layout at a new width from 35.6 to 0.8, 33.2 to 2.7 and 33.4 to 3.2. What the mix
+still asks is Chinese: a message without spaces is one unit, and every line after its first starts inside it. Under
+`overflow-wrap: normal` the loop asks nothing inside a word either, and the word scan saves its JavaScript alone (plain
+ASCII from scratch 0.30 to 0.26 s, 30,000 layouts 0.14 to 0.10 s). Storing what a unit holds inside on the prepared
+paragraph, the last candidates' offsets included, measured the same as reading it per visited unit, so nothing is
+stored.
+
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
 Blink word cache with them. Everything else a call keeps is local to it: the declarations it resolved, each once under

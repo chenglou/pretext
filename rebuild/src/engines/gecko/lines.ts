@@ -210,7 +210,7 @@ const startsUnit = (p: GeckoPrepared, run: GeckoTextRun, t: number): boolean => 
 // advances are Canvas questions, four to five a cluster. The walk passes over them where the unit's end fits, on this
 // PREMISE, which no engine source gives and Canvas isn't asked for: the advance before an offset inside a word is never
 // more than the advance before the word's end (no suffix of a shaped word has a negative advance; a detailed glyph's
-// advance is signed and nothing clamps it, gfxHarfBuzzShaper.cpp:1699-1719). Then every inner candidate fits, none
+// advance is signed and nothing clamps it, gfxHarfBuzzShaper.cpp:1692-1721). Then every inner candidate fits, none
 // aborts, and the last of them is the scan's last break until a later candidate is accepted; a scan that would break at
 // it is left to the loop, since the edge's advance is asked of Canvas. Letter spacing, negative word spacing and a
 // trimmable space inside the unit would enter the inner tests, so they leave it to the loop, and so does a unit whose
