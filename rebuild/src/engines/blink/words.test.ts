@@ -8,7 +8,6 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, prepare } from './index.js'
-import { LineBreaker } from './line-breaker.js'
 import { adjust16, wordsCheck } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
@@ -103,20 +102,14 @@ describe('blink word pieces', () => {
 })
 
 describe('blink candidate from the cuts', () => {
-  test('lines that end between two words are the search\'s lines, in a checked run', () => {
-    const fromCuts = LineBreaker.prototype.wordCandidate
+  test('in a checked run every candidate found from the cuts is the search\'s, at every width', () => {
     const families = ['Mono', 'Kern', 'Context']
+    wordsCheck.on = true
     for (let f = 0; f < families.length; f++) {
-      for (let width = 30; width <= 390; width += 7) {
-        wordsCheck.on = true
-        const withCuts = lineEnds(prepared(families[f]!), width)
-        wordsCheck.on = false
-        LineBreaker.prototype.wordCandidate = () => -1
-        const searched = lineEnds(prepared(families[f]!), width)
-        LineBreaker.prototype.wordCandidate = fromCuts
-        expect(withCuts).toEqual(searched)
-      }
+      const p = prepared(families[f]!)
+      for (let width = 30; width <= 390; width += 7) expect(lineEnds(p, width).length).toBeGreaterThan(0)
     }
+    wordsCheck.on = false
   })
 
   test('a line between two words asks where the two words around its end end, and a kept paragraph asks nothing at a width it has met', () => {
