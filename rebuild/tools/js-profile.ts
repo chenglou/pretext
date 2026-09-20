@@ -59,7 +59,7 @@ for (let t = 0; t < trees.length; t++) {
     entrypoints: [join(import.meta.dir, 'js-profile-entry.ts')], target: 'browser', format: 'iife', minify: false,
     plugins: [{ name: 'studied-tree', setup(build) { build.onResolve({ filter: /^\.\.\/src\// }, found => found.importer.endsWith('js-profile-entry.ts') ? { path: join(src, found.path.slice(7)) } : undefined) } }],
   })
-  if (!built.success) throw new Error(`bundling ${src} failed: ${built.logs.join('\n')}`)
+  if (!built.success) throw new Error(`bundling ${src} failed: ${built.logs.map(String).join('\n')}`)
   bundles.push(`${await built.outputs[0]!.text()}\n(globalThis.jsProfileLibs ??= []).push(globalThis.jsProfileLib);\n`)
   writeFileSync(join(outDir, `lib-${trees[t]!.label}.js`), bundles[t]!)
 }
@@ -344,7 +344,7 @@ for (let i = 0; i < 80; i++) {
 }
 await Bun.sleep(1_000)
 execFileSync('trash', [profile], { stdio: 'ignore', timeout: 60_000 })
-server.stop(true)
+await server.stop(true)
 
 function median(values: number[]): number {
   const sorted = values.slice().sort((a, b) => a - b)
