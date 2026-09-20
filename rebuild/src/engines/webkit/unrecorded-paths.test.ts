@@ -1,9 +1,9 @@
 // WebKit lines on four paths that no recorded case runs, so tier 1 (tests/replay.ts) says nothing of them: the coverage map
 // (tests/coverage-map.ts) of the recorded sets lists lastValidBreakingPosition whole, the second shaping of
 // shapePartialLineCandidate, placeInlineBoxesOnly, and the line-spanning inline box that gets no display box
-// (output.ts nonBidiDisplayBoxes). A case file can't hold the third: a case needs a text leaf. The stand-in Canvas gives
-// every code unit 8 px and the two joiners none, so the expectations follow from the cited source rules by hand: no
-// expectation here is a browser observation.
+// (output.ts nonBidiDisplayBoxes). A case reaches the third only with an empty text leaf inside its spans, since a case
+// needs a leaf (lab/cases/case.ts). The stand-in Canvas gives every code unit 8 px and the two joiners none, so the
+// expectations follow from the cited source rules by hand: no expectation here is a browser observation.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type BoxEdge } from '../../model.js'
