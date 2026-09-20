@@ -42,7 +42,7 @@ test('a right-to-left script in a left-to-right run has no windows, and its offs
     font, letterSpacing: 0, wordSpacing: 0, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto',
     tabSize: 8, direction: 'rtl', lang: 'he', textIndent: 0, textAlign: 'start', content: [{ kind: 'text', text }],
   }
-  const p = prepareGecko(paragraph, env, false)
+  const p = prepareGecko(paragraph, env, false, [])
   const run = p.textRuns[p.textRuns.length - 1]!
   expect(run.level).toBe(2)
   const unit = p.units[p.unitOf[run.tStart]!]!

@@ -46,7 +46,7 @@ const paragraphOf = (text: string): Paragraph => ({
 })
 
 function lines(text: string, width: number, inspect: boolean): { lines: [number, number][]; windows: number[] } {
-  const prepared = prepareGecko(paragraphOf(text), env, inspect)
+  const prepared = prepareGecko(paragraphOf(text), env, inspect, [])
   const out: [number, number][] = []
   for (let start = firstLine(prepared); start !== null;) {
     const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
