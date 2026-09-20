@@ -587,18 +587,39 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
 })
 
 describe("the simple builder's plain stretch (lines.ts commitPlainStretch)", () => {
+  const text = ' The quick  brown fox ju\u00admps over averyveryverylongwordindeed, then a lazy dog\u200bnaps. '
+  const cut = text.indexOf('over')
+  const rows = (lines: WebKitLine[]) => lines.map(l => [l.start, l.end, l.hasLineBox, l.geometry.contentWidth])
+
   // The stretch runs in a paragraph of one box. The same text in two text nodes, cut at a word's start, is two boxes, so
   // there the builder commits every item itself, and its lines have the same ranges and content widths.
   test('one text node fills as the builder fills the same text in two nodes, at every width', () => {
-    const text = ' The quick  brown fox ju\u00admps over averyveryverylongwordindeed, then a lazy dog\u200bnaps. '
-    const cut = text.indexOf('over')
-    const rows = (lines: WebKitLine[]) => lines.map(l => [l.start, l.end, l.hasLineBox, l.geometry.contentWidth])
     for (const overflowWrap of ['normal', 'break-word'] as const) {
       for (let width = 7; width <= 440; width++) {
         const one = layout(paragraph([[text, 'text']], { width, overflowWrap })).lines
         const two = layout(paragraph([[text.slice(0, cut), 'text'], [text.slice(cut), 'text']], { width, overflowWrap })).lines
         expect([overflowWrap, width, rows(one)]).toEqual([overflowWrap, width, rows(two)])
       }
+    }
+  })
+
+  // A block of break-spaces around one span that collapses spaces: the range based builder runs the simple builder under
+  // the BLOCK's style, where a word before white space is no candidate of its own, so the stretch isn't taken
+  // (placeInlineTextContent). The span's text in two nodes is two boxes, which the stretch never took. The lines were the
+  // same while the stretch ran there too, since a trailing collapsible space never decides a fit and a word's kept width
+  // is its width with its space less the space's, so the two add up to the measured total (research/PERF-JS-PROFILE.md,
+  // the WebKit critic's section 2): this holds the block to the builder's own lines whichever path fills it.
+  test('a break-spaces block around one span that collapses spaces fills as the builder fills the same text in two nodes, at every width', () => {
+    for (const overflowWrap of ['normal', 'break-word'] as const) {
+      const block = treeParagraph([], fontWith(), { whiteSpace: 'break-spaces', overflowWrap })
+      const around = (texts: string[]) => prepare({ ...block, content: [span(block, texts.map(t => ({ kind: 'text' as const, text: t })), { whiteSpace: 'normal' })] }, env, true, [])
+      const one = around([text])
+      const two = around([text.slice(0, cut), text.slice(cut)])
+      expect([one.builder, one.boxes.length, two.builder, two.boxes.length]).toEqual(['range-based', 1, 'range-based', 2])
+      const filled = (prepared: typeof one, width: number) => everyLine({
+        first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
+      }, width, []).lines
+      for (let width = 7; width <= 440; width++) expect([overflowWrap, width, rows(filled(one, width))]).toEqual([overflowWrap, width, rows(filled(two, width))])
     }
   })
 })

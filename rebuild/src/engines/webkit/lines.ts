@@ -1095,10 +1095,11 @@ function simpleHandleLineEnding(b: Builder, placedEnd: Position): void {
 }
 
 // The line's leading items while each is what most text is: text of the paragraph's one box with its width kept, a word
-// or one collapsible space, without a trailing soft hyphen, that fits. Each such item is a candidate of its own (it ends
-// at a soft wrap opportunity, placeInlineTextContent below), and what simpleCommitCandidateContent, appendTextFast,
-// expandRun and updateTrailingContent leave of them item by item is written here once: one run, the line's content width
-// and trimmable content, the wrap opportunity list and measuredEnd, with the same float32 sums in the same order. Returns
+// or one collapsible space, without a trailing soft hyphen, that fits. In a block that isn't break-spaces, the only kind
+// the caller takes the stretch in, each such item is a candidate of its own (it ends at a soft wrap opportunity,
+// placeInlineTextContent below), and what simpleCommitCandidateContent, appendTextFast, expandRun and
+// updateTrailingContent leave of them item by item is written here once: one run, the line's content width and
+// trimmable content, the wrap opportunity list and measuredEnd, with the same float32 sums in the same order. Returns
 // how many items it committed; the first item that isn't of that kind, or doesn't fit, goes to the builder as it is.
 function commitPlainStretch(b: Builder): number {
   const p = b.L.p
@@ -1154,7 +1155,8 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
   const items = L.p.items
   const style = L.p.style
   const hasWrapOpportunityBeforeWhitespace = style.collapse !== 'break-spaces'
-  let placed = b.partialLeadingTextItem === null ? commitPlainStretch(b) : 0
+  // Under a block of break-spaces a word before white space is no candidate of its own (below), so the stretch isn't taken.
+  let placed = b.partialLeadingTextItem === null && hasWrapOpportunityBeforeWhitespace ? commitPlainStretch(b) : 0
   let r = simpleResult(true)
   let candidateStart = b.rangeStart + placed
   let candidateEnd = candidateStart
