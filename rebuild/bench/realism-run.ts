@@ -3,7 +3,11 @@
 // pass and then counts what they asked of Canvas, in one browser session, and writes one JSON result. A run is short, so
 // runs at several settings can take turns inside one exclusive stretch.
 //   python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome
-//     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N] --out=<file.json>
+//     [--sets=mix,latin,real,languages] [--messages=10000] [--passes=3] [--counts=no] [--device-scale-factor=N] [--cpu-throttle=N]
+//     [--family=<font-family list>] --out=<file.json>
+// --family: the messages' font-family list in place of the bench's. The bench's three families have every character of the
+//   mix, but no kana, Hangul, Hebrew, Devanagari, Thai, Khmer or Burmese: those texts are laid out in the system's fallback
+//   fonts unless a run names a family that has them, so a language's cost under the bench's list is its fallback's too.
 // --device-scale-factor: Chrome's --force-device-scale-factor=N at launch. A forced ratio is a real one: Blink lays out at
 //   it, where a DevTools-emulated one lays out at zoom 1 (rebuild/probes/blink-probes.ts). In Firefox the profile's
 //   layout.css.devPixelsPerPx, which sets the app units of a device pixel as a screen's ratio does.
@@ -42,6 +46,7 @@ const messages = Number(args.get('messages') ?? 10000)
 const passes = Number(args.get('passes') ?? 3)
 const scaleFactor = args.get('device-scale-factor') ?? null
 const throttle = args.has('cpu-throttle') ? Number(args.get('cpu-throttle')) : null
+const family = args.get('family') ?? CHAT_STYLE.font.family
 if (browser !== 'chrome' && throttle !== null) throw new Error('--cpu-throttle is Chrome\'s')
 if (browser === 'webkit-host' && scaleFactor !== null) throw new Error('webkit-host has the screen\'s ratio')
 const outPath = resolve(args.get('out') ?? join(REPO, '.artifacts/bench', `realism-${browser}-${Date.now()}.json`))
@@ -56,7 +61,7 @@ function messagesOf(id: SetId): RealismMessage[] {
 }
 
 const plan: RealismPlan = {
-  runId, browser, engineBuild: build.engine, style: CHAT_STYLE, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes, counts: args.get('counts') !== 'no',
+  runId, browser, engineBuild: build.engine, style: { ...CHAT_STYLE, font: { ...CHAT_STYLE.font, family }, mainFont: `${CHAT_STYLE.font.size}px ${family}` }, codeFont: CHAT_CODE_FONT, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH, passes, counts: args.get('counts') !== 'no',
   sets: sets.map(id => ({ id, messages: messagesOf(id) })),
 }
 
@@ -267,7 +272,7 @@ await session.close()
 server.stop(true)
 const report = {
   schema: 'rebuild-bench-realism-1', status: failure === null ? 'ok' : 'error', failure, browser, build, app: labApp(browser), startedAt: startedAt.toISOString(),
-  durationMs: Date.now() - startedAt.getTime(), deviceScaleFactor: scaleFactor, cpuThrottle: throttle, passes,
+  durationMs: Date.now() - startedAt.getTime(), deviceScaleFactor: scaleFactor, cpuThrottle: throttle, family, passes,
   load: { start: loadStart, end: loadavg()[0]! }, power: execFileSync('pmset', ['-g', 'batt'], { encoding: 'utf8' }).split('\n').slice(0, 2).join(' '),
   head: execFileSync('git', ['-C', REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   result,
