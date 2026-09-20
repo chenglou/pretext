@@ -7,6 +7,9 @@
 //   by the scripts of the line's text;
 // - Canvas calls and characters sent, from scratch (prepare and one fill) and per fill of a kept paragraph at the
 //   other widths, in both modes.
+// - what a store of answers with the page's lifetime would hold: of the questions from scratch, the ones whose context
+//   settings and string no earlier paragraph of the run asked (`new to the page`), over the run and over its last 1,000
+//   paragraphs. No store is built; the questions are counted.
 // A difference says the two don't compute the same thing from the same answers. The answers are the stand-in's, so
 // equality says nothing about a browser: that is the function set's plain check on recorded answers, and tier 2.
 //
@@ -255,10 +258,58 @@ function fillAll(prepared: Prepared, width: number, insets: Input['insets'], tex
   return out
 }
 
-function pass(input: Input, widths: readonly number[], scanMode: 'exact' | 'proven' | 'premise', scanChecked: boolean): Pass {
+// The questions of a run's from-scratch layouts by context settings and string, per mode (tools/store-real-text.ts
+// installLog): how many were asked, and how many no earlier paragraph had asked.
+const SETTINGS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction'] as const
+type Repeats = { seen: Set<string>; asks: number; fresh: number; asksLast: number; freshLast: number }
+const repeats: Record<'exact' | 'word', Repeats> = {
+  exact: { seen: new Set(), asks: 0, fresh: 0, asksLast: 0, freshLast: 0 }, word: { seen: new Set(), asks: 0, fresh: 0, asksLast: 0, freshLast: 0 },
+}
+let onCall: (settings: string, text: string) => void = () => {}
+
+function installLog(): void {
+  const globals = globalThis as unknown as { OffscreenCanvas: new (w: number, h: number) => { getContext(kind: string): Record<string, unknown> & { measureText(text: string): unknown } } }
+  const Inner = globals.OffscreenCanvas
+  class Logged {
+    inner = new Inner(1, 1).getContext('2d')
+    assigned: Record<string, string> = {}
+    measureText(text: string): unknown {
+      let key = ''
+      for (let i = 0; i < SETTINGS.length; i++) key += `${this.assigned[SETTINGS[i]!] ?? ''}|`
+      onCall(key, text)
+      return this.inner.measureText(text)
+    }
+  }
+  for (let i = 0; i < SETTINGS.length; i++) {
+    const name = SETTINGS[i]!
+    Object.defineProperty(Logged.prototype, name, {
+      get(this: Logged): unknown { return this.inner[name] },
+      set(this: Logged, value: unknown): void {
+        this.assigned[name] = String(value)
+        this.inner[name] = value
+      },
+    })
+  }
+  globals.OffscreenCanvas = class { getContext(): Logged { return new Logged() } } as never
+}
+
+function pass(input: Input, widths: readonly number[], scanMode: 'exact' | 'proven' | 'premise', scanChecked: boolean, last: boolean): Pass {
   wordScanState.mode = scanMode
   wordScanState.checked = scanChecked
   const page = installStandInCanvas({ userAgent: USER_AGENT, devicePixelRatio: 2, pageLang: input.env.pageLang })
+  installLog()
+  const tally = repeats[scanMode === 'exact' ? 'exact' : 'word']
+  let scratch = true
+  onCall = (settings, text) => {
+    if (!scratch) return
+    tally.asks++
+    if (last) tally.asksLast++
+    const key = `${settings}\n${text}`
+    if (tally.seen.has(key)) return
+    tally.seen.add(key)
+    tally.fresh++
+    if (last) tally.freshLast++
+  }
   const result: Pass = { lines: [], scratch: { calls: 0, characters: 0 }, kept: { calls: 0, characters: 0, fills: 0 }, error: null }
   try {
     const prepared = prepare(input.paragraph, input.env, false)
@@ -267,6 +318,7 @@ function pass(input: Input, widths: readonly number[], scanMode: 'exact' | 'prov
       const asked = page.asked()
       result.lines.push(fillAll(prepared, widths[w]!, input.insets, text))
       const after = page.asked()
+      scratch = false
       if (w === 0) result.scratch = { calls: after.calls, characters: after.characters }
       else {
         result.kept.calls += after.calls - asked.calls
@@ -294,15 +346,17 @@ const report = {
   scratch: { exact: { calls: 0, characters: 0 }, word: { calls: 0, characters: 0 } },
   kept: { exact: { calls: 0, characters: 0, fills: 0 }, word: { calls: 0, characters: 0, fills: 0 } },
   scans: { proven: 0, premise: 0, refused: {} as Record<string, number> },
+  newToThePage: { exact: { asks: 0, fresh: 0, asksLast: 0, freshLast: 0 }, word: { asks: 0, fresh: 0, asksLast: 0, freshLast: 0 } },
 }
 for (let n = 0; n < all.length; n++) {
   const input = all[n]!
   const widths = (options.get('widths') ?? 'own') === 'own' ? [input.width] : options.get('widths')!.split(',').map(Number)
-  const exact = pass(input, widths, 'exact', false)
+  const last = n >= all.length - 1000
+  const exact = pass(input, widths, 'exact', false, last)
   wordScanState.proven = 0
   wordScanState.premise = 0
   wordScanState.refused = {}
-  const word = pass(input, widths, mode, checked)
+  const word = pass(input, widths, mode, checked, last)
   report.scans.proven += wordScanState.proven
   report.scans.premise += wordScanState.premise
   for (const reason in wordScanState.refused) report.scans.refused[reason] = (report.scans.refused[reason] ?? 0) + wordScanState.refused[reason]!
@@ -346,6 +400,10 @@ for (let n = 0; n < all.length; n++) {
   }
 }
 report.skipped = skipped
+report.newToThePage = {
+  exact: { asks: repeats.exact.asks, fresh: repeats.exact.fresh, asksLast: repeats.exact.asksLast, freshLast: repeats.exact.freshLast },
+  word: { asks: repeats.word.asks, fresh: repeats.word.fresh, asksLast: repeats.word.asksLast, freshLast: repeats.word.freshLast },
+}
 const out = options.get('out')
 if (out !== undefined && out !== '') writeFileSync(resolve(out), `${JSON.stringify(report, null, 2)}\n`)
 const share = (n: number, of: number): string => of === 0 ? 'none' : `${(100 * n / of).toFixed(1)}%`
@@ -356,6 +414,10 @@ console.log(`  layouts with every line decided by the word scan: ${report.layout
 for (const scripts in report.linesByScript) console.log(`  ${scripts}: ${Object.entries(report.linesByScript[scripts]!).map(([k, v]) => `${k} ${v}`).join(', ')}`)
 console.log(`  from scratch, per paragraph: exact ${(report.scratch.exact.calls / report.paragraphs).toFixed(2)} calls, ${(report.scratch.exact.characters / report.paragraphs).toFixed(1)} characters; word scan ${(report.scratch.word.calls / report.paragraphs).toFixed(2)} calls, ${(report.scratch.word.characters / report.paragraphs).toFixed(1)} characters`)
 if (report.kept.exact.fills > 0) console.log(`  kept, per fill at another width: exact ${(report.kept.exact.calls / report.kept.exact.fills).toFixed(2)} calls, ${(report.kept.exact.characters / report.kept.exact.fills).toFixed(1)} characters; word scan ${(report.kept.word.calls / report.kept.word.fills).toFixed(2)} calls, ${(report.kept.word.characters / report.kept.word.fills).toFixed(1)} characters`)
+for (const name of ['exact', 'word'] as const) {
+  const r = report.newToThePage[name]
+  console.log(`  ${name}, from scratch: ${r.asks} questions, ${r.fresh} new to the page (${share(r.asks - r.fresh, r.asks)} asked before); in the last 1,000 paragraphs ${r.asksLast} and ${r.freshLast} (${share(r.asksLast - r.freshLast, r.asksLast)} asked before)`)
+}
 for (let i = 0; i < Math.min(5, report.differing.length); i++) console.log(`  differs: ${JSON.stringify(report.differing[i])}`)
 for (let i = 0; i < Math.min(5, report.errors.length); i++) console.log(`  error: ${JSON.stringify(report.errors[i])}`)
 process.exit(report.differing.length > 0 || report.errors.length > 0 ? 1 : 0)
