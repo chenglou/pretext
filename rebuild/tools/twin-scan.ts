@@ -17,8 +17,9 @@
 // of characters any two cases of the file ask one context in both storages. It is listed under the case that asked the
 // second storage. With per-paragraph contexts the partition by storage had to hold inside a paragraph; with a page's it
 // has to hold across paragraphs (research/PROFILING-START.md, item 1). prepare empties a list that has grown past its
-// bound (src/index.ts), and a place in the list then names another context: that can list a twin that isn't one and can't
-// hide one, since a context that left the list is asked nothing by later cases.
+// bound (src/index.ts), so the scan names a context by the object it is and not by its place in the list: with places,
+// a whole-page scan listed a case whose `8bit` context had taken the place a `16bit` one held before the list was
+// emptied.
 //
 // It works on a scratch copy of the tree's rebuild/src and rebuild/lab with one line added to measure16, after its
 // raw16Of call, which notes the context, the string and canvasString's `twoByte`. The anchor is that call's text: the scan
@@ -43,8 +44,8 @@ import { installStandInCanvas } from './stand-in-canvas.ts'
 const REPO = resolve(import.meta.dir, '../..')
 const SHAPE = 'rebuild/src/engines/blink/shape.ts'
 const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)'
-// The port holds its contexts by reference; a context's place in the paragraph's list names it here.
-const TAP = '  ;(globalThis as { twinScan?: Array<[number, string, boolean]> }).twinScan?.push([p.canvases.indexOf(context), cs.s, cs.twoByte])'
+// The port holds its contexts by reference, and the scan numbers them in the order they are first asked.
+const TAP = '  ;(globalThis as { twinScan?: Array<[object, string, boolean]> }).twinScan?.push([context, cs.s, cs.twoByte])'
 const PAGE_PREDICTOR = 'rebuild/lab/baselines/page-contexts-predictor.ts'
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
 const ENV: PredictEnv = { browser: 'chrome', build: '153.0.8010.50', languages: { engine: 'blink', uiLanguage: 'zh-CN' } }
@@ -129,11 +130,12 @@ if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(report, nul
 // The files' cases through the scratch copy's Chrome predictor, into `report`.
 async function scan(scratch: string, files: readonly string[]): Promise<void> {
   const predictor = await import(join(scratch, page ? PAGE_PREDICTOR : PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
-  const asked: Array<[number, string, boolean]> = []
+  const asked: Array<[object, string, boolean]> = []
   ;(globalThis as { twinScan?: typeof asked }).twinScan = asked
   // Per context and string: the storages asked, in order. A case's own, or with --page the process's, whose predictor keeps
-  // one list of contexts, so a context's place in it names it across cases.
+  // one list of contexts, so a context serves the cases after the one that made it.
   let byQuestion = new Map<string, { context: number; text: string; storages: boolean[] }>()
+  let numbers = new Map<object, number>()
   for (const file of files) for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
     if (line === '' || report.cases >= limit) continue
     const c = JSON.parse(line) as Case
@@ -145,15 +147,23 @@ async function scan(scratch: string, files: readonly string[]): Promise<void> {
     } finally {
       standIn.restore()
     }
-    if (!page) byQuestion = new Map()
+    if (!page) {
+      byQuestion = new Map()
+      numbers = new Map()
+    }
     const sliced = new Set<string>()
     // The questions whose second storage this case asked first: a twin is listed once.
     const found: Array<{ context: number; text: string; storages: boolean[] }> = []
     for (let i = 0; i < asked.length; i++) {
-      const [context, text, twoByte] = asked[i]!
+      const [asker, text, twoByte] = asked[i]!
       // Only a Latin-1-only string has a one-byte spelling.
       if (!/^[\x00-\xff]*$/.test(text)) continue
       if (twoByte) sliced.add(text)
+      let context = numbers.get(asker)
+      if (context === undefined) {
+        context = numbers.size
+        numbers.set(asker, context)
+      }
       const key = `${context}\n${text}`
       const entry = byQuestion.get(key)
       if (entry === undefined) {
