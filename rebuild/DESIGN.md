@@ -1111,7 +1111,15 @@ source range. It makes no fragment, no Blink item and no WebKit display box, and
   rect, the source range and, inspected, the gaps its filling raised. Its types are in `types.ts` (`WebKitFilledLine`,
   `Line`, and `LineRun`, a tagged union of text, soft line break, element and line-spanning runs). `fillLine` is in
   `lines.ts`, `linePieces` and `lineGeometry` in `output.ts`, and `inspectLine` (`index.ts`) is `gaps.ts` `lineGaps`, then
-  `history.ts` `pageHistoryGaps`, then `lineGeometry`.
+  `history.ts` `pageHistoryGaps`, then `lineGeometry`. Since the profiling phase the simple builder writes what a line's
+  leading plain items leave of it in one step (`lines.ts` `commitPlainStretch`): while an item is text of the
+  paragraph's one box with its width kept, a word or one collapsible space without a trailing soft hyphen, and fits, it
+  is a candidate of its own, and the run, the content width, the trimmable content, the wrap opportunity list and
+  `measuredEnd` are what the builder would have left item by item, with the same float32 sums in the same order. The
+  first item of another kind, or that doesn't fit, goes to the builder as before, so every break decision is the
+  builder's. It is a second path through one stretch of the fill, taken for its price: the builder spent about 50 ns an
+  item on bookkeeping where a sum takes 6, and in webkit-host 10,000 plain ASCII chat messages went from 104 to 90 ms
+  from scratch and a layout of a kept message from 2.0 to 0.95 µs (the mix: 146 to 134 ms, 2.8 to 1.8 µs).
 - Gecko's decided line is the start, the band, the last pass's spans as reflow left them, the next position and, inspected,
   the gaps the passes raised with the in-word stand-in offsets they consulted. `fillLine` (`lines.ts`) runs the passes
   alone. `placement.ts` makes its own placed records from the line's reflowed spans (`lines.ts` `Reflowed`,
