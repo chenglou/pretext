@@ -282,15 +282,17 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
   updateTrailingContent(L, line, run, item, width, oldContentLogicalWidth)
 }
 
-// Line::appendTextFast (IL:483-556), the simple builder's variant: its line holds text runs alone while it is filled.
+// Line::appendTextFast (IL:483-556), the simple builder's variant: its line holds text runs alone while it is filled. The
+// source asks the last run for its trailing white space and its layout box whatever the run is, and a run that isn't text
+// has neither, so the item gets a run of its own after one, as in appendText.
 function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: number): void {
   const p = L.p
   const box = p.boxes[item.box]!
-  const last = line.runs[line.runs.length - 1] as TextRun | undefined
-  const willCollapseCompletely = item.isWhitespace && !preservesSpacesAndTabs(box.style) && (last === undefined || hasCollapsibleTrailingWhitespace(last))
+  const last = line.runs[line.runs.length - 1]
+  const willCollapseCompletely = item.isWhitespace && !preservesSpacesAndTabs(box.style) && (last === undefined || (last.kind === 'text' && hasCollapsibleTrailingWhitespace(last)))
   if (willCollapseCompletely) return
   // The run the item expands, or null where it needs a run of its own.
-  const expanded = last === undefined || hasCollapsedTrailingWhitespace(last) || last.box !== item.box || isZeroWidthSpaceSeparator(p, item) ? null : last
+  const expanded = last === undefined || last.kind !== 'text' || hasCollapsedTrailingWhitespace(last) || last.box !== item.box || isZeroWidthSpaceSeparator(p, item) ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
   // The item's run: the one it expands, or one of its own.
   const run = expanded ?? textRun(p, item, lastRunLogicalRight(line), width, null)
