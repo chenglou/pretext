@@ -42,6 +42,9 @@ rules and built one; a second agent attacked it. The attacker's review comes fir
   move a kept context, a new one and the DOM at the same reading, so the list doesn't matter to them.
 - **Counted on the way:** rich messages make 8.9 contexts a message in Gecko, 21 in WebKit and 40 in Blink (a stand-in
   count; nobody timed a rich message in a browser yet), which is what the list saves where it is kept.
+- **Landed the same day:** the rule, the attacker's three changes of wording, and the documents' texts that the two
+  reports below still call "not in the tree" (DESIGN.md §4.6 and its table, research/PERF-LIFETIME.md "What landed",
+  TESTS.md, the bench's and the probes' READMEs, platform-bugs/LEDGER.md entries 15 and 16).
 
 ## Second reading of the kept-contexts study and its rule (x-contexts-heal), 2026-09-20
 
