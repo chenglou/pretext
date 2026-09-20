@@ -16,6 +16,9 @@
 import type { EngineName } from '../src/env.ts'
 import { UNKNOWN_FONT_FACTS, type CssFont, type FontFacts, type LigatureFacts, type LigaturePattern, type ListedFontFacts } from '../src/model.ts'
 import table from './font-facts.json' with { type: 'json' }
+// The cut-grain study's table, on its branch alone: unitsPerEm of the installed families whose faces all have one
+// power-of-two value and no 'trak' or 'fvar' table, read from this Mac's font files by the study's own script.
+import studyUnitsPerEm from './study-units-per-em.json' with { type: 'json' }
 
 type Share = 'all' | 'some' | 'none'
 
@@ -375,6 +378,7 @@ function listedFacts(family: Family, r: Realized, engine: EngineName): ListedFon
     ligatures: sameLigatures ? ligaturesOf(first, engine) : null,
     spacingInputs: sameSpacing ? spacingInputsOf(first, engine) : null,
     scriptLookups: sameLookups ? scriptLookupsOf(first, engine) : null,
+    unitsPerEm: engine === 'blink' ? (studyUnitsPerEm as Record<string, number>)[family.name] ?? null : null,
   }
 }
 
