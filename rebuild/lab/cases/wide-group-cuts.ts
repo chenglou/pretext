@@ -1,4 +1,4 @@
-// Wide-group cuts (prefix 'cuts/'). The Blink port measures a shaping group of 256 zoomed px or more in pieces, because a
+// Wide-group cuts (prefix 'cuts/'; pass 1's one-line cases 'cuts-one-line/'). The Blink port measures a shaping group of 256 zoomed px or more in pieces, because a
 // Canvas total is exact only below that (engines/blink/shape.ts addPieces), and the pieces add up to the group only where
 // the two sides of a cut change nothing in each other. These cases put a line's end within half a px of where the browser
 // fits it, in texts whose cuts fall where shaping crosses them: ligatures and contextual forms inside unbroken words, kerning
@@ -44,7 +44,7 @@ type Text = {
   rotations: number
   letterSpacing?: number
   wordSpacing?: number
-  // The text's parts around an inline box, for a text that has one: the box holds the text from `boxStart` to `boxEnd`.
+  // An inline box with padding on both sides, for a text that has one: it holds the text from `start` to `end`.
   box?: { start: number; end: number; padding: number }
 }
 
@@ -167,7 +167,7 @@ function variants(): Variant[] {
   return out
 }
 
-function caseOf(v: Variant, pass: string, note: string, width: number): Case {
+function caseOf(v: Variant, family: string, note: string, width: number): Case {
   const t = v.t
   const spec: BlockSpec = {
     font: font(v.family, v.size), lang: t.lang, letterSpacing: t.letterSpacing ?? 0, wordSpacing: t.wordSpacing ?? 0, lineHeight: Math.round(v.size * 1.6),
@@ -178,13 +178,13 @@ function caseOf(v: Variant, pass: string, note: string, width: number): Case {
     : [leaf(v.text.slice(0, t.box.start + shift)), el({ start: { padding: t.box.padding }, end: { padding: t.box.padding } }, leaf(v.text.slice(t.box.start + shift, t.box.end + shift))), leaf(v.text.slice(t.box.end + shift))]
   const tree = treeParagraph(spec, parts)
   const paragraph: Paragraph = { ...tree.paragraph, width }
-  return makeCase({ family: `cuts/${pass}/${t.name}`, origin: `generator=wide-group-cuts ${v.key} ${note}`, pageLang: 'en', paragraph, inline: tree.inline, browsers: ['chrome'] })
+  return makeCase({ family: `${family}/${t.name}`, origin: `generator=wide-group-cuts ${v.key} ${note}`, pageLang: 'en', paragraph, inline: tree.inline, browsers: ['chrome'] })
 }
 
 export function generatePass1(): Case[] {
   const cases: Case[] = []
   const all = variants()
-  for (let i = 0; i < all.length; i++) cases.push(caseOf(all[i]!, 'pass1', 'one line', 20000))
+  for (let i = 0; i < all.length; i++) cases.push(caseOf(all[i]!, 'cuts-one-line', 'one line', 20000))
   return cases
 }
 
@@ -220,7 +220,7 @@ function variantCases(v: Variant, row: Row): Case[] {
       }
     }
     if (!(hi > lo)) continue
-    for (let d = 0; d < DELTAS.length; d++) cases.push(caseOf(v, 'pass2', `at=${best} d=${DELTAS[d]}`, Math.round((hi - lo + DELTAS[d]!) * 64) / 64))
+    for (let d = 0; d < DELTAS.length; d++) cases.push(caseOf(v, 'cuts', `at=${best} d=${DELTAS[d]}`, Math.round((hi - lo + DELTAS[d]!) * 64) / 64))
   }
   return mergeCases(cases)
 }
@@ -234,7 +234,7 @@ export function generatePass2(rows: readonly Row[], oneEach: boolean, seed: stri
   let missing = 0
   for (let i = 0; i < all.length; i++) {
     const v = all[i]!
-    const row = byOrigin.get(caseOf(v, 'pass1', 'one line', 20000).origin)
+    const row = byOrigin.get(caseOf(v, 'cuts-one-line', 'one line', 20000).origin)
     if (row === undefined) throw new Error(`no pass-1 row for ${v.key}`)
     const made = variantCases(v, row)
     if (made.length === 0) missing++
