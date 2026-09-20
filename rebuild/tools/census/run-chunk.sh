@@ -9,7 +9,8 @@
 # the chunk with exit 3 and leaves the rows written so far; small chunks stall after 30 s without page activity, corpus
 # chunks (one paragraph of up to 270,000 units a round trip) after 600 s.
 # Env: CASES_FILE runs another case file under the chunk's name (real-text, rerun-file, rerun-reverse, facts-pass-to-fail);
-# ORDER=reverse; PREDICTOR, another predictor than the headline's (rebuild/lab/predictor.ts has the lab's font facts).
+# ORDER=reverse; PREDICTOR, another predictor than the headline's (rebuild/lab/predictor.ts has the lab's font facts);
+# PARTIAL=1 keeps the rows a stalled native run wrote (the case file then names those cases alone): main's run and the scoring.
 set -u
 CASES=.artifacts/research-20260916/census/cases/chunks
 OUT=.artifacts/census-20260919
@@ -19,7 +20,9 @@ cases=${CASES_FILE:-$CASES/$chunk.ndjson}
 size=25
 stall=30000
 case $chunk in corpus*) size=1; stall=600000;; esac
-for kind in rebuild main; do
+kinds="rebuild main"
+if [ -n "${PARTIAL:-}" ]; then kinds=main; fi
+for kind in $kinds; do
   out=$OUT/$browser/$chunk/$kind
   if [ -f "$out/$browser-run.json" ] && grep -q '"status": "ok"' "$out/$browser-run.json"; then echo "skip $out"; continue; fi
   mkdir -p "$out"
@@ -43,6 +46,6 @@ done
 dir=$OUT/$browser/$chunk
 if [ ! -f "$dir/cases.ndjson" ]; then
   echo "== $(date +%T) $browser $chunk scoring"
-  bun rebuild/tools/census/census.ts chunk "$browser" "$chunk" > "$dir/census.log" 2>&1 || { echo "FAILED scoring: $dir"; tail -3 "$dir/census.log"; exit 1; }
+  bun rebuild/tools/census/census.ts chunk "$browser" "$chunk" ${PARTIAL:+--partial} > "$dir/census.log" 2>&1 || { echo "FAILED scoring: $dir"; tail -3 "$dir/census.log"; exit 1; }
 fi
 bash .artifacts/session/compress-rows.sh "census-20260919/$browser/$chunk"

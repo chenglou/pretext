@@ -1,6 +1,6 @@
 // Main's whole wrapping suite on today's library: one record per case and browser, from which every calibration table is
 // counted (tables.ts).
-//   bun rebuild/tools/census/census.ts chunk <browser> <chunk> [--out=<dir>]   # <dir>/<browser>/<chunk>/cases.ndjson
+//   bun rebuild/tools/census/census.ts chunk <browser> <chunk> [--partial] [--out=<dir>]   # <dir>/<browser>/<chunk>/cases.ndjson
 //   bun rebuild/tools/census/census.ts then <browser> <chunk> [--out=<dir>]    # <dir>/<browser>/<chunk>/then.ndjson
 //   bun rebuild/tools/census/census.ts rerun-cases <browser> [<ids file>] [--out=<dir>]   # <dir>/rerun/<browser>-cases.ndjson
 // `chunk` streams the chunk's rows (run-chunk.sh: native observation + today's library, no supplied font facts) and takes
@@ -43,7 +43,8 @@ function nativeKey(row: LabRow): { lines: number; key: string } {
 async function chunkStep(browser: string, chunk: string): Promise<void> {
   const dir = join(OUT, browser, chunk)
   const runOf = (kind: string): { status: string; bundleSha256: string } => JSON.parse(readFileSync(join(dir, kind, `${browser}-run.json`), 'utf8')) as { status: string; bundleSha256: string }
-  if (runOf('rebuild').status !== 'ok' || runOf('main').status !== 'ok') throw new Error(`${dir}: a run did not finish ok`)
+  // --partial: the rows a stalled run wrote before it stopped are whole rows; main's run over the same cases must be ok.
+  if ((runOf('rebuild').status !== 'ok' && !args.includes('--partial')) || runOf('main').status !== 'ok') throw new Error(`${dir}: a run did not finish ok`)
   const mainRows = plainRows(join(dir, 'main', `${browser}-rows.ndjson`))
   const mainIndex = await indexRows(mainRows.path)
   const mainFd = openSync(mainRows.path, 'r')
