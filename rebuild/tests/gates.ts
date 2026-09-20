@@ -71,8 +71,8 @@
 // would hide a failure, so the key is a sha256 over everything a gate reads, and what that is is said once, beside
 // what reads it: every gate reads the working tree and what is installed, which inputsKey hashes and lists, with what
 // it leaves out and why (--cores, what git holds, what unit tests read outside the repository); and what a gate reads
-// of .artifacts (a frozen reference, the painter's frozen bundles, Chrome's set files) is the gate's `reads` list, set
-// where the gate is made (gatesOf), which the key walks. A new gate's input goes in its `reads`.
+// of .artifacts, such as a frozen reference, is the gate's `reads` list, set where the gate is made (gatesOf) with the
+// reason beside it, which the key walks. A new gate's input goes in its `reads`.
 // A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
 // the run's exit code), no case goes to tier 2 and the key is the same after the run as before it: a tree edited, or a
 // reference frozen again, under the run keeps nothing. A reused result is the table and gates.json, not the gates'

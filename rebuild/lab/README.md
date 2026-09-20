@@ -497,10 +497,10 @@ reused result with that run's time, worktree and commit, and exits with its code
 1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over everything a
 gate reads, and `gates.ts` says what that is once, beside what reads it. `inputsKey` hashes what every gate reads (the
 working tree with its uncommitted edits, the installed packages, the flags that choose gates, bun's version and the OS
-release) and says what it leaves out and why (`--cores`: no report depends on it). What a gate reads of `.artifacts`
-(a frozen reference as `check` reads it, the painter's frozen bundles, Chrome's set files) is the gate's `reads` list,
-set where the gate is made (`gatesOf`), and the key walks those lists, so a new gate's input is in the key by being
-named there. A result is kept only when every gate has one, no
+release) and says what it leaves out and why (`--cores`: no report depends on it). What a gate reads of `.artifacts`,
+such as a frozen reference as `check` reads it, is the gate's `reads` list, set where the gate is made (`gatesOf`) with
+the reason beside it, and the key walks those lists, so a new gate's input is in the key by being named there. A
+result is kept only when every gate has one, no
 gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
 run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
 not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which
