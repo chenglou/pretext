@@ -46,7 +46,7 @@ for (let f = 0; f < rows.length; f++) {
     taken.set(key, (taken.get(key) ?? 0) + 1)
     const rtl = given.rtl !== (d.style === 'other-direction')
     const made = treeParagraph({ font: font(family, d.size), lang: given.lang, lineHeight: d.size * 2, overflowWrap: 'break-word', direction: rtl ? 'rtl' : 'ltr', ...style }, [leaf(d.paragraph ?? given.text)])
-    const c = makeCase({ family: 'words2-sum/differing', origin: `tools/words2-sum-cases.ts family=${row.family} part=${d.part} text=${d.text} style=${d.style} size=${d.size} width=${d.width}`, pageLang: 'en', paragraph: { ...made.paragraph, width: d.width }, inline: made.inline })
+    const c = makeCase({ family: 'words2-sum/differing', origin: `tools/words2-sum-cases.ts family=${row.family} text=${d.text}/${d.style} size=${d.size} width=${d.width} part=${d.part}`, pageLang: 'en', paragraph: { ...made.paragraph, width: d.width }, inline: made.inline })
     if (seen.has(c.id)) continue
     seen.add(c.id)
     lines.push(JSON.stringify(c))
