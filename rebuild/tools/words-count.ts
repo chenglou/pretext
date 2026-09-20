@@ -124,8 +124,8 @@ const all = messagesOf(set)
 const messages = options.get('count') === undefined ? all : all.slice(0, Number(options.get('count')))
 
 const SETTINGS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction'] as const
-type Tally = { asks: number; units: number; newAsks: number; newUnits: number }
-const newTally = (): Tally => ({ asks: 0, units: 0, newAsks: 0, newUnits: 0 })
+type Tally = { asks: number; units: number; newAsks: number; newUnits: number; wideAsks: number; wideUnits: number }
+const newTally = (): Tally => ({ asks: 0, units: 0, newAsks: 0, newUnits: 0, wideAsks: 0, wideUnits: 0 })
 let current = newTally()
 const met = new Set<string>()
 
@@ -150,7 +150,13 @@ function installLog(): void {
         current.newAsks++
         current.newUnits += text.length
       }
-      return this.inner.measureText(text)
+      // An answer of 256 px or more is no exact total (shape.ts EXACT16): it says that a range is cut further or a window shrinks.
+      const answer = this.inner.measureText(text) as { width: number }
+      if (answer.width >= 256) {
+        current.wideAsks++
+        current.wideUnits += text.length
+      }
+      return answer
     }
   }
   for (let i = 0; i < SETTINGS.length; i++) {
@@ -251,7 +257,7 @@ for (let m = 0; m < messages.length; m++) {
   }
 }
 
-const per = (t: Tally): Record<string, number> => ({ asks: +(t.asks / messages.length).toFixed(2), units: +(t.units / messages.length).toFixed(1), newAsks: +(t.newAsks / messages.length).toFixed(2), newUnits: +(t.newUnits / messages.length).toFixed(1) })
+const per = (t: Tally): Record<string, number> => ({ asks: +(t.asks / messages.length).toFixed(2), units: +(t.units / messages.length).toFixed(1), newAsks: +(t.newAsks / messages.length).toFixed(2), newUnits: +(t.newUnits / messages.length).toFixed(1), wideAsks: +(t.wideAsks / messages.length).toFixed(2), wideUnits: +(t.wideUnits / messages.length).toFixed(1) })
 const report = {
   tree, set, messages: messages.length, widths, devicePixelRatio: Number(options.get('device-pixel-ratio') ?? 2), checked,
   aMessage: { fromScratch: per(scratch), ofItPrepare: { asks: +(prepareOnly.asks / messages.length).toFixed(2), units: +(prepareOnly.units / messages.length).toFixed(1) }, laterWidths: later.map(per), everyWidthAgain: per(again) },
