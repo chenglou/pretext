@@ -35,7 +35,10 @@ Candidates for browser bug reports found while rebuilding Pretext, reduced to st
 Most likely to be accepted first. Every entry is behaviour against a spec or against the browser's own other path
 (Canvas and DOM, or two kinds of canvas, disagreeing about the same text). The cause was read in source for all but
 entries 10, 12 and 13, where it is inferred. Entries 13 and 14 came later, from the engine owners' reductions in round 4;
-they keep their numbers, and their rows sit where they rank.
+they keep their numbers, and their rows sit where they rank. Entries 15 and 16 came from the study of kept Canvas
+contexts of 2026-09-20 (`rebuild/research/CONTEXTS-HEAL.md`). No page was reduced for either, `pages/index.json`
+doesn't name them and no tracker was searched, so a probe is their evidence until someone reduces one, and their rows
+sit last, unranked.
 
 | # | Browser | Bug | Page |
 |---|---|---|---|
@@ -53,6 +56,8 @@ they keep their numbers, and their rows sit where they rank.
 | 10 | Firefox | After U+1F600 U+FE0E is shaped once in a new content process, plain U+1F600 is a missing-glyph box for a few seconds | `firefox-emoji-missing-after-text-presentation.html` |
 | 11 | Firefox | A tab misses its tab stop when its span starts inside a grapheme cluster | `firefox-tab-after-split-cluster.html` |
 | 12 | Firefox | `letter-spacing` opens a gap inside a joined Arabic word after a mark that a fallback font draws | `firefox-letter-spacing-cursive-fallback-mark.html` |
+| 15 | Firefox | A canvas context first used before Firefox has read the fonts' localized and legacy family names stays on the fallback font for as long as it lives; the DOM and a new context find the family | none yet; probe `rebuild/probes/contexts-start-up.ts` S1 |
+| 16 | WebKit | A kept canvas font misses a loaded FontFace added to a font set that holds no face; a new context and the DOM use it | none yet; probe `rebuild/probes/contexts-start-up.ts` W7, W8 |
 
 New facets of bugs that are already tracked, for a comment on the existing report instead of a new one:
 
@@ -345,6 +350,77 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 - **Pretext:** main has no inline boxes inside a cluster. The rebuild can't see the shared cluster or the advance's sign
   from Canvas, so it doesn't predict it: the rows stay failures under its `in-word-prefix` gap, whose reading names this
   function (3 held-out lab rows in `runs/word-spacing-spans` and 6 fresh ones).
+
+## 15. Firefox: a canvas context first used before the late family names arrive stays on the fallback font
+
+- **Browser:** Firefox 156.0, a browser that has just started. macOS 27.0.
+- **Steps:** no page yet. In a new browser, make an OffscreenCanvas context with
+  `font = '32px "ヒラギノ角ゴシック", monospace'` and measure `Hamburgefonstiv 0123` at once; three seconds later measure
+  again on the same context and on a new one, beside a DOM span in the same font.
+  `rebuild/probes/contexts-start-up.ts` S1 does this for four such names and eleven ways of touching the context.
+- **Expected:** the kept context measures what the DOM and a new context measure.
+- **Actual:** 385.33 px (monospace) everywhere at the start. After 0.6 to 1.8 s a new context and the DOM span measure
+  369.25 px (Hiragino Sans). The first context stays at 385.33 px for as long as it lives. Assigning the same font,
+  another font and back, `letterSpacing`, and `fontKerning` or `lang` changed and back from the start don't heal it.
+  `reset()` and a resize, each followed by the settings again, don't heal it either, nor does a font set that used a
+  `src: local()` rule. The same for the Chinese name of PingFang SC, the Korean name of Apple SD Gothic Neo and the
+  English legacy family name `Avenir Next Condensed Heavy`. Of 22 family names from common CSS font lists 9 behave so
+  on this Mac, `"ヒラギノ角ゴ ProN W3"` among them (`rebuild/probes/contexts-heal-attack.ts` H1). A change of the page's
+  FontFaceSet heals every such context. A page that waits twelve seconds first shows nothing. English canonical names
+  (`"Hiragino Sans"`), generic keywords and a family that doesn't exist never moved in any run.
+- **Source:** the font group resolves its list once (`F/gfx/thebes/gfxTextRun.cpp:1917-1990`); the late names arrive by
+  `FontList::SetAliases`, which moves no generation (`F/gfx/thebes/SharedFontList.cpp:1057-1116`), and by
+  `font-info-updated`, which only `PresShell` observes (`F/layout/base/PresShell.cpp:11042-11047`); the context's own
+  font group cache hands the old group back (`F/dom/canvas/CanvasRenderingContext2D.cpp:4409-4478`). `reset()` reaches
+  `SetInitialState` (`CanvasRenderingContext2D.h:124-128`, `.cpp:1871`) and leaves the context's cache of font groups
+  alone (`:4457-4466`, `:4606-4608`). The names are read 8 s after start-up, 60 s on Windows
+  (`gfx.font_loader.delay`, `F/modules/libpref/init/StaticPrefList.yaml:7831-7838`), or from the first lookup of a name
+  that isn't ASCII, or of an ASCII name with a space whose front part is a family
+  (`F/gfx/thebes/gfxPlatformFontList.cpp:1752-1781`).
+- **How sure:** high on the behaviour (2 of 2 S1 runs, the first form's run, 4 of 4 of the earlier A3 and A8 runs, and
+  the second reading's S1, H1, H2 and H5 runs). High on the cause: the once-only healing by `fontKerning` and the
+  healing by a never-seen spelling are what the cache's keys predict. Windows and Linux are from source only.
+- **Tracker:** not searched.
+- **What a page can do:** name its families by their canonical English names (`"Hiragino Sans"`, not
+  `"ヒラギノ角ゴシック"`), which resolve from the start. A font list that names the family in English right after its
+  localized name, as the classic Japanese lists do, finds the same font through the English name at once (from the
+  source's lookup order, not probed).
+- **Pretext:** why Gecko's contexts are one prepared paragraph's, whatever list the caller keeps (`rebuild/src/index.ts`
+  `prepare`). The rule ends the damage with the paragraphs prepared inside the window, which is from the browser's
+  start until the late names are in. Those stay wrong until the page prepares them again, which nothing tells it to
+  do, and one first filled after the names arrived measures with two fonts (`rebuild/tools/contexts-heal-attack-probe.ts`
+  K1: 6 lines where the DOM has 3; K3: a word broken after its first character). Main keeps one context and assigns it
+  each font string in turn (`src/measurement.ts:127-176`), which is S1's "another string and back", so main's context
+  is stale the same way, on top of the widths its cache holds. What would give Gecko its list back, and with it ×0.92
+  on the chat mix and ×0.75 on plain ASCII: Firefox telling Canvas font groups about `font-info-updated`.
+
+## 16. WebKit: a kept canvas font misses a loaded FontFace added to a font set that holds no face
+
+- **Browser:** WebKit 22625.1.29.11.27 in the lab's WKWebView host. macOS 27.0.
+- **Steps:** no page yet. With no `@font-face` rule and a `document.fonts` that holds no face, make an OffscreenCanvas
+  context with `font = '32px "Late", monospace'` and measure; then `const f = new FontFace('Late', 'url(...)'); await
+  f.load(); document.fonts.add(f)`; measure again on the same context and on a new one.
+  `rebuild/probes/contexts-start-up.ts` W7 and W8; W1 and W4 with a FontFace made from bytes.
+- **Expected:** both measure with the loaded face.
+- **Actual:** the new context measures 295.97 px, the kept one stays at 384.06 px. The same font string assigned again
+  doesn't heal it; another font string and back does. It heals by itself when the face was added before it loaded (W2,
+  W5), when it came by an `@font-face` rule (W3, W6), when the set already held another face (W9), and when a second
+  face is added after it (W10). The same after the set was emptied again (add, delete, add a loaded face: 384.06
+  against 295.97 px), and for an installed family that a loaded FontFace of the same name takes over (324.54 against
+  295.97 px; `rebuild/probes/contexts-heal-attack.ts` H4, H3).
+- **Source:** `W/platform/graphics/FontCascadeCache.cpp:104-115` leaves the font selector out of the key while
+  `isSimpleFontSelectorForDescription` holds, which is while the set has no face (`W/css/CSSFontSelector.cpp:526-539`;
+  its count includes the faces of `@font-face` rules, so a page with any rule in effect is never in this case), and
+  `CSSFontFaceSet::add` tells its observers before it inserts the face (`W/css/CSSFontFaceSet.cpp:203-209`), as
+  `remove` does before it removes (`:256-264`). So the kept context's font asks again under the key without the font
+  set and gets the fonts it had (`FontProxy::fontsNeedUpdate`, `W/html/canvas/CanvasRenderingContext2DBase.cpp:478-506`).
+- **How sure:** high on the behaviour (one run a probe, ten probes that agree with each other and with the 2026-09-19
+  `contexts-font-load` run; W8, W9 and H3, H4 in the second reading). High on the cause: W9, W10 and H4 were written
+  from it and came out as it says.
+- **Tracker:** not searched.
+- **Pretext:** WebKit's contract for a page's list of contexts (`rebuild/src/index.ts` `prepare`, DESIGN.md §4.6): a
+  page that adds loaded faces starts a new list after it, where it prepares its paragraphs again. Making a kept
+  context look again costs 85% of a new one, so the library doesn't.
 
 ---
 
