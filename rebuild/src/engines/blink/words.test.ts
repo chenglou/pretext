@@ -91,8 +91,8 @@ describe('blink word pieces', () => {
     expect(prepared('Mono', `xxxx xx${SHY}xx xxxx`).groups[0]!.cuts).toEqual([0, 15])
   })
 
-  test('a window side that holds no script of its own takes the next piece in', () => {
-    const text = 'xxxx, xxxx xxxx'
+  test('in a segmented paragraph a window side that holds no script of its own takes the next piece in', () => {
+    const text = `xxxx, xxxx xxx${String.fromCodePoint(0x3c9)}`
     const p = prepared('Neutral', text)
     expect(p.groups[0]!.cuts).toEqual([0, 6, 11, 15])
     asked = []

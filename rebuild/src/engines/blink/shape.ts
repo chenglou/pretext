@@ -658,9 +658,12 @@ function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
   return false
 }
 
-// Whether [from, to) holds a character other than white space and none with a script of its own: measured alone, Canvas
-// resolves such a range's script over the string, where the paragraph resolves it over its run (script-context).
+// Whether [from, to) of a segmented paragraph holds a character other than white space and none with a script of its own:
+// measured alone, Canvas resolves such a range's script over the string, where the paragraph resolves it over its run
+// (script-context). An unsegmented paragraph's windows stay as they were: what they measure was held against the browser
+// with them.
 function holdsNoScript(p: BlinkPrepared, from: number, to: number): boolean {
+  if (!p.segmented) return false
   let other = false
   for (let i = from; i < to;) {
     const cp = p.text.codePointAt(i)!
@@ -727,11 +730,13 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !holdsNoScript(p, a, k) && !holdsNoScript(p, k, b)))
 }
 
-// The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, and is measured
-// once with its trailing space, which is what a page's words repeat. The offset between two words is a cut where it
+// The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character
+// that a lookup doesn't skip (a word of U+200B and a space would hide the letter before it from the window of the next
+// word's cut), and is measured once with its trailing space, which is what a page's words repeat. The offset between two words is a cut where it
 // passes the safe test with the two words as the wide window: the two measured together are what they measure apart, and
-// the pair window shows 0 (where the two are 256 zoomed px or more, the test as addPieces makes it). A space that doesn't
-// pass is no cut. What is left between two cuts and isn't one word below 256 zoomed px (words whose space didn't pass, a
+// the pair window shows 0. Two words of 256 zoomed px or more have no exact total to hold their sum against, and a window
+// shrunk to fit can end at the space, where it can't see what the letter before the space does: such an offset is no cut
+// either. A space that doesn't pass is no cut. What is left between two cuts and isn't one word below 256 zoomed px (words whose space didn't pass, a
 // long word, text without spaces) is cut as before (addPieces). So no range of 256 zoomed px or more is measured whole
 // where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
 // A group of an unsegmented paragraph that holds SHY has no words: there a string without a space leaves SHY out and a
@@ -743,7 +748,8 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
   const starts = [group.start]
   const words = p.segmented || !holdsSoftHyphen(p, group.start, group.end)
   for (let k = group.start + 1; words && k < group.end; k++) {
-    if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(p.text.charCodeAt(k)) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) starts.push(k)
+    const cp = p.text.codePointAt(k)!
+    if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(cp) && !isDefaultIgnorableHarfBuzz(cp) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) starts.push(k)
   }
   starts.push(group.end)
   const word16: number[] = []
@@ -751,16 +757,15 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
   const passes = [true]
   for (let i = 1; i + 1 < starts.length; i++) {
     const whole = measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end)
-    passes.push(whole < EXACT16
-      ? whole === word16[i - 1]! + word16[i]! && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0
-      : passesSafeTest(sh, g, starts[i]!, starts[i - 1]!, starts[i + 1]!, whole))
+    passes.push(whole < EXACT16 && whole === word16[i - 1]! + word16[i]! && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
   }
   passes.push(true)
   // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
   // cuts around it) is the one that just showed 0.
   for (let i = 1; i + 1 < starts.length && keepsByOffset(sh, g, group.start, group.end); i++) {
-    if (passes[i - 1]! && passes[i]! && passes[i + 1]! && word16[i - 1]! < EXACT16 && word16[i]! < EXACT16 && !holdsNoScript(p, starts[i - 1]!, starts[i]!) &&
-      !holdsNoScript(p, starts[i]!, starts[i + 1]!)) group.wide16[starts[i]! - group.start] = 0
+    if (passes[i - 1]! && passes[i]! && passes[i + 1]! && !holdsNoScript(p, starts[i - 1]!, starts[i]!) && !holdsNoScript(p, starts[i]!, starts[i + 1]!)) {
+      group.wide16[starts[i]! - group.start] = 0
+    }
   }
   for (let i = 0; i + 1 < starts.length;) {
     let j = i + 1
