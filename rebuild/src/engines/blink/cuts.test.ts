@@ -1,17 +1,19 @@
-// The cut of a shaping group of 256 zoomed px or more (shape.ts addPieces, measureGroups; gaps.ts cutAdjustment) on a
-// stand-in Canvas where every code point is 10px wide at 16px. The text is 38 units and 380px, so it is cut once, at the
-// offset nearest its middle beside a space: 19, after the space and before `V`. Family `Kern` kerns a space with `V` by
-// -4px; family `Context` takes 2px more off where `x` stands before that space, which a window of one cluster on each
-// side doesn't show; family `Mono` adjusts nothing. Measured strings carry U+2028 for U+0020 (shape.ts).
+// The cut of a shaping group of 256 zoomed px or more (shape.ts addPieces, measureGroups; gaps.ts unsafeCut) on a stand-in
+// Canvas where every code point is 10px wide at 16px. TEXT is 38 units and 380px, so it is cut once; its middle, offset
+// 19, is after a space and before `V`. Family `Kern` kerns a space with `V` by -4px; family `Context` takes 2px more off
+// where `x` stands before that space, which a window of one cluster on each side doesn't show; family `Every` kerns every
+// two code points by -1px; family `Mono` adjusts nothing. IN_WORD has its middle inside a word. Measured strings carry
+// U+2028 for U+0020 (shape.ts).
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, paragraphGaps, prepare } from './index.js'
 
 const TEXT = 'xxxx xxxx xxxx xxx Vxxx xxxx xxxx xxxx'
+const IN_WORD = 'xxxxxxx xxxxxxx xxxxxxx xxxxxxx xxxxxx'
 const LS = String.fromCodePoint(0x2028)
 
-let asked = 0
+let asked: string[] = []
 
 function count(text: string, part: string): number {
   return text.split(part).length - 1
@@ -26,9 +28,10 @@ class Context {
   textRendering = 'auto'
   direction = 'ltr'
   measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
-    asked++
+    asked.push(text)
     const size = parseFloat(/([\d.]+)px/.exec(this.font)![1]!)
-    const kern = this.font.includes('Mono') ? 0 : 4 * count(text, `${LS}V`) + (this.font.includes('Context') ? 2 * count(text, `x${LS}V`) : 0)
+    const kern = this.font.includes('Mono') ? 0 : this.font.includes('Every') ? Math.max(0, text.length - 1)
+      : 4 * count(text, `${LS}V`) + (this.font.includes('Context') ? 2 * count(text, `x${LS}V`) : 0)
     return { width: (text.length * 10 - kern) * size / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -42,10 +45,10 @@ const env: BlinkEnvironment = {
   dictionaryBreaks: { kind: 'unavailable' },
 }
 
-function paragraphIn(family: string): Paragraph {
+function paragraphIn(family: string, text: string = TEXT): Paragraph {
   return {
     font: { family, size: 16, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal',
-    wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, content: [{ kind: 'text', text: TEXT }], lineHeight: 20, direction: 'ltr',
+    wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, content: [{ kind: 'text', text }], lineHeight: 20, direction: 'ltr',
     lang: 'en', textIndent: 0, textAlign: 'start',
   }
 }
@@ -74,25 +77,28 @@ function cutGaps(family: string): { start: number; end: number }[] {
 }
 
 describe('blink cuts of a wide group', () => {
-  test('the pieces and the adjustment at a cut that kerns add up to the group', () => {
+  test('the pieces add up to the group: the cut moves off an offset where the two sides change each other', () => {
     expect(lineCount('Mono', 380)).toBe(1)
     expect(lineCount('Mono', 378)).toBe(2)
     expect(lineCount('Kern', 376)).toBe(1)
     expect(lineCount('Kern', 374)).toBe(2)
+    expect(lineCount('Context', 374)).toBe(1)
+    expect(lineCount('Context', 372)).toBe(2)
   })
 
-  test('the search asks Canvas nothing: a font that adjusts beside the cut is asked what one that adjusts nothing is', () => {
-    asked = 0
-    prepare(paragraphIn('Mono'), env, false, [])
-    const mono = asked
-    asked = 0
-    prepare(paragraphIn('Kern'), env, false, [])
-    expect(asked).toBe(mono)
+  test('the search asks about no offset inside a word while an offset beside a space passes', () => {
+    asked = []
+    prepare(paragraphIn('Mono', IN_WORD), env, false, [])
+    expect(asked.includes('xx')).toBe(false)
+    asked = []
+    prepare(paragraphIn('Every', IN_WORD), env, false, [])
+    expect(asked.includes('xx')).toBe(true)
   })
 
-  test('an inspected paragraph reports the cut whose wide window shows another adjustment than the one added', () => {
+  test('an inspected paragraph reports the cut of a group where no offset passes', () => {
     expect(cutGaps('Mono')).toEqual([])
     expect(cutGaps('Kern')).toEqual([])
-    expect(cutGaps('Context')).toEqual([{ start: 19, end: 19 }])
+    expect(cutGaps('Context')).toEqual([])
+    expect(cutGaps('Every')).toEqual([{ start: 19, end: 19 }])
   })
 })

@@ -247,23 +247,16 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   if (canvasScripts !== null) scriptContext(sink, p, cs, canvasScripts)
 }
 
-// ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces, measureGroups) ----
+// ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces) ----
 
 export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void {
   if (sink === null) return
   addGap(sink, 'float32-precision', p.styles[p.groups[g]!.style]!.run, 'a grapheme cluster of 256 zoomed px or more', sourceRange(p, a, b))
 }
 
-// The pieces on both sides of cut k, with the adjustment `d` that measureGroups adds between them, are the group's shaping
-// only where d is all the shaping did across k: glyph clusters part there, no letters join across it, and the wide window
-// over the two pieces shows d (shape.ts adjust16: d itself before white space, and elsewhere the pair window's, which a
-// longer context can differ from). Elsewhere the line that holds the cut can be off by the rest.
-export function cutAdjustment(sink: GapSink, sh: Shaper, g: number, k: number, d: number): void {
+export function unsafeCut(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
   if (sink === null) return
-  const p = sh.p
-  const group = p.groups[g]!
-  if (isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && adjust16(sh, g, k, group.start, group.end) === d) return
-  addGap(sink, 'unsafe-to-break', p.styles[group.style]!.run, 'a shaping group of 256 zoomed px or more is measured in pieces, and at this cut the pieces and the adjustment added between them can\'t be vouched for: glyph clusters don\'t part or letters join there, or the wide window over both pieces shows another adjustment than the pair window\'s', sourceOffsetAt(p, k))
+  addGap(sink, 'unsafe-to-break', p.styles[p.groups[g]!.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there', sourceOffsetAt(p, k))
 }
 
 // ---- A HanKerning trim the port adds to a shaping call (shape.ts) ----
