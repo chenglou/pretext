@@ -97,9 +97,14 @@ export function rangeAdvance(p: GeckoPrepared, prov: Provider, a: number, b: num
 // goes to the next line; fresh c-ca72eae85de1aead: a span holding lam alone scans it as its 280 au share of lam-alef).
 function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number, a: number, b: number, consulted: number[] | null): number {
   if (b <= a) return 0
-  const end = glyphBefore(p, prov.run, scanOffset(p, prov, from, to, b), consulted)
-  const start = glyphBefore(p, prov.run, scanOffset(p, prov, from, to, a), consulted)
+  const end = scanBefore(p, prov, from, to, b, consulted)
+  const start = scanBefore(p, prov, from, to, a, consulted)
   return end - start + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
+}
+
+// The glyph advance before position t of a scan of [from, to).
+function scanBefore(p: GeckoPrepared, prov: Provider, from: number, to: number, t: number, consulted: number[] | null): number {
+  return glyphBefore(p, prov.run, scanOffset(p, prov, from, to, t), consulted)
 }
 
 // The offset whose advance stands for position t in a scan of [from, to): the end of a ligature group that lies within the
@@ -192,6 +197,8 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
   let breakPriority = priorityIn
   let width = 0
   let pending = aStart
+  // The scan's glyph advance before `pending`, read once: a candidate's pending text starts where the one before's ended.
+  let pendingBefore: number | null = null
   let trimmableChars = 0
   let trimStart = aStart
   let lastBreak = -1
@@ -214,7 +221,13 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
-        const pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted)
+        let pendingAdvance = 0
+        if (i > pending) {
+          const before = scanBefore(p, prov, aStart, end, i, consulted)
+          pendingBefore ??= scanBefore(p, prov, aStart, end, pending, consulted)
+          pendingAdvance = before - pendingBefore + spacingIn(p, prov, pending, i, true) + tabsIn(prov, pending, i)
+          pendingBefore = before
+        }
         const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted) : 0
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
