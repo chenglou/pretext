@@ -305,9 +305,10 @@ function trash(path: string): void {
 
 // Chrome and Firefox start through LaunchServices without activation (`open -g`), each in its own profile under
 // .artifacts/profiles so the session watchdog sees them. macOS 27 blocks shell-spawned Firefox from its data folders.
-// One attempt only: a failed launch can show the user a dialog.
+// One attempt only: a failed launch can show the user a dialog. `open` gets a minute: on a machine at a load of 100 it
+// took more than 15 s to return, which is a slow launch and not a failed one (a tier 2 job was lost to it on 2026-09-20).
 async function launchApp(app: string, executable: string, marker: string, profile: string, appArgs: string[]): Promise<Session> {
-  execFileSync('open', ['-n', '-g', '-a', app, '--args', ...appArgs], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 15_000 })
+  execFileSync('open', ['-n', '-g', '-a', app, '--args', ...appArgs], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 60_000 })
   let pid: number | null = null
   for (let i = 0; i < 100 && pid === null; i++) {
     pid = findPid(executable, marker)
