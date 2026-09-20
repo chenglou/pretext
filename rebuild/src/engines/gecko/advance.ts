@@ -109,8 +109,8 @@ function windowAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numbe
 // - no optional ligature as wide as its parts spans it (ligatureAcross), and the two cells hold as many ligature groups
 //   apart as together (groupsIn), so no group that required forms made spans it.
 // A cut that doesn't hold leaves its two cells in one window, measured whole. The windows must add up to the unit, which
-// ties every cut to the unit's own shaping; a unit of 2^18 px or more never does (gaps.ts wideUnit) and keeps the long
-// questions.
+// ties every cut to the unit's own shaping. A unit of 2^18 px or more, whose width Canvas no longer gives to the app
+// unit (gaps.ts wideUnit), has windows only where its float width is exact all the same (1,400 Han characters at 200px).
 function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoUnit[] {
   // Canvas can't count the groups of a unit that starts inside a cluster (inWordAdvance).
   if (p.clusterStart[unit.tStart] === 0) return []

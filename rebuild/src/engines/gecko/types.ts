@@ -207,8 +207,8 @@ export type InWord = {
   // and another width consult it again.
   offsets: (InWordEntry | null)[]
   // A long unit's windows in text order (advance.ts windowsOf): stretches between cuts that Canvas showed nothing crosses,
-  // each a unit of its own to every recipe, with `startAdvance` the advance before it. null until an offset asks; empty
-  // on a window, in a unit of at most 32 code units, and where no cut held.
+  // each a unit of its own to every recipe, with `startAdvance` the advance before it. null until an offset asks, and
+  // for ever in a unit of at most 32 code units; empty on a window and where no cut held.
   windows: GeckoUnit[] | null
 }
 
