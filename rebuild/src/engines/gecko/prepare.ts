@@ -869,8 +869,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   let anyTab = false
   for (let r = 0; r < builds.length; r++) anyTab ||= builds[r]!.hasTab
   const tabSpacingPrefix = anyTab ? new Int32Array(T + 1) : null
-  for (let k = 0; k < frames.length; k++) {
-    const f = frames[k]!
+  for (let fi = 0; fi < frames.length; fi++) {
+    const f = frames[fi]!
     const b = builds[f.textRun]!
     const run = f.run
     const leaf = leaves[run]!
