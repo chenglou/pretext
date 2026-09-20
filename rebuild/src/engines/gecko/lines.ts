@@ -5,7 +5,7 @@
 // (GeckoFilledLine); placing them, the line's pieces and its inspection are read from that record (placement.ts, pieces.ts,
 // inspect.ts), and nothing writes it after the fill.
 import type { FillResultOf, Gap, LineSlot } from '../../model.js'
-import { advanceBefore, advanceSlack, codePointAtT, groupAround, roughAdvanceBefore } from './advance.js'
+import { advanceBefore, advanceSlack, advancesAreSuffixes, codePointAtT, groupAround, roughAdvanceBefore } from './advance.js'
 import * as gaps from './gaps.js'
 import type { GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
@@ -198,7 +198,7 @@ export const wordScanState = {
 
 // Why the word scan leaves a scan to the engine's loop.
 type Refusal = 'break-spaces' | 'soft-hyphen' | 'starts-inside-unit' | 'ends-inside-unit' | 'trim-inside-unit' | 'inner-candidates' |
-  'inner-letter-spacing' | 'inner-space' | 'unit-overflows' | 'breaks-inside-unit'
+  'inner-letter-spacing' | 'inner-space' | 'inner-prefix-widths' | 'unit-overflows' | 'breaks-inside-unit'
 
 // The glyph advance before a shaping unit's start, or the run's end: what advanceBefore gives there, which asks nothing.
 function unitStartAdvance(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
@@ -245,7 +245,10 @@ function lastInnerCandidate(p: GeckoPrepared, unit: GeckoUnit, natural: boolean,
 // suffix of a shaped word has a negative advance; a detailed glyph's advance is signed and nothing clamps it,
 // gfxHarfBuzzShaper.cpp:1699-1719). Then every inner candidate fits, none aborts, and the last of them is the scan's last
 // break until a later candidate is accepted; a scan that would break at it is refused, since the edge's advance is
-// asked of Canvas. Letter spacing and a trimmable space inside the unit would enter the inner tests, so they refuse.
+// asked of Canvas. Letter spacing and a trimmable space inside the unit would enter the inner tests, so they refuse, and
+// so does a unit whose inner advances the port takes from a prefix's width (advance.ts advancesAreSuffixes), which a
+// narrow ligature puts past the unit's end: what is left of the premise is that Canvas measures no suffix below nothing
+// and no suffix narrower than the share of a pair's adjustment it holds.
 function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number, aWidth: number, suppress: 'none' | 'initial',
   canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean, wantTrimmable: boolean, priorityIn: number): Measured | Refusal {
   const run = prov.run
@@ -295,6 +298,7 @@ function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: 
       if (prov.letterSpacingAu !== 0) return 'inner-letter-spacing'
       if ((inner & INNER_SPACE) !== 0) return 'inner-space'
       if (unitsAdvance(p, prov, aStart, unit.tEnd) > aWidth) return 'unit-overflows'
+      if (!advancesAreSuffixes(p, run, unit)) return 'inner-prefix-widths'
       usedPremise = true
       lastBreak = lastInnerCandidate(p, unit, (inner & INNER_NATURAL) !== 0, canWordWrap)
       lastBreakUnit = k

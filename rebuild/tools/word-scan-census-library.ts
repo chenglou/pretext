@@ -33,9 +33,11 @@ function count(p: GeckoPrepared): void {
       census.offsets++
       const au = entry.advance.au
       if (au < unit.startAdvance) census.belowStart++
-      if (au <= unit.startAdvance + unit.au) continue
-      census.aboveEnd++
-      above = true
+      if (au >= unit.startAdvance && au <= unit.startAdvance + unit.au) continue
+      if (au > unit.startAdvance + unit.au) {
+        census.aboveEnd++
+        above = true
+      }
       if (census.examples.length < 40) {
         let text = ''
         for (let i = unit.tStart; i < unit.tEnd; i++) text += String.fromCharCode(p.tUnits[i]!)
