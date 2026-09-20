@@ -123,6 +123,20 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
+  // What filling reads at the edges of words, kept where it is first computed (shape.ts measureGroups, groupPrefix16,
+  // safeToBreak), one entry per cut but the last. It is read and written on a paragraph prepared plain alone: an inspected
+  // one measures again, because measuring raises the gaps of the line that reads.
+  // The 16.16 advance sum before each cut as a position reads it: prefixAtCut less the part of the cut's adjustment that
+  // the glyph after the cut carries, less the start trim.
+  positionAtCut: number[]
+  // Whether the cuts' positions never run backwards, which the search over them needs (line-breaker.ts wordCandidate).
+  cutsSorted: boolean
+  // Per piece, the offset where its trailing spaces start, or -1 for a piece without any; and the advance sum before that
+  // offset, NaN until a line reads it.
+  wordEnds: Int32Array
+  positionAtWordEnd: Float64Array
+  // Per cut, whether the offset is safe to break before: -1 until a line asks, then 0 or 1.
+  safeAtCut: Int8Array
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its

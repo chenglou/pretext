@@ -37,7 +37,7 @@ import {
   isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
+import type { BlinkGroup, BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
 
 const f32 = Math.fround
 // Float32 holds every 16.16 integer below 2^24, 256 px.
@@ -709,11 +709,25 @@ export function measureGroups(sh: Shaper): void {
     group.cuts = cuts
     group.prefixAtCut = prefix
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window).
+    const positions = [0]
+    let sorted = true
     for (let i = 1; i < cuts.length - 1; i++) {
       const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       cutAdjustment(sh.gaps, sh, g, cuts[i]!, d)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
+      positions.push(prefix[i]! - d + adjustBefore16(sh, g, d, cuts[i]!, group.start, group.end) - group.startTrim16)
+      if (positions[i]! < positions[i - 1]!) sorted = false
     }
+    group.positionAtCut = positions
+    group.cutsSorted = sorted
+    group.wordEnds = new Int32Array(cuts.length - 1).fill(-1)
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      let e = cuts[i + 1]!
+      while (e > cuts[i]! && p.text.charCodeAt(e - 1) === 0x20) e--
+      if (e > cuts[i]! && e < cuts[i + 1]!) group.wordEnds[i] = e
+    }
+    group.positionAtWordEnd = new Float64Array(cuts.length - 1).fill(NaN)
+    group.safeAtCut = new Int8Array(cuts.length - 1).fill(-1)
   }
 }
 
@@ -782,12 +796,32 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
     if (cuts[mid]! <= k) lo = mid
     else hi = mid - 1
   }
+  // What a plain paragraph keeps at the edges of words (types.ts BlinkGroup).
+  const plain = sh.gaps === null
+  if (plain && cuts[lo] === k) return group.positionAtCut[lo]!
+  const kept = plain && group.wordEnds[lo] === k
+  if (kept && !Number.isNaN(group.positionAtWordEnd[lo]!)) return group.positionAtWordEnd[lo]!
   const d = positionAdjust16(sh, g, k, group.start, group.end)
   const pair = adjustBefore16(sh, g, d, k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
   const base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
+  if (kept) group.positionAtWordEnd[lo] = base - group.startTrim16
   return base - group.startTrim16
+}
+
+// The index of the cut at offset k of a group, or -1.
+export function cutIndexAt(group: BlinkGroup, k: number): number {
+  const cuts = group.cuts
+  let lo = 0
+  let hi = cuts.length - 2
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (cuts[mid]! === k) return mid
+    if (cuts[mid]! < k) lo = mid + 1
+    else hi = mid - 1
+  }
+  return -1
 }
 
 // Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning
@@ -893,8 +927,13 @@ function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
       if (k <= group.start) return group.startTrim16 === 0
       if (k >= group.end) return true
       if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
-      return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
+      // What a plain paragraph keeps at a cut (types.ts BlinkGroup).
+      const at = sh.gaps === null ? cutIndexAt(group, k) : -1
+      if (at >= 0 && group.safeAtCut[at]! >= 0) return group.safeAtCut[at] === 1
+      const safe = isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
         pairAdjust16(sh, sr.group, k, group.start, group.end) === 0
+      if (at >= 0) group.safeAtCut[at] = safe ? 1 : 0
+      return safe
     }
   }
 }
