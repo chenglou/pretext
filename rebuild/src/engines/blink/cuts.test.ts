@@ -51,7 +51,7 @@ function paragraphIn(family: string): Paragraph {
 }
 
 function lineCount(family: string, width: number): number {
-  const prepared = prepare(paragraphIn(family), env, false)
+  const prepared = prepare(paragraphIn(family), env, false, [])
   let lines = 0
   let start = firstLine(prepared)
   while (start !== null) {
@@ -64,7 +64,7 @@ function lineCount(family: string, width: number): number {
 }
 
 function cutGaps(family: string): { start: number; end: number }[] {
-  const gaps = paragraphGaps(prepare(paragraphIn(family), env, true))
+  const gaps = paragraphGaps(prepare(paragraphIn(family), env, true, []))
   const at: { start: number; end: number }[] = []
   for (let i = 0; i < gaps.length; i++) {
     const gap = gaps[i]!
@@ -83,10 +83,10 @@ describe('blink cuts of a wide group', () => {
 
   test('the search asks Canvas nothing: a font that adjusts beside the cut is asked what one that adjusts nothing is', () => {
     asked = 0
-    prepare(paragraphIn('Mono'), env, false)
+    prepare(paragraphIn('Mono'), env, false, [])
     const mono = asked
     asked = 0
-    prepare(paragraphIn('Kern'), env, false)
+    prepare(paragraphIn('Kern'), env, false, [])
     expect(asked).toBe(mono)
   })
 
