@@ -1558,6 +1558,25 @@ calls where it made 478.0, and one Chinese unit of 9,428 units sends 0.23 M unit
 the same. In the output one number moves: an `in-word-prefix` gap's detail prints W(unit), which is the width of what
 the recipe measured in, inside a long unit the window's (39 tier cases).
 
+The item's review (2026-09-20) held the port with windows against the port without them in pinned Firefox, the port
+itself and not the rule as page script: `tools/windows-attack-probe.ts`, 531 paragraphs without spaces and 106,457
+cluster starts in the classes a cut is most likely to be wrong in (fonts that kern and substitute across clusters,
+fallback edges and characters that take the previous character's font, variation selectors, emoji, U+200D and U+200C,
+letter spacing, synthetic bold, sizes off Canvas's grid, Arabic with marks, tatweel and digits, scripts written without
+spaces, units of 2,400 units and of more than 2^18 px), and the same samples as a lab set of 1,566 cases
+(`tools/windows-attack-cases.ts`). Two runs without windows are equal in everything. With windows no line differs, plain
+or inspected, no exact advance differs, the longest units' advances are equal to their last offset, so nothing drifts
+with the number of windows, and every window start is the DOM's advance wherever the sample's Canvas widths are the
+DOM's. What differs:
+- One Latin offset (16px Helvetica Neue) that the long recipe holds as a stand-in 1 au off is exact with windows, and
+  the DOM's.
+- A stand-in isn't always the long recipe's. Inside a window an offset whose sides don't add up takes W(window) less
+  W(the window's suffix), and in a font whose shaping reaches far that is another number: 4 of 14,288 Arabic offsets
+  (DecoType Naskh 3, Diwan Thuluth 1), under the same `in-word-prefix` gap, neither value the DOM's. No tier case shows
+  it.
+- A unit under a direction override (above): 32 advances, a line's width and one native break, which is why such a
+  unit has no windows.
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 
