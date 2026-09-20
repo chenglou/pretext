@@ -335,7 +335,9 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
   has English, Arabic, Urdu and Chinese; Hebrew, Hindi, Korean, Thai, Khmer and Burmese are 80 to 100% fallback under it and
   Japanese 61%, so a language's cost under the bench's list is its fallback's too. With a family that has the script in the
   list (`"Helvetica Neue", "Apple SD Gothic Neo", "Geeza Pro", sans-serif`), Korean asks the same 500 calls a message and
-  goes from 4.4 to 1.8 times the same run's English message in Chrome 153; Japanese doesn't move (1.8 and 1.7).
+  goes from 4.4 to 1.8 times the same run's English message in Chrome 153; Hindi from 3.4 to 1.7, Thai 3.9 to 2.3, Khmer
+  3.7 to 2.1, Burmese 4.5 to 1.8, Hebrew 2.8 to 1.8, and Japanese doesn't move (1.8 and 1.7). The ratios are of the counting
+  pass on a loaded machine, a language beside English in one run; they aren't timing.
 - `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
   known leaves the counting pass out), `--out=<file.json>`.
 
