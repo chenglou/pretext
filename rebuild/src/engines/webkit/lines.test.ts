@@ -586,6 +586,23 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   })
 })
 
+describe("the simple builder's plain stretch (lines.ts commitPlainStretch)", () => {
+  // The stretch runs in a paragraph of one box. The same text in two text nodes, cut at a word's start, is two boxes, so
+  // there the builder commits every item itself, and its lines have the same ranges and content widths.
+  test('one text node fills as the builder fills the same text in two nodes, at every width', () => {
+    const text = ' The quick  brown fox ju\u00admps over averyveryverylongwordindeed, then a lazy dog\u200bnaps. '
+    const cut = text.indexOf('over')
+    const rows = (lines: WebKitLine[]) => lines.map(l => [l.start, l.end, l.hasLineBox, l.geometry.contentWidth])
+    for (const overflowWrap of ['normal', 'break-word'] as const) {
+      for (let width = 7; width <= 440; width++) {
+        const one = layout(paragraph([[text, 'text']], { width, overflowWrap })).lines
+        const two = layout(paragraph([[text.slice(0, cut), 'text'], [text.slice(cut), 'text']], { width, overflowWrap })).lines
+        expect([overflowWrap, width, rows(one)]).toEqual([overflowWrap, width, rows(two)])
+      }
+    }
+  })
+})
+
 describe('Canvas questions: every read asks Canvas, and a value needed twice in one scope is asked once (measure.ts)', () => {
   // What a plain or an inspected paragraph asked of Canvas, preparing and filling every line at its width.
   function questions(p: Sized, inspect: boolean): string[] {
