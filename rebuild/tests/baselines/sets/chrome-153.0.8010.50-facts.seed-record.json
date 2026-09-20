@@ -1,13 +1,13 @@
 {
-  "staged": "../../pretext-rebuild/.artifacts/tests/staged-seeds-fu-20260919/chrome-153.0.8010.50-facts.json",
+  "staged": "../../pretext-rebuild/.artifacts/tests/staged-seeds-b1b-merge-20260920/chrome-153.0.8010.50-facts.json",
   "against": "rebuild/tests/baselines/sets/chrome-153.0.8010.50-facts.json",
   "counts": {
-    "cases": 66244,
+    "cases": 68403,
     "passPairs": {
-      "lineCount": 65965,
-      "breaks": 65928,
-      "widths": 62758,
-      "painter": 59788
+      "lineCount": 68122,
+      "breaks": 68048,
+      "widths": 64839,
+      "painter": 61875
     },
     "historyDependentCases": 0,
     "withoutPassesCases": 237,
@@ -18,16 +18,7 @@
   "leftThroughHistory": [],
   "leftThroughProtocol": [],
   "leftWithTheirCase": [],
-  "gained": [
-    [
-      "c-a37545c096e939be",
-      "breaks"
-    ],
-    [
-      "c-a37545c096e939be",
-      "widths"
-    ]
-  ],
+  "gained": [],
   "casesOnlyBefore": 0,
-  "casesOnlyAfter": 0
+  "casesOnlyAfter": 2159
 }

@@ -539,10 +539,10 @@ function set's stand-in Canvas reads a font from its shorthand once (the sweep 3
 cases), and the twin scan scans its case files in parallel (nine minutes to two and a half).
 
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
-sets `runs`, `ws`, `policy`, `rich-prewrap`, `twins` (Chrome alone) and `suite-sample`; the rule and feature families
+sets `runs`, `ws`, `policy`, `rich-prewrap`, `twins` and `wide-group-cuts` (both Chrome alone) and `suite-sample`; the rule and feature families
 derived in round 3 (`families`, `features`, and Chrome's `features-en-US` under its second locale;
 `.artifacts/tests/derive-r3-20260917`); and the 09-16 held-out sets `heldout-runs`, `heldout-ws`, `heldout-policy` and
-`heldout-suite-sample`. Chrome 66,685 cases (67,065 with `twins`), Firefox 63,771, webkit-host 63,987. A case id can sit
+`heldout-suite-sample`. Chrome 66,685 cases (67,065 with `twins`, 69,224 with `wide-group-cuts` too), Firefox 63,771, webkit-host 63,987. A case id can sit
 in two sets (the smoke set samples the others, and `features-en-US` observes `features` ids under another locale), so
 everything keys on set and id. Giants are in no set: a giant's record is as large as its calls and one can take minutes,
 so they stay an evaluation job.
@@ -560,6 +560,25 @@ Arabic in one Amiri style, the only set where the Blink port asks the same chara
 Chrome 67,065 cases with it. It joined the development sets with the Blink string storage fix, after the correctness
 line (specs/blink-RESULTS.md "String storage", research/BLINK-STRING-STORAGE.md), so the counts of the line in this
 section are without it.
+
+`wide-group-cuts` (2,159 Chrome cases, `lab/cases/wide-group-cuts.ts`, sha256 4da479ef…): lines that end within half a px
+of where the browser fits them, in texts whose cuts of a shaping group of 256 zoomed px or more fall where shaping
+crosses them (ligatures and contextual forms inside unbroken words, kerning inside words and at spaces, joined Arabic
+and Indic letters, letter and word spacing, soft hyphens, combining marks, emoji sequences, the edges of an inline
+box), in 103 installed families: 56 under Latin texts, 22 under Arabic ones and 31 under texts of eleven other
+scripts, some under more than one. The Blink port alone cuts a group, so the set is Chrome's. The widths are the browser's own, so the generator has two passes: `pass1` writes every variant on one line
+(2,159 variants: a text in a font at a size, Latin ones with letters in front so the cuts land on other offsets), a
+`run.ts` job in pinned Chrome reads the code point rects, and `pass2 --rows=<its rows>` writes, per variant, three
+break candidates past the middle times eight container widths from half a px under the browser's width of the text
+before the candidate to half a px over it: 51,816 cases, of which `--one-each` keeps one a variant, drawn with the seed
+`wide-group-cuts-1` and the variant's key, so a variant that joins or leaves moves no other variant's case. That is the set; the whole 51,816 stay a tool (`pass2` without `--one-each`). The first 22,536 of
+them are, id for id, the cases with which a critic showed on 2026-09-20 that a form of the port that picked its cuts
+without asking Canvas moved lines in real Chrome (1,158 cases at a device pixel ratio of 2; the set holds 51 of them,
+and 2 of the 61 a second form moved), where the other 67,065 tier cases held no such text
+(research/PROFILING-START.md, item 6). The pass-1 rows behind the case file are in
+`.artifacts/tests/runs/b1b-rework-20260920/extended/pass1` (Chrome 153.0.8010.50, a device pixel ratio of 2); another
+browser build or another set of installed fonts needs pass 1 again. Chrome's references, ledgers and seeds hold the set
+since the recording at its merge (2026-09-20). The twin scan finds 0 on it.
 
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did

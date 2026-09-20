@@ -430,8 +430,9 @@ a plain paragraph computes no gap and no inspected value (its "lines only" state
 Firefox's, −15% of WebKit's at the line). What is left on the plain path, from RECIPE-COSTS-BROWSER's completed ranking:
 
 - Nothing lost offline or in the browser: Blink's safe tests for a cut tried beside spaces first (B1a: −5.1% of Chrome's
-  calls, the same cuts); the cut's safe test itself (B1b: −12.1%, nothing lost on the 972 cases that couldn't replay;
-  it changed gap lists alone); WebKit's check that a listed family resolves (W1a: −0.6%).
+  calls, the same cuts); WebKit's check that a listed family resolves (W1a: −0.6%). The cut's safe test itself (B1b:
+  −12.1%) lost nothing on the tier sets, the 972 cases that couldn't replay among them, and moved lines on texts built
+  to sit at a cut, which the sets didn't hold (below).
 - Dear per case bought, the maintainer's call with these prices: Gecko's ligature test by ink box (G2: 36% of Firefox's
   calls at the line, 28 cases lost of 63,771 in the browser, 60,526 calls a case) and its ligature groups by letter
   spacing (G3: 13%, 50 cases); WebKit's fixed-pitch check (S3: 25% of webkit-host's calls, 21 cases) and coverage probe
@@ -441,6 +442,95 @@ Firefox's, −15% of WebKit's at the line). What is left on the plain path, from
 
 The corpus those prices come from is adversarial, built from rule families aimed at these recipes, so they say nothing
 about how often ordinary text would lose a line. A recipe that goes takes its cases to the known tail by name.
+
+*Item 6's cut search, as it stands* (2026-09-20, branch `x-perf-b1b-2`, unmerged; DESIGN.md §4.4, "the cut of a group
+of 256 zoomed px or more"). B1a is built, with one thing more; B1b was built first, and was wrong.
+
+- *The first form, and why it was wrong.* B1b (2026-09-19, branch `x-perf-b1b`) picked the cut without asking Canvas:
+  the offset nearest the middle beside a space where clusters part and nothing joins. The pieces added the adjustment a
+  position takes at the cut, the pair window's unless the cut is before white space, and an inspected paragraph reported
+  the cut where the wide window showed another. On the tier sets nothing moved: tier 2 in both orders and
+  configurations, 0 of 67,065 line ranges on the plain path, every field of the recorded rows but gap lists and 6 cases'
+  reshape flags. A message from scratch went from 302.1 calls to 199.3 on the mix and from 306.7 to 193.6 on plain
+  ASCII, and the headline from 4.58 s to 3.24 s and from 4.00 s to 2.99 s (four alternating pairs on a quiet machine).
+  Its critic then built 22,536 cases that sit at a cut (15 texts in 2 to 12 installed fonts at 16, 26 and 40px; three
+  break candidates a text, eight container widths within half a px of the browser's own width before each), and in
+  pinned Chrome the form moved lines the old search had right: 1,158 cases at a device pixel ratio of 2 and 817 at 1,
+  in Futura, Baskerville, Zapfino and Apple Chancery, in unbroken ligature runs, a hyphenated run and, at 40px,
+  ordinary spaced English cut inside a word (`The diff|icult`). Every one reported the new gap, so the charter's
+  definition held, and the plain path, which applications run, was wrong where it had been right. The cause: between
+  `ff` and `i` the pair window, one cluster on each side measured alone, shows an `fi` ligature that the group never
+  forms, because `ff` has ligated. The old test refused such an offset, since its pair window wasn't 0, and moved on. The
+  critic's second form added the wide window's adjustment at every cut: 61 cases still differed from the old search at a
+  ratio of 2 and none at 1. In 37 of them, all Zapfino at 40px, the old search is right and the form wrong: Zapfino's
+  forms reach past a window of 256 zoomed px, which holds three letters there. In the other 24 (unbroken Arabic in Al
+  Nile at 40px) the form passes where the old search fails, which is a lead for a correctness round and not this
+  phase's. Both forms trusted an instrument at an offset the test refuses, and the tier sets held no text where that
+  shows: 0 of 67,065 cases.
+- *What stands.* The search and its test stay. The search tries the offsets beside a space first, from the middle
+  outward, and the others only once all of those failed (`shape.ts` `addPieces`). An offset beside a space that passes
+  always won over the others, so the cut is the one the search always found, by construction, and with it every
+  position, line and value; the questions are a subset of the old ones, so tier 1 replays every case. What went is the
+  test of the offsets that can't win, in ordinary text the one at the middle of a word, one test of two a cut. And the
+  adjustment a position takes at a cut that passed isn't asked again where the search measured it: the pair window's 0,
+  and before white space the wide window's 0 where both sides of the cut are one piece, since the window between the
+  cuts around it is then the search's own. The cut's gap is the old one, where no offset passed.
+- *Why not the wide window's adjustment with the old search where the two windows differ.* That was the plan, and it
+  can be written per cut: measure both windows at the chosen offset and search as before where they differ. But the
+  choice has to be made before the range is cut further, so both windows are asked at the candidate during the search,
+  on the plain path too, where the second form asked the wide window once the cuts were known and the pair window only
+  when a line read a position at the cut. With both asked there, accepting the offset only where both are 0, which is
+  the old test, costs the same questions in every font that doesn't adjust beside a space (Helvetica Neue, the bench's
+  font, is one), and makes the cuts the old search's in every case, which no count of attack cases can prove of
+  "equal". A font that adjusts beside a space pays the old search from the next offset on: of 162 installed families
+  asked by Canvas (`survey/summary.json` in the run folder), 12 measure one of 26 strings of a letter and a space
+  otherwise than the sum of their letters (Arial, Times New Roman, Avenir Next, Gill Sans, PT Sans, PT Serif, Seravek,
+  Chalkboard SE, STIX Two Text, Brush Script MT, Sinhala MN, Lao MN), 78 do so for a ligature or contextual string and
+  73 for a kerning pair.
+- *Counts.* The bench's chat smoke in pinned Chrome, 200 messages, `measureText` calls a message from scratch, the mix
+  and plain ASCII, the old search against this one: 209.5 to 182.9 and 208.3 to 177.2 at a device pixel ratio of 1,
+  302.1 to 243.8 and 306.7 to 239.0 at 2, 386.8 to 295.6 and 391.0 to 288.6 at 3 (the ratio forced at launch with branch
+  `x-realism`'s bench option `--device-scale-factor`, carried as a patch; the page reports the ratio it saw). All of it
+  is the engine's prepare (152.7 to 94.3 on the mix at 2); a layout at another width asks what it asked, and the lines
+  are the same in every run. On the tier cases the plain path asks 213.43 questions a paragraph where it asked 234.31
+  (B1b: 194.39). Firefox and webkit-host don't run this code.
+- *Time.* The bench's headline (10,000 chat messages from scratch, 3 passes a run, pinned Chrome, background window, AC
+  power, a device pixel ratio of 2), the tree before and the tree after taking turns: three pairs with the order swapped
+  from pair to pair, every run alone under the exclusive browser lock (`.artifacts/bench/b1b-rework-20260920`). Other
+  owners' offline jobs ran beside them (a 1-minute load of 27 to 39 on 18 cores), and the page's fixed arithmetic took
+  26.6 to 28.2 ms in every run, as on a quiet machine. Medians of the three runs' medians, with their range. With a
+  list of contexts a message: the mix 4.62 s (4.62 to 4.70) before and 4.19 s (3.99 to 4.24) after, plain ASCII 4.05 s
+  (4.01 to 4.05) and 3.82 s (3.72 to 3.84); the pairs' ratios are 0.86 to 0.92 and 0.92 to 0.96. With one list for the
+  page (item 1): the mix 3.81 s (3.79 to 3.88) and 3.00 s (2.98 to 3.10), plain ASCII 3.53 s (3.51 to 3.54) and 2.66 s
+  (2.66 to 2.66); ratios 0.79 to 0.80 and 0.75 to 0.76. Main's cold batch in the same pages didn't move (0.32 s and
+  0.19 s). So items 1 and 6 together stand at 3.0 s and 2.7 s, above the bar. The first form took 1.34 s and 1.01 s off
+  a list a message; this one takes 0.43 s and 0.23 s off there and 0.80 s and 0.87 s off one list.
+- *Proof.* By construction first: the search tries the same offsets with the same test and takes the same winner, so the
+  cuts are the old search's, and with them every position; what can differ is which strings were measured, and so a gap
+  entry that a measured string raises. Then in pinned Chrome 153.0.8010.50
+  (`.artifacts/tests/runs/b1b-rework-20260920`): the critic's 22,536 cases at device pixel ratios of 2 and 1, the old
+  search against this one with equal native observations in both runs: 0 rows differ in any field of the prediction but
+  its counts of Canvas work, gap lists included; the generator's 51,672 and 51,816 cases at the two ratios, the second
+  survey's 29,280 among them: 0 rows. Tier 2, both orders, both configurations, recorded: 0 status transitions in either
+  (the first form had 20 on the painter's metric with facts, 8 of them from covered to open; the old gap is where it
+  was), exact values unchanged (265 and 551 differing predicted values, 991 and 868 rect counts), limited values
+  unchanged (149,308 and 108,909), the gates lost 0. The plain predictor's run: 0 of 67,065 line ranges and 0 native
+  observations differ. Field by field against the references' recording, 134,130 rows a configuration: 1,500 rows (750
+  cases) differ without facts and 686 (343) with them, every one in a gap list; 34 of the rows also in the name of the
+  gap that limits a value, none in a value's state, and none anywhere else: no line range, no geometry (the first form's
+  6 cases of reshape flags are gone), no value, native observation or painted line. Every gap entry that one side alone
+  holds is `script-context` (1,369 lost and 288 gained without facts, 803 and 204 with them): a string the search no
+  longer measures raised it, or a merged range is cut otherwise. Offline (`gates.ts --engine=blink`): tier 1 replays
+  every case with 0 questions the record lacks and shows those 750 and 343 predictions changed, all first in a gap list,
+  all passing and exact in the ledger; the function set's plain, pure and sweep checks pass all 67,065 cases in both
+  configurations with none skipped (the first form skipped 8,675 and 2,526 that tier 1 couldn't replay); the citation
+  ledger loses nothing; the twin scan finds 0; the painter differential's Chrome rows exit 3 on the changed cases, as
+  they do for any changed prediction, with no painting differing.
+- *The family.* The attack set is a generator of the lab now (`lab/cases/wide-group-cuts.ts`): the critic's 939
+  variants, id for id, and 1,220 more after that survey (44 more Latin families with ligatures, contextual forms or
+  kerning, 18 more Arabic ones, Bengali, Tamil, Telugu, Malayalam, Khmer, pointed Hebrew, letter and word spacing, soft
+  hyphens, combining marks, emoji sequences, inline boxes): 51,816 cases, and one of each variant, 2,159, is the tier
+  set `wide-group-cuts` (lab README, "The sets"). It holds 51 of the cases the first form moved and 2 of the second's.
 
 ### 7. Engine tables parsed when the module loads
 

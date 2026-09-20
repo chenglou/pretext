@@ -322,6 +322,45 @@ compared with the usual runs case by case (`.artifacts/tests/runs/contexts-20260
   `tools/contexts-bound.ts` prices the list's search and shows the bound's cliff. The bench runs the library with a
   list a message and with one list a pass in one document (bench README, "Chat", E).
 
+**Since the profiling phase's item 6, 2026-09-20.** Blink's search for the cut of a group of 256 zoomed px or more
+tries the offsets beside a space first and asks about no offset that can't win, and a cut that passed doesn't ask again
+for the 0 the search measured (DESIGN.md §4.4; research/PROFILING-START.md, item 6, which has the form that was built
+first and moved lines). The cuts are the old search's by construction, so the tiers hold the change as one that drops
+questions (`.artifacts/tests/runs/b1b-rework-20260920`):
+
+- *Offline* (`gates.ts --engine=blink` at 9d5fad7). Tier 1 replays every Chrome case, with 0 questions the record lacks,
+  and exits 1: 750 predictions changed without facts and 343 with them, every one first in a gap list, every one pass,
+  pass, pass and exact in the ledger; 38,310 cases are the same and the rest ask fewer or the same questions in another
+  order. The function set's plain, pure and sweep checks pass all 67,065 cases in both configurations with none skipped,
+  and the plain path asks 213.43 questions a paragraph without facts where it asked 234.31 (203.48 for 224.3 with them).
+  The painter differential's Chrome rows exit 3 on the changed cases, with no painting differing; the citation ledger
+  loses nothing; the twin scan finds 0. The unit-test row failed by 5 s timeouts under a load of 30 to 60
+  (`lab/rows.test.ts`, `lab/compare-rows.test.ts`, `tests/families/families.test.ts`); alone the three files pass, and
+  `bun test rebuild` alone passes its 888 tests in 68 files.
+- *Chrome, tier 2*, both orders, both configurations, recorded: 0 status transitions, exact values unchanged (265 and
+  551 differing predicted values, 991 and 868 rect counts), limited values unchanged, the gates lost 0. The plain
+  predictor's run: 0 of 67,065 line ranges differ. Field by field against the references' recording (134,130 rows a
+  configuration): 1,500 rows differ without facts and 686 with them, all in gap lists (34 also in the name of the gap
+  that limits a value), and every entry one side alone holds is `script-context`, raised by strings the search no
+  longer measures. Most of the jobs ran inside exclusive stretches of the browser lock, with `browser-sets.ts`'s own
+  `run.ts` arguments, and `browser-sets.ts` resumed over them: its slot jobs had finished 6 of 38 in an hour behind
+  other owners' chained exclusive stretches (the run folder's `tools/tier2-driver.sh`).
+- *The cases built to sit at a cut*, the old search against this one on the same cases in the same browser, native
+  observations equal in both runs: the critic's 22,536 at device pixel ratios of 2 and 1, and the generator's 51,672
+  and 51,816: 0 rows differ in any field of the prediction but its counts of Canvas work.
+- *New unit tests* in `src/engines/blink/cuts.test.ts`, on a stand-in Canvas: the pieces add up to the group, since the
+  cut moves off an offset where the two sides change each other; the search asks about no offset inside a word while
+  one beside a space passes; a cut that passed asks nothing after its pieces; an inspected paragraph reports the cut of
+  a group where no offset passes. The second and third fail on the library before the change, as meant. The critic's
+  two files beside it: `cuts-window.test.ts` (a cut before white space beside a side that was cut again, where the
+  search's window and the window between the cuts differ: three mutants of the kept 0's condition passed the first
+  four tests and fail these) and `cuts-kept.test.ts` (with positions kept by offset, a plain line that ends at a cut
+  before white space between two pieces asks Canvas nothing about it).
+- *A new set, `wide-group-cuts`* (2,159 Chrome cases; lab README, "The sets"): lines that end within half a px of the
+  browser's fit in texts whose cuts fall where shaping crosses them. No other set held such a text: the form built first
+  passed every tier and moved lines in 1,158 of the 22,536 cases the set is drawn from. It is in `sets.ts`, and since
+  the recording at its merge (2026-09-20) Chrome's references, ledgers and seeds hold it: 69,224 cases a reference.
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report

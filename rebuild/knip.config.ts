@@ -10,7 +10,7 @@ const config: KnipConfig = {
     // Command-line tools (each parses its own arguments or runs on import).
     'rebuild/tools/*.ts',
     'rebuild/lab/{run,score,gate,fresh,sharded,measurements,compare-rows,triage}.ts',
-    'rebuild/lab/cases/{generate,giants,parts,seal,twins}.ts',
+    'rebuild/lab/cases/{generate,giants,parts,seal,twins,wide-group-cuts}.ts',
     'rebuild/tests/{browser-sets,compare-sets,coverage,coverage-map,derive,facts,function-set,gate,import-rules,known-tail,ledger,replay}.ts',
     // Run by path under `bun test --coverage` (tests/coverage-map.ts).
     'rebuild/tests/coverage-map.shard.ts',
