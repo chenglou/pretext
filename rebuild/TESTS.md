@@ -350,7 +350,8 @@ questions (`.artifacts/tests/runs/b1b-rework-20260920`):
   and 51,816: 0 rows differ in any field of the prediction but its counts of Canvas work.
 - *New unit tests* in `src/engines/blink/cuts.test.ts`, on a stand-in Canvas: the pieces add up to the group, since the
   cut moves off an offset where the two sides change each other; the search asks about no offset inside a word while
-  one beside a space passes; a cut that passed asks nothing after its pieces; an inspected paragraph reports the cut of
+  one beside a space passes; a cut that passed asks nothing after its pieces (on branch `x-words2-blink`: a cut between
+  two words that passed asks nothing after the tests); an inspected paragraph reports the cut of
   a group where no offset passes. The second and third fail on the library before the change, as meant. The critic's
   two files beside it: `cuts-window.test.ts` (a cut before white space beside a side that was cut again, where the
   search's window and the window between the cuts differ: three mutants of the kept 0's condition passed the first

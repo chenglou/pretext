@@ -1538,6 +1538,26 @@ ligature that the group never forms. The wide window's adjustment added there in
 search gets right, all Zapfino at 40px, whose forms reach past a window of 256 zoomed px. The test keeps a cut off such
 offsets, and no set of the tiers held one such text before the set `wide-group-cuts` (lab README, "Test tiers").
 
+Blink, words first (`shape.ts` `addWordPieces`; `line-breaker.ts` `wordCandidate`; branch `x-words2-blink`, speculative,
+2026-09-20, not recorded or frozen). A group is cut into words before anything else: a word starts after a U+0020 where
+clusters part, nothing joins and the character isn't one every lookup skips, and is measured once with its trailing
+space. The offset between two words is a cut where it passes the safe test with the two words as the wide window: the
+two measured together are what they measure apart (one string new to the recipe; the other two are the words' own
+totals), and the pair window shows 0. A space that doesn't pass is no cut, and two words of 256 zoomed px or more have
+no exact total to be held against. What is left between two cuts and isn't one word below 256 zoomed px goes through
+the cut above, unchanged: words whose space didn't pass, a long word, text without spaces, and every group of an
+unsegmented paragraph that holds SHY (there a word alone leaves SHY out and the word with its space carries U+2060, so
+their sums would hold the difference). Nothing is added at a word cut: the test measured 0 there. So no range of 256
+zoomed px or more is measured whole where words are shorter than that, and what a paragraph asks doesn't grow with the
+device pixel ratio. The windows `adjust16` takes follow the cuts, so they are a word or two wide; in a segmented
+paragraph a side that holds no script of its own takes the next piece in, since `, ` alone is no stand-in for the comma
+in its run. On a plain paragraph the candidate of a line that ends between two words is found by walking the cuts'
+positions from the line's start, which are sums the group holds, and the search over every offset stays for every other
+line; `wordsCheck` holds each such candidate against the search in the offline runs. Unit: per word, its total; per
+offset between two words, the two words together and the pair window's 3; per line that ends between two words, the
+position where the word that doesn't fit ends and the one where the line's last word ends. Against the cut above it is
+another recipe, not the same one asked less: research notes and numbers are in the branch's report.
+
 **Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
 
 Gecko, windows inside a long shaping unit (`advance.ts` `windowAt`, `windowsOf`). Every in-word recipe measures to its
