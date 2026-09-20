@@ -39,7 +39,10 @@ const gcIndex = (name: string) => generalCategories.indexOf(name)
 const GC_MN = gcIndex('Mn'), GC_MC = gcIndex('Mc'), GC_ME = gcIndex('Me'), GC_CF = gcIndex('Cf')
 const EA_H = eastAsianWidths.indexOf('H'), EA_F = eastAsianWidths.indexOf('F'), EA_W = eastAsianWidths.indexOf('W')
 
-export const packedProps = (cp: number): number => lookup(propertyRuns, cp)
+// U+0000..U+00FF by index: most text is there, and the measuring recipes read a property at every offset inside a word.
+const latin1Props = Int32Array.from({ length: 256 }, (_, cp) => lookup(propertyRuns, cp))
+
+export const packedProps = (cp: number): number => cp < 256 ? latin1Props[cp]! : lookup(propertyRuns, cp)
 export const generalCategory = (cp: number): string => generalCategories[packedProps(cp) & 31]!
 const gc = (cp: number): number => packedProps(cp) & 31
 const ea = (cp: number): number => (packedProps(cp) >> 5) & 7
