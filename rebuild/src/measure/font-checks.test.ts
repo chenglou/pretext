@@ -298,7 +298,7 @@ describe('one call', () => {
     expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Late')
   })
 
-  test('Gecko\'s contexts are one call\'s whatever list the caller keeps, so a family name that contexts learn only at their first use shows in the next call', () => {
+  test('Gecko\'s contexts are one prepared paragraph\'s whatever list the caller keeps, so a family name that contexts learn only at their first use shows in the next call', () => {
     keepsFirstFonts = true
     const p = paragraph('Late, Prop', 'ab ab ab')
     const lineCount = (env: Environment, contexts: Context[]): number => {

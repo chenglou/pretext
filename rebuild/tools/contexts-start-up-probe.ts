@@ -4,9 +4,10 @@
 // the DOM's line count, the library's with one list kept from the start, and the library's with a new list.
 //
 // - L1: in a browser that has just started, families named by a Japanese name and by a legacy family name, which Firefox
-//   learns about a second after it is first asked. Since Gecko's contexts are one call's (src/index.ts prepare), the kept
-//   list follows a new one at every reading, and the DOM follows at its reflow; on a tree where Gecko uses the caller's
-//   list, the kept list stays at six lines.
+//   learns about a second after it is first asked. Since Gecko's prepare makes its contexts anew whatever list it is
+//   handed (src/index.ts prepare), the kept list follows a new one at every reading, and the DOM follows at its reflow;
+//   on a tree where Gecko uses the caller's list, the kept list stays at six lines. A paragraph prepared before the
+//   names arrived and kept is another matter: tools/contexts-heal-attack-probe.ts K1 to K3.
 // - L2: a FontFace loaded first and added two seconds in, which is the one thing that makes WebKit's kept contexts stale.
 //   A third list is the one the page starts anew right after its own add(), which is WebKit's contract.
 //
