@@ -182,8 +182,7 @@ width of a row, and the report flags a row where they don't.
   across messages.
 - `rebuild prepare+fill×1000, <mode>`: `prepare()` and every line per message. The library keeps nothing across
   paragraphs: every message makes its own Canvas contexts and runs the runtime font checks again. `count` is compared with
-  `main prepare+layout×1000`. The earlier experiment with one measurer across all messages is gone with the measurer
-  parameter; contexts shared across paragraphs wait for profiling (research/ARCHITECTURE-PLAN-2.md §10).
+  `main prepare+layout×1000`. Contexts shared across paragraphs are the chat rows' E (below).
 
 ## Chat
 
@@ -241,9 +240,9 @@ and Firefox.
 | C. Main | `main cold` | `clearCache()` once, then `prepare()` and `layout()` for every message, as `pages/benchmark.ts` times a batch: main's caches fill across the messages |
 | | `main resize×3` | `layout()` at the three widths on handles prepared outside the timing |
 | D. The font checks | `rebuild scratch, count, checks lifted` | A on paragraphs whose font facts Canvas answered outside the timing: the engine's `prepare()` alone, then every line. Its distance from A is what the per-paragraph font checks cost, without any instrument in the timed code |
-| E. One measurer | `rebuild scratch, count, page keeps both` | A in count mode with one measurer (`rebuild/src/measure/font-checks.ts` `Measurer`) for the set's messages, made inside the repetition, as a page that lays its messages out from nothing makes one first: `prepare()` is handed it, so a Canvas context and a font check's question are paid for once per font declaration |
-| | `rebuild scratch, count, page keeps checks`, `... page keeps contexts` | the same with the measurer for one half of `prepare()` alone, the font checks or the engine's contexts, while the other half gets a call's own: what each half is worth by itself |
-| | `rebuild first resize×3, count, page keeps both`, `rebuild resize×3 again, count, page keeps both` | B on paragraphs prepared with one measurer, which share their Canvas contexts |
+| E. One list of contexts | `rebuild scratch, count, page keeps both` | A in count mode with one list of Canvas contexts (`rebuild/src/index.ts` `prepare`) for the set's messages, started inside the repetition, as a page that lays its messages out from nothing starts one first: `prepare()` is handed it, so a context is paid for once per settings, and the font checks ask Canvas again for every message, on the kept contexts |
+| | `rebuild scratch, count, page keeps checks`, `... page keeps contexts` | the same with the page's list for one half of `prepare()` alone, the font checks' contexts or the engine's, while the other half gets a call's own: what each half is worth by itself. No caller of `prepare()` can reach these two forms |
+| | `rebuild first resize×3, count, page keeps both`, `rebuild resize×3 again, count, page keeps both` | B on paragraphs prepared with one list, which share their Canvas contexts |
 
 The report gives each variant's median for the whole set, the time per layout, measureText calls and contexts made per
 layout, and the lines. The counting pass also holds the three modes' line ranges against each other at all four widths,
@@ -255,19 +254,20 @@ canvases pays for collections that trace them: on 2026-09-19 Chrome's timed row 
 messages of the mix where the headline gave 4.79 s against 3.82 s for 10,000.
 
 **The headline** (`--headline=10000`): the first 10,000 messages of each set from scratch, once a pass, `--headline-passes`
-times, the rebuild in count mode with a measurer a message, the rebuild with one measurer a pass (E) and main's cold batch
-taking turns, in forward order on even passes and in reverse on odd ones, with every pass's time in the report. It is the
-number to hold against "10,000 messages laid out again from scratch in about 2 s". After everything else in the document,
-the resize case runs once on the same 10,000, first for every set with one measurer and then with a measurer a message:
-all of them prepared, filled at 320 px and kept, then filled at the three other widths. It comes last because it holds 10,000 prepared paragraphs with their Canvas contexts at once (about 45,000
-contexts in Chrome), which no smoke has tried: if the page ends there, the report has everything else, and the driver fails
-after `--stall-ms`.
+times, the rebuild in count mode with a list of contexts a message, the rebuild with one list a pass (E) and main's cold
+batch taking turns, in forward order on even passes and in reverse on odd ones, with every pass's time in the report. So
+one run holds the library before the list and after it in alternating pairs. It is the number to hold against "10,000
+messages laid out again from scratch in about 2 s". After everything else in the document, the resize case runs once on
+the same 10,000, first for every set with one list and then with a list a message: all of them prepared, filled at
+320 px and kept, then filled at the three other widths. It comes last because it holds 10,000 prepared paragraphs with
+their Canvas contexts at once (about 45,000 contexts in Chrome with a list a message), which no smoke has tried: if the
+page ends there, the report has everything else, and the driver fails after `--stall-ms`.
 
 **The phases** (question D): one instrumented pass over the 1,000 messages, the median of `--phase-passes` passes field by
-field, taken twice: with a measurer a message, and with one measurer a pass (E), which says where the time is once
-contexts and font checks are paid for once. The page runs `prepare()` as the two halves `rebuild/src/index.ts` joins, with `performance.now()` around each and
-around the line loop: the runtime font checks (`measure/font-checks.ts` `withLearnedFontFacts`), the engine's own
-`prepare`, and `fillLine` over every line. Wrappers on the Canvas classes time what happens inside them: `measureText`,
+field, taken twice: with a list of contexts a message, and with one list a pass (E), which says where the time is once
+contexts are paid for once. The page runs `prepare()` as the two halves `rebuild/src/index.ts` joins, with
+`performance.now()` around each and around the line loop: the runtime font checks (`measure/font-checks.ts`
+`withLearnedFontFacts`), the engine's own `prepare`, and `fillLine` over every line. Wrappers on the Canvas classes time what happens inside them: `measureText`,
 and making contexts, which is the `OffscreenCanvas` constructor, `getContext` and every assignment to a context's text
 attributes (the font string is parsed and resolved there). What is left of a phase is outside Canvas: in the engine's
 `prepare` that is building the content, bidi, scripts, segmentation and break opportunities, and the code around each

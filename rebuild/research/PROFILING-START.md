@@ -5,7 +5,8 @@ the profiling and optimization phase starts from, in the order I would take the 
 buy from the numbers we have and what could make it unsafe. It collects research/BENCH-NIGHT.md ("The real pass"),
 DESIGN.md §4.7, research/RECIPE-COSTS.md and RECIPE-COSTS-BROWSER.md, research/ARCHITECTURE-PLAN-2.md §10 and
 research/CAPABILITY-CHECK.md. Nothing here is built, but for item 4's main part, which landed in correctness round 5
-(2026-09-19); that round also added item 8. Expected gains are arithmetic over one benchmark run, not results.
+(2026-09-19), and item 1, built in its smaller form the same day; that round also added item 8. Expected gains are
+arithmetic over one benchmark run, not results.
 
 ## The bar, and the rule for what may come back
 
@@ -108,66 +109,62 @@ cost of each fix). Counts, not times; nobody has timed the benchmark since.
 
 ## The items, in order
 
-### 1. The measurer's lifetime: contexts and font-check answers once per font declaration per page
+### 1. A page's list of Canvas contexts (done, in its smaller form)
 
-*What.* Today `prepare` makes a paragraph's contexts and runs the font checks for it, and both die with the prepared
-paragraph. The change: one object the caller makes once per page (it is also where an invisible store would live later)
-holds the contexts by their settings and the checks' answers by declaration and language. `prepare` takes it. Three
-engine sites and the checks' resolution take a list from outside (CAPABILITY-CHECK: Blink `index.ts`, WebKit
-`content.ts`, Gecko `prepare.ts`, `measure/font-checks.ts`); the records that hold contexts by reference don't change.
-The orchestrator kept it out of the re-architecture's last step so that it is measured against the baseline above.
-Since the fresh-eyes follow-up (2026-09-19) Gecko's recipes hold their contexts by reference too, which the review
-named as the precondition: `RunContexts` is the record per font declaration, language, direction and ligature state,
-and `prepareGecko`'s two lists, the contexts and those records, are what would come from outside. Each lazy fill would
-then search the page's list once per record and not at every ask. With a page's lifetime the recipe contexts could be
-made eagerly and the record's nullable fields could go, which changes the context count and so needs a new recording.
-The language parse in `advance.ts` `pairFactDescribes`, which runs at each ask for a script run of Common characters
-alone, belongs on the record once the record is the page's.
+*Done on 2026-09-19* (`prepare(paragraph, env, inspect, contexts)`; DESIGN.md §4.6, "A page's list of contexts", has the
+list's lifetime, what invalidates it and what bounds it). The item as planned was one object per page that holds the
+Canvas contexts and the font checks' answers. A prototype built that, and its review measured the list of contexts alone
+at nearly the same gain and found the kept answers to be the one part that goes stale silently after a web font loads
+(research/PERF-LIFETIME.md). So `prepare` takes a plain `Context[]`, the caller's, a page's or one call's when nothing
+is passed, and keeps nothing else: the font checks ask Canvas again at every `prepare`, on the kept contexts. Library
+code: 15 lines added and 13 removed in five files (`index.ts`, `measure/font-checks.ts` and the three engines' prepare).
 
-*Why first.* By measured share, not opinion: Chrome's 43% making contexts plus 31% font checks (the two overlap: 6.4 of
-the 11.1 contexts are the checks'), webkit-host's 26% font checks plus most of its per-call cost. It also ends the
-45,000 live canvases of kept paragraphs.
+*What it bought.* 10,000 chat messages from scratch, a list a message against one list a pass, taking turns in one
+document on a quiet machine (measured by the prototype's review as a variant of the bench page,
+research/PERF-LIFETIME.md, the review's §4; the machine was never quiet while this form was proven): Chrome 4.60 s to
+3.70 s on the mix and 4.01 s to 3.35 s on plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox 2.76 s
+to 2.51 s and 0.58 s to 0.46 s. Contexts made a message go from 11.07 to 0.024 in Chrome, 3.56 to 0.013 in Firefox and
+5.38 to 0.011 in webkit-host, and the `measureText` calls stay what they were (322, 120 and 40 a message on the mix),
+since the checks ask again. A kept paragraph no longer keeps about five canvases of its own alive in Chrome. Against the
+bar of 2 s: Chrome is not there, Firefox is there on ASCII and at 2.5 s on the mix, webkit-host is far under.
 
-*Expected.*
-- Chrome: with the checks lifted the benchmark's own variant runs at 0.69 of from-scratch on the mix (838 µs against
-  1.21 ms a message). The engine's own 4.7 contexts a message are about 220 µs more at 47 µs each. Together about half
-  of from-scratch time on the mix and about a fifth on plain ASCII, where contexts weighed 12% in the same run: roughly
-  9.6 s to 5 s, and 4.2 s to 3.3 s. Not under the bar by itself; what remains is 310 calls a message (items 2 and 6).
-- webkit-host: the checks' 26% goes. If a call in a context that has already resolved its font costs what main's does
-  (about 9 µs against 28 µs), the engine's 32 calls a message come to about 0.3 ms against 1.17 ms: roughly 11.7 s to
-  3 or 4 s. This is the least certain estimate here, and the cheapest to check: CAPABILITY-CHECK's three one-line sites
-  in a benchmark variant.
-- Firefox: at most 5%. Gecko's checks ask nothing, and it makes 3.6 contexts a message at 5% of its time.
+*What it costs.* In Chrome, kept plain ASCII paragraphs lay out again about 1.24 times slower at a width they have met
+(48 µs to 60 µs a layout in the prototype's review, whose list holds the same contexts), because a page's canvas is
+asked more distinct strings than Chrome's per-canvas cache of 32,768 holds. It costs time only, and item 2 is what
+removes it. The list is bounded at 512 contexts, a cliff at about 60 font declarations used in turn in Chrome (DESIGN.md
+§4.6).
 
-*What could make it unsafe.*
-- Chrome caches shaped words per canvas, and the first shaping of a word on a canvas wins. Per-paragraph contexts made
-  every paragraph's measurement history start from nothing; shared contexts make it the page's. The known hazards are
-  handled inside one paragraph by partitions (one-byte against two-byte strings of the same characters, research/
-  BLINK-STRING-STORAGE.md) and by adding word spacing in JS. Across paragraphs the same hazards need the same answer:
-  a segmented and an unsegmented paragraph must not meet on one canvas with the same characters in both storages, so
-  the partition has to say the storage for every paragraph, not only segmented ones. Proof: tier 2 with a sharing
-  predictor in both orders and a shuffled third order, both configurations, `twins` included, compared case by case with
-  the usual run; and the twin scan (`tools/twin-scan.ts`) over a whole set in one page, not per case.
-- WebKit and Gecko keep measured words per font, not per canvas, so sharing contexts changes no measurement history
-  there. Tier 2 in both orders is enough.
-- Staleness: a font-check answer and a context's resolved font are facts of the fonts a page has. A web font that
-  loads later changes both. The object needs a stated contract (make it after the fonts the text uses have loaded; make
-  a new one when they change), and whether a Chrome context made before a font loaded keeps measuring the fallback
-  needs a probe. The library reads nothing from the DOM, so it can't watch `document.fonts` itself.
-- Leak: contexts are bounded by the distinct settings a page uses (declaration, language, direction, letter spacing,
-  partition). Letter spacing is a continuous value: an application that animates it would grow the list, so unusual
-  settings need a bound or a per-call life.
+*How it is held* (TESTS.md, "Tiers"; `.artifacts/tests/runs/contexts-20260919`). The lab's usual predictors hand
+`prepare` no list, so the records and the references stay valid: the full offline gates exit 0, tier 1 with 0
+predictions and 0 questions changed (Chrome's exits 3 by the string storage rule alone, and its usual tier 2 shows 0
+transitions in both configurations). A page's list is three predictors of its own
+(`lab/baselines/page-contexts-*.ts`), compared with the usual recordings case by case. Chrome, where a shared canvas is
+a new history: 0 of 134,130 rows differ in file order and reversed and 0 of 67,065 in a shuffled third order, in each
+configuration, `twins` included; 0 of 67,065 line ranges on the plain path; and the twin scan over each case file as one
+page finds no context asked the same characters in both storages. webkit-host: 0 of 127,974 rows in each
+configuration. Firefox: 0 of 127,542 with facts, and without facts 7 cases of one reversed part, all history-dependent
+in the reference ledger, each predicting what the usual recording predicts for it in the other order: the process's two
+fallback-font states. Probes: a font that loads after a context was made (Chrome's and Firefox's kept contexts measure
+with it, webkit-host's don't), `<html lang>` changing, and Chrome's device scale factor changing under kept contexts
+(nothing moves).
 
-*If sharing proves unsafe in Chrome*, two parts need no sharing and no history argument, only a new recording:
-- Contexts made on first use. Blink makes five per style per paragraph (LTR, RTL, the two without ligatures, the
-  hyphen's); a plain left-to-right paragraph without a soft hyphen asks one. The two without ligatures serve gap tests
-  and limits, which a plain paragraph never runs. About 4 of the engine's 4.7 contexts a message.
-- The linear-size check on plain paragraphs. It answers `false` or nothing, and `false` is what a named family gets by
-  default, so it decides whether `optical-size` is reported and never how Blink measures (DESIGN.md §4.6); the primary
-  family check beside it does decide measuring and stays. It is why Blink's checks run at all for text with no soft
-  hyphen and no joining letters at a device pixel ratio other than 1. RECIPE-COSTS-BROWSER found nothing lost with it
-  off on all 67,065 Chrome cases; offline it was 10.6% of Chrome's calls and about 4 contexts a case. Once answers live
-  per declaration per page it costs nothing worth removing.
+*What is left of the item.*
+- The font checks still ask at every `prepare`: 10.8 `measureText` calls a chat message in Chrome and 9.5 in
+  webkit-host, on contexts that are already made (Gecko's checks ask nothing). The linear-size check on plain paragraphs
+  is most of Blink's; it answers `false` or nothing, and `false` is what a named family gets by default, so it decides
+  whether `optical-size` is reported and never how Blink measures (DESIGN.md §4.6). RECIPE-COSTS-BROWSER found nothing
+  lost with it off on all 67,065 Chrome cases. Dropping it on plain paragraphs changes the questions, so it needs a new
+  recording.
+- Gecko's recipe contexts are still made on first use, behind nullable fields on `RunContexts`. With a page's list they
+  could be made eagerly and the fields could lose their null, which changes the context count and needs a new
+  recording. The language parse in `advance.ts` `pairFactDescribes`, which runs at each ask for a script run of Common
+  characters alone, belongs on that record.
+- Blink makes five contexts per style per paragraph and a plain left-to-right paragraph without a soft hyphen asks
+  one. With a page's list the other four are made once per style per page, so making them on first use no longer buys
+  anything worth a recording.
+- A home for facts that depend on the declaration and the language alone (item 8's probe pairs) was not built:
+  nothing derived is kept, because the library can't see the page's fonts change. It waits for the API phase's store,
+  which needs an answer to the same question.
 
 ### 2. Blink: positions asked again, inside one fill and at every width
 
@@ -286,12 +283,13 @@ predictor's browser runs. The simpler form reads every candidate whole and costs
 Firefox, which already meets the bar on plain ASCII and whose cost on the mix is the CJK and Arabic fill (item 3). The
 maintainer may prefer the simpler form.
 
-*What would settle it.* Time, not counts: the benchmark with and without the lazy scan on a quiet machine. And item 1:
-the probe pairs and the same-face answers depend on the font declaration and the language alone, so a home that
-outlives a paragraph pays them once per declaration, not once per paragraph (24 to 30 questions a context today, by
-the two probes' medians). With that home the simple form's cost is the 3 to 8 questions of each kerned candidate, and
-the comparison should be run again. Note that the cost depends on the width: a paragraph that asks nothing at one
-width can ask the probe pairs at another, and the chat smoke measures one width a message.
+*What would settle it.* Time, not counts: the benchmark with and without the lazy scan on a quiet machine. And a home
+that outlives a paragraph: the probe pairs and the same-face answers depend on the font declaration and the language
+alone, so such a home pays them once per declaration, not once per paragraph (24 to 30 questions a context today, by the
+two probes' medians). Item 1 was built without one, because a kept answer goes stale when the page's fonts change and
+the library can't see that. With that home the simple form's cost is the 3 to 8 questions of each kerned candidate, and
+the comparison should be run again. Note that the cost depends on the width: a paragraph that asks nothing at one width
+can ask the probe pairs at another, and the chat smoke measures one width a message.
 
 ### 9. Later, with numbers only
 
@@ -312,9 +310,9 @@ research/CAPABILITY-CHECK.md found no door closed and three cheap openers. They 
    line's end (DESIGN.md §2.6, "Gecko's exception").
 2. **Identity on the painter's DOM through a callback**, 6 lines in `paint.ts`: the application is handed each span and
    atomic box with its element index. It opens rich-note and markdown-chat on `paintLines`.
-3. **A contexts list handed to `prepare`**, with font checks that outlive one prepare: four sites. This is item 1 above
-   seen from the API side; the profiling phase measures it and proves it in the browsers, and the API phase decides how
-   an application holds the object.
+3. **A contexts list handed to `prepare`**: done as item 1 above, `prepare(paragraph, env, inspect, contexts)` with a
+   plain array. The font checks don't outlive one prepare, by decision. The API phase decides how an application holds
+   the list, and what it is told about starting a new one after its fonts change (WebKit alone needs it).
 
 Also for that phase, from the fresh-eyes follow-up (2026-09-19): **a font-family list read once, at the library's
 boundary**. One parser reads the list today (`src/font-family.ts`), but where a port happens to need a name: Blink per

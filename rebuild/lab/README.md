@@ -421,6 +421,29 @@ The references were frozen with `--force` and a reason, Chrome's tier 2 seeds we
 gain one pass pair in each configuration), and the painter differential's frozen side was bundled again.
 After the freeze the full offline gates exit 0 on the frozen tree (39 gates, no case left for tier 2).
 
+## The profiling phase's item 1: a page's list of contexts (2026-09-19)
+
+`prepare(paragraph, env, inspect, contexts)` takes the list its Canvas contexts are found and made in (DESIGN.md §4.6,
+"A page's list of contexts"; research/PROFILING-START.md, item 1; research/PERF-LIFETIME.md has the prototype that also
+kept the font checks' answers, and its review). The lab's usual predictors hand `prepare` none, so every case makes its
+own contexts and a case's record stays what one paragraph asks: the references, the seeds and tier 1 are untouched by
+it. What holds a page's list (`.artifacts/tests/runs/contexts-20260919`, `.artifacts/bench/contexts-20260919`):
+
+- **Three predictors** under `baselines/`, `page-contexts-predictor.ts`, `page-contexts-facts-predictor.ts` and
+  `page-contexts-plain-predictor.ts`: the usual three with one list for every case a document lays out
+  (`predictor-core.ts` `makePredictor`'s and `makePlainPredictor`'s `pageContexts`). `browser-sets.ts --predictor=...`
+  runs them in both orders, and `--shuffle=<seed>` in a third; `compare-sets.ts` compares their rows with a usual run's
+  ("Prediction hook"). TESTS.md, "Tiers", has the results: Chrome and webkit-host equal the usual recordings on every
+  row in every order and configuration, and Firefox's 7 differing cases are the process's two fallback-font states.
+- **`tools/twin-scan.ts --page`** scans a case file as one page with one list, and names a context by the object it is,
+  because `prepare` empties a list past its bound ("Checks for the re-architecture").
+- **The bench** lays the chat messages out with a list a message and with one list a pass, taking turns in one
+  document (bench README, "Chat", E), so one run holds the library before the list and after it.
+- **Probes and a tool**: `probes/contexts-font-load.ts`, `contexts-page-lang.ts`, `contexts-device-scale.ts` and
+  `contexts-canvas-churn.ts`; `tools/contexts-bound.ts`. The device scale probe needs `runner.ts
+  --chrome-emulate-dsf=<factor>`: its script asks the runner for another factor mid-page (`/api/chrome-dsf`) and puts
+  the run's factor back before it returns.
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -825,8 +848,10 @@ Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin famil
 Canvas) counts the cases where the Blink port asks one context the same characters as a one-byte and as a two-byte
 string; since the string storage fix it is a tripwire: 0 on every set (at the merge 0 of the 67,072 case lines of Chrome's
 set files, 377 of which ask a two-byte slice at all, 281 of them in `twins`; at the line 166 of the 380 `twins` cases held
-such a pair). Since Blink's X2 the scan names a context by its place in the prepared paragraph's `canvases`, where it
-used the measurer's index; with `contextsOf` planted to give one set of contexts it finds 166 of the 380 again. Check
+such a pair). Since Blink's X2 the scan named a context by its place in the prepared paragraph's `canvases`, where it
+used the measurer's index; since the profiling phase's item 1 it names it by the object it is, since a page's list can
+be emptied between two cases (`--page` scans a case file as one page with one list). With `contextsOf` planted to give
+one set of contexts it finds 166 of the 380 again. Check
 7, the painter differential (`bun rebuild/tools/painter-diff.ts check --browser=all --config=all`), is the offline check
 that reads `overflows` and the engines' paint facts, which tier 1 can't see: at the painter step it was byte-equal on
 389,646 of 389,646 cases against the painter of 81fd07d, and a planted flip of `overflows` in the adapter exits 1 with
