@@ -351,7 +351,11 @@ questions (`.artifacts/tests/runs/b1b-rework-20260920`):
 - *New unit tests* in `src/engines/blink/cuts.test.ts`, on a stand-in Canvas: the pieces add up to the group, since the
   cut moves off an offset where the two sides change each other; the search asks about no offset inside a word while
   one beside a space passes; a cut that passed asks nothing after its pieces; an inspected paragraph reports the cut of
-  a group where no offset passes. The second and third fail on the library before the change, as meant.
+  a group where no offset passes. The second and third fail on the library before the change, as meant. The critic's
+  two files beside it: `cuts-window.test.ts` (a cut before white space beside a side that was cut again, where the
+  search's window and the window between the cuts differ: three mutants of the kept 0's condition passed the first
+  four tests and fail these) and `cuts-kept.test.ts` (with positions kept by offset, a plain line that ends at a cut
+  before white space between two pieces asks Canvas nothing about it).
 - *A new set, `wide-group-cuts`* (2,159 Chrome cases; lab README, "The sets"): lines that end within half a px of the
   browser's fit in texts whose cuts fall where shaping crosses them. No other set held such a text: the form built first
   passed every tier and moved lines in 1,158 of the 22,536 cases the set is drawn from. It is in `sets.ts`; tier 1

@@ -1696,9 +1696,12 @@ placement. Nothing is asked earlier than the engine needs it, but for the space 
     for the fonts the paragraph was prepared with.
   - *Key:* the offset, in the group's own shaping call alone (`shape.ts` `keepsByOffset`). An adjustment depends on
     the call's range as well as on the offset: a line-edge reshape is a call of its own, its windows stop at its
-    edges and its range follows the line, so what it measures is kept nowhere. Nothing asks the wide window of the
-    group's call before the group's cuts are made, so there it is a fact of the offset too. The no-ligature
-    adjustments are an inspected paragraph's alone and aren't kept.
+    edges and its range follows the line, so what it measures is kept nowhere. Nothing reads the wide window of the
+    group's call before the group's cuts are made, so there it is a fact of the offset too. One entry is written
+    before any read: at a cut before white space whose two sides are one piece each, the window the cut's search
+    measured 0 in is the window `adjust16` takes between the cuts around the offset, so `measureGroups` writes that 0
+    and a line that ends at the cut asks nothing (`cuts-kept.test.ts`). The no-ligature adjustments are an inspected
+    paragraph's alone and aren't kept.
   - *Bound:* three 8-byte numbers per UTF-16 unit of the group, made with it: about 2.8 KB for a chat message of 116
     units.
   - *Who reads it:* a read that raises no gap, which is every read of a plain paragraph and `linePieces` on an

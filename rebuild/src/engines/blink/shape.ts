@@ -713,6 +713,8 @@ export function measureGroups(sh: Shaper): void {
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
     for (let i = 1; i < cuts.length - 1; i++) {
       const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
+      // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
+      if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
     }
   }
