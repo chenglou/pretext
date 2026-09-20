@@ -23,6 +23,9 @@
 //   page waits 15 seconds and sends its tab to the runner's same document under the host name `localhost`, another site
 //   than 127.0.0.1, so Firefox and Chrome load it in another process; the runner sends a restarted page its probes again
 //   (runner.ts step), and there the sweep runs. `host` in the result says which page answered.
+// - A8: A3 beside the DOM, for what A3 found about the kept list itself: a span in the same family, its width read at
+//   every reading beside the kept context's and a new context's, so it shows whether the DOM follows a family name that
+//   resolves late where a kept context doesn't.
 //
 // Per string: every change of the kept context's answer and of the new contexts', with the time of the reading that first
 // showed it. A row of one entry never changed. Counts, not times (one browser slot); a newly started browser a probe:
@@ -110,6 +113,39 @@ if (location.hostname !== 'localhost') {
   location.replace('http://localhost:' + location.port + location.pathname + location.search);
   await new Promise(() => {});
 }
+`
+
+const BESIDE_DOM = String.raw`
+const FAMILIES = [['Hiragino Sans', 'Hiragino Sans'], ['Hiragino Sans, Japanese name', 'ヒラギノ角ゴシック'], ['PingFang SC, Chinese name', '苹方-简'], ['Apple SD Gothic Neo, Korean name', 'Apple SD 산돌고딕 Neo'], ['a family that does not exist', 'No Such Family Zq']];
+const TEXT = 'Hamburgefonstiv 0123';
+const make = (font) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c.lang = 'en'; c.font = font; return c; };
+const t0 = performance.now();
+const fonts = FAMILIES.map(row => 'normal 400 32px "' + row[1] + '", monospace');
+const kept = fonts.map(make);
+const spans = FAMILIES.map(row => {
+  const span = document.createElement('span');
+  span.style.cssText = 'font: normal 400 32px "' + row[1] + '", monospace; white-space: nowrap; position: absolute; left: 0; top: 0';
+  span.textContent = TEXT;
+  document.body.append(span);
+  return span;
+});
+const seen = FAMILIES.map(() => ({ kept: [], fresh: [], dom: [] }));
+const note = (list, width, ms) => { if (list.length === 0 || list[list.length - 1].width !== width) list.push({ width, fromMs: ms }); };
+const readAll = () => {
+  const ms = Math.round(performance.now() - t0);
+  for (let i = 0; i < FAMILIES.length; i++) {
+    note(seen[i].kept, kept[i].measureText(TEXT).width, ms);
+    note(seen[i].fresh, make(fonts[i]).measureText(TEXT).width, ms);
+    note(seen[i].dom, spans[i].getBoundingClientRect().width, ms);
+  }
+};
+readAll();
+for (let i = 0; i < 40; i++) {
+  await new Promise(resolve => setTimeout(resolve, 250));
+  readAll();
+}
+for (let i = 0; i < spans.length; i++) spans[i].remove();
+return { userAgent: navigator.userAgent, host: location.host, msSinceNavigationStart: Math.round(t0), rows: FAMILIES.map((row, i) => ({ what: row[0], font: fonts[i], kept: seen[i].kept, fresh: seen[i].fresh, dom: seen[i].dom })) };
 `
 
 const OVER_TIME = String.raw`
@@ -204,6 +240,9 @@ export default async function storeAttackProbes(): Promise<Probe[]> {
   }, {
     id: 'store-attack A6', spec: 'store prototype: the sweep after strings that hold U+FE0E, in a new content process of a browser that has been up 15 seconds', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${SAMPLES}\n${HOP}\nconst ROWS = rowsOf(TEXT_PRESENTATION.concat(BLOCKS));\n${OVER_TIME}` }],
+  }, {
+    id: 'store-attack A8', spec: 'the contexts list: a family named by a localized name, a kept context and a new one beside the DOM over ten seconds', pageLang: 'en', html: '<div></div>',
+    observe: [{ kind: 'script', source: BESIDE_DOM }],
   }, {
     id: 'store-attack A4', spec: 'store prototype: the library with one kept list under a changing <html lang>, beside the DOM', pageLang: 'en', html: '<div></div>',
     observe: [{ kind: 'script', source: `${bundle}\n${PAGE_LANG}` }],
