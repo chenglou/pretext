@@ -1674,19 +1674,35 @@ asks (a soft hyphen, joining letters) and on the layout zoom, and an answer depe
   painted line of all 67,065 cases, `twins` included, equals the usual run's in file order, reversed and in a shuffled
   third order, in both configurations, and the plain path's line ranges equal them too; `tools/twin-scan.ts --page`
   finds no context asked the same characters in both storages with a whole case file as one page. webkit-host: 0 of
-  63,987 cases differ in either order and configuration. Firefox: 94 cases without facts and 74 with them differ, in
-  two parts, native observation and prediction together; the reference ledger marks every one history-dependent
-  (Firefox's process has two fallback-font states), and they pass as they did but for one widths pass gained and one
-  lost among `suite/measurement` cases.
+  63,987 cases differ in either order and configuration. The largest document of these runs is 13,010 cases on one
+  measurer, and Chrome's page-measurer run makes 1.13 contexts a case where the usual run makes 15.75. Firefox: 94
+  cases without facts and 74 with them differ from the reference's recording, in two parts, native observation and
+  prediction together; the reference ledger marks every one history-dependent. They are Firefox's two fallback-font
+  states of a process and not the measurer's doing: the same 74 differ between two usual runs (the recording and the
+  Gecko follow-up's run), the page-measurer run with facts equals that follow-up run on all 63,771 cases, and the 87
+  without facts in file order equal the usual run's reversed order. They pass as they did but for one widths pass
+  gained and one lost among `suite/measurement` cases.
 - *What it buys* (research/PROFILING-START.md's bench, 10,000 chat messages from scratch, quiet machine, two runs):
   Chrome 4.79 s and 5.08 s to 3.82 s and 4.08 s on the mix, 4.11 s to 3.49 s on plain ASCII; Firefox 2.63 s to 2.41 s
-  and 0.62 s to 0.45 s; webkit-host 0.25 s to 0.14 s and 0.19 s to 0.10 s. Kept paragraphs no longer keep about eleven
-  canvases a message alive in Chrome.
+  and 0.62 s to 0.45 s; webkit-host 0.25 s to 0.14 s and 0.19 s to 0.10 s (that document's 11.7 s for webkit-host
+  didn't come back: main, in the same documents, ran 0.31 s where that run had 1.53 s). A kept paragraph no longer
+  keeps canvases of its own alive, about five a message in Chrome, and preparing 10,000 messages and keeping them all
+  went from 11.1 s and 14.7 s to 3.9 s and 4.2 s on the mix there.
 - *What it costs.* In Chrome, kept paragraphs of the plain ASCII set that share their contexts lay out again more
   slowly: 49 µs to 62 µs a layout at a width they have met and 59 µs to 64 µs at a new one (the first quiet run's timed
   rows, 1,000 messages; the second run and the 10,000-message pass move the same way), and the mix doesn't move.
-  Nobody has found why. What is known: a page's canvas holds every paragraph's strings, and Chrome drops strings from
-  a canvas's cache past 32,768 and at frame switches (frame_shape_cache.cc:29-43, :93-104).
+  The cause is Chrome's bound on a canvas's cache (frame_shape_cache.cc:12-16, :93-104): under the stand-in Canvas
+  1,000 plain ASCII messages ask one page canvas 113,331 distinct strings at four widths, three times what it keeps, so
+  it has dropped a paragraph's strings by the time the paragraph is laid out again, where a paragraph's own canvas
+  still holds them. A probe in pinned Chrome (2026-09-19, 100,000 two-word strings, three rounds taking turns): one
+  canvas answers them again at 0.56 to 1.06 µs a string, no cheaper than its first answers (0.43 to 0.59 µs), and
+  1,000 canvases of 100 strings each answer again at 0.30 to 0.34 µs. It costs time and changes no answer. The tier 2
+  documents stay under the bound (the busiest canvas of any of Chrome's is asked 5,437 distinct strings under the
+  stand-in), so two other checks hold that: the benchmark's counting pass, where one canvas is asked about 100,000
+  distinct strings, finds every line range of 1,000 messages at four widths equal with one measurer and with a measurer
+  a message, in both sets and all three browsers; and a probe in pinned Chrome finds 0 of 120,000 strings answered
+  with other bits when asked again on a canvas past its bound, and 0 of a sample of 3,244 on fresh canvases, for
+  one-byte strings and for two-byte ones. Fewer asks per layout (item 2) is what removes the cost.
 
 ### 4.7 What removing the memo cost
 
