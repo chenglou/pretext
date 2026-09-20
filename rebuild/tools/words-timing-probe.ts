@@ -137,9 +137,9 @@ for (let s = 0; s < SETS.length; s++) {
     }
     proto.measureText = original;
     set.counts.push(marks);
-    const tally = { lines: 0, cuts: 0, noSearch: 0, searched: 0, reasons: {} };
-    for (let w = 0; w < RESIZE.length + 1; w++) for (let i = 0; i < kept.length; i++) tree.tallyLines(kept[i], w === 0 ? WIDTH : RESIZE[w - 1], tally);
-    set.lineTallies.push(tally);
+    const lineTally = { lines: 0, cuts: 0, noSearch: 0, searched: 0, reasons: {} };
+    for (let w = 0; w < RESIZE.length + 1; w++) for (let i = 0; i < kept.length; i++) tree.tallyLines(kept[i], w === 0 ? WIDTH : RESIZE[w - 1], lineTally);
+    set.lineTallies.push(lineTally);
   }
   report.sets.push(set);
   report.spinMs.push(spin());
