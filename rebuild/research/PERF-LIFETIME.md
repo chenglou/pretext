@@ -5,6 +5,29 @@ research/PROFILING-START.md's first item, built as an unmerged prototype on bran
 attacked by a second agent who reran its numbers on a quiet machine. The attacker's review comes first, because it
 corrects the report. Nothing here is merged.
 
+## What landed: the smaller form (2026-09-20)
+
+The orchestrator's decision below was built, reviewed and merged: `prepare(paragraph, env, inspect, contexts: Context[] = [])`
+takes a plain list of Canvas contexts; there is no `Measurer` type, and the font checks ask Canvas again at every
+`prepare`, on the kept contexts. Library code +15 −13 lines in five files.
+- **Lifetime, invalidation, bound:** the list is the caller's (a page's, or one call's when nothing is passed). A kept
+  context heals by itself after a web font loads in Chrome and Firefox; webkit-host's doesn't, so there the caller makes
+  a new list after the page's fonts change. `prepare` empties a list longer than 512 contexts (a lookup costs 4 to 7 ns a
+  settings record compared; the cliff is about 60 font declarations used in turn in Chrome, past which a page pays what
+  it paid before the list; with 10,000 distinct declarations the list never holds more than 514).
+- **Proof (tier 2, case by case against the usual run):** Chrome 0 differences in 134,130 rows in both orders in each
+  configuration, 0 of 67,065 shuffled, 0 on the plain path, page-wide twin scan 0 of 67,072; webkit-host 0 of 127,974 in
+  each configuration; Firefox 0 with facts and 7 cases without, all history-dependent in the frozen ledger, each equal to
+  the usual recording's other order. The critic reproduced the shuffled Chrome run and both Firefox runs. A device pixel
+  ratio probe (nobody had one): 0 of 135 kept-against-new pairs differ; an OffscreenCanvas context doesn't read the
+  device scale factor.
+- **Numbers:** the owner's bench ran on a loaded machine, so ratios: Chrome ×0.75 on the mix and ×0.855 on plain ASCII
+  from scratch; preparing and keeping 10,000 messages in Chrome 45.6 s to 9.0 s under that load; kept ASCII paragraphs
+  lay out again 1.27 times slower at a width they have met (Chrome's per-canvas cache), which item 2's kept positions
+  then removed (research/PERF-POSITIONS.md). The quiet absolute numbers for this form are the review's §4 below.
+- **Found on the way:** `twin-scan.ts --page` named a context by its place in the list, which the bound can reuse; it now
+  names a context by identity.
+
 ## What came back, and the orchestrator's reading
 
 - **The morning's baselines were wrong.** They were taken while other jobs loaded the machine. On a quiet machine, 10,000
