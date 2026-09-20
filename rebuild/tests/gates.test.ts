@@ -1,6 +1,6 @@
 // What gates.ts makes of each gate's exit code and report, its queue and the key of a kept result. These run no gate.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
@@ -92,7 +92,9 @@ test('the next core goes by the table\'s order, then first come, first served; a
 })
 
 const dir = mkdtempSync(join(tmpdir(), 'gates-test-'))
-afterAll(() => { Bun.spawnSync(['trash', dir]) })
+// The folders this file makes are removed directly: `trash` asks the Finder, which took 4.5 s for an empty folder at a load
+// average of 70, and a hook that takes 5 s fails the file.
+afterAll(() => { rmSync(dir, { recursive: true }) })
 
 test('a run removes the socket files of processes that are gone, and its own pid\'s, which can only be an earlier process\'s', () => {
   const gone = Bun.spawnSync(['true']).pid
@@ -114,7 +116,7 @@ test('gates.ts refuses an unknown engine or argument before it runs anything', (
 // ---- The queue: child processes that take a turn, say so in <queue>.log, and hold it ----
 
 const shared = mkdtempSync(join(tmpdir(), 'gates-test-shared-'))
-afterAll(() => { Bun.spawnSync(['trash', shared]) })
+afterAll(() => { rmSync(shared, { recursive: true }) })
 const TURN = join(shared, 'turn.ts')
 writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
 import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
