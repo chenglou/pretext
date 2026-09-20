@@ -756,8 +756,9 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
   for (let i = 0; i + 1 < starts.length; i++) word16.push(measure16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
   const passes = [true]
   for (let i = 1; i + 1 < starts.length; i++) {
-    const whole = measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end)
-    passes.push(whole < EXACT16 && whole === word16[i - 1]! + word16[i]! && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
+    // A sum of 256 zoomed px or more can't equal an exact total, so the two words together aren't asked then.
+    const sum = word16[i - 1]! + word16[i]!
+    passes.push(sum < EXACT16 && measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end) === sum && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
   }
   passes.push(true)
   // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
