@@ -361,7 +361,9 @@ function chatInputs(c: Context, setId: string, count: number): ChatInputs {
   const chat = c.plan.chat!
   const messages: ChatMessage[] = chat.sets.find(set => set.id === setId)!.messages
   const s = c.plan.style
-  const font: FontDecl = { ...s.font, facts: UNKNOWN_FONT_FACTS }
+  const units = chat.studyUnitsPerEm
+  const font: FontDecl = units === null ? { ...s.font, facts: UNKNOWN_FONT_FACTS }
+    : { ...s.font, facts: { ...c.font.facts, fonts: c.font.facts.fonts!.map(listed => ({ ...listed, unitsPerEm: units[listed.family] ?? null })) } }
   const codeFont: FontDecl = { ...chat.codeFont, facts: UNKNOWN_FONT_FACTS }
   const text = { letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8 } as const
   const edge: BoxEdge = { margin: 0, border: 0, padding: chat.codePadding }

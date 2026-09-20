@@ -155,7 +155,9 @@ export function buildMessages(script: Script, count: number): string[] {
 // One declaration for every message, as an app sets one font on its bubbles: the mixed rows' list, so CJK and Arabic
 // messages have a listed family and emoji go to the system's fallback. Inline code is 14px Menlo with 6px of padding on
 // each inline side, the Markdown chat demo's shape (pages/demos/markdown-chat.model.ts).
-export const CHAT_STYLE: ScriptStyle = style('chat', 'en', '"Helvetica Neue", "PingFang TC", "Geeza Pro", sans-serif', 'ltr')
+// BENCH_CHAT_FAMILY and BENCH_CHAT_UNITS_PER_EM are the cut-grain study's switches, unset in every recorded run: another
+// family list for the messages, and the lab's font facts for it with a JSON record of unitsPerEm per listed family.
+export const CHAT_STYLE: ScriptStyle = style('chat', 'en', process.env['BENCH_CHAT_FAMILY'] ?? '"Helvetica Neue", "PingFang TC", "Geeza Pro", sans-serif', 'ltr')
 export const CHAT_CODE_FONT: ChatPlan['codeFont'] = { family: 'Menlo', size: 14, weight: 400, style: 'normal' }
 export const CHAT_CODE_PADDING = 6
 export const CHAT_WIDTH = 320
@@ -426,6 +428,7 @@ export function buildChatPlan(options: ChatOptions): ChatPlan {
     codeFont: CHAT_CODE_FONT, codeMainFont: `${CHAT_CODE_FONT.size}px ${CHAT_CODE_FONT.family}`, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH,
     resizeWidths: CHAT_RESIZE_WIDTHS.slice(), sets: options.sets.map(id => ({ id, messages: buildChat(id, count) })), timed: options.timed, headline: options.headline,
     headlinePasses: options.headlinePasses, phasePasses: options.phasePasses,
+    studyUnitsPerEm: process.env['BENCH_CHAT_UNITS_PER_EM'] === undefined ? null : JSON.parse(process.env['BENCH_CHAT_UNITS_PER_EM']) as Record<string, number>,
   }
 }
 

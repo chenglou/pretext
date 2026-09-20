@@ -60,6 +60,9 @@ export type ChatPlan = {
   headline: number
   headlinePasses: number
   phasePasses: number
+  // The cut-grain study's switch, null in every recorded run: the messages' declaration takes the lab's font facts, with
+  // these unitsPerEm per listed family (ListedFontFacts.unitsPerEm; an empty record gives the lab's facts alone).
+  studyUnitsPerEm: Record<string, number> | null
 }
 
 export type Settings = {
