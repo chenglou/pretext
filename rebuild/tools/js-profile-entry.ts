@@ -1,7 +1,7 @@
 // The page side of tools/js-profile.ts: the Blink port as an application runs it, behind a few functions the page's
 // script calls. Bundled once per studied checkout (the driver points `../src/` at that checkout's library). A pass hands
 // every prepare one list of Canvas contexts, started inside the pass, as a page that lays its messages out from nothing
-// does (bench/README.md, "Chat", E). Nothing here measures time but `phases`.
+// does (bench/README.md, "Chat", E). Nothing here measures time but `phases` and `each`.
 import type { BlinkEnvironment } from '../src/env.ts'
 import { blinkFontChecks } from '../src/engines/blink/checks.ts'
 import * as blink from '../src/engines/blink/index.ts'
@@ -84,6 +84,18 @@ function phases(paragraphs: readonly Paragraph[], env: BlinkEnvironment, width: 
   return { checksMs, prepareMs, fillMs }
 }
 
+// The pass message by message: every message's time and line boxes go to `ms` and `lineBoxes`, and `after` runs between
+// two messages, outside the timed stretch (the page reads its Canvas counters there).
+function each(paragraphs: readonly Paragraph[], env: BlinkEnvironment, width: number, ms: Float64Array, lineBoxes: Int32Array, after: (index: number) => void): void {
+  const contexts: Context[] = []
+  for (let i = 0; i < paragraphs.length; i++) {
+    const start = performance.now()
+    lineBoxes[i] = fillAll(prepareOne(paragraphs[i]!, env, contexts), width)
+    ms[i] = performance.now() - start
+    after(i)
+  }
+}
+
 function prepareAll(paragraphs: readonly Paragraph[], env: BlinkEnvironment, width: number): BlinkPrepared[] {
   const contexts: Context[] = []
   const out: BlinkPrepared[] = []
@@ -101,4 +113,4 @@ function relayout(prepared: readonly BlinkPrepared[], widths: readonly number[])
   return { lines, hash: rangeHash >>> 0 }
 }
 
-(globalThis as unknown as { jsProfileLib: unknown }).jsProfileLib = { environment, paragraphOf, scratch, phases, prepareAll, relayout }
+(globalThis as unknown as { jsProfileLib: unknown }).jsProfileLib = { environment, paragraphOf, scratch, phases, each, prepareAll, relayout }

@@ -3,7 +3,7 @@
 // every Canvas answer free.
 //
 //   python3 .artifacts/session/with-browser-lock.py <job> --browser=chrome -- bun rebuild/tools/js-profile.ts \
-//     --mode=profile|pairs --trees=<label>=<checkout>[,<label>=<checkout>...] --out=<dir> \
+//     --mode=profile|pairs|classes --trees=<label>=<checkout>[,<label>=<checkout>...] --out=<dir> \
 //     [--replay=yes] [--sets=mix,latin] [--messages=10000] [--rounds=12] [--relayout-rounds=6] [--phases=yes]
 //
 // A checkout is a folder that holds rebuild/src; the page side (js-profile-entry.ts) is this tree's, bundled once per
@@ -18,6 +18,9 @@
 //   later, so whatever the machine does in a round it does to every checkout. Then `--relayout-rounds` rounds of the
 //   relayout. --phases=yes adds a pass a round with a timer read around the font checks, the engine's prepare and the
 //   line loop of every message. A timed run takes the exclusive lock (--browser=all --exclusive).
+// --mode=classes: the first checkout's messages by the line boxes they make (1, 2, 3, 4 to 5, 6 and more): how many they
+//   are, their text, their measureText calls, and their time in three passes on the real Canvas and three with free
+//   answers, each message timed by itself (two timer reads a message, so read the classes beside each other).
 // --replay=yes: every Canvas answer is free. The first checkout's pass is recorded once (what measureText answered, in
 //   order, with a hash of every string asked and of the context it was asked on), every checkout must ask the same, and
 //   the timed and profiled passes get the recorded answers back in order from an array. The code runs the path it runs
@@ -39,7 +42,7 @@ for (const raw of process.argv.slice(2)) {
   args.set(match[1]!, match[2]!)
 }
 const mode = args.get('mode')
-if (mode !== 'profile' && mode !== 'pairs') throw new Error('--mode=profile|pairs')
+if (mode !== 'profile' && mode !== 'pairs' && mode !== 'classes') throw new Error('--mode=profile|pairs|classes')
 const trees = (args.get('trees') ?? '').split(',').filter(entry => entry !== '').map(entry => ({ label: entry.slice(0, entry.indexOf('=')), path: resolve(entry.slice(entry.indexOf('=') + 1)) }))
 if (trees.length === 0) throw new Error('--trees=<label>=<checkout>[,...]')
 const outDir = resolve(args.get('out') ?? '')
@@ -112,7 +115,7 @@ function replaying(recorded, run) {
   return result
 }
 
-const out = { runId: config.runId, userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: window.crossOriginIsolated, config, recorded: [], stretches: [], rounds: [], relayoutRounds: [] }
+const out = { classes: [], runId: config.runId, userAgent: navigator.userAgent, devicePixelRatio: window.devicePixelRatio, crossOriginIsolated: window.crossOriginIsolated, config, recorded: [], stretches: [], rounds: [], relayoutRounds: [] }
 const through = (entry, set, stage, run) => config.replay ? replaying(entry.recorded[set][stage], run) : run()
 
 // Compiled code first: every checkout over the first 1,000 messages of every set, scratch and relayout.
@@ -168,6 +171,45 @@ if (config.mode === 'profile') {
   }
 }
 
+if (config.mode === 'classes') {
+  const entry = libs[0]
+  for (const set of sets) {
+    const list = entry.paragraphs[set]
+    const n = list.length
+    const lineBoxes = new Int32Array(n)
+    const calls = new Int32Array(n)
+    const real = new Float64Array(n)
+    const free = new Float64Array(n)
+    const ms = new Float64Array(n)
+    document.title = 'classes ' + set
+    const recorded = record(() => entry.lib.scratch(list, entry.env, config.width))
+    let asked = 0
+    let before = 0
+    const counting = proto.measureText
+    proto.measureText = function (text) { asked++; return counting.call(this, text) }
+    entry.lib.each(list, entry.env, config.width, ms, lineBoxes, i => { calls[i] = asked - before; before = asked })
+    proto.measureText = counting
+    for (let pass = 0; pass < 3; pass++) {
+      entry.lib.each(list, entry.env, config.width, ms, lineBoxes, () => {})
+      for (let i = 0; i < n; i++) real[i] += ms[i] / 3
+      await pause()
+      replaying(recorded, () => entry.lib.each(list, entry.env, config.width, ms, lineBoxes, () => {}))
+      for (let i = 0; i < n; i++) free[i] += ms[i] / 3
+      await pause()
+    }
+    const rows = ['1', '2', '3', '4 to 5', '6 and more'].map(lines => ({ set, lines, messages: 0, units: 0, calls: 0, realMs: 0, freeMs: 0 }))
+    for (let i = 0; i < n; i++) {
+      const row = rows[lineBoxes[i] <= 3 ? Math.max(lineBoxes[i], 1) - 1 : lineBoxes[i] <= 5 ? 3 : 4]
+      row.messages++
+      for (const part of SETS[set][i].parts) row.units += part.text.length
+      row.calls += calls[i]
+      row.realMs += real[i]
+      row.freeMs += free[i]
+    }
+    out.classes.push(...rows)
+  }
+}
+
 if (config.mode === 'pairs') {
   for (let round = 0; round < config.rounds; round++) {
     const row = []
@@ -218,6 +260,7 @@ type Result = {
   recorded: Array<{ label: string; set: string; scratch: { calls: number; hash: number }; prepareAll: { calls: number; hash: number }; relayout: { calls: number; hash: number } }>
   stretches: Array<{ name: string; ms: number; unprofiledMs: number; lines: number; hash: number }>
   rounds: Cell[][]; relayoutRounds: Cell[][]
+  classes: Array<{ set: string; lines: string; messages: number; units: number; calls: number; realMs: number; freeMs: number }>
 }
 
 // run.ts asciiJsonResponse: every character above U+007E escaped, so a string is 8-bit in the page where its characters allow.
@@ -398,6 +441,10 @@ if (result !== null) {
     summary.push(`${s.name}: ${s.ms.toFixed(1)} ms profiled, ${s.unprofiledMs.toFixed(1)} ms without the profiler, ${s.lines} lines, hash ${s.hash}`)
   }
   summary.push(...summarize('scratch', result.rounds), ...summarize('relayout', result.relayoutRounds))
+  for (let i = 0; i < result.classes.length; i++) {
+    const c = result.classes[i]!
+    summary.push(`${c.set}, ${c.lines} line boxes: ${c.messages} messages, ${(c.units / c.messages).toFixed(0)} units and ${(c.calls / c.messages).toFixed(1)} calls a message, ${(c.realMs * 1000 / c.messages).toFixed(1)} µs a message on the real Canvas and ${(c.freeMs * 1000 / c.messages).toFixed(1)} µs with free answers; ${(c.realMs).toFixed(0)} ms and ${c.calls} calls of the set`)
+  }
 }
 writeFileSync(join(outDir, `${mode}${config.replay ? '-replay' : ''}-summary.txt`), `${summary.join('\n')}\n`)
 console.log(summary.join('\n'))
