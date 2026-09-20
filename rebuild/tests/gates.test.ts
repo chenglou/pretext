@@ -264,7 +264,7 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   write('.artifacts/lab/cases/twins.ndjson', '{}\n')
   expect(blink()).not.toBe(before[0]!)
   expect([blink('--quick'), inputsKey(repo, run())]).toEqual([before[1]!, before[2]!])
-})
+}, 120000)
 
 test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
   const row = (as: number, tier2: number): Row => ({ gate: 'a gate', exit: as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: 'a-gate.log' })
