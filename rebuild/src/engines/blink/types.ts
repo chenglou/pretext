@@ -64,9 +64,9 @@ export type ComputedStyle = {
 // (no spacing), and the factor from Canvas px to zoomed px (the layout zoom for fonts measured at the CSS size, else 1).
 export type StyleContexts = { ltr: Context; rtl: Context; ltrNoLigatures: Context; rtlNoLigatures: Context; hyphen: Context; scale: number }
 
-// A style with what measuring keeps beside it. The two answers Canvas gives when they are first needed are the only
-// prepared data written after prepare (the first adds its contexts to BlinkPrepared.canvases); each is a fact of the
-// style's fonts that no layout changes.
+// A style with what measuring keeps beside it. The two answers Canvas gives when they are first needed are written
+// after prepare (the first adds its contexts to BlinkPrepared.canvases), as a group's position data is (BlinkGroup);
+// each is a fact of the style's fonts that no layout changes.
 export type BlinkStyle = ComputedStyle & {
   // The contexts the style's strings are measured on: references into BlinkPrepared.canvases.
   contexts: StyleContexts
@@ -123,6 +123,13 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
+  // The group's position data, as Blink's ShapeResult keeps it for a shaping call (character_position_, shape_result.h:
+  // x_position and safe_to_break_before per character), per offset from `start`: the 16.16 advance sum before the offset,
+  // NaN until a line asks for it, and whether it is safe to break before, 0 until a line asks, then 1 for no and 2 for
+  // yes. Blink computes them for the whole result at once; here each costs Canvas questions, so they are filled as lines
+  // ask, by the reads that raise no gap, and read back at any width (shape.ts groupPrefix16, safeToBreak).
+  prefix16: Float64Array
+  safe: Uint8Array
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
@@ -131,7 +138,7 @@ export type BlinkGroup = {
 export type BlinkInspect = { gaps: Gap[] }
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
-// are first needed (BlinkStyle).
+// are first needed (BlinkStyle) and the groups' position data (BlinkGroup.prefix16, safe).
 export type BlinkPrepared = {
   paragraph: Paragraph
   env: BlinkEnvironment

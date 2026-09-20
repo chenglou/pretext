@@ -731,13 +731,26 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   }
 }
 
-// The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
+// The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping. It is a
+// fact of the group's text and fonts, which no width and no line changes, so a read that raises no gap keeps it by offset
+// (BlinkGroup.prefix16) for every later one, at any width: every read of a plain paragraph, and linePieces' on an
+// inspected one. A read under a gap list measures: each measurement raises its range's gaps into the list of the line that
+// reads (gaps.ts measuredRange), and a value read back would leave them out of a list that doesn't have them yet.
 export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   const p = sh.p
   const group = p.groups[g]!
   if (k >= group.end) return group.prefixAtCut[group.prefixAtCut.length - 1]! - group.startTrim16 - group.endTrim16
   k = clusterStartAtOrBefore(p, k, group.start)
   if (k <= group.start) return 0
+  if (sh.gaps !== null) return measuredPrefix16(sh, g, k)
+  const at = k - group.start
+  if (Number.isNaN(group.prefix16[at]!)) group.prefix16[at] = measuredPrefix16(sh, g, k)
+  return group.prefix16[at]!
+}
+
+// groupPrefix16 at a cluster start k inside the group, asked of Canvas.
+function measuredPrefix16(sh: Shaper, g: number, k: number): number {
+  const group = sh.p.groups[g]!
   const cuts = group.cuts
   let lo = 0
   let hi = cuts.length - 1
@@ -856,11 +869,20 @@ function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
       const group = sh.p.groups[sr.group]!
       if (k <= group.start) return group.startTrim16 === 0
       if (k >= group.end) return true
-      if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
-      return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
-        pairAdjust16(sh, sr.group, k, group.start, group.end) === 0
+      // Kept by offset where the read raises no gap, as groupPrefix16 keeps positions.
+      if (sh.gaps !== null) return safeInsideGroup(sh, sr.group, k)
+      const at = k - group.start
+      if (group.safe[at] === 0) group.safe[at] = safeInsideGroup(sh, sr.group, k) ? 2 : 1
+      return group.safe[at] === 2
     }
   }
+}
+
+function safeInsideGroup(sh: Shaper, g: number, k: number): boolean {
+  const group = sh.p.groups[g]!
+  if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
+  return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, g, k, group.start, group.end) === 0 &&
+    pairAdjust16(sh, g, k, group.start, group.end) === 0
 }
 
 export function isStartSafeToBreak(sh: Shaper, sr: ShapeResult): boolean {
