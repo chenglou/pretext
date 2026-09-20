@@ -11,7 +11,8 @@
 // scans. `after`: the window starts one cluster before the cut and ends 1, 2, 3... clusters after it. `before`: it ends one
 // cluster after the cut and starts 1, 2, 3... clusters before it. Each entry of a scan is the window, its text, its total
 // and its adjustment W(window) - W(window before the cut) - W(window after the cut), while the total stays below 256 zoomed
-// px. Beside them every string Canvas was asked for the longest window of the `after` scan, with its width.
+// px. Beside them every string Canvas was asked for the longest window of the `after` scan, with its width, and every
+// string it was asked while the paragraph was prepared, in order (`prepareAsked`): the cut search's own windows.
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -31,7 +32,11 @@ for (let n = 0; n < SCAN.length; n++) {
   const scan = SCAN[n];
   const given = TEXTS.find(t => t.name === scan.text);
   const family = scan.family.startsWith('!') ? scan.family.slice(1) : '"' + scan.family + '"';
+  asked.length = 0;
+  recording = true;
   const c = B.prepare(B.paragraphOf(family, scan.size, given.text, given.lang, given.rtl), env, []);
+  recording = false;
+  const prepareAsked = asked.slice();
   const made = B.groupsOf(c);
   let g = 0;
   while (g + 1 < made.groups.length && made.groups[g].end <= scan.cut) g++;
@@ -59,6 +64,7 @@ for (let n = 0; n < SCAN.length; n++) {
     a = clusterBefore(a, group.start);
   }
   if (last !== null) { asked.length = 0; recording = true; W(a1, last); W(a1, k); W(k, last); recording = false; row.asked = asked.slice(); }
+  row.prepareAsked = prepareAsked;
   out.push(row);
 }
 OffscreenCanvasRenderingContext2D.prototype.measureText = original;
