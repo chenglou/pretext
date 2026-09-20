@@ -285,7 +285,7 @@ so tier 1 can't pass before a new recording, and what holds it is the browser.
   off the mix and 25% off plain ASCII, and it doesn't reach the bar by itself. With item 1's measured saving (0.92 s
   and 0.65 s, research/PERF-LIFETIME.md) the two would come to about 2.3 s on both sets if they add, which is a sum and
   not a run; the store study's sum of two probes had 1.8 to 2.0 s and 2.0 to 2.4 s. A kept paragraph laid out at three
-  other widths was measured once a run and not in turns (2.2 to 4.2 s on either tree): the counts say it didn't move.
+  other widths was measured once a run and not in turns (1.9 to 4.2 s on either tree): the counts say it didn't move.
 - *Proof.* Tier 2 in pinned Chrome, both orders, both configurations, recorded: 0 status transitions without facts;
   with facts 20, all on the painter's metric and none from a pass (one text, `x AVAV…AV y`: the old gap sat at every
   cut of the word, since every offset in it kerns, and the painter's failure on that line was attributed to it; 8 rows
