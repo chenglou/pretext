@@ -118,8 +118,8 @@ afterAll(() => { Bun.spawnSync(['trash', shared]) })
 const TURN = join(shared, 'turn.ts')
 writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
 import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
-const [queue, name, hold, flags] = process.argv.slice(2)
-await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: name, flags, quick: flags === '--quick' })
+const [queue, name, hold, flags, worktree] = process.argv.slice(2)
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' })
 appendFileSync(queue + '.log', 'start ' + name + '\\n')
 await Bun.sleep(Number(hold))
 appendFileSync(queue + '.log', 'end ' + name + '\\n')
@@ -127,9 +127,9 @@ appendFileSync(queue + '.log', 'end ' + name + '\\n')
 const textOf = (path: string): string => (existsSync(path) ? readFileSync(path, 'utf8') : '')
 const soon = async (what: () => boolean): Promise<void> => { while (!what()) await Bun.sleep(50) }
 
-test('a run waits its turn behind the live runs of its kind, first come, first served, and says who holds it; a killed holder\'s turn goes on', async () => {
+test('a run waits its turn behind the live runs of its kind and of its worktree, first come, first served, and says who holds it; a killed holder\'s turn goes on', async () => {
   const queue = join(shared, 'queue')
-  const start = (name: string, flags: string) => Bun.spawn(['bun', TURN, queue, name, '60000', flags], { stdout: 'ignore', stderr: Bun.file(join(shared, `${name}.err`)) })
+  const start = (name: string, flags: string, worktree = name) => Bun.spawn(['bun', TURN, queue, name, '60000', flags, worktree], { stdout: 'ignore', stderr: Bun.file(join(shared, `${name}.err`)) })
   const log = (): string => textOf(`${queue}.log`)
   const said = (name: string): string => textOf(join(shared, `${name}.err`))
   const a = start('a', '')
@@ -153,15 +153,21 @@ test('a run waits its turn behind the live runs of its kind, first come, first s
   const late = start('late', '')
   await soon(() => log().includes('start late'))
   expect(log()).not.toContain('start quick2')
+  // Two runs of one worktree do: they would write the same reports and logs.
+  const same = start('same', '--quick', 'late')
   quick.kill('SIGKILL')
   await soon(() => log().includes('start quick2'))
-  late.kill('SIGKILL')
   quick2.kill('SIGKILL')
+  await soon(() => said('same').includes(`pid ${late.pid} holds it (worktree late, flags none, since `))
+  expect(log()).not.toContain('start same')
+  late.kill('SIGKILL')
+  await soon(() => log().includes('start same'))
+  same.kill('SIGKILL')
 }, 120000)
 
 test('runs that ask at the same moment get a ticket each and never run together', async () => {
   const queue = join(shared, 'at-once')
-  const runs = [0, 1, 2, 3, 4].map(i => Bun.spawn(['bun', TURN, queue, `run${i}`, '100', ''], { stdout: 'ignore', stderr: 'ignore' }))
+  const runs = [0, 1, 2, 3, 4].map(i => Bun.spawn(['bun', TURN, queue, `run${i}`, '100', '', `run${i}`], { stdout: 'ignore', stderr: 'ignore' }))
   for (let i = 0; i < runs.length; i++) expect(await runs[i]!.exited).toBe(0)
   const lines = textOf(`${queue}.log`).trim().split('\n')
   expect(lines.length).toBe(10)

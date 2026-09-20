@@ -45,18 +45,19 @@
 // A turn: the machine runs one full run and one --quick run at a time. Several full runs at once, each in its own
 // worktree, took two to three times as long each (19 to 33 minutes at load averages of 80 to 160) and spoiled the timed
 // benchmarks beside them. Before its first gate a run takes a ticket, <n>.json in .artifacts/tests/gates/queue, which
-// every worktree shares: n is one more than the highest number there, and the ticket is a hard link to a finished draft,
-// which fails when the name exists. So a ticket holds its pid, worktree, flags and time from the moment it exists, two
-// runs never get one number, and tickets appear in the order of their numbers. A run starts when no ticket below its own
-// is a live run's of its kind, first come, first served, and while it waits it says who holds the turn and how many wait
-// before it. Nothing is ever taken over, so nothing is timed: a ticket is dead when its pid is gone, or is a process that
-// started after the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until
-// the next run looks); a run skips and removes the dead tickets below its own and leaves its own behind as the highest,
-// so the numbers only go up. --no-wait takes no ticket, for a human who knows better. Measured with --quick
-// --engine=gecko, 42 to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs
-// wait for each other; on half the cores each they took 74 and 76 s, which gives the second what it takes from the
-// first and costs a run alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run
-// don't wait for each other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
+// every worktree shares: n is one more than the highest number there, and the ticket is a hard link to a finished
+// draft, which fails when the name exists. So a ticket holds its pid, worktree, flags and time from the moment it
+// exists, two runs never get one number, and tickets appear in the order of their numbers. A run starts when no ticket
+// below its own is a live run's of its kind, or of its worktree (two runs of one worktree write the same reports and
+// logs), first come, first served, and while it waits it says who holds the turn and how many wait before it. Nothing
+// is ever taken over, so nothing is timed: a ticket is dead when its pid is gone, or is a process that started after
+// the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
+// looks); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
+// numbers only go up. --no-wait takes no ticket, for a human who knows better. Measured with --quick --engine=gecko, 42
+// to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
+// on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
+// alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
+// other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
 //
 // Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
 // result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
@@ -313,8 +314,8 @@ function readTicket(path: string): Ticket | null {
 }
 
 
-// Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick); says who
-// holds the turn while it waits. True when it waited. The ticket is a hard link to a finished draft, which fails when the
+// Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
+// worktree, whose reports and logs it would write over; says who holds the turn while it waits. True when it waited. The ticket is a hard link to a finished draft, which fails when the
 // name exists: a ticket holds its run from the moment it exists, two runs never get one number, and the numbers only go
 // up, since a run removes dead tickets below its own only. So every ticket below a run's own was there before it, and
 // nothing is ever taken over.
@@ -344,7 +345,7 @@ export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
       const earlier = readTicket(path)
       if (earlier === null) continue
       if (!ticketLives(earlier)) rmSync(path, { force: true })
-      else if (earlier.quick === ticket.quick) before.push(earlier)
+      else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
     }
     if (before.length === 0) {
       if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)

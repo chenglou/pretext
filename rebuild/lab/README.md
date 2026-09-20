@@ -469,15 +469,15 @@ full runs at once, each in its own worktree, took 19 to 33 minutes each instead 
 and an owner, its critic and the orchestrator ran the gates three times on one tree. So a run takes a machine-wide turn
 before its first gate: a numbered ticket in `.artifacts/tests/gates/queue`, which every worktree shares, made in one
 step, first come, first served. A full run waits for the full runs before it and a `--quick` run for the `--quick` runs
-before it; while it waits it says who holds the turn (pid, worktree, flags, since when) and how many wait before it. A
-ticket whose process is gone holds nobody up, so a killed run needs no cleaning, and `--no-wait` skips the queue.
-Measured with `--quick --engine=gecko`, 31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at
-once took 115 and 120 s (246 and 248 s on a busier machine, where one took 113 s), one after the other through the
-queue 50 and 100 s. On 8 cores each they took 74 and 76 s, which gives the second what it takes from the first, and a
-run alone on 8 cores took 52 s, so a run never takes fewer cores instead of waiting. A `--quick` run and a full run
-don't wait for each other: beside a full run the `--quick` run took 123 s (185 s on 8 cores) at load averages up to 58,
-where its wait would be six minutes on average; the full run took 16 minutes with those two beside it and other owners'
-jobs.
+before it, and either for a run of its own worktree, whose reports and logs it would write over; while it waits it says
+who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
+nobody up, so a killed run needs no cleaning, and `--no-wait` skips the queue. Measured with `--quick --engine=gecko`,
+31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
+on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
+took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
+never takes fewer cores instead of waiting. A `--quick` run and a full run don't wait for each other: beside a full run
+the `--quick` run took 123 s (185 s on 8 cores) at load averages up to 58, where its wait would be six minutes on
+average; the full run took 16 minutes with those two beside it and other owners' jobs.
 
 A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
 reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
