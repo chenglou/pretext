@@ -937,6 +937,11 @@ function lineStatus(line: Line, availableWidth: number, lineHasContent: boolean,
 }
 
 // ---- TextOnlySimpleLineBuilder (TOS) ----
+// The simple builder's content is text items and line breaks alone: content.ts chooses it for such content, and the range
+// based builder runs it between the one span's start and end. That is known of the paragraph's builder, not of its item
+// list, which holds any item and which LineBuilder reads whole once the paragraph meets floats. So where this builder reads
+// an item of a candidate, or of the line so far, by its index, it says the item is text, as the source's downcasts do: a
+// line break ends the line, and every item before it is text.
 
 // A line builder's state. `measuredEnd` is the item index past the last item the builder read a width or a break opportunity
 // of: the line's content and the candidate content that ended the line. `shapedCarry` says the width carried to the next line
@@ -1078,6 +1083,7 @@ function consumeTrailingLineBreak(b: Builder, r: SimpleResult, index: number): b
 function placedInlineItemEnd(b: Builder, placedCount: number, overflowingContentLength: number): Position {
   if (!overflowingContentLength) return { index: b.rangeStart + placedCount, offset: 0 }
   const index = b.rangeStart + placedCount - 1
+  // Only a text item is split, so a line that ends inside an item ends inside text.
   const item = b.L.p.items[index] as WebKitTextItem
   return { index, offset: item.end - item.start - overflowingContentLength }
 }
@@ -1752,6 +1758,7 @@ function placeInlineAndFloatContent(b: Builder, start: Position): { end: Positio
     end = { index: b.rangeStart + placed, offset: 0 }
   } else {
     const index = b.rangeStart + placed - 1
+    // Only a text item is split, so a line that ends inside an item ends inside text.
     const item = L.p.items[index] as WebKitTextItem
     end = { index, offset: item.end - item.start - partialTrailingContentLength }
   }
@@ -1886,7 +1893,8 @@ export function textIndent(p: WebKitPrepared, start: WebKitLineStart): number {
 type Placed = { line: Line; end: Position; overflowLogicalWidth: number | null; carriedFromShaping: boolean; isLastLineOrLineEndsWithForcedLineBreak: boolean; measuredEnd: number }
 
 // The rest of the item the line before split. InlineTextItem::right (InlineTextItem.cpp:65-71) keeps the carried width as the
-// stored width.
+// stored width. Only a text item is split, so a start with an offset stands inside text, which a line start, an index and
+// an offset as the lab's rows keep them (geometry.ts), doesn't say.
 function partialLeadingTextItem(p: WebKitPrepared, start: WebKitLineStart): WebKitTextItem | null {
   if (start.previousLine === null || start.offset === 0) return null
   const item = p.items[start.itemIndex] as WebKitTextItem
@@ -1894,7 +1902,8 @@ function partialLeadingTextItem(p: WebKitPrepared, start: WebKitLineStart): WebK
 }
 
 // hasInlineBoxesOnly (RangeBasedLineBuilder.cpp:51-78): one line of the inline box runs, no content, eligible spans have no
-// decoration.
+// decoration. Every item is an inline box start or end, which is known of the paragraph's builder and not of its item list
+// (content.ts rangeInlineLayout).
 function placeInlineBoxesOnly(p: WebKitPrepared, start: WebKitLineStart): Placed {
   const line = newLine([])
   for (let i = 0; i < p.items.length; i++) line.runs.push(elementRun(p.items[i] as InlineBoxItem, 0, 0))
@@ -1920,7 +1929,8 @@ function placeWithSimpleBuilder(L: Layout, start: WebKitLineStart, rangeBased: b
   if (rangeBased) {
     // insertLeadingInlineBoxRun and appendTrailingInlineBoxRunIfNeeded (RangeBasedLineBuilder.cpp:106-126): the span's
     // start run on the first formatted line, a spanning start on later ones, and its end run at the content width on
-    // the line that places the last content.
+    // the line that places the last content. The first and the last item are the span's start and end, which is known
+    // of the paragraph's builder and not of its item list (content.ts rangeInlineLayout).
     const leading = items[0] as InlineBoxItem
     b.line.runs.unshift(start.isFirstFormattedLine ? elementRun(leading, 0, 0) : { kind: 'spanning-inline-box-start', element: leading.element, left: 0, width: 0, level: OPAQUE_BIDI_LEVEL })
     if (reachesRangeEnd) b.line.runs.push(elementRun(items[items.length - 1] as InlineBoxItem, b.line.contentLogicalWidth, 0))
