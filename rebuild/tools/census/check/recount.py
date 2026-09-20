@@ -97,6 +97,12 @@ def family_means(families):
     return [pct(sums[k], counted[k]) for k in range(4)]
 
 
+then = collections.defaultdict(dict)
+with open(f'{THEN}/census-transitions.ndjson', encoding='utf8') as f:
+    for line in f:
+        t = json.loads(line)
+        then[t['browser']][t['id']] = t
+
 calibration = json.load(open(f'{OUT}/calibration.json'))
 fields = calibration['fields']
 history = {h['id'] for h in json.load(open(f'{THEN}/history/webkit-host/history.json'))['historyDependent']}
@@ -182,6 +188,46 @@ for browser in BROWSERS:
     real_families = by_family(real)
     for name in real_families:
         compare(f'{browser} {name}', real_families[name], calibration[browser]['realText']['families'].get(name, {}), fields, differences)
+    # ---- 2026-09-17 against today, on the kept cases both days hold ----
+    native_then = {}
+    for chunk in chunks:
+        if os.path.exists(f'{OUT}/{browser}/{chunk}/then.ndjson'):
+            for t in read(f'{OUT}/{browser}/{chunk}/then.ndjson'):
+                native_then[t['id']] = t['native']
+    moves = collections.defaultdict(collections.Counter)
+    letter = lambda status: 'p' if status == 'pass' else 'f'
+    joined = compared = native_moved = lines_moved = 0
+    pass_to_fail = []
+    for r in kept:
+        t = then[browser].get(r['id'])
+        if t is None:
+            continue
+        joined += 1
+        was = native_then.get(r['id'])
+        if was is not None:
+            compared += 1
+            native_moved += was['key'] != r['native']['key']
+            lines_moved += was['lines'] != r['native']['lines']
+        for m in ('lineCount', 'breaks', 'widths'):
+            a, z = t['rebuild'][m], r['rebuild'][m]
+            key = 'u' if 'unobserved' in (a, z) else letter(a) + letter(z)
+            moves[f'rebuild {m}'][key] += 1
+            if was is not None and was['key'] == r['native']['key']:
+                moves[f'rebuild {m}, same native view'][key] += 1
+        a, z = t['main']['lineCount'], 'unobserved' if r['rebuild']['lineCount'] == 'unobserved' else r['main']['lineCount']
+        moves['main lineCount']['u' if 'unobserved' in (a, z) else letter(a) + letter(z)] += 1
+        if any(t['rebuild'][m] == 'pass' and r['rebuild'][m] == 'fail' for m in ('lineCount', 'breaks')):
+            pass_to_fail.append(r['id'])
+    theirs_then = calibration[browser]['thenAndNow']
+    compare(f'{browser} then and now', {'joined': joined, 'nativeCompared': compared, 'nativeMoved': native_moved, 'nativeLinesMoved': lines_moved}, theirs_then, ['joined', 'nativeCompared', 'nativeMoved', 'nativeLinesMoved'], differences)
+    for name in set(moves) | set(theirs_then['moves']):
+        compare(f'{browser} moves {name}', moves[name], theirs_then['moves'].get(name, {}), ['pp', 'fp', 'pf', 'ff', 'u'], differences)
+    listed = [i for i in open(f'{OUT}/rerun/{browser}-pass-to-fail.ids').read().split('\n') if i]
+    facts = read(f'{OUT}/{browser}/facts-pass-to-fail/cases.ndjson')
+    rate = lambda m: f'{pct(m["pp"] + m["pf"], m["pp"] + m["fp"] + m["pf"] + m["ff"])} -> {pct(m["pp"] + m["fp"], m["pp"] + m["fp"] + m["pf"] + m["ff"])} (fail to pass {m["fp"]}, pass to fail {m["pf"]})'
+    print(f'  09-17 against today, {joined} cases: lineCount {rate(moves["rebuild lineCount"])}; breaks {rate(moves["rebuild breaks"])}; widths {rate(moves["rebuild widths"])}; main {rate(moves["main lineCount"])}; native views differ {native_moved} of {compared} ({lines_moved} in the number of lines)')
+    print(f'  passed lineCount or breaks then and fail it now: {len(pass_to_fail)} (the ids file lists {len(listed)}, the same set: {set(listed) == set(pass_to_fail)}); run again with the lab\'s facts {len(facts)}, right lines {sum(1 for r in facts if not wrong(r))}, still wrong {sum(1 for r in facts if wrong(r))}; facts run covers the list: {set(r["id"] for r in facts) == set(listed)}')
+
     print(f'  compared with calibration.json: {len(families)} suite families, {len(real_families)} real-text families, 3 totals, the rerun counts: {len(differences)} counts differ')
     for d in differences[:20]:
         print('    ' + d)
