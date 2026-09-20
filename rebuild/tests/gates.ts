@@ -358,15 +358,14 @@ export function exclusiveBrowserJobs(lock: string): ExclusiveJob[] {
   return jobs
 }
 
+// A process's parent; `ps` gives nothing for a pid that is gone, which reads as 0.
+const parentOf = (pid: number): number => Number(Bun.spawnSync(['ps', '-o', 'ppid=', '-p', String(pid)]).stdout.toString())
+
 // Whether a process above `pid` (its parent, that one's parent, and so on) holds a lock of the folder, the exclusive
-// lock or a browser's slot: the run is part of a job under the browser lock then, its command or a script of it. `ps`
-// gives nothing for a pid that is gone, which reads as 0 and ends the walk.
+// lock or a browser's slot: the run is part of a job under the browser lock then, its command or a script of it.
 function underTheBrowserLock(lock: string, pid: number): boolean {
   const above: number[] = []
-  for (let at = pid; at > 1;) {
-    at = Number(Bun.spawnSync(['ps', '-o', 'ppid=', '-p', String(at)]).stdout.toString())
-    above.push(at)
-  }
+  for (let at = parentOf(pid); at > 1; at = parentOf(at)) above.push(at)
   const names = existsSync(lock) ? readdirSync(lock) : []
   for (let i = 0; i < names.length; i++) {
     if (!/^browser-lock(-.+)?\.owner$/.test(names[i]!)) continue
