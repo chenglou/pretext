@@ -1,9 +1,9 @@
-// What gates.ts makes of each gate's exit code and report. These run no gate.
+// What gates.ts makes of each gate's exit code and report, and its queue. These run no gate.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { citationsVerdict, closingLine, functionSetVerdict, nextWaiter, painterVerdict, removeStaleSockets, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Row } from './gates.ts'
+import { citationsVerdict, closingLine, functionSetVerdict, nextWaiter, painterVerdict, removeStaleSockets, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Row } from './gates.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -109,4 +109,71 @@ test('gates.ts refuses an unknown engine or argument before it runs anything', (
   }
   expect(run(['--engine=presto'])).toMatchObject({ exitCode: 2, stderr: expect.stringContaining('--engine must be blink, webkit, gecko or all') })
   expect(run(['--fast'])).toMatchObject({ exitCode: 2, stderr: expect.stringContaining('Unknown argument --fast') })
+})
+
+// ---- The queue: child processes that take a turn, say so in <queue>.log, and hold it ----
+
+const shared = mkdtempSync(join(tmpdir(), 'gates-test-shared-'))
+afterAll(() => { Bun.spawnSync(['trash', shared]) })
+const TURN = join(shared, 'turn.ts')
+writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
+import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
+const [queue, name, hold, flags] = process.argv.slice(2)
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: name, flags, quick: flags === '--quick' })
+appendFileSync(queue + '.log', 'start ' + name + '\\n')
+await Bun.sleep(Number(hold))
+appendFileSync(queue + '.log', 'end ' + name + '\\n')
+`)
+const textOf = (path: string): string => (existsSync(path) ? readFileSync(path, 'utf8') : '')
+const soon = async (what: () => boolean): Promise<void> => { while (!what()) await Bun.sleep(50) }
+
+test('a run waits its turn behind the live runs of its kind, first come, first served, and says who holds it; a killed holder\'s turn goes on', async () => {
+  const queue = join(shared, 'queue')
+  const start = (name: string, flags: string) => Bun.spawn(['bun', TURN, queue, name, '60000', flags], { stdout: 'ignore', stderr: Bun.file(join(shared, `${name}.err`)) })
+  const log = (): string => textOf(`${queue}.log`)
+  const said = (name: string): string => textOf(join(shared, `${name}.err`))
+  const a = start('a', '')
+  await soon(() => log().includes('start a'))
+  const b = start('b', '')
+  await soon(() => said('b').includes(`pid ${a.pid} holds it (worktree a, flags none, since `) && said('b').includes('; runs waiting before this one: 0.'))
+  const c = start('c', '')
+  await soon(() => said('c').includes(`pid ${a.pid} holds it`) && said('c').includes('; runs waiting before this one: 1.'))
+  const quick = start('quick', '--quick')
+  await soon(() => log().includes('start quick'))
+  const quick2 = start('quick2', '--quick')
+  await soon(() => said('quick2').includes(`pid ${quick.pid} holds it (worktree quick, flags --quick, since `))
+  expect(log()).toBe('start a\nstart quick\n')
+  a.kill('SIGKILL')
+  await soon(() => log().includes('start b') && said('c').includes(`pid ${b.pid} holds it`))
+  expect(log()).not.toContain('start c')
+  b.kill('SIGKILL')
+  await soon(() => log().includes('start c'))
+  // A full run and a --quick run don't wait for each other.
+  c.kill('SIGKILL')
+  const late = start('late', '')
+  await soon(() => log().includes('start late'))
+  expect(log()).not.toContain('start quick2')
+  quick.kill('SIGKILL')
+  await soon(() => log().includes('start quick2'))
+  late.kill('SIGKILL')
+  quick2.kill('SIGKILL')
+}, 120000)
+
+test('runs that ask at the same moment get a ticket each and never run together', async () => {
+  const queue = join(shared, 'at-once')
+  const runs = [0, 1, 2, 3, 4].map(i => Bun.spawn(['bun', TURN, queue, `run${i}`, '100', ''], { stdout: 'ignore', stderr: 'ignore' }))
+  for (let i = 0; i < runs.length; i++) expect(await runs[i]!.exited).toBe(0)
+  const lines = textOf(`${queue}.log`).trim().split('\n')
+  expect(lines.length).toBe(10)
+  for (let i = 0; i < lines.length; i += 2) expect(lines[i + 1]).toBe(lines[i]!.replace('start', 'end'))
+  // A finished run's ticket stays as the highest number, so numbers only go up; the dead ones below it went.
+  expect(readdirSync(queue)).toEqual(['5.json'])
+}, 120000)
+
+test('a ticket whose pid is now a younger process\'s is dead: pids come round again', async () => {
+  const queue = join(shared, 'pid-again')
+  mkdirSync(queue)
+  writeFileSync(join(queue, '1.json'), JSON.stringify({ pid: process.pid, at: Date.now() - 3600000, worktree: 'gone', flags: '', quick: false }))
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false })).toBe(false)
+  expect(readdirSync(queue)).toEqual(['2.json'])
 })

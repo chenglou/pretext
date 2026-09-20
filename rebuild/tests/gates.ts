@@ -1,7 +1,7 @@
 // The offline gates in one command (rebuild/lab/README.md, "Test tiers"): every check that needs no browser, run side by
 // side, with every exit code read from the child process itself and one table at the end.
 //
-//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N]
+//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait]
 //
 // --quick is what to run after every small edit: tier 0 (`bunx tsc --noEmit` over the six projects, and the unit tests),
 // tier 1 for the engine's browser in both configurations, and the function set's plain and pure checks for that browser.
@@ -42,11 +42,27 @@
 // The socket is pretext-gates-<pid>.sock in the temporary folder. A run that is killed leaves its file, and listening fails
 // on a path that exists, so a run first removes the socket files of processes that are gone (removeStaleSockets).
 //
+// A turn: the machine runs one full run and one --quick run at a time. Several full runs at once, each in its own
+// worktree, took two to three times as long each (19 to 33 minutes at load averages of 80 to 160) and spoiled the timed
+// benchmarks beside them. Before its first gate a run takes a ticket, <n>.json in .artifacts/tests/gates/queue, which
+// every worktree shares: n is one more than the highest number there, and the ticket is a hard link to a finished draft,
+// which fails when the name exists. So a ticket holds its pid, worktree, flags and time from the moment it exists, two
+// runs never get one number, and tickets appear in the order of their numbers. A run starts when no ticket below its own
+// is a live run's of its kind, first come, first served, and while it waits it says who holds the turn and how many wait
+// before it. Nothing is ever taken over, so nothing is timed: a ticket is dead when its pid is gone, or is a process that
+// started after the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until
+// the next run looks); a run skips and removes the dead tickets below its own and leaves its own behind as the highest,
+// so the numbers only go up. --no-wait takes no ticket, for a human who knows better. Measured with --quick
+// --engine=gecko, 42 to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs
+// wait for each other; on half the cores each they took 74 and 76 s, which gives the second what it takes from the
+// first and costs a run alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run
+// don't wait for each other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
+//
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
 // missing or doesn't fit. It prints the errors `bunx tsc --noEmit -p <project>` prints and exits 0 when that does; with
 // errors tsc exits 2 when it found them in this run and 1 when it kept them from the last one.
-import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
@@ -57,6 +73,8 @@ const BROWSER_OF: Record<EngineName, TierBrowser> = { blink: 'chrome', webkit: '
 const TSC_PROJECTS = ['rebuild', 'rebuild/lab', 'rebuild/tests', 'rebuild/probes', 'rebuild/lab/cases', 'rebuild/bench']
 const OUT = join(REPO, 'rebuild/tests/.check/gates')
 const TSC_STATE = join(REPO, 'node_modules/.cache/pretext-gates')
+// The queue's tickets: in the .artifacts folder every worktree shares.
+const SHARED = join(REPO, '.artifacts/tests/gates')
 
 // What a gate's result counts as toward the exit code: 0 is fine for a pure refactoring.
 export type Verdict = { counts: string; meaning: string; as: number }
@@ -210,6 +228,99 @@ export function removeStaleSockets(dir: string): number[] {
     removed.push(pid)
   }
   return removed
+}
+
+// ---- A run ----
+
+// What the arguments ask for, or what is wrong with them.
+export type Run = { engines: EngineName[]; quick: boolean; cores: number; wait: boolean }
+export function runOf(args: readonly string[]): Run | string {
+  const run: Run = { engines: [...ENGINES], quick: false, cores: Math.max(1, cpus().length - 2), wait: true }
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === '--quick') run.quick = true
+    else if (arg === '--no-wait') run.wait = false
+    else if (arg.startsWith('--engine=')) run.engines = arg === '--engine=all' ? [...ENGINES] : ENGINES.filter(name => name === arg.slice('--engine='.length))
+    else if (arg.startsWith('--cores=')) run.cores = Number(arg.slice('--cores='.length))
+    else return `Unknown argument ${arg}`
+  }
+  if (run.engines.length === 0) return '--engine must be blink, webkit, gecko or all'
+  if (!Number.isInteger(run.cores) || run.cores < 1) return '--cores must be a whole number of cores, 1 or more'
+  return run
+}
+
+// ---- A turn for every run ----
+
+// A run's place in the queue, <n>.json: who asks, from where, with which flags, and when (ms).
+export type Ticket = { pid: number; at: number; worktree: string; flags: string; quick: boolean }
+
+const when = (ms: number): string => new Date(ms).toString().slice(4, 24)
+const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)?.[1] ?? 0)
+
+// Whether the run that wrote a ticket still runs. Its pid alone would not do: the machine reuses pids within hours, and
+// a killed run's ticket stays until the next run looks. So a process of that pid that started after the ticket was written
+// is another one (`ps` gives the start to the second, in UTC here, since `bun test` keeps another time zone than its
+// children; when it gives nothing to read, the ticket counts as live).
+function ticketLives(ticket: Ticket): boolean {
+  if (!processExists(ticket.pid)) return false
+  const started = Bun.spawnSync(['ps', '-o', 'lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString()
+  return !(Date.parse(`${started} UTC`) > ticket.at)
+}
+
+// A ticket below a run's own, or null when another waiter removed it as dead between the listing and this read.
+function readTicket(path: string): Ticket | null {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as Ticket
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+
+// Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick); says who
+// holds the turn while it waits. True when it waited. The ticket is a hard link to a finished draft, which fails when the
+// name exists: a ticket holds its run from the moment it exists, two runs never get one number, and the numbers only go
+// up, since a run removes dead tickets below its own only. So every ticket below a run's own was there before it, and
+// nothing is ever taken over.
+export async function takeTurn(dir: string, ticket: Ticket): Promise<boolean> {
+  mkdirSync(dir, { recursive: true })
+  const draft = join(dir, `draft-${ticket.pid}`)
+  writeFileSync(draft, JSON.stringify(ticket))
+  let mine = 0
+  while (mine === 0) {
+    const names = readdirSync(dir)
+    let highest = 0
+    for (let i = 0; i < names.length; i++) highest = Math.max(highest, ticketNumber(names[i]!))
+    try {
+      linkSync(draft, join(dir, `${highest + 1}.json`))
+      mine = highest + 1
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+  unlinkSync(draft)
+  let said = ''
+  for (;;) {
+    const numbers = readdirSync(dir).map(ticketNumber).filter(n => n > 0 && n < mine).sort((a, b) => a - b)
+    const before: Ticket[] = []
+    for (let i = 0; i < numbers.length; i++) {
+      const path = join(dir, `${numbers[i]!}.json`)
+      const earlier = readTicket(path)
+      if (earlier === null) continue
+      if (!ticketLives(earlier)) rmSync(path, { force: true })
+      else if (earlier.quick === ticket.quick) before.push(earlier)
+    }
+    if (before.length === 0) {
+      if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)
+      return said !== ''
+    }
+    const holder = before[0]!
+    const text = `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
+    if (text !== said) console.error(`[gates] ${text}`)
+    said = text
+    await Bun.sleep(500)
+  }
 }
 
 // ---- The gates of a run ----
@@ -371,34 +482,23 @@ function printTable(rows: readonly Row[]): void {
 }
 
 if (import.meta.main) {
-  const options = new Map<string, string>()
-  const flags = new Set<string>()
-  const usage = (text: string): never => {
-    console.error(`[gates] ${text}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N]`)
+  const run = runOf(process.argv.slice(2))
+  if (typeof run === 'string') {
+    console.error(`[gates] ${run}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait]`)
     process.exit(2)
   }
-  for (const raw of process.argv.slice(2)) {
-    const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
-    if (match === null) usage(`Unknown argument ${raw}`)
-    else if (match[1] === 'quick' && match[2] === undefined) flags.add('quick')
-    else if ((match[1] === 'engine' || match[1] === 'cores') && match[2] !== undefined) options.set(match[1], match[2])
-    else usage(`Unknown argument ${raw}`)
-  }
-  const engine = options.get('engine') ?? 'all'
-  const engines = engine === 'all' ? [...ENGINES] : ENGINES.filter(name => name === engine)
-  if (engines.length === 0) usage('--engine must be blink, webkit, gecko or all')
-  const cores = Number(options.get('cores') ?? Math.max(1, cpus().length - 2))
-  if (!Number.isInteger(cores) || cores < 1) usage('--cores must be a whole number of cores, 1 or more')
   mkdirSync(OUT, { recursive: true })
   mkdirSync(TSC_STATE, { recursive: true })
+  if (run.wait) await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick })
   const started = Date.now()
-  const gates = gatesOf(engines, flags.has('quick'))
-  console.error(`[gates] ${gates.length} gates${flags.has('quick') ? ' (quick)' : ''} for ${engines.join(', ')} on ${cores} cores; logs in ${relative(REPO, OUT)}`)
-  const rows = await runAll(gates, cores)
+  const gates = gatesOf(run.engines, run.quick)
+  console.error(`[gates] ${gates.length} gates${run.quick ? ' (quick)' : ''} for ${run.engines.join(', ')} on ${run.cores} cores; logs in ${relative(REPO, OUT)}`)
+  const rows = await runAll(gates, run.cores)
+  const seconds = Math.round((Date.now() - started) / 100) / 10
   writeFileSync(join(OUT, 'gates.json'), `${JSON.stringify(rows, null, 2)}\n`)
   printTable(rows)
   let exit = 0
   for (let i = 0; i < rows.length; i++) exit = worse(exit, rows[i]!.as)
-  console.log(closingLine(rows, Math.round((Date.now() - started) / 100) / 10, exit))
+  console.log(closingLine(rows, seconds, exit))
   process.exit(exit)
 }
