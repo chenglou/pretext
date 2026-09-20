@@ -374,10 +374,17 @@ function summarize(title: string, rounds: Cell[][]): string[] {
   return lines
 }
 
+// A checkout's commit, or null for a folder exported from one (git archive), which holds no repository.
+function headOf(path: string): string | null {
+  const found = Bun.spawnSync(['git', '-C', path, 'rev-parse', '--show-toplevel', 'HEAD'])
+  const lines = found.stdout.toString().trim().split('\n')
+  return found.exitCode === 0 && lines[0] === path ? lines[1]! : null
+}
+
 const report = {
   schema: 'rebuild-js-profile-1', status: failure === null ? 'ok' : 'error', failure, build: readBuild('chrome'), startedAt: startedAt.toISOString(), durationMs: Date.now() - startedAt.getTime(),
   load: { start: loadStart, end: loadavg()[0]! }, power: execFileSync('pmset', ['-g', 'batt'], { encoding: 'utf8' }).split('\n').slice(0, 2).join(' '),
-  trees: trees.map(tree => ({ ...tree, head: execFileSync('git', ['-C', tree.path, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() })), messages, result,
+  trees: trees.map(tree => ({ ...tree, head: headOf(tree.path) })), messages, result,
 }
 writeFileSync(join(outDir, `${mode}${config.replay ? '-replay' : ''}-result.json`), `${JSON.stringify(report, null, 1)}\n`)
 const summary: string[] = [`load ${loadStart.toFixed(1)} to ${loadavg()[0]!.toFixed(1)}; ${report.power}`]

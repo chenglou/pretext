@@ -136,6 +136,38 @@ for (const [id, sum] of under) {
   underByKey.set(key, entry)
 }
 
+// The Blink port's phases. A sample belongs to the first phase that a frame of its stack names, in this order, so a
+// question asked by the cut search or by a fill counts as a question, and what is left of those two is their own work.
+// A phase is named by source file where it can be, since V8 leaves a function it inlined into a caller that isn't the
+// sample's top frame off the stack (fillLine and nextLine went missing that way).
+const PHASES: Array<[RegExp, string]> = [
+  [/^measure16 \[/, 'the questions: their strings, their contexts and the call (measure16 and under)'],
+  [/\[src\/measure\/font-checks\.ts\]$/, 'the font checks but their questions'],
+  [/^(fillLine|fillAll|relayout) \[|\[src\/engines\/blink\/(line-breaker|breaks)\.ts\]$/, 'the fill but its questions: the line loop, candidates, fit tests'],
+  [/^(measureGroups|addPieces) \[/, 'the cut search but its questions'],
+  [/\[src\//, 'paragraph analysis: content, bidi, scripts, graphemes, items, shaping groups'],
+]
+const phaseOfNode = new Map<number, number>()
+function phaseOf(id: number): number {
+  const known = phaseOfNode.get(id)
+  if (known !== undefined) return known
+  const above = parent.has(id) ? phaseOf(parent.get(id)!) : PHASES.length
+  const key = keyOf(nodes.get(id)!)
+  const own = PHASES.findIndex(phase => phase[0].test(key))
+  const phase = own >= 0 && own < above ? own : above
+  phaseOfNode.set(id, phase)
+  return phase
+}
+const phaseTimes = PHASES.map(() => ({ own: 0, canvas: 0 }))
+phaseTimes.push({ own: 0, canvas: 0 })
+for (const [id, time] of self) {
+  const kind = kindOf(nodes.get(id)!)
+  if (kind === 'special') continue
+  const entry = phaseTimes[phaseOf(id)]!
+  if (kind === 'canvas') entry.canvas += time
+  else entry.own += time
+}
+
 const ms = (time: number): string => (time / 1000).toFixed(1).padStart(8)
 const share = (time: number): string => `${(100 * time / total).toFixed(1).padStart(5)}%`
 const each = (time: number): string => `${(time / messages).toFixed(1).padStart(6)} µs`
@@ -145,6 +177,8 @@ const sorted = <T>(map: Map<string, T>, value: (entry: T) => number): Array<[str
 const out: string[] = [file, `${profile.samples.length} samples, ${(total / 1000).toFixed(1)} ms; "µs" is a message's share (${messages} messages)`, '', 'The split']
 out.push(row('Canvas: measureText', canvasMeasure), row('Canvas: a context made, its setters, TextMetrics getters', canvasOther), row('own JavaScript', js), row('natives called by own JavaScript (builtins V8 did not inline)', native))
 for (const [key, time] of sorted(special, value => value)) out.push(row(key, time))
+out.push('', 'By phase: own JavaScript, then Canvas under it')
+for (let i = 0; i < phaseTimes.length; i++) out.push(`${row(i < PHASES.length ? PHASES[i]![1] : 'outside the library (the page\'s loop)', phaseTimes[i]!.own)}   Canvas ${(phaseTimes[i]!.canvas / 1000).toFixed(1)} ms, ${(phaseTimes[i]!.canvas / messages).toFixed(1)} µs`)
 out.push('', 'Own JavaScript by source file (self time, natives included)')
 for (const [key, time] of sorted(byModule, value => value)) if (time / total >= 0.001) out.push(row(key, time))
 out.push('', `Own JavaScript by function, self time with the natives it calls, top ${top}`)
