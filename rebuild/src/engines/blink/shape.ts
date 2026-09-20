@@ -595,11 +595,14 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
 // Where the two windows differ and the offset isn't before white space, the position is a stand-in (limits.ts positionLimit, and
 // unsafe-to-break at a line edge taken from it). Heuristic, registered in CHARTER.md's known deviations.
 export function positionAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
-  const p = sh.p
   if (k <= lo || k >= hi) return 0
-  const c = p.text.charCodeAt(k)
-  if ((c === 0x20 || c === 0xa0 || c === 0x3000) && !joinsAcross(p, k, lo, hi)) return adjust16(sh, g, k, lo, hi)
+  if (beforeWhiteSpace(sh.p, k, lo, hi)) return adjust16(sh, g, k, lo, hi)
   return pairAdjust16(sh, g, k, lo, hi)
+}
+
+function beforeWhiteSpace(p: BlinkPrepared, k: number, lo: number, hi: number): boolean {
+  const c = p.text.charCodeAt(k)
+  return (c === 0x20 || c === 0xa0 || c === 0x3000) && !joinsAcross(p, k, lo, hi)
 }
 
 // Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
@@ -620,14 +623,18 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
 // unsafe-to-break. An offset beside a space that passes wins over every other offset, so the search tries those first,
 // from the middle outward, and tries the others only once they have all failed: what it then finds is what trying every
 // offset in one turn from the middle outward finds, without the questions about offsets that can't win. Every piece's end
-// goes to `cuts` and its measured total to `totals`, in order.
-function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[]): void {
+// goes to `cuts` and its measured total to `totals`, in order, and to `zero` whether the adjustment a position takes at
+// the cut at its end is a 0 the search measured (positionAdjust16): the pair window's at a cut that passed the safe test,
+// and before white space the wide window's, which is the search's own window where both sides of the cut are one piece
+// (adjust16 takes it between the cuts around an offset).
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[]): void {
   const p = sh.p
   const group = p.groups[g]!
   const whole = measure16(sh, g, a, b, group.start, group.end)
   if (whole < EXACT16) {
     cuts.push(b)
     totals.push(whole)
+    zero.push(false)
     return
   }
   const mid = a + ((b - a) >> 1)
@@ -648,14 +655,19 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
     uncutCluster(sh.gaps, p, g, a, b)
     cuts.push(b)
     totals.push(whole)
+    zero.push(false)
     return
   }
-  if (k < 0) {
+  const passed = k >= 0
+  if (!passed) {
     k = boundary
     unsafeCut(sh.gaps, p, g, k)
   }
-  addPieces(sh, g, a, k, cuts, totals)
-  addPieces(sh, g, k, b, cuts, totals)
+  const first = cuts.length
+  addPieces(sh, g, a, k, cuts, totals, zero)
+  const at = cuts.length - 1
+  addPieces(sh, g, k, b, cuts, totals, zero)
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
 }
 
 // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
@@ -668,14 +680,15 @@ export function measureGroups(sh: Shaper): void {
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
     const cuts = [group.start]
     const totals: number[] = []
-    addPieces(sh, g, group.start, group.end, cuts, totals)
+    const zero = [false]
+    addPieces(sh, g, group.start, group.end, cuts, totals, zero)
     const prefix = [0]
     for (let i = 0; i < totals.length; i++) prefix.push(prefix[i]! + totals[i]!)
     group.cuts = cuts
     group.prefixAtCut = prefix
-    // The adjustment at a cut needs the cuts on both sides of it (adjust16's window).
+    // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
     for (let i = 1; i < cuts.length - 1; i++) {
-      const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
+      const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
     }
   }

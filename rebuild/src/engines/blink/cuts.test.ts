@@ -2,8 +2,8 @@
 // Canvas where every code point is 10px wide at 16px. TEXT is 38 units and 380px, so it is cut once; its middle, offset
 // 19, is after a space and before `V`. Family `Kern` kerns a space with `V` by -4px; family `Context` takes 2px more off
 // where `x` stands before that space, which a window of one cluster on each side doesn't show; family `Every` kerns every
-// two code points by -1px; family `Mono` adjusts nothing. IN_WORD has its middle inside a word. Measured strings carry
-// U+2028 for U+0020 (shape.ts).
+// two code points by -1px; family `Mono` adjusts nothing. IN_WORD has its middle inside a word, BEFORE_SPACE before a
+// space. Measured strings carry U+2028 for U+0020 (shape.ts).
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
@@ -11,6 +11,7 @@ import { fillLine, firstLine, paragraphGaps, prepare } from './index.js'
 
 const TEXT = 'xxxx xxxx xxxx xxx Vxxx xxxx xxxx xxxx'
 const IN_WORD = 'xxxxxxx xxxxxxx xxxxxxx xxxxxxx xxxxxx'
+const BEFORE_SPACE = 'xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx'
 const LS = String.fromCodePoint(0x2028)
 
 let asked: string[] = []
@@ -93,6 +94,19 @@ describe('blink cuts of a wide group', () => {
     asked = []
     prepare(paragraphIn('Every', IN_WORD), env, false, [])
     expect(asked.includes('xx')).toBe(true)
+  })
+
+  test('a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured', () => {
+    // After a space the pair window's; before one the wide window's, which between two pieces is the search's own window.
+    asked = []
+    prepare(paragraphIn('Mono'), env, false, [])
+    expect(asked[asked.length - 1]).toBe(TEXT.slice(19).replaceAll(' ', LS))
+    asked = []
+    prepare(paragraphIn('Mono', BEFORE_SPACE), env, false, [])
+    expect(asked[asked.length - 1]).toBe(BEFORE_SPACE.slice(19).replaceAll(' ', LS))
+    asked = []
+    prepare(paragraphIn('Every'), env, false, [])
+    expect(asked[asked.length - 1]).not.toBe(TEXT.slice(19).replaceAll(' ', LS))
   })
 
   test('an inspected paragraph reports the cut of a group where no offset passes', () => {
