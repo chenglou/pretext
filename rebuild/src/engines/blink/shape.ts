@@ -490,13 +490,23 @@ export function isFontRunEdge(p: BlinkPrepared, k: number, lo: number, hi: numbe
 // U+0600 before U+3000 is one grapheme (GB9b) and two clusters in Amiri (c-32e897f031fc55ea). Treating every
 // non-continuation unit as a boundary (fix-r9) fixed the second and lost 8 of the first, so the grapheme stays the unit,
 // and a position asked at another cluster start inside a grapheme reports glyph-clusters (startsClusterInsideGrapheme).
+// Where getTextClusters told the paragraph's own clusters while it was prepared (BlinkPrepared.clusterStarts), that is the
+// answer, and the rules and the ligature facts above answer the rest.
 export function isClusterBoundary(p: BlinkPrepared, k: number): boolean {
+  if (p.clusterStarts !== null && p.clusterStarts[k]! >= 0) return p.clusterStarts[k] === 1
   return p.graphemeStarts[k] === 1 && p.continuations[k] !== 1 && p.ligature[k] !== LIGATURE_MERGED
 }
 
+// Whether unit k goes on the glyph cluster before it, for what lists a line's clusters (inspect.ts shapeOf).
+export function continuesCluster(p: BlinkPrepared, k: number): boolean {
+  if (p.clusterStarts !== null && p.clusterStarts[k]! >= 0) return p.clusterStarts[k] === 0
+  return p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED
+}
+
 // Whether k is inside a grapheme at a unit HarfBuzz doesn't mark a continuation: whether glyphs there form one cluster or
-// two depends on the font's lookups.
+// two depends on the font's lookups, unless getTextClusters told.
 export function startsClusterInsideGrapheme(p: BlinkPrepared, k: number): boolean {
+  if (p.clusterStarts !== null && p.clusterStarts[k]! >= 0) return false
   return p.graphemeStarts[k] !== 1 && p.continuations[k] !== 1
 }
 
@@ -741,6 +751,17 @@ export function measureGroups(sh: Shaper): void {
       const d = positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       cutAdjustment(sh.gaps, sh, g, cuts[i]!, d)
       for (let j = i; j < prefix.length; j++) prefix[j]! += d
+    }
+    // Where Canvas has getTextClusters, every piece's table is made here, so which units start a glyph cluster is a fact of
+    // the prepared paragraph that every later question reads (isClusterBoundary), whatever was asked first. The cuts above
+    // were found by the rules, since a piece has to exist before Canvas can tell of it.
+    if (p.clusterStarts !== null) {
+      for (let i = 0; i + 1 < cuts.length; i++) {
+        const table = clusterTable(sh, g, cuts[i]!, cuts[i + 1]!, group.start, group.end)
+        group.clusterTables[i] = table
+        if (table === null) continue
+        for (let k = cuts[i]! + 1; k < cuts[i + 1]!; k++) p.clusterStarts[k] = table.starts[k - cuts[i]!]!
+      }
     }
   }
 }

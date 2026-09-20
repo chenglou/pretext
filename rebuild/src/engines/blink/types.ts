@@ -173,6 +173,10 @@ export type BlinkPrepared = {
   // pictograph after it, an emoji modifier, the second of a regional indicator pair, a halfwidth voiced sound mark or a
   // tag character (hb-ot-shape.cc:470-546, hb-ot-layout.hh:247 at harfbuzz dfdc088c), or the trail unit of a surrogate pair.
   continuations: Uint8Array
+  // Per text_content offset, what getTextClusters told of the paragraph's own shaping while it was prepared (shape.ts
+  // measureGroups): 1 where a glyph cluster starts, 0 inside one, -1 where it told nothing (a group's or a piece's start,
+  // an item that isn't text). Null where Canvas has no getTextClusters.
+  clusterStarts: Int8Array | null
   // Per text_content offset, what the font declaration's ligature facts say about a glyph cluster over the boundary before
   // it (ligatures.ts): unknown, none, merged into a ligature's cluster, or uncertain.
   ligature: Uint8Array

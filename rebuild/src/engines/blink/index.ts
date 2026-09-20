@@ -6,7 +6,7 @@
 // the gaps (gaps.ts). The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { Context } from '../../measure/canvas.js'
+import { hasTextClusters, type Context } from '../../measure/canvas.js'
 import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFont, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
@@ -146,6 +146,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),
+    clusterStarts: hasTextClusters ? new Int8Array(text.length + 1).fill(-1) : null,
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
