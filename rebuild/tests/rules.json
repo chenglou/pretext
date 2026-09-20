@@ -9421,7 +9421,7 @@
   "blink/shape/pair-adjustment-on-glyph-before": "3b213a5b57f6f38c",
   "blink/shape/default-ignorables-skipped-in-pair": "96d034c241466ec6",
   "blink/shape/unsafe-to-break-offsets": "fb4eda318eb1bc5f",
-  "blink/shape/wide-group-halved": "8d73fd3ef1a1e93a",
+  "blink/shape/wide-group-halved": "fd72647e0403bb73",
   "blink/shape/position-from-prefix-and-pair": "605aaf4ca7fe3fd3",
   "blink/units/lu-ceil": "2d78919fc6f234fc",
   "blink/units/available-width-trunc": "38df67f9347d8fc0",
