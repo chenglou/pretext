@@ -11,7 +11,7 @@
 //   gfxUserFontSet::RebuildLocalRules, gfxUserFontSet.cpp:1087-1092), and a font group looks its families up again when
 //   its font set was rebuilt (gfxFontGroup::UpdateUserFonts, gfxTextRun.cpp:3946-3965), so a kept context might follow
 //   by itself there. It doesn't (2026-09-20, one run): the kept context stays on the fallback. A page's own process
-//   only forgets its local() faces (nsPresContext::ForceReflowForFontInfoUpdate, nsPresContext.cpp:210-214), which moves
+//   only forgets its local() faces (nsPresContext::ForceReflowForFontInfoUpdate, nsPresContext.cpp:209-213), which moves
 //   no rebuild generation.
 // - H3: a family that draws at first through an installed font and later through a web font of the same name: a
 //   FontFace named `Helvetica Neue`, loaded first and added two seconds in, with a span in the family.
