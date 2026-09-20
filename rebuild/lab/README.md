@@ -461,7 +461,41 @@ CPU-seconds for the same gates one after another earlier that night, at load ave
 line names how many cases tier 1 sends to tier 2, per gate, so "every gate is fine" never reads as done (the rows carry
 the count as `tier2`; the exit codes are unchanged). A run first removes the `pretext-gates-<pid>.sock` files of
 processes that are gone: listening fails on a path that exists, and a run killed from outside leaves its file. A full
-run can take 30 minutes on a shared machine, so start it detached from anything that has a time limit.
+run can take 30 minutes on a shared machine, and waits for its turn first, so start it detached from anything that has
+a time limit.
+
+**One run at a time, and a result kept by its inputs** (2026-09-19; the header of `gates.ts` has both in full). Several
+full runs at once, each in its own worktree, took 19 to 33 minutes each instead of 12, at load averages of 80 to 160,
+and an owner, its critic and the orchestrator ran the gates three times on one tree. So a run takes a machine-wide turn
+before its first gate: a numbered ticket in `.artifacts/tests/gates/queue`, which every worktree shares, made in one
+step, first come, first served. A full run waits for the full runs before it and a `--quick` run for the `--quick` runs
+before it, and either for a run of its own worktree, whose reports and logs it would write over; while it waits it says
+who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
+nobody up, so a killed run needs no cleaning, and `--no-wait` skips the queue. Measured with `--quick --engine=gecko`,
+31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
+on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
+took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
+never takes fewer cores instead of waiting. A `--quick` run and a full run don't wait for each other: beside a full run
+the `--quick` run took 123 s (185 s on 8 cores) at load averages up to 58, where its wait would be six minutes on
+average; the full run took 16 minutes with those two beside it and other owners' jobs.
+
+A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
+reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
+1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over every
+tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, so uncommitted edits count,
+and under `rebuild/` also what git ignores but for `.check`, which the gates write: tsc, the unit tests and the citation
+ledger read its folders whole, and the root `.gitignore` names `dist` and `site` wherever they are;
+the `package.json` of every installed package; the frozen references of the run's browsers as `check` reads them under
+`.artifacts/tests/reference` (the tracked pins in `rebuild/tests/reference` are copies that `check` never reads): every
+file by its bytes but the 725 MB of shards, whose hashes the manifests hold and tier 1 checks, by size and time; without
+`--quick` the painter's frozen bundles and, for Blink, Chrome's set files; the engines and `--quick`, bun's version and
+the OS release. `--cores` isn't in it: no report depends on it. A result is kept only when every gate has one, no
+gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
+run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
+not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which
+after a reused result is absent or an earlier tree's, so a run that sends cases to tier 2 runs again in the worktree
+that goes on to tier 2. What unit tests read outside the repository (the pinned engine sources and the groundwork's
+tools under `~/github/browser-engines`, Homebrew's ICU 78) isn't in the key: run with `--fresh` after changing one.
 
 **A process replays a group of shards** since 2026-09-19 (`replay.ts` `shardGroups`; tier 1, the function set's plain
 and pure checks, the painter differential): a set's shards eight to a process in order, and a shard of fewer than 50
