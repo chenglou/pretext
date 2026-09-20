@@ -5,7 +5,7 @@
 // --smoke run, only validate the harness, and the report says so.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { loadavg } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from '../lab/browser-build.ts'
@@ -433,11 +433,11 @@ function findPid(executable: string, marker: string): number | null {
   return null
 }
 
-function trash(path: string): void {
+function remove(path: string): void {
   try {
-    execFileSync('trash', [path], { stdio: 'ignore', timeout: 60_000 })
+    rmSync(path, { recursive: true, force: true })
   } catch (error) {
-    console.error(`[bench] could not trash ${path}: ${message(error)}`)
+    console.error(`[bench] could not remove ${path}: ${message(error)}`)
   }
 }
 
@@ -457,7 +457,7 @@ async function launchApp(app: string, executable: string, marker: string, profil
     async close() {
       await stopProcess(owned)
       await Bun.sleep(1_000)
-      trash(profile)
+      remove(profile)
     },
   }
 }
