@@ -115,14 +115,21 @@ export type DetectedEnvironment =
   | { kind: 'supported'; env: Environment }
   | { kind: 'unsupported'; userAgent: string; reason: string }
 
-// The engine from the user agent. The build isn't read here: Chrome's reduced user agent shows only the major version.
-function engineFromUserAgent(): DetectedEngine {
-  const ua = navigator.userAgent
+// The engine from a user agent: the engine that lays the page out, whatever the browser is called. Every Chromium
+// browser says `Chrome/` and runs Blink (Edge, Opera, Samsung Internet, an Android WebView). Every browser on iOS runs
+// WebKit and says `AppleWebKit/` without `Chrome/` (Chrome there is `CriOS/`, Firefox `FxiOS/`, Edge `EdgiOS/`), as does a
+// WKWebView, which has no `Version/… Safari/`. Chrome's own user agent holds `AppleWebKit/` and `Safari/` too, so it is
+// asked first. Only Chrome, Firefox and Safari on one Mac are pinned and tested; the others ride on their engine. The
+// build isn't read here: Chrome's reduced user agent shows only the major version.
+export function engineOfUserAgent(ua: string): DetectedEngine {
   if (/\bFirefox\//.test(ua)) return { kind: 'supported', engine: 'gecko' }
-  if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: 'Chromium browsers other than Chrome are not modeled' }
   if (/\bChrome\//.test(ua)) return { kind: 'supported', engine: 'blink' }
-  if (/\bVersion\/[\d.]+ .*Safari\//.test(ua)) return { kind: 'supported', engine: 'webkit' }
+  if (/\bAppleWebKit\//.test(ua)) return { kind: 'supported', engine: 'webkit' }
   return { kind: 'unsupported', userAgent: ua, reason: 'unknown browser' }
+}
+
+function engineFromUserAgent(): DetectedEngine {
+  return engineOfUserAgent(navigator.userAgent)
 }
 
 // What each port's measuring recipes assume of Canvas, as the port lists it (engines/<engine>/checks.ts).

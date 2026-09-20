@@ -1,9 +1,9 @@
-// What gates.ts makes of each gate's exit code and report. These run no gate.
+// What gates.ts makes of each gate's exit code and report, its queue and the key of a kept result. These run no gate.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { citationsVerdict, closingLine, functionSetVerdict, nextWaiter, painterVerdict, removeStaleSockets, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Row } from './gates.ts'
+import { dirname, join } from 'node:path'
+import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -109,4 +109,198 @@ test('gates.ts refuses an unknown engine or argument before it runs anything', (
   }
   expect(run(['--engine=presto'])).toMatchObject({ exitCode: 2, stderr: expect.stringContaining('--engine must be blink, webkit, gecko or all') })
   expect(run(['--fast'])).toMatchObject({ exitCode: 2, stderr: expect.stringContaining('Unknown argument --fast') })
+})
+
+// ---- The queue: child processes that take a turn, say so in <queue>.log, and hold it ----
+
+const shared = mkdtempSync(join(tmpdir(), 'gates-test-shared-'))
+afterAll(() => { Bun.spawnSync(['trash', shared]) })
+const TURN = join(shared, 'turn.ts')
+writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
+import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
+const [queue, name, hold, flags, worktree, minFreeMemory] = process.argv.slice(2)
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' }, Number(minFreeMemory ?? 0))
+appendFileSync(queue + '.log', 'start ' + name + '\\n')
+await Bun.sleep(Number(hold))
+appendFileSync(queue + '.log', 'end ' + name + '\\n')
+`)
+const textOf = (path: string): string => (existsSync(path) ? readFileSync(path, 'utf8') : '')
+const soon = async (what: () => boolean): Promise<void> => { while (!what()) await Bun.sleep(50) }
+
+test('a run waits its turn behind the live runs of its kind and of its worktree, first come, first served, and says who holds it; a killed holder\'s turn goes on', async () => {
+  const queue = join(shared, 'queue')
+  const start = (name: string, flags: string, worktree = name) => Bun.spawn(['bun', TURN, queue, name, '60000', flags, worktree], { stdout: 'ignore', stderr: Bun.file(join(shared, `${name}.err`)) })
+  const log = (): string => textOf(`${queue}.log`)
+  const said = (name: string): string => textOf(join(shared, `${name}.err`))
+  const a = start('a', '')
+  await soon(() => log().includes('start a'))
+  const b = start('b', '')
+  await soon(() => said('b').includes(`pid ${a.pid} holds it (worktree a, flags none, since `) && said('b').includes('; runs waiting before this one: 0.'))
+  const c = start('c', '')
+  await soon(() => said('c').includes(`pid ${a.pid} holds it`) && said('c').includes('; runs waiting before this one: 1.'))
+  const quick = start('quick', '--quick')
+  await soon(() => log().includes('start quick'))
+  const quick2 = start('quick2', '--quick')
+  await soon(() => said('quick2').includes(`pid ${quick.pid} holds it (worktree quick, flags --quick, since `))
+  expect(log()).toBe('start a\nstart quick\n')
+  a.kill('SIGKILL')
+  await soon(() => log().includes('start b') && said('c').includes(`pid ${b.pid} holds it`))
+  expect(log()).not.toContain('start c')
+  b.kill('SIGKILL')
+  await soon(() => log().includes('start c'))
+  // A full run and a --quick run don't wait for each other.
+  c.kill('SIGKILL')
+  const late = start('late', '')
+  await soon(() => log().includes('start late'))
+  expect(log()).not.toContain('start quick2')
+  // Two runs of one worktree do: they would write the same reports and logs.
+  const same = start('same', '--quick', 'late')
+  quick.kill('SIGKILL')
+  await soon(() => log().includes('start quick2'))
+  quick2.kill('SIGKILL')
+  await soon(() => said('same').includes(`pid ${late.pid} holds it (worktree late, flags none, since `))
+  expect(log()).not.toContain('start same')
+  late.kill('SIGKILL')
+  await soon(() => log().includes('start same'))
+  same.kill('SIGKILL')
+}, 120000)
+
+test('runs that ask at the same moment get a ticket each and never run together', async () => {
+  const queue = join(shared, 'at-once')
+  const runs = [0, 1, 2, 3, 4].map(i => Bun.spawn(['bun', TURN, queue, `run${i}`, '100', '', `run${i}`], { stdout: 'ignore', stderr: 'ignore' }))
+  for (let i = 0; i < runs.length; i++) expect(await runs[i]!.exited).toBe(0)
+  const lines = textOf(`${queue}.log`).trim().split('\n')
+  expect(lines.length).toBe(10)
+  for (let i = 0; i < lines.length; i += 2) expect(lines[i + 1]).toBe(lines[i]!.replace('start', 'end'))
+  // A finished run's ticket stays as the highest number, so numbers only go up; the dead ones below it went.
+  expect(readdirSync(queue)).toEqual(['5.json'])
+}, 120000)
+
+test('a ticket whose pid is now a younger process\'s is dead: pids come round again', async () => {
+  const queue = join(shared, 'pid-again')
+  mkdirSync(queue)
+  writeFileSync(join(queue, '1.json'), JSON.stringify({ pid: process.pid, at: Date.now() - 3600000, worktree: 'gone', flags: '', quick: false }))
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false }, 0)).toBe(false)
+  expect(readdirSync(queue)).toEqual(['2.json'])
+})
+
+test('a killed run that its parent never reaps is a zombie, which signal 0 still finds: its turn goes on', async () => {
+  const queue = join(shared, 'zombie')
+  // The shell starts the run and becomes a `sleep`, which never waits for its child.
+  const parent = Bun.spawn(['sh', '-c', `bun "$0" "$1" holder 60000 '' holder & exec sleep 60`, TURN, queue], { stdout: 'ignore', stderr: 'ignore' })
+  await soon(() => textOf(`${queue}.log`).includes('start holder'))
+  const holder = (JSON.parse(readFileSync(join(queue, '1.json'), 'utf8')) as { pid: number }).pid
+  process.kill(holder, 'SIGKILL')
+  await soon(() => Bun.spawnSync(['ps', '-o', 'stat=', '-p', String(holder)]).stdout.toString().startsWith('Z'))
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false }, 0)).toBe(false)
+  expect(readdirSync(queue)).toEqual(['2.json'])
+  parent.kill('SIGKILL')
+}, 120000)
+
+test('a run whose turn came still starts no gate while too little of the machine\'s memory is free, and keeps its place', async () => {
+  const queue = join(shared, 'memory')
+  // No machine has 101% of its memory free, so the first run waits for ever; the second waits behind it.
+  const first = Bun.spawn(['bun', TURN, queue, 'first', '0', '', 'one', '101'], { stdout: 'ignore', stderr: 'pipe' })
+  await soon(() => existsSync(join(queue, '1.json')))
+  const second = Bun.spawn(['bun', TURN, queue, 'second', '0', '', 'two', '0'], { stdout: 'ignore', stderr: 'pipe' })
+  await soon(() => existsSync(join(queue, '2.json')))
+  await Bun.sleep(1500)
+  expect(textOf(`${queue}.log`)).toBe('')
+  first.kill('SIGKILL')
+  await soon(() => textOf(`${queue}.log`).includes('end second'))
+  expect(await new Response(first.stderr).text()).toContain("waiting for memory: under 101% of the machine's memory is free")
+  expect(await new Response(second.stderr).text()).toContain('waiting for a turn')
+}, 120000)
+
+// ---- Reuse ----
+
+test('the key of a run\'s inputs: every file of the working tree, the frozen references and the flags that choose gates; not --cores', () => {
+  const repo = join(shared, 'repo')
+  const write = (path: string, text: string): void => {
+    mkdirSync(dirname(join(repo, path)), { recursive: true })
+    writeFileSync(join(repo, path), text)
+  }
+  const shard = '.artifacts/tests/reference/firefox-no-facts/inputs/smoke/part0-000.ndjson.zst'
+  write('.gitignore', '.artifacts\nnode_modules\ndist\nrebuild/tests/.check/\n')
+  write('rebuild/src/a.ts', 'export const a = 1\n')
+  write('node_modules/typescript/package.json', '{"version":"6.0.2"}')
+  write('node_modules/@types/bun/package.json', '{"version":"1.4.0"}')
+  write('.artifacts/tests/reference/firefox-no-facts/inputs/manifest.json', '{"sets":{}}')
+  write(shard, 'shard')
+  write('.artifacts/tests/reference/firefox-no-facts/reference/manifest.json', '{"sets":{}}')
+  write('.artifacts/tests/reference/firefox-facts/inputs/unfaithful.json', '{"cases":{}}')
+  write('.artifacts/tests/reference/chrome-facts/inputs/manifest.json', '{"sets":{}}')
+  write('.artifacts/tests/painter-frozen/facts.js', '// frozen\n')
+  Bun.spawnSync(['git', 'init', '-q'], { cwd: repo })
+  Bun.spawnSync(['git', 'add', '-A'], { cwd: repo })
+  const run = (...args: string[]): Run => runOf(['--engine=gecko', ...args]) as Run
+  const keys = [inputsKey(repo, run('--quick'))]
+  // Each change gives a key no earlier state had.
+  const changes = (change: () => void): void => {
+    change()
+    const key = inputsKey(repo, run('--quick'))
+    expect(keys).not.toContain(key)
+    keys.push(key)
+  }
+  expect(inputsKey(repo, run('--quick'))).toBe(keys[0]!)
+  changes(() => write('rebuild/src/a.ts', 'export const a = 2\n'))
+  changes(() => write('rebuild/src/untracked.ts', ''))
+  // Under rebuild also what git ignores: tsc, the unit tests and the citation ledger read its folders whole.
+  changes(() => write('rebuild/src/dist/ignored.test.ts', ''))
+  changes(() => unlinkSync(join(repo, 'rebuild/src/a.ts')))
+  changes(() => write('package.json', '{}'))
+  changes(() => write('node_modules/typescript/package.json', '{"version":"6.0.3"}'))
+  changes(() => write('.artifacts/tests/reference/firefox-no-facts/inputs/manifest.json', '{"sets":{ }}'))
+  changes(() => write('.artifacts/tests/reference/firefox-facts/inputs/unfaithful.json', '{"cases":{"smoke/c-1":"x"}}'))
+  changes(() => write('.artifacts/tests/reference/firefox-facts/ledger/entries.ndjson', '{}\n'))
+  // A shard goes in by name, size and time: the manifests hold its hash, and tier 1 checks it.
+  changes(() => write(shard, 'shar'))
+  changes(() => utimesSync(join(repo, shard), new Date(2026, 0, 1), new Date(2026, 0, 1)))
+  const last = keys[keys.length - 1]!
+  // What this run's gates don't read: an ignored file outside rebuild, what the gates write, another engine's reference,
+  // the painter's frozen bundle with --quick.
+  write('.artifacts/notes.txt', 'x')
+  write('dist/layout.js', '')
+  write('rebuild/tests/.check/gates/gates.json', '[]')
+  write('.artifacts/tests/reference/chrome-facts/inputs/manifest.json', '{"sets":{ }}')
+  write('.artifacts/tests/painter-frozen/facts.js', '// frozen again\n')
+  expect(inputsKey(repo, run('--quick'))).toBe(last)
+  // The flags: --engine and --quick choose the gates; --cores, --no-wait and --fresh change no gate's result.
+  expect(inputsKey(repo, run('--quick', '--cores=3', '--no-wait', '--fresh'))).toBe(last)
+  expect(inputsKey(repo, runOf(['--quick', '--engine=webkit']) as Run)).not.toBe(last)
+  const full = inputsKey(repo, run())
+  expect(full).not.toBe(last)
+  expect(inputsKey(repo, run('--cores=3'))).toBe(full)
+  write('.artifacts/tests/painter-frozen/facts.js', '// frozen\n')
+  expect(inputsKey(repo, run())).not.toBe(full)
+  // Chrome's set files, which the twin scan reads and nothing pins: in the full key with Blink, and in no other.
+  const blink = (...args: string[]): string => inputsKey(repo, runOf(['--engine=blink', ...args]) as Run)
+  const before = [blink(), blink('--quick'), inputsKey(repo, run())]
+  write('.artifacts/lab/cases/twins.ndjson', '{}\n')
+  expect(blink()).not.toBe(before[0]!)
+  expect([blink('--quick'), inputsKey(repo, run())]).toEqual([before[1]!, before[2]!])
+}, 120000)
+
+test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
+  const row = (as: number, tier2: number): Row => ({ gate: 'a gate', exit: as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: 'a-gate.log' })
+  expect(notKept([row(0, 0), row(1, 0), row(3, 0)])).toBeNull()
+  expect(notKept([row(1, 0), row(2, 0)])).toContain('tool failed')
+  expect(notKept([row(0, 0), row(0, 40)])).toContain('tier 2')
+})
+
+test('a kept result comes back by its key, and the last 50 stay', () => {
+  const results = join(shared, 'results')
+  const kept = (n: number): Kept => ({ key: `key${n}`, at: n, worktree: '/w', commit: 'abc', dirty: false, seconds: 1, exit: 3, rows: [] })
+  for (let n = 0; n < 52; n++) {
+    keepResult(results, kept(n))
+    utimesSync(join(results, `key${n}.json`), new Date(2026, 0, 1, 0, n), new Date(2026, 0, 1, 0, n))
+  }
+  expect(readdirSync(results).length).toBe(50)
+  expect(keptResult(results, 'key0')).toBeNull()
+  expect(keptResult(results, 'key1')).toBeNull()
+  expect(keptResult(results, 'key2')).toEqual(kept(2))
+  // --fresh replaces a result under its key.
+  keepResult(results, { ...kept(51), exit: 0 })
+  expect(readdirSync(results).length).toBe(50)
+  expect(keptResult(results, 'key51')).toEqual({ ...kept(51), exit: 0 })
 })

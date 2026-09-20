@@ -1,7 +1,7 @@
 // The offline gates in one command (rebuild/lab/README.md, "Test tiers"): every check that needs no browser, run side by
 // side, with every exit code read from the child process itself and one table at the end.
 //
-//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N]
+//   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait] [--fresh]
 //
 // --quick is what to run after every small edit: tier 0 (`bunx tsc --noEmit` over the six projects, and the unit tests),
 // tier 1 for the engine's browser in both configurations, and the function set's plain and pure checks for that browser.
@@ -42,12 +42,72 @@
 // The socket is pretext-gates-<pid>.sock in the temporary folder. A run that is killed leaves its file, and listening fails
 // on a path that exists, so a run first removes the socket files of processes that are gone (removeStaleSockets).
 //
+// A turn: the machine runs one full run and one --quick run at a time. Several full runs at once, each in its own
+// worktree, took two to three times as long each (19 to 33 minutes at load averages of 80 to 160) and spoiled the timed
+// benchmarks beside them. Before its first gate a run takes a ticket, <n>.json in .artifacts/tests/gates/queue, which
+// every worktree shares: n is one more than the highest number there, and the ticket is a hard link to a finished
+// draft, which fails when the name exists. So a ticket holds its pid, worktree, flags and time from the moment it
+// exists, two runs never get one number, and tickets appear in the order of their numbers. A run starts when no ticket
+// below its own is a live run's of its kind, or of its worktree (two runs of one worktree write the same reports and
+// logs), first come, first served, and while it waits it says who holds the turn and how many wait before it. Nothing
+// is ever taken over, so nothing is timed: a ticket is dead when its pid is gone, or is a process that started after
+// the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
+// looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
+// lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
+// numbers only go up. A run whose turn came still starts no gate while under 30% of the machine's memory is free, as the
+// browser lock does, and keeps its place meanwhile. --no-wait takes no ticket and asks nothing of memory, for a human who
+// knows better. Measured with --quick --engine=gecko, 42
+// to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
+// on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
+// alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
+// other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
+//
+// Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
+// result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
+// the orchestrator run the gates on one tree); --fresh runs anyway and replaces the result. A key that misses an input
+// would hide a failure, so the key (inputsKey) is a sha256 over everything a gate reads:
+// - every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
+//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
+//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
+//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
+//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
+//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
+//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself;
+// - what is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
+//   worktree installed it;
+// - the frozen references of the run's browsers, .artifacts/tests/reference/<browser>-<config>: every file under
+//   inputs/, reference/ and ledger/ by its bytes, but the shards (*.zst, 725 MB) by name, size and modification time.
+//   `check` reads that folder and never the tracked pins in rebuild/tests/reference (freeze copies
+//   reference/manifest.json there; the six are equal today), so the pins alone would not do. The manifests hold every
+//   shard's sha256 and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept),
+//   so a kept result's shards were the manifests', and a shard written since has another time.
+//   inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned by nothing. browser/ isn't read (check
+//   --against=reference);
+// - without --quick, the painter differential's frozen bundles (.artifacts/tests/painter-frozen; the tool checks them
+//   against rebuild/tools/painter-frozen.json on every run, exit 2 otherwise) and, for Blink, Chrome's set files, which
+//   the twin scan reads and nothing pins (the inputs' manifests hold the hashes they had when recorded);
+// - the engines and --quick, bun's version and revision, the OS release.
+// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
+// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
+// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
+// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
+// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
+// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
+// A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
+// the run's exit code), no case goes to tier 2 and the key is the same after the run as before it: a tree edited, or a
+// reference frozen again, under the run keeps nothing. A reused result is the table and gates.json, not the gates'
+// reports: tier 2 takes its cases from tier 1's <report>.needs-browser.ids in the working tree (browser-sets.ts
+// --ids-file), which after a reused result is absent or an earlier tree's, so a run that sends cases to tier 2 runs
+// again in the worktree that goes on to tier 2. Results are <key>.json in .artifacts/tests/gates/results, the last 50.
+// The key takes a quarter of a second for the full form and a tenth for one engine's --quick at a load average of 30,
+// and 1.2 and 0.5 s at 60.
+//
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
 // missing or doesn't fit. It prints the errors `bunx tsc --noEmit -p <project>` prints and exits 0 when that does; with
 // errors tsc exits 2 when it found them in this run and 1 when it kept them from the last one.
-import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { cpus, tmpdir } from 'node:os'
+import { closeSync, existsSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { cpus, release, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
 
@@ -57,6 +117,8 @@ const BROWSER_OF: Record<EngineName, TierBrowser> = { blink: 'chrome', webkit: '
 const TSC_PROJECTS = ['rebuild', 'rebuild/lab', 'rebuild/tests', 'rebuild/probes', 'rebuild/lab/cases', 'rebuild/bench']
 const OUT = join(REPO, 'rebuild/tests/.check/gates')
 const TSC_STATE = join(REPO, 'node_modules/.cache/pretext-gates')
+// The queue's tickets and the kept results: in the .artifacts folder every worktree shares.
+const SHARED = join(REPO, '.artifacts/tests/gates')
 
 // What a gate's result counts as toward the exit code: 0 is fine for a pure refactoring.
 export type Verdict = { counts: string; meaning: string; as: number }
@@ -210,6 +272,200 @@ export function removeStaleSockets(dir: string): number[] {
     removed.push(pid)
   }
   return removed
+}
+
+// ---- A run ----
+
+// What the arguments ask for, or what is wrong with them.
+export type Run = { engines: EngineName[]; quick: boolean; cores: number; wait: boolean; fresh: boolean }
+export function runOf(args: readonly string[]): Run | string {
+  const run: Run = { engines: [...ENGINES], quick: false, cores: Math.max(1, cpus().length - 2), wait: true, fresh: false }
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === '--quick') run.quick = true
+    else if (arg === '--no-wait') run.wait = false
+    else if (arg === '--fresh') run.fresh = true
+    else if (arg.startsWith('--engine=')) run.engines = arg === '--engine=all' ? [...ENGINES] : ENGINES.filter(name => name === arg.slice('--engine='.length))
+    else if (arg.startsWith('--cores=')) run.cores = Number(arg.slice('--cores='.length))
+    else return `Unknown argument ${arg}`
+  }
+  if (run.engines.length === 0) return '--engine must be blink, webkit, gecko or all'
+  if (!Number.isInteger(run.cores) || run.cores < 1) return '--cores must be a whole number of cores, 1 or more'
+  return run
+}
+
+// ---- A turn for every run ----
+
+// A run's place in the queue, <n>.json: who asks, from where, with which flags, and when (ms).
+export type Ticket = { pid: number; at: number; worktree: string; flags: string; quick: boolean }
+
+const when = (ms: number): string => new Date(ms).toString().slice(4, 24)
+const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)?.[1] ?? 0)
+
+// Whether the run that wrote a ticket still runs. Its pid alone would not do: the machine reuses pids within hours, and
+// a killed run's ticket stays until the next run looks. So a process of that pid that started after the ticket was written
+// is another one (`ps` gives the start to the second, in UTC here, since `bun test` keeps another time zone than its
+// children; when it gives nothing to read, the ticket counts as live). And a killed run whose parent never reaps it
+// stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives its state as Z.
+function ticketLives(ticket: Ticket): boolean {
+  if (!processExists(ticket.pid)) return false
+  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
+  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > ticket.at)
+}
+
+// A ticket below a run's own, or null when another waiter removed it as dead between the listing and this read.
+function readTicket(path: string): Ticket | null {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as Ticket
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+// The machine's free memory in percent, as macOS's `memory_pressure` gives it and the browser lock reads it
+// (.artifacts/session/with-browser-lock.py, which starts no browser job under 30% either).
+function freeMemoryPercent(): number {
+  return Number(/free percentage: (\d+)%/.exec(Bun.spawnSync(['memory_pressure']).stdout.toString())![1])
+}
+
+// A run starts no gate while less of the machine's memory is free: every gate's children load a group of recorded cases,
+// and several heavy jobs at once took the machine to its swap on 2026-09-19. It keeps its place while it waits, so the
+// runs behind it wait too.
+export const MIN_FREE_MEMORY = 30
+
+// Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
+// worktree, whose reports and logs it would write over, and `minFreeMemory` percent of the machine's memory is free (0
+// asks nothing); says who holds the turn, or how much memory is free, while it waits. True when it waited.
+// The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
+// moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
+// its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
+export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number): Promise<boolean> {
+  mkdirSync(dir, { recursive: true })
+  const draft = join(dir, `draft-${ticket.pid}`)
+  writeFileSync(draft, JSON.stringify(ticket))
+  let mine = 0
+  while (mine === 0) {
+    const names = readdirSync(dir)
+    let highest = 0
+    for (let i = 0; i < names.length; i++) highest = Math.max(highest, ticketNumber(names[i]!))
+    try {
+      linkSync(draft, join(dir, `${highest + 1}.json`))
+      mine = highest + 1
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+  unlinkSync(draft)
+  let said = ''
+  for (;;) {
+    const numbers = readdirSync(dir).map(ticketNumber).filter(n => n > 0 && n < mine).sort((a, b) => a - b)
+    const before: Ticket[] = []
+    for (let i = 0; i < numbers.length; i++) {
+      const path = join(dir, `${numbers[i]!}.json`)
+      const earlier = readTicket(path)
+      if (earlier === null) continue
+      if (!ticketLives(earlier)) rmSync(path, { force: true })
+      else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
+    }
+    const free = before.length > 0 || minFreeMemory === 0 ? 100 : freeMemoryPercent()
+    if (before.length === 0 && free >= minFreeMemory) {
+      if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)
+      return said !== ''
+    }
+    const holder = before[0]
+    const text = holder === undefined
+      ? `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
+      : `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
+    if (text !== said) console.error(`[gates] ${text}`)
+    said = text
+    await Bun.sleep(500)
+  }
+}
+
+// ---- A result a key ----
+
+// What `check` reads of a frozen reference's folder; browser/ is for `pack` and --against=browser.
+const REFERENCE_PARTS = ['inputs', 'reference', 'ledger']
+
+// The files under a folder, in order; none when it isn't there (a recording can leave no ledger).
+function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
+}
+
+// One hash over everything a gate of this run reads (the file comment lists it, and what is left out and why). `repo` is
+// the working tree, with its .artifacts.
+export function inputsKey(repo: string, run: Run): string {
+  const hash = new Bun.CryptoHasher('sha256')
+  const addFile = (path: string): void => {
+    // A tracked file can be deleted in the working tree.
+    const content = existsSync(path) ? readFileSync(path) : null
+    hash.update(`${relative(repo, path)}\0${content === null ? 'gone' : content.length}\0`)
+    if (content !== null) hash.update(content)
+  }
+  hash.update(`${run.engines.join(',')} ${run.quick ? 'quick' : 'full'}; bun ${Bun.version} ${Bun.revision}; ${process.platform} ${release()}\0`)
+  // An empty list from a git that failed would be a key that reads no file of the tree.
+  const listed = (...args: string[]): string[] => {
+    const list = Bun.spawnSync(['git', 'ls-files', '-z', ...args], { cwd: repo })
+    if (list.exitCode !== 0) throw new Error(`git ls-files failed in ${repo}: ${list.stderr.toString()}`)
+    return list.stdout.toString().split('\0')
+  }
+  // Under rebuild also what git ignores, but for what the gates write: the gates read its folders whole.
+  const tree = [...listed('--cached', '--others', '--exclude-standard'), ...listed('--others', '--ignored', '--exclude-standard', '--', 'rebuild', ':!rebuild/tests/.check')]
+  for (let i = 0; i < tree.length; i++) if (tree[i] !== '') addFile(join(repo, tree[i]!))
+  const modules = join(repo, 'node_modules')
+  const installed = readdirSync(modules).sort()
+  for (let i = 0; i < installed.length; i++) {
+    const name = installed[i]!
+    if (name.startsWith('.')) continue
+    const packages = name.startsWith('@') ? readdirSync(join(modules, name)).sort().map(inner => join(name, inner)) : [name]
+    for (let k = 0; k < packages.length; k++) addFile(join(modules, packages[k]!, 'package.json'))
+  }
+  for (let e = 0; e < run.engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) for (let p = 0; p < REFERENCE_PARTS.length; p++) {
+    const files = filesUnder(join(repo, `.artifacts/tests/reference/${BROWSER_OF[run.engines[e]!]}-${CONFIGS[c]!}`, REFERENCE_PARTS[p]!))
+    for (let i = 0; i < files.length; i++) {
+      if (!files[i]!.endsWith('.zst')) addFile(files[i]!)
+      else {
+        const shard = statSync(files[i]!)
+        hash.update(`${relative(repo, files[i]!)}\0${shard.size} ${shard.mtimeMs}\0`)
+      }
+    }
+  }
+  if (!run.quick) {
+    const frozen = filesUnder(join(repo, '.artifacts/tests/painter-frozen'))
+    for (let i = 0; i < frozen.length; i++) addFile(frozen[i]!)
+    if (run.engines.includes('blink')) {
+      const sets = SETS.filter(set => set.browsers.includes('chrome'))
+      for (let i = 0; i < sets.length; i++) for (let k = 0; k < sets[i]!.parts.length; k++) addFile(join(repo, sets[i]!.parts[k]!.replaceAll('{browser}', 'chrome')))
+    }
+  }
+  return hash.digest('hex')
+}
+
+// A finished run as it is kept for reuse: when and where it ran, and what it printed.
+export type Kept = { key: string; at: number; worktree: string; commit: string; dirty: boolean; seconds: number; exit: number; rows: Row[] }
+
+export function keptResult(dir: string, key: string): Kept | null {
+  const path = join(dir, `${key}.json`)
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as Kept : null
+}
+
+// Why a finished run's rows aren't kept for reuse, or null (the file comment).
+export function notKept(rows: readonly Row[]): string | null {
+  if (rows.some(row => row.as === 2)) return 'a gate\'s tool failed'
+  if (rows.some(row => row.tier2 > 0)) return 'tier 1 sends cases to tier 2, and their ids are in this worktree\'s reports, which a reused result doesn\'t write'
+  return null
+}
+
+// Keeps a result under its key, in one step, so a reader never sees half a file, and drops all but the last 50.
+export function keepResult(dir: string, kept: Kept): void {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `draft-${process.pid}`), `${JSON.stringify(kept, null, 1)}\n`)
+  renameSync(join(dir, `draft-${process.pid}`), join(dir, `${kept.key}.json`))
+  // Two runs can finish at once: a result the other one dropped counts as the oldest.
+  const results = readdirSync(dir).filter(name => name.endsWith('.json')).map(name => ({ name, at: statSync(join(dir, name), { throwIfNoEntry: false })?.mtimeMs ?? 0 })).sort((a, b) => b.at - a.at)
+  for (let i = 50; i < results.length; i++) rmSync(join(dir, results[i]!.name), { force: true })
 }
 
 // ---- The gates of a run ----
@@ -371,34 +627,45 @@ function printTable(rows: readonly Row[]): void {
 }
 
 if (import.meta.main) {
-  const options = new Map<string, string>()
-  const flags = new Set<string>()
-  const usage = (text: string): never => {
-    console.error(`[gates] ${text}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N]`)
+  const run = runOf(process.argv.slice(2))
+  if (typeof run === 'string') {
+    console.error(`[gates] ${run}\nUsage: bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait] [--fresh]`)
     process.exit(2)
   }
-  for (const raw of process.argv.slice(2)) {
-    const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
-    if (match === null) usage(`Unknown argument ${raw}`)
-    else if (match[1] === 'quick' && match[2] === undefined) flags.add('quick')
-    else if ((match[1] === 'engine' || match[1] === 'cores') && match[2] !== undefined) options.set(match[1], match[2])
-    else usage(`Unknown argument ${raw}`)
-  }
-  const engine = options.get('engine') ?? 'all'
-  const engines = engine === 'all' ? [...ENGINES] : ENGINES.filter(name => name === engine)
-  if (engines.length === 0) usage('--engine must be blink, webkit, gecko or all')
-  const cores = Number(options.get('cores') ?? Math.max(1, cpus().length - 2))
-  if (!Number.isInteger(cores) || cores < 1) usage('--cores must be a whole number of cores, 1 or more')
   mkdirSync(OUT, { recursive: true })
   mkdirSync(TSC_STATE, { recursive: true })
+  // An earlier run of the same inputs answers at once, before the queue; and after a wait again, since the run this
+  // one waited for may have been of the same tree (an owner, its critic and the orchestrator start together).
+  const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
+  let key = inputsKey(REPO, run)
+  let earlier = earlierRun(key)
+  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
+    key = inputsKey(REPO, run)
+    earlier = earlierRun(key)
+  }
+  if (earlier !== null) {
+    writeFileSync(join(OUT, 'gates.json'), `${JSON.stringify(earlier.rows, null, 2)}\n`)
+    printTable(earlier.rows)
+    console.log(`Reused result: no gate ran now. A run with the same inputs finished on ${when(earlier.at)} in ${earlier.worktree}, at commit ${earlier.commit}${earlier.dirty ? ' with uncommitted changes' : ''}; the logs and the gates' reports are that worktree's, and --fresh runs the gates anyway`)
+    console.log(`Reused result of ${when(earlier.at)}: ${closingLine(earlier.rows, earlier.seconds, earlier.exit)}`)
+    process.exit(earlier.exit)
+  }
   const started = Date.now()
-  const gates = gatesOf(engines, flags.has('quick'))
-  console.error(`[gates] ${gates.length} gates${flags.has('quick') ? ' (quick)' : ''} for ${engines.join(', ')} on ${cores} cores; logs in ${relative(REPO, OUT)}`)
-  const rows = await runAll(gates, cores)
+  const gates = gatesOf(run.engines, run.quick)
+  console.error(`[gates] ${gates.length} gates${run.quick ? ' (quick)' : ''} for ${run.engines.join(', ')} on ${run.cores} cores; logs in ${relative(REPO, OUT)}`)
+  const rows = await runAll(gates, run.cores)
+  const seconds = Math.round((Date.now() - started) / 100) / 10
   writeFileSync(join(OUT, 'gates.json'), `${JSON.stringify(rows, null, 2)}\n`)
   printTable(rows)
   let exit = 0
   for (let i = 0; i < rows.length; i++) exit = worse(exit, rows[i]!.as)
-  console.log(closingLine(rows, Math.round((Date.now() - started) / 100) / 10, exit))
+  // Kept for reuse only when the rows allow it, and the inputs are what they were when the run started.
+  const reason = notKept(rows) ?? (inputsKey(REPO, run) !== key ? 'the inputs changed under the run' : null)
+  if (reason !== null) console.error(`[gates] not kept for reuse: ${reason}`)
+  else {
+    const git = (...args: string[]): string => Bun.spawnSync(['git', ...args], { cwd: REPO }).stdout.toString().trim()
+    keepResult(join(SHARED, 'results'), { key, at: Date.now(), worktree: REPO, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '', seconds, exit, rows })
+  }
+  console.log(closingLine(rows, seconds, exit))
   process.exit(exit)
 }

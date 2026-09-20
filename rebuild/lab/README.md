@@ -378,6 +378,49 @@ the 3 known, Firefox 120 in the known process (14 of them in line ranges), all h
 frozen tree tier 1 exits 0 for all six, the plain and pure checks exit 0, the painter differential holds 6 of 6 and
 citations lose 0.
 
+## Landed in the fresh-eyes follow-up (2026-09-19)
+
+A reviewer who hadn't worked on the code read the library against the engineering guide
+(research/FRESH-EYES-REVIEW.md). Three owners and a critic took up what it found; rebuild/SHARED-CHANGES.md has their
+entries and the orchestrator's decisions, and rebuild/TESTS.md, "Tiers", the tests and probes.
+
+- **Shared** (`.artifacts/tests/runs/fu-shared`): one parser reads a font-family list for the font checks and the
+  three ports (`src/font-family.ts`; DESIGN.md §1.1). The lab keeps its own three readers of a family string
+  (`fresh.ts`, `score.ts`, `font-facts.ts` `parseFamilies`), since it may not import the library's. `tools/two-trees.ts`
+  compares a plain predictor's line ranges with the layout's lines that have a line box, as `compare-rows.ts` does: on
+  the reviewer's 6,362 fresh cases the false differences went from 9, 47 and 5 to 0. `gates.ts` names the cases for
+  tier 2 in its last line and removes stale socket files ("Test tiers"). A worktree's probes project checks its own
+  files.
+- **Gecko** (`.artifacts/tests/runs/fu-gecko`): text runs hold their recipe contexts by reference, on a record that
+  also holds the context's pair placement (DESIGN.md §4.6). No question moved. The owner's two later commits weren't
+  merged; they stay on branch `fu-gecko`.
+- **Blink** (`.artifacts/tests/runs/fu-blink`, `.artifacts/lab/fu-blink`, `.artifacts/probes/fu-blink`): `system-ui`
+  is matched as the CSS keyword it is in any case and as a quoted name as written, and `BlinkMacSystemFont` stays
+  exact (probe `blink-sysui-spellings`, 20 of 20 checks). A span that holds nothing but empty items and a collapsible
+  space creates a box fragment, as `ExitInline` sets it: the review's open row `c-d600d9b01c0ae9d7`, and the
+  known-tail class that had blamed the lab's observation port ("The known tail").
+- **The critic** (`.artifacts/session/fu-critic`, `.artifacts/tests/runs/fu-critic`): a family the list leaves open
+  at its end is handed on as a closed string, merged as its own commit; the one parser had let the font checks'
+  appended generic land inside such a name.
+- **Tier 1 at the merge, before the freeze.** The box fragment rule changes predictions by design: 494 Chrome cases per
+  configuration (483 distinct ids) gain an `inline-box` geometry item, with 0 questions changed. The full `gates.ts`
+  showed exactly four rows of 39 that aren't 0: tier 1 for Chrome exits 1 in both configurations, and the painter
+  differential for Chrome exits 3 in both (494 not painted, 0 differ). Tier 1 exits 0 for Firefox and webkit-host with
+  0 questions changed, so their references are unchanged.
+- **The needs-browser list after such a merge** holds the cases whose questions changed and the storage rule's, not
+  the cases whose prediction changed under the same questions ("Tier 1: offline replay", "By rule, to tier 2"). With
+  facts it held 47 of the 483 changed ids; the critic ran tier 2 on the union.
+
+Chrome's two references were recorded again and frozen at d7df936 (`.artifacts/tests/runs/fu-merge-20260919`). The
+recording, Chrome only, both orders and both configurations: four exits 0 (no-facts, facts, the plain predictor's run,
+its comparison). 67,065 cases each; 3 status transitions per configuration, all on `c-a37545c096e939be`
+(`rich-prewrap/normal-in-pre-wrap`): breaks `fail open` to pass, widths `unobserved` to pass, `not exact` to exact; 0
+from a pass; differing predicted values 266 to 265 without facts and 552 to 551 with them; gates lost 0, new 2. The
+plain predictor's run equals the usual run on all 67,065 cases. Every case replays exactly from the packed recordings.
+The references were frozen with `--force` and a reason, Chrome's tier 2 seeds were adopted (0 lost; breaks and widths
+gain one pass pair in each configuration), and the painter differential's frozen side was bundled again.
+After the freeze the full offline gates exit 0 on the frozen tree (39 gates, no case left for tier 2).
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -387,7 +430,7 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 
 | Tier | Command | What a change shows as | Measured |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests then; 819 in 59 files on 2026-09-19); 20 to 30 s at load average 25 |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests then; 819 in 59 files on 2026-09-19, 862 in 64 since the fresh-eyes follow-up); 20 to 30 s at load average 25 |
 | 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; every case whose Canvas questions changed, by kind (repeats only, dropped only, other); cases that need the browser | 42 s for the six frozen references (388,886 cases then, 389,646 with `twins`) on a quiet machine with the library's memo, 4 to 9 s a reference; 77 s at load average 25; two to three minutes since the memo went, beside other owners' jobs |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; the three at once against the frozen line: 92 to 195 s a browser and configuration; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
@@ -414,7 +457,47 @@ X3 merge's library, other owners' jobs beside it (load averages of 10 to 40): `-
 and 112 s for Blink (1,800 CPU-seconds on 16 cores: Chrome's cases ask the most questions); the full form for the three
 engines 13 minutes (10,300 CPU-seconds, 12 GB at the peak; tier 1's six rows after 74 s), against 62 minutes and 18,000
 CPU-seconds for the same gates one after another earlier that night, at load averages of 40 to 75. At load averages of
-45 to 60 the same forms took 32 s, 103 s, about 3 minutes and 20 minutes.
+45 to 60 the same forms took 32 s, 103 s, about 3 minutes and 20 minutes. Since the fresh-eyes follow-up the run's last
+line names how many cases tier 1 sends to tier 2, per gate, so "every gate is fine" never reads as done (the rows carry
+the count as `tier2`; the exit codes are unchanged). A run first removes the `pretext-gates-<pid>.sock` files of
+processes that are gone: listening fails on a path that exists, and a run killed from outside leaves its file. A full
+run can take 30 minutes on a shared machine, and waits for its turn first, so start it detached from anything that has
+a time limit.
+
+**One run at a time, and a result kept by its inputs** (2026-09-19; the header of `gates.ts` has both in full). Several
+full runs at once, each in its own worktree, took 19 to 33 minutes each instead of 12, at load averages of 80 to 160,
+and an owner, its critic and the orchestrator ran the gates three times on one tree. So a run takes a machine-wide turn
+before its first gate: a numbered ticket in `.artifacts/tests/gates/queue`, which every worktree shares, made in one
+step, first come, first served. A full run waits for the full runs before it and a `--quick` run for the `--quick` runs
+before it, and either for a run of its own worktree, whose reports and logs it would write over; while it waits it says
+who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
+nobody up, so a killed run needs no cleaning. A run whose turn came still starts no gate while under 30% of the
+machine's memory is free, the browser lock's floor, and keeps its place meanwhile: on 2026-09-19 two full runs beside a
+browser scoring job took the machine to its swap. `--no-wait` skips both waits. Measured with `--quick --engine=gecko`,
+31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
+on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
+took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
+never takes fewer cores instead of waiting. A `--quick` run and a full run don't wait for each other: beside a full run
+the `--quick` run took 123 s (185 s on 8 cores) at load averages up to 58, where its wait would be six minutes on
+average; the full run took 16 minutes with those two beside it and other owners' jobs.
+
+A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
+reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
+1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over every
+tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, so uncommitted edits count,
+and under `rebuild/` also what git ignores but for `.check`, which the gates write: tsc, the unit tests and the citation
+ledger read its folders whole, and the root `.gitignore` names `dist` and `site` wherever they are;
+the `package.json` of every installed package; the frozen references of the run's browsers as `check` reads them under
+`.artifacts/tests/reference` (the tracked pins in `rebuild/tests/reference` are copies that `check` never reads): every
+file by its bytes but the 725 MB of shards, whose hashes the manifests hold and tier 1 checks, by size and time; without
+`--quick` the painter's frozen bundles and, for Blink, Chrome's set files; the engines and `--quick`, bun's version and
+the OS release. `--cores` isn't in it: no report depends on it. A result is kept only when every gate has one, no
+gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
+run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
+not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which
+after a reused result is absent or an earlier tree's, so a run that sends cases to tier 2 runs again in the worktree
+that goes on to tier 2. What unit tests read outside the repository (the pinned engine sources and the groundwork's
+tools under `~/github/browser-engines`, Homebrew's ICU 78) isn't in the key: run with `--fresh` after changing one.
 
 **A process replays a group of shards** since 2026-09-19 (`replay.ts` `shardGroups`; tier 1, the function set's plain
 and pure checks, the painter differential): a set's shards eight to a process in order, and a shard of fewer than 50
@@ -612,7 +695,9 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   for tier 2 (where this change moved no status). On the six recordings of 2026-09-18 no case is unfaithful: all 380,882 replay
   exactly, the question sequences included, so nothing the library reads from its host outside Canvas and the segmenters
   (Unicode property escapes in `src/paint.ts`, case mapping, `Intl`) shows a difference between bun and the browsers on
-  these sets.
+  these sets. The list is for a step that means to change no prediction. A case whose prediction changed under the
+  same questions isn't in it, so after a merge that changes predictions tier 2 runs the union of the list and the
+  report's changed cases (at the fresh-eyes follow-up's merge the list held 47 of the 483 changed ids with facts).
 - *Deterministic by construction*: a process replays one group of a set's shards, cut from the manifest alone ("Test
   tiers"), and runs its cases in recorded order, so nothing depends on the core count, on the sets chosen or on what ran
   before; the report lists cases in the sets' order and holds no time. The same tree gives the same report.
@@ -924,7 +1009,15 @@ keeps, and `gecko/nbsp-first-family-apple-color-emoji` a boundary U+00A0 under a
 as going from history-dependent to pass (74 without facts, all among the 87 with them): that browser process has two
 states, a plain predictor run an hour later landed in the other one on exactly those 74, and a pass in one recording
 isn't stable. They are named because a ledger that marks them as passes drops them from the item's rule; a named case
-that later leaves a pass still shows as a transition on the item.
+that later leaves a pass still shows as a transition on the item. At the fresh-eyes follow-up
+`lab/blink-rect-of-a-span-holding-only-a-trimmed-space` is closed: the missing rect was the engine port's, not the
+observation port's. Blink gives a box fragment to a span that holds nothing but empty items and a collapsible space
+(`InlineItemsBuilder::ExitInline`), and the port culled it. With the rule ported, all 36 named cases pass line count,
+breaks and widths in pinned Chrome in both configurations (`.artifacts/lab/fu-blink`), and the class's one tier case,
+`c-a37545c096e939be`, went from `fail open` to pass in the recording at the merge. The painter still fails the
+review's fresh case `c-d600d9b01c0ae9d7` without an explanation (a collapsible space of a `white-space: normal` span
+hangs at a line end in a pre-wrap block, and the line painted as its own block loses it), so
+`painter/without-explanation` names it (67 items, 784 named cases). The final evaluation's one hanging Chrome case, `c-a948c5abca7d9a92`, is named under `blink/range-rects-hang` (research/FINAL-EVALUATION.md), which makes 785.
 
 ## Running
 
@@ -1960,7 +2053,10 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
 
 1. **Generate**, without any case id used so far (`cases/used-ids.ts`: every case file a `run.json` under `.artifacts`
    names, `.artifacts/lab/cases`, `final-20260916/cases`, every sealed set, every earlier fresh set, the smoke cases), under
-   a generation lock so two rounds started together can't draw the same case. Kinds (`--kinds=`, default all):
+   a generation lock so two rounds started together can't draw the same case (a lock without an owner file is taken over
+   once the LOCK has been without one for 10 s; until 2026-09-19 the 10 s were the waiter's own, so a waiter of more than
+   10 s could take a live lock over during its release, and two of the final evaluation's sets were generated at once).
+   Kinds (`--kinds=`, default all):
    - `runs`, `ws`, `policy`: the generators of `cases/` under the seed, about 5,200 cases; `--repeat=N` adds the seeds
      `<seed>#2` to `<seed>#N`.
    - `rich-prewrap` (since the round 4 evaluation): `cases/rich-prewrap.ts` under the seed, about 1,330 cases a seed, the
@@ -1975,7 +2071,10 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
      cases (`--family-dirs=`, default the 09-16 rule and 09-17 feature derivations) and lays each paragraph out at
      `--widths-per-paragraph=N` (default 1) new widths: 70% within ±2 to ±128 units of 1/64 px of a derived bracket, 30%
      between the paragraph's narrowest and widest brackets. A paragraph with line slots stays at or above its narrowest
-     derived width, so the slot protocol holds.
+     derived width, so the slot protocol holds. A draw that meets a used id is drawn again, up to 8 times, and the kind's
+     log line and manifest say how many draws met one and how many widths were given up (since 2026-09-19: before, the
+     line read "0 used ids left out" whatever the loop had skipped; the kind had shrunk 8 to 12% between the correctness
+     line and the final evaluation, research/FINAL-EVALUATION.md).
    A seed names one set of flat cases: a second browser asking for the same seed copies the first one's `runs`, `ws`,
    `policy` and `suite` files, so browsers compare on the same cases. `family-widths` is per browser. Giants (below) go to
    `cases/giants.ndjson` and run only with `--giants=run`, exclusively, after the parts.

@@ -30,7 +30,8 @@ export function defaultFamilyDirs(browser: BrowserKind): string[] {
 
 type Derived = { value: Case; role: string }
 
-export type FamilyWidthsResult = { cases: Case[]; paragraphs: number; sources: Array<{ file: string; cases: number; paragraphs: number }> }
+// `usedDraws` counts the draws that met a used id and were drawn again, `givenUp` the widths no draw of 8 found.
+export type FamilyWidthsResult = { cases: Case[]; paragraphs: number; usedDraws: number; givenUp: number; sources: Array<{ file: string; cases: number; paragraphs: number }> }
 
 // `perParagraph` widths for every family paragraph with a derived bracket. `used` ids are skipped, and a width that
 // collides is drawn again, up to 8 times.
@@ -38,6 +39,8 @@ export function familyWidthCases(seed: string, dirs: readonly string[], perParag
   const out: Case[] = []
   const sources: FamilyWidthsResult['sources'] = []
   let paragraphs = 0
+  let usedDraws = 0
+  let givenUp = 0
   for (let d = 0; d < dirs.length; d++) {
     const file = join(dirs[d]!, 'family-cases.ndjson')
     if (!existsSync(file)) throw new Error(`No derived family cases at ${file}`)
@@ -66,6 +69,7 @@ export function familyWidthCases(seed: string, dirs: readonly string[], perParag
       const rng = createRng(`${seed}/family-widths/${key}`)
       const seen = new Set<string>()
       for (let n = 0; n < perParagraph; n++) {
+        let found = false
         for (let attempt = 0; attempt < 8; attempt++) {
           const from = rng.pick(sized).value
           const slots = from.inline !== undefined && from.inline.lineSlots.length > 0
@@ -84,15 +88,18 @@ export function familyWidthCases(seed: string, dirs: readonly string[], perParag
             family: from.family, origin: `fresh-widths seed=${seed} paragraph=${key} from=${from.id} ${note}`, pageLang: from.pageLang,
             paragraph: { ...from.paragraph, width }, browsers: from.browsers, fontFixtures: from.fontFixtures, inline: from.inline,
           })
+          if (used.has(value.id)) usedDraws++
           if (used.has(value.id) || seen.has(value.id)) continue
           seen.add(value.id)
           out.push(value)
+          found = true
           break
         }
+        if (!found) givenUp++
       }
     }
     paragraphs += withBrackets
     sources.push({ file, cases: count, paragraphs: withBrackets })
   }
-  return { cases: sortCases(mergeCases(out)), paragraphs, sources }
+  return { cases: sortCases(mergeCases(out)), paragraphs, usedDraws, givenUp, sources }
 }

@@ -47,12 +47,51 @@ may read the DOM freely; this is research, not the library.
   white space, U+00A0, keyword case, an unclosed string, and the lists CSS rejects. It returns `checks`, and beside them
   `classification`: which reference a list measures as where that is the engine's choice of keywords and not syntax (a
   quoted `"system-ui"`, `BlinkMacSystemFont` in small letters, `-apple-system` quoted). On 2026-09-19 all 95 checks held in
-  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`).
+  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`). It doesn't hold the six lists the
+  fresh-eyes follow-up's critic probed: an escaped newline in a string, a last backslash, an unclosed string and a
+  backslash that take a comma and a generic after them into the name, U+3000, and an empty string. That probe isn't
+  tracked (`.artifacts/probes/critic-family-edges/`: 34 of 34 checks in Chrome 153 and in Firefox 156, webkit-host not
+  run).
+
+- `blink-sysui-spellings.ts`: how Chrome's DOM reads other spellings of its two system font names. One probe,
+  meaningful alone in a fresh browser at DPR 2; it returns `checks`. On 2026-09-19 in the pinned Chrome (20 of 20
+  checks, `.artifacts/probes/fu-blink/sysui-spellings/`): unquoted `system-ui` in any case, a quoted `"system-ui"` and
+  `BlinkMacSystemFont`, quoted or not, lay out as the system font. `blinkmacsystemfont`, `BLINKMACSYSTEMFONT` and a
+  quoted `"System-UI"` laid out before `system-ui` fall to the standard font. A quoted `"System-UI"` laid out after
+  `system-ui` at the same size gets the system font from the platform font cache. It needs a process of its own if it
+  is added to `rebuild/tests/rerun-probes.sh`.
+- `ff-element-workers.ts` (W1 to W5) and `ff-element-documents.ts` (D1 to D5): what measuring on a detached `<canvas>`
+  element in Firefox again would rest on (2026-09-19). The first runs the library's own bundled module over 435 lab cases
+  on the page and in a module worker, both on OffscreenCanvas, and compares everything it returns. The second measures an element canvas in every kind of document a
+  page can make, finds what tells a document without a presentation shell, which operations flush a pending style change,
+  and what the test costs. Each header has its results; the runs are under `.artifacts/probes/ff-element-20260919/workers/`.
+  `ff-element-attacks.ts` (X1 to X7) is the second look at the same question: contexts whose font is set once while the
+  document's presentation shell goes and comes back, a hidden tab and a new tab, a shared worker and a transferred
+  OffscreenCanvas, a pending stylesheet change, SVG and XHTML documents, a document asking from its own early scripts, and
+  the test's cost over many contexts. X2 and X7 open a tab with `window.open`, in the runner's background window. Its header
+  has the results, with the first set's reruns; the runs are under `.artifacts/probes/ff-element-20260919/workers-check/`.
 
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
   `text-rendering: optimizeLegibility`, and no context first). Each returns checks and is meaningful only alone in a fresh
   browser process (`--only`); its header has the loop, and rebuild/lab/README.md "Measure first" the verdicts.
+
+- `gecko-element-cost.ts`: what a detached `<canvas>` element costs in Firefox as a measuring surface beside
+  `new OffscreenCanvas(1, 1)` (the question of 2026-09-19, CHARTER.md decision 2 of 2026-09-18). Measurement only, raw
+  values, no `checks`: making contexts, each assignment, the first `measureText` and the steady state on the chat bench's
+  words, 10,000 chat messages' worth of contexts and calls, whether `ctx.font` or `measureText` flushes a dirty page (with a
+  connected canvas as the control that does), a `FontFace` that isn't loaded, DOM widths beside each kind at another
+  `layout.css.devPixelsPerPx`, and pauses while dropped contexts are freed. Its header has the commands; the timing sets
+  run alone on the machine with `{ "privacy.reduceTimerPrecision": false }`, which gives `performance.now()` 20 µs steps.
+  `gecko-element-cost-rss.ts` wraps one `M` probe and samples the launched Firefox's resident size with `ps` beside the
+  page's marks. It names no browser on its command line, so pass `--browser=firefox` to the lock, or the lock takes the
+  whole machine. No page can ask Firefox for a collection: the `M2` probes bring one on with 32 MiB buffers.
+- `gecko-element-cost-check.ts`: a second look at the same question, with what the first file didn't try. A change to
+  the page's style sheets before a canvas call (`K1`, `K1b`: an element's `measureText` brings the page's style sheet data
+  up to date, an OffscreenCanvas's doesn't), many font declarations taking turns (`K2`), 36,000 live contexts, what a
+  frame costs with them and the pauses while they are freed (`K3`, one kind per browser process), the freeing pause at
+  10,000, 20,000 and 40,000 contexts (`K4`), the chat bench's shape of work on a page whose style or layout is dirty
+  (`K5`), and the first `measureText` of kept contexts after their web font loads (`K6`). Same prefs, same lock rules.
 
 ## Running
 

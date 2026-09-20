@@ -36,7 +36,8 @@ for the analysis, M4 and M5 this round; `.artifacts/session/cr5-gecko-20260919/p
   times 2^k give the fractions. A placement is told only where the other two are struck out; the third placement has no
   value in the port and only keeps the other two honest. The cut's own pair is tried first. Else probe pairs measured
   alone in the run's context strike placements out together, once per Canvas context of a prepared paragraph
-  (`GeckoPrepared.pairPlacements`); HarfBuzz chooses GPOS or the kern machine once per face, script and language
+  (`RunContexts.pairPlacement`, on the record the context's text runs share; until the fresh-eyes follow-up a list,
+  `GeckoPrepared.pairPlacements`); HarfBuzz chooses GPOS or the kern machine once per face, script and language
   (hb-ot-shape.cc:131-187). What the probe pairs tell counts for a pair only where Canvas shows one face draws both: a
   kerned pair is one face's, since a text run is shaped one font range at a time, so a cluster must be a probe letter or
   measure together with one other than apart (probe M5: a first font that draws only the digits has `11` in halves and

@@ -71,7 +71,11 @@ test('family widths are seeded, new, near or between the derived brackets, and k
   }
   // A used id is never produced again.
   const used = new Set(first.cases.map(value => value.id))
-  for (const value of familyWidthCases('seed-a', [dir], 6, used).cases) expect(used.has(value.id)).toBe(false)
+  const beside = familyWidthCases('seed-a', [dir], 6, used)
+  for (const value of beside.cases) expect(used.has(value.id)).toBe(false)
+  // The same seed draws the used widths first, so the generator says how often it drew again; nothing used met none.
+  expect(beside.usedDraws).toBeGreaterThan(0)
+  expect(first.usedDraws).toBe(0)
 })
 
 test('a case file named by a worktree that is gone is found in this repository', () => {
