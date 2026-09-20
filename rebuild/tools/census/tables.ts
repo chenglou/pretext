@@ -248,6 +248,7 @@ const then = await thenRecords()
 const json: Record<string, unknown> = { generatedAt: new Date().toISOString(), fields: FIELDS }
 const text: string[] = []
 const full: string[] = []
+const realByBrowser: Array<{ browser: string; families: Map<string, Counts>; total: Counts }> = []
 for (let b = 0; b < BROWSERS.length; b++) {
   const browser = BROWSERS[b]!
   const all = await records(browser, chunk => chunk.startsWith('chunk') || chunk.startsWith('corpus'))
@@ -368,14 +369,30 @@ for (let b = 0; b < BROWSERS.length; b++) {
   text.push(`Gaps named on the ${listed.length} cases main passes and the rebuild gets wrong (a case can name several; \`main-only/${browser}.ndjson\` lists the cases): ${gapList.map(g => `${g} ${gapNames.get(g)}`).join(', ')}.`, '')
 
   const real = tally(await records(browser, chunk => chunk === 'real-text'))
+  realByBrowser.push({ browser, ...real })
   if (real.total.cases > 0) full.push(`## ${browser}: real paragraphs, every corpus`, '', familyTable(real.families, real.total, Infinity), '')
-  if (real.total.cases > 0) text.push(`### ${browser}: real paragraphs, ${real.total.cases} cases`, '', ...headlines(real.total), '', familyTable(real.families, real.total, Infinity), '')
 
   json[browser] = {
     suite: { total: suite.total, families: Object.fromEntries(suite.families) }, setAside: asideTally.total, suiteWithSetAside: whole.total, rerun,
     thenAndNow: { joined, nativeCompared, nativeMoved, nativeLinesMoved, moves, families: Object.fromEntries(movedFamilies) },
     realText: { total: real.total, families: Object.fromEntries(real.families) },
   }
+}
+// Real paragraphs, the browsers side by side. Per browser: main's failed line counts, main's right counts with wrong visible
+// breaks, the rebuild's wrong lines, the rebuild's failed widths.
+if (realByBrowser.length > 0 && realByBrowser[0]!.total.cases > 0) {
+  const cell = (c: Counts): string => `${c.observed - c.mainPass} / ${c.rightCountWrongBreaks} / ${c.wrongLines} / ${c.widthsFail}`
+  const lines = [`## Real paragraphs: ${realByBrowser[0]!.total.cases} cases a browser`, '', 'Each cell: main\'s failed line counts / main\'s right counts with wrong visible breaks / the rebuild\'s wrong lines / the rebuild\'s failed widths.', '',
+    `| corpus | cases | ${realByBrowser.map(r => r.browser).join(' | ')} |\n|---|---:|${realByBrowser.map(() => '---').join('|')}|`]
+  for (const name of [...realByBrowser[0]!.families.keys()].sort()) {
+    lines.push(`| \`${name.replace(/^real\//, '')}\` | ${realByBrowser[0]!.families.get(name)!.cases} | ${realByBrowser.map(r => cell(r.families.get(name) ?? emptyCounts())).join(' | ')} |`)
+  }
+  lines.push(`| **all** | ${realByBrowser[0]!.total.cases} | ${realByBrowser.map(r => cell(r.total)).join(' | ')} |`, '')
+  for (let i = 0; i < realByBrowser.length; i++) {
+    const c = realByBrowser[i]!.total
+    lines.push(`- ${realByBrowser[i]!.browser}: main's line count passes ${rate(c.mainPass, c.observed)}; the rebuild's lineCount ${rate(c.rebuildPass, c.observed)}, breaks ${rate(c.breaksPass, c.breaksObserved)}, widths ${rate(c.widthsPass, c.widthsObserved)}; main fails and the rebuild passes ${c.mainFailRebuildPass}; main passes and the rebuild fails ${c.mainPassRebuildFail}.`)
+  }
+  text.push(...lines, '')
 }
 writeFileSync(join(OUT, 'calibration.json'), JSON.stringify(json, null, 1) + '\n')
 writeFileSync(join(OUT, 'tables.txt'), text.join('\n') + '\n')
