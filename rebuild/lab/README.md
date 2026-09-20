@@ -472,7 +472,7 @@ facts configuration, where they are predicted ("The ledger", the exact-value sta
 every check that needs no browser side by side, reads each exit code from the child process itself, and prints one
 table: gate, exit code, whether a pure refactoring may go on with it, wall time, the report's key counts, and what the
 code means in words and which kind of step accepts it. `--quick` is for after every small edit: tier 0 (the six `tsc`
-projects, incremental, and the unit tests a process a file, two minutes a test so a busy machine doesn't fail them),
+projects, incremental, and the unit tests a process a file, ten minutes a test so a busy machine doesn't fail them),
 tier 1, and the function set's plain and pure checks, for
 that engine's browser in both configurations. Without it the sweep, the painter differential, the citation ledger and
 (for Blink) the twin scan run too. It exits 0 only when every gate is fine for a step that means to change no prediction

@@ -505,11 +505,13 @@ export function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] 
     })
   }
   // A process a test file: two files take most of the unit tests' time, and one process runs the files one after another.
-  // Two minutes a test, not bun's five seconds: the gates ask whether a test passes, and beside a timed browser job they
-  // run on the efficiency cores of a busy machine, where tests that read row files or walk every code point took 5 to 10 s.
+  // Ten minutes a test, not bun's five seconds: the limit is there to end a test that hangs, and the gates ask whether a
+  // test passes, not how fast. Beside a timed browser job they run on the efficiency cores of a busy machine: tests that
+  // read row files or walk every code point took 5 to 10 s there, and at a load average over 100 the likely-subtags test,
+  // 18 s alone, ran past two minutes.
   const leftOut = quick && engines.length === 1 ? ENGINES.filter(name => name !== engines[0]) : []
   const tests = unitTestFiles(leftOut)
-  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, reads: [], parts: tests.map(file => ['test', '--timeout', '120000', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
+  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, reads: [], parts: tests.map(file => ['test', '--timeout', '600000', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
   if (!quick) {
     const citations = join(OUT, 'citations.json')
     gates.push({ name: 'citations', sharded: false, report: citations, reads: [], parts: [['rebuild/tools/citations.ts', 'check', `--out=${citations}`]], read: (code, report, log) => citationsVerdict(code, report as CitationsReport | null, log) })
