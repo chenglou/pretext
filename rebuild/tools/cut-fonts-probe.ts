@@ -113,7 +113,7 @@ for (let f = 0; f < FONTS.length; f++) {
     factsA = [{ ...FACTS[FONTS[f]], unitsPerEm: null }];
     factsB = [FACTS[FONTS[f]]];
   }
-  const row = { family: FONTS[f], resolves: true, positionsCompared: 0, positionsOff: 0, wholeGroups: 0, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
+  const row = { family: FONTS[f], resolves: true, positionsCompared: 0, positionsOff: 0, wholeGroups: 0, sameCuts: 0, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
   const shared = SHARED ? [[], [], []] : null;
   for (let t = 0; t < TEXTS.length; t++) for (let z = 0; z < SIZES.length; z++) {
     const text = TEXTS[t].text, size = SIZES[z];
@@ -135,6 +135,7 @@ for (let f = 0; f < FONTS.length; f++) {
       const group = FACTS === null ? gb.groups[g] : ga.groups[g];
       if (FACTS !== null) {
         if (group.cuts.length > 2 && gb.groups[g].cuts.length === 2) row.wholeGroups++;
+        if (group.cuts.length > 2 && JSON.stringify(group.cuts) === JSON.stringify(gb.groups[g].cuts)) row.sameCuts++;
         for (let k = group.start + 1; k <= group.end; k++) {
           if (k < group.end && (k % 3 !== 0 && !group.cuts.includes(k))) continue;
           row.positionsCompared++;
