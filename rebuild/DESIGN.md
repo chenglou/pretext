@@ -1766,29 +1766,36 @@ alone pays nearly as much and that the kept answers were the one part that went 
   usual runs). The offline gates exit 0, tier 1 for Chrome by the string storage rule alone, and Chrome's usual tier 2
   then shows 0 transitions in both configurations (TESTS.md, "Tiers").
 - *What it buys* (the bench's headline: 10,000 chat messages from scratch, a list a message and one list a pass taking
-  turns in one document; quiet machine, 2026-09-19, measured by the prototype's review as a variant of the bench page
-  beside the prototype, research/PERF-LIFETIME.md, the review's §4, because the machine was never quiet while this form
-  was proven): Chrome 4.60 s to 3.70 s on the mix and 4.01 s to 3.35 s on plain ASCII; webkit-host 235 ms to 138 ms and
-  195 ms to 104 ms; Firefox, whose checks ask nothing, 2.76 s to 2.51 s and 0.58 s to 0.46 s. A kept paragraph no longer
-  keeps canvases of its own alive, about five a message in Chrome: preparing 10,000 messages and keeping them all went
-  from 10.3 s to 3.8 s on the mix and from 15.8 s to 3.5 s on plain ASCII with the prototype's list, which holds the
-  same contexts.
+  turns in one document). On a quiet machine the prototype's review measured this form as a variant of the bench page
+  (2026-09-19, research/PERF-LIFETIME.md, the review's §4): Chrome 4.60 s to 3.70 s on the mix and 4.01 s to 3.35 s on
+  plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox, whose checks ask nothing, 2.76 s to 2.51 s
+  and 0.58 s to 0.46 s. This form's own run (2026-09-20, `.artifacts/bench/contexts-20260919/two`, five alternating
+  pairs) ran while other work kept the machine about twice as slow as that, the bench's fixed arithmetic at 47 to 61 ms
+  where a quiet run has 27 to 29, so its ratios count and its times don't: Chrome 6.34 s to 4.76 s on the mix (medians;
+  the pairs ×0.63 to ×1.00) and 8.30 s to 7.09 s on plain ASCII (×0.82 to ×0.94); webkit-host 283 ms to 166 ms and 260
+  ms to 151 ms (×0.51 to ×0.62). Counts don't depend on load: the `measureText` calls a message stay what they were,
+  since the checks ask again (322.13 and 281.86 in Chrome, 39.78 and 30.00 in webkit-host), contexts made a message go
+  from 11.07 to 0.024 in Chrome and from 5.38 to 0.011 in webkit-host, and every line range of 1,000 messages at four
+  widths is equal in both forms. A kept paragraph no longer keeps canvases of its own alive, about five a message in
+  Chrome: preparing 10,000 messages and keeping them all went from 45.6 s to 9.0 s on the mix and from 107 s to 9.4 s on
+  plain ASCII in the loaded run (one measurement each; the prototype's quiet runs, with a list that holds the same
+  contexts, had 10.3 s to 3.8 s and 15.8 s to 3.5 s).
 - *What it costs.* In Chrome, kept paragraphs of the plain ASCII set that share their contexts lay out again more slowly
-  at a width they have met: 48 µs to 60 µs a layout (the prototype's review, timed rows of 1,000 messages, the same
-  shared contexts), and the mix doesn't move. The cause is Chrome's bound on a canvas's cache
-  (frame_shape_cache.cc:12-16, :93-104): under the stand-in Canvas 1,000 plain ASCII messages ask one page canvas
-  113,331 distinct strings at four widths, three times what it keeps, so it has dropped a paragraph's strings by the
-  time the paragraph is laid out again, where a paragraph's own canvas still holds them. A probe in pinned Chrome
-  (2026-09-19, 100,000 two-word strings, three rounds taking turns): one canvas answers them again at 0.56 to 1.06 µs a
-  string, no cheaper than its first answers (0.43 to 0.59 µs), and 1,000 canvases of 100 strings each answer again at
-  0.30 to 0.34 µs. It costs time and changes no answer. The tier 2 documents stay under the bound (the busiest canvas of
-  any of Chrome's is asked 5,437 distinct strings under the stand-in), so two other checks hold that: the benchmark's
-  counting pass, where one canvas is asked about 100,000 distinct strings, finds every line range of 1,000 messages at
-  four widths equal with one list and with a list a message, in both sets and all three browsers (the prototype's
-  runs, whose canvases are shared the same way); and a probe in pinned
-  Chrome finds 0 of 120,000 strings answered with other bits when asked again on a canvas past its bound, and 0 of a
-  sample of 3,244 on fresh canvases, for one-byte strings and for two-byte ones. Fewer asks per layout (item 2) is what
-  removes the cost.
+  at a width they have met: 54.7 µs to 69.7 µs a layout, ×1.27 (timed rows of 1,000 messages, six interleaved samples,
+  in the loaded run above; ×1.10 at a new width; the prototype's review had ×1.24 on a quiet machine), and the mix
+  doesn't move (×1.03). The cause is Chrome's bound on a canvas's cache (frame_shape_cache.cc:12-16, :93-104): under the
+  stand-in Canvas 1,000 plain ASCII messages ask one page canvas 113,331 distinct strings at four widths, three times
+  what it keeps, so it has dropped a paragraph's strings by the time the paragraph is laid out again, where a
+  paragraph's own canvas still holds them. A probe in pinned Chrome (2026-09-19, 100,000 two-word strings, three rounds
+  taking turns): one canvas answers them again at 0.56 to 1.06 µs a string, no cheaper than its first answers (0.43 to
+  0.59 µs), and 1,000 canvases of 100 strings each answer again at 0.30 to 0.34 µs. It costs time and changes no answer.
+  The tier 2 documents stay under the bound (the busiest canvas of any of Chrome's is asked 5,437 distinct strings under
+  the stand-in), so two other checks hold that: the benchmark's counting pass, where one canvas is asked about 100,000
+  distinct strings, finds every line range of 1,000 messages at four widths equal with one list and with a list a
+  message, in both sets, in Chrome and in webkit-host (and in all three browsers in the prototype's runs, whose canvases
+  are shared the same way); and a probe in pinned Chrome finds 0 of 120,000 strings answered with other bits when asked
+  again on a canvas past its bound, and 0 of a sample of 3,244 on fresh canvases, for one-byte strings and for two-byte
+  ones. Fewer asks per layout (item 2) is what removes the cost.
 
 ### 4.7 What removing the memo cost
 

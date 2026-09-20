@@ -121,18 +121,21 @@ code: 15 lines added and 13 removed in five files (`index.ts`, `measure/font-che
 
 *What it bought.* 10,000 chat messages from scratch, a list a message against one list a pass, taking turns in one
 document on a quiet machine (measured by the prototype's review as a variant of the bench page,
-research/PERF-LIFETIME.md, the review's §4; the machine was never quiet while this form was proven): Chrome 4.60 s to
-3.70 s on the mix and 4.01 s to 3.35 s on plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox 2.76 s
-to 2.51 s and 0.58 s to 0.46 s. Contexts made a message go from 11.07 to 0.024 in Chrome, 3.56 to 0.013 in Firefox and
-5.38 to 0.011 in webkit-host, and the `measureText` calls stay what they were (322, 120 and 40 a message on the mix),
-since the checks ask again. A kept paragraph no longer keeps about five canvases of its own alive in Chrome. Against the
-bar of 2 s: Chrome is not there, Firefox is there on ASCII and at 2.5 s on the mix, webkit-host is far under.
+research/PERF-LIFETIME.md, the review's §4; this form's own run, `.artifacts/bench/contexts-20260919/two`, was taken
+while other work kept the machine about twice as slow, and gives the same ratios in five alternating pairs: Chrome ×0.75
+on the mix and ×0.86 on plain ASCII, webkit-host ×0.59 and ×0.58): Chrome 4.60 s to 3.70 s on the mix and 4.01 s to 3.35
+s on plain ASCII; webkit-host 235 ms to 138 ms and 195 ms to 104 ms; Firefox 2.76 s to 2.51 s and 0.58 s to 0.46 s.
+Contexts made a message go from 11.07 to 0.024 in Chrome, 3.56 to 0.013 in Firefox (the prototype's count; Firefox's
+bench wasn't run again) and 5.38 to 0.011 in webkit-host, and the `measureText` calls stay what they were (322, 120 and
+40 a message on the mix), since the checks ask again. A kept paragraph no longer keeps about five canvases of its own
+alive in Chrome. Against the bar of 2 s: Chrome is not there, Firefox is there on ASCII and at 2.5 s on the mix,
+webkit-host is far under.
 
 *What it costs.* In Chrome, kept plain ASCII paragraphs lay out again about 1.24 times slower at a width they have met
-(48 µs to 60 µs a layout in the prototype's review, whose list holds the same contexts), because a page's canvas is
-asked more distinct strings than Chrome's per-canvas cache of 32,768 holds. It costs time only, and item 2 is what
-removes it. The list is bounded at 512 contexts, a cliff at about 60 font declarations used in turn in Chrome (DESIGN.md
-§4.6).
+(×1.27 in this form's own timed rows, 54.7 µs to 69.7 µs a layout under load; ×1.24 in the prototype's review on a quiet
+machine, 48 µs to 60 µs), because a page's canvas is asked more distinct strings than Chrome's per-canvas cache of
+32,768 holds. It costs time only, and item 2 is what removes it. The list is bounded at 512 contexts, a cliff at about
+60 font declarations used in turn in Chrome (DESIGN.md §4.6).
 
 *How it is held* (TESTS.md, "Tiers"; `.artifacts/tests/runs/contexts-20260919`). The lab's usual predictors hand
 `prepare` no list, so the records and the references stay valid: the full offline gates exit 0, tier 1 with 0
