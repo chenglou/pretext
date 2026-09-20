@@ -261,6 +261,7 @@ I also checked one false lead. The sweep with facts looked 2.5 times slower than
 **Cores**
 - Every gate starts at once. A check asks gates.ts for a core before each child it starts (`rebuild/tests/cores.ts`).
 - A core is a connection to a Unix socket until the connection closes, so a check that dies gives its cores back.
+- Since later that day a check asks over one connection, and a core is a numbered request on it. A connection a request was 496 connections at a full run's start. macOS keeps 128 that a listener hasn't accepted and refuses the next, which failed two gates of a run at a load average of 60 (`rebuild/tests/cores.ts` has the numbers). A check that dies still gives its cores back: its connection closes.
 - The table's order decides who gets a core. A quarter of the cores go first to groups of long paragraphs, which bound the run's end.
 - Run alone, every tool behaves as before.
 

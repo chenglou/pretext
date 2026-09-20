@@ -65,12 +65,15 @@ export const SETS: readonly TestSet[] = [
   { name: 'heldout-suite-sample', group: 'heldout', parts: [0, 1].map(k => `${A}/lab/final-20260916/cases/heldout-suite-sample-part${k}.ndjson`), runArgs: [], browsers: ALL },
 ]
 
+// A set's case files for a browser, as paths from the top of the repository.
+export const partPaths = (set: TestSet, browser: TierBrowser): string[] => set.parts.map(part => part.replaceAll('{browser}', browser))
+
 // A set's case files as run.ts gets them: real paths. A worktree reaches the shared `.artifacts` through a symbolic link,
 // and a run record names its case file (run.json `casesFile`, which lab/cases/used-ids.ts reads for the registry of used
 // ids), so the record names the shared file itself, which outlives the worktree.
 export function partFiles(set: TestSet, browser: TierBrowser): string[] {
-  return set.parts.map(part => {
-    const path = join(REPO, part.replaceAll('{browser}', browser))
+  return partPaths(set, browser).map(part => {
+    const path = join(REPO, part)
     return existsSync(path) ? realpathSync(path) : path
   })
 }
@@ -100,8 +103,7 @@ export type SetProtocol = { set: string; parts: PartProtocol[]; casesPerRoundTri
 // (browser-sets.ts --measure-first). They are part of the protocol, so such a ledger meets the usual one only knowingly.
 export function setProtocol(set: TestSet, browser: TierBrowser, moreRunArgs: readonly string[] = []): SetProtocol {
   const parts: PartProtocol[] = []
-  for (const part of set.parts) {
-    const relative = part.replaceAll('{browser}', browser)
+  for (const relative of partPaths(set, browser)) {
     const path = join(REPO, relative)
     if (!existsSync(path)) throw new Error(`${relative}: the case file of set ${set.name} is missing`)
     parts.push({ casesFile: relative, casesSha256: sha256File(path) })

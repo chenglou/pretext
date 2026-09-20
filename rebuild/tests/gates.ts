@@ -39,6 +39,8 @@
 // beside the next gate's first. A quarter of the cores go to groups of long paragraphs first, whichever gate asks: they
 // take up to two minutes each in the sweep and bound the run's end, so they start at once, and the other three quarters
 // keep the order. (With every core open to them the sweep's long groups held tier 1's result back for seven minutes.)
+// A gate's process asks over one connection, whatever its --jobs: macOS refuses a connection at once while 128 wait
+// for the listener to accept them, and a connection a request was 496 at the start of a full run (cores.ts).
 // The socket is pretext-gates-<pid>.sock in the temporary folder. A run that is killed leaves its file, and listening fails
 // on a path that exists, so a run first removes the socket files of processes that are gone (removeStaleSockets).
 //
@@ -54,9 +56,11 @@
 // the ticket was written (the machine reuses pids within hours, and a killed run's ticket stays until the next run
 // looks), or is a zombie (a killed run whose parent never reaps it, which held the turn for as long as the parent
 // lived); a run skips and removes the dead tickets below its own and leaves its own behind as the highest, so the
-// numbers only go up. A run whose turn came still starts no gate while under 30% of the machine's memory is free, as the
-// browser lock does, and keeps its place meanwhile. --no-wait takes no ticket and asks nothing of memory, for a human who
-// knows better. Measured with --quick --engine=gecko, 42
+// numbers only go up. A run whose turn came still starts no gate while an exclusive browser job, a timed benchmark,
+// holds the browser lock or waits for it (exclusiveBrowserJobs; a run that has started is never stopped, and a run that
+// a job under the browser lock starts doesn't wait, since that job's lock waits for the run), or while under
+// 30% of the machine's memory is free, as the browser lock does, and keeps its place meanwhile. --no-wait takes no
+// ticket and waits for neither, for a human who knows better. Measured with --quick --engine=gecko, 42
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
 // on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
 // alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
@@ -65,34 +69,11 @@
 // Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
 // result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
 // the orchestrator run the gates on one tree); --fresh runs anyway and replaces the result. A key that misses an input
-// would hide a failure, so the key (inputsKey) is a sha256 over everything a gate reads:
-// - every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
-//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
-//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
-//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
-//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
-//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
-//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself;
-// - what is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
-//   worktree installed it;
-// - the frozen references of the run's browsers, .artifacts/tests/reference/<browser>-<config>: every file under
-//   inputs/, reference/ and ledger/ by its bytes, but the shards (*.zst, 725 MB) by name, size and modification time.
-//   `check` reads that folder and never the tracked pins in rebuild/tests/reference (freeze copies
-//   reference/manifest.json there; the six are equal today), so the pins alone would not do. The manifests hold every
-//   shard's sha256 and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept),
-//   so a kept result's shards were the manifests', and a shard written since has another time.
-//   inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned by nothing. browser/ isn't read (check
-//   --against=reference);
-// - without --quick, the painter differential's frozen bundles (.artifacts/tests/painter-frozen; the tool checks them
-//   against rebuild/tools/painter-frozen.json on every run, exit 2 otherwise) and, for Blink, Chrome's set files, which
-//   the twin scan reads and nothing pins (the inputs' manifests hold the hashes they had when recorded);
-// - the engines and --quick, bun's version and revision, the OS release.
-// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
-// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
-// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
-// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
-// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
-// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
+// would hide a failure, so the key is a sha256 over everything a gate reads, and what that is is said once, beside
+// what reads it: every gate reads the working tree and what is installed, which inputsKey hashes and lists, with what
+// it leaves out and why (--cores, what git holds, what unit tests read outside the repository); and what a gate reads
+// of .artifacts, such as a frozen reference, is the gate's `reads` list, set where the gate is made (gatesOf) with the
+// reason beside it, which the key walks. A new gate's input goes in its `reads`.
 // A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
 // the run's exit code), no case goes to tier 2 and the key is the same after the run as before it: a tree edited, or a
 // reference frozen again, under the run keeps nothing. A reused result is the table and gates.json, not the gates'
@@ -109,7 +90,7 @@
 import { closeSync, existsSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { cpus, release, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
-import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
+import { CONFIGS, REPO, SETS, partFiles, partPaths, type Config, type TierBrowser } from './sets.ts'
 
 const ENGINES = ['blink', 'webkit', 'gecko'] as const
 type EngineName = typeof ENGINES[number]
@@ -134,6 +115,12 @@ type Gate = {
   atMost?: number
   // The report the gate writes, or null when its log is all there is.
   report: string | null
+  // What the gate reads beside the working tree, which every gate reads: files and folders of .artifacts, as paths from
+  // the top of the working tree. The key of a kept result walks these lists (inputsKey), so a gate's input is in the key
+  // by being named here, where the gate is made (gatesOf). Every *.zst under a path named here goes in by its name, size
+  // and time, not its bytes, which is sound for a frozen reference's shards alone, whose hashes the manifests hold: a
+  // gate that reads another *.zst needs it in the key by its bytes.
+  reads: string[]
   read: (code: number, report: unknown, log: string) => Verdict | Tier1Verdict
 }
 // `tier2`: the cases the gate sends to tier 2, which only a tier 1 gate does.
@@ -302,25 +289,90 @@ export type Ticket = { pid: number; at: number; worktree: string; flags: string;
 const when = (ms: number): string => new Date(ms).toString().slice(4, 24)
 const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)?.[1] ?? 0)
 
-// Whether the run that wrote a ticket still runs. Its pid alone would not do: the machine reuses pids within hours, and
-// a killed run's ticket stays until the next run looks. So a process of that pid that started after the ticket was written
-// is another one (`ps` gives the start to the second, in UTC here, since `bun test` keeps another time zone than its
-// children; when it gives nothing to read, the ticket counts as live). And a killed run whose parent never reaps it
-// stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives its state as Z.
-function ticketLives(ticket: Ticket): boolean {
-  if (!processExists(ticket.pid)) return false
-  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(ticket.pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
-  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > ticket.at)
+// Whether the process that wrote a ticket (or a marker) at `at` still runs. Its pid alone would not do: the machine
+// reuses pids within hours, and a killed run's ticket stays until the next run looks. So a process of that pid that
+// started after the ticket was written is another one (`ps` gives the start to the second, in UTC here, since `bun test`
+// keeps another time zone than its children; when it gives nothing to read, the ticket counts as live). And a killed run
+// whose parent never reaps it stays a zombie for as long as the parent lives: signal 0 still finds it, and `ps` gives
+// its state as Z.
+function livesSince(pid: number, at: number): boolean {
+  if (!processExists(pid)) return false
+  const [state, ...started] = Bun.spawnSync(['ps', '-o', 'stat=,lstart=', '-p', String(pid)], { env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } }).stdout.toString().trim().split(/\s+/)
+  return !state!.startsWith('Z') && !(Date.parse(`${started.join(' ')} UTC`) > at)
 }
 
-// A ticket below a run's own, or null when another waiter removed it as dead between the listing and this read.
-function readTicket(path: string): Ticket | null {
+// A file another process removes when it likes: its text, or null when it went between a listing and this read.
+function readIfThere(path: string): string | null {
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as Ticket
+    return readFileSync(path, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
   }
+}
+
+// The browser lock's folder (.artifacts/session/with-browser-lock.py, ROOT; rebuild/bench/run.ts reads it too).
+const BROWSER_LOCK = '/private/tmp/pretext-eng-20260912'
+
+// The exclusive browser jobs under the browser lock: timed benchmarks, mostly. The lock keeps other browser jobs away
+// from one and knows nothing of the gates, which fill every core: with several owners at work a timed run waited for a
+// quiet machine that never came (2026-09-19). So a run starts no gate while one holds the exclusive lock or waits for
+// it; a run that has started is never stopped. `pid` is null while a holder's owner file isn't written yet.
+// - The holder: the folder `browser-lock`, with `browser-lock.owner` beside it, { job, pid } as JSON (the main
+//   repository's checkers write the pid in a line of text). It counts as the lock script counts it: while its pid
+//   lives, or while no pid is there to read.
+// - A waiter: `browser-lock.waiting-<pid>`, { job, pid, atMs }, which the lock script writes while an exclusive job
+//   waits for the lock and removes when the job takes it or gives up. A killed waiter's marker stays, so it counts only
+//   while its process lives, as a ticket does. The script is outside the repository: one that writes no marker shows
+//   its holder only.
+export type ExclusiveJob = { job: string; pid: number | null; waits: boolean }
+
+// An owner file as the lock script reads it (owner_pid): JSON with a pid, else the first number after `pid` in the text.
+// The file is another program's, written after the lock's folder is made and not in one step.
+function lockOwner(text: string): { job: string; pid: number | null } {
+  try {
+    const owner = JSON.parse(text) as { job?: unknown; pid?: unknown }
+    if (typeof owner.pid === 'number') return { job: String(owner.job), pid: owner.pid }
+  } catch {
+    // Not JSON: a line of text, or nothing yet.
+  }
+  const pid = /pid\D{0,3}(\d+)/.exec(text)
+  return pid === null ? { job: 'its owner file names no pid yet', pid: null } : { job: 'a checker of the main repository', pid: Number(pid[1]) }
+}
+
+export function exclusiveBrowserJobs(lock: string): ExclusiveJob[] {
+  const jobs: ExclusiveJob[] = []
+  const names = existsSync(lock) ? readdirSync(lock).sort() : []
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i]!
+    if (name === 'browser-lock') {
+      const owner = lockOwner(readIfThere(join(lock, 'browser-lock.owner')) ?? '')
+      if (owner.pid === null || processExists(owner.pid)) jobs.push({ ...owner, waits: false })
+    } else if (/^browser-lock\.waiting-\d+$/.test(name)) {
+      const text = readIfThere(join(lock, name))
+      if (text === null) continue
+      const waiter = JSON.parse(text) as { job: string; pid: number; atMs: number }
+      if (livesSince(waiter.pid, waiter.atMs)) jobs.push({ job: waiter.job, pid: waiter.pid, waits: true })
+    }
+  }
+  return jobs
+}
+
+// A process's parent; `ps` gives nothing for a pid that is gone, which reads as 0.
+const parentOf = (pid: number): number => Number(Bun.spawnSync(['ps', '-o', 'ppid=', '-p', String(pid)]).stdout.toString())
+
+// Whether a process above `pid` (its parent, that one's parent, and so on) holds a lock of the folder, the exclusive
+// lock or a browser's slot: the run is part of a job under the browser lock then, its command or a script of it.
+function underTheBrowserLock(lock: string, pid: number): boolean {
+  const above: number[] = []
+  for (let at = parentOf(pid); at > 1; at = parentOf(at)) above.push(at)
+  const names = existsSync(lock) ? readdirSync(lock) : []
+  for (let i = 0; i < names.length; i++) {
+    if (!/^browser-lock(-.+)?\.owner$/.test(names[i]!)) continue
+    const owner = lockOwner(readIfThere(join(lock, names[i]!)) ?? '')
+    if (owner.pid !== null && above.includes(owner.pid)) return true
+  }
+  return false
 }
 
 // The machine's free memory in percent, as macOS's `memory_pressure` gives it and the browser lock reads it
@@ -335,12 +387,13 @@ function freeMemoryPercent(): number {
 export const MIN_FREE_MEMORY = 30
 
 // Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
-// worktree, whose reports and logs it would write over, and `minFreeMemory` percent of the machine's memory is free (0
-// asks nothing); says who holds the turn, or how much memory is free, while it waits. True when it waited.
+// worktree, whose reports and logs it would write over, no exclusive browser job holds the lock in `browserLock` or waits
+// for it, and `minFreeMemory` percent of the machine's memory is free (0 asks nothing); says what it waits for while it
+// waits. True when it waited.
 // The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
 // moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
 // its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
-export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number): Promise<boolean> {
+export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: number, browserLock: string): Promise<boolean> {
   mkdirSync(dir, { recursive: true })
   const draft = join(dir, `draft-${ticket.pid}`)
   writeFileSync(draft, JSON.stringify(ticket))
@@ -357,26 +410,38 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
     }
   }
   unlinkSync(draft)
+  // A run that a job under the browser lock starts (the gates timed on a quiet machine, or a step of a script that goes
+  // on to a browser) waits for no exclusive job: the job keeps its lock until this run ends, and an exclusive job starts
+  // only once it has every lock, so each would wait for the other for ever, and every browser job behind them too. A
+  // job has its lock before its command starts and until it ends, so this is asked once.
+  const underTheLock = underTheBrowserLock(browserLock, ticket.pid)
   let said = ''
   for (;;) {
     const numbers = readdirSync(dir).map(ticketNumber).filter(n => n > 0 && n < mine).sort((a, b) => a - b)
     const before: Ticket[] = []
     for (let i = 0; i < numbers.length; i++) {
       const path = join(dir, `${numbers[i]!}.json`)
-      const earlier = readTicket(path)
-      if (earlier === null) continue
-      if (!ticketLives(earlier)) rmSync(path, { force: true })
+      // Another waiter can remove a dead ticket between the listing and this read.
+      const text = readIfThere(path)
+      if (text === null) continue
+      const earlier = JSON.parse(text) as Ticket
+      if (!livesSince(earlier.pid, earlier.at)) rmSync(path, { force: true })
       else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
     }
-    const free = before.length > 0 || minFreeMemory === 0 ? 100 : freeMemoryPercent()
-    if (before.length === 0 && free >= minFreeMemory) {
+    // What the run waits for: its turn first, and it keeps its place while it waits for the rest.
+    let text = ''
+    if (before.length > 0) {
+      const holder = before[0]!
+      text = `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
+    } else {
+      const exclusive = underTheLock ? [] : exclusiveBrowserJobs(browserLock)
+      if (exclusive.length > 0) text = `waiting for an exclusive browser job, a timed run that gates beside it would spoil: ${exclusive.map(job => `${job.pid === null ? 'a job' : `pid ${job.pid}`} (${job.job}) ${job.waits ? 'waits for' : 'holds'} the browser lock`).join('; ')}. --no-wait skips the wait`
+      else if (minFreeMemory > 0 && freeMemoryPercent() < minFreeMemory) text = `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
+    }
+    if (text === '') {
       if (said !== '') console.error(`[gates] the turn came after ${Math.round((Date.now() - ticket.at) / 1000)} s`)
       return said !== ''
     }
-    const holder = before[0]
-    const text = holder === undefined
-      ? `waiting for memory: under ${minFreeMemory}% of the machine's memory is free. --no-wait skips the wait`
-      : `waiting for a turn: pid ${holder.pid} holds it (worktree ${holder.worktree}, flags ${holder.flags === '' ? 'none' : holder.flags}, since ${when(holder.at)}); runs waiting before this one: ${before.length - 1}. --no-wait skips the queue`
     if (text !== said) console.error(`[gates] ${text}`)
     said = text
     await Bun.sleep(500)
@@ -385,17 +450,36 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
 
 // ---- A result a key ----
 
-// What `check` reads of a frozen reference's folder; browser/ is for `pack` and --against=browser.
-const REFERENCE_PARTS = ['inputs', 'reference', 'ledger']
-
-// The files under a folder, in order; none when it isn't there (a recording can leave no ledger).
-function filesUnder(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
+// The files under a folder, in order, or the file itself; none when it isn't there (a recording can leave no ledger).
+function filesUnder(path: string): string[] {
+  const entry = statSync(path, { throwIfNoEntry: false })
+  if (entry === undefined) return []
+  if (entry.isFile()) return [path]
+  return readdirSync(path, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort()
 }
 
-// One hash over everything a gate of this run reads (the file comment lists it, and what is left out and why). `repo` is
-// the working tree, with its .artifacts.
+// One hash over everything a gate of this run reads: a key that misses an input would hide a failure. `repo` is the
+// working tree, with its .artifacts.
+// - The engines and --quick, which choose the gates (gatesOf), bun's version and revision, the OS release.
+// - Every tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, since the gates run
+//   on uncommitted edits (844 files, 64 MB): rebuild/ with this file, the root package.json, bun.lock and tsconfig.json,
+//   and the root src/ and scripts/ files that rebuild/bench and rebuild/probes import. Under rebuild/ also every file
+//   git ignores, but for .check, which the gates write: tsc, the unit tests and the citation ledger read rebuild's
+//   folders whole, and the root .gitignore names `dist` and `site` wherever they are (a failing test in rebuild/site
+//   and a type error in rebuild/src/dist failed their gates and left the key as it was). Of what git ignores
+//   elsewhere, the gates read node_modules and .artifacts and write tsc's state, which tsc keys by content itself.
+// - What is installed: the package.json of every package at the top of node_modules, since bun.lock doesn't say that a
+//   worktree installed it.
+// - What a gate reads of .artifacts: its `reads` list, which says why where the gate is made (gatesOf). Every file by
+//   its bytes, but a shard (*.zst, 725 MB) by name, size and modification time: the manifests hold every shard's sha256
+//   and tier 1 checks each shard against it before it replays (exit 2 otherwise, which is never kept), so a kept
+//   result's shards were the manifests', and a shard written since has another time.
+// Not in the key: --cores (a process replays a group of shards cut from the manifest alone, replay.ts "Deterministic by
+// construction", and the reports were the same bytes at 3, 6, 8 and 16 jobs, research/ITERATION-SPEED.md); what git
+// holds (tier 1 asks which STORAGE_PATHS files differ from the reference's commit: the commit is in the manifest, the
+// files are in the tree, and a commit never changes); and what unit tests read outside the repository (the pinned
+// engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
+// same files there and no step of the rebuild writes them, so run with --fresh after changing one.
 export function inputsKey(repo: string, run: Run): string {
   const hash = new Bun.CryptoHasher('sha256')
   const addFile = (path: string): void => {
@@ -422,22 +506,16 @@ export function inputsKey(repo: string, run: Run): string {
     const packages = name.startsWith('@') ? readdirSync(join(modules, name)).sort().map(inner => join(name, inner)) : [name]
     for (let k = 0; k < packages.length; k++) addFile(join(modules, packages[k]!, 'package.json'))
   }
-  for (let e = 0; e < run.engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) for (let p = 0; p < REFERENCE_PARTS.length; p++) {
-    const files = filesUnder(join(repo, `.artifacts/tests/reference/${BROWSER_OF[run.engines[e]!]}-${CONFIGS[c]!}`, REFERENCE_PARTS[p]!))
+  // Several gates read one frozen reference: once each.
+  const reads = [...new Set(gatesOf(run.engines, run.quick).flatMap(gate => gate.reads))].sort()
+  for (let r = 0; r < reads.length; r++) {
+    const files = filesUnder(join(repo, reads[r]!))
     for (let i = 0; i < files.length; i++) {
       if (!files[i]!.endsWith('.zst')) addFile(files[i]!)
       else {
         const shard = statSync(files[i]!)
         hash.update(`${relative(repo, files[i]!)}\0${shard.size} ${shard.mtimeMs}\0`)
       }
-    }
-  }
-  if (!run.quick) {
-    const frozen = filesUnder(join(repo, '.artifacts/tests/painter-frozen'))
-    for (let i = 0; i < frozen.length; i++) addFile(frozen[i]!)
-    if (run.engines.includes('blink')) {
-      const sets = SETS.filter(set => set.browsers.includes('chrome'))
-      for (let i = 0; i < sets.length; i++) for (let k = 0; k < sets[i]!.parts.length; k++) addFile(join(repo, sets[i]!.parts[k]!.replaceAll('{browser}', 'chrome')))
     }
   }
   return hash.digest('hex')
@@ -488,45 +566,59 @@ function unitTestFiles(leftOut: readonly EngineName[]): string[] {
   return out.sort()
 }
 
-function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
+export function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
   const gates: Gate[] = []
   for (let i = 0; i < TSC_PROJECTS.length; i++) {
     const project = TSC_PROJECTS[i]!
     gates.push({
-      name: `tsc ${project}`, sharded: false, report: null, read: (code, _report, log) => tscVerdict(code, log),
+      name: `tsc ${project}`, sharded: false, report: null, reads: [], read: (code, _report, log) => tscVerdict(code, log),
       parts: [['x', 'tsc', '--noEmit', '-p', `${project}/tsconfig.json`, '--incremental', '--tsBuildInfoFile', join(TSC_STATE, `${project.replaceAll('/', '_')}.tsbuildinfo`)]],
     })
   }
   // A process a test file: two files take most of the unit tests' time, and one process runs the files one after another.
   const leftOut = quick && engines.length === 1 ? ENGINES.filter(name => name !== engines[0]) : []
   const tests = unitTestFiles(leftOut)
-  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, parts: tests.map(file => ['test', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
+  gates.push({ name: `unit tests${leftOut.length === 0 ? '' : ` without ${leftOut.join(' and ')}`}`, sharded: false, report: null, reads: [], parts: tests.map(file => ['test', file]), read: (code, _report, log) => unitTestsVerdict(code, tests.length, log) })
   if (!quick) {
     const citations = join(OUT, 'citations.json')
-    gates.push({ name: 'citations', sharded: false, report: citations, parts: [['rebuild/tools/citations.ts', 'check', `--out=${citations}`]], read: (code, report, log) => citationsVerdict(code, report as CitationsReport | null, log) })
+    gates.push({ name: 'citations', sharded: false, report: citations, reads: [], parts: [['rebuild/tools/citations.ts', 'check', `--out=${citations}`]], read: (code, report, log) => citationsVerdict(code, report as CitationsReport | null, log) })
     if (engines.includes('blink')) {
       const twins = join(OUT, 'twin-scan.json')
-      const cases = SETS.filter(set => set.browsers.includes('chrome')).flatMap(set => partFiles(set, 'chrome'))
+      // Chrome's set files, which nothing pins: the inputs' manifests hold the hashes they had when recorded.
+      const sets = SETS.filter(set => set.browsers.includes('chrome'))
       // A process a case file: 19 files, and the four largest hold half the cases.
-      gates.push({ name: 'twin scan', sharded: true, atMost: 4, report: twins, parts: [['rebuild/tools/twin-scan.ts', `--cases=${cases.join(',')}`, `--out=${twins}`]], read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log) })
+      gates.push({
+        name: 'twin scan', sharded: true, atMost: 4, report: twins, reads: sets.flatMap(set => partPaths(set, 'chrome')), parts: [['rebuild/tools/twin-scan.ts', `--cases=${sets.flatMap(set => partFiles(set, 'chrome')).join(',')}`, `--out=${twins}`]],
+        read: (code, report, log) => twinVerdict(code, report as TwinReport | null, log),
+      })
     }
   }
-  const each = (add: (browser: TierBrowser, config: Config, check: string) => void): void => {
-    for (let e = 0; e < engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) add(BROWSER_OF[engines[e]!], CONFIGS[c]!, `rebuild/tests/.check/${BROWSER_OF[engines[e]!]}-${CONFIGS[c]!}`)
+  // A gate a browser and configuration replays that pair's frozen reference, replay.ts's referenceDir: what `check` reads
+  // of it is inputs/, reference/ and ledger/ (browser/ is for `pack` and --against=browser). `check` reads that folder
+  // and never the tracked pins in rebuild/tests/reference (freeze copies reference/manifest.json there; the six are
+  // equal today), so the pins alone would not do, and inputs/unfaithful.json and inputs/storage-sensitive.ids are pinned
+  // by nothing.
+  const each = (add: (browser: TierBrowser, config: Config, check: string, reference: string[]) => void): void => {
+    for (let e = 0; e < engines.length; e++) for (let c = 0; c < CONFIGS.length; c++) {
+      const pair = `${BROWSER_OF[engines[e]!]}-${CONFIGS[c]!}`
+      add(BROWSER_OF[engines[e]!], CONFIGS[c]!, `rebuild/tests/.check/${pair}`, ['inputs', 'reference', 'ledger'].map(part => `.artifacts/tests/reference/${pair}/${part}`))
+    }
   }
-  each((browser, config, check) => gates.push({
-    name: `tier 1 ${browser} ${config}`, sharded: true, report: join(REPO, check, 'check-report.json'), parts: [['rebuild/tests/replay.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
+  each((browser, config, check, reference) => gates.push({
+    name: `tier 1 ${browser} ${config}`, sharded: true, report: join(REPO, check, 'check-report.json'), reads: reference, parts: [['rebuild/tests/replay.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
     read: (code, report) => tier1Verdict(code, report as Tier1Report | null),
   }))
-  const functionSet = (name: string): void => each((browser, config, check) => gates.push({
-    name: `${name} ${browser} ${config}`, sharded: true, report: join(REPO, check, `${name}-report.json`), parts: [['rebuild/tests/function-set.ts', name, `--browser=${browser}`, `--config=${config}`]],
+  const functionSet = (name: string): void => each((browser, config, check, reference) => gates.push({
+    name: `${name} ${browser} ${config}`, sharded: true, report: join(REPO, check, `${name}-report.json`), reads: reference, parts: [['rebuild/tests/function-set.ts', name, `--browser=${browser}`, `--config=${config}`]],
     read: (code, report, log) => functionSetVerdict(name, code, report as FunctionSetReport | null, log),
   }))
   functionSet('plain')
   functionSet('pure')
   if (!quick) {
-    each((browser, config) => gates.push({
-      name: `painter ${browser} ${config}`, sharded: true, report: join(REPO, '.artifacts/tests/painter-diff', basename(REPO), `${browser}-${config}.json`), parts: [['rebuild/tools/painter-diff.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
+    // The painter differential's frozen bundles, painter-diff.ts's FROZEN_DIR: the tool checks them against
+    // rebuild/tools/painter-frozen.json on every run (exit 2 otherwise).
+    each((browser, config, _check, reference) => gates.push({
+      name: `painter ${browser} ${config}`, sharded: true, report: join(REPO, '.artifacts/tests/painter-diff', basename(REPO), `${browser}-${config}.json`), reads: [...reference, '.artifacts/tests/painter-frozen'], parts: [['rebuild/tools/painter-diff.ts', 'check', `--browser=${browser}`, `--config=${config}`]],
       read: (code, report, log) => painterVerdict(code, report as PainterReport | null, log),
     }))
     functionSet('sweep')
@@ -549,9 +641,14 @@ export function nextWaiter(waiting: readonly Waiter[], longFirst: boolean): numb
   return best
 }
 
-// Starts every gate at once. The cores go round through `waiting`: a part of a single-process gate waits here, and a
-// sharded gate's children wait through the socket (cores.ts), where a connection is a core until it closes.
-async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
+// A run's cores, one child process at a time: `take` resolves when a core is this process's, for a part of a
+// single-process gate, and `give` gives it back; a sharded gate's process asks through the socket (cores.ts), over its
+// one connection, a number a request: `<n> long|short <holder>` asks, `<n> done` gives the core back, and the answer
+// `<n>` grants it. Every core of a connection that closes comes back, so a gate that dies gives its cores back by dying.
+export type Cores = { take: (holder: number) => Promise<void>; give: () => void; stop: () => void }
+// A request of a connection, under the number its process gave it.
+type Ask = { n: number; waiter: Waiter; granted: boolean }
+export function shareCores(cores: number, socketPath: string): Cores {
   const waiting: Waiter[] = []
   let free = cores
   // The cores that groups of long paragraphs hold.
@@ -564,28 +661,58 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
       next.grant()
     }
   }
-  removeStaleSockets(tmpdir())
-  const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
-  const server = Bun.listen<{ waiter: Waiter | null; granted: boolean }>({
+  // A request that ends, by its `done` or with its connection: its core comes back, or it no longer waits for one.
+  const end = (ask: Ask): void => {
+    if (ask.granted) {
+      free++
+      if (ask.waiter.long) long--
+    } else waiting.splice(waiting.indexOf(ask.waiter), 1)
+  }
+  // A connection's requests that wait for a core or hold one: --jobs at most.
+  const server = Bun.listen<{ partial: string; asks: Ask[] }>({
     unix: socketPath,
     socket: {
-      open(socket) { socket.data = { waiter: null, granted: false } },
+      open(socket) { socket.data = { partial: '', asks: [] } },
+      // Lines can come several to a chunk, and a chunk can end inside one.
       data(socket, bytes) {
-        const [kind, holder] = bytes.toString().trim().split(' ')
-        socket.data.waiter = { long: kind === 'long', holder: Number(holder), grant: () => { socket.data.granted = true; socket.write('1') } }
-        waiting.push(socket.data.waiter)
+        const asks = socket.data.asks
+        const lines = (socket.data.partial + bytes.toString()).split('\n')
+        socket.data.partial = lines.pop()!
+        for (let i = 0; i < lines.length; i++) {
+          const [n, kind, holder] = lines[i]!.split(' ')
+          if (kind === 'done') end(asks.splice(asks.findIndex(ask => ask.n === Number(n)), 1)[0]!)
+          else {
+            const ask: Ask = { n: Number(n), granted: false, waiter: { long: kind === 'long', holder: Number(holder), grant: () => { ask.granted = true; socket.write(`${n}\n`) } } }
+            asks.push(ask)
+            waiting.push(ask.waiter)
+          }
+        }
         grant()
       },
       close(socket) {
-        const waiter = socket.data.waiter
-        if (socket.data.granted) {
-          free++
-          if (waiter!.long) long--
-        } else if (waiter !== null) waiting.splice(waiting.indexOf(waiter), 1)
+        for (let i = 0; i < socket.data.asks.length; i++) end(socket.data.asks[i]!)
         grant()
       },
     },
   })
+  return {
+    take: holder => new Promise<void>(granted => {
+      waiting.push({ long: false, holder, grant: granted })
+      grant()
+    }),
+    give: () => {
+      free++
+      grant()
+    },
+    stop: () => { server.stop() },
+  }
+}
+
+// Starts every gate at once, and shares the cores among their child processes.
+async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
+  removeStaleSockets(tmpdir())
+  const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
+  const shared = shareCores(cores, socketPath)
   const runGate = async (gate: Gate, g: number): Promise<Row> => {
     const log = join(OUT, `${gate.name.replaceAll(/[^a-z0-9]+/gi, '-')}.log`)
     const fd = openSync(log, 'w')
@@ -593,13 +720,9 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     const env = { ...process.env, PRETEXT_GATES_CORES: socketPath, PRETEXT_GATES_HOLDER: String(g) }
     const codes = await Promise.all(gate.parts.map(async part => {
       if (gate.sharded) return await Bun.spawn(['bun', ...part, `--jobs=${Math.min(cores, gate.atMost ?? cores)}`], { cwd: REPO, env, stdin: 'ignore', stdout: fd, stderr: fd }).exited
-      await new Promise<void>(granted => {
-        waiting.push({ long: false, holder: g, grant: granted })
-        grant()
-      })
+      await shared.take(g)
       const code = await Bun.spawn(['bun', ...part], { cwd: REPO, stdin: 'ignore', stdout: fd, stderr: fd }).exited
-      free++
-      grant()
+      shared.give()
       return code
     }))
     closeSync(fd)
@@ -613,7 +736,7 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     return row
   }
   const rows = await Promise.all(gates.map(runGate))
-  server.stop()
+  shared.stop()
   return rows
 }
 
@@ -639,7 +762,7 @@ if (import.meta.main) {
   const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
   let key = inputsKey(REPO, run)
   let earlier = earlierRun(key)
-  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
+  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY, BROWSER_LOCK)) {
     key = inputsKey(REPO, run)
     earlier = earlierRun(key)
   }

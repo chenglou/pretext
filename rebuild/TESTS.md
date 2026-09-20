@@ -32,14 +32,15 @@ tier 1 sends to tier 2, per gate, so "every gate is fine" never reads as done, a
 `pretext-gates-<pid>.sock` files of processes that are gone. A full run can take 30 minutes on a shared machine, so
 start it detached from anything that has a time limit. Since the same day a run takes a machine-wide turn before its
 first gate (one full run and one `--quick` run at a time, first come, first served; it says who holds the turn while it
-waits, a killed run holds nobody up, a run whose turn came still waits while under 30% of the machine's memory is free,
-and `--no-wait` skips both waits), and a run whose inputs equal an earlier finished
+waits, a killed run holds nobody up, a run whose turn came still waits while an exclusive browser job, a timed
+benchmark, holds the browser lock or waits for it, and while under 30% of the machine's memory is free, and `--no-wait`
+skips every wait), and a run whose inputs equal an earlier finished
 run's prints that run's table and last line again as a reused result, with that run's time, worktree and commit, and
 exits with its code in under a second (`--fresh` runs anyway; a run that sends cases to tier 2 is never kept, since a
-reused result doesn't write the list tier 2 reads). The key covers every file of the working tree that git doesn't
-ignore and every file under `rebuild/` but `.check`, the installed packages, the frozen references as `check` reads
-them, the painter's frozen bundles, Chrome's set files, the flags that choose gates and bun's version; the lab README
-and the file's header have what it leaves out and why, and the measurements.
+reused result doesn't write the list tier 2 reads). The key is a hash over everything a gate reads, and `gates.ts`
+says what that is once, beside what reads it: what every gate reads (the working tree, the installed packages, the
+flags that choose gates) at `inputsKey`, with what it leaves out and why, and what a gate reads of `.artifacts` in the
+gate's `reads` list where the gate is made (`gatesOf`), which the key walks; the lab README has the measurements.
 
 **State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
 and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier
@@ -259,7 +260,8 @@ collapsible space (DESIGN.md §1.1, §1.2, §4.6).
   probed lists as the one parser does: 95 of 95 checks in Chrome 153, Firefox 156 and webkit-host) and
   `rebuild/probes/blink-sysui-spellings.ts` (Chrome only, alone in a fresh browser at DPR 2: 20 of 20 checks). The
   critic's probe of lists left open at their end isn't tracked (34 of 34 checks in Chrome and in Firefox, webkit-host
-  not probed; `.artifacts/probes/critic-family-edges`).
+  not probed; `.artifacts/probes/critic-family-edges`). Since later that day its six lists and a seventh are in
+  `font-family-syntax.ts`: 123 of 123 checks in each of the three, webkit-host included.
 - *The rule registry* took one new Blink rule and one restatement through `rule-changes.json` (§3). *The known tail*
   has 67 items and 784 named cases: `lab/blink-rect-of-a-span-holding-only-a-trimmed-space` is closed, since it was the
   engine port and not the observation port, and `painter/without-explanation` names the review's fresh case, which the
@@ -408,7 +410,7 @@ Terms:
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
 | `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (20 tests; one ties the joining-script test to the Blink port's joining types, two hold the checks' contexts to the engine's own text rendering), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
-| `rebuild/src/font-family.test.ts`, `rebuild/probes/font-family-syntax.ts` | The one parser of a font-family list against CSS syntax, with what each of the four old parsers did above each case, and the browsers' own CSS parsers on the same kinds of list, for an element's style and for a Canvas font (95 checks, which held in Chrome 153, Firefox 156 and webkit-host on 2026-09-19) |
+| `rebuild/src/font-family.test.ts`, `rebuild/probes/font-family-syntax.ts` | The one parser of a font-family list against CSS syntax, with what each of the four old parsers did above each case, and the browsers' own CSS parsers on the same kinds of list, for an element's style and for a Canvas font (123 checks, which held in Chrome 153, Firefox 156 and webkit-host on 2026-09-19) |
 | `rebuild/src/measure/canvas-checks.test.ts`, `rebuild/probes/canvas-checks.ts` | `detectEngine()`'s Canvas checks against stand-in contexts, and the library's own `detectEngine()` in a browser: a pinned browser must answer supported (`LAB_CHROME_APP`, `LAB_FIREFOX_APP` for another build) |
 | `rebuild/src/measure/canvas.test.ts`, `rebuild/probes/blink-storage.ts` | The string an engine hands to `measureText` reaches Canvas as built: `contextFor`, `width` and `bounds` use no `Map` or `Set` key at all while they run (V8 would hand Blink a one-byte string after a keyed use of the measured string), and in pinned Chrome the library's own bundled module answers a run of brackets on its `8bit` and `16bit` contexts as each storage shapes (S5, which since X2 notes Canvas's answers on the page's `OffscreenCanvasRenderingContext2D` itself, the string passed through untouched, and finds a context's partition through the prepared paragraph's `canvases`; `rerun-probes.sh` reruns the probe per Chrome release) |
 | `rebuild/knip.config.ts` | `bunx knip --config rebuild/knip.config.ts`: unused files and exports under `rebuild/`, tests ignored |

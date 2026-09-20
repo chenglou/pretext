@@ -1,9 +1,12 @@
 // What gates.ts makes of each gate's exit code and report, its queue and the key of a kept result. These run no gate.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
+import { dirname, extname, join, relative } from 'node:path'
+import { FROZEN_DIR } from '../tools/painter-diff.ts'
+import { citationsVerdict, closingLine, exclusiveBrowserJobs, functionSetVerdict, gatesOf, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
+import { referenceDir } from './replay.ts'
+import { CONFIGS, REPO, TIER_BROWSERS } from './sets.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -92,7 +95,9 @@ test('the next core goes by the table\'s order, then first come, first served; a
 })
 
 const dir = mkdtempSync(join(tmpdir(), 'gates-test-'))
-afterAll(() => { Bun.spawnSync(['trash', dir]) })
+// The folders this file makes are removed directly: `trash` asks the Finder, which took 4.5 s for an empty folder at a load
+// average of 70, and a hook that takes 5 s fails the file.
+afterAll(() => { rmSync(dir, { recursive: true }) })
 
 test('a run removes the socket files of processes that are gone, and its own pid\'s, which can only be an earlier process\'s', () => {
   const gone = Bun.spawnSync(['true']).pid
@@ -114,12 +119,14 @@ test('gates.ts refuses an unknown engine or argument before it runs anything', (
 // ---- The queue: child processes that take a turn, say so in <queue>.log, and hold it ----
 
 const shared = mkdtempSync(join(tmpdir(), 'gates-test-shared-'))
-afterAll(() => { Bun.spawnSync(['trash', shared]) })
+afterAll(() => { rmSync(shared, { recursive: true }) })
+// No browser lock's folder is here, so no exclusive browser job is.
+const NO_LOCK = join(shared, 'no-browser-lock')
 const TURN = join(shared, 'turn.ts')
 writeFileSync(TURN, `import { appendFileSync } from 'node:fs'
 import { takeTurn } from ${JSON.stringify(join(import.meta.dir, 'gates.ts'))}
-const [queue, name, hold, flags, worktree, minFreeMemory] = process.argv.slice(2)
-await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' }, Number(minFreeMemory ?? 0))
+const [queue, name, hold, flags, worktree, minFreeMemory, browserLock] = process.argv.slice(2)
+await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree, flags, quick: flags === '--quick' }, Number(minFreeMemory ?? 0), browserLock ?? ${JSON.stringify(NO_LOCK)})
 appendFileSync(queue + '.log', 'start ' + name + '\\n')
 await Bun.sleep(Number(hold))
 appendFileSync(queue + '.log', 'end ' + name + '\\n')
@@ -180,7 +187,7 @@ test('a ticket whose pid is now a younger process\'s is dead: pids come round ag
   const queue = join(shared, 'pid-again')
   mkdirSync(queue)
   writeFileSync(join(queue, '1.json'), JSON.stringify({ pid: process.pid, at: Date.now() - 3600000, worktree: 'gone', flags: '', quick: false }))
-  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false }, 0)).toBe(false)
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'here', flags: '', quick: false }, 0, NO_LOCK)).toBe(false)
   expect(readdirSync(queue)).toEqual(['2.json'])
 })
 
@@ -192,7 +199,7 @@ test('a killed run that its parent never reaps is a zombie, which signal 0 still
   const holder = (JSON.parse(readFileSync(join(queue, '1.json'), 'utf8')) as { pid: number }).pid
   process.kill(holder, 'SIGKILL')
   await soon(() => Bun.spawnSync(['ps', '-o', 'stat=', '-p', String(holder)]).stdout.toString().startsWith('Z'))
-  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false }, 0)).toBe(false)
+  expect(await takeTurn(queue, { pid: process.pid, at: Date.now(), worktree: 'next', flags: '', quick: false }, 0, NO_LOCK)).toBe(false)
   expect(readdirSync(queue)).toEqual(['2.json'])
   parent.kill('SIGKILL')
 }, 120000)
@@ -210,6 +217,87 @@ test('a run whose turn came still starts no gate while too little of the machine
   await soon(() => textOf(`${queue}.log`).includes('end second'))
   expect(await new Response(first.stderr).text()).toContain("waiting for memory: under 101% of the machine's memory is free")
   expect(await new Response(second.stderr).text()).toContain('waiting for a turn')
+}, 120000)
+
+// A stand-in for the browser lock's folder (.artifacts/session/with-browser-lock.py): the exclusive lock is the folder
+// `browser-lock` with its owner file beside it, and a waiting exclusive job's marker is `browser-lock.waiting-<pid>`.
+const holds = (lock: string, owner: string): void => {
+  mkdirSync(join(lock, 'browser-lock'), { recursive: true })
+  writeFileSync(join(lock, 'browser-lock.owner'), owner)
+}
+const releases = (lock: string): void => {
+  unlinkSync(join(lock, 'browser-lock.owner'))
+  rmdirSync(join(lock, 'browser-lock'))
+}
+const waits = (lock: string, job: string, pid: number, atMs: number): void => writeFileSync(join(lock, `browser-lock.waiting-${pid}`), JSON.stringify({ job, pid, atMs }))
+
+test('the exclusive browser jobs: the lock\'s holder while its pid lives or isn\'t written yet, and the waiters whose process lives', () => {
+  const lock = join(shared, 'lock-shapes')
+  expect(exclusiveBrowserJobs(lock)).toEqual([])
+  mkdirSync(lock)
+  const gone = Bun.spawnSync(['true']).pid
+  // The slots of the browsers' jobs are no exclusive job.
+  mkdirSync(join(lock, 'browser-lock-chrome-0'))
+  writeFileSync(join(lock, 'browser-lock-chrome-0.owner'), JSON.stringify({ job: 'probes-chrome', pid: process.pid }))
+  expect(exclusiveBrowserJobs(lock)).toEqual([])
+  // The folder is made before its owner file is written.
+  mkdirSync(join(lock, 'browser-lock'))
+  expect(exclusiveBrowserJobs(lock)).toEqual([{ job: 'its owner file names no pid yet', pid: null, waits: false }])
+  holds(lock, JSON.stringify({ job: 'bench-chrome', pid: process.pid, session: 'pretext-rebuild', at: '2026-09-19T23:00:00' }))
+  expect(exclusiveBrowserJobs(lock)).toEqual([{ job: 'bench-chrome', pid: process.pid, waits: false }])
+  // The main repository's checkers write their pid in a line of text.
+  holds(lock, `accuracy-check pid: ${process.pid}\n`)
+  expect(exclusiveBrowserJobs(lock)).toEqual([{ job: 'a checker of the main repository', pid: process.pid, waits: false }])
+  // Half an owner file, which the lock script doesn't write in one step: still held, by nobody it can name.
+  holds(lock, '{"job": "bench-chr')
+  expect(exclusiveBrowserJobs(lock)).toEqual([{ job: 'its owner file names no pid yet', pid: null, waits: false }])
+  // A dead owner's lock is there for the taking.
+  holds(lock, JSON.stringify({ job: 'bench-chrome', pid: gone }))
+  expect(exclusiveBrowserJobs(lock)).toEqual([])
+  releases(lock)
+  // A waiter counts while its process lives: not a killed one's marker, and not one whose pid is now a younger process's.
+  waits(lock, 'bench-firefox', process.ppid, Date.now())
+  waits(lock, 'killed', gone, Date.now())
+  waits(lock, 'pid-again', process.pid, Date.now() - 3600000)
+  expect(exclusiveBrowserJobs(lock)).toEqual([{ job: 'bench-firefox', pid: process.ppid, waits: true }])
+})
+
+test('a run whose turn came starts no gate while an exclusive browser job holds the browser lock or waits for it, says which, and keeps its place; a run that has started goes on', async () => {
+  const queue = join(shared, 'exclusive')
+  const lock = join(shared, 'lock')
+  const log = (): string => textOf(`${queue}.log`)
+  // Two sleeping processes stand in for a timed run that holds the lock and one that waits for it.
+  const holder = Bun.spawn(['sleep', '600'])
+  const waiter = Bun.spawn(['sleep', '600'])
+  holds(lock, JSON.stringify({ job: 'bench-chrome', pid: holder.pid, session: 'pretext-rebuild', at: '2026-09-19T23:00:00' }))
+  waits(lock, 'bench-firefox', waiter.pid, Date.now())
+  const start = (name: string, hold: number) => Bun.spawn(['bun', TURN, queue, name, String(hold), '', name, '0', lock], { stdout: 'ignore', stderr: Bun.file(join(shared, `exclusive-${name}.err`)) })
+  const said = (name: string): string => textOf(join(shared, `exclusive-${name}.err`))
+  const first = start('first', 2000)
+  await soon(() => said('first').includes(`waiting for an exclusive browser job, a timed run that gates beside it would spoil: pid ${holder.pid} (bench-chrome) holds the browser lock; pid ${waiter.pid} (bench-firefox) waits for the browser lock. --no-wait skips the wait`))
+  const second = start('second', 0)
+  await soon(() => said('second').includes(`waiting for a turn: pid ${first.pid} holds it`))
+  // The holder is done. The waiter still waits, so still no gate starts.
+  holder.kill('SIGKILL')
+  releases(lock)
+  await soon(() => said('first').includes(`spoil: pid ${waiter.pid} (bench-firefox) waits for the browser lock. --no-wait`))
+  expect(log()).toBe('')
+  // The waiter takes the lock and its marker goes, and then it is done.
+  holds(lock, JSON.stringify({ job: 'bench-firefox', pid: waiter.pid }))
+  unlinkSync(join(lock, `browser-lock.waiting-${waiter.pid}`))
+  await soon(() => said('first').includes(`spoil: pid ${waiter.pid} (bench-firefox) holds the browser lock. --no-wait`))
+  expect(log()).toBe('')
+  releases(lock)
+  await soon(() => log().includes('start first'))
+  // A run that has started isn't stopped by a timed run that comes later; the next run waits for it.
+  holds(lock, JSON.stringify({ job: 'bench-webkit-host', pid: waiter.pid }))
+  await soon(() => log().includes('end first') && said('second').includes(`pid ${waiter.pid} (bench-webkit-host) holds the browser lock`))
+  expect(log()).toBe('start first\nend first\n')
+  // A killed holder's lock holds nobody up.
+  waiter.kill('SIGKILL')
+  await soon(() => log().includes('end second'))
+  expect(await first.exited).toBe(0)
+  expect(await second.exited).toBe(0)
 }, 120000)
 
 // ---- Reuse ----
@@ -236,12 +324,13 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   const run = (...args: string[]): Run => runOf(['--engine=gecko', ...args]) as Run
   const keys = [inputsKey(repo, run('--quick'))]
   // Each change gives a key no earlier state had.
-  const changes = (change: () => void): void => {
+  const changesFor = (of: Run, change: () => void): void => {
     change()
-    const key = inputsKey(repo, run('--quick'))
+    const key = inputsKey(repo, of)
     expect(keys).not.toContain(key)
     keys.push(key)
   }
+  const changes = (change: () => void): void => changesFor(run('--quick'), change)
   expect(inputsKey(repo, run('--quick'))).toBe(keys[0]!)
   changes(() => write('rebuild/src/a.ts', 'export const a = 2\n'))
   changes(() => write('rebuild/src/untracked.ts', ''))
@@ -249,6 +338,9 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   changes(() => write('rebuild/src/dist/ignored.test.ts', ''))
   changes(() => unlinkSync(join(repo, 'rebuild/src/a.ts')))
   changes(() => write('package.json', '{}'))
+  changes(() => write('bun.lock', ''))
+  // A tracked pin of a frozen reference is a file of the tree.
+  changes(() => write('rebuild/tests/reference/firefox-facts.json', '{}'))
   changes(() => write('node_modules/typescript/package.json', '{"version":"6.0.3"}'))
   changes(() => write('.artifacts/tests/reference/firefox-no-facts/inputs/manifest.json', '{"sets":{ }}'))
   changes(() => write('.artifacts/tests/reference/firefox-facts/inputs/unfaithful.json', '{"cases":{"smoke/c-1":"x"}}'))
@@ -256,6 +348,7 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   // A shard goes in by name, size and time: the manifests hold its hash, and tier 1 checks it.
   changes(() => write(shard, 'shar'))
   changes(() => utimesSync(join(repo, shard), new Date(2026, 0, 1), new Date(2026, 0, 1)))
+  changes(() => renameSync(join(repo, shard), join(repo, shard.replace('part0-000', 'part0-001'))))
   const last = keys[keys.length - 1]!
   // What this run's gates don't read: an ignored file outside rebuild, what the gates write, another engine's reference,
   // the painter's frozen bundle with --quick.
@@ -279,7 +372,29 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   write('.artifacts/lab/cases/twins.ndjson', '{}\n')
   expect(blink()).not.toBe(before[0]!)
   expect([blink('--quick'), inputsKey(repo, run())]).toEqual([before[1]!, before[2]!])
+  // The key walks the gates' `reads`, so whatever a gate names there is in it: a new file in each folder named, and a
+  // byte more in each file, moves the key of a run with that gate.
+  const all = runOf([]) as Run
+  const named = [...new Set(gatesOf(all.engines, all.quick).flatMap(gate => gate.reads))]
+  expect(named.length).toBeGreaterThan(30)
+  for (let i = 0; i < named.length; i++) changesFor(all, () => write(extname(named[i]!) === '' ? `${named[i]!}/planted` : named[i]!, `planted ${i}\n`))
 }, 120000)
+
+test('the paths a gate\'s `reads` name are the tools\' own: replay.ts\'s reference folder and painter-diff.ts\'s frozen bundles, which gates.ts can\'t import (it must start on a tree whose library doesn\'t load)', () => {
+  const gates = gatesOf(['blink', 'webkit', 'gecko'], false)
+  const reads = (name: string): string[] => gates.find(gate => gate.name === name)!.reads
+  for (let b = 0; b < TIER_BROWSERS.length; b++) for (let c = 0; c < CONFIGS.length; c++) {
+    const pair = `${TIER_BROWSERS[b]!} ${CONFIGS[c]!}`
+    const reference = ['inputs', 'reference', 'ledger'].map(part => relative(REPO, join(referenceDir(TIER_BROWSERS[b]!, CONFIGS[c]!), part)))
+    expect(reads(`tier 1 ${pair}`)).toEqual(reference)
+    expect(reads(`plain ${pair}`)).toEqual(reference)
+    expect(reads(`pure ${pair}`)).toEqual(reference)
+    expect(reads(`sweep ${pair}`)).toEqual(reference)
+    expect(reads(`painter ${pair}`)).toEqual([...reference, relative(REPO, FROZEN_DIR)])
+  }
+  // Tier 0 and the citation ledger read the tree alone.
+  expect(gates.filter(gate => gate.reads.length === 0).map(gate => gate.name.split(' ')[0]!)).toEqual(['tsc', 'tsc', 'tsc', 'tsc', 'tsc', 'tsc', 'unit', 'citations'])
+})
 
 test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
   const row = (as: number, tier2: number): Row => ({ gate: 'a gate', exit: as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: 'a-gate.log' })

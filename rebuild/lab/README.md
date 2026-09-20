@@ -475,7 +475,11 @@ fine there when no case dropped a question (repeats only, or Chrome's string sto
 sends the listed cases to tier 2; a function-set check that skipped cases isn't fine although it exits 0. Logs and the
 rows as JSON are in `rebuild/tests/.check/gates`. Tier 2 stays its own command. Every gate starts at once, and they
 share the cores one child process at a time (`rebuild/tests/cores.ts`): the table's order decides who gets a core, and a
-quarter of the cores go to groups of long paragraphs first, which bound the run's end. Measured on 2026-09-19 with the
+quarter of the cores go to groups of long paragraphs first, which bound the run's end. A gate's process asks for all its
+cores over one connection: macOS refuses a connection at once while 128 wait for the listener to accept them, a
+connection a request was 496 of them at a full run's start, and at a load average of 60 that failed two gates of a run
+(exit 2) on 2026-09-19; with the same start, 24 of 31 stand-in gates failed to connect before and none does since
+(`rebuild/tests/cores.test.ts`). Measured on 2026-09-19 with the
 X3 merge's library, other owners' jobs beside it (load averages of 10 to 40): `--quick` 27 s for WebKit, 49 s for Gecko
 and 112 s for Blink (1,800 CPU-seconds on 16 cores: Chrome's cases ask the most questions); the full form for the three
 engines 13 minutes (10,300 CPU-seconds, 12 GB at the peak; tier 1's six rows after 74 s), against 62 minutes and 18,000
@@ -496,7 +500,16 @@ before it, and either for a run of its own worktree, whose reports and logs it w
 who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
 nobody up, so a killed run needs no cleaning. A run whose turn came still starts no gate while under 30% of the
 machine's memory is free, the browser lock's floor, and keeps its place meanwhile: on 2026-09-19 two full runs beside a
-browser scoring job took the machine to its swap. `--no-wait` skips both waits. Measured with `--quick --engine=gecko`,
+browser scoring job took the machine to its swap. Nor does it start one while an exclusive browser job, a timed
+benchmark, holds the browser lock or waits for it (`exclusiveBrowserJobs`): the lock kept other browser jobs away from
+a timed run and not the gates, which fill every core, so with several owners at work a timed run waited for a quiet
+machine that never came. The run says which job it waits for; a run that has started is never stopped, so a timed run
+still waits for the load to fall (`bench/run.ts --quiet-load`), and no new run starts meanwhile. A run that a job
+under the browser lock starts (the gates timed on a quiet machine, or a step of a script that holds a browser's slot)
+doesn't wait: an exclusive job starts only once it has every lock, and that job keeps its lock until the run ends.
+A waiting exclusive job is known by a marker beside the lock, `browser-lock.waiting-<pid>`, which the lock script
+writes while a job waits (a marker whose process is gone counts for nothing; the script is outside the repository, and
+one that writes no marker shows its holder only). `--no-wait` skips every wait. Measured with `--quick --engine=gecko`,
 31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
 on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
 took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
@@ -506,15 +519,13 @@ average; the full run took 16 minutes with those two beside it and other owners'
 
 A run whose inputs equal an earlier finished run's prints that run's table and last line again, says that it is a
 reused result with that run's time, worktree and commit, and exits with its code, in 0.2 to 0.4 s (the key takes up to
-1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over every
-tracked file of the working tree and every untracked one git doesn't ignore, by its bytes, so uncommitted edits count,
-and under `rebuild/` also what git ignores but for `.check`, which the gates write: tsc, the unit tests and the citation
-ledger read its folders whole, and the root `.gitignore` names `dist` and `site` wherever they are;
-the `package.json` of every installed package; the frozen references of the run's browsers as `check` reads them under
-`.artifacts/tests/reference` (the tracked pins in `rebuild/tests/reference` are copies that `check` never reads): every
-file by its bytes but the 725 MB of shards, whose hashes the manifests hold and tier 1 checks, by size and time; without
-`--quick` the painter's frozen bundles and, for Blink, Chrome's set files; the engines and `--quick`, bun's version and
-the OS release. `--cores` isn't in it: no report depends on it. A result is kept only when every gate has one, no
+1.3 s at a load average of 60); `--fresh` runs anyway and replaces the result. The key is a sha256 over everything a
+gate reads, and `gates.ts` says what that is once, beside what reads it. `inputsKey` hashes what every gate reads (the
+working tree with its uncommitted edits, the installed packages, the flags that choose gates, bun's version and the OS
+release) and says what it leaves out and why (`--cores`: no report depends on it). What a gate reads of `.artifacts`,
+such as a frozen reference as `check` reads it, is the gate's `reads` list, set where the gate is made (`gatesOf`) with
+the reason beside it, and the key walks those lists, so a new gate's input is in the key by being named there. A
+result is kept only when every gate has one, no
 gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
 run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
 not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which

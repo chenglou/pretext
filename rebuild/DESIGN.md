@@ -181,7 +181,7 @@ replays it.
 `CssFont.family` is a CSS font-family list, the string the page sets. One parser reads it, `src/font-family.ts`
 `listedFamilies`, for the font checks and the three ports, because quotes, escapes and commas are CSS syntax and the
 same in every engine (CSS Fonts 4 §4.2, CSS Syntax §4.3.5 and §4.3.7; probe `font-family-syntax`: the browsers' own
-parsers read the probed lists the same way, 95 of 95 checks in each of the three). An entry is `{ name, quoted, css }`,
+parsers read the probed lists the same way, 123 of 123 checks in each of the three). An entry is `{ name, quoted, css }`,
 with `identifiers` for an unquoted name. What differs per engine is which unquoted names are its keywords and how it
 compares names, and each port owns that (Blink's `styleOf`, WebKit's `familyNames`, Gecko's `parseFamilyList`).
 `family` stays the string, which Canvas and the painter are given as it is, so the list is read where a name is
