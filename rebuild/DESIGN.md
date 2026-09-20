@@ -1222,7 +1222,9 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   item holds `-1` for a leaf or an element it doesn't have, and a text item's shaping group is `groupOfUnit` at its
   start. The port holds no Map and no Set: a line's item results are an array by
   item index from the line's first item (`LineBreaker.shapeResults`; a rewind comes back to the same result, so an item is
-  asked once per fill), and tables are generated records searched by binary search, or switches. A line's output reads the
+  asked once per fill), and tables are generated records searched by binary search, or switches; `props.ts` reads the
+  properties of code points below U+3000 by index, from two tables it makes from its records when it loads (the
+  profiling phase, §4.7). A line's output reads the
   paragraph around the line and never scans it whole (`pieces.ts` `fragmentsOf` walks the events from the line's first
   result, or the leaf holding its source start, to its last result, or the leaf holding its source end). The break
   iterator (`breaks.ts` `LineBreakIterator`) keeps the boundaries its rule iterator has given so far, pulls the next one
@@ -2105,6 +2107,25 @@ in Firefox (0.58 s) and 0.235 s in webkit-host (0.195 s), against main's cold pr
 most of them the runtime font checks', and webkit-host 5.4 for its 41 calls a message, which a page's list of contexts
 has since taken away (§4.6); Firefox spent 88% in the fill, carried by CJK and Arabic messages.
 research/PROFILING-START.md starts from there.
+
+**The Blink port's own JavaScript** (the profiling phase, 2026-09-20). Until then every item removed Canvas questions,
+and nobody had profiled the port's own code. `tools/js-profile.ts` takes a JS CPU profile in pinned Chrome through the
+DevTools Profiler domain, times checkouts in turns in one page, and runs the same passes with every Canvas answer free:
+a pass's answers are recorded once and handed back in order, so the code runs the path it runs on the real Canvas.
+10,000 chat messages from scratch with one list of contexts a pass, at the profiling phase's first merges: 72% of the
+samples are inside `measureText`, 25% in the port's own code and 2% in collections (3.45 s on the mix, 3.23 s on plain
+ASCII); with free answers a pass takes 0.68 s and 0.62 s, a fifth of the time, which no removal of questions can beat.
+The two numbers differ by what a native call costs on its JavaScript side, which a free answer doesn't pay. Seven
+tenths of the own time is making a question (`shape.ts` `measure16` and under: the joining test at both edges, the
+string, the context), 40 µs of a message's 94 in `canvasString` alone; paragraph analysis is 11 µs, the line loop 8 µs,
+the cut search's own code 4 µs and the font checks' 3 µs. Three changes that ask Canvas the same strings on the same
+contexts in the same order (tier 1: 0 predictions and 0 questions changed; the pass's questions hash the same in
+Chrome) took 34 µs a message, in twelve alternating rounds each: the list of text offsets a Canvas string hands out is
+the array it built, where it was copied into a typed array that nothing reads on a plain paragraph without letter
+spacing (24 µs); properties below U+3000 are read by index (6 µs; `props.ts`, §3); and a string of code units is built
+in one `String.fromCharCode` call where they fit one, without a copy of the list (4 µs). From scratch 3.45 s became
+3.10 s on the mix and 3.23 s became 2.89 s on plain ASCII, 10,000 kept messages at 3 widths 1.11 s became 0.99 s and
+0.98 s became 0.86 s, and the pass with free answers 0.68 s became 0.41 s and 0.62 s became 0.36 s.
 
 ## 5. Gaps
 
