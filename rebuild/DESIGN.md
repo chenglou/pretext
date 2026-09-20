@@ -2424,7 +2424,8 @@ rebuild/
                                              offline, and four probes that time or check it in the browsers
     store-key-check.ts store-real-text.ts    checks on the store study: a key with two recorded answers, a store's hit rates
     store-space-identity.ts                  on long-form text used once, a run against its sides measured with their space,
-    store-cluster-sums.ts                    and a cluster's advance inside a run against the cluster alone
+    store-cluster-sums.ts                    a cluster's advance inside a run against the cluster alone,
+    store-word-facts.ts                      and the word facts new to a page on text used once
     webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
     index.ts        prepare, firstLine, fillLine, linePieces, inspectLine, paragraphGaps: the dispatch over the engines'
