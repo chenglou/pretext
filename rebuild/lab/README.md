@@ -477,7 +477,14 @@ before it, and either for a run of its own worktree, whose reports and logs it w
 who holds the turn (pid, worktree, flags, since when) and how many wait before it. A ticket whose process is gone holds
 nobody up, so a killed run needs no cleaning. A run whose turn came still starts no gate while under 30% of the
 machine's memory is free, the browser lock's floor, and keeps its place meanwhile: on 2026-09-19 two full runs beside a
-browser scoring job took the machine to its swap. `--no-wait` skips both waits. Measured with `--quick --engine=gecko`,
+browser scoring job took the machine to its swap. Nor does it start one while an exclusive browser job, a timed
+benchmark, holds the browser lock or waits for it (`exclusiveBrowserJobs`): the lock kept other browser jobs away from
+a timed run and not the gates, which fill every core, so with several owners at work a timed run waited for a quiet
+machine that never came. The run says which job it waits for; a run that has started is never stopped, so a timed run
+still waits for the load to fall (`bench/run.ts --quiet-load`), and no new run starts meanwhile. A waiting exclusive job
+is known by a marker beside the lock, `browser-lock.waiting-<pid>`, which the lock script writes while a job waits (a
+marker whose process is gone counts for nothing; the script is outside the repository, and one that writes no marker
+shows its holder only). `--no-wait` skips every wait. Measured with `--quick --engine=gecko`,
 31 s alone on a quiet machine and 42 to 55 s beside other owners' jobs: two at once took 115 and 120 s (246 and 248 s
 on a busier machine, where one took 113 s), one after the other through the queue 50 and 100 s. On 8 cores each they
 took 74 and 76 s, which gives the second what it takes from the first, and a run alone on 8 cores took 52 s, so a run
