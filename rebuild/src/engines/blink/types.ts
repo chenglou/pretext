@@ -65,7 +65,7 @@ export type ComputedStyle = {
 export type StyleContexts = { ltr: Context; rtl: Context; ltrNoLigatures: Context; rtlNoLigatures: Context; hyphen: Context; scale: number }
 
 // A style with what measuring keeps beside it. The two answers Canvas gives when they are first needed are written
-// after prepare (the first adds its contexts to BlinkPrepared.canvases), as a group's position data is (BlinkGroup);
+// after prepare (the first adds its contexts to BlinkPrepared.canvases), as what a group keeps by offset is (BlinkGroup);
 // each is a fact of the style's fonts that no layout changes.
 export type BlinkStyle = ComputedStyle & {
   // The contexts the style's strings are measured on: references into BlinkPrepared.canvases.
@@ -123,13 +123,16 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
-  // The group's position data, as Blink's ShapeResult keeps it for a shaping call (character_position_, shape_result.h:
-  // x_position and safe_to_break_before per character), per offset from `start`: the 16.16 advance sum before the offset,
-  // NaN until a line asks for it, and whether it is safe to break before, 0 until a line asks, then 1 for no and 2 for
-  // yes. Blink computes them for the whole result at once; here each costs Canvas questions, so they are filled as lines
-  // ask, by the reads that raise no gap, and read back at any width (shape.ts groupPrefix16, safeToBreak).
+  // What measuring found per offset from `start` in the group's own shaping call, NaN until it is first asked: the 16.16
+  // advance sum before the offset (shape.ts groupPrefix16), and the pair window's and the wide window's adjustment across
+  // it (pairAdjust16, adjust16), which positions and safe-to-break tests both read. Blink's ShapeResult keeps the same per
+  // character of a shaping call (character_position_, shape_result.h: x_position and safe_to_break_before), computed for
+  // the whole result at once; here each costs Canvas questions, so an entry is written by the first read that raises no
+  // gap and read back by every later one, at any width (shape.ts keepsByOffset). Facts of the group's text and fonts,
+  // which no width and no line changes; they go with the prepared paragraph, and its length bounds them.
   prefix16: Float64Array
-  safe: Uint8Array
+  pair16: Float64Array
+  wide16: Float64Array
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
@@ -138,7 +141,7 @@ export type BlinkGroup = {
 export type BlinkInspect = { gaps: Gap[] }
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
-// are first needed (BlinkStyle) and the groups' position data (BlinkGroup.prefix16, safe).
+// are first needed (BlinkStyle) and what the groups keep by offset (BlinkGroup.prefix16, pair16, wide16).
 export type BlinkPrepared = {
   paragraph: Paragraph
   env: BlinkEnvironment

@@ -568,6 +568,32 @@ describe('blink plain and inspected paragraphs', () => {
     }
   })
 
+  test('a plain paragraph keeps by offset what its lines measured; an inspected one measures again, so each line\'s gaps hold what its reads raise', () => {
+    const p = paragraph([['The quick brown fox jumps over the lazy dog', 'text']], 120)
+    const laidOut = (prepared: ReturnType<typeof prepare>, width: number, inspect: boolean): unknown[] => {
+      const lines: unknown[] = []
+      for (let start = firstLine(prepared); start !== null;) {
+        const result = fillLine(prepared, start, { width, left: 0, right: 0 })
+        if (result.kind === 'line') lines.push({ start: result.start, end: result.end, pieces: linePieces(prepared, result.line), gaps: inspect ? inspectLine(prepared, result.line).gaps : null })
+        start = result.next
+      }
+      return lines
+    }
+    const plain = prepare(p, env, false)
+    const first = laidOut(plain, 120, false)
+    asked = []
+    // A width met before asks Canvas nothing, and another width gives what a fresh paragraph gives there.
+    expect(laidOut(plain, 120, false)).toEqual(first)
+    expect(asked.length).toBe(0)
+    for (const width of [60, 200, 85]) expect(laidOut(plain, width, false)).toEqual(laidOut(prepare(p, env, false), width, false))
+    const inspected = prepare(p, env, true)
+    const firstInspected = laidOut(inspected, 120, true)
+    asked = []
+    expect(laidOut(inspected, 120, true)).toEqual(firstInspected)
+    expect(asked.length).toBeGreaterThan(0)
+    expect(laidOut(inspected, 60, true)).toEqual(laidOut(prepare(p, env, true), 60, true))
+  })
+
   test('only an inspected paragraph measures without ligatures, which no line\'s breaks read', () => {
     // The word that didn't fit is measured again at 1/64 px of letter spacing, which turns liga, clig and calt off, for the
     // gap that tells a ligature from a kern there (gaps.ts lineEdgeGaps).
