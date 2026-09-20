@@ -602,9 +602,16 @@ export function buildContent(index: ContentIndex<FontDecl>, styles: ComputedStyl
     }
   }
   b.removeTrailingCollapsibleSpaceIfExists() // ExitBlock (1621-1629)
+  return { text: stringOfUnits(b.units), sourceOffsets: Int32Array.from(b.src), items: b.items, hasNonOrc16Bit: b.hasNonOrc16Bit }
+}
+
+// The string of UTF-16 units as String.fromCharCode builds it, a byte a unit where every unit fits one (shape.ts
+// canvasString rests on that): one call where the units fit its arguments, which is every string but a long text.
+export function stringOfUnits(units: number[]): string {
+  if (units.length <= 4096) return String.fromCharCode(...units)
   let text = ''
-  for (let i = 0; i < b.units.length; i += 4096) text += String.fromCharCode(...b.units.slice(i, i + 4096))
-  return { text, sourceOffsets: Int32Array.from(b.src), items: b.items, hasNonOrc16Bit: b.hasNonOrc16Bit }
+  for (let i = 0; i < units.length; i += 4096) text += String.fromCharCode(...units.slice(i, i + 4096))
+  return text
 }
 
 // Character::MaybeBidiRtl(String) (character.h:295-328).
