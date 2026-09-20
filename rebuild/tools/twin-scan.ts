@@ -43,7 +43,7 @@ import { installStandInCanvas } from './stand-in-canvas.ts'
 
 const REPO = resolve(import.meta.dir, '../..')
 const SHAPE = 'rebuild/src/engines/blink/shape.ts'
-const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)'
+const ANCHOR = 'const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s, cs.key)'
 // The port holds its contexts by reference, and the scan numbers them in the order they are first asked.
 const TAP = '  ;(globalThis as { twinScan?: Array<[object, string, boolean]> }).twinScan?.push([context, cs.s, cs.twoByte])'
 const PAGE_PREDICTOR = 'rebuild/lab/baselines/page-contexts-predictor.ts'
