@@ -2,7 +2,7 @@
 // own shaping call measured). Offline, under the stand-in Canvas. A check, not a test of the tiers: nothing reads it.
 //
 //   bun rebuild/tools/positions-attack.ts --base=<a checkout's rebuild folder> --head=<another's> --cases=<cases.ndjson>[,<more>]
-//     [--config=no-facts|facts] [--canvas=stand-in|long-context] [--mutate=none|big|spaced] [--every=N] [--limit=N] [--jobs=N] [--out=<report.json>]
+//     [--config=no-facts|facts] [--canvas=stand-in|long-context] [--mutate=none|big|spaced] [--every=N] [--max-units=N] [--limit=N] [--jobs=N] [--out=<report.json>]
 //   bun rebuild/tools/positions-attack.ts counts --trees=<name>=<rebuild folder>,... [--count=1000]     (at the file's end)
 //
 // What function-set.ts sweep leaves out, which this adds:
@@ -26,6 +26,7 @@
 // `--head` can be a tree whose kept values check themselves (a scratch patch that measures at every read and throws where
 // the kept number differs): a throw is reported as a difference.
 // Exit 0 when nothing differs, 1 when something does, 2 on a failure of the tool.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -238,7 +239,11 @@ function readCases(files: readonly string[]): Case[] {
   const out: Case[] = []
   for (const file of files) for (const line of readFileSync(resolve(file), 'utf8').split('\n')) if (line !== '') out.push(JSON.parse(line) as Case)
   const every = Number(options.get('every') ?? 1)
-  return out.filter((c, i) => i % every === 0 && (c.browsers === undefined || c.browsers.includes('chrome')))
+  // `--max-units` leaves the longest paragraphs out: an inspected layout of several thousand units takes seconds, and a case
+  // is laid out a hundred times here. The giants are a run of their own.
+  const maxUnits = Number(options.get('max-units') ?? Infinity)
+  const units = (c: Case): number => c.paragraph.runs.reduce((sum, run) => sum + run.text.length, 0)
+  return out.filter((c, i) => i % every === 0 && (c.browsers === undefined || c.browsers.includes('chrome')) && units(c) <= maxUnits)
 }
 
 async function work(): Promise<void> {
@@ -286,6 +291,7 @@ async function run(): Promise<number> {
     total.calls.head += result.calls.head
     total.differences.push(...result.differences)
   }
+  execFileSync('trash', [dir])
   console.log(`[positions-attack] ${options.get('canvas') ?? 'stand-in'} Canvas, ${config}, mutate ${options.get('mutate') ?? 'none'}: ${total.cases} cases (${total.skipped} skipped), ${total.layouts} layouts of head's kept paragraphs compared with base's fresh ones: ${total.differences.length} cases differ (${Math.round((Date.now() - started) / 100) / 10} s)`)
   console.log(`  eight fresh layouts a case, plain and inspected: base asks ${(total.calls.base / Math.max(1, total.cases)).toFixed(1)} calls a case, head ${(total.calls.head / Math.max(1, total.cases)).toFixed(1)}`)
   const byPass = new Map<string, number>()
