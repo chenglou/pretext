@@ -8,7 +8,8 @@
 //     [--groups=...] [--out=<report.json>] [--jobs=N] [--sites]
 //
 // `check --browser=all --config=all` is the whole tier: every frozen reference there is, one after another (each check uses
-// every core), with the worst exit code.
+// every core), with the worst exit code. `pack` and `freeze` wait for the offline gates' machine-wide turn before they
+// write, since every worktree's gates read the folder they replace (gates.ts, "A turn").
 //
 // The replay folder, by default .artifacts/tests/reference/<browser>-<config>:
 // - inputs/: what a replay reads. Per case its Case, the page facts the library reads (user agent, DPR, <html lang>), the
@@ -102,6 +103,7 @@ import type { CaseMeasurements, RecordedCall } from '../lab/record.ts'
 import { readLines } from '../lab/rows.ts'
 import type { BrowserBuild, BrowserKind, Case, LabRow, LayoutPrediction, LinesPrediction, PainterLimits, ParagraphLayout, ProcessLanguages, RecordedLayout } from '../lab/types.ts'
 import { withCore } from './cores.ts'
+import { QUEUE, takeTurn } from './gates.ts'
 import { readLedger, type LedgerEntry, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, selectSets, type Config, type SetProtocol, type TierBrowser } from './sets.ts'
 
@@ -545,6 +547,12 @@ async function packPart(): Promise<void> {
   writeFileSync(options.get('result')!, JSON.stringify({ shards, browserShards, storageSensitive }))
 }
 
+// pack and freeze replace files every worktree's gates read (.artifacts is shared), so they take the gates' turn as a job
+// that writes: every live gates run ends first, and none starts before this process ends (gates.ts Ticket).
+async function takeWritersTurn(): Promise<void> {
+  await takeTurn(QUEUE, { pid: process.pid, at: Date.now(), worktree: REPO, flags: `replay.ts ${process.argv.slice(2).join(' ')}`, quick: false, writes: true }, 0)
+}
+
 async function pack(): Promise<number> {
   const { browser, config, dir } = replayDir()
   const runsDir = resolve(options.get('runs') ?? fail('--runs=<browser-sets out dir> is required'))
@@ -552,6 +560,7 @@ async function pack(): Promise<number> {
   if (run.browser !== browser || run.config !== config) fail(`${relative(REPO, runsDir)} ran ${run.browser} ${run.config}, not ${browser} ${config}`)
   if (run.sets.some(set => set.subset)) fail('A run of --ids-file subsets can\'t be packed: the inputs hold whole sets')
   if (existsSync(join(dir, 'inputs/manifest.json')) && !flags.has('force')) fail(`${relative(REPO, dir)}/inputs exists; --force replaces it (and makes the frozen reference stale: freeze again)`)
+  await takeWritersTurn()
   const started = Date.now()
   type Part = { set: string; part: number; rows: string; measurements: string; record: { bundleSha256: string | null } }
   const parts: Part[] = []
@@ -949,6 +958,7 @@ async function freeze(): Promise<number> {
   // Questions only: the new reference must hold the replaced one's predictions byte for byte.
   const questionsOnly = flags.has('questions-only')
   if (questionsOnly && before === null) fail('--questions-only freezes the questions of an existing reference again; there is none')
+  await takeWritersTurn()
   const started = Date.now()
   const staging = join(dir, '.reference-new')
   if (existsSync(staging)) execFileSync('trash', [staging])

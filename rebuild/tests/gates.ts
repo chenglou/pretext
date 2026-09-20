@@ -62,7 +62,9 @@
 // to 55 s alone: two at once took 115 and 120 s, one after the other 50 and 100 s, so --quick runs wait for each other;
 // on half the cores each they took 74 and 76 s, which gives the second what it takes from the first and costs a run
 // alone a quarter, so no run takes fewer cores instead of waiting. A --quick run and a full run don't wait for each
-// other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average.
+// other: beside a full run the --quick run took 123 s, and its wait would be six minutes on average. replay.ts pack and
+// freeze take a ticket too, one that writes: they replace the frozen references every run reads, so they wait for
+// every live run before them and every run after them waits for them (Ticket).
 //
 // Reuse: a run whose inputs equal an earlier finished run's prints that run's table again, says that it is a reused
 // result with that run's time, worktree and commit, and exits with its code, in under a second (an owner, its critic and
@@ -281,8 +283,14 @@ export function runOf(args: readonly string[]): Run | string {
 
 // ---- A turn for every run ----
 
-// A run's place in the queue, <n>.json: who asks, from where, with which flags, and when (ms).
-export type Ticket = { pid: number; at: number; worktree: string; flags: string; quick: boolean }
+// A run's place in the queue, <n>.json: who asks, from where, with which flags, and when (ms). `writes` is a job that
+// replaces the frozen references every worktree's gates read (replay.ts pack and freeze): it waits for every live run
+// before it, and every run after it waits for it. On 2026-09-20 a pack removed input shards under another worktree's
+// sweep, which failed with ENOENT. A ticket from before the field reads as a run that doesn't write.
+export type Ticket = { pid: number; at: number; worktree: string; flags: string; quick: boolean; writes?: boolean }
+
+// The queue every worktree shares, since each worktree's .artifacts is the main checkout's.
+export const QUEUE = join(SHARED, 'queue')
 
 const when = (ms: number): string => new Date(ms).toString().slice(4, 24)
 const ticketNumber = (name: string): number => Number(/^(\d+)\.json$/.exec(name)?.[1] ?? 0)
@@ -320,8 +328,9 @@ function freeMemoryPercent(): number {
 export const MIN_FREE_MEMORY = 30
 
 // Takes a ticket in `dir` and resolves when no ticket below it is a live run's of its kind (full, or --quick) or of its
-// worktree, whose reports and logs it would write over, and `minFreeMemory` percent of the machine's memory is free (0
-// asks nothing); says who holds the turn, or how much memory is free, while it waits. True when it waited.
+// worktree, whose reports and logs it would write over, or a live job's that writes the references, or any live run's
+// when this one writes them, and `minFreeMemory` percent of the machine's memory is free (0 asks nothing); says who
+// holds the turn, or how much memory is free, while it waits. True when it waited.
 // The ticket is a hard link to a finished draft, which fails when the name exists: a ticket holds its run from the
 // moment it exists, two runs never get one number, and the numbers only go up, since a run removes dead tickets below
 // its own only. So every ticket below a run's own was there before it, and nothing is ever taken over.
@@ -351,7 +360,7 @@ export async function takeTurn(dir: string, ticket: Ticket, minFreeMemory: numbe
       const earlier = readTicket(path)
       if (earlier === null) continue
       if (!ticketLives(earlier)) rmSync(path, { force: true })
-      else if (earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
+      else if (earlier.writes === true || ticket.writes === true || earlier.quick === ticket.quick || earlier.worktree === ticket.worktree) before.push(earlier)
     }
     const free = before.length > 0 || minFreeMemory === 0 ? 100 : freeMemoryPercent()
     if (before.length === 0 && free >= minFreeMemory) {
@@ -684,7 +693,7 @@ if (import.meta.main) {
   const earlierRun = (key: string): Kept | null => (run.fresh ? null : keptResult(join(SHARED, 'results'), key))
   let key = inputsKey(REPO, run)
   let earlier = earlierRun(key)
-  if (earlier === null && run.wait && await takeTurn(join(SHARED, 'queue'), { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
+  if (earlier === null && run.wait && await takeTurn(QUEUE, { pid: process.pid, at: Date.now(), worktree: REPO, flags: process.argv.slice(2).join(' '), quick: run.quick }, MIN_FREE_MEMORY)) {
     key = inputsKey(REPO, run)
     earlier = earlierRun(key)
   }
