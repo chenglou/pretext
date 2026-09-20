@@ -222,6 +222,11 @@ one reading. The Latin kinds read The Great Gatsby and the masonry demo's 1,904 
 `arabic` reads Arabic (كتاب البخلاء), Hebrew and Urdu in turn. `app-mixed` has no long text and stays the mix's. The
 first 1,000 have a mean of 117 units and a median of 60. A run has the first two sets; `--chat-sets=mix,latin,real` gives
 it a `chat/real` row, headline and phase pass too, and `realism-run.ts` lays the three out beside each other ("Realism").
+The set changes two things at once. The declaration's three families have every character of the mix, but no kana, no
+Hangul and no Hebrew: 49% of the `cjk` kind's characters here and 26% of the `arabic` kind's are in none of them (CoreText's
+character sets, spaces left out), so Chrome lays them out in the system's fallback fonts, which costs it more a call than a
+listed family does. What `real` costs beside the mix is that and the languages, not text read once: the plain ASCII kind
+costs the same in both sets.
 
 **One declaration for every message**, as an app sets one font on its bubbles: 16px `"Helvetica Neue", "PingFang TC",
 "Geeza Pro", sans-serif`, line height 20 px, `white-space: normal`, `overflow-wrap: break-word`, `lang="en"`, left to
@@ -300,7 +305,7 @@ measures at the zoomed size, a Canvas total is an exact 16.16 value only below 2
 pieces (`engines/blink/shape.ts` `addPieces`), so a message has two to three times the pieces at 3 that it has at 1, and at 1
 check 4 isn't asked at all. `measureText` calls a message from scratch in Chrome 153 over the headline's 10,000 messages
 (`realism-run.ts`, 2026-09-19): 233 (mix) and 211 (ASCII) at a ratio of 1, 336 and 311 at 2, 427 and 400 at 3, with 4.8, 11.2
-and 11.2 contexts. The 10,000 messages from scratch on a quiet machine, the median of six passes in three launches a ratio
+and 11.2 contexts; at 2.625, which many Android phones report (a Galaxy A55: 1080 px over a viewport of 412), 388 and 365. The 10,000 messages from scratch on a quiet machine, the median of six passes in three launches a ratio
 taking turns: 3.06, 4.60 and 5.37 s (mix) and 2.69, 3.92 and 4.67 s (ASCII) at 1, 2 and 3. Firefox's calls are the same at 1 and 3. `--device-scale-factor=3` runs any row at a phone's ratio;
 give the headline at the ratio it is claimed for.
 
@@ -325,6 +330,11 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
   memory and the font code's own waits aren't slowed, so a time under it is this Mac's time stretched.
 - `--sets=mix,latin,real,languages`: the chat sets, and `languages`, the eleven languages of `corpora/` read once with the
   chat lengths and taking turns (`cases.ts` `buildLanguages`), which the counting pass files by language.
+- `--family=<font-family list>`: the messages' families in place of the bench's. Of the eleven languages the bench's list
+  has English, Arabic, Urdu and Chinese; Hebrew, Hindi, Korean, Thai, Khmer and Burmese are 80 to 100% fallback under it and
+  Japanese 61%, so a language's cost under the bench's list is its fallback's too. With a family that has the script in the
+  list (`"Helvetica Neue", "Apple SD Gothic Neo", "Geeza Pro", sans-serif`), Korean asks the same 500 calls a message and
+  goes from 4.4 to 1.8 times the same run's English message in Chrome 153; Japanese doesn't move (1.8 and 1.7).
 - `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
   known leaves the counting pass out), `--out=<file.json>`.
 
