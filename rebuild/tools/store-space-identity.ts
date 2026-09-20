@@ -12,7 +12,8 @@
 // the same canvas. Only wholes below 256 px are tried: Canvas totals are exact 16.16 sums below that. Main's sum is tried
 // beside it where the record holds both sides alone: W(L) + W(s) + W(R).
 // Tallied per font string and per what the two characters around the space are (Latin-1 on both sides, or not), with
-// letter-spaced contexts apart.
+// letter-spaced contexts apart, and apart again where one side holds no character with a script of its own (brackets,
+// digits, punctuation): Canvas gives such a side measured alone another script than it has in the whole.
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { readInputs, readShard, referenceDir, type InputCase } from '../tests/replay.ts'
@@ -45,6 +46,7 @@ function tallyOf(map: Map<string, Tally>, key: string): Tally {
 }
 
 const to16 = (width: number): number => Math.round(width * 65536)
+const NO_SCRIPT = /^[\p{Script=Common}\p{Script=Inherited}]*$/u
 const isSpace = (unit: number): boolean => unit === 0x2028 || unit === 0x20
 
 const dir = referenceDir(browser, config)
@@ -95,7 +97,8 @@ for (let n = 0; n < sets.length; n++) {
             // the port corrects in JS (shape.ts letterSpacingDifference16): a miss there is that correction, a whole number
             // of spacings, so those contexts are tallied apart.
             const spaced = (assigned.letterSpacing ?? '0px') === '0px' ? 'no letter spacing' : 'letter spacing'
-            const kind = `${spaced}, ${space === ' ' ? 'U+0020' : 'U+2028'}, ${latin ? 'Latin-1 on both sides' : 'another character beside the space'}, ${assigned.direction ?? ''}`
+            const sides = NO_SCRIPT.test(left) || NO_SCRIPT.test(right) ? 'a side without a script of its own' : 'a script on both sides'
+            const kind = `${spaced}, ${space === ' ' ? 'U+0020' : 'U+2028'}, ${latin ? 'Latin-1 on both sides' : 'another character beside the space'}, ${assigned.direction ?? ''}, ${sides}`
             const tallies = [total, tallyOf(byFont, `${font}, ${spaced}`), tallyOf(byKind, kind)]
             for (let t = 0; t < tallies.length; t++) {
               const tally = tallies[t]!
