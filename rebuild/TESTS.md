@@ -375,6 +375,36 @@ with tier 1 at 0 predictions and 0 questions changed on the six references (the 
   list) and `tools/contexts-heal-attack-probe.ts` (K1 to K3: a paragraph prepared at the start of a Firefox that has
   just started and kept).
 
+**Since the profile of the ports' own JavaScript, WebKit, 2026-09-20.** Four changes to the code WebKit's port runs mean
+to change no Canvas question and no line: the font checks find a declaration's contexts once, a font-family list's names
+are cut out in stretches (both in files all three ports run, `src/measure/font-checks.ts` and `src/font-family.ts`), the
+port keeps its one word segmenter, and the simple builder commits a line's leading plain items in one step (DESIGN.md
+§2.9; research/PERF-JS-PROFILE.md; research/PROFILING-START.md, item 4). The tiers hold them as a refactoring
+(`.artifacts/tests/runs/prof-webkit-20260920`, the critic's runs under `critic/`):
+
+- *Offline* (`gates.ts --engine=webkit` at the owner's head). Tier 1 for webkit-host exits 0 in both configurations:
+  63,987 cases, 0 predictions and 0 questions changed. The function set's plain, pure and sweep checks pass on all of
+  them with none skipped, the citation ledger loses nothing, and the painter differential paints 63,987 cases the same
+  on both sides. `font-checks.ts` is under `src/measure`, so Chrome's tier 1 exits 3 by the string storage rule alone,
+  with 0 predictions and 0 questions changed (the owner's run on the first three changes), and Chrome's
+  storage-sensitive cases go to tier 2 at the merge.
+- *Two checkouts held against each other* (`tools/own-js-attack.ts`: base against head in one process under the stand-in
+  Canvas, on what the recorded cases don't hold, everything compared as text). 300,051 font-family lists, hand-made
+  edges and seeded random ones, 54,991 of them rejected by both with the same error. 25,592 paragraphs (31 texts, eight
+  structures, every `white-space`, `overflow-wrap`, `word-break` and `line-break` value, a span whose `white-space`
+  isn't its block's, spacing of both signs, rtl, indent, justify, four giants), plain and inspected, at 12 widths and a
+  slot with insets, under the stand-in as it is and with widths that round at every sum: every context made and every
+  question in order, every `fillLine` result whole, `linePieces`, `inspectLine` and `paragraphGaps`, 61.3 million steps.
+  And 750,264 line widths at which an item, or an item with the next one, fits exactly, with six float32 steps on both
+  sides, in 38 shapes. 0 differences in all three. The stretch mirrors `appendTextFast`, `expandRun` and
+  `updateTrailingContent`, and the unit tests below hold line ranges and content widths only, so this is the check to
+  run after an edit to any of them.
+- *New unit tests* in `src/engines/webkit/lines.test.ts`: one text node fills as the builder fills the same text in two
+  nodes, which is two boxes, where the builder commits every item itself, at every width from 7 to 440 px and both
+  `overflow-wrap` values (a wrong width sum fails it, and so does a fit test 1 px too generous); and a block of
+  `break-spaces` around one span that collapses spaces, where a word before white space is no candidate of its own and
+  the stretch isn't taken, held to the builder's lines the same way (no line differed while the stretch ran there).
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
