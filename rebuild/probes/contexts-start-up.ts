@@ -33,7 +33,7 @@
 //   a machine whose load changed during the run.
 //
 // Per declaration and way: every change of the answer with the time of the reading that first showed it. A list of one
-// entry never changed. The verdicts are in research/PERF-LIFETIME.md ("Kept contexts in a browser that has just started").
+// entry never changed. The verdicts are in research/PERF-LIFETIME.md ("What landed", "Gecko keeps no list").
 //
 // Run under the browser lock, from the worktree (S2 waits, so give it a longer probe timeout):
 //   python3 .artifacts/session/with-browser-lock.py contexts-start-up --browser=firefox -- bun rebuild/probes/runner.ts \
