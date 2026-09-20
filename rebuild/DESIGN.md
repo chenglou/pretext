@@ -2299,7 +2299,11 @@ the same data, and `env.dictionaryBreaks` says which is available.
   that DOM lines inside SA runs equal it after a line start (blink-text H34).
 - **WebKit**: Safari exposes no line segmenter. JSC's `Intl.Segmenter` word granularity runs libicucore's word iterator
   with the same dictionaries. Against libicucore's own line iterator it differs on 27 of 282,337 SA positions, all in
-  ranges that start with a combining mark (`dictionary-breaks-stand-in`).
+  ranges that start with a combining mark (`dictionary-breaks-stand-in`). The port makes one segmenter at the first
+  dictionary range and keeps it for the page's life (`engines/webkit/breaks.ts` `wordSegmenter`), as it keeps its decoded
+  tables: it is fixed data, the process's default locale and nothing of any text. Making one per range cost about four
+  times what segmenting a short range does (7.8 µs against 1.9 µs under JavaScriptCore, 2026-09-20), and 1,000 Thai chat
+  messages went from 42.6 to 18.6 µs a message of the port's own JavaScript with the same segmentations.
 - **Gecko**: Firefox's `Intl.Segmenter` word granularity uses ICU4X's word segmenter, and layout's per-word LSTM breaks
   equaled it on 54,589 of 54,589 SA positions (specs/gecko-text.md §10). Gecko feeds one space-delimited word at a time,
   split by language. Probe gecko-text H25 confirms it in installed Firefox 156.

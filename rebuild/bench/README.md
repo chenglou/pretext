@@ -404,8 +404,9 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
 - Main's `layout()` returns a line count. The rebuild's `count` mode returns as little, but each port still builds every
   line's fragments, engine geometry and gaps while it fills it, and logs the measureText calls of its own recipes with
   their text and width.
-- Main's cold variants also re-create its segmenters. The rebuild creates `Intl.Segmenter` objects inside its WebKit and
-  Gecko break code per call, and keeps its lazily decoded tables for the page's lifetime.
+- Main's cold variants also re-create its segmenters. The rebuild creates `Intl.Segmenter` objects inside its Gecko
+  break code per call, keeps the WebKit port's one word segmenter from its first dictionary range on, and keeps its
+  lazily decoded tables for the page's lifetime.
 - Main reads an emoji correction from a DOM span when a text may hold emoji. It's in the mixed rows' timing, as it is for
   an app.
 - The chat rows supply no font facts, so every runtime font check of the engine is in their timing; every other row takes
