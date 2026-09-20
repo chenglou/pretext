@@ -34,10 +34,11 @@ start it detached from anything that has a time limit. Since the same day a run 
 first gate (one full run and one `--quick` run at a time, first come, first served; it says who holds the turn while it
 waits, a killed run holds nobody up, and `--no-wait` skips the queue), and a run whose inputs equal an earlier finished
 run's prints that run's table and last line again as a reused result, with that run's time, worktree and commit, and
-exits with its code in under a second (`--fresh` runs anyway). The key covers every file of the working tree that git
-doesn't ignore and every file under `rebuild/` but `.check`, the installed packages, the frozen references as `check`
-reads them, the painter's frozen bundles, Chrome's set files, the flags that choose gates and bun's version; the lab
-README and the file's header have what it leaves out and why, and the measurements.
+exits with its code in under a second (`--fresh` runs anyway; a run that sends cases to tier 2 is never kept, since a
+reused result doesn't write the list tier 2 reads). The key covers every file of the working tree that git doesn't
+ignore and every file under `rebuild/` but `.check`, the installed packages, the frozen references as `check` reads
+them, the painter's frozen bundles, Chrome's set files, the flags that choose gates and bun's version; the lab README
+and the file's header have what it leaves out and why, and the measurements.
 
 **State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
 and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier

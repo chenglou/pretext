@@ -92,10 +92,13 @@
 // engine sources and the groundwork's tools under ~/github/browser-engines, Homebrew's ICU 78): every worktree reads the
 // same files there and no step of the rebuild writes them, so run with --fresh after changing one.
 // A result is kept only when the run finished, no gate's tool failed (a row that counts as 2 knows nothing, whatever
-// the run's exit code) and the key is the same after the run as before it: a tree edited, or a reference frozen again,
-// under the run keeps nothing. Results are <key>.json in .artifacts/tests/gates/results, the last 50. The key takes a
-// quarter of a second for the full form and a tenth for one engine's --quick at a load average of 30, and 1.2 and 0.5 s
-// at 60.
+// the run's exit code), no case goes to tier 2 and the key is the same after the run as before it: a tree edited, or a
+// reference frozen again, under the run keeps nothing. A reused result is the table and gates.json, not the gates'
+// reports: tier 2 takes its cases from tier 1's <report>.needs-browser.ids in the working tree (browser-sets.ts
+// --ids-file), which after a reused result is absent or an earlier tree's, so a run that sends cases to tier 2 runs
+// again in the worktree that goes on to tier 2. Results are <key>.json in .artifacts/tests/gates/results, the last 50.
+// The key takes a quarter of a second for the full form and a tenth for one engine's --quick at a load average of 30,
+// and 1.2 and 0.5 s at 60.
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
@@ -432,6 +435,13 @@ export function keptResult(dir: string, key: string): Kept | null {
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as Kept : null
 }
 
+// Why a finished run's rows aren't kept for reuse, or null (the file comment).
+export function notKept(rows: readonly Row[]): string | null {
+  if (rows.some(row => row.as === 2)) return 'a gate\'s tool failed'
+  if (rows.some(row => row.tier2 > 0)) return 'tier 1 sends cases to tier 2, and their ids are in this worktree\'s reports, which a reused result doesn\'t write'
+  return null
+}
+
 // Keeps a result under its key, in one step, so a reader never sees half a file, and drops all but the last 50.
 export function keepResult(dir: string, kept: Kept): void {
   mkdirSync(dir, { recursive: true })
@@ -620,7 +630,7 @@ if (import.meta.main) {
   if (earlier !== null) {
     writeFileSync(join(OUT, 'gates.json'), `${JSON.stringify(earlier.rows, null, 2)}\n`)
     printTable(earlier.rows)
-    console.log(`Reused result: no gate ran now. A run with the same inputs finished on ${when(earlier.at)} in ${earlier.worktree}, at commit ${earlier.commit}${earlier.dirty ? ' with uncommitted changes' : ''}; the logs are that worktree's, and --fresh runs the gates anyway`)
+    console.log(`Reused result: no gate ran now. A run with the same inputs finished on ${when(earlier.at)} in ${earlier.worktree}, at commit ${earlier.commit}${earlier.dirty ? ' with uncommitted changes' : ''}; the logs and the gates' reports are that worktree's, and --fresh runs the gates anyway`)
     console.log(`Reused result of ${when(earlier.at)}: ${closingLine(earlier.rows, earlier.seconds, earlier.exit)}`)
     process.exit(earlier.exit)
   }
@@ -633,9 +643,9 @@ if (import.meta.main) {
   printTable(rows)
   let exit = 0
   for (let i = 0; i < rows.length; i++) exit = worse(exit, rows[i]!.as)
-  // Kept for reuse only when every gate knows its result, and the inputs are what they were when the run started.
-  if (rows.some(row => row.as === 2)) console.error('[gates] not kept for reuse: a gate\'s tool failed')
-  else if (inputsKey(REPO, run) !== key) console.error('[gates] not kept for reuse: the inputs changed under the run')
+  // Kept for reuse only when the rows allow it, and the inputs are what they were when the run started.
+  const reason = notKept(rows) ?? (inputsKey(REPO, run) !== key ? 'the inputs changed under the run' : null)
+  if (reason !== null) console.error(`[gates] not kept for reuse: ${reason}`)
   else {
     const git = (...args: string[]): string => Bun.spawnSync(['git', ...args], { cwd: REPO }).stdout.toString().trim()
     keepResult(join(SHARED, 'results'), { key, at: Date.now(), worktree: REPO, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '', seconds, exit, rows })

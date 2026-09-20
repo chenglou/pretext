@@ -490,10 +490,12 @@ the `package.json` of every installed package; the frozen references of the run'
 file by its bytes but the 725 MB of shards, whose hashes the manifests hold and tier 1 checks, by size and time; without
 `--quick` the painter's frozen bundles and, for Blink, Chrome's set files; the engines and `--quick`, bun's version and
 the OS release. `--cores` isn't in it: no report depends on it. A result is kept only when every gate has one, no
-gate's tool failed and the key is the same after the run as before it, so a tree edited under a run keeps nothing; the
-last 50 are in `.artifacts/tests/gates/results`. What unit tests read outside the repository (the pinned engine sources
-and the groundwork's tools under `~/github/browser-engines`, Homebrew's ICU 78) isn't in the key: run with `--fresh`
-after changing one.
+gate's tool failed, no case goes to tier 2 and the key is the same after the run as before it, so a tree edited under a
+run keeps nothing; the last 50 are in `.artifacts/tests/gates/results`. A reused result is the table and `gates.json`,
+not the gates' reports: tier 2 takes its cases from tier 1's `<report>.needs-browser.ids` in the working tree, which
+after a reused result is absent or an earlier tree's, so a run that sends cases to tier 2 runs again in the worktree
+that goes on to tier 2. What unit tests read outside the repository (the pinned engine sources and the groundwork's
+tools under `~/github/browser-engines`, Homebrew's ICU 78) isn't in the key: run with `--fresh` after changing one.
 
 **A process replays a group of shards** since 2026-09-19 (`replay.ts` `shardGroups`; tier 1, the function set's plain
 and pure checks, the painter differential): a set's shards eight to a process in order, and a shard of fewer than 50

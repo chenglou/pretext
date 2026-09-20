@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
+import { citationsVerdict, closingLine, functionSetVerdict, inputsKey, keepResult, keptResult, nextWaiter, notKept, painterVerdict, removeStaleSockets, runOf, takeTurn, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Kept, type Row, type Run } from './gates.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -258,6 +258,13 @@ test('the key of a run\'s inputs: every file of the working tree, the frozen ref
   expect(inputsKey(repo, run('--cores=3'))).toBe(full)
   write('.artifacts/tests/painter-frozen/facts.js', '// frozen\n')
   expect(inputsKey(repo, run())).not.toBe(full)
+})
+
+test('a run is kept unless a gate\'s tool failed, whatever the run\'s exit code, or tier 1 sends cases to tier 2, whose ids a reused result doesn\'t write', () => {
+  const row = (as: number, tier2: number): Row => ({ gate: 'a gate', exit: as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: 'a-gate.log' })
+  expect(notKept([row(0, 0), row(1, 0), row(3, 0)])).toBeNull()
+  expect(notKept([row(1, 0), row(2, 0)])).toContain('tool failed')
+  expect(notKept([row(0, 0), row(0, 40)])).toContain('tier 2')
 })
 
 test('a kept result comes back by its key, and the last 50 stay', () => {
