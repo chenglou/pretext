@@ -1,5 +1,5 @@
 // The calibration tables, counted from census.ts's per-case records.
-//   bun rebuild/tools/census/tables.ts [--out=<dir>]   # <dir>/calibration.json, <dir>/tables.txt and tables-full.txt (Markdown)
+//   bun rebuild/tools/census/tables.ts [--out=<dir>] [--top=N]   # <dir>/calibration.json, <dir>/tables.txt and tables-full.txt (Markdown)
 // Every count is over one browser's records (<dir>/<browser>/<chunk>/cases.ndjson). The columns:
 // - cases: records of the family; observed: those whose line count the scorer could compare (the rebuild's lineCount status
 //   isn't `unobserved`). Main and the rebuild are compared on observed cases only.
@@ -33,6 +33,8 @@ const BROWSERS = ['chrome', 'firefox', 'webkit-host']
 const THEN = '.artifacts/research-20260916/census'
 const outArg = process.argv.slice(2).find(a => a.startsWith('--out='))
 const OUT = outArg === undefined ? '.artifacts/census-20260919' : outArg.slice('--out='.length)
+const topArg = process.argv.slice(2).find(a => a.startsWith('--top='))
+const TOP = topArg === undefined ? Infinity : Number(topArg.slice('--top='.length))
 
 // ---- Counts ----
 
@@ -125,9 +127,9 @@ function tableRow(name: string, c: Counts): string {
   return `| ${name} | ${c.cases} | ${c.observed} | ${rate(c.mainPass, c.observed)} | ${rate(c.rebuildPass, c.observed)} | ${rate(c.breaksPass, c.breaksObserved)} | ${rate(c.widthsPass, c.widthsObserved)} | ${c.mainFailRebuildPass} | ${c.mainPassRebuildFail} (${c.mainPassRebuildFailCovered}) | ${c.wrongLines} (${c.wrongLinesCovered}) | ${c.rightCountWrongBreaks} |`
 }
 
-// Every family worst first. `fold` sums the families where the rebuild fails nothing (no wrong lines, no failed width) into
-// one row, for the document; tables-full.txt keeps every row.
-function familyTable(families: Map<string, Counts>, total: Counts, fold: boolean): string {
+// Every family worst first: by the rebuild's wrong lines, then by its failed widths. With `top`, the families after the
+// first `top` are summed into one row, for the document; tables-full.txt keeps every row.
+function familyTable(families: Map<string, Counts>, total: Counts, top: number): string {
   const names = [...families.keys()].sort((a, b) => {
     const x = families.get(a)!
     const y = families.get(b)!
@@ -135,17 +137,17 @@ function familyTable(families: Map<string, Counts>, total: Counts, fold: boolean
   })
   const lines = [HEADER]
   const rest = emptyCounts()
-  let folded = 0
+  let worstFolded = ''
   for (let i = 0; i < names.length; i++) {
     const c = families.get(names[i]!)!
-    if (fold && c.wrongLines === 0 && c.widthsFail === 0) {
-      folded++
-      for (let f = 0; f < FIELDS.length; f++) rest[FIELDS[f]!] += c[FIELDS[f]!]
-    } else {
+    if (i < top) {
       lines.push(tableRow(`\`${names[i]!.replace(/^suite\//, '')}\``, c))
+      continue
     }
+    if (i === top) worstFolded = `at most ${c.wrongLines} wrong lines each`
+    for (let f = 0; f < FIELDS.length; f++) rest[FIELDS[f]!] += c[FIELDS[f]!]
   }
-  if (folded > 0) lines.push(tableRow(`${folded} families where the rebuild fails nothing`, rest))
+  if (names.length > top) lines.push(tableRow(`the other ${names.length - top} families (${worstFolded})`, rest))
   lines.push(tableRow('**all**', total))
   return lines.join('\n')
 }
@@ -248,7 +250,7 @@ const text: string[] = []
 const full: string[] = []
 for (let b = 0; b < BROWSERS.length; b++) {
   const browser = BROWSERS[b]!
-  const all = await records(browser, chunk => chunk !== 'real-text' && !chunk.startsWith('rerun'))
+  const all = await records(browser, chunk => chunk.startsWith('chunk') || chunk.startsWith('corpus'))
   if (all.length === 0) continue
 
   // The reruns: which failures are the long document's history, and which stay in short fresh documents.
@@ -288,8 +290,8 @@ for (let b = 0; b < BROWSERS.length; b++) {
   const suite = tally(kept)
   const asideTally = tally(apart)
   const whole = tally(all)
-  text.push(`## ${browser}: main's suite, ${all.length} cases${apart.length > 0 ? ` (${apart.length} set aside as page history)` : ''}`, '', ...headlines(suite.total), familyMeans(suite.families), '', difficulty(suite.total), '', familyTable(suite.families, suite.total, true), '')
-  full.push(`## ${browser}: main's suite, every family`, '', familyTable(suite.families, suite.total, false), '')
+  text.push(`## ${browser}: main's suite, ${all.length} cases${apart.length > 0 ? ` (${apart.length} set aside as page history)` : ''}`, '', ...headlines(suite.total), familyMeans(suite.families), '', difficulty(suite.total), '', familyTable(suite.families, suite.total, TOP), '')
+  full.push(`## ${browser}: main's suite, every family`, '', familyTable(suite.families, suite.total, Infinity), '')
   if (apart.length > 0) text.push(`### ${browser}: the ${apart.length} cases set aside`, '', HEADER, tableRow('set aside', asideTally.total), tableRow('suite with them', whole.total), '')
   if (rerun.cases > 0) text.push(`### ${browser}: the rebuild's wrong lines, run again in short fresh documents (${rerun.cases} cases, both orders)`, '',
     `- Native view differs from the long document's in either rerun (page history, set aside): ${rerun.historyDependent}. The rebuild has the right lines in both reruns on ${rerun.historyDependentRightInBoth} of them; main passed and the rebuild failed line count on ${rerun.historyDependentMainOnlyThen} in the long document and on ${rerun.historyDependentMainOnlyInBoth} in both reruns.`,
@@ -303,6 +305,9 @@ for (let b = 0; b < BROWSERS.length; b++) {
   let nativeCompared = 0
   let nativeMoved = 0
   let nativeLinesMoved = 0
+  // Cases that passed lineCount or breaks on 2026-09-17 and fail it today. That day's library carried the lab's font facts
+  // (research/FACTS-FREE.md); chunk facts-pass-to-fail runs these cases through today's library with those facts.
+  const passToFail: string[] = []
   const bump = (name: string, a: Status, z: Status): string => {
     const key = a === 'unobserved' || z === 'unobserved' ? 'u' : `${a === 'pass' ? 'p' : 'f'}${z === 'pass' ? 'p' : 'f'}`
     const m = moves[name] ??= {}
@@ -331,10 +336,17 @@ for (let b = 0; b < BROWSERS.length; b++) {
       }
     }
     bump('main lineCount', t.main.lineCount, r.rebuild.lineCount === 'unobserved' ? 'unobserved' : r.main.lineCount)
+    if ((t.rebuild.lineCount === 'pass' && r.rebuild.lineCount === 'fail') || (t.rebuild.breaks === 'pass' && r.rebuild.breaks === 'fail')) passToFail.push(r.id)
   }
+  mkdirSync(join(OUT, 'rerun'), { recursive: true })
+  writeFileSync(join(OUT, 'rerun', `${browser}-pass-to-fail.ids`), passToFail.join('\n') + '\n')
+  const withFacts = await records(browser, chunk => chunk === 'facts-pass-to-fail')
+  let factsRight = 0
+  for (let i = 0; i < withFacts.length; i++) if (!wrongLines(withFacts[i]!)) factsRight++
   const movedNames = [...movedFamilies.keys()].sort((x, y) => movedFamilies.get(y)!.fp + movedFamilies.get(y)!.pf - movedFamilies.get(x)!.fp - movedFamilies.get(x)!.pf)
   text.push(`### ${browser}: 2026-09-17 against today, ${joined} cases held on both days`, '',
     nativeCompared === 0 ? 'Native views of 2026-09-17 weren\'t read.' : `Native views compared on ${nativeCompared} cases: ${nativeMoved} differ, ${nativeLinesMoved} of them in the number of lines.`, '', movesTable(moves), '',
+    `${passToFail.length} cases passed lineCount or breaks then and fail it now (\`rerun/${browser}-pass-to-fail.ids\`).${withFacts.length > 0 ? ` Run again today with the lab's font facts, which that day's library carried: ${factsRight} of ${withFacts.length} have the right lines.` : ''}`, '',
     `Line-count moves by family (fail → pass, pass → fail): ${movedNames.slice(0, 25).map(n => `\`${n.replace(/^suite\//, '')}\` ${movedFamilies.get(n)!.fp}, ${movedFamilies.get(n)!.pf}`).join('; ')}${movedNames.length > 25 ? `; and ${movedNames.length - 25} more families` : ''}.`, '')
 
   // The cases main passes and the rebuild gets wrong, as a list, with the gaps their rows name.
@@ -352,7 +364,8 @@ for (let b = 0; b < BROWSERS.length; b++) {
   text.push(`Gaps named on the ${listed.length} cases main passes and the rebuild gets wrong (a case can name several; \`main-only/${browser}.ndjson\` lists the cases): ${gapList.map(g => `${g} ${gapNames.get(g)}`).join(', ')}.`, '')
 
   const real = tally(await records(browser, chunk => chunk === 'real-text'))
-  if (real.total.cases > 0) text.push(`### ${browser}: real paragraphs, ${real.total.cases} cases`, '', ...headlines(real.total), '', familyTable(real.families, real.total, false), '')
+  if (real.total.cases > 0) full.push(`## ${browser}: real paragraphs, every corpus`, '', familyTable(real.families, real.total, Infinity), '')
+  if (real.total.cases > 0) text.push(`### ${browser}: real paragraphs, ${real.total.cases} cases`, '', ...headlines(real.total), '', familyTable(real.families, real.total, Infinity), '')
 
   json[browser] = {
     suite: { total: suite.total, families: Object.fromEntries(suite.families) }, setAside: asideTally.total, suiteWithSetAside: whole.total, rerun,
