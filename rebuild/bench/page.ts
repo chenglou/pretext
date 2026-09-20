@@ -708,7 +708,7 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
 // What the wrappers below have seen: measureText calls with the time inside them, and contexts made (getContext calls)
 // with the time making them: the OffscreenCanvas constructor, getContext and every assignment to a context's text
 // attributes (the font string is parsed and resolved in the assignment).
-const canvasWork = { measureTextCalls: 0, measureTextMs: 0, contexts: 0, contextMs: 0 }
+const canvasWork = { measureTextCalls: 0, measureTextMs: 0, measuredUnits: 0, textClusterCalls: 0, contexts: 0, contextMs: 0 }
 
 type Restore = () => void
 
@@ -717,12 +717,25 @@ function wrapMeasureText(proto: { measureText(text: string): TextMetrics } | und
   const original = proto.measureText
   proto.measureText = function (this: unknown, text: string): TextMetrics {
     canvasWork.measureTextCalls++
+    canvasWork.measuredUnits += text.length
     const start = performance.now()
     const metrics = original.call(this, text)
     canvasWork.measureTextMs += performance.now() - start
     return metrics
   }
   return () => { proto.measureText = original }
+}
+
+// TextMetrics.getTextClusters where the browser has it (Chrome behind ExtendedTextMetrics): counted, not timed.
+function wrapTextClusters(): Restore {
+  if (typeof TextMetrics === 'undefined' || !('getTextClusters' in TextMetrics.prototype)) return () => {}
+  const proto = TextMetrics.prototype as unknown as { getTextClusters: (...rest: unknown[]) => unknown }
+  const original = proto.getTextClusters
+  proto.getTextClusters = function (this: unknown, ...rest: unknown[]): unknown {
+    canvasWork.textClusterCalls++
+    return original.apply(this, rest)
+  }
+  return () => { proto.getTextClusters = original }
 }
 
 function wrapGetContext(proto: { getContext: (...rest: never[]) => unknown } | undefined): Restore {
@@ -782,7 +795,7 @@ function wrapCanvas(): Restore {
   const offscreenContext = typeof OffscreenCanvasRenderingContext2D === 'undefined' ? undefined : OffscreenCanvasRenderingContext2D.prototype
   const canvasContext = typeof CanvasRenderingContext2D === 'undefined' ? undefined : CanvasRenderingContext2D.prototype
   const restores = [
-    wrapMeasureText(offscreenContext), wrapMeasureText(canvasContext), wrapTextAttributes(offscreenContext), wrapTextAttributes(canvasContext),
+    wrapMeasureText(offscreenContext), wrapMeasureText(canvasContext), wrapTextClusters(), wrapTextAttributes(offscreenContext), wrapTextAttributes(canvasContext),
     wrapGetContext(typeof OffscreenCanvas === 'undefined' ? undefined : OffscreenCanvas.prototype),
     wrapGetContext(typeof HTMLCanvasElement === 'undefined' ? undefined : HTMLCanvasElement.prototype), wrapOffscreenCanvasConstructor(),
   ]
@@ -845,9 +858,11 @@ function countRow(row: RowSpec, c: Context): RowCount {
     const variant = variants[i]!
     variant.setup?.()
     canvasWork.measureTextCalls = 0
+    canvasWork.measuredUnits = 0
+    canvasWork.textClusterCalls = 0
     canvasWork.contexts = 0
     const lines = variant.run()
-    counts.push({ variant: variant.name, measureTextCalls: canvasWork.measureTextCalls, contexts: canvasWork.contexts, lines })
+    counts.push({ variant: variant.name, measureTextCalls: canvasWork.measureTextCalls, contexts: canvasWork.contexts, measuredUnits: canvasWork.measuredUnits, textClusterCalls: canvasWork.textClusterCalls, lines })
     sink += lines
   }
   const counted = rebuildRanges(row, c, 'count')

@@ -172,6 +172,10 @@ export type VariantCount = {
   // contexts it made (getContext calls on OffscreenCanvas and <canvas>).
   measureTextCalls: number
   contexts: number
+  // The UTF-16 units those measureText calls sent, and the TextMetrics.getTextClusters calls beside them (Chrome's flagged
+  // API, which the speculative Blink prototype asks where Canvas has it).
+  measuredUnits: number
+  textClusterCalls: number
   // Lines produced by that repetition, summed over widths or messages: main's line count, the rebuild's line boxes.
   lines: number
 }
