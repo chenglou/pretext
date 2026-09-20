@@ -292,6 +292,27 @@ Main makes no context in a batch: it keeps one for the page. Every page had a de
 Blink's font checks run at all for text without a soft hyphen or joining letters: check 4 asks whether the primary family
 scales linearly to the zoomed size.
 
+## Realism
+
+`realism-run.ts` asks how far the headline carries: to another device pixel ratio, to text that isn't the generator's,
+and to a slower processor. It serves `realism-page.ts`, which is the headline and nothing else: every set (`mix`, `latin`,
+`real`) laid out from scratch in count mode once a pass, the sets taking turns, then one counting pass with wrappers on
+`measureText` and `getContext`: calls, the UTF-16 units of the strings sent, contexts and lines, in all and by message
+kind. A run is a launch and a few passes, so runs at several settings can take turns inside one exclusive stretch. It
+launches what `run.ts` launches, in the background, and doesn't take the browser lock.
+
+```sh
+python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome --device-scale-factor=3 --out=<file.json>
+```
+
+- `--device-scale-factor=N`: Chrome's `--force-device-scale-factor=N` at launch, which is a real ratio (Blink lays out at
+  it; a DevTools-emulated one lays out at zoom 1, `rebuild/probes/blink-probes.ts`). In Firefox the profile's
+  `layout.css.devPixelsPerPx`. webkit-host has the screen's ratio.
+- `--cpu-throttle=N` (Chrome): `Emulation.setCPUThrottlingRate` over a DevTools session that stays attached for the run.
+  The throttle stops the renderer's main thread for a share of every interval. It is not a slower processor: caches,
+  memory and the font code's own waits aren't slowed, so a time under it is this Mac's time stretched.
+- `--sets=mix,latin,real`, `--messages=N` (10,000), `--passes=N` (3), `--out=<file.json>`.
+
 ## Method
 
 - **First repetition**: before anything else in a row, every variant runs once, timed alone, with one library's variants
