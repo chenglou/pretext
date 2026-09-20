@@ -9,8 +9,8 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { loadavg } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from '../lab/browser-build.ts'
-import { buildContexts, describeChat, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
-import type { BrowserKind, ChatPlan, ChatPost, ContextDonePost, ContextPlan, CountsPost, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
+import { buildContexts, CHAT_SETS, DEFAULT_CHAT_SETS, describeChat, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
+import type { BrowserKind, ChatPlan, ChatPost, ChatSetId, ContextDonePost, ContextPlan, CountsPost, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
 import { formatMs, renderMarkdown, type BenchReport, type ChatReport, type ContextReport, type LockState, type MachineSnapshot } from './report.ts'
 
 const BENCH_DIR = import.meta.dir
@@ -38,12 +38,12 @@ function message(error: unknown): string {
 // ---- Arguments ----
 
 const USAGE = 'Usage: bun rebuild/bench/run.ts --browser=chrome|firefox|safari|webkit-host [--foreground] [--smoke] [--out=<dir>] '
-  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--samples=N] '
+  + '[--scripts=latin,cjk,arabic,mixed] [--sizes=tiny,sentence,paragraph,long,corpus] [--scenarios=cold,sweep,many,chat] [--chat-sets=mix,latin,real] [--samples=N] '
   + '[--min-samples=N] [--warmup=N] [--min-sample-ms=N] [--budget-ms=N] [--messages=N] [--headline=N] [--headline-passes=N] [--phase-passes=N] '
-  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--allow-battery] [--allow-no-lock]'
+  + '[--quiet-load=N] [--quiet-wait-min=N] [--stall-ms=N] [--device-scale-factor=N] [--allow-battery] [--allow-no-lock]'
 const FLAGS = ['foreground', 'smoke', 'allow-battery', 'allow-no-lock']
-const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
-  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms']
+const VALUES = ['browser', 'out', 'scripts', 'sizes', 'scenarios', 'chat-sets', 'samples', 'min-samples', 'warmup', 'min-sample-ms', 'budget-ms', 'messages', 'headline',
+  'headline-passes', 'phase-passes', 'quiet-load', 'quiet-wait-min', 'stall-ms', 'device-scale-factor']
 const flags = new Set<string>()
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -83,6 +83,7 @@ function positiveInteger(name: string, fallback: number): number {
 const scripts: Script[] = list('scripts', SCRIPTS)
 const sizes: SizeClass[] = list('sizes', SIZES)
 const scenarios: Scenario[] = list('scenarios', SCENARIOS)
+const chatSets: ChatSetId[] = args.has('chat-sets') ? list('chat-sets', CHAT_SETS) : DEFAULT_CHAT_SETS.slice()
 const settings: Settings = {
   samples: positiveInteger('samples', smoke ? 3 : 40),
   minSamples: positiveInteger('min-samples', smoke ? 2 : 10),
@@ -104,6 +105,11 @@ const phasePasses = positiveInteger('phase-passes', smoke ? 1 : 3)
 const quietLoad = args.has('quiet-load') ? positiveInteger('quiet-load', 1) : null
 const quietWaitMin = positiveInteger('quiet-wait-min', 15)
 const stallMs = positiveInteger('stall-ms', 20 * 60_000)
+// --device-scale-factor=N: the page's device pixel ratio, forced at launch: Chrome's --force-device-scale-factor, Firefox's
+// layout.css.devPixelsPerPx. Blink measures at the zoomed size, so what the rebuild asks of Canvas in Chrome grows with the
+// ratio (README.md, "Chat"); the reports' rows record the ratio the page saw.
+const scaleFactor = args.get('device-scale-factor') ?? null
+if (scaleFactor !== null && browser !== 'chrome' && browser !== 'firefox') fail('--device-scale-factor is for --browser=chrome and --browser=firefox; Safari and webkit-host have the screen\'s ratio')
 const runId = randomUUID()
 const startedAt = new Date()
 const stamp = startedAt.toISOString().replace(/[:.]/g, '-')
@@ -210,7 +216,7 @@ if (foreground) console.warn(`[bench] load average ${machineStart.loadAverage}; 
 
 // ---- Plan ----
 
-const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount, chat: { timed: messageCount, headline, headlinePasses, phasePasses } })
+const contexts: ContextSpec[] = buildContexts({ scripts, sizes, scenarios, messages: messageCount, chat: { sets: chatSets, timed: messageCount, headline, headlinePasses, phasePasses } })
 if (contexts.length === 0) fail('No rows selected')
 const totalRows = contexts.reduce((sum, context) => sum + context.rows.length, 0)
 
@@ -282,6 +288,10 @@ function checkSnapshot(id: string, when: string, snap: { visibility: string; foc
 
 let baseUrl = ''
 let firstSnapshot: { devicePixelRatio: number; innerWidth: number; innerHeight: number } | null = null
+// The report's ratio. A function, since at the top level the compiler still reads the variable as the null it began with.
+function pageDevicePixelRatio(): number | null {
+  return firstSnapshot === null ? null : firstSnapshot.devicePixelRatio
+}
 
 async function handle(request: Request): Promise<Response> {
   lastActivity = Date.now()
@@ -307,7 +317,10 @@ async function handle(request: Request): Promise<Response> {
       rowsDone++
       checkSnapshot(row.id, 'start', row.start)
       checkSnapshot(row.id, 'end', row.end)
-      firstSnapshot ??= row.start
+      if (firstSnapshot === null) {
+        firstSnapshot = row.start
+        if (scaleFactor !== null && row.start.devicePixelRatio !== Number(scaleFactor)) violations.push(`--device-scale-factor=${scaleFactor} didn't take: the page's devicePixelRatio is ${row.start.devicePixelRatio}`)
+      }
       const snaps = [row.start, row.end]
       for (let i = 0; i < snaps.length; i++) {
         const snap = snaps[i]!
@@ -458,7 +471,7 @@ async function launchChrome(url: string): Promise<Session> {
   const app = CHROME_APP()
   // CHROME_PIN_ARGS keeps the copy out of Chrome's updater (lab README, "Pinned browsers").
   const common = [`--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
-    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900']
+    '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900', ...(scaleFactor === null ? [] : [`--force-device-scale-factor=${scaleFactor}`])]
   if (foreground) return await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [...common, '--new-window', url])
   const session = await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     ...common, '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
@@ -522,6 +535,7 @@ function launchFirefox(url: string): Promise<Session> {
     // Firefox updates the bundle it runs from; these keep the pinned copy at its build.
     ...FIREFOX_PIN_PREFS,
   ]
+  if (scaleFactor !== null) prefs.push(['layout.css.devPixelsPerPx', scaleFactor])
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   const app = FIREFOX_APP()
   return launchApp(app, `${app}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile, ['--new-instance', '--profile', profile, url])
@@ -669,6 +683,7 @@ try {
       rebuildSrcSha256: treeHash(join(REPO, 'rebuild/src')),
     },
     bundleBytes: bundle.length,
+    devicePixelRatio: { page: pageDevicePixelRatio(), forced: scaleFactor },
     environmentViolations: violations,
     contexts: reports,
   }

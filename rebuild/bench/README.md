@@ -108,11 +108,14 @@ python3 .artifacts/session/with-browser-lock.py bench-smoke-chrome -- bun rebuil
 ```
 
 Options: `--scripts=latin,cjk,arabic,mixed`, `--sizes=tiny,sentence,paragraph,long,corpus`, `--scenarios=cold,sweep,many,chat`,
+`--chat-sets=mix,latin,real` (default `mix,latin`),
 `--samples=N` (default 40), `--min-samples=N` (10), `--warmup=N` (3), `--min-sample-ms=N` (10), `--budget-ms=N` (20000 per
 row), `--messages=N` (1000; the many rows' messages and the chat rows' timed messages), `--headline=N` (0: the chat
 context's headline passes lay out this many messages, and 0 leaves them out), `--headline-passes=N` (3), `--phase-passes=N`
 (3, smoke 1), `--quiet-load=N` and `--quiet-wait-min=N` (above; off unless given, 15), `--stall-ms=N` (fail after this
-long without a page request, default 20 minutes), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
+long without a page request, default 20 minutes), `--device-scale-factor=N` (Chrome and Firefox: the page's device pixel
+ratio, forced at launch; "Chat" says why it matters; the report states the page's ratio, and a forced ratio the page
+doesn't have is an environment violation), `--out=<dir>` (default `.artifacts/bench/<time>-<browser>`).
 
 ## Inputs
 
@@ -212,6 +215,19 @@ Of the first 1,000 of the mix, 73% are printable ASCII, 7% hold an emoji, 9% CJK
 span and 0.2% a soft hyphen. `chat/latin` is the `latin` kind alone from a stream of its own, with the same lengths: the
 common case beside the mix. The report prints these shares for the messages it ran.
 
+**A third set, `real`**, holds the mix's kinds, shares and lengths over text that isn't sliced at random (`cases.ts`
+`realTexts`): every text is read once from its start, a message after the other, so no unit of text is in two messages of
+one reading. The Latin kinds read The Great Gatsby and the masonry demo's 1,904 short posts in turn (about 510,000 units:
+10,000 messages read them twice, with other slices the second time), `cjk` reads Chinese, Japanese and Korean in turn, and
+`arabic` reads Arabic (كتاب البخلاء), Hebrew and Urdu in turn. `app-mixed` has no long text and stays the mix's. The
+first 1,000 have a mean of 117 units and a median of 60. A run has the first two sets; `--chat-sets=mix,latin,real` gives
+it a `chat/real` row, headline and phase pass too, and `realism-run.ts` lays the three out beside each other ("Realism").
+The set changes two things at once. The declaration's three families have every character of the mix, but no kana, no
+Hangul and no Hebrew: 49% of the `cjk` kind's characters here and 26% of the `arabic` kind's are in none of them (CoreText's
+character sets, spaces left out), so Chrome lays them out in the system's fallback fonts, which costs it more a call than a
+listed family does. What `real` costs beside the mix is that and the languages, not text read once: the plain ASCII kind
+costs the same in both sets.
+
 **One declaration for every message**, as an app sets one font on its bubbles: 16px `"Helvetica Neue", "PingFang TC",
 "Geeza Pro", sans-serif`, line height 20 px, `white-space: normal`, `overflow-wrap: break-word`, `lang="en"`, left to
 right, 320 px wide; the resize case lays the same messages out at 260, 380 and 440 px. No font facts are supplied: every
@@ -293,6 +309,47 @@ aren't given, because the machine was busy):
 Main makes no context in a batch: it keeps one for the page. Every page had a device pixel ratio of 2, which is why
 Blink's font checks run at all for text without a soft hyphen or joining letters: check 4 asks whether the primary family
 scales linearly to the zoomed size.
+
+**The device pixel ratio.** The headline is read at the ratio of the screen the window opened on, 2 on this Mac's displays.
+Most phones have 3 and most office monitors 1, and what the rebuild asks of Canvas in Chrome follows the ratio: Blink
+measures at the zoomed size, a Canvas total is an exact 16.16 value only below 256 px, and the port cuts a wider group into
+pieces (`engines/blink/shape.ts` `addPieces`), so a message has two to three times the pieces at 3 that it has at 1, and at 1
+check 4 isn't asked at all. `measureText` calls a message from scratch in Chrome 153 over the headline's 10,000 messages
+(`realism-run.ts`, 2026-09-19): 233 (mix) and 211 (ASCII) at a ratio of 1, 336 and 311 at 2, 426 and 400 at 3, with 4.8, 11.2
+and 11.2 contexts; at 2.625, which many Android phones report (a Galaxy A55: 1080 px over a viewport of 412), 388 and 365. The 10,000 messages from scratch on a quiet machine, the median of six passes in three launches a ratio
+taking turns: 3.06, 4.60 and 5.37 s (mix) and 2.69, 3.92 and 4.67 s (ASCII) at 1, 2 and 3. Firefox's calls are the same at 1 and 3. `--device-scale-factor=3` runs any row at a phone's ratio;
+give the headline at the ratio it is claimed for.
+
+## Realism
+
+`realism-run.ts` asks how far the headline carries: to another device pixel ratio, to text that isn't the generator's,
+and to a slower processor. It serves `realism-page.ts`, which is the headline and nothing else: every set (`mix`, `latin`,
+`real`) laid out from scratch in count mode once a pass, the sets taking turns, then one counting pass with wrappers on
+`measureText` and `getContext`: calls, the UTF-16 units of the strings sent, contexts and lines, in all and by message
+kind (by language in the `languages` set). A run is a launch and a few passes, so runs at several settings can take turns inside one exclusive stretch. It
+launches what `run.ts` launches, in the background, and doesn't take the browser lock.
+
+```sh
+python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/bench/realism-run.ts --browser=chrome --device-scale-factor=3 --out=<file.json>
+```
+
+- `--device-scale-factor=N`: Chrome's `--force-device-scale-factor=N` at launch, which is a real ratio (Blink lays out at
+  it; a DevTools-emulated one lays out at zoom 1, `rebuild/probes/blink-probes.ts`). In Firefox the profile's
+  `layout.css.devPixelsPerPx`. webkit-host has the screen's ratio.
+- `--cpu-throttle=N` (Chrome): `Emulation.setCPUThrottlingRate` over a DevTools session that stays attached for the run.
+  The throttle stops the renderer's main thread for a share of every interval. It is not a slower processor: caches,
+  memory and the font code's own waits aren't slowed, so a time under it is this Mac's time stretched.
+- `--sets=mix,latin,real,languages`: the chat sets, and `languages`, the eleven languages of `corpora/` read once with the
+  chat lengths and taking turns (`cases.ts` `buildLanguages`), which the counting pass files by language.
+- `--family=<font-family list>`: the messages' families in place of the bench's. Of the eleven languages the bench's list
+  has English, Arabic, Urdu and Chinese; Hebrew, Hindi, Korean, Thai, Khmer and Burmese are 80 to 100% fallback under it and
+  Japanese 61%, so a language's cost under the bench's list is its fallback's too. With a family that has the script in the
+  list (`"Helvetica Neue", "Apple SD Gothic Neo", "Geeza Pro", sans-serif`), Korean asks the same 500 calls a message and
+  goes from 4.4 to 1.8 times the same run's English message in Chrome 153; Hindi from 3.4 to 1.7, Thai 3.9 to 2.3, Khmer
+  3.7 to 2.1, Burmese 4.5 to 1.8, Hebrew 2.8 to 1.8, and Japanese doesn't move (1.8 and 1.7). The ratios are of the counting
+  pass on a loaded machine, a language beside English in one run; they aren't timing.
+- `--messages=N` (10,000), `--passes=N` (3), `--counts=no` (a timed sitting whose counts are
+  known leaves the counting pass out), `--out=<file.json>`.
 
 ## Method
 

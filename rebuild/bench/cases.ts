@@ -85,13 +85,17 @@ function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff
 }
 
-// From `start`, the longest slice of at most `max` units ending at a boundary, trimmed. When no boundary lies past
+// From `start`, the end of the longest slice of at most `max` units ending at a boundary. When no boundary lies past
 // start + min, the slice ends at start + min, moved off a surrogate pair.
-function excerpt(source: string, start: number, min: number, max: number): string {
+function excerptEnd(source: string, start: number, min: number, max: number): number {
   let end = Math.min(source.length, start + max)
   while (end > start + min && !BOUNDARY.test(source[end - 1]!)) end--
   if (end < source.length && isHighSurrogate(source.charCodeAt(end - 1))) end++
-  return source.slice(start, end).trim()
+  return end
+}
+
+function excerpt(source: string, start: number, min: number, max: number): string {
+  return source.slice(start, excerptEnd(source, start, min, max)).trim()
 }
 
 // The first unit after the next boundary at or after `offset`, past white space.
@@ -156,7 +160,9 @@ export const CHAT_CODE_FONT: ChatPlan['codeFont'] = { family: 'Menlo', size: 14,
 export const CHAT_CODE_PADDING = 6
 export const CHAT_WIDTH = 320
 export const CHAT_RESIZE_WIDTHS: readonly number[] = [260, 380, 440]
-export const CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin']
+// Every set, and the ones a run has unless --chat-sets names others: 'real' is a third row and a third headline for who asks.
+export const CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin', 'real']
+export const DEFAULT_CHAT_SETS: readonly ChatSetId[] = ['mix', 'latin']
 
 // The mix, by kind. Shares sum to 1.
 export const CHAT_KIND_SHARES: readonly (readonly [ChatKind, number])[] = [
@@ -216,7 +222,39 @@ function chatSlice(rng: ReturnType<typeof createRng>, source: string, min: numbe
   return excerpt(source, start, min, max)
 }
 
-function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMessage | null {
+// The 'real' set's texts: the long-form corpora and the masonry demo's 1,904 short posts, each read once from its start, a
+// message after the other, so no unit of a text is in two messages of one reading. A kind with several texts takes them
+// in turn. A text that ends is read again from its start, where the lengths drawn differ, so its slices do. The Latin
+// kinds share the readings of the two English texts (about 510,000 units: 10,000 messages read them twice). 'app-mixed'
+// has no long text and stays the mix's slices of corpora/mixed-app-text.txt.
+type RealText = { text: string; at: number }
+type RealTexts = { latin: RealText[]; cjk: RealText[]; arabic: RealText[]; next: { latin: number; cjk: number; arabic: number } }
+
+function realTexts(): RealTexts {
+  const read = (ids: string[], joiner: string): RealText => ({ text: flow(ids.map(corpus).join('\n'), joiner), at: 0 })
+  const posts = JSON.parse(readFileSync(resolve(import.meta.dir, '../../pages/demos/masonry/shower-thoughts.json'), 'utf8')) as string[]
+  return {
+    latin: [read(['en-gatsby-opening'], ' '), { text: flow(posts.join('\n'), ' '), at: 0 }],
+    cjk: [read(['zh-zhufu', 'zh-guxiang'], ''), read(['ja-rashomon', 'ja-kumo-no-ito'], ''), read(['ko-sonagi', 'ko-unsu-joh-eun-nal'], ' ')],
+    arabic: [read(['ar-al-bukhala'], ' '), read(['he-masaot-binyamin-metudela'], ' '), read(['ur-chughd'], ' ')],
+    next: { latin: 0, cjk: 0, arabic: 0 },
+  }
+}
+
+// The next slice of a text read from start to end, and from its start again when it ends.
+function readNext(source: RealText, min: number, max: number): string {
+  if (source.at + min >= source.text.length) source.at = 0
+  const start = alignStart(source.text, source.at)
+  source.at = excerptEnd(source.text, start, min, max)
+  return source.text.slice(start, source.at).trim()
+}
+
+function realSlice(real: RealTexts, script: 'latin' | 'cjk' | 'arabic', min: number, max: number): string {
+  const texts = real[script]
+  return readNext(texts[real.next[script]++ % texts.length]!, min, max)
+}
+
+function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind, real: RealTexts | null): ChatMessage | null {
   const sources = getChatSources()
   const r = rng.next()
   let lengths = CHAT_LENGTH_CLASSES[CHAT_LENGTH_CLASSES.length - 1]!
@@ -227,9 +265,20 @@ function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMes
       break
     }
   }
+  // Picked before the length is drawn, as before the real set came: the mix keeps the messages every earlier number was taken on.
   const source = kind === 'cjk' ? sources.cjk : kind === 'arabic' ? sources.arabic : kind === 'latin-smart' ? sources.latinSmart : kind === 'app-mixed' ? rng.pick(sources.app) : sources.latin
   // A length anywhere in the class, so lengths don't pile up at the class edges.
-  const text = chatSlice(rng, source, lengths.min, lengths.min + rng.int(lengths.max - lengths.min + 1))
+  const max = lengths.min + rng.int(lengths.max - lengths.min + 1)
+  let text: string
+  if (real === null || kind === 'app-mixed') text = chatSlice(rng, source, lengths.min, max)
+  else {
+    switch (kind) {
+      case 'cjk': text = realSlice(real, 'cjk', lengths.min, max); break
+      case 'arabic': text = realSlice(real, 'arabic', lengths.min, max); break
+      case 'latin-smart': text = realSlice(real, 'latin', lengths.min, max); break
+      case 'latin': case 'latin-emoji': case 'latin-url': case 'latin-code': text = toAscii(realSlice(real, 'latin', lengths.min, max)).trim(); break
+    }
+  }
   if (text.length === 0) return null
   const plain = (whole: string): ChatMessage => ({ kind, parts: [{ code: false, text: whole }] })
   switch (kind) {
@@ -253,13 +302,14 @@ function chatMessage(rng: ReturnType<typeof createRng>, kind: ChatKind): ChatMes
 }
 
 // The first `count` messages of a set's stream, so a longer set starts with the shorter one. 'latin' is the mix's 'latin'
-// kind alone, from a stream of its own.
+// kind alone, from a stream of its own. 'real' is the mix's kinds, shares and lengths over texts read once (realTexts).
 export function buildChat(set: ChatSetId, count: number): ChatMessage[] {
   const rng = createRng(`rebuild-bench-chat-${set}`)
+  const real = set === 'real' ? realTexts() : null
   const out: ChatMessage[] = []
   while (out.length < count) {
     let kind: ChatKind = 'latin'
-    if (set === 'mix') {
+    if (set !== 'latin') {
       const r = rng.next()
       for (let i = 0, edge = 0; i < CHAT_KIND_SHARES.length; i++) {
         edge += CHAT_KIND_SHARES[i]![1]
@@ -269,8 +319,41 @@ export function buildChat(set: ChatSetId, count: number): ChatMessage[] {
         }
       }
     }
-    const message = chatMessage(rng, kind)
+    const message = chatMessage(rng, kind, real)
     if (message !== null) out.push(message)
+  }
+  return out
+}
+
+// What each language costs beside the others (realism-run.ts --sets=languages): every language of the long-form corpora
+// read once from its start with the chat lengths, the languages taking turns; a text that ends is read again. The shortest,
+// Burmese, has about 4,000 units, 35 messages a reading.
+const LANGUAGES: readonly { language: string; corpora: string[]; joiner: string }[] = [
+  { language: 'en', corpora: ['en-gatsby-opening'], joiner: ' ' }, { language: 'ar', corpora: ['ar-al-bukhala', 'ar-risalat-al-ghufran-part-1'], joiner: ' ' },
+  { language: 'he', corpora: ['he-masaot-binyamin-metudela'], joiner: ' ' }, { language: 'ur', corpora: ['ur-chughd'], joiner: ' ' },
+  { language: 'hi', corpora: ['hi-eidgah'], joiner: ' ' }, { language: 'zh', corpora: ['zh-zhufu', 'zh-guxiang'], joiner: '' },
+  { language: 'ja', corpora: ['ja-rashomon', 'ja-kumo-no-ito'], joiner: '' }, { language: 'ko', corpora: ['ko-sonagi', 'ko-unsu-joh-eun-nal'], joiner: ' ' },
+  { language: 'th', corpora: ['th-nithan-vetal-story-1', 'th-nithan-vetal-story-7'], joiner: ' ' },
+  { language: 'km', corpora: ['km-prachum-reuang-preng-khmer-volume-7-stories-1-10'], joiner: ' ' },
+  { language: 'my', corpora: ['my-cunning-heron-teacher', 'my-bad-deeds-return-to-you-teacher'], joiner: ' ' },
+]
+
+export function buildLanguages(count: number): { language: string; text: string }[] {
+  const rng = createRng('rebuild-bench-languages')
+  const texts: RealText[] = LANGUAGES.map(entry => ({ text: flow(entry.corpora.map(corpus).join('\n'), entry.joiner), at: 0 }))
+  const out: { language: string; text: string }[] = []
+  for (let i = 0; out.length < count; i++) {
+    const r = rng.next()
+    let lengths = CHAT_LENGTH_CLASSES[CHAT_LENGTH_CLASSES.length - 1]!
+    for (let k = 0, edge = 0; k < CHAT_LENGTH_CLASSES.length; k++) {
+      edge += CHAT_LENGTH_CLASSES[k]!.share
+      if (r < edge) {
+        lengths = CHAT_LENGTH_CLASSES[k]!
+        break
+      }
+    }
+    const text = readNext(texts[i % texts.length]!, lengths.min, lengths.min + rng.int(lengths.max - lengths.min + 1))
+    if (text.length > 0) out.push({ language: LANGUAGES[i % texts.length]!.language, text })
   }
   return out
 }
@@ -335,13 +418,14 @@ export function describeChat(messages: readonly ChatMessage[]): ChatMixSummary {
   return summary
 }
 
-export type ChatOptions = { timed: number; headline: number; headlinePasses: number; phasePasses: number }
+export type ChatOptions = { sets: readonly ChatSetId[]; timed: number; headline: number; headlinePasses: number; phasePasses: number }
 
 export function buildChatPlan(options: ChatOptions): ChatPlan {
   const count = Math.max(options.timed, options.headline)
   return {
     codeFont: CHAT_CODE_FONT, codeMainFont: `${CHAT_CODE_FONT.size}px ${CHAT_CODE_FONT.family}`, codePadding: CHAT_CODE_PADDING, width: CHAT_WIDTH,
-    resizeWidths: CHAT_RESIZE_WIDTHS.slice(), sets: CHAT_SETS.map(id => ({ id, messages: buildChat(id, count) })), ...options,
+    resizeWidths: CHAT_RESIZE_WIDTHS.slice(), sets: options.sets.map(id => ({ id, messages: buildChat(id, count) })), timed: options.timed, headline: options.headline,
+    headlinePasses: options.headlinePasses, phasePasses: options.phasePasses,
   }
 }
 
@@ -371,7 +455,7 @@ export function buildContexts(options: { scripts: readonly Script[]; sizes: read
     if (rows.length > 0) contexts.push({ style: STYLES[script], rows, chat: null })
   }
   if (options.scenarios.includes('chat')) {
-    contexts.push({ style: CHAT_STYLE, rows: CHAT_SETS.map(set => ({ kind: 'chat', id: `chat/${set}`, set })), chat: buildChatPlan(options.chat) })
+    contexts.push({ style: CHAT_STYLE, rows: options.chat.sets.map(set => ({ kind: 'chat', id: `chat/${set}`, set })), chat: buildChatPlan(options.chat) })
   }
   return contexts
 }
