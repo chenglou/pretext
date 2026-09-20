@@ -454,7 +454,9 @@ function handleTrailingHangingContent(line: Line, lineWidth: number, isLastForma
 
 // ---- ContinuousContent (ICB:917-1004, InlineContentBreaker.h:84-147) ----
 
-type ContentRun = { item: ContentItem; offset: number; contentWidth: number; shapingBoundary: 'start' | 'end' | null }
+// A run of text is a ContentRun<WebKitTextItem>: what the breaker breaks, and all the simple builder's content holds.
+type ContentRun<Item extends ContentItem = ContentItem> = { item: Item; offset: number; contentWidth: number; shapingBoundary: 'start' | 'end' | null }
+type TextContentRun = ContentRun<WebKitTextItem>
 
 type Content = {
   runs: ContentRun[]
@@ -580,13 +582,12 @@ function hasLeadingTextContent(c: Content): boolean {
   return false
 }
 
-function nextTextRunIndex(runs: ContentRun[], start: number): number | null {
-  for (let i = start + 1; i < runs.length; i++) if (runs[i]!.item.kind === 'text') return i
-  return null
-}
-
-function firstTextRunIndex(runs: ContentRun[]): number | null {
-  for (let i = 0; i < runs.length; i++) if (runs[i]!.item.kind === 'text') return i
+// The text item of the next text run after `start`, or null.
+function nextTextItem(runs: ContentRun[], start: number): WebKitTextItem | null {
+  for (let i = start + 1; i < runs.length; i++) {
+    const item = runs[i]!.item
+    if (item.kind === 'text') return item
+  }
   return null
 }
 
@@ -626,7 +627,7 @@ function wordBreakBehavior(s: WebKitStyle, hasWrapOpportunityAtPreviousPosition:
 }
 
 // isBreakableRun (ICB:353-362): text whose own style allows wrapping.
-function isBreakableRun(L: Layout, run: ContentRun): boolean {
+function isBreakableRun(L: Layout, run: ContentRun): run is TextContentRun {
   return run.item.kind === 'text' && L.p.boxes[run.item.box]!.style.wrap
 }
 
@@ -653,8 +654,7 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
 }
 
 // lastValidBreakingPosition (ICB:364-403)
-function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number): number | null {
-  const item = runs[index]!.item as WebKitTextItem
+function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number, item: WebKitTextItem): number | null {
   const text = textOf(L, item)
   const lineBreak = L.p.boxes[item.box]!.style.lineBreak
   const inside = (): number | null => {
@@ -664,9 +664,8 @@ function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number)
     }
     return null
   }
-  const nextIndex = nextTextRunIndex(runs, index)
-  if (nextIndex !== null) {
-    const next = runs[nextIndex]!.item as WebKitTextItem
+  const next = nextTextItem(runs, index)
+  if (next !== null) {
     const canBreakAtRunBoundary = next.isWhitespace ? L.p.boxes[next.box]!.style.collapse !== 'break-spaces' : canBreakBefore(textOf(L, next).charCodeAt(next.start), lineBreak)
     return canBreakAtRunBoundary ? item.end : inside()
   }
@@ -677,8 +676,8 @@ function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number)
 }
 
 // midWordBreak (ICB:405-430)
-function midWordBreak(L: Layout, run: ContentRun, logicalLeft: number, availableWidth: number): PartialRun | null {
-  const item = run.item as WebKitTextItem
+function midWordBreak(L: Layout, run: TextContentRun, logicalLeft: number, availableWidth: number): PartialRun | null {
+  const item = run.item
   const text = textOf(L, item)
   const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
   if (!wb.length || wb.length === item.end - item.start) return null
@@ -693,10 +692,9 @@ function midWordBreak(L: Layout, run: ContentRun, logicalLeft: number, available
   return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft) }
 }
 
-// InlineContentBreaker::tryBreakingTextRun (ICB:502-641)
-function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOverflowingRun: boolean, logicalLeft: number, availableWidth: number, st: LineStatus): PartialRun | null {
-  const run = runs[index]!
-  const item = run.item as WebKitTextItem
+// InlineContentBreaker::tryBreakingTextRun (ICB:502-641). `run` is runs[index], a breakable run (isBreakableRun).
+function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, run: TextContentRun, isOverflowingRun: boolean, logicalLeft: number, availableWidth: number, st: LineStatus): PartialRun | null {
+  const item = run.item
   const length = item.end - item.start
   const lineHasRoomForContent = availableWidth > 0
   const style = L.p.boxes[item.box]!.style
@@ -725,14 +723,14 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOver
         }
         return null
       }
-      const position = lastValidBreakingPosition(L, runs, index)
+      const position = lastValidBreakingPosition(L, runs, index, item)
       if (position === null) return null
       return { length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft) }
     }
     case 'arbitrary': {
       if (length === 0) return null
       if (!isOverflowingRun) {
-        if (nextTextRunIndex(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
+        if (nextTextItem(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft) }
         if (length > 1) return { length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft) }
         return null
       }
@@ -770,7 +768,7 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
   const overflowingRun = runs[overflowingRunIndex]!
   if (isBreakableRun(L, overflowingRun)) {
     const available = Math.max(0, f32(st.availableWidth - nonOverflowing))
-    const partial = tryBreakingTextRun(L, runs, overflowingRunIndex, true, f32(st.contentLogicalRight + nonOverflowing), available, st)
+    const partial = tryBreakingTextRun(L, runs, overflowingRunIndex, overflowingRun, true, f32(st.contentLogicalRight + nonOverflowing), available, st)
     if (partial !== null) {
       if (partial.length) return { runIndex: overflowingRunIndex, breakingPosition: { runIndex: overflowingRunIndex, trailingContent: { overflows: false, partialRun: partial } } }
       const trailing = findTrailingRunIndexBeforeBreakableRun(runs, overflowingRunIndex)
@@ -787,10 +785,9 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
     previousContentWidth = f32(previousContentWidth - spaceRequired(run))
     if (!isBreakableRun(L, run)) continue
     const available = Math.max(0, f32(st.availableWidth - previousContentWidth))
-    const partial = tryBreakingTextRun(L, runs, index, false, f32(st.contentLogicalRight + previousContentWidth), available, st)
+    const partial = tryBreakingTextRun(L, runs, index, run, false, f32(st.contentLogicalRight + previousContentWidth), available, st)
     if (partial === null) continue
-    const item = run.item as WebKitTextItem
-    if (partial.length === item.end - item.start) {
+    if (partial.length === run.item.end - run.item.start) {
       let trailingInlineBoxEnd: number | null = null
       for (let k = index + 1; k <= overflowingRunIndex; k++) {
         const kind = runs[k]!.item.kind
@@ -809,7 +806,7 @@ function processOverflowingContentWithText(L: Layout, c: Content, st: LineStatus
   for (let index = overflowingRunIndex + 1; index < runs.length; index++) {
     const run = runs[index]!
     if (isBreakableRun(L, run)) {
-      const partial = tryBreakingTextRun(L, runs, index, true, f32(st.contentLogicalRight + nextContentWidth), 0, st)
+      const partial = tryBreakingTextRun(L, runs, index, run, true, f32(st.contentLogicalRight + nextContentWidth), 0, st)
       if (partial !== null) {
         if (partial.length) return { runIndex: overflowingRunIndex, breakingPosition: { runIndex: index, trailingContent: { overflows: true, partialRun: partial } } }
         const trailing = findTrailingRunIndexBeforeBreakableRun(runs, index)
@@ -849,8 +846,10 @@ function processOverflowingContent(L: Layout, c: Content, st: LineStatus): Break
       if (trailing === null) {
         // Not even the first glyph fits (:214-251).
         if (st.hasContent) return result('wrap', true)
-        const leadingTextRunIndex = firstTextRunIndex(c.runs)!
-        const item = c.runs[leadingTextRunIndex]!.item as WebKitTextItem
+        // The leading text run, which the content has (hasTextContent).
+        let leadingTextRunIndex = 0
+        let item = c.runs[0]!.item
+        while (item.kind !== 'text') item = c.runs[++leadingTextRunIndex]!.item
         const firstLength = firstUserPerceivedCharacterLength(L.p, item)
         if (item.end - item.start > firstLength) {
           const partial = firstCharacterBreakRespectingLineStartProhibitions(L, item, st.contentLogicalRight)
