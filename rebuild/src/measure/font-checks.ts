@@ -150,13 +150,22 @@ export type FontChecks = {
   textRendering: CanvasTextRendering
 }
 
-type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string }
+// `found`: the declaration's contexts so far, each under the family list and size it measures. One declaration's checks
+// ask a dozen questions under four lists, so a list's font string is built, and looked up among the caller's contexts, once.
+type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string; found: { family: string; size: number; context: Context }[] }
 
-function width(p: Probe, family: string, size: number, text: string): number {
+function probeContext(p: Probe, family: string, size: number): Context {
+  for (let i = 0; i < p.found.length; i++) if (p.found[i]!.family === family && p.found[i]!.size === size) return p.found[i]!.context
   const context = contextFor(p.resolution.contexts, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
     textRendering: p.textRendering, direction: 'ltr', partition: 'font-checks',
   })
+  p.found.push({ family, size, context })
+  return context
+}
+
+function width(p: Probe, family: string, size: number, text: string): number {
+  const context = probeContext(p, family, size)
   const asked = p.resolution.asked
   for (let i = 0; i < asked.length; i++) if (asked[i]!.context === context && asked[i]!.text === text) return asked[i]!.width
   const measured = canvasWidth(context, text)
@@ -251,7 +260,7 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 // reads the fact and the paragraph's text can ask for it (FontChecks; each port says why it reads what it reads).
 function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
-  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang }
+  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang, found: [] }
   const scaling = checks.opticalSizeAxis
   const asksHyphen = given.mapsHyphen === null && checks.mapsHyphen && needs.hyphen
   const asksPitch = given.monospace === null && checks.monospace
