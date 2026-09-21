@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "chrome",
   "config": "facts",
-  "inputsSha256": "3d2db7d136ce55946040699bf74d0e176f0afa89f2ba1a3c1052ec27ed34f17d",
-  "commit": "7f077ac2c46e3301f68868232852b942eed79e8c",
+  "inputsSha256": "ae1b9778859f9eb6fc1402d12383c3fd96ea306ec059e4cac6ea63379539bfef",
+  "commit": "ff0f5844f5a26e2688546d13c6185fdf2ebe3b35",
   "dirty": [],
-  "createdAt": "2026-09-20T20:02:41.397Z",
-  "reason": "Blink's cut of a wide group asked less (7f077ac): the search tries the offsets beside a space first and a passed cut keeps the 0 its search measured, so 750 cases without facts and 343 with them hold other script-context entries in their gap lists and no line, value or status moved (0 transitions in both orders; 0 rows differ in lines or values against the old search across 318 font families); the set wide-group-cuts joins with 2,159 cases; recorded again at the merge",
+  "createdAt": "2026-09-21T00:47:57.153Z",
+  "reason": "the JS profiling pass's confirmed changes (ff0f584): Blink's Canvas strings are built without a copy of the offsets, its properties below U+3000 read by index, and the shared font checks find a declaration's contexts once; the same questions in the same order and no line, value or status moved (0 transitions in both orders, 69,224 cases replay exactly); recorded again at the merge because the code that builds Chrome's strings changed",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -80,6 +80,12 @@
       "createdAt": "2026-09-20T15:49:14.003Z",
       "reason": "the profiling phase's first merges (6d71b37): prepare takes the caller's list of Canvas contexts and a Blink shaping group keeps its positions and adjustments by offset; files under src/measure and engines/blink/shape.ts changed, no prediction did (0 transitions in both orders); recorded again at the merge",
       "cases": 67065
+    },
+    {
+      "commit": "7f077ac2c46e3301f68868232852b942eed79e8c",
+      "createdAt": "2026-09-20T20:02:41.397Z",
+      "reason": "Blink's cut of a wide group asked less (7f077ac): the search tries the offsets beside a space first and a passed cut keeps the 0 its search measured, so 750 cases without facts and 343 with them hold other script-context entries in their gap lists and no line, value or status moved (0 transitions in both orders; 0 rows differ in lines or values against the old search across 318 font families); the set wide-group-cuts joins with 2,159 cases; recorded again at the merge",
+      "cases": 69224
     }
   ],
   "sets": {
@@ -2213,7 +2219,7 @@
   },
   "cases": 69224,
   "ledger": {
-    "headerSha256": "ea1d77dd5be50fa533c80865ba7381dfafdf40f27d2f00daa87002a529ed86aa",
+    "headerSha256": "43849b7116aff906d1e2e3724cbcd5776c4e811c75f5288d95a171871d000f5e",
     "entriesSha256": "e046f53e5dfe83a4ae2d946baba5a976f7c3c17f083ce2c76de846d274b3b3fc"
   }
 }
