@@ -812,6 +812,42 @@ describe('ceiling round 2', () => {
     expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
   })
 
+  test('deep null-language spans inherit canonical tags; empty tags reset and closing spans restores the parent', () => {
+    const block = paragraph([], 100, { lang: 'EN-us' })
+    const leaf = (text: string): InlineNode => ({ kind: 'text', text })
+    const span = (children: InlineNode[], lang: string | null = null): InlineNode => ({
+      ...block, kind: 'span', lang, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children,
+    })
+    let nested: InlineNode[] = [
+      leaf('one'), span([leaf('two'), span([leaf('three')], 'KO'), leaf('')], ''),
+      leaf('four'), span([], 'de'), span([leaf('raw')], 'invalid_tag'), leaf('five'),
+    ]
+    for (let depth = 0; depth < 128; depth++) nested = [span(nested)]
+    const p = { ...block, content: [span(nested, 'ZH-hANs-cn'), leaf('six')] }
+    expect(prepareGecko(p, env, false, []).leaves.map(leaf => leaf.lang)).toEqual([
+      'zh-Hans-CN', '', 'ko', '', 'zh-Hans-CN', 'invalid_tag', 'zh-Hans-CN', 'en-US',
+    ])
+    // Empty style language uses the supplied font locale, and stays unknown when that process fact is absent.
+    expect(layout(p).measure.contexts.some(context => context.lang === 'en-us')).toBe(true)
+    expect(allGaps(layout(p, { ...env, regionalPrefsLocale: null }))).toContainEqual(expect.objectContaining({
+      gap: 'ui-language', run: 1, at: { start: 3, end: 6 },
+    }))
+    expect(prepareGecko(paragraph([run('fresh')], 100), env, false, []).leaves[0]!.lang).toBe('en')
+  })
+
+  test('localized empty spans create no text language, Canvas context or contentful line', () => {
+    const block = paragraph([], 100, { lang: 'EN-us' })
+    const span = (children: InlineNode[], lang: string | null): InlineNode => ({
+      ...block, kind: 'span', lang, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children,
+    })
+    const p = { ...block, content: [span([], 'ZH-hANs-cn'), span([span([], ''), span([], null)], 'KO')] }
+    const measured = layout(p)
+    expect(measured.measure).toEqual({ contexts: [], calls: [] })
+    expect(measured.lines.some(line => line.hasLineBox)).toBe(false)
+    expect(measured.lines.flatMap(line => line.fragments).some(fragment => fragment.kind === 'text')).toBe(false)
+    expect(prepareGecko(p, env, false, []).leaves).toEqual([])
+  })
+
   test('lang="" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)', () => {
     const p = paragraph([run('abc', 'span', { lang: '' })], 500)
     const given = layout(p)

@@ -818,18 +818,19 @@ reference ledger; and checks the runs against the build-keyed seed through `gate
 
 `ledger.ts` keeps, for every set and case and each of the four metrics, one status from a closed set: `pass`; `fail covered
 by <conditions>` (the covering gaps, and for the painter the library's limits as `limit:<name>`); `fail open`; `residual
-<class> (probed|signature)`; `history-dependent` (the two orders observed other native layouts, or gave the metric another
-kind of status on equal layouts); `protocol row`; `unobserved` (the scorer's unobserved and not-applicable). The header
+<class> (probed|signature)`; `history-dependent` (the scorer observed other native layouts);
+`prediction-order-dependent` (equal native layouts gave different kinds of metric status); `protocol row`; `unobserved` (the scorer's unobserved and not-applicable). The header
 records the browser and its build, the configuration, the scorer, the evidence runs' environments, the library bundles the
 jobs ran (one, or the command says the library changed mid-run), whether both orders ran, and per set its protocol and the
 runs that are its evidence (run ids, `run.json`, per-case files).
 
-**The exact-value status** (format `pretext-ledger/2`) sits beside the four metrics and is part of none: whether every value
+**The exact-value status** (format `pretext-ledger/3`) sits beside the four metrics and is part of none: whether every value
 the observation port reports as predicted equals the browser's. The values are the scorer's per-case facts: the rect count
 of every code point, node and element, predicted by definition, and the x and width of every rect in the predicted state;
 limited values are stand-ins and never count. Its closed set is `exact`, `not exact (values <n>, rect counts <m>)` with the
-two numbers in the entry's `differing`, `history-dependent` (as for the metrics; two orders that disagree on exactness over
-equal native layouts count), `protocol row`, and `unobserved` where the scorer compared nothing. A metric can pass over a
+two numbers in the entry's `differing`, `history-dependent` (other native layouts), `prediction-order-dependent`
+(different exact-value results on equal native layouts, including two not-exact orders with different tallies),
+`protocol row`, and `unobserved` where the scorer compared nothing. A metric can pass over a
 wrong predicted value (a width inside a line whose sum holds, an x that moves no break), which is why the status exists:
 research/ROUND4-CRITIC.md planted one regression per engine that tier 1 caught and tier 2 didn't, 0 lost passes in Chrome
 and Firefox while passing cases with a wrong predicted value went from 0 to 57 and from 0 to 5 with the lab's facts. Read
@@ -846,13 +847,55 @@ bun rebuild/tests/ledger.ts conditions <ledger dir> --groups=development        
 ```
 
 `transitions` lists every change of status, so a failure that was never in scope is visible when it moves (`fail covered by
-in-word-prefix -> fail open`, `fail open -> pass`), and exits 1 when a pass became anything but history-dependent or a
-protocol row. The exact-value status moves the same way under `exact:` (`exact -> not exact (values 11, rect counts 0)`),
-and exits 1 when an exact case became anything but those two, or when a case that wasn't exact holds more differing values
-or rect counts than before; tier 2 exits the same. A ledger of the older format is refused: build it again from its runs
+in-word-prefix -> fail open`, `fail open -> pass`), and exits 1 when a pass became anything but a protocol row. Newly
+observed native history therefore cannot silently remove a passing obligation. Known native-history exclusions stay
+visible and non-gating. The exact-value status moves the same way under `exact:` (`exact -> not exact (values 11, rect
+counts 0)`), and exits 1 when an exact case became anything but a protocol row, or a case that wasn't exact holds more
+differing values or rect counts. Newly acquiring `prediction-order-dependent` also blocks, even on an already failing
+case. Missing reference cases in a selected complete set also exit 1; intentionally focused subsets and unselected
+sets do not require those omitted cases. Its entry's `predictionOrderDependent` keeps the actual forward and reverse statuses; no invented combined tally
+replaces either observation. The header's compared-value totals cover stable exact and not-exact cases; unstable cases
+are counted separately. Tier 2 exits the same. A ledger of the older format is refused: build it again from its runs
 (`ledger.ts build --runs=<dir>`), whose per-case files hold the facts. It refuses, by name, ledgers of another browser, build, process languages, scorer, configuration or protocol;
 `--allow=<name>` accepts one knowingly. The reference ledgers sit beside the references (`.artifacts/tests/reference/
 <browser>-<config>/ledger`), copied by `pack` from the recording and pinned by hash in the repository's manifest.
+
+**Migrating the native comparison and order evidence, 2026-09-20.** Scorer 8 compares the complete native scorer
+view, including collection lengths, element rects and slot floats. Re-score the stored forward and reverse rows with
+`--native-compare`; no browser recording is needed to correct these classifications. Ledger format 3 refuses older
+ledgers: rebuild them from those per-case files before carrying history or repinning ledger hashes. Review newly found
+native-history exclusions rather than adopting expanded exclusions automatically. Existing browser observations and
+Canvas answers remain evidence; this migration does not certify a previously failing prediction as correct.
+
+The migration command stages new per-case scores, summaries and a ledger without altering observations, pins or seeds:
+
+```sh
+bun rebuild/tests/migrate-ledger.ts --from=.artifacts/tests/reference/chrome-no-facts/ledger \
+  --source-root=/Users/chenglou/github/pretext-rebuild-wt/prof-merge \
+  --out=.artifacts/tests/migrations/<name>/chrome-no-facts --native=full --plan
+# Remove --plan to score. --sets=smoke-hand selects a small first step; omit it for the full reference.
+```
+
+`--source-root` is the checkout that wrote the old evidence paths, not today's checkout: the frozen ledgers contain
+producer-relative paths such as `../../pretext-rebuild/.artifacts/tests/runs/...`. `--plan` validates every source part
+and prints byte counts and scoring jobs without creating output. Each scored order compares the full native scorer view
+with its recorded opposite order; neither an unchanged prediction nor a favorable isolated rerun establishes native
+stability. Both orders must exist, every selected set keeps its case population, and the output must be a new folder.
+`migration.json` records source ledger hashes, source run and row hashes, the scorer hash, selected sets and elapsed time.
+It lists changed statuses, new native-history exclusions and prediction order dependence, and exits 1 when review is
+required. It never adopts an expanded history set. The new per-case files keep each native difference's reason.
+
+For legitimate native history demonstrated by an older recording, first migrate and review that recording, then supply
+`--carry-native-from=<reviewed format-3 ledger>`. Legacy history cannot be carried: it mixed native and prediction
+instability. A single two-orders recording can still miss a browser process state; the absence of a difference in that
+recording does not refute prior demonstrated native dependence.
+
+After reviewing the staged classifications, adopting this metadata affects only the reference's `ledger/ledger.json`
+and `ledger/entries.ndjson`, `ledger.headerSha256` and `ledger.entriesSha256` in its `reference/manifest.json`, and the
+same two hashes in `rebuild/tests/reference/<browser>-<config>.json`. Preserve the recording commit, input hashes,
+Canvas answers, browser/replay prediction shards and their hashes; do not re-freeze predictions to accept a classification
+change. Stage scorer-8 gate seeds from the reviewed scores, compare their lost and newly history-obscured obligations
+against the existing seeds, and adopt only after review. Their environment keys change from scorer 7 to scorer 8.
 
 ### False regressions, by construction
 
@@ -1518,7 +1561,7 @@ Imported as a module, `score.ts` runs nothing and exports `scoreRow`, `nativeLin
 `lineRangeDiagnostics`, `withNativeRow`, `indexRows`, `readRowAt`, `environmentKey`, `rowText` and `readLines` with their
 types, so tools that compare rows use the scorer's rules. It also exports `slotProtocol`, `lineLocalGaps`,
 `RESIDUAL_CLASSES` and `residualMembership`.
-`SCORER_VERSION` is 7. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
+`SCORER_VERSION` is 8. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
 native lines by vertical centre; version 3 placed code point rects by their own node's box; version 4 compared element
 rects, marked slot protocol rows and counted every gap that concerned a failing line as covering it; version 5 counts a gap
 as covering only where its range touches what differs, observes indented lines' widths and matches residual classes.
@@ -1526,7 +1569,10 @@ Version 6 changes no metric's status: it attributes three observation consequenc
 failures", the last three paragraphs), counts painter limits ("Painter limits") and records gap firing ("Gap firing and
 lift"). Version 7 (ceiling round 4b) changes no metric's status either: it finds Blink's hyphen rect on whichever range
 reports it, keeps differing units inside one stand-in span in one run ("Covered failures") and registers a second residual
-class ("Residual classes"). Their rules and evidence are in this file's git history. It also exports `gapFiring` and
+class ("Residual classes"). Version 8 compares native collection lengths, element rects and slot floats symmetrically;
+well-formed lab geometry is required before grouping/scoring. The complete-source evaluator independently rejects
+omitted or split visible source scalars. Prediction order dependence against a stable native target is separate from
+actual native history in ledger format 3. Their rules and evidence are in this file's git history. It also exports `gapFiring` and
 `syntheticBoldStep`.
 
 **Round 2 re-counted under scorer 5 (2026-09-17, ceiling round 3).** Round 2's evaluation rows
@@ -1896,16 +1942,16 @@ bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-<round>-<c
   seeding run that doesn't pass it, whether that run found a covered explanation and the gaps that cover it (`lineGaps`),
   its residual class if any, and an empty `attribution` for the source reading a person adds; `leftThroughHistory`, the
   adopted seed's passes whose case a seeding run now marks history-dependent, with the difference the two orders showed
-  and whether the pair passes now (they stop gating without failing, which round 2's record left out: Firefox 134 pairs,
-  webkit-host 8); `leftThroughProtocol`, the same for rows that are protocol rows now; the pairs gained; and the cases
+  and whether the pair passes now (round 2's record left these out: Firefox 134 pairs, webkit-host 8).
+  They require review before adoption and block checks against the existing passing obligations; `leftThroughProtocol`, the same for rows that are protocol rows now; the pairs gained; and the cases
   only one side observed. Protocol rows and history-dependent cases are never passes of a seed.
 - `leftWithTheirCase` (since ceiling round 4b; research/ROUND3-CRITIC.md item 9): the adopted seed's passes of cases no
   seeding run observed, by id and metric. A case dropped from the new case files takes its passes out of the gate without
   losing them, so they are listed like every other pass that leaves. The staged round 3 records hold them too: 18 Firefox
   feature pairs of 9 cases, 6 webkit-host family pairs of 2 cases and 12 webkit-host feature pairs of 3 cases, the critic's
   count.
-- A check reports `leftThroughHistoryPairs`: baseline passes of cases that are history-dependent now and weren't at
-  seeding.
+- A check reports `leftThroughHistoryPairs`: baseline passes newly obscured by native history. A nonzero count blocks
+  acceptance against that seed; existing native-history exclusions are still reported separately.
 - Seeding refuses runs without recorded process languages and runs scored by different scorers. It doesn't skip the
   environment check of a later `gate.ts` run: a seed's environments are the ones its runs recorded.
 - `rebuild/tests/gate.ts seed` stages too since ceiling round 4: `--staging=<dir>` is required, the seed goes to
@@ -1973,8 +2019,9 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
   So contexts run in another order too, and cases in a shared document get other predecessors. `run.json` records
   `order`.
 - `--native-compare` reads the other run's row for each case. webkit-host and Safari rows compare with each other. A
-  case is history-dependent when the two native observations differ in the native line count, or in any code point's or
-  node's rect count, or in any rect's x, width or native line: exactly the values the scorer compares. Float32 noise
+  case is history-dependent when the two native observations differ in the native line count, code point/node/element
+  collection lengths, any rect count, any rect's x, width or native line, or any slot float's x, y or width: the complete
+  native scorer view. Float32 noise
   counts (12.28799819946289 against 12.288000106811523), since a predicted value can't equal both. Two native
   observation errors agree.
 - History-dependent cases count in `rows` and in the native diagnostics, but not in the metric counts, reasons, facts,

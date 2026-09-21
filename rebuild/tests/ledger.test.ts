@@ -1,12 +1,14 @@
 // The known-status ledger's rules (ledger.ts): the closed set of statuses, history dependence, like with like, and lift
 // over prediction failures alone.
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GapFiring, MetricAttribution } from '../lab/score.ts'
 import { buildLedger, carryHistory, conditionsOf, entryOf, exactOf, incomparable, readLedger, statusOf, transitionsBetween, writeLedger, LEDGER_FORMAT, type Differing, type Ledger, type LedgerEntry, type LedgerHeader, type PerCase, type SetsRun } from './ledger.ts'
 import type { SetProtocol } from './sets.ts'
+import { abcd, abcdExpected, abcdLayout, abcdNative, row } from '../lab/row-fixtures.ts'
+import { nativeDifference, nativeView, scoreRow } from '../lab/score.ts'
 
 const pass = { status: 'pass' }
 const fail = { status: 'fail', reason: 'width differs' }
@@ -43,9 +45,10 @@ describe('one status from a closed set', () => {
     expect(statusOf(per('c-1', { protocol: 'a float moved' }), 'lineCount')).toBe('protocol row')
   })
 
-  test('a metric the two orders score differently on equal native layouts depends on history too', () => {
+  test('different metric statuses on equal native layouts are prediction order dependence', () => {
     const entry = entryOf('runs', per('c-1'), per('c-1', { widths: fail, lineGaps: { widths: attribution(false, []) } }))
-    expect(entry.status).toEqual({ lineCount: 'pass', breaks: 'pass', widths: 'history-dependent', painter: 'pass' })
+    expect(entry.status).toEqual({ lineCount: 'pass', breaks: 'pass', widths: 'prediction-order-dependent', painter: 'pass' })
+    expect(entry.predictionOrderDependent).toEqual({ widths: { forward: 'pass', reverse: 'fail open' } })
     // A failure both orders have, under other conditions, keeps the forward order's conditions.
     const covered = (gaps: string[]): PerCase => per('c-1', { widths: fail, lineGaps: { widths: attribution(true, gaps) } })
     expect(entryOf('runs', covered(['in-word-prefix']), covered(['in-word-prefix', 'page-history'])).status.widths).toBe('fail covered by in-word-prefix')
@@ -76,10 +79,14 @@ describe('the exact-value status, beside the metrics', () => {
     expect([failing.status.widths, failing.exact, failing.differing]).toEqual(['fail open', 'exact', undefined])
   })
 
-  test('two orders that disagree on exactness over equal native layouts depend on history; two that both aren\'t exact keep the forward numbers', () => {
-    expect(entryOf('runs', per('c-1'), per('c-1', { facts: facts(1) })).exact).toBe('history-dependent')
-    expect(entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1')).differing).toBeUndefined()
-    expect(entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1', { facts: facts(2) }))).toMatchObject({ exact: 'not exact (values 1, rect counts 0)', differing: { values: 1, rectCounts: 0 } })
+  test('different exact-value results retain both orders as prediction instability', () => {
+    const unstable = entryOf('runs', per('c-1'), per('c-1', { facts: facts(1) }))
+    expect(unstable.exact).toBe('prediction-order-dependent')
+    expect(unstable.predictionOrderDependent).toEqual({ exact: { forward: 'exact', reverse: 'not exact (values 1, rect counts 0)', differing: { forward: null, reverse: { values: 1, rectCounts: 0 } } } })
+    expect(entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1')).exact).toBe('prediction-order-dependent')
+    const bothWrong = entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1', { facts: facts(2) }))
+    expect(bothWrong).toMatchObject({ exact: 'prediction-order-dependent', predictionOrderDependent: { exact: { forward: 'not exact (values 1, rect counts 0)', reverse: 'not exact (values 2, rect counts 0)' } } })
+    expect(bothWrong.differing).toBeUndefined()
   })
 })
 
@@ -112,9 +119,10 @@ describe('transitions', () => {
     })
   })
 
-  test('a pass that turns history-dependent or into a protocol row doesn\'t block', () => {
+  test('new native history blocks a prior pass; existing native-history and protocol exclusions stay distinct', () => {
     const report = transitionsBetween(ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]), ledger([entry('c-1', 'history-dependent'), entry('c-2', 'protocol row')]), [])
-    expect([report.transitions.length, report.blocking]).toEqual([2, 0])
+    expect([report.transitions.length, report.blocking]).toEqual([2, 1])
+    expect(transitionsBetween(ledger([entry('c-1', 'history-dependent')]), ledger([entry('c-1', 'history-dependent')]), []).blocking).toBe(0)
   })
 
   test('a case that goes from exact to not exact is a transition of its own and blocks, while every metric still passes', () => {
@@ -129,12 +137,12 @@ describe('transitions', () => {
       'not exact (values 2, rect counts 0) -> not exact (values 5, rect counts 0)': { 'test/family': ['c-3'] },
       'not exact (values 2, rect counts 1) -> not exact (values 1, rect counts 1)': { 'test/family': ['c-4'] },
       'not exact (values 2, rect counts 0) -> exact': { 'test/family': ['c-5'] },
-      // As for a pass: history dependence doesn't block, and nothing left to compare does.
+      // Newly observed native history and nothing left to compare both retire an exact obligation and block.
       'exact -> history-dependent': { 'test/family': ['c-6'] },
       'unobserved -> not exact (values 1, rect counts 0)': { 'test/family': ['c-7'] },
       'exact -> unobserved': { 'test/family': ['c-8'] },
     })
-    expect(report.exactBlocking).toBe(3)
+    expect(report.exactBlocking).toBe(4)
     expect([report.differingBefore, report.differingAfter]).toEqual([{ values: 6, rectCounts: 1 }, { values: 10, rectCounts: 1 }])
   })
 
@@ -175,6 +183,99 @@ describe('transitions', () => {
     const report = transitionsBetween(ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]), { header: subset, entries: [entry('c-1', 'pass')] }, [])
     expect([report.comparable, report.onlyBefore]).toEqual([[], 0])
     expect(transitionsBetween(ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]), ledger([entry('c-1', 'pass')]), []).onlyBefore).toBe(1)
+  })
+
+  test('the transitions command fails closed on dropped complete-set rows, including an empty run, and permits focused subsets', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ledger-completeness-'))
+    const before = join(root, 'before')
+    writeLedger(before, ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]))
+    for (const [name, rows, subset, expected] of [
+      ['dropped-row', [entry('c-1', 'pass')], false, 1],
+      ['all-empty', [], false, 1],
+      ['focused-subset', [entry('c-1', 'pass')], true, 0],
+    ] as const) {
+      const after = join(root, name), reportPath = join(root, name + '.json')
+      writeLedger(after, ledger([...rows], { sets: { runs: { protocol, subset, cases: rows.length, environments: [ENVIRONMENT], evidence: [] } } }))
+      const child = Bun.spawn([process.execPath, join(import.meta.dir, 'ledger.ts'), 'transitions', before, after, `--out=${reportPath}`], { stdout: 'pipe', stderr: 'pipe' })
+      const [exit, output, errors] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()])
+      expect({ exit, errors }).toEqual({ exit: expected, errors: '' })
+      expect(output).toContain('cases compared')
+      const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+      expect(report).toMatchObject({ comparable: [], blocking: 0, exactBlocking: 0, onlyBefore: subset ? 0 : 2 - rows.length })
+    }
+  })
+})
+
+describe('existing prediction order dependence', () => {
+  test('a successful order cannot be retired by becoming consistently wrong', () => {
+    const before = entryOf('runs', per('c-1'), per('c-1', { widths: fail }))
+    const after = entryOf('runs', per('c-1', { widths: fail }), per('c-1', { widths: fail }))
+    const report = transitionsBetween(ledger([before]), ledger([after]), [])
+    expect(report.blocking).toBe(1)
+    expect(report.transitions[0]!.orders).toEqual({ before: { forward: 'pass', reverse: 'fail open' }, after: { forward: 'fail open', reverse: 'fail open' } })
+  })
+  test('unchanged instability remains visible without a new regression', () => {
+    const old = entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1', { facts: facts(2) }))
+    const report = transitionsBetween(ledger([old]), ledger([structuredClone(old)]), [])
+    expect(report.transitions).toHaveLength(0)
+    expect(report.exactBlocking).toBe(0)
+  })
+  test('more wrong values in either order block even under the same outer status', () => {
+    const old = entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1', { facts: facts(2) }))
+    const worse = entryOf('runs', per('c-1', { facts: facts(1) }), per('c-1', { facts: facts(3) }))
+    const report = transitionsBetween(ledger([old]), ledger([worse]), [])
+    expect(report.exactBlocking).toBe(1)
+    expect(report.transitions).toHaveLength(1)
+    expect(report.transitions[0]!.before).toBe('prediction-order-dependent')
+    expect(report.transitions[0]!.after).toBe('prediction-order-dependent')
+    const better = entryOf('runs', per('c-1', { facts: facts(0) }), per('c-1', { facts: facts(2) }))
+    expect(transitionsBetween(ledger([old]), ledger([better]), []).exactBlocking).toBe(0)
+    const stableWrong = entryOf('runs', per('c-1', { facts: facts(3) }), per('c-1', { facts: facts(3) }))
+    expect(transitionsBetween(ledger([old]), ledger([stableWrong]), []).exactBlocking).toBe(1)
+  })
+})
+
+describe('stable-native planted regressions', () => {
+  const scored = (predicted: typeof abcdExpected): PerCase => {
+    const value = row('chrome', abcd, abcdNative, abcdLayout, predicted)
+    const score = scoreRow(value)
+    if (score.facts === null) throw new Error('plant fixture must compare exact values')
+    return { id: value.id, family: value.family, ...score.metrics, facts: { counts: [score.facts.counts.equal, score.facts.counts.differ], predicted: [score.facts.predicted.equal, score.facts.predicted.differ] } }
+  }
+
+  test('an x error in one order blocks exactness while line count, breaks and widths remain green', () => {
+    const clean = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
+    const wrong = structuredClone(abcdExpected)
+    wrong.codePoints[1]!.rects[0]!.x.value += 1 / 128
+    const mutant = row('chrome', abcd, abcdNative, abcdLayout, wrong)
+    expect(nativeDifference(nativeView(clean), nativeView(mutant))).toBeNull()
+    const good = scored(abcdExpected)
+    const bad = scored(wrong)
+    expect([bad.lineCount.status, bad.breaks.status, bad.widths.status]).toEqual(['pass', 'pass', 'pass'])
+    expect(bad.facts!.predicted[1]).toBe(1)
+    const before = ledger([entryOf('runs', good, good)])
+    for (const [forward, reverse] of [[good, bad], [bad, good]] as const) {
+      const after = entryOf('runs', forward, reverse)
+      expect(after.exact).toBe('prediction-order-dependent')
+      expect(transitionsBetween(before, ledger([after]), []).exactBlocking).toBe(1)
+    }
+  })
+
+  test('a newly unstable prediction blocks even if its forward order was already failing', () => {
+    const old = entryOf('runs', per('c-1', { widths: fail }), per('c-1', { widths: fail }))
+    const now = entryOf('runs', per('c-1', { widths: fail }), per('c-1'))
+    expect(transitionsBetween(ledger([old]), ledger([now]), []).blocking).toBe(1)
+    const wrongBefore = entryOf('runs', per('c-2', { facts: facts(1) }), per('c-2', { facts: facts(1) }))
+    const wrongAfter = entryOf('runs', per('c-2', { facts: facts(1) }), per('c-2', { facts: facts(2) }))
+    expect(transitionsBetween(ledger([wrongBefore]), ledger([wrongAfter]), []).exactBlocking).toBe(1)
+  })
+
+  test('a native-history finding in either order applies to the whole case', () => {
+    const history = per('c-1', { historyDependent: 'element 0 moved' })
+    const unstable = entryOf('runs', per('c-1'), history)
+    expect(Object.values(unstable.status)).toEqual(['history-dependent', 'history-dependent', 'history-dependent', 'history-dependent'])
+    expect(unstable.exact).toBe('history-dependent')
+    expect(unstable.predictionOrderDependent).toBeUndefined()
   })
 })
 
@@ -245,8 +346,8 @@ describe('a ledger from a browser-sets run', () => {
 
   test('every case gets its statuses, and every part\'s runs are the evidence', () => {
     const built = buildLedger(runFolder(['b1', 'b1']), null)
-    expect(built.entries.map(value => [value.id, value.status.widths])).toEqual([['c-0', 'pass'], ['c-1', 'history-dependent']])
-    expect(built.header).toMatchObject({ scorer: 6, orders: 'both', bundles: ['b1'], counts: { widths: { pass: 1, 'history-dependent': 1 } } })
+    expect(built.entries.map(value => [value.id, value.status.widths])).toEqual([['c-0', 'pass'], ['c-1', 'prediction-order-dependent']])
+    expect(built.header).toMatchObject({ scorer: 6, orders: 'both', bundles: ['b1'], counts: { widths: { pass: 1, 'prediction-order-dependent': 1 } } })
     expect(built.header.sets['runs']!.evidence.map(value => [value.part, value.order, value.runId])).toEqual([[0, 'forward', 'forward-0'], [0, 'reverse', 'reverse-0'], [1, 'forward', 'forward-1'], [1, 'reverse', 'reverse-1']])
   })
 
@@ -259,10 +360,12 @@ describe('a ledger from a browser-sets run', () => {
     expect(readLedger(dir)).toEqual(built)
   })
 
-  test('a ledger of the format without the exact-value status is refused, with how to build it again', () => {
+  test('old ledger formats are refused, with how to rebuild the order evidence', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ledger-old-'))
-    writeLedger(dir, { header: { ...header(), format: 'pretext-ledger/1' as typeof LEDGER_FORMAT }, entries: [] })
-    expect(() => readLedger(dir)).toThrow('build it again from its runs')
+    for (const format of ['pretext-ledger/1', 'pretext-ledger/2']) {
+      writeLedger(dir, { header: { ...header(), format: format as typeof LEDGER_FORMAT }, entries: [] })
+      expect(() => readLedger(dir)).toThrow('build it again from its runs')
+    }
   })
 
   test('jobs that ran two library bundles show in the header: the rows describe no single library', () => {

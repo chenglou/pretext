@@ -1,5 +1,7 @@
 # Current Priorities
 
+On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
+
 ## 1. Engine Work
 
 - Deferred engine decisions, known gaps and harness debt live in [ENGINE_FOLLOWUPS.md](ENGINE_FOLLOWUPS.md). Finish open landings depth-first before starting new discovery.

@@ -554,7 +554,16 @@
   },
   "cases": 63987,
   "ledger": {
-    "headerSha256": "672b7ac11e405d9e03b5c9987a85c8527191f9d358d4306c499d526ae3c139a1",
-    "entriesSha256": "129d0612f8daee981017285429edd4011c91b526a8f2d7e5e5f5b04aca6a7f70"
+    "headerSha256": "1fe8c8748093755ee6c2685400afb8aff10c97ca3be167b420d777d9fc51d43e",
+    "entriesSha256": "d1d5a895ccf18914c0f21a1b6444215ebf9587d95a096436bcdfdf2018cf181c"
+  },
+  "ledgerReclassified": {
+    "scorer": 8,
+    "format": "pretext-ledger/3",
+    "evidence": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/migration.json",
+    "predictionsUnchanged": true,
+    "canvasRecordsUnchanged": true,
+    "nativeHistoryAdded": 0,
+    "predictionOrderDependent": 4
   }
 }

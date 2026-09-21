@@ -27,8 +27,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--dry-run]'
-const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'dry-run']
+const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--foreground] [--require-clean] [--dry-run]'
+const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'foreground', 'require-clean', 'dry-run']
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
@@ -39,6 +39,10 @@ const dryRun = args.has('dry-run')
 const browserArg = args.get('browser')
 if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox' && browserArg !== 'webkit-host') fail(`--browser must be chrome, safari, firefox or webkit-host. ${USAGE}`)
 const browser: BrowserKind = browserArg
+const foreground = args.has('foreground')
+const requireClean = args.has('require-clean')
+for (const flag of ['foreground', 'require-clean']) if (args.has(flag) && args.get(flag) !== '') fail(`--${flag} takes no value`)
+if (foreground && browser !== 'chrome' && browser !== 'firefox') fail('--foreground is supported by the pinned Chrome and Firefox launchers')
 // webkit-host runs installed Safari's engine, so it takes Safari's probes.
 const probeBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 // The build the run observes, read from the app bundles before launch; the output records it, so facts extracted from it
@@ -321,7 +325,7 @@ function remove(path: string): void {
 }
 
 function openApp(app: string, appArgs: string[]): void {
-  execFileSync('open', ['-n', '-g', '-a', app, '--args', ...appArgs], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 15_000 })
+  execFileSync('open', ['-n', ...(foreground ? [] : ['-g']), '-a', app, '--args', ...appArgs], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 15_000 })
 }
 
 async function closeLaunched(pid: number, profile: string): Promise<void> {
@@ -363,11 +367,11 @@ async function launchChrome(url: string): Promise<Session> {
   try {
     cdp = await connectCdp(await devToolsEndpoint(profile, pid))
     if (chromeEmulateDsf === null) {
-      await cdp.send('Target.createTarget', { url, newWindow: true, background: true })
+      await cdp.send('Target.createTarget', { url, newWindow: true, background: !foreground })
       cdp.close()
       cdp = null
     } else {
-      const created = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true }) as { targetId: string }
+      const created = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: !foreground }) as { targetId: string }
       const attached = await cdp.send('Target.attachToTarget', { targetId: created.targetId, flatten: true }) as { sessionId: string }
       const socket = cdp
       overrideChromeDsf = deviceScaleFactor => socket.send('Emulation.setDeviceMetricsOverride', { width: 0, height: 0, deviceScaleFactor, mobile: false }, attached.sessionId)
@@ -522,7 +526,7 @@ async function launchFirefox(url: string): Promise<Session> {
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   const port = await getAvailablePort()
-  openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank'])
+  openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank', ...(foreground ? ['-foreground'] : [])])
   const pid = await waitForPid(`${app!.path}/Contents/MacOS/firefox`, ` --profile ${profile} `)
   if (pid === null) {
     remove(profile)
@@ -542,6 +546,7 @@ async function launchFirefox(url: string): Promise<Session> {
     const tree = await bidiCall(bidi, 'browsingContext.getTree', {}) as { contexts: Array<{ context: string }> }
     const context = tree.contexts[0]?.context
     if (context === undefined) throw new Error('Firefox BiDi returned no browsing context')
+    if (foreground) await bidiCall(bidi, 'browsingContext.activate', { context })
     await bidiCall(bidi, 'browsingContext.navigate', { context, url, wait: 'none' })
     return session
   } catch (error) {
@@ -835,6 +840,8 @@ try {
     clearInterval(watchdog)
   }
   if (totals.results !== selected) errors.push(`Observed ${totals.results} probes of ${selected}`)
+  if (requireClean && totals.probesWithErrors > 0) errors.push(`${totals.probesWithErrors} probes failed`)
+  if (requireClean && totals.observationErrors > 0) errors.push(`${totals.observationErrors} observations failed`)
   const stable = new Set([...envs.keys()].map(key => {
     const env = JSON.parse(key) as PageEnv
     return JSON.stringify([env.userAgent, env.devicePixelRatio, env.visualViewportScale])
@@ -855,7 +862,7 @@ try {
   const output: ProbeOutput = {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, app, build, runId, probesFile: probesPath, only,
+    browser, app, build, foreground, requireClean, runId, probesFile: probesPath, only,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     totals,
     envs: [...envs].map(([key, documents]) => ({ ...JSON.parse(key) as PageEnv, documents })),

@@ -161,12 +161,17 @@ Options:
   DPR, not for accuracy runs.
 - `--allow-safari-frontmost`: Safari only, no value. Skips the wait for Safari to leave the front (approved by the
   maintainer on 2026-09-16); the probe window then opens over the user's windows.
+- `--foreground`: pinned Chrome and Firefox only. Request activation of the dedicated window and tab for timing work. Firefox also receives its native `-foreground` switch
+  ([Mozilla driver fix](https://bugzilla.mozilla.org/show_bug.cgi?id=1466573)). The probe
+  must acquire and check actual content focus during timing; the launch flag neither proves content focus nor prevents a later focus change.
+- `--require-clean`: fail the run on probe or observation errors, while retaining every raw result. Use it for
+  validation and timing probes that require successful observations.
 - `--dry-run`: validate the probes and print the document count without launching anything.
 
 The runner exits nonzero when anything goes wrong at run level: invalid probes, a launch or page failure, a stall, a
 missing result, or a change of user agent, DPR or visual-viewport scale during the run. Errors inside a probe (bad
 markup, a throwing setup, a timeout) or inside one observation are results, not run failures. They are counted in
-`totals` and kept in the result.
+`totals` and kept in the result. `--require-clean` makes those errors run failures too.
 
 ## Probe format
 

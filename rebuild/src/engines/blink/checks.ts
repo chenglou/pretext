@@ -18,11 +18,13 @@ export const blinkCanvasNeeds: CanvasNeeds = {
 const SYSTEM_FONT_FAMILIES = ['system-ui', 'blinkmacsystemfont']
 
 // Blink reads primaryFamily for the opticalSizeAxis default, so it is asked there only with that check or for the hyphen.
+// The primary-family resolution is also needed on plain paragraphs: its keyword chooses the measuring size. Only
+// the advance check can be omitted there, because its false answer changes diagnostics alone.
 // opticalSizeAxis is asked at the layout zoom, which Canvas never applies. Blink resolves a Canvas font under the context's
 // language, and its contexts are at text-rendering optimizeLegibility (contexts.ts styleContexts).
-export function blinkFontChecks(env: BlinkEnvironment): FontChecks {
+export function blinkFontChecks(env: BlinkEnvironment, inspect = true): FontChecks {
   return {
-    primaryFamily: false, mapsHyphen: true, monospace: false, opticalSizeAxis: { zoom: env.devicePixelRatio, cssSizeFamilies: SYSTEM_FONT_FAMILIES },
+    primaryFamily: false, mapsHyphen: true, monospace: false, opticalSizeAxis: { zoom: env.devicePixelRatio, cssSizeFamilies: SYSTEM_FONT_FAMILIES, checkAdvances: inspect },
     joining: true, contextTakesLang: true, textRendering: 'optimizeLegibility',
   }
 }

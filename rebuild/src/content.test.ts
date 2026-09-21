@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { indexContent, langUnder, styleUnder } from './content.js'
+import { indexContent, styleUnder } from './content.js'
 import { NO_BOX_EDGE, type CssFont, type InlineElementOf, type InlineNodeOf, type ParagraphOf } from './model.js'
 
 const font: CssFont = { family: 'Arial', size: 16, weight: 400, style: 'normal' }
@@ -43,11 +43,9 @@ describe('indexContent', () => {
     expect(index.events.map(event => event.kind)).toEqual(['text', 'open', 'text', 'open', 'br', 'close', 'text', 'atomic', 'close', 'wbr', 'text'])
   })
 
-  test('style and lang come from the nearest element', () => {
+  test('style comes from the containing element', () => {
     expect(styleUnder(paragraph, index, -1).whiteSpace).toBe('normal')
     expect(styleUnder(paragraph, index, 1).whiteSpace).toBe('nowrap')
-    expect(langUnder(paragraph, index, -1)).toBe('en')
-    expect(langUnder(paragraph, index, 1)).toBe('ja')
     expect(() => styleUnder(paragraph, index, 3)).toThrow()
   })
 

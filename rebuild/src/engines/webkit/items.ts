@@ -8,7 +8,7 @@ import { makeFactory, moveToNextBreakablePosition } from './breaks.js'
 import { webkitBidiData } from './data.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { preservesNewline, preservesSpacesAndTabs } from './style.js'
-import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type WebKitBox, type WebKitPrepared, type WebKitTextItem } from './types.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type WebKitBox, type WebKitItem, type WebKitPrepared, type WebKitTextItem } from './types.js'
 
 // InlineItemsBuilder::build (IIB:121-135) over the boxes of the rendered runs (`boxOfRun`; null for a text node without a
 // renderer): the items of the tree in document order, then the bidi levels of an RTL block or of content that needs visual
@@ -118,7 +118,7 @@ export function bidiBoxContent(box: WebKitBox): string {
 // starts and ends and word break opportunities have no position in the paragraph (:599-618); an atomic inline is U+FFFC
 // (:596-598); a hard line break starts a paragraph with LF (handleBidiParagraphStart, :535-548, :568).
 function computeBidiLevels(p: WebKitPrepared): void {
-  const items = p.items
+  const sourceItems = p.items
   let paragraph = ''
   const offsets: (number | null)[] = []
   let lastBox: number | null = null
@@ -129,8 +129,8 @@ function computeBidiLevels(p: WebKitPrepared): void {
     paragraph += bidiBoxContent(p.boxes[box]!)
     lastBox = box
   }
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]!
+  for (let i = 0; i < sourceItems.length; i++) {
+    const item = sourceItems[i]!
     switch (item.kind) {
       case 'soft-line-break': {
         const preserveNewline = preservesNewline(p.boxes[item.box]!.style)
@@ -176,6 +176,9 @@ function computeBidiLevels(p: WebKitPrepared): void {
   }
   if (paragraph.length === 0) return
   const levels = resolveIcuBidi(paragraph, p.style.rtl ? 'rtl' : 'ltr', webkitBidiData).levels
+  // Append split items in logical order; a pending right half replaces only its original source slot.
+  // Inserting each split used to move every later item and offset again.
+  const items: WebKitItem[] = []
   let itemIndex = 0
   let hasSeenOpaqueItem = false
   for (let position = 0; position < paragraph.length;) {
@@ -183,31 +186,38 @@ function computeBidiLevels(p: WebKitPrepared): void {
     const level = levels[position]!
     let end = position + 1
     while (end < paragraph.length && levels[end] === level) end++
-    for (; itemIndex < offsets.length; itemIndex++) {
+    for (; itemIndex < sourceItems.length; itemIndex++) {
       const offset = offsets[itemIndex]!
-      const item = items[itemIndex]!
+      const item = sourceItems[itemIndex]!
       if (offset === null) {
         hasSeenOpaqueItem = true
         item.level = level
+        items.push(item)
         continue
       }
       if (offset >= end) break
       item.level = level
-      if (item.kind !== 'text') continue
+      if (item.kind !== 'text') {
+        items.push(item)
+        continue
+      }
       if (offset + item.end - item.start > end) {
         // InlineTextItem::split (InlineTextItem.cpp:73-82): both sides keep hasTrailingSoftHyphen, and neither keeps a width.
         const leftLength = end - offset
         const right: WebKitTextItem = { ...item, start: item.start + leftLength, width: null }
         item.end = item.start + leftLength
         item.width = null
-        items.splice(itemIndex + 1, 0, right)
-        offsets.splice(itemIndex + 1, 0, end)
-        itemIndex++
+        items.push(item)
+        sourceItems[itemIndex] = right
+        offsets[itemIndex] = end
         break
       }
+      items.push(item)
     }
     position = end
   }
+  for (; itemIndex < sourceItems.length; itemIndex++) items.push(sourceItems[itemIndex]!)
+  p.items = items
   if (!hasSeenOpaqueItem) return
   // setBidiLevelForOpaqueInlineItems (:730-774).
   const hasContent: boolean[] = []

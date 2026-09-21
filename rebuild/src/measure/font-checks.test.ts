@@ -103,9 +103,9 @@ function paragraph(family: string, text: string, facts: FontFacts = UNKNOWN_FONT
 }
 
 // What index.ts prepare hands the checks for an environment.
-function checksOf(env: Environment): FontChecks {
+function checksOf(env: Environment, inspect = true): FontChecks {
   switch (env.engine) {
-    case 'blink': return blinkFontChecks(env)
+    case 'blink': return blinkFontChecks(env, inspect)
     case 'webkit': return webkitFontChecks
     case 'gecko': return geckoFontChecks
   }
@@ -252,7 +252,7 @@ describe('the checks\' contexts', () => {
     for (let e = 0; e < envs.length; e++) {
       // The checks run before the engine, so their contexts are the first ones a prepare makes.
       made = []
-      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!), [])
+      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!, false), [])
       const checks = made
       made = []
       prepare(paragraph('Prop', everyCheck), envs[e]!, false)
@@ -355,5 +355,86 @@ describe('one call', () => {
     const learned = out.content[0]!
     expect(learned.kind === 'span' && learned.font.facts.primaryFamily).toBe('Mono')
     expect(made.some(c => c.lang === 'ja' && c.font.includes('Mono'))).toBe(true)
+  })
+})
+
+describe('plain Blink optical check', () => {
+  const checked = (p: Paragraph, inspect: boolean): Paragraph => withLearnedFontFacts(p, blinkFontChecks(blink(2), inspect), [])
+
+  test('omits only linear-sample questions while preserving named-family resolution', () => {
+    const p = paragraph('Prop', 'Hello world')
+    const inspected = checked(p, true)
+    const inspectCalls = calls
+    const inspectQuestions = asked.map(q => ({ font: q.context.font, text: q.text }))
+    calls = 0; asked = []
+    const plain = checked(p, false)
+    expect(plain.font.facts).toEqual({ ...inspected.font.facts, opticalSizeAxis: null })
+    expect(plain.font.facts.primaryFamily).toBe('Prop')
+    expect(asked.map(q => ({ font: q.context.font, text: q.text }))).toEqual(inspectQuestions.filter(q => q.text !== 'Hamburgefonstiv'))
+    expect(asked.some(q => q.text === 'Hamburgefonstiv')).toBe(false)
+    expect(calls).toBeLessThan(inspectCalls)
+    expect([inspectCalls, calls]).toEqual([10, 4])
+  })
+
+  test('retains the exact primary-family condition, including Missing/system-ui permutations', () => {
+    fonts['system-ui'] = { ...proportional, adjust: (_text, size) => size / 1000 }
+    fonts['BlinkMacSystemFont'] = fonts['system-ui']!
+    const cases: [string, string | null, boolean][] = [
+      ['Missing, system-ui', 'system-ui', true],
+      ['system-ui, Missing', 'system-ui', true],
+      ['Missing, BlinkMacSystemFont', 'BlinkMacSystemFont', true],
+      ['Prop, system-ui', 'Prop', false],
+      ['Missing, Prop, system-ui', 'Prop', false],
+      ['"system-ui", Prop', null, true],
+    ]
+    for (let i = 0; i < cases.length; i++) {
+      const [family, primary, cssSize] = cases[i]!
+      const p = paragraph(family, 'Hello world')
+      const a = checked(p, true)
+      const b = checked(p, false)
+      expect(b.font.facts.primaryFamily).toBe(a.font.facts.primaryFamily)
+      expect(b.font.facts.primaryFamily).toBe(primary)
+      const oldState = prepare(p, blink(2), true)
+      const plainState = prepare(p, blink(2), false)
+      expect(oldState.engine).toBe('blink')
+      expect(plainState.engine).toBe('blink')
+      if (oldState.engine !== 'blink' || plainState.engine !== 'blink') throw Error('wrong engine')
+      expect(plainState.state.styles[0]!.measuresAtCssSize).toBe(oldState.state.styles[0]!.measuresAtCssSize)
+      expect(plainState.state.styles[0]!.measuresAtCssSize).toBe(cssSize)
+      const firstOld = firstLine(oldState)!
+      const firstPlain = firstLine(plainState)!
+      const oldLine = fillLine(oldState, firstOld, { width: 500, left: 0, right: 0 })
+      const plainLine = fillLine(plainState, firstPlain, { width: 500, left: 0, right: 0 })
+      expect(plainLine.kind).toBe(oldLine.kind)
+      if (oldLine.kind !== 'line' || plainLine.kind !== 'line' || oldLine.line.engine !== 'blink' || plainLine.line.engine !== 'blink') throw Error('wrong line')
+      expect([plainLine.start, plainLine.end, plainLine.line.info.width]).toEqual([oldLine.start, oldLine.end, oldLine.line.info.width])
+    }
+    // A keyword before a missing family can itself be unavailable: the realized named family must still win.
+    delete fonts['system-ui']
+    const p = paragraph('system-ui, Prop', 'Hello world')
+    expect(checked(p, false).font.facts.primaryFamily).toBe('Prop')
+    const plainState = prepare(p, blink(2), false)
+    if (plainState.engine !== 'blink') throw Error('wrong engine')
+    expect(plainState.state.styles[0]!.measuresAtCssSize).toBe(false)
+  })
+
+  test('preserves supplied facts without introducing a primary-family query', () => {
+    const supplied: FontFacts = { primaryFamily: 'Other', mapsHyphen: false, monospace: true, opticalSizeAxis: true, joining: 'aat', pairKerning: 'split' }
+    expect(checked(paragraph('Prop', `a\u00adb${BEH}`, supplied), false).font.facts).toEqual(supplied)
+    expect(calls).toBe(0)
+    const suppliedAxis = { ...UNKNOWN_FONT_FACTS, opticalSizeAxis: false }
+    expect(checked(paragraph('Missing, system-ui', 'Hello', suppliedAxis), false).font.facts).toEqual(suppliedAxis)
+    expect(calls).toBe(0)
+    const atOne = withLearnedFontFacts(paragraph('Missing, system-ui', 'Hello'), blinkFontChecks(blink(1), false), [])
+    expect(atOne.font.facts).toEqual(UNKNOWN_FONT_FACTS)
+    expect(calls).toBe(0)
+  })
+
+  test('still asks the hyphen and joining checks plain text decisions consume', () => {
+    const p = paragraph('Prop', `a\u00adb${BEH}`)
+    const a = checked(p, true).font.facts
+    const b = checked(p, false).font.facts
+    expect(b).toEqual({ ...a, opticalSizeAxis: null })
+    expect(b.mapsHyphen).toBe(true)
   })
 })

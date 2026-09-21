@@ -2219,7 +2219,16 @@
   },
   "cases": 69224,
   "ledger": {
-    "headerSha256": "43849b7116aff906d1e2e3724cbcd5776c4e811c75f5288d95a171871d000f5e",
+    "headerSha256": "08958e84ed30a8487645ffe2a51c2f43aee24f11dbf6eed4a4d6ce74a844bc63",
     "entriesSha256": "e046f53e5dfe83a4ae2d946baba5a976f7c3c17f083ce2c76de846d274b3b3fc"
+  },
+  "ledgerReclassified": {
+    "scorer": 8,
+    "format": "pretext-ledger/3",
+    "evidence": ".artifacts/tests/migrations/takeover-20260920/chrome-facts/migration.json",
+    "predictionsUnchanged": true,
+    "canvasRecordsUnchanged": true,
+    "nativeHistoryAdded": 0,
+    "predictionOrderDependent": 0
   }
 }

@@ -51,7 +51,7 @@ import { appliesTo, readCaseLines, writeCaseLines } from '../lab/cases/parts.ts'
 import { checkRuns, formatBaseline, parseBaseline, readRun, runProblems, seedBaseline, seedRecord, stagedPath, type Engine } from '../lab/gate.ts'
 import { existingRows } from '../lab/rows.ts'
 import { readKnownTail } from './known-tail.ts'
-import { buildLedger, printCounts, printTransitions, readLedger, transitionsBetween, writeLedger, type SetsRun } from './ledger.ts'
+import { buildLedger, printCounts, printTransitions, readLedger, transitionExitCode, transitionsBetween, writeLedger, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, partFiles, selectSets, setProtocol, type Config, type TestSet, type TierBrowser } from './sets.ts'
 
 const LOCK = join(REPO, '.artifacts/session/with-browser-lock.py')
@@ -263,8 +263,7 @@ if (reference !== null) {
   const report = transitionsBetween(reference, ledger, allowed, readKnownTail().items)
   writeFileSync(join(outDir, 'transitions.json'), `${JSON.stringify(report, null, 2)}\n`)
   printTransitions(report)
-  if (report.comparable.length > 0) exit = 2
-  else if (report.blocking > 0 || report.exactBlocking > 0) exit = Math.max(exit, 1)
+  exit = Math.max(exit, transitionExitCode(report))
 }
 
 // ---- 6. The gate ----

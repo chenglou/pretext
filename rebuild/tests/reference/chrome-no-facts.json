@@ -2124,7 +2124,16 @@
   },
   "cases": 69224,
   "ledger": {
-    "headerSha256": "fd682a1225615e6db9d1caf762d5c4061e2847ef9b96850cddc841315223941a",
+    "headerSha256": "2e3b30b28f660897f61e0039f7a0a8b638b1e3c6b453c8dd67a87eb0e315dac7",
     "entriesSha256": "6d65187c7acaae6f3f998f25665f82f60a521de5d206b79b0915f19fc5988d4c"
+  },
+  "ledgerReclassified": {
+    "scorer": 8,
+    "format": "pretext-ledger/3",
+    "evidence": ".artifacts/tests/migrations/takeover-20260920/chrome-no-facts/migration.json",
+    "predictionsUnchanged": true,
+    "canvasRecordsUnchanged": true,
+    "nativeHistoryAdded": 0,
+    "predictionOrderDependent": 0
   }
 }

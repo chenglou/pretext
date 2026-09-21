@@ -213,12 +213,19 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
-export type CanvasString = { s: string; units: number[]; twoByte: boolean; leftOut: boolean }
+// units is null when the measuring caller needs neither spacing corrections nor diagnostics.
+export type CanvasString = { s: string; units: number[] | null; twoByte: boolean; leftOut: boolean }
 
-export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false): CanvasString {
+export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false, mapUnits: boolean = true): CanvasString {
+  const text = p.canvasText
+  if (!mapUnits && text !== null && !zwjBefore && !zwjAfter) {
+    const narrow = text.narrow.slice(from, to)
+    const wide = !keepSpaces && narrow.includes(' ')
+    return { s: wide ? text.spaced.slice(from, to) : narrow, units: null, twoByte: wide, leftOut: false }
+  }
   let codes: number[] = []
-  let units: number[] = []
-  if (zwjBefore) { codes.push(0x200d); units.push(-1) }
+  let units: number[] | null = mapUnits ? [] : null
+  if (zwjBefore) { codes.push(0x200d); units?.push(-1) }
   let wide = zwjBefore || zwjAfter
   const substituted: number[] = []
   for (let i = from; i < to; i++) {
@@ -230,19 +237,19 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
       case 0x0b: case 0x0c: codes.push(0x0001); break
       default: codes.push(c); if (c > 0xff) wide = true
     }
-    units.push(i)
+    units?.push(i)
   }
-  if (zwjAfter) { codes.push(0x200d); units.push(-1) }
+  if (zwjAfter) { codes.push(0x200d); units?.push(-1) }
   // Whether the string keeps its default-ignorable characters as U+2060, which makes it 16-bit: in a segmented paragraph.
   const keeps = wide || p.segmented
   const leftOut = !keeps && substituted.length > 0
   if (leftOut) {
     const keptCodes: number[] = []
-    const keptUnits: number[] = []
+    const keptUnits: number[] | null = units === null ? null : []
     for (let i = 0, next = 0; i < codes.length; i++) {
       if (next < substituted.length && substituted[next] === i) { next++; continue }
       keptCodes.push(codes[i]!)
-      keptUnits.push(units[i]!)
+      if (keptUnits !== null) keptUnits.push(units![i]!)
     }
     codes = keptCodes
     units = keptUnits
@@ -259,7 +266,7 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
   const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: [-1, ...units], twoByte, leftOut }
+  if (prefixed) return { s: '\u2060' + s, units: units === null ? null : [-1, ...units], twoByte, leftOut }
   return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte, leftOut }
 }
 
@@ -388,26 +395,27 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
     }
   }
   const group = p.groups[g]!
-  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(p, group.style, from, to))
+  const st = p.styles[group.style]!
+  const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
+  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(p, group.style, from, to), sh.gaps !== null || ls16 !== 0)
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
-  const st = p.styles[group.style]!
-  const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
   const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
   measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts)
   if (ls16 === 0) return w + adjust
-  return w + adjust + letterSpacingDifference16(p, cs, scripts, ls16)
+  // Non-zero effective spacing requested the map above.
+  return w + adjust + letterSpacingDifference16(p, cs.s, cs.units!, scripts, ls16)
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
-function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array | null, ls16: number): number {
+function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number): number {
   let adjust = 0
-  for (let u = 0; u < cs.units.length; u++) {
-    const t = cs.units[u]!
+  for (let u = 0; u < units.length; u++) {
+    const t = units[u]!
     if (t < 0) continue
     const c = p.text.charCodeAt(t)
     if ((c & 0xfc00) === 0xdc00) continue
@@ -418,7 +426,7 @@ function letterSpacingDifference16(p: BlinkPrepared, cs: CanvasString, scripts: 
     // its RunSegmenter gives the string, so a lone U+202F (Latin or Mongolian) loses its spacing in Canvas where the DOM's
     // Latin run keeps it (research/SUPERSET-blink.md §2.1 B).
     const cp = p.text.codePointAt(t)!
-    const canvasCp = cs.s.codePointAt(u)!
+    const canvasCp = text.codePointAt(u)!
     const dom = !treatAsZeroWidthSpace(cp) && (!isCursiveScript(p.scripts[t]!) || treatAsSpace(cp))
     const canvas = !treatAsZeroWidthSpace(canvasCp) && (!isCursiveScript(canvasScript) || treatAsSpace(canvasCp))
     if (dom !== canvas) adjust += dom ? ls16 : -ls16
@@ -560,7 +568,9 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
 // `whole` is the measured total of [from, to), which the caller has or measures.
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number): number {
+type CutTotals = { left: number; right: number }
+
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number, cutTotals: CutTotals | null = null): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
   let a = from
@@ -583,7 +593,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     }
     whole = measure16(sh, g, a, b, lo, hi)
   }
-  return whole - measure16(sh, g, a, k, lo, hi) - measure16(sh, g, k, b, lo, hi)
+  const left = measure16(sh, g, a, k, lo, hi)
+  const right = measure16(sh, g, k, b, lo, hi)
+  if (cutTotals !== null) {
+    cutTotals.left = a === from ? left : NaN
+    cutTotals.right = b === to ? right : NaN
+  }
+  return whole - left - right
 }
 
 // windowAdjust16 for an offset the layout asks about: within the piece of the paragraph's group that holds k, or the two
@@ -633,10 +649,10 @@ function beforeWhiteSpace(p: BlinkPrepared, k: number, lo: number, hi: number): 
 
 // Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
 // whose measured total is `whole`.
-function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number): boolean {
+function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number, cutTotals: CutTotals): boolean {
   const p = sh.p
   const group = p.groups[g]!
-  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end, whole) === 0 &&
+  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0 &&
     pairAdjust16(sh, g, k, group.start, group.end) === 0
 }
 
@@ -653,16 +669,18 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
 // the cut at its end is a 0 the search measured (positionAdjust16): the pair window's at a cut that passed the safe test,
 // and before white space the wide window's, which is the search's own window where both sides of the cut are one piece
 // (adjust16 takes it between the cuts around an offset).
-function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[]): void {
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: number = NaN): void {
   const p = sh.p
   const group = p.groups[g]!
-  const whole = measure16(sh, g, a, b, group.start, group.end)
+  const whole = Number.isNaN(knownWhole) ? measure16(sh, g, a, b, group.start, group.end) : knownWhole
   if (whole < EXACT16) {
     cuts.push(b)
     totals.push(whole)
     zero.push(false)
     return
   }
+  // An accepted window may already have measured a child's whole range in this same shaping call.
+  const cutTotals: CutTotals = { left: NaN, right: NaN }
   const mid = a + ((b - a) >> 1)
   let k = -1
   let boundary = -1
@@ -673,7 +691,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
         if (boundary < 0) boundary = c
         const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
-        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, whole)) k = c
+        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, whole, cutTotals)) k = c
       }
     }
   }
@@ -690,9 +708,9 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
     unsafeCut(sh.gaps, p, g, k)
   }
   const first = cuts.length
-  addPieces(sh, g, a, k, cuts, totals, zero)
+  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN)
   const at = cuts.length - 1
-  addPieces(sh, g, k, b, cuts, totals, zero)
+  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN)
   zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
 }
 

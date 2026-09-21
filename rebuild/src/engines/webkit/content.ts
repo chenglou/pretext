@@ -6,7 +6,7 @@ import type { WebKitEnvironment } from '../../env.js'
 import { contextFor, width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { familyNames, genericFamilyUnder, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
-import { indexContent, langUnder, styleUnder } from '../../content.js'
+import { indexContent, styleUnder } from '../../content.js'
 import type { Paragraph, TextStyle } from '../../model.js'
 import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf } from '../../unicode/bidi.js'
 import { computedLocale, localeScript, webkitBidiData } from './data.js'
@@ -251,15 +251,18 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
   }
   // Leaves in document order, with the renderer decision of each rendering parent's children.
   const leaves: LeafInput[] = []
-  const frames: { parent: number; previous: PreviousRenderer }[] = [{ parent: -1, previous: 'none' }]
+  const frames: { parent: number; previous: PreviousRenderer; lang: string }[] = [{ parent: -1, previous: 'none', lang: paragraph.lang }]
   for (let ev = 0; ev < index.events.length; ev++) {
     const event = index.events[ev]!
     const frame = frames[frames.length - 1]!
     switch (event.kind) {
-      case 'open':
+      case 'open': {
         frame.previous = 'inline'
-        frames.push({ parent: event.element, previous: 'none' })
+        const span = index.elements[event.element]!.node
+        if (span.kind !== 'span') throw new Error(`open event ${event.element} is ${span.kind}`)
+        frames.push({ parent: event.element, previous: 'none', lang: span.lang === null ? frame.lang : span.lang })
         break
+      }
       case 'close':
         frames.pop()
         break
@@ -275,7 +278,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
         const parentStyle = styleOf(leaf.parent)
         const textStyle = styleUnder(paragraph, index, leaf.parent)
         const rendered = textRendererIsNeeded(leaf.text, frame.previous, parentStyle, leaf.parent >= 0)
-        leaves.push({ run: event.run, parent: leaf.parent, text: leaf.text, textStyle, style: parentStyle, lang: langUnder(paragraph, index, leaf.parent), rendered })
+        leaves.push({ run: event.run, parent: leaf.parent, text: leaf.text, textStyle, style: parentStyle, lang: frame.lang, rendered })
         if (rendered) frame.previous = 'text'
         break
       }

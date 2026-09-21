@@ -1,101 +1,2101 @@
 {
-  "staged": ".artifacts/tests/staged-seeds-cr5-20260919/firefox-facts/firefox-156.0-facts.json",
-  "against": "rebuild/tests/baselines/sets/firefox-156.0-facts.json",
+  "staged": "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/migrations/takeover-20260920/staged-seeds/firefox-156.0-facts.json",
+  "against": "/Users/chenglou/github/pretext-rebuild/rebuild/tests/baselines/sets/firefox-156.0-facts.json",
   "counts": {
     "cases": 63516,
     "passPairs": {
-      "lineCount": 63161,
-      "breaks": 63002,
-      "widths": 60393,
-      "painter": 55681
+      "lineCount": 63087,
+      "breaks": 62928,
+      "widths": 60319,
+      "painter": 55607
     },
-    "historyDependentCases": 239,
+    "historyDependentCases": 313,
     "withoutPassesCases": 116,
     "unstablePairs": 1,
     "protocolCases": 0
   },
   "lost": [],
-  "leftThroughHistory": [],
+  "leftThroughHistory": [
+    {
+      "id": "c-0565a1e6b3058e9c",
+      "family": "suite/paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0565a1e6b3058e9c",
+      "family": "suite/paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0565a1e6b3058e9c",
+      "family": "suite/paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0565a1e6b3058e9c",
+      "family": "suite/paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-06b0d6eb26b5a287",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [8.899993896484375,17,0] vs [8.899993896484375,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-06b0d6eb26b5a287",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [8.899993896484375,17,0] vs [8.899993896484375,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-06b0d6eb26b5a287",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [8.899993896484375,17,0] vs [8.899993896484375,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-06b0d6eb26b5a287",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [8.899993896484375,17,0] vs [8.899993896484375,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-083464238991ffde",
+      "family": "suite/straight-double",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-083464238991ffde",
+      "family": "suite/straight-double",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-083464238991ffde",
+      "family": "suite/straight-double",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-083464238991ffde",
+      "family": "suite/straight-double",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0eec16b3dd37b874",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0eec16b3dd37b874",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0eec16b3dd37b874",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0eec16b3dd37b874",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f834af806680b5d",
+      "family": "suite/paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f834af806680b5d",
+      "family": "suite/paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f834af806680b5d",
+      "family": "suite/paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f834af806680b5d",
+      "family": "suite/paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-11b7b1625a193015",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-11b7b1625a193015",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-11b7b1625a193015",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-11b7b1625a193015",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-12716a8b633ca712",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-12716a8b633ca712",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-12716a8b633ca712",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-12716a8b633ca712",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-181da052f3766b9f",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-181da052f3766b9f",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-181da052f3766b9f",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-181da052f3766b9f",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1eec362693e6d0da",
+      "family": "suite/straight-double",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1eec362693e6d0da",
+      "family": "suite/straight-double",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1eec362693e6d0da",
+      "family": "suite/straight-double",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1eec362693e6d0da",
+      "family": "suite/straight-double",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-21cae382ae0c7e81",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [2,18,1] vs [3,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-21cae382ae0c7e81",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [2,18,1] vs [3,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-21cae382ae0c7e81",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [2,18,1] vs [3,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-21cae382ae0c7e81",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [2,18,1] vs [3,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-25ed1daa11cd055d",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-8,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-25ed1daa11cd055d",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-8,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-25ed1daa11cd055d",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-8,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-25ed1daa11cd055d",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-8,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-284b25c8624cc2bd",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [-1,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-284b25c8624cc2bd",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [-1,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-284b25c8624cc2bd",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [-1,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-284b25c8624cc2bd",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [-1,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-29df5f40a53fd88b",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [13.100006103515625,23,0] vs [13.100006103515625,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-29df5f40a53fd88b",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [13.100006103515625,23,0] vs [13.100006103515625,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-29df5f40a53fd88b",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [13.100006103515625,23,0] vs [13.100006103515625,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-29df5f40a53fd88b",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [13.100006103515625,23,0] vs [13.100006103515625,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-2f6194a4b423236e",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-2f6194a4b423236e",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-2f6194a4b423236e",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-2f6194a4b423236e",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-398ea2101313fa17",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [66.05000305175781,18.5,0] vs [67.05000305175781,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-398ea2101313fa17",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [66.05000305175781,18.5,0] vs [67.05000305175781,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-398ea2101313fa17",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [66.05000305175781,18.5,0] vs [67.05000305175781,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-398ea2101313fa17",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [66.05000305175781,18.5,0] vs [67.05000305175781,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a0ed7770c306025",
+      "family": "suite/signed-spacing/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [26.883331298828125,18.5,0] vs [27.883331298828125,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a0ed7770c306025",
+      "family": "suite/signed-spacing/guillemet",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [26.883331298828125,18.5,0] vs [27.883331298828125,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a0ed7770c306025",
+      "family": "suite/signed-spacing/guillemet",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [26.883331298828125,18.5,0] vs [27.883331298828125,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a0ed7770c306025",
+      "family": "suite/signed-spacing/guillemet",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [26.883331298828125,18.5,0] vs [27.883331298828125,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3bb9c5db75974989",
+      "family": "suite/paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3bb9c5db75974989",
+      "family": "suite/paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3bb9c5db75974989",
+      "family": "suite/paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3bb9c5db75974989",
+      "family": "suite/paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3ec6eda4e6e558a4",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [67.28334045410156,18.5,0] vs [68.28334045410156,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3ec6eda4e6e558a4",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [67.28334045410156,18.5,0] vs [68.28334045410156,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3ec6eda4e6e558a4",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [67.28334045410156,18.5,0] vs [68.28334045410156,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3ec6eda4e6e558a4",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [67.28334045410156,18.5,0] vs [68.28334045410156,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3f9563075da5c369",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3f9563075da5c369",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3f9563075da5c369",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3f9563075da5c369",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [69.43333435058594,16,0] vs [70.43333435058594,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-402c2ab717c89e57",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [66.93333435058594,18.5,0] vs [67.93333435058594,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-402c2ab717c89e57",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [66.93333435058594,18.5,0] vs [67.93333435058594,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-402c2ab717c89e57",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [66.93333435058594,18.5,0] vs [67.93333435058594,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-402c2ab717c89e57",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [66.93333435058594,18.5,0] vs [67.93333435058594,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-407d7af0b0a9b04f",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [-13,23,1] vs [-12,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-407d7af0b0a9b04f",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [-13,23,1] vs [-12,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-407d7af0b0a9b04f",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [-13,23,1] vs [-12,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-407d7af0b0a9b04f",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [-13,23,1] vs [-12,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4160ac40b0e44924",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [64,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4160ac40b0e44924",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [64,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4160ac40b0e44924",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [64,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4160ac40b0e44924",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [64,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-43e8c83611999897",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-43e8c83611999897",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-43e8c83611999897",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-43e8c83611999897",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4902a90e21083f23",
+      "family": "suite/signed-spacing/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [22.76666259765625,18.5,0] vs [23.76666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4902a90e21083f23",
+      "family": "suite/signed-spacing/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [22.76666259765625,18.5,0] vs [23.76666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4902a90e21083f23",
+      "family": "suite/signed-spacing/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [22.76666259765625,18.5,0] vs [23.76666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4902a90e21083f23",
+      "family": "suite/signed-spacing/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [22.76666259765625,18.5,0] vs [23.76666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4cbbca3f2acd7ed9",
+      "family": "suite/signed-spacing/bracket",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [13.449996948242188,16,0] vs [14.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4cbbca3f2acd7ed9",
+      "family": "suite/signed-spacing/bracket",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [13.449996948242188,16,0] vs [14.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4cbbca3f2acd7ed9",
+      "family": "suite/signed-spacing/bracket",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [13.449996948242188,16,0] vs [14.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4cbbca3f2acd7ed9",
+      "family": "suite/signed-spacing/bracket",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [13.449996948242188,16,0] vs [14.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-52de6a12a7f0351a",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-52de6a12a7f0351a",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-52de6a12a7f0351a",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-52de6a12a7f0351a",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-53466ad53d788acf",
+      "family": "suite/signed-spacing/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-53466ad53d788acf",
+      "family": "suite/signed-spacing/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-53466ad53d788acf",
+      "family": "suite/signed-spacing/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-53466ad53d788acf",
+      "family": "suite/signed-spacing/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-56ed933dcd7e36b9",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-56ed933dcd7e36b9",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-56ed933dcd7e36b9",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-56ed933dcd7e36b9",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-585dbd1ab03478c3",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-585dbd1ab03478c3",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-585dbd1ab03478c3",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-585dbd1ab03478c3",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-58a58cda2bf65529",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-58a58cda2bf65529",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-58a58cda2bf65529",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-58a58cda2bf65529",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-61b781000e55bacd",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-61b781000e55bacd",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-61b781000e55bacd",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-61b781000e55bacd",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-64a851115ecf6da7",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [14.899993896484375,23,0] vs [14.899993896484375,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-64a851115ecf6da7",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [14.899993896484375,23,0] vs [14.899993896484375,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-64a851115ecf6da7",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [14.899993896484375,23,0] vs [14.899993896484375,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-64a851115ecf6da7",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [14.899993896484375,23,0] vs [14.899993896484375,22,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6547baf3ad8daecb",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [23,17,0] vs [16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6547baf3ad8daecb",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [23,17,0] vs [16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6547baf3ad8daecb",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [23,17,0] vs [16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6547baf3ad8daecb",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [23,17,0] vs [16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6c365b9be9b36d8e",
+      "family": "suite/space-context",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18,0] vs [0,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6c365b9be9b36d8e",
+      "family": "suite/space-context",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18,0] vs [0,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6c365b9be9b36d8e",
+      "family": "suite/space-context",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18,0] vs [0,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6c365b9be9b36d8e",
+      "family": "suite/space-context",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18,0] vs [0,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-749405d5a5aecc80",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-749405d5a5aecc80",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-749405d5a5aecc80",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-749405d5a5aecc80",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-77ca17027a1431e5",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-77ca17027a1431e5",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-77ca17027a1431e5",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-77ca17027a1431e5",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-78b0e1be2d2cc3b9",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-78b0e1be2d2cc3b9",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-78b0e1be2d2cc3b9",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-78b0e1be2d2cc3b9",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7bdf6356f1fea83f",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [-3,23,1] vs [-2,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7bdf6356f1fea83f",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [-3,23,1] vs [-2,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7bdf6356f1fea83f",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [-3,23,1] vs [-2,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7bdf6356f1fea83f",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [-3,23,1] vs [-2,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-900d933ae0605e60",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-900d933ae0605e60",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-900d933ae0605e60",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-900d933ae0605e60",
+      "family": "suite/signed-spacing/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [25.25,16,0] vs [26.25,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-907236747a7c1f7c",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [12,23,1] vs [13,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-907236747a7c1f7c",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [12,23,1] vs [13,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-907236747a7c1f7c",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [12,23,1] vs [13,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-907236747a7c1f7c",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [12,23,1] vs [13,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-90b934a03132d34a",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-90b934a03132d34a",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-90b934a03132d34a",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-90b934a03132d34a",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,17,1] vs [0,16,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-915a96e676b39a9a",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [23.149993896484375,18.5,0] vs [24.149993896484375,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-915a96e676b39a9a",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [23.149993896484375,18.5,0] vs [24.149993896484375,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-915a96e676b39a9a",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [23.149993896484375,18.5,0] vs [24.149993896484375,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-915a96e676b39a9a",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [23.149993896484375,18.5,0] vs [24.149993896484375,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-917fffe2f204f89c",
+      "family": "suite/signed-spacing/paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-917fffe2f204f89c",
+      "family": "suite/signed-spacing/paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-917fffe2f204f89c",
+      "family": "suite/signed-spacing/paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-917fffe2f204f89c",
+      "family": "suite/signed-spacing/paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-96caef526f53b7f1",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-96caef526f53b7f1",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-96caef526f53b7f1",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-96caef526f53b7f1",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-983ef0ab7d210e48",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "lineCount",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-983ef0ab7d210e48",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "breaks",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-983ef0ab7d210e48",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "widths",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-983ef0ab7d210e48",
+      "family": "suite/signed-spacing/curly-double-close",
+      "metric": "painter",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-994154419653ff35",
+      "family": "suite/straight-single",
+      "metric": "lineCount",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-994154419653ff35",
+      "family": "suite/straight-single",
+      "metric": "breaks",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-994154419653ff35",
+      "family": "suite/straight-single",
+      "metric": "widths",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-994154419653ff35",
+      "family": "suite/straight-single",
+      "metric": "painter",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-99874a20cdefe6f8",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [1.100006103515625,11,0] vs [1.100006103515625,10,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-99874a20cdefe6f8",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [1.100006103515625,11,0] vs [1.100006103515625,10,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-99874a20cdefe6f8",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [1.100006103515625,11,0] vs [1.100006103515625,10,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-99874a20cdefe6f8",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [1.100006103515625,11,0] vs [1.100006103515625,10,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a38308e5147ae0cc",
+      "family": "suite/signed-spacing/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a38308e5147ae0cc",
+      "family": "suite/signed-spacing/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a38308e5147ae0cc",
+      "family": "suite/signed-spacing/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a38308e5147ae0cc",
+      "family": "suite/signed-spacing/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a3efdf85e7b40710",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,18,1] vs [0,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a3efdf85e7b40710",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,18,1] vs [0,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a3efdf85e7b40710",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,18,1] vs [0,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a3efdf85e7b40710",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,18,1] vs [0,17,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a57466c5bbbbc3a6",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a57466c5bbbbc3a6",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a57466c5bbbbc3a6",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a57466c5bbbbc3a6",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a5be32780c5c0f3a",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a5be32780c5c0f3a",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a5be32780c5c0f3a",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a5be32780c5c0f3a",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a602805571f7e6bc",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a602805571f7e6bc",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a602805571f7e6bc",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a602805571f7e6bc",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,11,1] vs [0,10,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a706682ef3ae04e2",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [23.01666259765625,16,0] vs [24.01666259765625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a706682ef3ae04e2",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [23.01666259765625,16,0] vs [24.01666259765625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a706682ef3ae04e2",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [23.01666259765625,16,0] vs [24.01666259765625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-a706682ef3ae04e2",
+      "family": "suite/signed-spacing/curly-single-close",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [23.01666259765625,16,0] vs [24.01666259765625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ac9a86310cdd269b",
+      "family": "suite/signed-spacing/pair",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ac9a86310cdd269b",
+      "family": "suite/signed-spacing/pair",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ac9a86310cdd269b",
+      "family": "suite/signed-spacing/pair",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ac9a86310cdd269b",
+      "family": "suite/signed-spacing/pair",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,18.5,0] vs [0,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ade2cb500ccd1d01",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [-1,16,1] vs [0,15,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ade2cb500ccd1d01",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [-1,16,1] vs [0,15,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ade2cb500ccd1d01",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [-1,16,1] vs [0,15,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ade2cb500ccd1d01",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [-1,16,1] vs [0,15,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-aedf0fcbbecbac22",
+      "family": "suite/signed-spacing/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-aedf0fcbbecbac22",
+      "family": "suite/signed-spacing/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-aedf0fcbbecbac22",
+      "family": "suite/signed-spacing/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-aedf0fcbbecbac22",
+      "family": "suite/signed-spacing/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b43fc6559abdc5b2",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [56,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b43fc6559abdc5b2",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [56,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b43fc6559abdc5b2",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [56,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b43fc6559abdc5b2",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [63,17,0] vs [56,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b757602cc611f82b",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b757602cc611f82b",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b757602cc611f82b",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b757602cc611f82b",
+      "family": "suite/policy/source-seam/numeric",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ba74a59f4a0cb054",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ba74a59f4a0cb054",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ba74a59f4a0cb054",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ba74a59f4a0cb054",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc65f414a34bd4c2",
+      "family": "suite/paren",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc65f414a34bd4c2",
+      "family": "suite/paren",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc65f414a34bd4c2",
+      "family": "suite/paren",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc65f414a34bd4c2",
+      "family": "suite/paren",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c3a86992de531502",
+      "family": "suite/space-context",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [2,18,0] vs [3,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c3a86992de531502",
+      "family": "suite/space-context",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [2,18,0] vs [3,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c3a86992de531502",
+      "family": "suite/space-context",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [2,18,0] vs [3,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c3a86992de531502",
+      "family": "suite/space-context",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [2,18,0] vs [3,17,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c6488bc34b362fb8",
+      "family": "suite/straight-single",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c6488bc34b362fb8",
+      "family": "suite/straight-single",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c6488bc34b362fb8",
+      "family": "suite/straight-single",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c6488bc34b362fb8",
+      "family": "suite/straight-single",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c947a84e3264bc6e",
+      "family": "suite/straight-single",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c947a84e3264bc6e",
+      "family": "suite/straight-single",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c947a84e3264bc6e",
+      "family": "suite/straight-single",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c947a84e3264bc6e",
+      "family": "suite/straight-single",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-d6478523d5e6ca11",
+      "family": "suite/script-prefix-heldout",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-d6478523d5e6ca11",
+      "family": "suite/script-prefix-heldout",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-d6478523d5e6ca11",
+      "family": "suite/script-prefix-heldout",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-d6478523d5e6ca11",
+      "family": "suite/script-prefix-heldout",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [-9,17,0] vs [-16,24,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-db01d6df72ae7444",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-db01d6df72ae7444",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-db01d6df72ae7444",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-db01d6df72ae7444",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [0,23,1] vs [0,22,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dd50a9d48952cbf0",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [40.100006103515625,16,0] vs [41.100006103515625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dd50a9d48952cbf0",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [40.100006103515625,16,0] vs [41.100006103515625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dd50a9d48952cbf0",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [40.100006103515625,16,0] vs [41.100006103515625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dd50a9d48952cbf0",
+      "family": "suite/signed-spacing/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [40.100006103515625,16,0] vs [41.100006103515625,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e05fcb4ea9b42cb7",
+      "family": "suite/signed-spacing/curly-single-open",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [20.51666259765625,18.5,0] vs [21.51666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e05fcb4ea9b42cb7",
+      "family": "suite/signed-spacing/curly-single-open",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [20.51666259765625,18.5,0] vs [21.51666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e05fcb4ea9b42cb7",
+      "family": "suite/signed-spacing/curly-single-open",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [20.51666259765625,18.5,0] vs [21.51666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e05fcb4ea9b42cb7",
+      "family": "suite/signed-spacing/curly-single-open",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [20.51666259765625,18.5,0] vs [21.51666259765625,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ed65fb74c71a52d9",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "lineCount",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-ed65fb74c71a52d9",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "breaks",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-ed65fb74c71a52d9",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "widths",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-ed65fb74c71a52d9",
+      "family": "suite/signed-spacing/straight-double",
+      "metric": "painter",
+      "difference": "4 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-f267189a519a0996",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f267189a519a0996",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f267189a519a0996",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f267189a519a0996",
+      "family": "suite/signed-spacing/straight-single",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,16,0] vs [0,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f2716018bfc06c37",
+      "family": "suite/straight-double",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f2716018bfc06c37",
+      "family": "suite/straight-double",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f2716018bfc06c37",
+      "family": "suite/straight-double",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f2716018bfc06c37",
+      "family": "suite/straight-double",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,17,0] vs [0,16,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f287fd591e24f062",
+      "family": "suite/signed-spacing/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [29.449996948242188,16,0] vs [30.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f287fd591e24f062",
+      "family": "suite/signed-spacing/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [29.449996948242188,16,0] vs [30.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f287fd591e24f062",
+      "family": "suite/signed-spacing/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [29.449996948242188,16,0] vs [30.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f287fd591e24f062",
+      "family": "suite/signed-spacing/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [29.449996948242188,16,0] vs [30.449996948242188,15,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fcd84f69dc83cef6",
+      "family": "suite/signed-spacing/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [26.949996948242188,18.5,0] vs [27.949996948242188,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fcd84f69dc83cef6",
+      "family": "suite/signed-spacing/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [26.949996948242188,18.5,0] vs [27.949996948242188,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fcd84f69dc83cef6",
+      "family": "suite/signed-spacing/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [26.949996948242188,18.5,0] vs [27.949996948242188,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fcd84f69dc83cef6",
+      "family": "suite/signed-spacing/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [26.949996948242188,18.5,0] vs [27.949996948242188,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd2df0ae18c51ddc",
+      "family": "suite/space-context-emoji",
+      "metric": "lineCount",
+      "difference": "2 native lines vs 1",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd2df0ae18c51ddc",
+      "family": "suite/space-context-emoji",
+      "metric": "breaks",
+      "difference": "2 native lines vs 1",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd2df0ae18c51ddc",
+      "family": "suite/space-context-emoji",
+      "metric": "widths",
+      "difference": "2 native lines vs 1",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd2df0ae18c51ddc",
+      "family": "suite/space-context-emoji",
+      "metric": "painter",
+      "difference": "2 native lines vs 1",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd5234ef9654fd31",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd5234ef9654fd31",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd5234ef9654fd31",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fd5234ef9654fd31",
+      "family": "suite/signed-spacing/non-ascii-control",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [66.94999694824219,18.5,0] vs [67.94999694824219,17.5,0]",
+      "passesNow": true
+    }
+  ],
   "leftThroughProtocol": [],
   "leftWithTheirCase": [],
-  "gained": [
-    [
-      "c-0783d6381458ee82",
-      "widths"
-    ],
-    [
-      "c-285da9bb411933f6",
-      "widths"
-    ],
-    [
-      "c-3a1d29f457283bb2",
-      "widths"
-    ],
-    [
-      "c-47549d0332c24211",
-      "widths"
-    ],
-    [
-      "c-4847c0864fcbaeb7",
-      "widths"
-    ],
-    [
-      "c-494f2e33bcbcbd10",
-      "widths"
-    ],
-    [
-      "c-4c542b5c8057f5fd",
-      "widths"
-    ],
-    [
-      "c-50917757a1dee54a",
-      "widths"
-    ],
-    [
-      "c-79b3cc88390ad66b",
-      "widths"
-    ],
-    [
-      "c-8010427811c61681",
-      "widths"
-    ],
-    [
-      "c-99205f8bb0348685",
-      "widths"
-    ],
-    [
-      "c-a3b433588b3371e9",
-      "widths"
-    ],
-    [
-      "c-b68365f4b336d55c",
-      "lineCount"
-    ],
-    [
-      "c-b68365f4b336d55c",
-      "breaks"
-    ],
-    [
-      "c-b68365f4b336d55c",
-      "widths"
-    ],
-    [
-      "c-ddb7b0c21bf3d492",
-      "lineCount"
-    ],
-    [
-      "c-ddb7b0c21bf3d492",
-      "breaks"
-    ],
-    [
-      "c-ddb7b0c21bf3d492",
-      "widths"
-    ],
-    [
-      "c-f6ede8fbbfc2b9b8",
-      "widths"
-    ]
-  ],
+  "gained": [],
   "casesOnlyBefore": 0,
-  "casesOnlyAfter": 0
+  "casesOnlyAfter": 0,
+  "historyWitnessLedger": "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/migrations/takeover-20260920/firefox-facts/ledger",
+  "carriedNativeWitnesses": [
+    "c-0c212a2aabd774b1"
+  ]
 }

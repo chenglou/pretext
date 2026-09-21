@@ -163,6 +163,16 @@ type ReferenceManifest = {
   cases: number
   // The ledger beside the reference, by the hashes of its two files; null when the recording left none.
   ledger: { headerSha256: string; entriesSha256: string } | null
+  // Explicit review of acceptance metadata; predictions and Canvas recordings are not repinned.
+  ledgerReclassified?: {
+    scorer: number
+    format: string
+    evidence: string
+    predictionsUnchanged: boolean
+    canvasRecordsUnchanged: boolean
+    nativeHistoryAdded: number
+    predictionOrderDependent: number
+  }
 }
 
 function ledgerHashes(dir: string): ReferenceManifest['ledger'] {

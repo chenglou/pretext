@@ -23,8 +23,8 @@
 //   dependent cases are known. --allow-uncompared accepts single-order runs. Exit 2.
 // - A baseline pass that isn't a pass in a run observing the case is a lost pass. unobserved and not-applicable are never
 //   passes, and gains elsewhere don't offset a loss. Exit 1.
-// - A case that any current run marks history-dependent, or that the baseline lists as history-dependent, never fails the
-//   gate. Its baseline passes and current statuses are reported apart. So are pairs that were unstable when the baseline
+// - Known native-history exclusions remain non-gating and visible. Newly observed native history blocks acceptance
+//   when it obscures baseline pass obligations; it does not automatically retire them. So are pairs unstable when the baseline
 //   was seeded: passing in some seeding runs and not in others with no history-dependent mark (float32 noise at a WebKit
 //   line edge, or installed Safari against webkit-host).
 // - A protocol row (score.ts slotProtocol: its page doesn't describe the declared input) is never a pass: seeding lists it
@@ -41,7 +41,7 @@
 //   gaps that cover it there (score.ts lineGaps) or that it has no covered explanation, its residual class if any, and an
 //   empty `attribution` for the source reading a person adds;
 // - the pairs that leave through new history dependence: passes of the adopted seed whose case a seeding run now marks
-//   history-dependent. They stop gating without failing, so they are listed with the difference the two orders showed and
+//   history-dependent. These need explicit review before adoption, so they are listed with the native difference and
 //   the metrics the case passes now;
 // - the pairs that leave because their row is a protocol row now; pairs gained; cases only one of the two observed.
 // Seeding refuses runs whose environment records no process languages, since no run could then match the baseline's
@@ -111,7 +111,7 @@ export type GateReport = {
     lostPairs: number
     newPairs: number
     historyDependentCases: number
-    // Baseline passes of cases that are history-dependent now and weren't when the baseline was seeded: they stopped gating.
+    // Baseline passes newly obscured by native history. These block acceptance until explicitly reviewed.
     // checkRuns always sets it; optional so reports built by hand before it existed still type-check.
     leftThroughHistoryPairs?: number
     unstablePairs: number
@@ -121,7 +121,7 @@ export type GateReport = {
   }
   lost: LostPass[]
   newPasses: Array<{ id: string; family: string; metric: MetricName }>
-  // Cases history-dependent now or in the baseline: never a gate failure.
+  // Native-history cases. Known exclusions don't gate; a newly obscured baseline pass blocks acceptance.
   historyDependent: Array<{ id: string; family: string; now: string | null; inBaseline: boolean; baselinePasses: string; currentPasses: string }>
   // Protocol rows now or in the baseline: never a gate failure.
   protocol: Array<{ id: string; family: string; now: string | null; inBaseline: boolean; baselinePasses: string }>
@@ -488,7 +488,7 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
   report.counts.unstablePairs = report.unstable.length
   report.counts.missingCases = report.missing.cases
   report.counts.missingPairs = report.missing.pairs
-  report.ok = report.lost.length === 0 && (!options.complete || report.missing.pairs === 0)
+  report.ok = report.lost.length === 0 && leftThroughHistory === 0 && (!options.complete || report.missing.pairs === 0)
   return report
 }
 
@@ -765,7 +765,7 @@ async function main(): Promise<number> {
   if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify(report, null, 2)}\n`)
   const c = report.counts
   console.log(`gate ${baseline.engine} (${baseline.engineVersion}): ${runs.length} runs, ${c.observedCases} cases observed; the baseline has ${c.baselineCases}`)
-  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; history-dependent cases ${c.historyDependentCases} (never gate; ${c.leftThroughHistoryPairs ?? 0} baseline passes left through new history dependence); protocol rows ${c.protocolCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
+  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; native-history cases ${c.historyDependentCases} (${c.leftThroughHistoryPairs ?? 0} newly obscured baseline passes, blocking); protocol rows ${c.protocolCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
   for (const value of report.lost.slice(0, 30)) console.log(describeLost(value))
   if (report.lost.length > 30) console.log(`  ... ${report.lost.length - 30} more${outPath === undefined ? '; --out writes them all' : ''}`)
   console.log(report.ok ? 'gate: pass' : 'gate: FAIL')

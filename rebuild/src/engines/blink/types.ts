@@ -150,6 +150,9 @@ export type BlinkPrepared = {
   layoutZoom: number
   // text_content: the paragraph string after white-space processing (specs/blink-text.md §2.C).
   text: string
+  // Equal-length Canvas spellings for a plain unsegmented 8-bit paragraph without SHY. The narrow string is one-byte;
+  // the spaced string widens only U+0020. A question takes that string only when its own range holds a widened space.
+  canvasText: { narrow: string; spaced: string } | null
   is8Bit: boolean
   // RunSegmenter segments text_content: it is 16-bit with a character other than U+FFFC, or bidi is on
   // (inline_node.cc:1256-1290). Otherwise the paragraph is one Latin segment.

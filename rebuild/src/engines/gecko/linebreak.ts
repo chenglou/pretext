@@ -8,6 +8,15 @@ import { geckoLineRules } from './data.js'
 import { scriptIsChineseOrJapanese } from './likely.js'
 
 type DictionaryBreaks = GeckoEnvironment['dictionaryBreaks']
+// A preparation's line breaker keeps the four dictionary machines, not the text or boundaries of their calls.
+type DictionaryLanguage = 'th' | 'lo' | 'my' | 'km'
+type DictionarySegmenters = Record<DictionaryLanguage, Intl.Segmenter | null>
+type DictionaryMachines = { segmenters: DictionarySegmenters | null }
+
+function dictionaryMachine(machines: DictionaryMachines, language: DictionaryLanguage): Intl.Segmenter {
+  const segmenters = machines.segmenters ??= { th: null, lo: null, my: null, km: null }
+  return segmenters[language] ??= new Intl.Segmenter(language, { granularity: 'word' })
+}
 
 // Line_Break property values of the data (line.rs:20-128).
 const AI = 1, AL = 3, BA = 8, BK = 10, CJ = 12, CM = 14, CR = 16, EX = 19, H2 = 21, H3 = 22, HY = 24, ID = 25, IN = 27,
@@ -24,7 +33,7 @@ export const BREAK_NORMAL = 1
 export const BREAK_EMERGENCY_WRAP = 3
 
 // complex/language.rs:17-45, read on single code units (LanguageIteratorUtf16).
-export function complexLanguage(u: number): string {
+export function complexLanguage(u: number): DictionaryLanguage | '' {
   if (u >= 0xe01 && u <= 0xe7f) return 'th'
   if (u >= 0xe80 && u <= 0xeff) return 'lo'
   if ((u >= 0x1000 && u <= 0x109f) || (u >= 0xa9e0 && u <= 0xa9ff) || (u >= 0xaa60 && u <= 0xaa7f)) return 'my'
@@ -35,7 +44,7 @@ export function complexLanguage(u: number): string {
 // complex_language_segment_utf16 (complex/mod.rs:135-156): split the SA run by language and let the LSTM model mark
 // boundaries inside each slice; every slice reports its end. Firefox's Intl.Segmenter word granularity runs the same
 // ICU4X models (specs/gecko-text.md §10, DESIGN.md §6.3); without it a slice has no interior boundaries.
-function segmentComplex(units: number[], dictionary: DictionaryBreaks): number[] {
+function segmentComplex(units: number[], dictionary: DictionaryBreaks, machines: DictionaryMachines): number[] {
   const result: number[] = []
   let i = 0
   while (i < units.length) {
@@ -47,7 +56,7 @@ function segmentComplex(units: number[], dictionary: DictionaryBreaks): number[]
         case 'intl-segmenter-word': {
           let slice = ''
           for (let k = i; k < j; k++) slice += String.fromCharCode(units[k]!)
-          const segments = new Intl.Segmenter(language, { granularity: 'word' }).segment(slice)
+          const segments = dictionaryMachine(machines, language).segment(slice)
           for (const part of segments) if (part.index > 0) result.push(i + part.index)
           break
         }
@@ -87,7 +96,8 @@ function looseBreak(rightCp: number, left: number, right: number, jaZh: boolean)
 
 // LineBreakIterator over UTF-16 (line.rs:833-1080, Utf16 handling at :1249-1340). Returns every boundary, including 0
 // and text.length.
-export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dictionary: DictionaryBreaks): number[] {
+export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dictionary: DictionaryBreaks,
+  machines: DictionaryMachines = { segmenters: null }): number[] {
   const d: Icu4xRuleData = geckoLineRules
   const out: number[] = []
   const len = text.length
@@ -113,6 +123,9 @@ export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dic
   }
   const state = (left: number, right: number): number => d.states[left * d.propertyCount + right] ?? KEEP
   let cache: number[] = []
+  // Dictionary boundaries stay in their SA range's coordinates; the cursor consumes them without copying suffixes.
+  let cacheIndex = 0
+  let cachePosition = 0
 
   // check_eof: the first call returns 0 (line.rs:1086-1107).
   advance()
@@ -120,14 +133,13 @@ export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dic
   if (pos < 0) return out
 
   next: for (;;) {
-    if (cache.length > 0) { // line.rs:838-852
-      const firstPos = cache[0]!
-      let i = 0
+    if (cacheIndex < cache.length) { // line.rs:838-852
+      const firstPos = cache[cacheIndex]!
+      let i = cachePosition
       for (;;) {
         if (i === firstPos) {
-          const rest: number[] = []
-          for (let k = 1; k < cache.length; k++) rest.push(cache[k]! - i)
-          cache = rest
+          cachePosition = i
+          cacheIndex++
           out.push(pos)
           continue next
         }
@@ -188,15 +200,16 @@ export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dic
           if (pos < 0 || icu4xProperty(d, cp) !== SA) break
         }
         front = startFront; pos = startPos; cp = startCp
-        cache = segmentComplex(units, dictionary)
+        cache = segmentComplex(units, dictionary, machines)
+        cacheIndex = 0
+        cachePosition = 0
         if (cache.length > 0) {
           const firstPos = cache[0]!
           let i = 1
           for (;;) {
             if (i === firstPos) {
-              const rest: number[] = []
-              for (let k = 1; k < cache.length; k++) rest.push(cache[k]! - i)
-              cache = rest
+              cachePosition = i
+              cacheIndex++
               out.push(pos)
               continue next
             }
@@ -278,7 +291,7 @@ export type LineBreakRule = 'auto' | 'loose' | 'normal' | 'strict' | 'anywhere'
 // LineBreaker::ComputeBreakPositions (LineBreaker.cpp:112-194). `st` receives 1 at every boundary below the word
 // length, 0 elsewhere.
 function computeBreakPositions(word: string, wordBreak: WordBreakRule, lineBreak: LineBreakRule, cj: boolean,
-  st: Uint8Array, base: number, dictionary: DictionaryBreaks): void {
+  st: Uint8Array, base: number, dictionary: DictionaryBreaks, machines: DictionaryMachines): void {
   if (word.length === 1) { st[base] = 1; return } // :120-127
   st.fill(0, base, base + word.length) // :153
   // :26-41 strictness; :57-110 the auto segmenter has the same defaults (Strict, Normal, no ja_zh).
@@ -289,7 +302,7 @@ function computeBreakPositions(word: string, wordBreak: WordBreakRule, lineBreak
     case 'loose': strictness = 'loose'; break
     case 'anywhere': strictness = 'anywhere'; break
   }
-  const boundaries = icu4xLineBoundaries(word, { strictness, wordOption: wordBreak, jaZh: cj }, dictionary)
+  const boundaries = icu4xLineBoundaries(word, { strictness, wordOption: wordBreak, jaZh: cj }, dictionary, machines)
   for (let i = 0; i < boundaries.length; i++) {
     const pos = boundaries[i]!
     if (pos >= word.length) break
@@ -355,6 +368,7 @@ export class LineBreakerState {
   wordBreak: WordBreakRule = 'normal'
   lineBreak: LineBreakRule = 'auto'
   readonly dictionary: DictionaryBreaks
+  segmenters: DictionarySegmenters | null = null
 
   constructor(dictionary: DictionaryBreaks) {
     this.dictionary = dictionary
@@ -383,7 +397,13 @@ export class LineBreakerState {
     const st = new Uint8Array(length)
     if (this.lineBreak === 'anywhere') st.fill(BREAK_NORMAL)
     else if (!this.wordMightBreak && this.wordBreak !== 'break-all') st.fill(BREAK_NONE)
-    else computeBreakPositions(String.fromCharCode(...this.word), this.wordBreak, this.lineBreak, this.cj, st, 0, this.dictionary)
+    else {
+      let word = ''
+      // Words can span arbitrarily many mapped flows; keep every conversion below the engine's argument limit.
+      if (length <= 4096) word = String.fromCharCode(...this.word)
+      else for (let i = 0; i < length; i += 4096) word += String.fromCharCode(...this.word.slice(i, i + 4096))
+      computeBreakPositions(word, this.wordBreak, this.lineBreak, this.cj, st, 0, this.dictionary, this)
+    }
     let offset = 0
     for (let i = 0; i < this.items.length; i++) {
       const ti = this.items[i]!
@@ -471,7 +491,7 @@ export class LineBreakerState {
             const saved = st[wordStart]!
             let word = ''
             for (let k = wordStart; k < offset; k++) word += String.fromCharCode(text[k]!)
-            computeBreakPositions(word, this.wordBreak, this.lineBreak, this.cj, st, wordStart, this.dictionary)
+            computeBreakPositions(word, this.wordBreak, this.lineBreak, this.cj, st, wordStart, this.dictionary, this)
             st[wordStart] = saved
           }
         }

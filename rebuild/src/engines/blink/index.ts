@@ -145,8 +145,13 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
   const gaps: GapSink = inspect ? [] : null
+  let canvasText: BlinkPrepared['canvasText'] = null
+  if (!inspect && is8Bit && !segmented && !text.includes('\u00ad') && styles.some(style => style.letterSpacing === 0)) {
+    const narrow = text.replace(/[\v\f]/g, '\u0001')
+    canvasText = { narrow, spaced: narrow.replaceAll(' ', '\u2028') }
+  }
   const p: BlinkPrepared = {
-    paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
+    paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
     items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),

@@ -1,5 +1,7 @@
 # Engine Follow-ups
 
+On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
+
 Open engine work: decisions for the maintainer, known gaps and harness debt.
 
 ## Decisions

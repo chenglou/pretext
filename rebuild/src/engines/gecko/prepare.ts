@@ -1,7 +1,7 @@
 // Content building for Gecko (Firefox 156.0): frames, bidi splits, text runs, TransformText per mapped flow, glyph
 // flags, nsLineBreaker breaks, spacing and the app-unit advances known before lines are filled.
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
-import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../content.js'
+import { indexContent, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
 import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
@@ -412,12 +412,31 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const inspected: GeckoInspect | null = inspect ? { gaps: [], emergencyUnconfirmed: [] } : null
   const sink: gaps.GapSink = inspected === null ? null : inspected.gaps
   const leaves: GeckoLeaf[] = []
-  for (let i = 0; i < index.leaves.length; i++) {
+  // Language belongs to this document-order walk: null inherits, while an empty tag resets it.
+  let inheritedLanguage = paragraph.lang
+  const languages: string[] = []
+  // No language below the final text event is consumed by this phase.
+  const lastEvent = index.leaves.length === 0 ? -1 : index.leaves[index.leaves.length - 1]!.event
+  for (let ev = 0; ev <= lastEvent; ev++) {
+    const event = index.events[ev]!
+    switch (event.kind) {
+      case 'open': {
+        const span = index.elements[event.element]!.node
+        if (span.kind !== 'span') throw new Error(`open event ${event.element} is ${span.kind}`)
+        languages.push(inheritedLanguage)
+        if (span.lang !== null) inheritedLanguage = span.lang
+        continue
+      }
+      case 'close': inheritedLanguage = languages.pop()!; continue
+      case 'atomic': case 'br': case 'wbr': continue
+      case 'text': break
+    }
+    const i = event.run
     const indexed = index.leaves[i]!
     const end = indexed.start + indexed.text.length
     // A text frame reads its parent element's computed style: a text node inherits every property the model has.
     const style = styleUnder(paragraph, index, indexed.parent)
-    const lang = canonicalLanguageTag(langUnder(paragraph, index, indexed.parent))
+    const lang = canonicalLanguageTag(inheritedLanguage)
     let is8bit = true
     for (let s = indexed.start; s < end; s++) if (text.charCodeAt(s) >= 0x100) { is8bit = false; break }
     leaves.push({

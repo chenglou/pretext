@@ -31,6 +31,12 @@ describe('the known tail', () => {
     expect(statusParts('fail covered by in-word-prefix+limit:carried-width')).toEqual({ kind: 'covered', names: ['in-word-prefix', 'limit:carried-width'] })
     expect(statusParts('residual gecko/synthetic-bold-offset (probed)')).toEqual({ kind: 'residual', names: ['gecko/synthetic-bold-offset'] })
     expect(statusParts('fail open')).toEqual({ kind: 'open', names: [] })
+    expect(statusParts('prediction-order-dependent')).toEqual({ kind: 'prediction-order-dependent', names: [] })
+  })
+
+  test('prediction order dependence cannot inherit an open-failure rule', () => {
+    const tail = [item({ id: 'gecko/open', match: { browsers: ['firefox'], status: 'open', families: ['rule/'] } })]
+    expect(itemsOf(tail, 'firefox', 'facts', entry('c-1', 'prediction-order-dependent'), 'widths', 'prediction-order-dependent')).toEqual([])
   })
 
   test('members by name and by rule: browser, status kind, conditions, family prefixes, metrics', () => {

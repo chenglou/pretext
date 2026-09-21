@@ -5,7 +5,7 @@
 // main: ...' }. Lines come from walkLineRanges(); their cursors index main's segment stream, which is the source text after
 // main's white-space normalization, so the adapter aligns that stream with the source once and converts each cursor to a
 // UTF-16 source offset. Widths are main's. paint returns null.
-import { prepareWithSegments, setLocale, walkLineRanges, type LayoutCursor, type PrepareOptions } from '../../../src/layout.ts'
+import { layout, prepareWithSegments, setLocale, walkLineRanges, type LayoutCursor, type PrepareOptions } from '../../../src/layout.ts'
 import type { BrowserKind, Case, FontDecl, LinesPrediction as Prediction, TextRun } from '../types.ts'
 
 function sameFont(a: FontDecl, b: FontDecl): boolean {
@@ -97,6 +97,12 @@ export function alignStream(source: string, stream: string, whiteSpace: 'normal'
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 export function predict(c: Case, _env: { browser: BrowserKind; build: string }): Prediction | { error: string } {
+  return predictWithLocale(c, _env, c.paragraph.lang === '' ? undefined : c.paragraph.lang)
+}
+
+// The maintained corpus uses the default preparation locale independently of its document/content language.
+// Survey tooling can select that original contract and capture the actual public height API, without changing Case.
+export function predictWithLocale(c: Case, _env: { browser: BrowserKind; build: string }, locale: string | undefined, captureLayout = false): (Prediction | { error: string }) & { countedLayout?: { lineCount: number; height: number; locale: string | null } } {
   const reasons = unsupportedReasons(c)
   if (reasons.length > 0) return { error: `unsupported by main: ${reasons.join('; ')}` }
   const p = c.paragraph
@@ -110,14 +116,15 @@ export function predict(c: Case, _env: { browser: BrowserKind; build: string }):
   if (run.letterSpacing !== 0) options.letterSpacing = run.letterSpacing
 
   // setLocale() clears main's caches, so every case prepares cold and measureLog counts one fresh prepare. main takes
-  // break rules and font resolution from <html lang> only; the paragraph's lang reaches it through setLocale's word
-  // segmenter.
-  setLocale(p.lang === '' ? undefined : p.lang)
+  // break rules and font resolution from <html lang> only; the selected preparation locale reaches its word segmenter.
+  setLocale(locale)
   measureCalls = 0
   measuring = true
   const lines: Prediction['lines'] = []
+  let countedLayout: { lineCount: number; height: number; locale: string | null } | undefined
   try {
     const prepared = prepareWithSegments(source, canvasFont(run.font), options)
+    if (captureLayout) countedLayout = { ...layout(prepared, p.width, p.lineHeight), locale: locale ?? null }
     const stream = prepared.segments.join('')
     const segmentStarts: number[] = []
     for (let i = 0, offset = 0; i < prepared.segments.length; i++) {
@@ -143,7 +150,7 @@ export function predict(c: Case, _env: { browser: BrowserKind; build: string }):
       ranges.push({ start: streamOffset(line.start), end: streamOffset(line.end), width: line.width })
     })
     const aligned = alignStream(source, stream, whiteSpace)
-    if (aligned === null) return { error: 'adapter: main\'s segment stream does not align with the source text' }
+    if (aligned === null) return { error: 'adapter: main\'s segment stream does not align with the source text', ...(countedLayout === undefined ? {} : { countedLayout }) }
     for (let i = 0; i < ranges.length; i++) {
       const range = ranges[i]!
       const start = range.start < stream.length ? aligned.starts[range.start]! : source.length
@@ -153,7 +160,7 @@ export function predict(c: Case, _env: { browser: BrowserKind; build: string }):
   } finally {
     measuring = false
   }
-  return { lines, measureLog: measureCalls }
+  return { lines, measureLog: measureCalls, ...(countedLayout === undefined ? {} : { countedLayout }) }
 }
 
 export function paint(_c: Case, _prediction: Prediction, _host: HTMLElement): HTMLElement[] | null {

@@ -26,7 +26,7 @@ import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPredic
 // finds Blink's hyphen rect on whichever range of the node reports it and, on the expected side, from the layout's hyphen
 // items (reportOnlyRects), keeps differing units inside one stand-in span in one run (standInSpans), and registers Gecko's
 // synthetic bold class beside the 1 au class (RESIDUAL_CLASSES).
-export const SCORER_VERSION = 7
+export const SCORER_VERSION = 8
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -98,20 +98,25 @@ function webkitBrowser(browser: BrowserKind): boolean {
   return browser === 'safari' || browser === 'webkit-host'
 }
 
-// Whether a code point rect reports the box of a whole-node rect (rule 1).
-function reportsBox(browser: BrowserKind, point: Rect, node: Rect): boolean {
-  if (webkitBrowser(browser)) return point.y === node.y || point.y === Math.trunc(f32(node.y * 64)) / 64
-  return point.y === node.y && point.height === node.height
-}
-
 export function nativeLines(native: NativeObservation, paragraph: Pick<Paragraph, 'lineHeight' | 'runs'>, browser: BrowserKind): NativeLines {
   const centres: number[] = []
   const shareTops = browser !== 'firefox'
+  const webkit = webkitBrowser(browser)
+  // First centre for each node box. WebKit keys both raw and truncated tops, ignoring height with a fixed zero key.
+  // NaN is excluded because strict equality never reports such a top; Map would otherwise equate two NaNs.
+  const nodeBoxes: Array<Map<number, Map<number, number>>> = []
   // Per node, per rect: its centre index, or -1 without positive height.
   const nodeCentre: number[][] = []
   for (let r = 0; r < native.runRects.length; r++) {
     const rects = native.runRects[r]!
     const indices: number[] = []
+    const boxes = new Map<number, Map<number, number>>()
+    const addBox = (top: number, height: number, centre: number) => {
+      if (Number.isNaN(top)) return
+      let heights = boxes.get(top)
+      if (heights === undefined) { heights = new Map(); boxes.set(top, heights) }
+      if (!heights.has(height)) heights.set(height, centre)
+    }
     let previous = -1
     for (let k = 0; k < rects.length; k++) {
       const rect = rects[k]!
@@ -125,9 +130,12 @@ export function nativeLines(native: NativeObservation, paragraph: Pick<Paragraph
         centres.push(rect.y + rect.height / 2)
         indices.push(centres.length - 1)
       }
+      addBox(rect.y, webkit ? 0 : rect.height, indices[k]!)
+      if (webkit) addBox(Math.trunc(f32(rect.y * 64)) / 64, 0, indices[k]!)
       previous = k
     }
     nodeCentre.push(indices)
+    nodeBoxes.push(boxes)
   }
   // Code point rects: the centre index of the node rect reporting their box, or their own centre.
   const runEnds: number[] = []
@@ -141,7 +149,6 @@ export function nativeLines(native: NativeObservation, paragraph: Pick<Paragraph
   for (let i = 0; i < native.points.length; i++) {
     const point = native.points[i]!
     while (run < runEnds.length - 1 && point.offset >= runEnds[run]!) run++
-    const nodes = native.runRects[run] ?? []
     const indices: number[] = []
     for (let k = 0; k < point.rects.length; k++) {
       const rect = point.rects[k]!
@@ -151,11 +158,7 @@ export function nativeLines(native: NativeObservation, paragraph: Pick<Paragraph
       }
       // The first node rect reporting the box. Several can: bidi continuations of one frame, or a node's boxes on one line.
       // They share their y, so they sit on one line.
-      let index = -1
-      for (let n = 0; n < nodes.length && index < 0; n++) {
-        const centre = nodeCentre[run]![n]!
-        if (centre >= 0 && reportsBox(browser, rect, nodes[n]!)) index = centre
-      }
+      let index = nodeBoxes[run]?.get(rect.y)?.get(webkit ? 0 : rect.height) ?? -1
       if (index < 0) {
         centres.push(rect.y + rect.height / 2)
         index = centres.length - 1
@@ -237,16 +240,68 @@ export function slotProtocol(c: Case, native: NativeObservation, browser: Browse
   return null
 }
 
-// The rows' code point observations must walk the concatenated text code point by code point.
-function nativeProblem(native: NativeObservation, text: string): string | null {
+function nativeRectsProblem(rects: readonly Rect[]): string | null {
+  if (!Array.isArray(rects)) return 'rects are not an array'
+  for (let i = 0; i < rects.length; i++) {
+    const rect = rects[i]!
+    if (rect === null || typeof rect !== 'object' || !Number.isFinite(rect.x) || !Number.isFinite(rect.y)
+      || !Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width < 0 || rect.height < 0) {
+      return `rect ${i} must have finite numeric x, y, width and height, with nonnegative width and height`
+    }
+  }
+  return null
+}
+
+function nativeRectListsProblem(lists: readonly (readonly Rect[])[], where: string): string | null {
+  if (!Array.isArray(lists)) return `${where} rect lists are not an array`
+  for (let i = 0; i < lists.length; i++) {
+    const problem = nativeRectsProblem(lists[i]!)
+    if (problem !== null) return `${where} ${i} ${problem}`
+  }
+  return null
+}
+
+// The lab records finite client bounds with nonnegative dimensions, not arbitrary DOMRect constructors.
+// Code point observations walk the concatenated text code point by code point.
+function nativeProblem(native: NativeObservation, c: Case, text: string): string | null {
+  if (!Number.isFinite(native.width) || !Number.isFinite(native.height) || native.width < 0 || native.height < 0) return 'Paragraph width and height must be finite nonnegative numbers'
+  if (!Array.isArray(native.points)) return 'Code point observations are not an array'
   let expected = 0
   for (let i = 0; i < native.points.length; i++) {
     const point = native.points[i]!
+    if (point === null || typeof point !== 'object') return `Code point observation ${i} is not an object`
     const length = text.codePointAt(expected)! > 0xffff ? 2 : 1
     if (point.offset !== expected || point.length !== length) return `Code point observation ${i} is [${point.offset}, +${point.length}); expected [${expected}, +${length})`
+    const problem = nativeRectsProblem(point.rects)
+    if (problem !== null) return `Code point observation ${i} ${problem}`
     expected += length
   }
-  return expected === text.length ? null : `Observations cover ${expected} of ${text.length} UTF-16 units`
+  if (expected !== text.length) return `Observations cover ${expected} of ${text.length} UTF-16 units`
+  const runs = nativeRectListsProblem(native.runRects, 'Text node')
+  if (runs !== null) return runs
+  if (native.runRects.length !== c.paragraph.runs.length) return `${c.paragraph.runs.length} text node rect lists expected; ${native.runRects.length} observed`
+  if (native.elements !== undefined) {
+    const elements = nativeRectListsProblem(native.elements, 'Element')
+    if (elements !== null) return elements
+  }
+  if (c.inline !== undefined) {
+    // page.ts emits one list for every non-text node, including empty spans, <br> and <wbr>.
+    let count = 0
+    const pending = [c.inline.content]
+    while (pending.length > 0) {
+      const nodes = pending.pop()!
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i]!
+        if (node.kind === 'text') continue
+        count++
+        if (node.kind === 'span') pending.push(node.children)
+      }
+    }
+    if (native.elements === undefined) return `${count} element rect lists expected; not recorded`
+    if (native.elements.length !== count) return `${count} element rect lists expected; ${native.elements.length} observed`
+  }
+  const floats = native.floats === undefined ? null : nativeRectsProblem(native.floats)
+  return floats === null ? null : `Float ${floats}`
 }
 
 // ---- Engine units ----
@@ -931,10 +986,29 @@ function attribution(layout: RecordedLayout, boxes: readonly number[], failing: 
 // text, leave these rects out, on the native side and on the expected side alike.
 type ReportOnly = { native: boolean[][]; expected: boolean[][] }
 
+// Native-only reading of Blink's source-verified hyphen item report rule above. A matching rect must come from a
+// soft hyphen of the same text node on the same native line. Predictions and their observation ports supply no fact.
+export function nativeHyphenReportRects(browser: LabRow['browser'], runs: Paragraph['runs'], text: string, observation: NativeObservation, lines: NativeLines): boolean[][] {
+  if (browser !== 'chrome') return observation.points.map(point => point.rects.map(() => false))
+  const nodeOf: number[] = [], hyphens: Array<Array<{ line: number; x: number; width: number }>> = runs.map(() => [])
+  for (let index = 0, run = 0, end = runs[0]?.text.length ?? 0; index < observation.points.length; index++) {
+    const point = observation.points[index]!
+    while (run + 1 < runs.length && point.offset >= end) end += runs[++run]!.text.length
+    nodeOf.push(run)
+    if (text.charCodeAt(point.offset) !== 0xad) continue
+    for (let rect = 0; rect < point.rects.length; rect++) {
+      const value = point.rects[rect]!, line = lines.points[index]![rect]!
+      if (value.width > 0 && line >= 0) hyphens[run]!.push({ line, x: value.x, width: value.width })
+    }
+  }
+  return observation.points.map((point, index) => point.rects.map((rect, at) => text.charCodeAt(point.offset) !== 0xad && lines.points[index]![at]! >= 0 && hyphens[nodeOf[index]!]!.some(hyphen => hyphen.line === lines.points[index]![at] && hyphen.x === rect.x && hyphen.width === rect.width)))
+}
+
 function reportOnlyRects(layout: RecordedLayout, runs: Paragraph['runs'], text: string, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines, nativeLineOf: Int32Array): ReportOnly | null {
   const engine = layout.engine
   if (engine === 'gecko') return null
   const out: ReportOnly = { native: [], expected: [] }
+  const nativeHyphens = engine === 'blink' ? nativeHyphenReportRects('chrome', runs, text, nativeObservation, native) : null
   type Placed = { line: number; x: number; width: number }
   const points = observation.codePoints
   const softHyphen = (i: number): boolean => text.charCodeAt(points[i]!.offset) === 0xad
@@ -990,7 +1064,7 @@ function reportOnlyRects(layout: RecordedLayout, runs: Paragraph['runs'], text: 
     return flags
   }
   for (let i = 0; i < points.length; i++) {
-    out.native.push(mark(i, nativeRects(i), hyphens[nodeOf[i]!]!.native, null))
+    out.native.push(nativeHyphens?.[i] ?? mark(i, nativeRects(i), hyphens[nodeOf[i]!]!.native, null))
     out.expected.push(mark(i, expectedRects(i), hyphens[nodeOf[i]!]!.expected, points[i]!.rects))
   }
   return out
@@ -1573,7 +1647,7 @@ export function scoreRow(row: LabRow): CaseScore {
   if ('skipped' in row.native) return noNative({ status: 'unobserved', reason: 'native observation skipped', detail: row.native.skipped })
   if ('error' in row.native) return noNative({ status: 'unobserved', reason: 'native observation error', detail: row.native.error })
   const text = rowText(row.case)
-  const problem = nativeProblem(row.native, text)
+  const problem = nativeProblem(row.native, row.case, text)
   if (problem !== null) return noNative({ status: 'unobserved', reason: 'malformed native observation', detail: problem })
   const native = nativeLines(row.native, row.case.paragraph, row.browser)
   const prediction = row.prediction
@@ -1606,12 +1680,34 @@ export type LineRangeDiagnostics = { visibleBreaks: Metric; zeroWidthPlacement: 
 
 const DIAGNOSTIC_WHITE_SPACE = /^[ \t\n\r\f　]$/
 
-export function lineRangeDiagnostics(native: NativeObservation, lines: NativeLines, prediction: LinesPrediction, text: string): LineRangeDiagnostics {
+export function lineRangeDiagnostics(native: NativeObservation, lines: NativeLines, prediction: LinesPrediction, text: string, reportOnly: readonly (readonly boolean[])[] | null = null): LineRangeDiagnostics {
   if (lines.count !== prediction.lines.length) {
     const metric: Metric = { status: 'unobserved', reason: 'line count differs', detail: `native ${lines.count}, predicted ${prediction.lines.length}` }
     return { visibleBreaks: metric, zeroWidthPlacement: metric }
   }
+  // Ordered disjoint source ranges admit indexed lookup. Legacy overlaps, reversed or malformed ranges keep the
+  // original first-match scan; native points need not be ordered for either path.
+  let ordered = true
+  for (let l = 0; l < prediction.lines.length; l++) {
+    const range = prediction.lines[l]!
+    if (range === undefined || range === null || !Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end)
+      || range.end < range.start || (l > 0 && range.start < prediction.lines[l - 1]!.end)) {
+      ordered = false
+      break
+    }
+  }
   const predictedLine = (offset: number): number => {
+    if (ordered) {
+      let low = 0, high = prediction.lines.length
+      // First range whose end is after this offset. Empty ranges and uncovered gaps still have no matching line.
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2)
+        if (offset >= prediction.lines[middle]!.end) low = middle + 1
+        else high = middle
+      }
+      const range = prediction.lines[low]
+      return range !== undefined && offset >= range.start && offset < range.end ? low : -1
+    }
     for (let l = 0; l < prediction.lines.length; l++) if (offset >= prediction.lines[l]!.start && offset < prediction.lines[l]!.end) return l
     return -1
   }
@@ -1623,20 +1719,22 @@ export function lineRangeDiagnostics(native: NativeObservation, lines: NativeLin
     let positiveLine = -2
     let placedLine = -2
     for (let k = 0; k < point.rects.length; k++) {
+      if (reportOnly?.[i]?.[k]) continue
       const line = lines.points[i]![k]!
       if (line < 0) continue
       placedLine = placedLine === -2 || placedLine === line ? line : -1
       if (point.rects[k]!.width > 0) positiveLine = positiveLine === -2 || positiveLine === line ? line : -1
     }
-    const where = describeCodePoint(text, point.offset, point.length)
-    // A code point no predicted line covers says nothing about where the predicted lines start (main's line ranges leave
-    // out zero-width content at a line edge; research/ROUND1-CRITIC.md item 3): it is left out.
+    // Main's ranges may omit zero-width edge content. Visible content cannot disappear from a passing prediction.
     const l = predictedLine(point.offset)
-    if (l < 0) continue
+    if (l < 0) {
+      if (positiveLine >= 0 && visible.status !== 'fail') visible = { status: 'fail', reason: 'visible code point uncovered by predicted lines', detail: `${describeCodePoint(text, point.offset, point.length)}: native line ${positiveLine}, no predicted line` }
+      continue
+    }
     if (positiveLine >= 0) {
-      if (visible.status !== 'fail') visible = l === positiveLine ? { status: 'pass' } : { status: 'fail', reason: 'code point on other lines', detail: `${where}: native line ${positiveLine}, predicted line ${l}` }
+      if (visible.status !== 'fail') visible = l === positiveLine ? { status: 'pass' } : { status: 'fail', reason: 'code point on other lines', detail: `${describeCodePoint(text, point.offset, point.length)}: native line ${positiveLine}, predicted line ${l}` }
     } else if (positiveLine === -2 && placedLine >= 0 && !DIAGNOSTIC_WHITE_SPACE.test(text.slice(point.offset, point.offset + point.length))) {
-      if (zeroWidth.status !== 'fail') zeroWidth = l === placedLine ? { status: 'pass' } : { status: 'fail', reason: 'zero-width code point on other lines', detail: `${where}: native line ${placedLine}, predicted line ${l}` }
+      if (zeroWidth.status !== 'fail') zeroWidth = l === placedLine ? { status: 'pass' } : { status: 'fail', reason: 'zero-width code point on other lines', detail: `${describeCodePoint(text, point.offset, point.length)}: native line ${placedLine}, predicted line ${l}` }
     }
   }
   return { visibleBreaks: visible, zeroWidthPlacement: zeroWidth }
@@ -1667,7 +1765,7 @@ function scoreLines(row: LabRow, nativeObservation: NativeObservation, predictio
   return {
     metrics: { lineCount, breaks: noLayout, widths: { status: 'not-applicable', reason: 'breaks unobserved' }, painter },
     facts: null, firstDifference: null, native, gaps: [], widthDiffs: [],
-    diagnostics: lineRangeDiagnostics(nativeObservation, native, prediction, text),
+    diagnostics: lineRangeDiagnostics(nativeObservation, native, prediction, text, nativeHyphenReportRects(row.browser, row.case.paragraph.runs, text, nativeObservation, native)),
     protocol: null, lineGaps: lineCount.status === 'fail' ? { lineCount: UNATTRIBUTED } : {},
   }
 }
@@ -1968,12 +2066,19 @@ function sameValues(a: number[], b: number[]): boolean {
 export function nativeDifference(a: NativeView, b: NativeView): string | null {
   if (a.error !== null || b.error !== null) return a.error !== null && b.error !== null ? null : `native observation error in one run: ${a.error ?? b.error}`
   if (a.lines !== b.lines) return `${a.lines} native lines vs ${b.lines}`
+  if (a.points.length !== b.points.length) return `${a.points.length} native code points vs ${b.points.length}`
   for (let i = 0; i < a.points.length; i++) {
     if (!sameValues(a.points[i]!, b.points[i]!)) return `code point ${i}: [x, width, line] ${JSON.stringify(a.points[i])} vs ${JSON.stringify(b.points[i])}`
   }
+  if (a.nodes.length !== b.nodes.length) return `${a.nodes.length} native nodes vs ${b.nodes.length}`
   for (let r = 0; r < a.nodes.length; r++) {
     if (!sameValues(a.nodes[r]!, b.nodes[r]!)) return `node ${r}: [x, width, line] ${JSON.stringify(a.nodes[r])} vs ${JSON.stringify(b.nodes[r])}`
   }
+  if (a.elements.length !== b.elements.length) return `${a.elements.length} native elements vs ${b.elements.length}`
+  for (let e = 0; e < a.elements.length; e++) {
+    if (!sameValues(a.elements[e]!, b.elements[e]!)) return `element ${e}: [x, width, line] ${JSON.stringify(a.elements[e])} vs ${JSON.stringify(b.elements[e])}`
+  }
+  if (!sameValues(a.floats, b.floats)) return `native floats: [x, y, width] ${JSON.stringify(a.floats)} vs ${JSON.stringify(b.floats)}`
   return null
 }
 

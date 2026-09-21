@@ -119,7 +119,7 @@ const MAX_CONTEXTS = 512
 export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean, contexts: Context[] = []): Prepared {
   if (contexts.length > MAX_CONTEXTS) contexts.length = 0
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), contexts), env, inspect, contexts) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env, inspect), contexts), env, inspect, contexts) }
     case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, contexts), env, inspect, contexts) }
     case 'gecko': {
       const own: Context[] = []

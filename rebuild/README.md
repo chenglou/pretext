@@ -1,66 +1,65 @@
 # Pretext rebuild
 
-The current goal is to make the stateless core cheap, with simple data flow and predictable cost, and to make its tests
-reflect native browser behavior. A new paragraph should do only the work its requested output needs. Optimize until the
-remaining gains are small relative to the code, assumptions, and state they would add. There is no arbitrary time bar.
-The engineering approach follows `~/github/vibescript/docs/engineering.md`.
+The goal is a cheap stateless core with simple data flow and predictable cost, and tests that reflect native browser
+behavior. Optimize until the remaining gains are small relative to the code, assumptions and state they add. The
+engineering approach follows `~/github/vibescript/docs/engineering.md`.
 
-This guide records the takeover on 2026-09-20. The prior research endpoint is preserved at
-`codex/redo-handoff-backup-20260920` (`9369b7f`), with every committed study branch in a verified local Git bundle.
-`HANDOFF.md`, `CHARTER.md`, and the dated research reports preserve how that endpoint was built. Their previous phase
-ordering, freezes, and requests for maintainer decisions do not constrain this work; the maintainer authorized changes
-to the foundations, harness, scope, and intermediate behavior.
+Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
+is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated
+research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
+`codex/redo-handoff-backup-20260920` (`9369b7f`), with all committed studies in a verified Git bundle.
 
 ## Core
 
-The public dispatch is `src/index.ts`; each engine owns its preparation and line-filling rules under
-`src/engines/{blink,gecko,webkit}`. Canvas supplies measurements. DOM reads and font-file loading are outside the core.
-Plain preparation computes lines and pieces; inspection additionally computes diagnostic geometry and uncertainty.
-Keep those costs distinct, and retain information needed by actual line decisions when removing diagnostic work.
+`src/index.ts` dispatches to `src/engines/{blink,gecko,webkit}`. Canvas supplies measurements; DOM reads and font-file
+loading are outside the core. Plain preparation computes lines and pieces. Inspection additionally computes diagnostic
+geometry and uncertainty. A paragraph should do only the work its requested output needs.
 
-Prefer fewer representations, local derived values, and ordinary loops. Preserve shaping context at measurement
-boundaries. A smaller number of Canvas calls is not itself a speed result or a correctness argument. Sampled font
-behavior is evidence; it must not silently become a guarantee about arbitrary fonts.
+Prefer fewer representations, local derived values and ordinary loops. Preserve shaping context and numeric units at
+measurement boundaries. A smaller number of Canvas calls is neither a speed result nor a correctness argument.
+Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
 
-Measure stateless preparation plus filling from scratch, separately from repeated widths on retained prepared data.
-Report fresh contexts and a caller-owned context list separately. Keep browser, DPR, font, input population, power
-conditions, and base/head commit beside a timing. Use alternating pairs for small gains and inspect latency tails.
+Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
+DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.
+The core changes and the measured reasons for stopping are in `TAKEOVER.md`.
 
-## Tests and iteration
+## Iteration
 
-Start with the tests for the affected code, then the relevant engine's replay and function checks:
+Run the affected function tests first. They usually finish in under a second. For engine changes, follow with the
+certified fast native workflow for its browser:
 
 ```sh
-bun test rebuild/src/measure/font-checks.test.ts
-bun rebuild/tests/gates.ts --engine=blink --quick
+bun test rebuild/src/engines/blink/canvas-text.test.ts rebuild/src/measure/font-checks.test.ts
+bun rebuild/tests/run-main-obligations.ts --browser=chrome \
+  --catalog=.artifacts/tests/main-native/takeover-certified-compact-final-20260920/chrome \
+  --out=.artifacts/tests/main-native-runs/<new>/chrome
 ```
 
-The quick gates still traverse the selected engine's full recorded references; they are not a tiny smoke suite.
-`TESTS.md` and the lab README's **Test tiers** explain the existing commands and artifact inputs.
+The inspected-range adapter runs the complete inspected core and omits lab diagnostic observation and painting.
+The workflow runs fresh inspected/plain preparations in both orders with no supplied font facts, then checks visible
+cuts, complete source coverage, native stability and mode parity. It preserves actual child failures. Optional
+`--main-comparison` adds two diagnostic main processes. [Main obligations](tests/MAIN_OBLIGATIONS.md) explains
+certification, scope and provenance. A small feature-covering set speeds iteration; it does not replace the full corpus.
+Known foundation failures and native variation still return a nonzero strict result; examine the report against the
+open failures in `TAKEOVER.md`. There is no automatic waiver or acceptance seed in this workflow.
 
-A replay answers what the recorded Canvas calls answered and protects prior output. Native observations answer whether
-that output is correct. Keep both. Changes to measuring questions or string storage require targeted native checks;
-changes to observation or acceptance rules require planted defects that the old rule missed. A browser-history change
-and a predictor-order change are different facts. Newly unstable predictions must not acquire a browser exemption.
-Failures remain visible even when a diagnostic gap explains them.
+[Book survey](tests/BOOK_SURVEY.md) adds all 18 complete maintained texts at original endpoint widths, using separate
+raw and maintained-normalized source contracts. Its portable driver records main, inspected and plain own-native
+observations in both orders. Requirements come from main's actual visible/count passes; unresolved evidence stays
+visible and blocks acceptance.
 
-Main's passing cases are external browser obligations when their visible breaks agree with native layout, rather than
-only their line count agreeing. Do not discard a real passing result because its implementation is heuristic. Keep
-ambiguous or history-sensitive observations separately, with their provenance; do not select exclusions by rebuild
-failure. The full imported main corpus is useful for broad checks; a smaller representative browser set should make
-routine iteration quick without replacing that corpus.
+Before closing an engine change, run its recorded-output and function checks:
 
-Browser jobs are scheduled by the root agent, one checker per browser. The local wrapper is
-`.artifacts/session/with-browser-lock.py`. Laptop/battery runs are authorized; record that condition. Do not alter or
-stop unrelated processes. Run large evaluations only for an unresolved question that a focused check cannot answer.
+```sh
+bun rebuild/tests/gates.ts --engine=blink --quick --fresh
+```
 
-## Current work
+Quick gates traverse the engine's full references. All-engine quick gates took about three minutes in this takeover;
+they are a broader check, not the loop for every small edit. Replay protects prior output; native observations establish
+correctness. Changed measurement questions or string storage need targeted native evidence. Changed acceptance rules
+need planted defects that the old rule missed. Native history and predictor order dependence are separate facts.
 
-- Repair acceptance and native-history comparison, with explicit migration of old ledger semantics.
-- Omit Blink's diagnostic scaling probe on plain preparation while retaining primary-font resolution.
-- Avoid building unused per-character measuring maps on plain zero-spacing text.
-- Remove repeated dictionary machinery and boundary-array copies in Gecko; discard the scan-carry micro-optimization.
-- Establish a fast browser set protecting main's sound passes, and measure the resulting current implementation.
-
-Update this short list and the relevant design/test documentation as work lands. The dated studies are reference
-material; they are not an additional task queue.
+The native driver holds the maintained browser lock across its sequential jobs. Run one checker per
+browser. Keep timing work foreground and verify actual page focus. Laptop/battery runs are authorized; record their
+conditions. Do not alter unrelated processes. Use large evaluations for unresolved questions that focused evidence
+cannot answer. The current work left main's public source and package surface unchanged.

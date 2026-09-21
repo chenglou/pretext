@@ -882,3 +882,52 @@ describe('text-indent, text-align and line slots (DESIGN.md §2.9)', () => {
     expect(textBoxes(lines[0]!.geometry.boxes)[0]!.width).toBe(52)
   })
 })
+
+describe('preparation data flow (items.ts and content.ts)', () => {
+  test('repeated level splits keep their logical order, widths, soft-hyphen flags and later items', () => {
+    const repeats = 256
+    const alternating = 'aא'.repeat(repeats)
+    const prefix = alternating + '\u00ad'
+    const p = paragraph([[prefix + ' ' + 'tail '.repeat(repeats), 'text']])
+    asked = []
+    const prepared = prepare(p, env, false, [])
+    const text = prepared.items.filter(item => item.kind === 'text')
+    const splits = text.filter(item => item.start < alternating.length)
+    expect(splits.map(item => [item.start, item.end, item.level])).toEqual(
+      Array.from({ length: alternating.length }, (_, i) => [i, i + 1, i % 2]),
+    )
+    // InlineTextItem::split keeps the original trailing-soft-hyphen flag on both halves.
+    expect(splits.every(item => item.hasTrailingSoftHyphen)).toBe(true)
+    expect(splits.every(item => item.width === 8)).toBe(true)
+    expect(text.map(item => prepared.boxes[item.box]!.text.slice(item.start, item.end)).join('')).toBe(prefix + ' ' + 'tail '.repeat(repeats))
+    const tail = text.filter(item => !item.isWhitespace && item.start >= prefix.length)
+    expect(tail.length).toBe(repeats)
+    expect(tail.every(item => item.level === 0 && item.width === 32 && !item.hasTrailingSoftHyphen)).toBe(true)
+    expect(asked.filter(question => question.endsWith('|a')).length).toBe(repeats)
+    expect(asked.filter(question => question.endsWith('|א')).length).toBe(repeats)
+    expect(asked.filter(question => question.endsWith('|tail ')).length).toBe(repeats)
+  })
+
+  test('null-language descendants inherit; empty language resets and closing a span restores its parent', () => {
+    const block = treeParagraph([], { ...fontWith(), family: 'sans-serif' })
+    const leaf = (text: string) => ({ kind: 'text' as const, text })
+    let inherited = [
+      leaf('one'),
+      span(block, [leaf('two'), span(block, [leaf('three')], { lang: 'ko' })], { lang: '' }),
+      leaf('four'),
+    ]
+    for (let depth = 0; depth < 128; depth++) inherited = [span(block, inherited)]
+    const nested = { ...block, content: [span(block, inherited, { lang: 'ja' }), leaf('five')] }
+    const explicit = { ...block, content: ['ja', '', 'ko', 'ja', 'en'].map((lang, i) => span(block, [leaf(['one', 'two', 'three', 'four', 'five'][i]!)], { lang })) }
+    asked = []
+    const a = prepare(nested, env, false, [])
+    const questions = asked
+    asked = []
+    const b = prepare(explicit, env, false, [])
+    expect(a.boxes.map(box => box.locale)).toEqual(['ja', '', 'ko', 'ja', 'en'])
+    expect(a.boxes.map(box => [box.text, box.locale, box.canvasFamily])).toEqual(b.boxes.map(box => [box.text, box.locale, box.canvasFamily]))
+    expect(questions).toEqual(asked)
+    // A fresh paragraph has no inherited language from the previous preparation.
+    expect(prepare(paragraph([['six', 'text']]), env, false, []).boxes[0]!.locale).toBe('en')
+  })
+})

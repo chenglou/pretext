@@ -64,12 +64,21 @@ describe('losses', () => {
 })
 
 describe('history dependence and unstable pairs', () => {
-  test('a case history-dependent in a current run never fails the gate, and keeps its baseline passes in the report', () => {
+  test('new native history cannot silently remove baseline pass obligations', () => {
     const baseline = seed([run('a', [result('c-1', 'PPPP')])])
     const report = checkRuns(baseline, [run('b', [result('c-1', 'FFNN', { historyDependent: '2 derived lines vs 1' })])], unchecked)
-    expect(report.ok).toBe(true)
+    expect(report.ok).toBe(false)
     expect(report.lost).toEqual([])
+    expect(report.counts.leftThroughHistoryPairs).toBe(4)
     expect(report.historyDependent).toEqual([{ id: 'c-1', family: 'test/family', now: '2 derived lines vs 1', inBaseline: false, baselinePasses: 'lbwp', currentPasses: '' }])
+  })
+
+  test('new native history blocks even if every currently scored metric still passes', () => {
+    const baseline = seed([run('old', [result('c-1', 'PPPP')])])
+    const report = checkRuns(baseline, [run('new', [result('c-1', 'PPPP', { historyDependent: 'float moved' })])], unchecked)
+    expect(report.ok).toBe(false)
+    expect(report.counts.leftThroughHistoryPairs).toBe(4)
+    expect(report.historyDependent[0]!.currentPasses).toBe('lbwp')
   })
 
   test('a case history-dependent when seeded holds no passes and never fails the gate', () => {

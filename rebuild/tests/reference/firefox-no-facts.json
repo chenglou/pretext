@@ -525,7 +525,16 @@
   },
   "cases": 63771,
   "ledger": {
-    "headerSha256": "417ec5a4b8fcc67bd99fa675f040154ce134620163d25a3c6d8fba2a6bb84105",
-    "entriesSha256": "b61c7b6861f35949861e04ac9fdae00a21d74112ea16f6676075f00d4cf4cb77"
+    "headerSha256": "fc4b83745da8b0d02b7a69e239b59232d0a41be5b2b924356889c7d46622bd30",
+    "entriesSha256": "b97c1f6c981ed678891f62afff368e25321522ff298f819690c4597281185192"
+  },
+  "ledgerReclassified": {
+    "scorer": 8,
+    "format": "pretext-ledger/3",
+    "evidence": ".artifacts/tests/migrations/takeover-20260920/firefox-no-facts-reviewed/migration.json",
+    "predictionsUnchanged": true,
+    "canvasRecordsUnchanged": true,
+    "nativeHistoryAdded": 0,
+    "predictionOrderDependent": 1
   }
 }

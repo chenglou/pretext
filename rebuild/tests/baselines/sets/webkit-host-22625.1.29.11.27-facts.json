@@ -2,212 +2,212 @@
   "format": "pretext-lab-gate/1",
   "engine": "webkit",
   "engineVersion": "22625.1.29.11.27",
-  "note": "tier 2 sets, facts, webkit-host 27.0, macOS 26A428; sets smoke-hand, smoke, runs, ws, policy, rich-prewrap, suite-sample, families, features, heldout-runs, heldout-ws, heldout-policy, heldout-suite-sample",
+  "note": "Scorer 8: full native history comparison; prediction order dependence remains visible. Saved native observations and predictions unchanged.",
   "environments": [
-    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 7"
+    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 8"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/smoke-hand/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": "rebuild/lab/smoke-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/smoke-hand/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 25,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/smoke-hand/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": "rebuild/lab/smoke-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/smoke-hand/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 25,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/smoke/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/smoke.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/smoke/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 300,
-      "historyDependent": 0
+      "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/smoke/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/smoke.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/smoke/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 300,
-      "historyDependent": 0
+      "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/runs/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/runs.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/runs/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/runs/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/runs.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/runs/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/ws/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/ws.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/ws/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/ws/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/ws.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/ws/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/policy/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/policy.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/policy/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/policy/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/policy.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/policy/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/rich-prewrap/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/rich-prewrap.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/rich-prewrap/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1334,
       "historyDependent": 11
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/rich-prewrap/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/rich-prewrap.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/rich-prewrap/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1334,
       "historyDependent": 11
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part0.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 11
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part0.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 11
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/forward/part1/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part1.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/forward/part1/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/reverse/part1/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part1.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/reverse/part1/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/forward/part2/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part2.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/forward/part2/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4998,
       "historyDependent": 25
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/reverse/part2/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part2.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/reverse/part2/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4998,
       "historyDependent": 25
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/forward/part3/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part3.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/forward/part3/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4935,
       "historyDependent": 39
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/reverse/part3/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/suite-sample-part3.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/suite-sample/reverse/part3/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4935,
       "historyDependent": 39
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/families/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/tests/derive-r3-20260917/webkit-host/families/final/family-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/families/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 9726,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/families/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/tests/derive-r3-20260917/webkit-host/families/final/family-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/families/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 9726,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/features/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/tests/derive-r3-20260917/webkit-host/features/final/family-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/features/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 12268,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/features/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/tests/derive-r3-20260917/webkit-host/features/final/family-cases.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/features/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 12268,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-runs/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-runs/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-runs/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-runs/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-ws/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-ws/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-ws/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-ws/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-policy/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-policy/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-policy/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-policy/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-suite-sample/forward/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part0.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-suite-sample/forward/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4991,
       "historyDependent": 119
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-suite-sample/reverse/part0/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part0.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-suite-sample/reverse/part0/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 4991,
       "historyDependent": 119
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-suite-sample/forward/part1/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part1.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-suite-sample/forward/part1/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 60
     },
     {
-      "perCase": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-suite-sample/reverse/part1/webkit-host-per-case.ndjson",
-      "casesFile": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part1.ndjson",
+      "perCase": ".artifacts/tests/migrations/takeover-20260920/webkit-host-facts/runs/heldout-suite-sample/reverse/part1/webkit-host-per-case.ndjson",
+      "casesFile": null,
       "cases": 5000,
       "historyDependent": 60
     }

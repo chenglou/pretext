@@ -232,6 +232,8 @@ export type PageEnv = { userAgent: string; devicePixelRatio: number; visualViewp
 
 export type ProbeOutput = {
   status: 'ok' | 'error'
+  foreground?: boolean
+  requireClean?: boolean
   errors: string[]
   browser: BrowserKind
   // The browser build the runner read from the app bundles before launch (lab/browser-build.ts). Absent in outputs recorded

@@ -210,7 +210,7 @@ function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScrip
 
 // script-context for every stretch of the measured string, white space apart, that Canvas shapes under another script than
 // the paragraph does.
-function scriptContext(gaps: Gap[], p: BlinkPrepared, cs: CanvasString, scripts: Uint8Array): void {
+function scriptContext(gaps: Gap[], p: BlinkPrepared, units: readonly number[], scripts: Uint8Array): void {
   let start = -1
   let end = -1
   const flush = (): void => {
@@ -218,8 +218,8 @@ function scriptContext(gaps: Gap[], p: BlinkPrepared, cs: CanvasString, scripts:
     addGap(gaps, 'script-context', runAt(p, start), SCRIPT_CONTEXT_DETAIL, sourceRange(p, start, end))
     start = -1
   }
-  for (let u = 0; u < cs.units.length; u++) {
-    const t = cs.units[u]!
+  for (let u = 0; u < units.length; u++) {
+    const t = units[u]!
     if (t < 0) continue
     const c = p.text.charCodeAt(t)
     if ((c & 0xfc00) === 0xdc00) { if (start >= 0) end = t + 1; continue }
@@ -244,7 +244,8 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   callEdge(sink, p, g, from, callStart, callEnd)
   callEdge(sink, p, g, to, callStart, callEnd)
   const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s) : null)
-  if (canvasScripts !== null) scriptContext(sink, p, cs, canvasScripts)
+  // A non-null sink requested the map in measure16.
+  if (canvasScripts !== null) scriptContext(sink, p, cs.units!, canvasScripts)
 }
 
 // ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces) ----

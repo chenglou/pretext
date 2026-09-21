@@ -1,6 +1,6 @@
 {
-  "staged": "../../pretext-rebuild/.artifacts/tests/staged-seeds-b1b-merge-20260920/chrome-153.0.8010.50-facts.json",
-  "against": "rebuild/tests/baselines/sets/chrome-153.0.8010.50-facts.json",
+  "staged": "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/migrations/takeover-20260920/staged-seeds/chrome-153.0.8010.50-facts.json",
+  "against": "/Users/chenglou/github/pretext-rebuild/rebuild/tests/baselines/sets/chrome-153.0.8010.50-facts.json",
   "counts": {
     "cases": 68403,
     "passPairs": {
@@ -20,5 +20,7 @@
   "leftWithTheirCase": [],
   "gained": [],
   "casesOnlyBefore": 0,
-  "casesOnlyAfter": 2159
+  "casesOnlyAfter": 0,
+  "historyWitnessLedger": "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/migrations/takeover-20260920/chrome-facts/ledger",
+  "carriedNativeWitnesses": []
 }

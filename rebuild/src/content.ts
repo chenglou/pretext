@@ -90,12 +90,3 @@ export function styleUnder<Font>(paragraph: ParagraphOf<Font>, index: ContentInd
   if (node.kind !== 'span') throw new Error(`element ${parent} is ${node.kind}, which holds no content`)
   return node
 }
-
-// The lang attribute that applies under `parent`: the nearest span that has one, else the block's.
-export function langUnder<Font>(paragraph: ParagraphOf<Font>, index: ContentIndex<Font>, parent: number): string {
-  for (let e = parent; e >= 0; e = index.elements[e]!.parent) {
-    const node = index.elements[e]!.node
-    if (node.kind === 'span' && node.lang !== null) return node.lang
-  }
-  return paragraph.lang
-}

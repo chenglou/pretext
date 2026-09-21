@@ -320,7 +320,7 @@ Alignment itself is Blink `ApplyTextAlign` with justification (`inline_layout_al
 `TextAlignLine` and `ApplyFrameJustification` (`nsLineLayout.cpp:3220-3670`). `text-align-last` is fixed at `auto`: the
 last line and a line ending at a forced break take `start` under `justify`.
 
-**Language.** A span's `lang` null inherits its parent's; `langUnder` in `src/content.ts` finds the nearest. The block's
+**Language.** A span's `lang` null inherits its parent's; the engines carry it through document-order traversal. The block's
 `lang` `''` is `lang=""`: the language is unknown and does not inherit `<html lang>` (lab/VALIDATION.md, fix 1). `<html
 lang>` is `env.pageLang`.
 
@@ -382,6 +382,11 @@ A given fact never produces a gap of its own.
 | `opticalSizeAxis`: the fonts drawing the declaration have an opsz axis | Blink at layout zoom ≠ 1; Gecko | Blink's DOM shapes at the zoomed size with opsz at the CSS size (`font_platform_data_mac.mm:170-176`); Gecko's OffscreenCanvas uses the axis default (specs/gecko-canvas.md §1.2 C1a) | Blink at zoom ≠ 1, only ever `false`; never for the system font keywords; Gecko's OffscreenCanvas shows nothing | true when `primaryFamily` is the engine's system-font keyword (Blink: `system-ui`, `BlinkMacSystemFont`; Gecko: `system-ui`, `-apple-system`), else false | `optical-size`: Blink wherever layout zoom ≠ 1; Gecko for every run |
 | `joining`: how the font drawing joining-script text shapes | Blink | HarfBuzz's Arabic shaper reads the shaping call's context for OpenType fonts; `morx` fonts never read it (`hb-ot-shape.cc:60-66, 100-101`) | Blink, where the text holds a joining-script letter; null for fonts whose joined forms are as wide as isolated ones | each shaping call's text measured alone, which is what an AAT font gives | `joining-technology` at a shaping-call edge between joining letters |
 | `pairKerning`: where HarfBuzz puts a pair adjustment between two glyphs of the primary font's Latin text | Blink; Gecko for in-word positions between kerned glyphs (`in-word-prefix` when null); WebKit for the space a text item is measured with (`simplified-measuring` when null) | GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2 adds it to the first glyph's advance (`PairSet.hh:126-127`); the kern and kerx pair machine adds `kern >> 1` to the first glyph and the rest to the second (`hb-kern.hh:102-106`); which one applies follows the font's GPOS, kern and kerx tables (`hb-ot-shape.cc:150-185`, harfbuzz dfdc088c) | Blink and WebKit: no, Canvas totals don't show which glyph carries it. Blink keeps 16.16 advances and rounds no glyph, so no total moves with the placement (tried again in correctness round 5, §5). Gecko: yes, where the fact is null, per offset between two kerned glyphs and never as a fact of the declaration (`engines/gecko/advance.ts`, §4.4): Gecko rounds each glyph's advance to app units, so the placements give totals one app unit apart, which widths at the size times 2^k tell; a pair that doesn't tell keeps the default and its gap | all of it on the first glyph | `unsafe-to-break` at a line edge taken from the paragraph's positions where the adjustment isn't 0 |
+
+Blink's primary-family resolution remains required on plain preparation: a missing listed family can resolve to a
+system font whose scaling changes line decisions. The six sampled linear-advance questions serve inspection's gap
+reporting only and are omitted on plain preparation. The inspection request reaches the font-check plan explicitly;
+plain preparation still performs primary-family discovery and reads supplied optical-size facts.
 
 What a given fact does:
 
@@ -1252,12 +1257,19 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   fields without text. A run's trailing white space and a line's trimmable content are a record or null, and the
   breaker's result is a union on its action. A box's inspection record is made in one step, with the box (`gaps.ts`
   `boxMade`, from a family list parsed once, `fonts.ts` `familyNames` over the shared list, `src/font-family.ts`). The
-  item builder is `items.ts`; the history worlds and a decided line laid out in them are `history.ts`. No import cycle
+  item builder is `items.ts`: bidi-level splits are appended in logical order, with a pending right half replacing
+  its source slot, so splitting does not move all later items and offsets. `content.ts` carries the inherited language
+  on its renderer frame stack; only null inherits, an empty language resets it, and closing a span restores the parent.
+  Each leaf reads that language without walking its ancestors again. Both structures live only in preparation.
+  The history worlds and a decided line laid out in them are `history.ts`. No import cycle
   is left, type imports included: `gaps.ts` imports neither the fill nor the content stage, `history.ts` imports the
   fill, the output and `gaps.ts`, and `content.ts` (which collects the worlds when it prepares an inspected paragraph)
   and `index.ts` import `history.ts`.
 - Gecko. A text leaf is one record (`GeckoLeaf`: its source range, parent, style, font, language, 8-bit storage, and
-  letter and word spacing in au). A text run is cut into shaping units once, where the port of
+  letter and word spacing in au). Its language comes from the document-order event walk in `prepare.ts`, with a local
+  stack: null inherits, an empty tag resets, and closing a span restores the parent. Canonicalization stays at each
+  text leaf, so an empty localized span parses no language; the walk ends at the final text event. The stack is gone
+  after preparation and no new field is kept. A text run is cut into shaping units once, where the port of
   `gfxFont::SplitAndInitTextRun` sets the glyph flags (`prepare.ts` `splitAndInitTextRun`), and the measuring step reads
   those units. What measuring found inside a unit is on the unit (`GeckoUnit.inWord`, §4.6). Text runs that measure
   alike share one record of their Canvas contexts (`RunContexts`, held as `GeckoTextRun.contexts`), and what Canvas told
@@ -1284,7 +1296,7 @@ follow-up added the other 105: the one font-family parser (99 lines, where the f
 
 Shared, working and tested (§8.2):
 
-- `src/content.ts`: the document-order index of the inline tree, `styleUnder` and `langUnder`.
+- `src/content.ts`: the document-order index of the inline tree and `styleUnder`.
 - `src/breaks/rbbi.ts`: the ICU rule-based break iterator over `.brk` data, with Apple's category overrides and a
   dictionary-segment flag. Blink and WebKit use it for line and grapheme tables.
 - `src/breaks/icu4x.ts`: ICU4X's small code point trie and the rule iterator for Firefox's baked data. Gecko's line
@@ -1371,6 +1383,15 @@ holds a space, a character other than white space, no soft hyphen and no charact
 as an 8-bit string with U+0020 itself. That string is one item shaped as one Latin segment, which is the paragraph's own
 shaping (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), where `RunSegmenter` resolves the 16-bit string as
 Common. Fonts shaped word by word keep U+2028 and the `script-context` condition, since U+0020 would cut the string there.
+
+Plain measuring omits the source-unit map when neither diagnostics nor effective 16.16 letter spacing reads it.
+The general builder still owns mapped, segmented, soft-hyphen and artificial-ZWJ questions. For plain, unsegmented
+Latin-1 text without soft hyphens and with a zero-letter-spacing style, preparation makes equal-length Canvas
+spellings once: VT/FF become U+0001; one spelling keeps spaces, the other uses U+2028. Questions slice the required
+spelling. This adds normally two bytes per source unit, at most about three plus a small object, and stores no answers.
+The characters and one-byte/two-byte encoding remain the measuring protocol; sequential versus sliced JS storage is
+not a guarantee. Inspected and all-nonzero-spacing paragraphs compile neither spelling. `canvas-text.test.ts` protects
+the builder boundary; the focused native pair in `TAKEOVER.md` verifies ordered questions, answers and complete pieces.
 
 ### 4.3 Font strings and sizes
 
@@ -1547,7 +1568,10 @@ text the middle falls inside a word, and the test of that offset was one test of
 cut (`positionAdjust16`) is the 0 the search measured, where it measured it: the pair window's at a cut that passed,
 and before white space the wide window's where both sides of the cut are one piece, since the window `adjust16` takes
 between the cuts around an offset is then the search's own. Elsewhere it is asked once the cuts are known. Unit: per
-cut, the wide window's strings (its total after each shrink, and its two sides) and the pair window's 3. The test stays
+cut, the wide window's strings (its total after each shrink, and its two sides) and the pair window's 3. An accepted unshrunk wide
+window can already have measured an entire child range. That transient width passes directly to the recursive child;
+a shrunken window or failed test carries nothing. It removes a duplicate question without storing an answer table,
+changing a cut, or borrowing a width from another shaping context. The test stays
 because two forms that asked less moved lines (research/PROFILING-START.md, item 6). A cut picked without asking
 Canvas, with the pair window's adjustment added there, moved lines in 1,158 of 22,536 cases built to sit at a cut, in
 Futura, Baskerville, Zapfino and Apple Chancery: between `ff` and `i` the pair window, measured alone, shows an `fi`
@@ -2390,7 +2414,11 @@ the same data, and `env.dictionaryBreaks` says which is available.
   (research/PERF-JS-PROFILE.md).
 - **Gecko**: Firefox's `Intl.Segmenter` word granularity uses ICU4X's word segmenter, and layout's per-word LSTM breaks
   equaled it on 54,589 of 54,589 SA positions (specs/gecko-text.md §10). Gecko feeds one space-delimited word at a time,
-  split by language. Probe gecko-text H25 confirms it in installed Firefox 156.
+  split by language. Probe gecko-text H25 confirms it in installed Firefox 156. One preparation's line breaker
+  lazily makes a word segmenter for each of the four explicit locales it reaches and reuses it across its resets.
+  The machines keep no text or boundaries and do not outlive preparation. Each dictionary range's returned boundaries
+  remain in their original coordinates and are consumed by a cursor, without copying the remaining suffix at each
+  boundary. Every segmentation request and break opportunity is unchanged.
 
 Predicting an engine from another runtime (tests, another browser) leaves `unavailable`: SA runs get no interior break
 opportunities and the paragraph reports `dictionary-breaks-unavailable`.
@@ -2871,7 +2899,7 @@ rebuild/
     model.ts        input tree, font facts, line slots, fragments, gaps, and what the function set returns
                     (FillResultOf, LinePieces, LineInspectionOf); names no engine                                     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
-    content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
+    content.ts      indexContent, styleUnder, and its test                                               architect
     font-family.ts  listedFamilies: a CSS font-family list as the families it names, the one parser the font checks
                     and the three ports read (§1.1), and its test                                                   architect
     paint.ts        paintLines(), painterLimits(), PaintRules and PaintLine: the painter, which names no engine (§7)  architect

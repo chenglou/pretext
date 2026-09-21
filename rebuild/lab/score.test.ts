@@ -8,12 +8,33 @@ import {
 } from './row-fixtures.ts'
 import type { Gap, GapName } from '../src/model.ts'
 import type { ExpectedObservation } from './observe/contract.ts'
-import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, syntheticBoldStep, withNativeRow, type CaseScore } from './score.ts'
-import type { BrowserKind, EnginePrediction, LabRow, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
+import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, syntheticBoldStep, withNativeRow, type CaseScore, type NativeLines, type NativeView } from './score.ts'
+import type { BrowserKind, EnginePrediction, InlineNode, LabRow, LinesPrediction, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
 
 const f32 = Math.fround
 
 describe('native lines', () => {
+  test('WebKit raw/truncated top aliases retain the first positive-height node box in source order', () => {
+    const p = paragraph([['ab', 'text']])
+    const first: Rect = { x: 0, y: 10.3, height: 20, width: 8 }
+    const alias: Rect = { x: 0, y: 10.296875, height: 60, width: 8 }
+    const observed = native(p, [[{ ...first, height: 19 }], [{ ...alias, height: 19 }]], [[first, alias]])
+    expect(nativeLines(observed, p, 'webkit-host')).toEqual({ count: 2, points: [[0], [0]], nodes: [[0, 1]], elements: [], unplaced: 0, byCentre: 0 })
+    observed.runRects[0]!.reverse()
+    expect(nativeLines(observed, p, 'webkit-host')).toEqual({ count: 2, points: [[0], [1]], nodes: [[1, 0]], elements: [], unplaced: 0, byCentre: 0 })
+    observed.runRects[0] = [{ ...first, height: 0 }, alias]
+    expect(nativeLines(observed, p, 'webkit-host')).toEqual({ count: 2, points: [[0], [1]], nodes: [[-1, 1]], elements: [], unplaced: 1, byCentre: 1 })
+  })
+
+  test('Gecko matches both top and height, while standalone NaN tops never report a node box', () => {
+    const p = paragraph([['ab', 'text']])
+    const first = at(0, 8), second = { ...at(0, 8), height: 60 }
+    expect(nativeLines(native(p, [[first], [second]], [[first, second]]), p, 'firefox')).toEqual({ count: 2, points: [[0], [1]], nodes: [[0, 1]], elements: [], unplaced: 0, byCentre: 0 })
+    const one = paragraph([['a', 'text']]), nan = { ...at(0, 8), y: NaN }
+    // scoreRow rejects malformed geometry, but the exported standalone grouper preserves its strict-equality rule.
+    for (const browser of ['chrome', 'firefox', 'webkit-host'] as const) expect(nativeLines(native(one, [[nan]], [[nan]]), one, browser)).toEqual({ count: 1, points: [[0]], nodes: [[0]], elements: [], unplaced: 0, byCentre: 1 })
+  })
+
   test('zero-width rects are placed, rects without height are not', () => {
     const p = paragraph([['ab', 'text']])
     const lines = nativeLines(native(p, [[at(0, 8), { x: 8, y: 30, width: 0, height: 0 }], [at(0, 0, 1)]], [[at(0, 8), at(0, 0, 1)]]), p, 'chrome')
@@ -45,6 +66,55 @@ describe('native lines', () => {
     expect(nativeLines(observed, p, 'chrome').count).toBe(1)
     expect(nativeLines(observed, p, 'webkit-host').count).toBe(1)
     expect(nativeLines(observed, p, 'firefox').count).toBe(2)
+  })
+})
+
+describe('native collection population matches the declared case', () => {
+  test('missing or extra text-node lists are malformed even when code-point rects still group, and empty runs retain their list', () => {
+    const p = paragraph([['', 'text'], ['ab cd', 'text'], ['', 'span']])
+    const observed = { ...abcdNative, runRects: [[], ...abcdNative.runRects, []] }
+    const base = linesRow(row('chrome', p, observed, abcdLayout, abcdExpected), [[0, 3], [3, 5]])
+    expect(scoreRow(base).native!.nodes).toEqual([[], [0, 1], []])
+    for (const runRects of [[], observed.runRects.slice(0, 2), [...observed.runRects, []]]) {
+      const score = scoreRow({ ...base, native: { ...observed, runRects } })
+      expect(score.native).toBeNull()
+      expect(Object.values(score.metrics).every(metric => metric.status === 'unobserved' && metric.reason === 'malformed native observation')).toBe(true)
+    }
+    // The exported standalone grouper deliberately remains usable independently of complete case validation.
+    expect(nativeLines({ ...observed, runRects: [] }, p, 'chrome').count).toBe(2)
+  })
+
+  test('inline element lists include nested and empty spans, atomics, br and wbr, but exclude text leaves', () => {
+    const p = paragraph([['ab cd', 'text'], ['', 'text']])
+    const span = (children: InlineNode[]): InlineNode => ({
+      kind: 'span', font: p.font, letterSpacing: p.letterSpacing, wordSpacing: p.wordSpacing,
+      whiteSpace: p.whiteSpace, wordBreak: p.wordBreak, overflowWrap: p.overflowWrap, lineBreak: p.lineBreak, tabSize: p.tabSize,
+      lang: null, inlineStart: { margin: 0, border: 0, padding: 0 }, inlineEnd: { margin: 0, border: 0, padding: 0 }, verticalAlign: 'baseline', children,
+    })
+    const content: InlineNode[] = [span([
+      { kind: 'text', text: 'ab cd' }, span([{ kind: 'text', text: '' }]),
+      { kind: 'atomic', width: 0, height: 0, marginInlineStart: 0, marginInlineEnd: 0 }, { kind: 'br' }, { kind: 'wbr' },
+    ]), span([])]
+    const observed = { ...abcdNative, runRects: [...abcdNative.runRects, []], elements: [[], [], [], [], [], []] }
+    const base = linesRow(row('chrome', p, observed, abcdLayout, abcdExpected), [[0, 3], [3, 5]])
+    base.case.inline = { content, textIndent: 0, textAlign: 'start', lineSlots: [] }
+    expect(scoreRow(base).native!.elements).toEqual([[], [], [], [], [], []])
+    for (const elements of [[], observed.elements.slice(0, 5), [...observed.elements, []]]) {
+      expect(scoreRow({ ...base, native: { ...observed, elements } }).metrics.lineCount).toMatchObject({ status: 'unobserved', reason: 'malformed native observation', detail: `6 element rect lists expected; ${elements.length} observed` })
+    }
+    const missing = { ...observed }
+    delete (missing as NativeObservation).elements
+    expect(scoreRow({ ...base, native: missing }).metrics.lineCount).toMatchObject({ status: 'unobserved', reason: 'malformed native observation', detail: '6 element rect lists expected; not recorded' })
+  })
+
+  test('empty text and zero-rect observations remain valid with every node placeholder present', () => {
+    const p = paragraph([['', 'text'], ['\u200b', 'text'], ['', 'text']])
+    const observed = { ...native(p, [[]], [[], [], []]), elements: [] }
+    const base = linesRow(row('chrome', p, observed, blink([]), observation(p, [[]], [[], [], []])), [])
+    base.case.inline = { content: [{ kind: 'text', text: '' }, { kind: 'text', text: '\u200b' }, { kind: 'text', text: '' }], textIndent: 0, textAlign: 'start', lineSlots: [] }
+    expect(scoreRow(base).native).toMatchObject({ count: 0, nodes: [[], [], []], elements: [] })
+    const empty = paragraph([['', 'text']])
+    expect(scoreRow(linesRow(row('chrome', empty, native(empty, [], [[]]), blink([]), observation(empty, [], [[]])), [])).native).toMatchObject({ count: 0, points: [], nodes: [[]] })
   })
 })
 
@@ -135,8 +205,8 @@ describe('rects compare exactly, and the metrics follow from the comparisons', (
 describe('slot protocol rows', () => {
   const slotted = (floats: Rect[] | undefined): LabRow => {
     const base = row('firefox', abcd, abcdNative, gecko([[0, 3, 937], [3, 5, 844]]), abcdExpected)
-    const inline = { content: [], textIndent: 10, textAlign: 'start' as const, lineSlots: [{ left: 40, right: 40 }, { left: 40, right: 40 }] }
-    return { ...base, case: { ...base.case, inline }, native: floats === undefined ? { ...abcdNative, width: 90 } : { ...abcdNative, width: 90, floats } }
+    const inline = { content: [{ kind: 'text' as const, text: 'ab cd' }], textIndent: 10, textAlign: 'start' as const, lineSlots: [{ left: 40, right: 40 }, { left: 40, right: 40 }] }
+    return { ...base, case: { ...base.case, inline }, native: floats === undefined ? { ...abcdNative, width: 90, elements: [] } : { ...abcdNative, width: 90, elements: [], floats } }
   }
 
   test('floats in their rows on their sides describe the slots', () => {
@@ -166,7 +236,10 @@ describe('elements: Element.getClientRects() of cases with inline structure', ()
   const layout = blink([[0, 2, 2000], [2, 2, 1920]])
   const base = row('chrome', p, native(p, [[at(0, 8)], [at(8, 7.625)]], [[at(0, 15.625)]]), layout,
     { ...observation(p, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)]], [[expect32(0, 0, 15.625)]]), elements: [[expect32(1, 0, 15)]] })
-  const withElements = (elements: Rect[][]): LabRow => ({ ...base, case: { ...base.case, inline: { content: [], textIndent: 0, textAlign: 'start', lineSlots: [] } }, native: { ...(base.native as NativeObservation), elements } })
+  const withElements = (elements: Rect[][]): LabRow => ({ ...base, case: { ...base.case, inline: {
+    content: [{ kind: 'text', text: 'ab' }, { kind: 'atomic', width: 15, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }],
+    textIndent: 0, textAlign: 'start', lineSlots: [],
+  } }, native: { ...(base.native as NativeObservation), elements } })
 
   test('a line holding only an atomic inline is observed through its element rect', () => {
     const score = scoreRow(withElements([[{ x: 0, y: 26, width: 15, height: 10 }]]))
@@ -566,7 +639,7 @@ describe('residual classes', () => {
     const scored = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${path}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
     expect(scored.exitCode).toBe(0)
     const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { scorer: number; browsers: { firefox: { lineLocal: Record<string, unknown> } } }
-    expect(summary.scorer).toBe(7)
+    expect(summary.scorer).toBe(8)
     expect(summary.browsers.firefox.lineLocal['predictionRows']).toEqual({ failing: 4, withoutCoveredExplanation: 3, residualProbed: 1, residualSignatureOnly: 1, open: 1 })
     expect(summary.browsers.firefox.lineLocal['residual']).toEqual({ 'gecko/one-shaping-unit-one-app-unit': { probed: 1, signatureOnly: 1, coveredProbed: 0, coveredSignatureOnly: 0 } })
     expect(summary.browsers.firefox.lineLocal['withoutLineGap']).toEqual({ lineCount: 0, breaks: 0, widths: 3, painter: 3 })
@@ -869,6 +942,55 @@ describe('painter: painted lines against the engine width', () => {
 describe('a prediction of line ranges alone', () => {
   const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
 
+  const diagnosticInput = (count: number, points: readonly (readonly [offset: number, length: number, nativeLine: number, width: number])[]): { observed: NativeObservation; lines: NativeLines } => ({
+    observed: { ...abcdNative, points: points.map(([offset, length, line, width]) => ({ offset, length, rects: [at(0, width, line)] })) },
+    lines: { count, points: points.map(([, , line]) => [line]), nodes: [], elements: [], unplaced: 0, byCentre: 0 },
+  })
+
+  test('empty ranges, uncovered zero-width content and unordered UTF-16 points preserve placement', () => {
+    const text = 'a👩\u00adbc\u200b'
+    const prediction: LinesPrediction = { lines: [{ start: 0, end: 0 }, { start: 0, end: 3 }, { start: 3, end: 3 }, { start: 4, end: 7 }] }
+    const { observed, lines } = diagnosticInput(4, [[5, 1, 3, 8], [1, 2, 1, 8], [3, 1, 0, 0], [6, 1, 3, 0], [0, 1, 1, 8]])
+    expect(lineRangeDiagnostics(observed, lines, prediction, text)).toEqual({ visibleBreaks: { status: 'pass' }, zeroWidthPlacement: { status: 'pass' } })
+    observed.points[2]!.rects[0]!.width = 8
+    expect(lineRangeDiagnostics(observed, lines, prediction, text).visibleBreaks).toEqual({ status: 'fail', reason: 'visible code point uncovered by predicted lines', detail: `code point 3 ${JSON.stringify('\u00ad')}: native line 0, no predicted line` })
+    // The first failure is in point order, including when offsets decrease.
+    lines.points[0]![0] = 0
+    expect(lineRangeDiagnostics(observed, lines, prediction, text).visibleBreaks).toEqual({ status: 'fail', reason: 'code point on other lines', detail: 'code point 5 "c": native line 0, predicted line 3' })
+  })
+
+  test('legacy overlaps, reordered and malformed ranges retain their first matching line', () => {
+    const cases: { ranges: LinesPrediction['lines']; points: readonly (readonly [number, number, number, number])[] }[] = [
+      { ranges: [{ start: 0, end: 4 }, { start: 2, end: 5 }, { start: 5, end: 6 }], points: [[3, 1, 0, 8], [4, 1, 1, 8], [5, 1, 2, 8]] },
+      { ranges: [{ start: 4, end: 6 }, { start: 0, end: 2 }, { start: 2, end: 4 }], points: [[0, 1, 1, 8], [2, 1, 2, 8], [4, 1, 0, 8]] },
+      { ranges: [{ start: 2, end: 0 }, { start: 0, end: 3 }, { start: 3, end: 6 }], points: [[0, 1, 1, 8], [3, 1, 2, 8]] },
+      { ranges: [{ start: 0, end: .5 }, { start: .5, end: 3 }, { start: 3, end: 6 }], points: [[0, 1, 0, 8], [1, 1, 1, 8], [3, 1, 2, 8]] },
+      { ranges: [{ start: NaN, end: NaN }, { start: 0, end: 3 }, { start: 3, end: Infinity }], points: [[0, 1, 1, 8], [4, 1, 2, 8]] },
+      { ranges: [{} as never, { start: 0, end: 3 }, { start: 3, end: 6 }], points: [[0, 1, 1, 8], [4, 1, 2, 8]] },
+      // A malformed later entry is never read by the original first-match scan when the first range covers the point.
+      { ranges: [{ start: 0, end: 6 }, null as never], points: [[0, 1, 0, 8]] },
+      { ranges: [{ start: 0, end: 6 }, undefined as never], points: [[0, 1, 0, 8]] },
+    ]
+    for (const { ranges, points } of cases) {
+      const { observed, lines } = diagnosticInput(ranges.length, points)
+      expect(lineRangeDiagnostics(observed, lines, { lines: ranges }, 'abcdef')).toEqual({ visibleBreaks: { status: 'pass' }, zeroWidthPlacement: { status: 'unobserved', reason: 'no zero-width code point to place' } })
+    }
+    const { observed, lines } = diagnosticInput(2, [[0, 1, 0, 8]])
+    expect(() => lineRangeDiagnostics(observed, lines, { lines: [null as never, { start: 0, end: 6 }] }, 'abcdef')).toThrow(TypeError)
+  })
+
+  test('book-sized ordered ranges cover every point and preserve inconclusive early returns', () => {
+    const text = 'ab\u00ad '.repeat(16384)
+    const prediction: LinesPrediction = { lines: Array.from({ length: text.length / 16 }, (_, line) => ({ start: line * 16, end: (line + 1) * 16 })) }
+    const { observed, lines } = diagnosticInput(prediction.lines.length, Array.from({ length: text.length }, (_, offset) => [offset, 1, Math.floor(offset / 16), text[offset] === '\u00ad' || text[offset] === ' ' ? 0 : 8] as const))
+    expect(lineRangeDiagnostics(observed, lines, prediction, text)).toEqual({ visibleBreaks: { status: 'pass' }, zeroWidthPlacement: { status: 'pass' } })
+    const reportOnly = observed.points.map(() => [true])
+    expect(lineRangeDiagnostics(observed, lines, prediction, text, reportOnly)).toEqual({ visibleBreaks: { status: 'unobserved', reason: 'no code point has positive-width rects on one native line' }, zeroWidthPlacement: { status: 'unobserved', reason: 'no zero-width code point to place' } })
+    const mismatch = lineRangeDiagnostics(observed, { ...lines, count: 3 }, { lines: [null as never] }, text)
+    expect(mismatch).toEqual({ visibleBreaks: { status: 'unobserved', reason: 'line count differs', detail: 'native 3, predicted 1' }, zeroWidthPlacement: { status: 'unobserved', reason: 'line count differs', detail: 'native 3, predicted 1' } })
+    expect(mismatch.visibleBreaks).toBe(mismatch.zeroWidthPlacement)
+  })
+
   test('only the line count is a metric', () => {
     expect(scoreRow(linesRow(base, [[0, 3], [3, 5]])).metrics).toEqual({
       lineCount: { status: 'pass' },
@@ -900,7 +1022,7 @@ describe('a prediction of line ranges alone', () => {
     expect(lineRangeDiagnostics(observed, lines, { lines: [{ start: 0, end: 1, width: 0 }, { start: 1, end: 3, width: 0 }] }, text).zeroWidthPlacement).toEqual({ status: 'pass' })
   })
 
-  test('a code point no predicted line covers is left out, not a failure', () => {
+  test('uncovered zero-width edge content is left out, not a failure', () => {
     // Main's line ranges leave out the ZWSP at the line edge: [0, 1) and [2, 3).
     const p = paragraph([['a​b', 'text']])
     const observed = native(p, [[at(0, 8)], [at(8, 0)], [at(0, 8, 1)]], [[at(0, 8), at(0, 8, 1)]])
@@ -909,6 +1031,12 @@ describe('a prediction of line ranges alone', () => {
       visibleBreaks: { status: 'pass' },
       zeroWidthPlacement: { status: 'unobserved', reason: 'no zero-width code point to place' },
     })
+  })
+
+  test('an uncovered visible code point fails even when line count and every other visible placement agree', () => {
+    const score = scoreRow(linesRow(base, [[0, 3], [4, 5]]))
+    expect(score.metrics.lineCount.status).toBe('pass')
+    expect(score.diagnostics!.visibleBreaks).toEqual({ status: 'fail', reason: 'visible code point uncovered by predicted lines', detail: 'code point 3 "c": native line 1, no predicted line' })
   })
 })
 
@@ -977,6 +1105,35 @@ describe('rows from run.ts --predict-only take native observations from another 
 })
 
 describe('two runs of one case', () => {
+  const view: NativeView = { error: null, lines: 1, points: [[0, 8, 0]], nodes: [[0, 8, 0]], elements: [[0, 8, 0]], floats: [0, 0, 8] }
+
+  test('element and float changes are native differences, not prediction geometry changes', () => {
+    expect(nativeDifference(view, { ...view, elements: [[1, 8, 0]] })).toBe('element 0: [x, width, line] [0,8,0] vs [1,8,0]')
+    expect(nativeDifference(view, { ...view, floats: [0, 1, 8] })).toBe('native floats: [x, y, width] [0,0,8] vs [0,1,8]')
+    expect(nativeDifference(view, structuredClone(view))).toBeNull()
+  })
+
+  test('extra or missing code points, nodes and elements differ in either comparison direction', () => {
+    for (const key of ['points', 'nodes', 'elements'] as const) {
+      for (const values of [[], [...view[key], []]]) {
+        const changed = { ...view, [key]: values }
+        expect(nativeDifference(view, changed)).not.toBeNull()
+        expect(nativeDifference(changed, view)).not.toBeNull()
+      }
+    }
+    const extraRect = { ...view, points: [[0, 8, 0, 8, 4, 0]] }
+    expect(nativeDifference(view, extraRect)).not.toBeNull()
+    expect(nativeDifference(extraRect, view)).not.toBeNull()
+  })
+
+  test('extra or missing floats differ in either comparison direction', () => {
+    for (const values of [[], [...view.floats, 8, 0, 8]]) {
+      const changed = { ...view, floats: values }
+      expect(nativeDifference(view, changed)).not.toBeNull()
+      expect(nativeDifference(changed, view)).not.toBeNull()
+    }
+  })
+
   test('rects that differ in x, width or line differ; y alone does not', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
     const shifted = { ...base, native: native(abcd, [[at(0, 8)], [at(8, 7.625)], [at(15.625, 0)], [at(0, 7, 1)], [at(7, 7.0625, 1)]], [[{ x: 0, y: 1, width: 15.625, height: 20 }, at(0, 14.0625, 1)]]) }
@@ -987,10 +1144,10 @@ describe('two runs of one case', () => {
 
   test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 7')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 8')
     const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
-    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 7')
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 8')
     const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
-    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 7')
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 8')
   })
 })

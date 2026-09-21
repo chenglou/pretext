@@ -321,7 +321,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
 // (measure/font-checks.ts), then the engine's own prepare on the paragraph with the facts Canvas answered.
 function withFontChecks(paragraph: Paragraph, env: Environment, contexts: CanvasContext[]): Paragraph {
   switch (env.engine) {
-    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env), contexts)
+    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env, false), contexts)
     case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, contexts)
     case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks, contexts)
   }

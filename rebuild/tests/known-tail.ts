@@ -46,8 +46,8 @@ export const KNOWN_TAIL_KINDS = [
   'decision',
 ] as const
 export type KnownTailKind = typeof KNOWN_TAIL_KINDS[number]
-export type StatusKind = 'covered' | 'open' | 'residual' | 'history-dependent' | 'unobserved' | 'not exact'
-const STATUS_KINDS: readonly StatusKind[] = ['covered', 'open', 'residual', 'history-dependent', 'unobserved', 'not exact']
+export type StatusKind = 'covered' | 'open' | 'residual' | 'history-dependent' | 'prediction-order-dependent' | 'unobserved' | 'not exact'
+const STATUS_KINDS: readonly StatusKind[] = ['covered', 'open', 'residual', 'history-dependent', 'prediction-order-dependent', 'unobserved', 'not exact']
 
 export type KnownTailItem = {
   // '<engine or area>/<short name>', unique.
@@ -114,7 +114,7 @@ export function statusParts(status: LedgerStatus): { kind: StatusKind | 'pass' |
   if (status.startsWith('not exact ')) return { kind: 'not exact', names: [] }
   // An exact case is to the exact-value status what a pass is to a metric.
   if (status === 'exact') return { kind: 'pass', names: [] }
-  if (status === 'history-dependent' || status === 'unobserved' || status === 'pass' || status === 'protocol row') return { kind: status, names: [] }
+  if (status === 'history-dependent' || status === 'prediction-order-dependent' || status === 'unobserved' || status === 'pass' || status === 'protocol row') return { kind: status, names: [] }
   return { kind: 'open', names: [] }
 }
 

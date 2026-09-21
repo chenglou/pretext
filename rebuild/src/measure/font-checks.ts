@@ -138,8 +138,9 @@ export type FontChecks = {
   // Check 3.
   monospace: boolean
   // Check 4, asked at a layout zoom other than 1: the zoom the engine's DOM shapes at, and the families, lowercased, that
-  // the engine measures at the CSS size whatever Canvas shows. null where the engine doesn't read the fact off Canvas.
-  opticalSizeAxis: { zoom: number; cssSizeFamilies: readonly string[] } | null
+  // the engine measures at the CSS size whatever Canvas shows. With checkAdvances false, resolve the primary family
+  // under the same conditions but omit the advance check. null where the engine doesn't read the fact off Canvas.
+  opticalSizeAxis: { zoom: number; cssSizeFamilies: readonly string[]; checkAdvances: boolean } | null
   // Check 5, for a paragraph with letters of a joining script.
   joining: boolean
   // Whether the engine's Canvas resolves a font under the context's language, the element's here as in the engine's own
@@ -274,7 +275,7 @@ function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl
   if (primary !== null) {
     if (asksHyphen) mapsHyphen = draws(p, cssFamily(primary), HYPHEN)
     if (asksPitch) monospace = fixedPitch(p, cssFamily(primary))
-    if (asksScaling) opticalSizeAxis = scalesLinearly(p, primary, scaling.zoom, scaling.cssSizeFamilies)
+    if (asksScaling && scaling.checkAdvances) opticalSizeAxis = scalesLinearly(p, primary, scaling.zoom, scaling.cssSizeFamilies)
   }
   if (joiningFact === null && checks.joining && needs.joining) joiningFact = joining(p)
   return { ...given, primaryFamily: primary, mapsHyphen, monospace, opticalSizeAxis, joining: joiningFact }

@@ -1,6 +1,6 @@
 // Lab driver: serves the page bundle, opens one background browser session, streams rows to NDJSON.
-// Always run under the shared browser lock (this script doesn't take it):
-//   python3 .artifacts/session/with-browser-lock.py lab-chrome -- bun rebuild/lab/run.ts --browser=chrome --cases=<file> --out=<dir>
+// This low-level driver doesn't take a lock. Use tests/run-main-obligations.ts or tests/run-book-survey.ts for
+// maintained workflows; other callers must hold scripts/browser-automation.ts's matching browser lock.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from 'node:fs'

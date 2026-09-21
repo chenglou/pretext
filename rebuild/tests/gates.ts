@@ -3,7 +3,7 @@
 //
 //   bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick] [--cores=N] [--no-wait] [--fresh]
 //
-// --quick is what to run after every small edit: tier 0 (`bunx tsc --noEmit` over the six projects, and the unit tests),
+// Use focused function tests for the edit loop; --quick closes an engine change with tier 0 (`bunx tsc --noEmit` over the six projects, and the unit tests),
 // tier 1 for the engine's browser in both configurations, and the function set's plain and pure checks for that browser.
 // Without it the rest runs too: the function set's sweep, the painter differential, the citation ledger and, for Blink,
 // the twin scan over Chrome's set files. --engine=all (the default) runs every browser's gates. Tier 2 needs a browser
