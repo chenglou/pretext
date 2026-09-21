@@ -22,8 +22,9 @@ Sampled font behavior must not silently become a guarantee about arbitrary fonts
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.
 The earlier cohort results are in `TAKEOVER.md`. [GENERAL_COST.md](GENERAL_COST.md) tracks the current general-cost
-audit and the practical stopping frontier after five checkpoints. Testing infrastructure is sufficient for this
-iteration; further work follows concrete core or native-evidence needs.
+audit and the practical stopping frontier after five checkpoints. [Performance against main](MAIN_PERFORMANCE.md)
+records the remaining application gaps; the input-growth audit did not close that work. Testing infrastructure is
+sufficient for this iteration; further work follows concrete core or native-evidence needs.
 
 ## Iteration
 

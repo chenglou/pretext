@@ -10,6 +10,8 @@ boundaries. The final closure passes 1,182 tests and six strict projects, preser
 source fingerprint, and retains the known strict Native failures. The detailed closure and practical stopping frontier
 are in that shorter record. Arbitrary supplied ligature grammar and contextual/counterfactual shaping retain costly cases; this is not a universal linear-cost claim.
 The earlier cohort stopping decisions below remain historical evidence, rather than general worst-case conclusions.
+Fresh foreground [main comparisons](MAIN_PERFORMANCE.md) still show substantial preparation and scalar-fill gaps. The
+general input-growth audit is a bounded stopping point, not a claim that application performance is finished.
 
 ## Preservation
 

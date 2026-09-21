@@ -6,9 +6,10 @@ further gains require substantially more machinery, assumptions or retained data
 establish predictable worst-case cost.
 
 Five general-cost checkpoints remove justified input-driven traversal, rescanning and relocation factors across the
-three ports. This is a practical stopping point after the final validation below, rather than a claim that arbitrary
-text, supplied font grammar and contextual shaping now have linear cost. Testing work reopens when a concrete change
-needs a new observable contract.
+three ports. This is a practical stopping point for that input-growth audit after the final validation below, rather than
+a claim that arbitrary text, supplied font grammar and contextual shaping now have linear cost. [Current main comparisons](MAIN_PERFORMANCE.md)
+show material preparation and scalar-fill gaps; they do not support closing application performance work. Testing work
+reopens when a concrete change needs a new observable contract.
 
 ## Current data flow
 
