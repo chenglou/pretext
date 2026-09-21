@@ -1222,7 +1222,9 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   item holds `-1` for a leaf or an element it doesn't have, and a text item's shaping group is `groupOfUnit` at its
   start. The port holds no Map and no Set: a line's item results are an array by
   item index from the line's first item (`LineBreaker.shapeResults`; a rewind comes back to the same result, so an item is
-  asked once per fill), and tables are generated records searched by binary search, or switches. A line's output reads the
+  asked once per fill), and tables are generated records searched by binary search, or switches; `props.ts` reads the
+  properties of code points below U+3000 by index, from two tables it makes from its records when it loads (the
+  profiling phase, §4.7). A line's output reads the
   paragraph around the line and never scans it whole (`pieces.ts` `fragmentsOf` walks the events from the line's first
   result, or the leaf holding its source start, to its last result, or the leaf holding its source end). The break
   iterator (`breaks.ts` `LineBreakIterator`) keeps the boundaries its rule iterator has given so far, pulls the next one
@@ -2106,6 +2108,40 @@ most of them the runtime font checks', and webkit-host 5.4 for its 41 calls a me
 has since taken away (§4.6); Firefox spent 88% in the fill, carried by CJK and Arabic messages.
 research/PROFILING-START.md starts from there.
 
+**The Blink port's own JavaScript** (the profiling phase, 2026-09-20; research/PERF-JS-PROFILE.md has the profile and
+its review by a second pair of eyes). Until then every item removed Canvas questions, and nobody had profiled the port's
+own code. `tools/js-profile.ts` takes a JS CPU profile in pinned Chrome through the DevTools Profiler domain, times
+checkouts in turns in one page, and runs the same passes with every Canvas answer free: a pass's answers are recorded
+once and handed back in order, so the code runs the path it runs on the real Canvas. The profile is of the tree at the
+profiling phase's first merges, before the cut search tried the offsets beside a space first (above), where a message of
+the mix asked 238 questions and not 196. There 10,000 chat messages from scratch with one list of contexts a pass took
+3.45 s on the mix and 3.23 s on plain ASCII: 72% of the samples were inside `measureText`, 25% in the port's own code
+and 2% in collections, and with free answers a pass took 0.68 s and 0.62 s, a fifth of the time. The two numbers differ
+by what a native call costs on its JavaScript side, which a free answer doesn't pay; the review's two other methods, the
+pass's questions asked again alone without the port and a stopwatch around every call, both put Canvas at 76 to 78% of a
+pass, between the profile's 72% and the four fifths that free answers leave. A pass with free answers is the port's own
+JavaScript at that number of questions, and not a floor that no removal of questions can beat: own code goes with the
+questions, about 0.15 µs each with the three changes below in, and the cut search's change alone took their pass with
+free answers from 0.42 s to 0.35 s on the mix. Seven tenths of the own time was making a question (`shape.ts`
+`measure16` and under: the joining test at both edges, the string, the context), 40 µs of a message's 94 in
+`canvasString` alone; paragraph analysis was 11 µs, the line loop 8 µs, the cut search's own code 4 µs and the font
+checks' 3 µs.
+
+Three changes that ask Canvas the same strings on the same contexts in the same order (tier 1: 0 predictions and 0
+questions changed; the pass's questions hash the same in Chrome; the review's dump of every question, with how V8 stores
+its string, is byte-equal on 520 edge texts and 18 giants) took 34 µs a message on that tree and 26 µs on the tree they
+landed on, which has fewer questions to make, by the review's fresh page per measurement in twelve rounds (each change's
+two numbers below are the mix's on the two trees): the list of text offsets a Canvas string hands out is the array it
+built, where it was copied into a typed array that nothing reads on a plain paragraph without letter spacing (24 and 21
+µs); properties below U+3000 are read by index (6 and 4 µs; `props.ts`, §3); and a Canvas string is built in one
+`String.fromCharCode` call where its units fit one, without a copy of the list (4 and 2.5 µs). The third was measured in
+a form that built the paragraph's text through the same function, in `content.ts`. It stays inside `canvasString`: tier
+1's string storage rule watches `shape.ts` for the code that builds every Canvas string (`replay.ts` `STORAGE_PATHS`),
+the gain is per question and the text is built once a paragraph, and three timed runs couldn't tell the two forms apart.
+On the tree they landed on, from scratch 2.68 s became 2.41 s on the mix and 2.43 s became 2.17 s on plain ASCII, 10,000
+kept messages at 3 widths 1.09 s became 0.94 s and 0.97 s became 0.84 s, and the pass with free answers 0.55 s became
+0.35 s and 0.49 s became 0.29 s. After them Canvas is 82 to 87% of a pass.
+
 ## 5. Gaps
 
 "Handled" means the recipe gives the DOM's value. A named gap is reported among the paragraph's gaps or a line's (§2.8)
@@ -2257,7 +2293,9 @@ Generators read pinned engine data, check every input's sha256 against a recorde
 Data only one engine reads sits under that engine; the bidi data, which the engines share, stays shared and is named by
 where it comes from (Unicode 17, libicucore 78.1, `unicode-bidi` 15). Tables are base64 in the module, and each engine
 decodes and parses its own when its data module loads (`src/engines/<engine>/data.ts`): every table of the three engines
-in about 3 ms under bun, kept for the life of the page. Not shipped:
+in about 3 ms under bun, kept for the life of the page. Blink's `props.ts` also fills two tables read by index as it
+loads, the properties and the script of every code point below U+3000, from its runs: about a millisecond in a cold
+process and 72 KB, kept the same way (§4.7, "The Blink port's own JavaScript"). Not shipped:
 the phrase tables and `jaml` model (the input model has no `word-break: auto-phrase`), ICU's dictionaries (`cjdict` is
 2 MB) and Firefox's LSTM models (874 KB), because §6.3 takes SA breaks from the running browser. Compacting tables
 (dropping the reverse table and rule source, which `rbbi.ts` never reads) is later performance work.

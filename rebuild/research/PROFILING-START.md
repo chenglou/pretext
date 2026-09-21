@@ -633,6 +633,37 @@ with the general path as fallback, the width-interval skip for resize drags, Bli
 class, bounding WebKit's `simplified-measuring` check (inspected path only), dropping a history world's discarded gap
 work (the lab only).
 
+### 10. The ports' own JavaScript (profiled 2026-09-20)
+
+Not an item of the list this document started with: every item above removes Canvas questions, and nobody had looked at
+the ports' own code until the maintainer asked whether it had slow parts that were free to speed up.
+research/PERF-JS-PROFILE.md has an owner's profile per engine and, first, a second pair of eyes' review of each. Free
+means the same Canvas questions in the same order, the same lines and no state beyond a call.
+
+*Blink, landed on 2026-09-20* (DESIGN.md §4.7, "The Blink port's own JavaScript"). Making a Canvas question cost more
+than the rest of the port together, so the three changes are there. A Canvas string hands out the list of text offsets
+it built, where it copied the list into a typed array that nothing reads on a plain paragraph without letter spacing
+(`shape.ts` `canvasString`, 0 lines net). The Unicode properties of code points below U+3000 are read by index, from two
+tables `props.ts` fills as it loads (+20 lines, 72 KB, about a millisecond in a cold process; fixed data with a page's
+lifetime, which the rule above allows). A Canvas string is built in one `String.fromCharCode` call where its units fit
+one, without a copy of the list (+2 lines). The review's numbers, a fresh page per measurement in twelve rounds, on the
+tree with item 6's cut search: −21, −4 to −5 and −2.5 to −3.5 µs a message, 26 µs together (34 µs on the tree before
+item 6, which has more questions to make). 10,000 messages from scratch with one list of contexts go from 2.68 s to 2.41
+s on the mix and from 2.43 s to 2.17 s on plain ASCII, kept messages laid out at 3 widths from 1.09 s to 0.94 s and from
+0.97 s to 0.84 s, and a pass with every Canvas answer free from 0.55 s to 0.35 s and from 0.49 s to 0.29 s. That last
+pass is the port's own JavaScript at that number of questions, not a floor: own code goes with the questions, about 0.15
+µs each. The third change landed in the review's form. As first built it moved the code that builds every Canvas string
+into `content.ts`, which tier 1's string storage rule doesn't watch; it stays inside `canvasString`, and three timed
+runs couldn't tell the two forms apart. *How it is held:* tier 1 shows 0 predictions and 0 questions changed in both
+configurations, and exits 3 for Chrome by the string storage rule alone, because `shape.ts` differs from the references'
+commit, so Chrome's storage-sensitive cases go to a browser at the merge. The review's dump of every question, with how
+V8 stores its string, is byte-equal before and after on 520 edge texts and 18 giants, and its tier 2 forward in pinned
+Chrome showed 0 status transitions in both configurations. *What is left:* after the three changes Canvas is 82 to 87%
+of a pass at about 1.06 µs a question, and 69% of the bench's questions repeat a string the same canvas was already
+asked, so Chrome's time is its questions, the cut search of wide groups first. One free change the review names wasn't
+built or timed: on a plain paragraph `floatWidthOfParts` computes its slack, its scan for unknown clusters and its run
+list for a null list of gaps, 3% of a relayout's time.
+
 ## For the API phase, not profiling
 
 research/CAPABILITY-CHECK.md found no door closed and three cheap openers. They are API work and wait for that phase:

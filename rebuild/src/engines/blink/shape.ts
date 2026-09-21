@@ -213,7 +213,7 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
-export type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
+export type CanvasString = { s: string; units: number[]; twoByte: boolean; leftOut: boolean }
 
 export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false): CanvasString {
   let codes: number[] = []
@@ -247,8 +247,10 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
     codes = keptCodes
     units = keptUnits
   }
+  // One String.fromCharCode call where the units fit its arguments, which is every string but a long text's: no copy.
   let s = ''
-  for (let i = 0; i < codes.length; i += 4096) s += String.fromCharCode(...codes.slice(i, i + 4096))
+  if (codes.length <= 4096) s = String.fromCharCode(...codes)
+  else for (let i = 0; i < codes.length; i += 4096) s += String.fromCharCode(...codes.slice(i, i + 4096))
   // A segmented paragraph's Latin-1-only string is 16-bit when V8 slices it, from 13 code units on; a Latin range keeps the
   // one Latin segment of an 8-bit string. A shorter range the paragraph shapes under another script gets U+2060 before it,
   // which makes the string 16-bit without a glyph or a script (the ignorables probe above: U+2060 alone measures 0, and
@@ -257,8 +259,8 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
   const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: Int32Array.from([-1, ...units]), twoByte, leftOut }
-  return { s: forced ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte, leftOut }
+  if (prefixed) return { s: '\u2060' + s, units: [-1, ...units], twoByte, leftOut }
+  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte, leftOut }
 }
 
 // IsWordDelimiter<true> over the string as NormalizeSpacesAndMaybeBidi leaves it (plain_text_node.cc:26-91): U+0020, TAB and
