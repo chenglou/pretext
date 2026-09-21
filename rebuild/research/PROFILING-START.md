@@ -625,6 +625,52 @@ with both changes. The reviewer agrees with the simpler form: the port itself gi
 lines with it on all 531 samples of the windows' probe, plain and inspected, and the lab set run with it has no scorer
 transition against the port at the phase's start.
 
+*The Gecko port's own JavaScript, profiled (2026-09-20; research/PERF-JS-PROFILE.md, the Gecko owner's report and
+"Review of the Gecko profile and its commits").* No item above looked at the port's own code. An owner profiled the
+chat benchmark in pinned Firefox and built what is free: the same Canvas questions in the same order, the same lines,
+no state beyond a call. A critic timed it again in fresh pages and attacked exactness. What landed:
+
+- The script a piece itemizes to alone is read from the piece, from its first character that has a script
+  (`measure.ts` `scriptContextFor`), where every Canvas question made a view of the units and ran the script itemizer
+  over it. It is the big one. As first built it read one unit past the piece: a text run that ends with a lone high
+  surrogate, where the next run starts with the low one, asked Canvas another string (4 of the critic's 3,358 built
+  paragraphs; no recorded case holds one, so tier 1 stayed at 0 and 0). The critic's fix landed right after it, with
+  a unit test (`split-pair.test.ts`).
+- The packed properties of U+0000 to U+00FF are read by index (`props.ts`): 256 numbers made when the module loads,
+  1 KB, the page's lifetime, nothing invalidates them. That is fixed data under "What may come back" above.
+- The spacing step walks the frames, which know their leaf and their start, where two arrays held both for every
+  character: no time, 8 lines fewer.
+
+The critic's numbers for the three together (twelve rounds, every checkout in a fresh page, the median of the pair
+differences): a message from scratch lost 3.55 µs on plain ASCII (faster in 11 of 12 rounds) and 13.9 µs on the mix (12
+of 12), and a kept message's layouts at three widths 10.5 and 9.45 µs (12 of 12 each). The script check is nearly all
+of it (1.8, 12.2, 7.15 and 7.2 µs), the property table gives 1.75, 2.0, 3.1 and 2.45 µs, and the spacing step is inside
+the spread. In that stretch's quiet half 10,000 messages from scratch went from 455 to 418 ms and from 880 to 740 ms,
+and their 30,000 layouts from 645 to 550 ms and from 670 to 580 ms. The owner's method, checkouts taking turns inside
+one page, gave 5.5, 11.7, 6.1 and 7.35 µs: the methods differ on plain ASCII and on relayout, and both say gain. All
+of it was measured on the tree before Gecko's `prepare` made its own contexts (item 1), with one list of contexts a
+pass; the changes are in the port's own code, which that rule doesn't touch. The library's non-test lines: 26 added,
+25 removed. Tier 1 shows 0 predictions and 0 questions changed in both of Firefox's configurations, and the critic's
+differential of two checkouts over the stand-in Canvas (`tools/prof-critic-attack.ts`), run again on the landed tree
+against the main line before it, finds 0 differences over 3,633 paragraphs, 22,772 layouts and 2,824,838 questions and
+settings.
+
+Left out: a Canvas question as a slice of a kept transformed string (af52d1c on the local branch `x-prof-gecko`: no time
+by either method, and a second form of `tUnits`), and the critic's own change to the break scan (d87ed53 there: a scan
+carries the advance before its pending text from one candidate to the next, 3 to 3.75 µs off a kept message's three
+layouts on one quiet stretch and nothing visible on a loaded one). The second asks the same questions in the same order,
+but it adds 13 lines, writes the scan's advance a second time beside `scanAdvance`, and an inspected line's `consulted`
+list loses its duplicates (the differential's paragraphs differ there and nowhere else), so it is neither equal field by
+field nor simpler to read.
+
+What the profile says of the rest: Firefox spends 42 to 44% of a pass from scratch inside `measureText` and 34 to 36%
+of a relayout, by three methods that agree, and 52 to 54% goes when every Canvas answer is free. After the changes the
+port's own code is about 0.19 s (plain ASCII) and 0.31 s (the mix) per 10,000 from scratch with free answers, and no
+removal of questions alone goes under that. 76% of the questions on plain ASCII and 84% on the mix are break candidates
+inside each line's first word, which decide nothing when the word fits and which main never asks. A scratch patch that
+skips them took plain ASCII from 441 to 189 ms per 10,000, under main's cold prepare, and failed 12 of 63,771 cases of
+the plain check, so it needs a careful rule, a recording and tier 2 (the report's R1; research/SPEC-WORD-SUM.md).
+
 ### 9. Later, with numbers only
 
 From the plan's §10, not started and not ranked here: a bounded store for strings that recur across paragraphs (the API
