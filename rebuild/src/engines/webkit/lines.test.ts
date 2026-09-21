@@ -10,7 +10,7 @@ import { UNKNOWN_FONT_FACTS, type FontFacts } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import type { WebKitDisplayBox, WebKitLineGeometry, WebKitLineStart, WebKitTextBox } from './geometry.js'
 import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type WebKitFilledLine, type WebKitRefusedSlot } from './index.js'
-import { breakWord, firstUserPerceivedCharacterLength, itemWidth } from './measure.js'
+import { boxWidth, breakWord, firstUserPerceivedCharacterLength, itemWidth } from './measure.js'
 import { lineGeometry } from './output.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 
@@ -1184,5 +1184,27 @@ describe('ancestor depth workload', () => {
     expect(filled.next).toBeNull()
     expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').length).toBe(count)
     expect(parentReads).toBeLessThan(8 * (count + depth))
+  })
+})
+
+describe('original-box TAB range membership', () => {
+  test('nonmonotone prefixes before a late TAB do not scan their source units to decide the measurement recipe', () => {
+    const count = 4096
+    const p = paragraph([['a'.repeat(count) + '\tz', 'text']], { whiteSpace: 'pre-wrap' })
+    const prepared = prepare(p, env, false, createContextPool()), box = prepared.boxes[0]!
+    let offsetReads = 0
+    box.tabPositions = new Proxy(box.tabPositions, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) offsetReads++
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    for (let k = 0; k < count; k++) {
+      const end = (k * 4093) % count + 1
+      expect(boxWidth(box, 0, end, 0, false)).toBe(8 * end)
+    }
+    expect(offsetReads).toBeLessThanOrEqual(3 * count)
+    expect(boxWidth(box, count, count + 1, 0, false)).toBe(32)
+    expect(boxWidth(box, count + 1, count + 2, 0, false)).toBe(8)
   })
 })

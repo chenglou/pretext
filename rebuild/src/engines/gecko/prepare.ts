@@ -451,10 +451,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // A text frame reads its parent element's computed style: a text node inherits every property the model has.
     const style = styleUnder(paragraph, index, indexed.parent)
     const lang = canonicalLanguageTag(inheritedLanguage)
-    let is8bit = true
-    for (let s = indexed.start; s < end; s++) if (text.charCodeAt(s) >= 0x100) { is8bit = false; break }
+    let is8bit = true, onlyWhitespace = true
+    for (let s = indexed.start; s < end; s++) {
+      const ch = text.charCodeAt(s)
+      is8bit &&= ch < 0x100
+      onlyWhitespace &&= ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d
+      if (!is8bit && !onlyWhitespace) break
+    }
     leaves.push({
-      start: indexed.start, end, parent: indexed.parent, style: geckoStyle(style), font: style.font, lang, is8bit,
+      start: indexed.start, end, parent: indexed.parent, style: geckoStyle(style), font: style.font, lang, is8bit, onlyWhitespace,
       letterSpacingAu: pxToAu(style.letterSpacing), wordSpacingAu: pxToAu(style.wordSpacing),
     })
     // lang="" leaves the style language empty (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375), and nsFontCache gives
@@ -686,6 +691,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   // mCommonAncestorWithLastFrame (nsTextFrame.cpp:1151-1156, :1886-1888, :2254-2275); -1 is the block, the line container
   // SetupBreakSinksForTextRun falls back to (:2956-2963).
   let commonAncestor = -1
+  // Real source-tree ancestry follows source closes, independently of synthetic bidi continuation closes.
+  // It is the last text frame's ancestor still open when the next frame is reached.
+  let frameAncestor = -1
   let inWhitespace = false
   const flushRun = (): void => {
     if (current === null) return
@@ -703,12 +711,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     }
     return false
   }
-  const ancestorsOf = (e: number): number[] => {
-    const out: number[] = []
-    for (let a = e; a >= 0; a = elements[a]!.parent) out.push(a)
-    out.push(-1)
-    return out
-  }
   const continuesAcross = (prevFrame: GeckoFrame, p: Piece): boolean => {
     if (prevFrame.level !== p.level) return false
     const a = leaves[prevFrame.run]!
@@ -717,10 +719,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const parentA = a.parent
     const parentB = b.parent
     if (parentA !== parentB) {
-      const up = ancestorsOf(parentA)
-      let ancestor = -1
-      const down = ancestorsOf(parentB)
-      for (let k = 0; k < down.length; k++) if (up.includes(down[k]!)) { ancestor = down[k]!; break }
+      const ancestor = frameAncestor
       // The inline end of the first frame's boxes and the inline start of the second's, swapped when the first frame's
       // embedding level is against the block's direction (nsTextFrame.cpp:2112-2126).
       const swap = ((prevFrame.level & 1) === 1) === !rtlBlock
@@ -776,6 +775,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           items.push({ kind: 'text', frame: fi, at: p.start })
           lastFrame = fi
           commonAncestor = leaf.parent
+          frameAncestor = leaf.parent
         }
         offsetAt = leaves[event.run]!.end
         break
@@ -795,6 +795,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         openStack.pop()
         // LiftCommonAncestorWithLastFrameToParent with the span's parent after the span is scanned (:2275).
         if (commonAncestor === event.element) commonAncestor = el.parent
+        if (frameAncestor === event.element) frameAncestor = el.parent
         break
       }
       case 'atomic':

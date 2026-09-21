@@ -191,3 +191,32 @@ describe('blink prepared paragraph gap selection', () => {
     }
   })
 })
+
+describe('blink canonical source interval components', () => {
+  test('reverse-arriving components and a late bridge retain earliest-raise placement around repeated scalars', () => {
+    const built = [
+      gap('glyph-clusters', 0, 'd', 40, 50), gap('page-history', null, 'p'), gap('glyph-clusters', 0, 'd', 0, 10),
+      gap('script-context', 0, 'other', 5, 6), gap('glyph-clusters', 0, 'd', 20, 30), gap('page-history', null, 'p'),
+      gap('glyph-clusters', 0, 'd', 10, 40), gap('glyph-clusters', 0, 'd', 100, 100),
+    ]
+    expect(canonicalGaps(built)).toEqual([
+      gap('glyph-clusters', 0, 'd', 0, 50), gap('page-history', null, 'p'), gap('script-context', 0, 'other', 5, 6),
+      gap('page-history', null, 'p'), gap('glyph-clusters', 0, 'd', 100, 100),
+    ])
+  })
+
+  test('many source points merge through touching bridges across independent runs and details', () => {
+    const built: Gap[] = []
+    for (let i = 1023; i >= 0; i--) built.push(gap('script-context', 0, 'd', i * 4, i * 4))
+    built.push(gap('script-context', 1, 'd', 0, 4096), gap('script-context', 0, 'e', 0, 4096))
+    for (let i = 0; i < 1024; i++) built.push(gap('script-context', 0, 'd', i * 4, i * 4 + 4))
+    const original = structuredClone(built)
+    const out = canonicalGaps(built)
+    expect(out).toEqual([
+      gap('script-context', 0, 'd', 0, 4096), gap('script-context', 1, 'd', 0, 4096), gap('script-context', 0, 'e', 0, 4096),
+    ])
+    expect(canonicalGaps(out)).toEqual(out)
+    out[0]!.at!.end = 8192
+    expect(built).toEqual(original)
+  })
+})

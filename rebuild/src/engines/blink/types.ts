@@ -1,3 +1,4 @@
+import type { OffsetRuns } from './offset-runs.js'
 // Blink's prepared paragraph (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ParagraphGapIndex } from './paragraph-gap-index.js'
 import type { ContentIndex } from '../../content.js'
@@ -139,11 +140,13 @@ export type BlinkGroup = {
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
 // fonts' and the environment's, with the ones preparation's measuring raised first; canonical once prepare ends (gaps.ts
 // canonicalGaps).
-export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null }
+export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; sourceRuns: OffsetRuns | null; graphemeRuns: OffsetRuns | null }
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
 // are first needed (BlinkStyle) and what the groups keep by offset (BlinkGroup.prefix16, pair16, wide16).
 export type BlinkPrepared = {
+  // Fixed non-boundary runs after continuation and declared ligature facts have been resolved.
+  clusterRuns: OffsetRuns | null
   paragraph: Paragraph
   env: BlinkEnvironment
   index: ContentIndex<FontDecl>

@@ -408,9 +408,11 @@ export function fixedPitchWidth(box: WebKitBox, from: number, to: number): numbe
   return width
 }
 
-function containsTab(text: string, from: number, to: number): boolean {
-  for (let i = from; i < to; i++) if (text.charCodeAt(i) === 0x09) return true
-  return false
+function containsTab(box: WebKitBox, from: number, to: number): boolean {
+  const positions = box.tabPositions
+  let lo = 0, hi = positions.length
+  while (lo < hi) { const mid = lo + Math.floor((hi - lo) / 2); if (positions[mid]! < from) lo = mid + 1; else hi = mid }
+  return lo < positions.length && positions[lo]! < to
 }
 
 // The end of a range measured with UseTrailingWhitespaceMeasuringOptimization: a range followed by U+0020 in the same box
@@ -434,7 +436,7 @@ export function boxWidth(box: WebKitBox, from: number, to: number, left: number,
 export function advancesWidth(box: WebKitBox, from: number, end: number, left: number): number {
   // Canvas strings split at TABs start past the TextRun's index 0, where WidthIterator gives a space word spacing, so the
   // tab path adds word spacing itself.
-  if (tabsAllowed(box.style) && containsTab(box.text, from, end)) return addWordSpacing(box, from, end, tabbedWidth(box, from, end, left))
+  if (tabsAllowed(box.style) && containsTab(box, from, end)) return addWordSpacing(box, from, end, tabbedWidth(box, from, end, left))
   // rule webkit/measure/word-spacing-in-context
   // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
   // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).

@@ -49,7 +49,7 @@ protects prior output; it cannot establish native correctness or the cost of cha
 A deliberate core change can produce nonzero replay gates. Retain the actual result, inspect complete differences,
 and prove the intended behavior independently; do not rename it a pure refactor or silently replace reference output.
 The first 2026-09-21 general-cost batch changes only diagnostics among complete replayable predictions. The second
-and third batches retain exactly those replay classifications and ordered question behavior while repairing input-sized
+through fourth batches retain those replay classifications and ordered question behavior while repairing input-sized
 metadata, diagnostic scans and alternate-world views. All preserve prior native fast obligations and classify targeted
 misses against the preserved core. [GENERAL_COST.md](GENERAL_COST.md) records its
 skips and remaining native work.

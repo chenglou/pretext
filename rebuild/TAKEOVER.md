@@ -5,10 +5,11 @@
 
 2026-09-21: testing infrastructure is sufficient for the current iteration. The prior stopping decisions below concern
 their measured cohorts, not general worst-case performance. The active [general-cost audit](GENERAL_COST.md) has reopened
-that work and the previously deferred Gecko original-start guard on unbreakable inputs. Three general-cost batches repair
+that work and the previously deferred Gecko original-start guard on unbreakable inputs. Four general-cost batches repair
 ordered access, long-window bookkeeping, diagnostic gap accumulation, script/cluster witnesses and deep geometry;
 paragraph/style selection, canonical Gecko row/family analysis and alternate-world views have landed. Source/cluster
-lookup, remaining deep Gecko formatting work and source-preserving numeric geometry remain active prototypes.
+lookup, incremental no-base extension, canonical union, deep Gecko formatting and sparse WebKit TAB analysis have also
+landed. Further Builder/font/diagnostic bookkeeping and source-preserving numeric geometry remain active prototypes.
 
 ## Preservation
 

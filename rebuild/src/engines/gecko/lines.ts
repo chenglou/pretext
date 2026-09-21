@@ -135,7 +135,7 @@ function scanOffset(p: GeckoPrepared, prov: Provider, from: number, to: number, 
 // reason (gaps.ts placedStandIn, tabCountsFrom). A later tab counts from the stop before it; it stays a stand-in, since a
 // stand-in that crosses a stop moves every stop after it. The tabs of text run `run` in [startT, end), the measured content
 // of frame `frame`.
-function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, xForTabs: number):
+function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, psd: SpanData):
   { tabs: readonly Tab[]; through: (until: number) => void } | null {
   if (p.tabs === null || !run.hasTab) return null
   // rule gecko/measure/tab-width-containing-block
@@ -148,7 +148,8 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame:
   if (tabWidth <= 0) return null
   const tabs: Tab[] = []
   const tabSpacing = p.tabs.spacingPrefix
-  let x = xForTabs
+  let x = 0
+  let started = false
   let standIn = gaps.placedStandIn(ll.gaps, p, ll.root)
   let from = startT
   const positions = p.tabs.positions
@@ -165,6 +166,12 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame:
     const limit = Math.min(until, end)
     while (next < positions.length && positions[next]! < limit) {
       const t = positions[next++]!
+      if (!started) {
+        // The containing coordinates are unchanged until this text frame finishes reflow. Add them in the original
+        // innermost-to-root order only when a consumed tab actually needs the origin.
+        for (let s: SpanData | null = psd; s !== null; s = s.parent) x += s.iCoord
+        started = true
+      }
       let first = from
       while (first < t && p.clusterStart[first] === 0) first++
       standIn = gaps.tabCountsFrom(ll.gaps, standIn, p, run, first)
@@ -510,9 +517,7 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   const canTrim = !style.whiteSpaceIsSignificant
   // GetCurrentFrameInlineDistanceFromBlock less the block's padding, 0 here (nsTextFrame.cpp:11063-11067,
   // nsLineLayout.cpp:1154-1160): the sum of the span chain's inline coordinates.
-  let xForTabs = 0
-  for (let s: SpanData | null = psd; s !== null; s = s.parent) xForTabs += s.iCoord
-  const tabWidths = computeTabs(p, ll, run, fi, tOffset, tOffset + tLength, xForTabs)
+  const tabWidths = computeTabs(p, ll, run, fi, tOffset, tOffset + tLength, psd)
   const prov: Provider = {
     run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: leaf.letterSpacingAu,
     tabs: tabWidths?.tabs ?? NO_TABS,
@@ -664,59 +669,79 @@ function openSpansAt(p: GeckoPrepared, start: GeckoLineStart): number[] {
 // Reflows the children of `psd` from item `from` until `end` (the span's close event, or the end for the root), mapping each
 // child's status the way the container does: nsInlineFrame::ReflowInlineFrame for a span (nsInlineFrame.cpp:707-757,
 // ReflowFrames :585-600) and nsBlockFrame::ReflowInlineFrame for the block (nsBlockFrame.cpp:5486-5620).
+type ReflowSpan = {
+  span: SpanData; open: GeckoEdgeItem | null; end: number; finalClose: boolean; notSafeToBreak: boolean
+  iStart: number; startMargin: number; startEdge: number; hasPrev: boolean; childFrom: number
+}
+type ChildWalk = { psd: SpanData; k: number; end: number; first: boolean; depth: number; span: ReflowSpan | null }
+
 function reflowChildren(p: GeckoPrepared, ll: LineLayout, psd: SpanData, from: number, end: number, chain: number[],
   depth: number, start: GeckoLineStart): Status | 'redo-next-band' {
-  let k = from
-  let first = true
-  while (k < end) {
-    let s: Status
-    if (first && depth < chain.length) {
-      s = reflowSpan(p, ll, psd, chain[depth]!, null, from, chain, depth + 1, start)
-    } else {
-      const item = p.items[k]!
-      switch (item.kind) {
-        case 'text': {
-          const f = p.frames[item.frame]!
-          s = reflowTextFrame(p, ll, psd, k, item.frame, k === start.frame ? Math.max(start.contentOffset, f.start) : f.start)
-          break
+  const stack: ChildWalk[] = [{ psd, k: from, end, first: true, depth, span: null }]
+  let returned: Status | null = null
+  const finish = (s: Status): Status => {
+    const done = stack.pop()!
+    return done.span === null ? s : endReflowSpan(p, ll, done.span, s)
+  }
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (returned === null && walk.k >= walk.end) {
+      returned = finish(completeAt(p, walk.end))
+      continue
+    }
+    if (returned === null) {
+      let element = -1, open: GeckoEdgeItem | null = null, childFrom = walk.k, childDepth = chain.length
+      if (walk.first && walk.depth < chain.length) {
+        element = chain[walk.depth]!
+        childDepth = walk.depth + 1
+      } else {
+        const item = p.items[walk.k]!
+        switch (item.kind) {
+          case 'text': {
+            const f = p.frames[item.frame]!
+            returned = reflowTextFrame(p, ll, walk.psd, walk.k, item.frame, walk.k === start.frame ? Math.max(start.contentOffset, f.start) : f.start)
+            break
+          }
+          case 'open': element = item.element; open = item; childFrom = walk.k + 1; break
+          case 'atomic': case 'br': case 'wbr': returned = reflowLeaf(p, ll, walk.psd, walk.k, item); break
+          case 'close': throw new Error(`gecko: close event ${walk.k} outside its span`)
         }
-        case 'open':
-          s = reflowSpan(p, ll, psd, item.element, item, k + 1, chain, chain.length, start)
-          break
-        case 'atomic':
-        case 'br':
-        case 'wbr':
-          s = reflowLeaf(p, ll, psd, k, item)
-          break
-        case 'close':
-          throw new Error(`gecko: close event ${k} outside its span`)
+      }
+      if (element >= 0) {
+        const span = beginReflowSpan(p, ll, walk.psd, element, open, childFrom)
+        stack.push({ psd: span.span, k: childFrom, end: span.end, first: true, depth: childDepth, span })
+        continue
       }
     }
-    if (psd.element >= 0) {
+    const s = returned!
+    if (walk.psd.element >= 0) {
       if (s.breakBefore) {
-        // Break-before on a child other than the first becomes break-after and incomplete; on the first, it propagates.
-        return first ? s : { breakBefore: false, breakAfter: true, incomplete: true, next: s.next }
+        returned = finish(walk.first ? s : { breakBefore: false, breakAfter: true, incomplete: true, next: s.next })
+        continue
       }
-      if (s.breakAfter) return s.next.item < end ? { ...s, incomplete: true } : s
-      if (s.incomplete) return s
+      if (s.breakAfter) {
+        returned = finish(s.next.item < walk.end ? { ...s, incomplete: true } : s)
+        continue
+      }
+      if (s.incomplete) { returned = finish(s); continue }
     } else {
       if (s.breakBefore) {
-        // Break-before on the line's first frame: the line moves below the floats (RedoNextBand); otherwise the line is
-        // split before the pushed frame and marked wrapped.
-        if (first) {
-          if (!ll.impactedByFloats) throw new Error(`gecko: the first frame of a line without floats broke before at item ${k}`)
+        if (walk.first) {
+          if (!ll.impactedByFloats) throw new Error(`gecko: the first frame of a line without floats broke before at item ${walk.k}`)
           return 'redo-next-band'
         }
         ll.lineWrapped = true
-        return s
+        returned = finish(s)
+        continue
       }
       if (s.incomplete && !ll.lineEndsInBR) ll.lineWrapped = true
-      if (s.breakAfter || s.incomplete) return s
+      if (s.breakAfter || s.incomplete) { returned = finish(s); continue }
     }
-    k = s.next.item
-    first = false
+    walk.k = s.next.item
+    walk.first = false
+    returned = null
   }
-  return completeAt(p, end)
+  return returned!
 }
 
 // nsLineLayout::ReflowFrame for a text frame (nsLineLayout.cpp:733-1092) and its CanPlaceFrame branch (:1189-1342).
@@ -743,8 +768,8 @@ function reflowTextFrame(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: num
 // (nsInlineFrame.cpp:489-688) with BeginSpan and EndSpan (nsLineLayout.cpp:378-436), then CanPlaceFrame and PlaceFrame for the
 // span frame. `open`: the frame's open item, the one before `childFrom`; null where the span's frame on this line continues
 // one from an earlier line.
-function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element: number, open: GeckoEdgeItem | null,
-  childFrom: number, chain: number[], depth: number, start: GeckoLineStart): Status {
+function beginReflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element: number, open: GeckoEdgeItem | null,
+  childFrom: number): ReflowSpan {
   const el = spanAt(p.elements, element)
   const notSafeToBreak = ll.lineIsEmpty && !ll.impactedByFloats
   const iStart = parent.iCoord
@@ -771,8 +796,13 @@ function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element:
     element, iStart: startEdge, iCoord: startEdge, iEnd: startEdge + availableISize, noWrap: !el.style.wrap, frames: [],
     hasNonemptyContent: false, parent,
   }
-  const s = reflowChildren(p, ll, span, childFrom, end, chain, depth, start)
-  if (s === 'redo-next-band') throw new Error('gecko: redo-next-band inside a span')
+  return { span, open, end, finalClose, notSafeToBreak, iStart, startMargin, startEdge, hasPrev, childFrom }
+}
+
+function endReflowSpan(p: GeckoPrepared, ll: LineLayout, state: ReflowSpan, s: Status): Status {
+  const { span, open, end, finalClose, notSafeToBreak, iStart, startMargin, startEdge, hasPrev, childFrom } = state
+  const parent = span.parent!
+  const el = spanAt(p.elements, span.element)
   if (s.breakBefore) {
     // The span frame itself is pushed (nsLineLayout.cpp:1081-1084, nsInlineFrame.cpp:717-731).
     return { ...s, next: open === null ? s.next : { item: childFrom - 1, offset: open.at } }
@@ -795,7 +825,7 @@ function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element:
     parent.hasNonemptyContent = true
     ll.lineIsEmpty = false
   }
-  parent.frames.push({ kind: 'span', element, span, iStart: placedStart, iSize, hasStartEdge: !hasPrev, hasEndEdge: last })
+  parent.frames.push({ kind: 'span', element: span.element, span, iStart: placedStart, iSize, hasStartEdge: !hasPrev, hasEndEdge: last })
   parent.iCoord = placedStart + iSize + endMargin
   ll.totalPlaced++
   return complete ? { ...s, next: { item: end + 1, offset: itemAt(p, end + 1) } } : s

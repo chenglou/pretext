@@ -25,18 +25,29 @@ export type Placed = PlacedText | PlacedSpan | PlacedLeaf
 export type PlacedSpanData = { iStart: number; iCoord: number; iEnd: number; frames: Placed[]; hasNonemptyContent: boolean }
 
 function placedFrom(psd: SpanData): PlacedSpanData {
-  const frames: Placed[] = []
-  for (let k = 0; k < psd.frames.length; k++) {
-    const pf = psd.frames[k]!
+  const record = (source: SpanData): PlacedSpanData => ({
+    iStart: source.iStart, iCoord: source.iCoord, iEnd: source.iEnd, frames: [], hasNonemptyContent: source.hasNonemptyContent,
+  })
+  const root = record(psd)
+  const stack = [{ source: psd, placed: root, next: 0 }]
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (walk.next === walk.source.frames.length) { stack.pop(); continue }
+    const pf = walk.source.frames[walk.next++]!
     switch (pf.kind) {
       case 'text':
-        frames.push({ ...pf, trimmedEnd: pf.r.contentStart + pf.r.contentLength, endOfLine: false, justification: { ...pf.r.justification }, assign: { start: 0, end: 0 } })
+        walk.placed.frames.push({ ...pf, trimmedEnd: pf.r.contentStart + pf.r.contentLength, endOfLine: false, justification: { ...pf.r.justification }, assign: { start: 0, end: 0 } })
         break
-      case 'span': frames.push({ ...pf, span: placedFrom(pf.span) }); break
-      case 'atomic': case 'br': case 'wbr': frames.push({ ...pf, assign: { start: 0, end: 0 } }); break
+      case 'span': {
+        const child = record(pf.span)
+        walk.placed.frames.push({ ...pf, span: child })
+        stack.push({ source: pf.span, placed: child, next: 0 })
+        break
+      }
+      case 'atomic': case 'br': case 'wbr': walk.placed.frames.push({ ...pf, assign: { start: 0, end: 0 } }); break
     }
   }
-  return { iStart: psd.iStart, iCoord: psd.iCoord, iEnd: psd.iEnd, frames, hasNonemptyContent: psd.hasNonemptyContent }
+  return root
 }
 
 // nsLineLayout::TrimTrailingWhiteSpaceIn (nsLineLayout.cpp:2851-2985) over one span: from the last frame back, a child span
@@ -44,18 +55,26 @@ function placedFrom(psd: SpanData): PlacedSpanData {
 // text frame not already trimmed at its break loses the floored advance of its trailing IsTrimmableSpace characters,
 // unclamped (nsTextFrame.cpp:11540-11628). Frames after a trimmed one slide back.
 function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: PlacedSpanData): { handled: boolean; delta: number } {
-  for (let k = psd.frames.length - 1; k >= 0; k--) {
-    const pf = psd.frames[k]!
-    let delta = 0
-    let handled = false
+  const stack = [{ psd, k: psd.frames.length - 1 }]
+  let returned: { handled: boolean; delta: number } | null = null
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (returned === null && walk.k < 0) {
+      stack.pop()
+      returned = { handled: false, delta: 0 }
+      continue
+    }
+    const pf = walk.psd.frames[walk.k]!
+    let delta = 0, handled = false
     if (pf.kind === 'span') {
-      const inner = trimTrailingWhiteSpaceIn(p, pf.span)
-      if (!inner.handled) continue
-      delta = inner.delta
+      if (returned === null) { stack.push({ psd: pf.span, k: pf.span.frames.length - 1 }); continue }
+      if (!returned.handled) { returned = null; walk.k--; continue }
+      delta = returned.delta
       handled = true
+      returned = null
     } else if (pf.kind !== 'text') {
-      if (pf.kind === 'br') continue
-      return { handled: true, delta: 0 }
+      if (pf.kind === 'br') { walk.k--; continue }
+      handled = true
     } else {
       const r = pf.r
       const f = p.frames[r.frame]!
@@ -78,30 +97,34 @@ function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: PlacedSpanData): { hand
     }
     if (delta !== 0) {
       if (pf.kind === 'text') {
-        // JustificationInfo::CancelOpportunityForTrimmedSpace (JustificationUtils.h).
         if (pf.justification.inner > 0) pf.justification.inner--
         else pf.justification = { ...pf.justification, startJustifiable: false, endJustifiable: false }
       }
       pf.iSize -= delta
-      psd.iCoord -= delta
-      for (let j = k + 1; j < psd.frames.length; j++) psd.frames[j]!.iStart -= delta
+      walk.psd.iCoord -= delta
+      for (let j = walk.k + 1; j < walk.psd.frames.length; j++) walk.psd.frames[j]!.iStart -= delta
     }
-    if (handled) return { handled: true, delta }
+    if (handled) { stack.pop(); returned = { handled: true, delta } }
+    else walk.k--
   }
-  return { handled: false, delta: 0 }
+  return returned!
 }
 
 // The frame nsLineLayout::GetTrimFrom and nsLineLayout::GetHangFrom read (nsLineLayout.cpp:3452-3478, :3416-3450): the
 // line's last frame, inside the span the line ends with, frames skipped when trimming (<br>) passed over; null where that
 // isn't a text frame.
 function lastTextFrame(psd: PlacedSpanData): PlacedText | null {
-  for (let k = psd.frames.length - 1; k >= 0; k--) {
-    const pf = psd.frames[k]!
-    if (pf.kind === 'span') return lastTextFrame(pf.span)
-    if (pf.kind === 'text') return pf
-    if (pf.kind !== 'br') return null
+  for (;;) {
+    let child: PlacedSpanData | null = null
+    for (let k = psd.frames.length - 1; k >= 0; k--) {
+      const pf = psd.frames[k]!
+      if (pf.kind === 'span') { child = pf.span; break }
+      if (pf.kind === 'text') return pf
+      if (pf.kind !== 'br') return null
+    }
+    if (child === null) return null
+    psd = child
   }
-  return null
 }
 
 // nsLineLayout::PerFrameData::ParticipatesInJustification (nsLineLayout.cpp:2993-3004): not empty, not skipped when trimming
@@ -116,11 +139,7 @@ function participatesInJustification(p: GeckoPrepared, pf: Placed): boolean {
       if (!pf.endOfLine) return true
       // TextIsOnlyWhitespace of the node (CharacterData.cpp:486-510).
       const leaf = p.leaves[p.frames[pf.r.frame]!.run]!
-      for (let s = leaf.start; s < leaf.end; s++) {
-        const u = p.text.charCodeAt(s)
-        if (u !== 0x20 && u !== 0x09 && u !== 0x0a && u !== 0x0d) return true
-      }
-      return false
+      return !leaf.onlyWhitespace
     }
   }
 }
@@ -150,27 +169,33 @@ function assignInterframeGaps(pf: PlacedText | PlacedLeaf, state: ComputationSta
 // nsLineLayout::ComputeFrameJustification (nsLineLayout.cpp:3084-3150): the span's inner opportunities into `inner`, and
 // the opportunities before its first participant returned.
 function computeFrameJustification(p: GeckoPrepared, psd: PlacedSpanData, state: ComputationState, inner: { count: number }): number {
-  let firstChild = true
+  const stack = [{ psd, inner, k: 0, firstChild: true, outer: 0 }]
+  let returned: { outer: number; count: number } | null = null
   let outer = 0
-  for (let k = 0; k < psd.frames.length; k++) {
-    const pf = psd.frames[k]!
-    if (!participatesInJustification(p, pf)) continue
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (returned === null && walk.k === walk.psd.frames.length) {
+      stack.pop()
+      returned = { outer: walk.outer, count: walk.inner.count }
+      outer = walk.outer
+      continue
+    }
+    const pf = walk.psd.frames[walk.k]!
+    if (!participatesInJustification(p, pf)) { walk.k++; continue }
     let extra = 0
     if (pf.kind === 'span') {
-      const spanInner = { count: 0 }
-      extra = computeFrameJustification(p, pf.span, state, spanInner)
-      inner.count += spanInner.count
+      if (returned === null) { stack.push({ psd: pf.span, inner: { count: 0 }, k: 0, firstChild: true, outer: 0 }); continue }
+      extra = returned.outer
+      walk.inner.count += returned.count
+      returned = null
     } else {
-      if (pf.kind === 'text') inner.count += pf.justification.inner
+      if (pf.kind === 'text') walk.inner.count += pf.justification.inner
       if (state.last !== null) extra = assignInterframeGaps(pf, state)
       state.last = pf
     }
-    if (firstChild) {
-      outer = extra
-      firstChild = false
-    } else {
-      inner.count += extra
-    }
+    if (walk.firstChild) { walk.outer = extra; walk.firstChild = false }
+    else walk.inner.count += extra
+    walk.k++
   }
   return outer
 }
@@ -188,30 +213,40 @@ export function consume(state: ApplicationState, gaps: number): number {
 // nsLineLayout::ApplyFrameJustification (nsLineLayout.cpp:3220-3275), without annotations: each participant takes its gaps'
 // share of the remaining width, frames after it move, and a leaf that isn't text takes its gaps as margins.
 function applyFrameJustification(p: GeckoPrepared, psd: PlacedSpanData, state: ApplicationState): number {
-  let deltaICoord = 0
+  const stack = [{ psd, k: 0, deltaICoord: 0 }]
   const justifiable = state.count > 0 && state.available > 0
-  for (let k = 0; k < psd.frames.length; k++) {
-    const pf = psd.frames[k]!
+  let returned: number | null = null
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (returned === null && walk.k === walk.psd.frames.length) {
+      stack.pop()
+      returned = walk.deltaICoord
+      continue
+    }
+    const pf = walk.psd.frames[walk.k]!
     let dw = 0
     if (participatesInJustification(p, pf)) {
       if (pf.kind === 'text') {
         if (justifiable) dw = consume(state, pf.justification.inner * 2 + pf.assign.start + pf.assign.end)
         else pf.assign = { start: 0, end: 0 }
       } else if (pf.kind === 'span') {
-        dw = applyFrameJustification(p, pf.span, state)
+        if (returned === null) { stack.push({ psd: pf.span, k: 0, deltaICoord: 0 }); continue }
+        dw = returned
+        returned = null
       }
     }
     pf.iSize += dw
     let gapsAtEnd = 0
     if (pf.kind !== 'text' && pf.kind !== 'span' && pf.assign.start + pf.assign.end > 0) {
-      deltaICoord += consume(state, pf.assign.start)
+      walk.deltaICoord += consume(state, pf.assign.start)
       gapsAtEnd = consume(state, pf.assign.end)
       dw += gapsAtEnd
     }
-    pf.iStart += deltaICoord
-    deltaICoord += dw
+    pf.iStart += walk.deltaICoord
+    walk.deltaICoord += dw
+    walk.k++
   }
-  return deltaICoord
+  return returned!
 }
 
 // A decided line placed: its spans after trimming and alignment, and what TextAlignLine computed on the way.
@@ -232,10 +267,13 @@ export type PlacedLine = {
 
 // The text frames of a line's spans in logical order.
 export function textFramesOf(psd: PlacedSpanData, out: PlacedText[] = []): PlacedText[] {
-  for (let k = 0; k < psd.frames.length; k++) {
-    const pf = psd.frames[k]!
+  const stack = [{ psd, next: 0 }]
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (walk.next === walk.psd.frames.length) { stack.pop(); continue }
+    const pf = walk.psd.frames[walk.next++]!
     if (pf.kind === 'text') out.push(pf)
-    else if (pf.kind === 'span') textFramesOf(pf.span, out)
+    else if (pf.kind === 'span') stack.push({ psd: pf.span, next: 0 })
   }
   return out
 }

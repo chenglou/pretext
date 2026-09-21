@@ -114,9 +114,12 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
   const chains = new Map<number, { spans: PlacedSpan[]; unplaced: number }>()
   const collect = (psd: PlacedSpanData, origin: number): Box[] => {
     const boxes: Box[] = []
-    for (let k = 0; k < psd.frames.length; k++) {
-      const pf = psd.frames[k]!
-      const logical = origin + pf.iStart
+    const stack = [{ psd, origin, boxes, next: 0 }]
+    while (stack.length > 0) {
+      const walk = stack[stack.length - 1]!
+      if (walk.next === walk.psd.frames.length) { stack.pop(); continue }
+      const pf = walk.psd.frames[walk.next++]!
+      const logical = walk.origin + pf.iStart
       let geometry: GeckoFrameGeometry
       switch (pf.kind) {
         case 'text': {
@@ -136,7 +139,9 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
           const chain = chains.get(pf.element)
           if (chain === undefined) chains.set(pf.element, { spans: [pf], unplaced: 1 })
           else { chain.spans.push(pf); chain.unplaced++ }
-          boxes.push({ kind: 'span', placed: pf, geometry: inline, children: collect(pf.span, logical), relative: 0 })
+          const children: Box[] = []
+          walk.boxes.push({ kind: 'span', placed: pf, geometry: inline, children, relative: 0 })
+          stack.push({ psd: pf.span, origin: logical, boxes: children, next: 0 })
           continue
         }
         case 'atomic':
@@ -152,7 +157,7 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
           break
       }
       frames.push(geometry)
-      boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
+      walk.boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
     }
     return boxes
   }
@@ -167,41 +172,63 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
     // takes the block's direction. Places come out relative to the containing frame, then add up.
     const paragraphLevel = rtl ? 1 : 0
     const levelOf = (pf: Placed): number => {
-      switch (pf.kind) {
-        case 'text': return p.frames[pf.r.frame]!.level
-        case 'span': return pf.span.frames.length > 0 ? levelOf(pf.span.frames[0]!) : paragraphLevel
-        default: return objectAt(p.elements, pf.element).level
+      while (pf.kind === 'span') {
+        if (pf.span.frames.length === 0) return paragraphLevel
+        pf = pf.span.frames[0]!
       }
+      return pf.kind === 'text' ? p.frames[pf.r.frame]!.level : objectAt(p.elements, pf.element).level
     }
-    const place = (box: Box, isEven: boolean, startOrEnd: number, containerReverse: boolean, containerWidth: number): number => {
+    type PlaceWalk = {
+      box: Box; isEven: boolean; startOrEnd: number; containerReverse: boolean; containerWidth: number
+      icoord: number; marginStart: number; marginEnd: number; next: number
+      reverseDir: boolean; width: number; startBP: number; endBP: number; isFirst: boolean; isLast: boolean
+    }
+    const begin = (box: Box, isEven: boolean, startOrEnd: number, containerReverse: boolean, containerWidth: number): PlaceWalk => {
       let icoord = box.placed.iSize
       let marginStart = box.placed.kind === 'atomic' ? box.placed.startMargin : 0
       let marginEnd = box.placed.kind === 'atomic' ? box.placed.endMargin : 0
+      let reverseDir = false, width = 0, startBP = 0, endBP = 0, isFirst = false, isLast = false
       if (box.kind === 'span') {
         const pf = box.placed
         const el = spanAt(p.elements, pf.element)
         const chain = chains.get(pf.element)!
-        const isFirst = chain.unplaced === chain.spans.length && chain.spans[0]!.hasStartEdge
-        const isLast = chain.unplaced === 1 && chain.spans[chain.spans.length - 1]!.hasEndEdge
+        isFirst = chain.unplaced === chain.spans.length && chain.spans[0]!.hasStartEdge
+        isLast = chain.unplaced === 1 && chain.spans[chain.spans.length - 1]!.hasEndEdge
         chain.unplaced--
-        const startBP = isFirst ? el.edges.startBorderPadding : 0
-        const endBP = isLast ? el.edges.endBorderPadding : 0
+        startBP = isFirst ? el.edges.startBorderPadding : 0
+        endBP = isLast ? el.edges.endBorderPadding : 0
         marginStart = isFirst ? el.edges.startMargin : 0
         marginEnd = isLast ? el.edges.endMargin : 0
-        // The reflowed size less the edges applied in continuation order, plus the visual ones (:1806-1826).
-        const width = pf.iSize - (pf.hasStartEdge ? el.edges.startBorderPadding : 0) - (pf.hasEndEdge ? el.edges.endBorderPadding : 0) + startBP + endBP
-        const reverseDir = isEven === rtl
+        // Preserve the original edges, margins, and child accumulation order.
+        width = pf.iSize - (pf.hasStartEdge ? el.edges.startBorderPadding : 0) - (pf.hasEndEdge ? el.edges.endBorderPadding : 0) + startBP + endBP
+        reverseDir = isEven === rtl
         icoord = reverseDir ? endBP : startBP
-        for (let k = 0; k < box.children.length; k++) icoord += place(box.children[k]!, isEven, icoord, reverseDir, width)
-        icoord += reverseDir ? startBP : endBP
-        box.geometry.width = icoord
-        box.geometry.hasStartEdge = isFirst
-        box.geometry.hasEndEdge = isLast
       }
-      const frameStartOrEnd = startOrEnd + (containerReverse ? marginEnd : marginStart)
-      const iStartInContainer = containerReverse ? containerWidth - frameStartOrEnd - icoord : frameStartOrEnd
-      box.relative = rtl ? containerWidth - iStartInContainer - icoord : iStartInContainer
-      return icoord + marginStart + marginEnd
+      return { box, isEven, startOrEnd, containerReverse, containerWidth, icoord, marginStart, marginEnd, next: 0, reverseDir, width, startBP, endBP, isFirst, isLast }
+    }
+    const place = (box: Box, isEven: boolean, startOrEnd: number, containerReverse: boolean, containerWidth: number): number => {
+      const stack = [begin(box, isEven, startOrEnd, containerReverse, containerWidth)]
+      let returned: number | null = null
+      while (stack.length > 0) {
+        const walk = stack[stack.length - 1]!
+        if (returned !== null) { walk.icoord += returned; returned = null }
+        if (walk.box.kind === 'span') {
+          if (walk.next < walk.box.children.length) {
+            stack.push(begin(walk.box.children[walk.next++]!, walk.isEven, walk.icoord, walk.reverseDir, walk.width))
+            continue
+          }
+          walk.icoord += walk.reverseDir ? walk.startBP : walk.endBP
+          walk.box.geometry.width = walk.icoord
+          walk.box.geometry.hasStartEdge = walk.isFirst
+          walk.box.geometry.hasEndEdge = walk.isLast
+        }
+        const frameStartOrEnd = walk.startOrEnd + (walk.containerReverse ? walk.marginEnd : walk.marginStart)
+        const iStartInContainer = walk.containerReverse ? walk.containerWidth - frameStartOrEnd - walk.icoord : frameStartOrEnd
+        walk.box.relative = rtl ? walk.containerWidth - iStartInContainer - walk.icoord : iStartInContainer
+        returned = walk.icoord + walk.marginStart + walk.marginEnd
+        stack.pop()
+      }
+      return returned!
     }
     const levels = root.frames.map(levelOf)
     const order = visualOrder(levels)
@@ -211,10 +238,13 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
       acc += place(boxes[index]!, (levels[index]! & 1) === 0, acc, false, band.containerWidth)
     }
     const settle = (list: Box[], origin: number): void => {
-      for (let k = 0; k < list.length; k++) {
-        const box = list[k]!
-        box.geometry.x = origin + box.relative
-        if (box.kind === 'span') settle(box.children, box.geometry.x)
+      const stack = [{ list, origin, next: 0 }]
+      while (stack.length > 0) {
+        const walk = stack[stack.length - 1]!
+        if (walk.next === walk.list.length) { stack.pop(); continue }
+        const box = walk.list[walk.next++]!
+        box.geometry.x = walk.origin + box.relative
+        if (box.kind === 'span') stack.push({ list: box.children, origin: box.geometry.x, next: 0 })
       }
     }
     settle(boxes, 0)

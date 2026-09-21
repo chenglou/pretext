@@ -1,3 +1,4 @@
+import { OffsetRuns } from './offset-runs.js'
 // Blink (Chrome 153.0.8010.48). prepare builds text_content, items, bidi levels, script runs and shaping groups from the
 // inline tree and measures the groups; fillLine runs LineBreaker::NextLine for one line in one layout opportunity and keeps
 // its item results as the decided line. What LogicalLineBuilder and InlineLayoutAlgorithm make of them is read from the
@@ -23,7 +24,7 @@ import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import { measureGroups, type Shaper } from './shape.js'
+import { isClusterBoundary, measureGroups, type Shaper } from './shape.js'
 import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
 
 export { paragraphGaps } from './gaps.js'
@@ -152,19 +153,24 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     canvasText = { narrow, spaced: narrow.replaceAll(' ', '\u2028') }
   }
   const p: BlinkPrepared = {
-    paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
+    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
     items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
-    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null },
+    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, sourceRuns: null, graphemeRuns: null },
   }
   const sh: Shaper = { p, gaps }
   shapingGroups(p)
   markContinuations(p)
   fontFactsOfText(p)
+  p.clusterRuns = new OffsetRuns(text.length + 1, k => !isClusterBoundary(p, k))
+  if (p.inspect !== null) {
+    p.inspect.sourceRuns = new OffsetRuns(text.length, k => p.sourceOffsets[k]! < 0)
+    p.inspect.graphemeRuns = new OffsetRuns(text.length + 1, k => p.graphemeStarts[k] !== 1)
+  }
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
     if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)

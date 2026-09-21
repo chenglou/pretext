@@ -22,7 +22,7 @@ import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js
 import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
-  EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
+  EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
   joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
   startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
 } from './shape.js'
@@ -55,32 +55,32 @@ export function dropGapsFrom(sink: GapSink, count: number): void {
 // The source range of text_content [from, to): from the first unit with a source offset to the last one's end. A range
 // holding only generated units (a <wbr>'s or an atomic inline's) is the break offset before the next source unit.
 function sourceRange(p: BlinkPrepared, from: number, to: number): { start: number; end: number } {
-  let start = -1
-  let end = -1
-  for (let t = from; t < to && t < p.text.length; t++) {
-    const s = p.sourceOffsets[t]!
-    if (s < 0) continue
-    if (start < 0) start = s
-    end = s + 1
+  const end = Math.min(to, p.text.length)
+  if (from < end) {
+    const first = p.sourceOffsets[from]! >= 0 ? from : p.inspect!.sourceRuns!.end(from)
+    const lastUnit = end - 1
+    const last = p.sourceOffsets[lastUnit]! >= 0 ? lastUnit : p.inspect!.sourceRuns!.start(lastUnit) - 1
+    if (first <= last) return { start: p.sourceOffsets[first]!, end: p.sourceOffsets[last]! + 1 }
   }
-  if (start >= 0) return { start, end }
-  let at = p.index.text.length
-  for (let t = to; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) { at = p.sourceOffsets[t]!; break }
-  return { start: at, end: at }
+  return sourceOffsetAt(p, to)
 }
 
 // The source break offset at text_content offset k: the source offset of the first unit at or after k.
 function sourceOffsetAt(p: BlinkPrepared, k: number): { start: number; end: number } {
-  for (let t = k; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return { start: p.sourceOffsets[t]!, end: p.sourceOffsets[t]! }
-  return { start: p.index.text.length, end: p.index.text.length }
+  let at = p.index.text.length
+  if (k < p.text.length) {
+    const first = p.sourceOffsets[k]! >= 0 ? k : p.inspect!.sourceRuns!.end(k)
+    if (first < p.text.length) at = p.sourceOffsets[first]!
+  }
+  return { start: at, end: at }
 }
 
 // The source range of the grapheme around text_content offset k (k inside it or at its start).
 function graphemeSourceRange(p: BlinkPrepared, k: number): { start: number; end: number } {
   let a = Math.min(k, p.text.length)
-  while (a > 0 && p.graphemeStarts[a] !== 1) a--
+  if (p.graphemeStarts[a] !== 1) a = p.inspect!.graphemeRuns!.start(a) - 1
   let b = a + 1
-  while (b < p.text.length && p.graphemeStarts[b] !== 1) b++
+  if (b < p.text.length && p.graphemeStarts[b] !== 1) b = p.inspect!.graphemeRuns!.end(b)
   return sourceRange(p, a, Math.min(b, p.text.length))
 }
 
@@ -106,11 +106,7 @@ function runAt(p: BlinkPrepared, k: number): number | null {
 
 // The source range of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi).
 function clustersAround(p: BlinkPrepared, k: number, lo: number, hi: number): { start: number; end: number } {
-  let a = k - 1
-  while (a > lo && !isClusterBoundary(p, a)) a--
-  let b = k + 1
-  while (b < hi && !isClusterBoundary(p, b)) b++
-  return sourceRange(p, a, b)
+  return sourceRange(p, clusterStartAtOrBefore(p, k - 1, lo), clusterEndAfter(p, k, hi))
 }
 
 // ---- A measured range (shape.ts measure16) ----
@@ -497,31 +493,39 @@ function inspected(p: BlinkPrepared, what: string): BlinkInspect {
 // was raised and in what order it first was, and not how often or in what order ranges were raised again. The entries are
 // copies: nothing handed out is the prepared paragraph's own, or a list still being built.
 export function canonicalGaps(gaps: readonly Gap[]): Gap[] {
-  const out: Gap[] = []
+  // These are private engine lists: source mapping and GapAccumulator produce finite integer
+  // ranges with start <= end, and run is a text-leaf index or null. Source coordinates include EOF points.
+  const groups = new Map<GapName, Map<number | null, Map<string, number[]>>>()
+  // A component goes in its earliest input entry's slot. Scalars keep their own slots, including repeats.
+  const slots: (Gap | undefined)[] = new Array(gaps.length)
   for (let i = 0; i < gaps.length; i++) {
-    const gap = copyOf(gaps[i]!)
-    if (gap.at === undefined) {
-      out.push(gap)
-      continue
-    }
-    // The entries of `out` for one gap, run and detail never meet each other, so the ones this range meets are the ones
-    // its union with the first of them meets, and all go into that first one.
-    const at = gap.at
-    let range: { start: number; end: number } | null = null
-    for (let o = 0; o < out.length; o++) {
-      const entry = out[o]!
-      if (entry.at === undefined || entry.gap !== gap.gap || entry.run !== gap.run || entry.detail !== gap.detail || at.start > entry.at.end || at.end < entry.at.start) continue
-      if (range === null) {
-        range = { start: Math.min(entry.at.start, at.start), end: Math.max(entry.at.end, at.end) }
-        entry.at = range
+    const gap = gaps[i]!
+    if (gap.at === undefined) { slots[i] = copyOf(gap); continue }
+    let runs = groups.get(gap.gap)
+    if (runs === undefined) { runs = new Map(); groups.set(gap.gap, runs) }
+    let details = runs.get(gap.run)
+    if (details === undefined) { details = new Map(); runs.set(gap.run, details) }
+    let ranges = details.get(gap.detail)
+    if (ranges === undefined) { ranges = []; details.set(gap.detail, ranges) }
+    ranges.push(i)
+  }
+  for (const runs of groups.values()) for (const details of runs.values()) for (const ranges of details.values()) {
+    ranges.sort((a, b) => gaps[a]!.at!.start - gaps[b]!.at!.start || a - b)
+    let first = ranges[0]!, start = gaps[first]!.at!.start, end = gaps[first]!.at!.end
+    for (let r = 1; r <= ranges.length; r++) {
+      const i = ranges[r]
+      if (i !== undefined && gaps[i]!.at!.start <= end) {
+        first = Math.min(first, i)
+        start = Math.min(start, gaps[i]!.at!.start)
+        end = Math.max(end, gaps[i]!.at!.end)
       } else {
-        range.start = Math.min(range.start, entry.at.start)
-        range.end = Math.max(range.end, entry.at.end)
-        out.splice(o--, 1)
+        slots[first] = { ...gaps[first]!, at: { start, end } }
+        if (i !== undefined) { first = i; start = gaps[i]!.at!.start; end = gaps[i]!.at!.end }
       }
     }
-    if (range === null) out.push(gap)
   }
+  const out: Gap[] = []
+  for (let i = 0; i < slots.length; i++) if (slots[i] !== undefined) out.push(slots[i]!)
   return out
 }
 

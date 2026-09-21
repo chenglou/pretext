@@ -62,6 +62,8 @@ export type WebKitBox = {
   text: string
   // Stored as Latin-1: every code unit is at most U+00FF, what JS-created nodes get (gap string-storage).
   is8Bit: boolean
+  // Actual TAB offsets, collected with byte classification; empty on ordinary boxes.
+  tabPositions: readonly number[]
   // InlineTextBox::canUseSimplifiedContentMeasuring (RenderText.cpp:480-524). The primary-font coverage condition is tested
   // only for fixed-pitch boxes, the only ones that read the result.
   simplifiedMeasuring: boolean

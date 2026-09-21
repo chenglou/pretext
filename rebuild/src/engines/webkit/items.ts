@@ -265,7 +265,7 @@ function computeItemWidths(p: WebKitOwnPrepared): void {
     if (item.isWhitespace && preservesSpacesAndTabs(box.style)) {
       if (scannedBox !== item.box) {
         scannedBox = item.box
-        hasTabs = box.text.includes('\t')
+        hasTabs = box.tabPositions.length !== 0
       }
       if (hasTabs) continue
     }

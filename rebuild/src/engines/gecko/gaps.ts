@@ -354,12 +354,12 @@ export type TabReason =
 // stand-in tab.
 export function placedStandIn(sink: GapSink, p: GeckoPrepared, psd: SpanData): TabReason | null {
   if (sink === null) return null
-  for (let k = 0; k < psd.frames.length; k++) {
-    const pf = psd.frames[k]!
-    if (pf.kind === 'span') {
-      const inner = placedStandIn(sink, p, pf.span)
-      if (inner !== null) return inner
-    }
+  const stack = [{ psd, next: 0 }]
+  while (stack.length > 0) {
+    const walk = stack[stack.length - 1]!
+    if (walk.next === walk.psd.frames.length) { stack.pop(); continue }
+    const pf = walk.psd.frames[walk.next++]!
+    if (pf.kind === 'span') { stack.push({ psd: pf.span, next: 0 }); continue }
     if (pf.kind !== 'text' || pf.r.prov === null) continue
     const prov = pf.r.prov
     if (prov.run.advancesStandIn !== null) return { kind: 'earlier-frame', under: prov.run.advancesStandIn }

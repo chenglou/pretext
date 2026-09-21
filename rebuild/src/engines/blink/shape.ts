@@ -510,14 +510,13 @@ export function startsClusterInsideGrapheme(p: BlinkPrepared, k: number): boolea
 }
 
 export function clusterStartAtOrBefore(p: BlinkPrepared, k: number, min: number): number {
-  while (k > min && !isClusterBoundary(p, k)) k--
+  if (k > min && !isClusterBoundary(p, k)) return Math.max(min, p.clusterRuns!.start(k) - 1)
   return k
 }
 
-function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
-  let e = k + 1
-  while (e < max && !isClusterBoundary(p, e)) e++
-  return e
+export function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
+  const e = k + 1
+  return e < max && !isClusterBoundary(p, e) ? Math.min(max, p.clusterRuns!.end(e)) : e
 }
 
 // d at offset k inside a shaping call over [lo, hi) of group g: the adjustment between the clusters on both sides of k
@@ -540,9 +539,18 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
   const kept = !noLigatures && keepsByOffset(sh, g, lo, hi) ? p.groups[g]!.pair16 : null
   if (kept !== null && !Number.isNaN(kept[k - lo]!)) return kept[k - lo]!
   let a = clusterStartAtOrBefore(p, k - 1, lo)
-  while (a > lo && holdsNoBase(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
+  // Accepted spans stop at global cluster/code-point boundaries, so test only the newly included units.
+  let checkedFrom = k
+  while (a > lo && holdsNoBase(p, a, checkedFrom)) {
+    checkedFrom = a
+    a = clusterStartAtOrBefore(p, a - 1, lo)
+  }
   let b = clusterEndAfter(p, k, hi)
-  while (b < hi && holdsNoBase(p, k, b)) b = clusterEndAfter(p, b, hi)
+  let checkedTo = k
+  while (b < hi && holdsNoBase(p, checkedTo, b)) {
+    checkedTo = b
+    b = clusterEndAfter(p, b, hi)
+  }
   const d = measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
   if (kept !== null) kept[k - lo] = d
   return d
@@ -576,9 +584,18 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   let a = from
   let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
-  while (nearA > from && holdsNoBase(p, nearA, k)) nearA = clusterStartAtOrBefore(p, nearA - 1, lo)
+  // Accepted spans stop at global cluster/code-point boundaries, so test only the newly included units.
+  let checkedFrom = k
+  while (nearA > from && holdsNoBase(p, nearA, checkedFrom)) {
+    checkedFrom = nearA
+    nearA = clusterStartAtOrBefore(p, nearA - 1, lo)
+  }
   let nearB = clusterEndAfter(p, k, hi)
-  while (nearB < to && holdsNoBase(p, k, nearB)) nearB = clusterEndAfter(p, nearB, hi)
+  let checkedTo = k
+  while (nearB < to && holdsNoBase(p, checkedTo, nearB)) {
+    checkedTo = nearB
+    nearB = clusterEndAfter(p, nearB, hi)
+  }
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
   while (whole >= EXACT16 && (a < nearA || b > nearB)) {
@@ -1049,9 +1066,7 @@ function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
 // other way, to the cluster's start (shape_result.cc:2113-2200).
 export function sliceEdge(p: BlinkPrepared, k: number, lo: number, hi: number): number {
   if (k <= lo || k >= hi) return k
-  let e = k
-  while (e < hi && !isClusterBoundary(p, e)) e++
-  return e
+  return !isClusterBoundary(p, k) ? Math.min(hi, p.clusterRuns!.end(k)) : k
 }
 
 // The advance sum before slice edge k in the shaping call a part's glyphs come from: the item's result or a reshape.

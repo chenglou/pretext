@@ -1042,7 +1042,11 @@ where it may be wrong.
   first (`GapSink`: Blink's private `GapAccumulator`, `Gap[]` in the other ports, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
   done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
   `inspectLine` starts from a copy of it. Blink snapshots its private accumulator into ordinary decided-line gap lists; a sparse inclusive source-position index preserves first-touch widening and speculative rollback without scanning all prior entries. Blink hands a list out in a canonical form, which doesn't follow how often a
-  range was raised (§5). What else only gaps read is in `prepared.inspect`, null on a plain paragraph; nothing else says
+  range was raised (§5). Canonicalization uses temporary per-key sorted inclusive interval components, placed in their
+  earliest original input slots; it does not scan the growing result. Fixed generated/source and grapheme exception runs
+  live only in inspected preparation; cluster exception runs describe finalized continuation/ligature flags on both paths.
+  Their ordered endpoint lookups preserve local shaping clamps. No-base context extension carries the already-proven
+  interval rather than rescanning it. What else only gaps read is in `prepared.inspect`, null on a plain paragraph; nothing else says
   which of the two a paragraph is.
 - WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,
   the content that ended the line included, with `at` naming them; its paragraph keeps only `page-zoom`. The filling
@@ -1052,7 +1056,8 @@ where it may be wrong.
   (`engines/webkit/history.ts`) then fills the line in each history world that changes what it read, and raises
   `page-history` through `gaps.ts` (`lineDiffersInHistoryWorld`, which keeps the prose and the merge rule) where the
   world's line differs. A history world shares the final own item array through a splice view, replacing only one box's contiguous logical range. Its source-to-world map covers that range alone; changed positions are sorted absolute item indices. Ordered box ranges select only worlds affecting the line's read range. Preparation keeps a mutable array; generic filling/inspection reads either finished array or view in constant time. The box facts only gaps read, made with each box, and the history worlds are in
-  `prepared.inspect`.
+  `prepared.inspect`. Original-box TAB offsets are compiled during byte classification and shared by histories; queried
+  ranges use ordered membership instead of repeatedly scanning their characters.
 - Blink reports the conditions of the content in the paragraph's gaps with `at`, computed in `prepare` from the content
   alone (control characters Canvas replaces, U+FFFC, graphemes whose Canvas strings shape under another script, default
   ignorables left out of 8-bit strings, shaping-group edges inside graphemes, joining edges at group edges), and adds each
@@ -1060,6 +1065,10 @@ where it may be wrong.
   line's gaps. Edge conditions (reshapes, pair adjustments at a chosen edge, positions inside graphemes) stay line gaps
   with `at` naming the offset. A plain paragraph also computes no limit, glyph cluster or offset mapping:
   `engines/blink/limits.ts` holds the limits, and only `gaps.ts` and `inspect.ts` call it.
+- Gecko compiles exact whole-leaf ASCII whitespace participation during leaf classification; later characters in the
+  node still affect justification. Real source-event ancestry is separate from synthetic bidi continuation ancestry.
+  Reflow, placement, trimming, justification and inspected geometry use local ordered work stacks, retaining source
+  arithmetic and question order. Tab origins are folded innermost-to-root only for a consumed tab.
 - Gecko's decided line keeps what its fill raised and the in-word stand-in offsets its break scans consulted, across both
   passes of a redo; `inspectLine` reports from them. What a plain paragraph doesn't ask: the characters of placed frames,
   the space-in-shaping windows, a letter-spaced unit's group count at 2px and the positions a stand-in tab rests on. A

@@ -19,6 +19,7 @@ import { boxEdges, layoutUnit, preservesNewline, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitOwnPrepared, WebKitStyle } from './types.js'
 
 const f32 = Math.fround
+const NO_TAB_POSITIONS: readonly number[] = []
 
 // uprv_getDefaultLocaleID without LANG, LC_ALL or LC_MESSAGES (AppleICU76 putil.cpp:1727-1874; specs/webkit-gaps.md §8.2).
 const ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT = 'en_US_POSIX'
@@ -121,7 +122,12 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): We
   const wordSpacing = leaf.style.wordSpacing
   const text = leaf.text
   let is8Bit = true
-  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
+  let tabPositions: number[] | null = null
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    if (c > 0xff) is8Bit = false
+    if (c === 0x09) (tabPositions ??= []).push(i)
+  }
   const simpleFontCodePath = !isComplexCodePath(text)
   const characterAnalysis = simpleFontCodePath
     ? { simpleFontCodePath: true as const, characterBoundaries: null }
@@ -194,7 +200,7 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): We
     }
   }
   const box: WebKitBox = {
-    run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, ...characterAnalysis, simplifiedMeasuring, fixedPitch,
+    run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, tabPositions: tabPositions ?? NO_TAB_POSITIONS, ...characterAnalysis, simplifiedMeasuring, fixedPitch,
     fixedPitchFastMeasuring: fixedPitch && primaryFamily !== 'courier new',
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',

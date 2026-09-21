@@ -34,6 +34,8 @@ export type GeckoLeaf = {
   lang: string
   // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
   is8bit: boolean
+  // TextIsOnlyWhitespace of the whole source node (CharacterData.cpp:486-510), read by line justification.
+  onlyWhitespace: boolean
   // Resolved in au (nsTextFrame.cpp:1949-1980).
   letterSpacingAu: number
   wordSpacingAu: number
