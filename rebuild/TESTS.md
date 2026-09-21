@@ -1,5 +1,7 @@
 # Tests for the rebuild
 
+The active goal and iteration guide are in [README.md](README.md). The phase plans and dated outcomes below record the previous research endpoint.
+
 Status, 2026-09-19, branch `rebuild-20260916` after the re-architecture (the sections below keep the date of what they describe; "Tiers" has the state now). This replaces the 2026-09-16 test strategy (research/TESTS.md). That strategy made main's accuracy grid, oracles and filed reports first-class obligations. Here main's suite and obligations are a measurement corpus (CHARTER.md tentpole 5). The blocking layers are the rebuild's own:
 
 - rule-targeted families, at widths derived from the browsers' observations;

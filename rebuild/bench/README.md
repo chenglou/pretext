@@ -1,5 +1,8 @@
 # Bench
 
+`chat-night.sh` exits nonzero if any browser or the summary fails. It still attempts every browser and summarizes any
+reports that finished; no report means a failed run, even if the shell script itself reached the end.
+
 Compares the cost of the rebuild (`rebuild/src`, through the function set of `rebuild/src/index.ts`, DESIGN.md §2.9) and
 main (`src/`, `prepare` / `layout`) in each installed browser, on inputs both can express. Performance comes after
 correctness here (`rebuild/CHARTER.md`), so these are recorded costs, not targets.

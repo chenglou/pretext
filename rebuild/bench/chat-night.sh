@@ -16,15 +16,29 @@ cd "$(dirname "$0")/../.." || exit 1
 out=$1
 shift
 mkdir -p "$out"
+status=0
 for browser in chrome firefox webkit-host; do
-  python3 .artifacts/session/with-browser-lock.py "bench-chat-$browser" --browser=all --exclusive -- \
-    bun rebuild/bench/run.ts --browser="$browser" --scenarios=chat --headline=10000 --quiet-load=8 --out="$out" "$@" > "$out/$browser.log" 2>&1
-  echo "[chat-night] $browser: exit $?; log $out/$browser.log"
+  if python3 .artifacts/session/with-browser-lock.py "bench-chat-$browser" --browser=all --exclusive -- \
+    bun rebuild/bench/run.ts --browser="$browser" --scenarios=chat --headline=10000 --quiet-load=8 --out="$out" "$@" > "$out/$browser.log" 2>&1; then
+    code=0
+  else
+    code=$?
+    status=1
+  fi
+  echo "[chat-night] $browser: exit $code; log $out/$browser.log"
 done
 reports=""
 for browser in chrome firefox webkit-host; do
   if [ -f "$out/$browser-bench.json" ]; then reports="$reports $out/$browser-bench.json"; fi
 done
+if [ -z "$reports" ]; then
+  echo "[chat-night] no browser report was written; see the logs" >&2
+  exit 1
+fi
 # shellcheck disable=SC2086
-bun rebuild/bench/report.ts $reports > "$out/summary.md"
-echo "[chat-night] summary $out/summary.md"
+if bun rebuild/bench/report.ts $reports > "$out/summary.md"; then
+  echo "[chat-night] summary $out/summary.md"
+else
+  status=1
+fi
+exit "$status"

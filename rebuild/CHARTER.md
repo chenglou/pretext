@@ -1,5 +1,7 @@
 # Rebuild charter
 
+The active goal and iteration guide are in [README.md](README.md). The phase plans and dated outcomes below record the previous research endpoint.
+
 This branch establishes the edge: the most correct text layout predictor we can build from engine source, with Canvas as
 the only measurement. Current Pretext (main) and this rebuild will later be interpolated. That only works if this is the
 extreme endpoint rather than a compromise, so nothing here is shaped by main's history. Main contributes convenient

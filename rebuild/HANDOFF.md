@@ -1,5 +1,7 @@
 # Handoff, 2026-09-20 evening: where the rebuild stands and how to continue
 
+The work is now continuing under `README.md` (takeover of 2026-09-20). This file records the completed research session.
+
 Written for whoever picks this up with no memory of the sessions that built it. Read this file, then the four it points at
 in section 1, before touching anything. Everything is on branch `rebuild-20260916` of the Pretext repository; the rebuild
 lives under `rebuild/` and the published library it replaces is the repository's root (`src/`, "main" below).

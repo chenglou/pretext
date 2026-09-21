@@ -1,5 +1,7 @@
 # Pretext rebuild: design
 
+The active goal and iteration guide are in [README.md](README.md). The phase plans and dated outcomes below record the previous research endpoint.
+
 Status, 2026-09-19, branch `rebuild-20260916`, after the re-architecture (research/ARCHITECTURE-PLAN-2.md; §8.3 has the
 order things landed in). This document describes the library as it is. Correctness is where the correctness line froze
 it on 2026-09-18, with the fixes recorded since (REPORT.md "The correctness line"; lab/README.md "Test tiers"): the
