@@ -1,3 +1,4 @@
+import { clampLU } from './layout-unit.js'
 // text_content and items: which text nodes get a LayoutText (specs/blink-text.md §2.A), InlineItemsBuilder's
 // white-space processing (§2.C) over the inline tree in document order, with open and close tags, atomic inlines, <br>
 // and <wbr> (inline_items_builder.cc), bidi item splitting (§2.D) and the styles items are handled under.
@@ -81,10 +82,13 @@ function iteratorSettings(style: TextStyle): IteratorSettings {
   }
 }
 
-// A fixed length as ComputedStyle holds it, the zoomed px as a float, resolved to a LayoutUnit by LayoutUnit(float), which
-// truncates (layout_unit.h:125-130; MinimumValueForLength, length_functions.cc).
+// A CSS fixed Length: resolve the double literal under float zoom, clamp to the CSS Length range, then store its float
+// (CSSPrimitiveValue::ComputeLength<Length>/ClampToCSSLengthRange, css_primitive_value.cc:44-65,328-331;
+// CSSLengthResolver::ZoomedComputedPixels, css_length_resolver.cc:153-159). Only then does MinimumValueForLength cast
+// Length::Pixels() to LayoutUnit (length_functions.h:62-64; layout_unit.h:125-130). Border widths use a separate producer.
 export function lengthLU(px: number, zoom: number): number {
-  return Math.trunc(Math.fround(Math.fround(Math.fround(px) * Math.fround(zoom)) * 64))
+  const stored = Math.fround(Math.min(33554429, Math.max(-33554430, px * Math.fround(zoom))))
+  return clampLU(Math.fround(stored * 64))
 }
 
 const NO_EDGE: BlinkBoxEdge = { margin: 0, border: 0, padding: 0 }
@@ -93,7 +97,7 @@ const NO_EDGE: BlinkBoxEdge = { margin: 0, border: 0, padding: 0 }
 // integer (style_builder_converter.cc:1953-1990).
 function borderLU(px: number, zoom: number): number {
   const zoomed = Math.fround(px * zoom)
-  const width = zoomed > 0 && zoomed < 1 ? 1 : Math.max(0, Math.floor(zoomed))
+  const width = zoomed > 0 && zoomed < 1 ? 1 : Math.min(33554431, Math.max(0, Math.floor(zoomed)))
   return width * 64
 }
 
@@ -221,16 +225,44 @@ export type Content = {
 type PreviousInFlow = null | { kind: 'text'; endsWithSpace: boolean } | { kind: 'inline' } | { kind: 'br' }
 
 class Builder {
-  units: number[] = []
-  src: number[] = []
+  private units: number[] = []
+  private src: number[] = []
   items: InlineItem[] = []
   hasNonOrc16Bit = false
   readonly styles: ComputedStyle[]
   // The styles of the spans that are open (BoxInfo, inline_items_builder.cc:236-266).
-  readonly boxes: number[] = []
-  // The source offset of the collapsible space RemoveTrailingCollapsibleSpace erased last, for a restore: the item restored
-  // is the last one to collapse with, which is the one a space was last removed from.
-  removedSpaceSource = 0
+  readonly boxes: { style: number; open: number }[] = []
+  // Only the last non-opaque item can have its trailing space removed/restored. Earlier ones are finalized.
+  private lastCollapse = -1
+  private beforeLastBlocking = -1
+  private nonOpaqueBlocking = -1
+  private opaqueBlocking = -1
+  // The current eligible item's erased space remains physically present until that item is finalized.
+  // Later items are opaque; their offsets use that physical coordinate space during this epoch.
+  private removedAt = -1
+
+  get length(): number { return this.units.length - (this.removedAt < 0 ? 0 : 1) }
+  unitAt(offset: number): number | undefined {
+    return this.units[offset + (this.removedAt >= 0 && offset >= this.removedAt ? 1 : 0)]
+  }
+
+  private finalizeSpace(): void {
+    if (this.removedAt < 0) return
+    this.units.splice(this.removedAt, 1)
+    this.src.splice(this.removedAt, 1)
+    for (let i = this.lastCollapse + 1; i < this.items.length; i++) {
+      this.items[i]!.start--
+      this.items[i]!.end--
+    }
+    this.removedAt = -1
+  }
+
+  finish(): Content {
+    this.finalizeSpace()
+    let text = ''
+    for (let i = 0; i < this.units.length; i += 4096) text += String.fromCharCode(...this.units.slice(i, i + 4096))
+    return { text, sourceOffsets: Int32Array.from(this.src), items: this.items, hasNonOrc16Bit: this.hasNonOrc16Bit }
+  }
 
   constructor(styles: ComputedStyle[]) {
     this.styles = styles
@@ -245,40 +277,46 @@ class Builder {
 
   // What an item over the units appended since `start` holds, whatever its type.
   span(start: number, style: number, endCollapseType: EndCollapseType): { start: number; end: number; style: number; bidiLevel: number; endCollapseType: EndCollapseType } {
-    return { start, end: this.units.length, style, bidiLevel: 0, endCollapseType }
+    return { start, end: this.length, style, bidiLevel: 0, endCollapseType }
   }
 
-  // LastItemToCollapseWith (inline_items_builder.cc:207-214).
-  lastItemToCollapseWith(): InlineItem | null {
-    for (let i = this.items.length - 1; i >= 0; i--) {
-      if (this.items[i]!.endCollapseType !== 'opaque-to-collapsing') return this.items[i]!
+  private blocksEmptySpan(item: InlineItem): boolean {
+    return !this.isEmptyItem(item) && !(item.type === 'text' && item.endCollapseType === 'collapsible' && item.end - item.start === 1)
+  }
+
+  private appendItem(item: InlineItem): void {
+    if (item.endCollapseType === 'opaque-to-collapsing') {
+      // Every opaque item appended after the eligible item is at or beyond its pending erased space.
+      if (this.removedAt >= 0) { item.start++; item.end++ }
+    } else this.finalizeSpace()
+    const index = this.items.length
+    this.items.push(item)
+    if (item.endCollapseType === 'opaque-to-collapsing') {
+      if (this.blocksEmptySpan(item)) this.opaqueBlocking = index
+    } else {
+      this.beforeLastBlocking = this.nonOpaqueBlocking
+      this.lastCollapse = index
+      if (this.blocksEmptySpan(item)) this.nonOpaqueBlocking = index
     }
-    return null
+  }
+
+  // LastItemToCollapseWith (inline_items_builder.cc:207-214), maintained as the append-only stream's cursor.
+  lastItemToCollapseWith(): InlineItem | null {
+    return this.lastCollapse < 0 ? null : this.items[this.lastCollapse]!
   }
 
   // ShouldRemoveNewline with the East Asian width rule compiled out (inline_items_builder.cc:67, 92-151).
   shouldRemoveNewline(spaceIndex: number, after: string): boolean {
-    return (spaceIndex > 0 && this.units[spaceIndex - 1] === ZWSP) || (after.length > 0 && after.charCodeAt(0) === ZWSP)
-  }
-
-  shift(from: InlineItem, delta: number): void {
-    const index = this.items.indexOf(from)
-    for (let i = index + 1; i < this.items.length; i++) {
-      this.items[i]!.start += delta
-      this.items[i]!.end += delta
-    }
+    return (spaceIndex > 0 && this.unitAt(spaceIndex - 1) === ZWSP) || (after.length > 0 && after.charCodeAt(0) === ZWSP)
   }
 
   // RemoveTrailingCollapsibleSpace (inline_items_builder.cc:1376-1410).
   removeTrailingCollapsibleSpace(item: InlineItem): void {
     if (item.type !== 'text') return
-    const offset = item.end - 1
-    this.removedSpaceSource = this.src[offset]!
-    this.units.splice(offset, 1)
-    this.src.splice(offset, 1)
+    this.removedAt = item.end - 1
     item.end--
     item.endCollapseType = 'collapsed'
-    this.shift(item, -1)
+    this.nonOpaqueBlocking = this.lastCollapse
   }
 
   removeTrailingCollapsibleSpaceIfExists(): void {
@@ -290,19 +328,18 @@ class Builder {
   restoreTrailingCollapsibleSpaceIfRemoved(): void {
     const item = this.lastItemToCollapseWith()
     if (item === null || item.endCollapseType !== 'collapsed') return
-    this.units.splice(item.end, 0, SPACE)
-    this.src.splice(item.end, 0, this.removedSpaceSource)
+    this.removedAt = -1
     item.end++
     item.endCollapseType = 'collapsible'
-    this.shift(item, 1)
+    this.nonOpaqueBlocking = this.blocksEmptySpan(item) ? this.lastCollapse : this.beforeLastBlocking
   }
 
   // AppendBreakOpportunity (inline_items_builder.cc:1209-1218): an opaque U+200B flow-control item, a <wbr>'s or one
   // generated for a text leaf.
   appendBreakOpportunity(of: { control: 'wbr'; element: number } | { control: 'generated-zwsp'; run: number }, style: number): void {
-    const start = this.units.length
+    const start = this.length
     this.push(ZWSP, -1)
-    this.items.push({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'control', ...of })
+    this.appendItem({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'control', ...of })
   }
 
   // AppendCollapseWhitespace (inline_items_builder.cc:784-985). `base` is S's source offset.
@@ -336,14 +373,14 @@ class Builder {
         } else if (!wrapsLines(this.styles[last.style]!.whiteSpace) && wrapsLines(this.styles[style]!.whiteSpace)) {
           // A nowrap space run collapsing a following wrapping one keeps its soft wrap opportunity through a generated
           // break opportunity, except right after a forced break (847-866; AppendGeneratedBreakOpportunity, 317-326).
-          if (last.type !== 'control' || this.units[last.start] !== LF) this.appendBreakOpportunity({ control: 'generated-zwsp', run }, style)
+          if (last.type !== 'control' || this.unitAt(last.start) !== LF) this.appendBreakOpportunity({ control: 'generated-zwsp', run }, style)
         }
       }
-      if (runHasNewline && this.shouldRemoveNewline(this.units.length, s.slice(i))) {
+      if (runHasNewline && this.shouldRemoveNewline(this.length, s.slice(i))) {
         insertSpace = false
         runHasNewline = false
       }
-      start = this.units.length
+      start = this.length
       if (insertSpace) this.push(SPACE, base)
       if (i === n) endCollapse = 'collapsible'
     } else {
@@ -351,7 +388,7 @@ class Builder {
       if (last !== null && last.type === 'text' && last.endCollapseType === 'collapsible' && last.isEndCollapsibleNewline && this.shouldRemoveNewline(last.end - 1, s)) {
         this.removeTrailingCollapsibleSpace(last)
       }
-      start = this.units.length
+      start = this.length
     }
     while (i < n) {
       let j = i
@@ -362,7 +399,7 @@ class Builder {
         break
       }
       endOfSpaceRun(j)
-      if (runHasNewline && this.shouldRemoveNewline(this.units.length, s.slice(i))) {
+      if (runHasNewline && this.shouldRemoveNewline(this.length, s.slice(i))) {
         endCollapse = 'not-collapsible'
         runHasNewline = false
       } else {
@@ -371,15 +408,15 @@ class Builder {
       }
     }
     // AppendEmptyTextItem (302-312) when nothing was appended.
-    if (this.units.length === start) this.items.push({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'text', run, isEndCollapsibleNewline: false })
-    else this.items.push({ ...this.span(start, style, endCollapse), type: 'text', run, isEndCollapsibleNewline: runHasNewline })
+    if (this.length === start) this.appendItem({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'text', run, isEndCollapsibleNewline: false })
+    else this.appendItem({ ...this.span(start, style, endCollapse), type: 'text', run, isEndCollapsibleNewline: runHasNewline })
   }
 
   // AppendForcedBreak (1162-1199): no bidi contexts in this model. `source` is -1 for a <br>'s LF.
   appendForcedBreak(source: number, of: { control: 'forced-break'; run: number } | { control: 'br'; element: number }, style: number): void {
-    const start = this.units.length
+    const start = this.length
     this.push(LF, source)
-    this.items.push({ ...this.span(start, style, 'collapsible'), type: 'control', ...of })
+    this.appendItem({ ...this.span(start, style, 'collapsible'), type: 'control', ...of })
   }
 
   // AppendPreserveNewline (1138-1160).
@@ -402,21 +439,21 @@ class Builder {
   insertBreakAfterLeadingPreservedSpaces(s: string, base: number, run: number, style: number, start: number): number {
     const ws = this.styles[style]!.whiteSpace
     if (collapsesWhiteSpace(ws) || !wrapsLines(ws) || start >= s.length || s.charCodeAt(start) !== SPACE) return start
-    const atLineStart = start > 0 ? s.charCodeAt(start - 1) === LF : this.units.length === 0 || this.units[this.units.length - 1] === LF
+    const atLineStart = start > 0 ? s.charCodeAt(start - 1) === LF : this.length === 0 || this.unitAt(this.length - 1) === LF
     if (!atLineStart) return start
     let end = start
     do end++; while (end < s.length && s.charCodeAt(end) === SPACE)
-    const itemStart = this.units.length
+    const itemStart = this.length
     for (let k = start; k < end; k++) this.push(SPACE, base + k)
-    this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
+    this.appendItem({ ...this.span(itemStart, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
     this.appendBreakOpportunity({ control: 'generated-zwsp', run }, style)
     return end
   }
 
   appendTextItem(s: string, base: number, from: number, to: number, run: number, style: number): void {
-    const start = this.units.length
+    const start = this.length
     for (let k = from; k < to; k++) this.push(s.charCodeAt(k), base + k)
-    this.items.push({ ...this.span(start, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
+    this.appendItem({ ...this.span(start, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
   }
 
   // AppendPreserveWhitespace (1040-1136).
@@ -444,18 +481,18 @@ class Builder {
       } else if (c === TAB) {
         let end = start + 1
         while (end < n && s.charCodeAt(end) === TAB) end++
-        const itemStart = this.units.length
+        const itemStart = this.length
         for (let k = start; k < end; k++) this.push(TAB, base + k)
-        this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'tab', run })
+        this.appendItem({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'tab', run })
         start = end
       } else if (c === ZWNJ) {
         // ZWNJ splits the item but stays text (1112-1118).
         control = findControl(start + 1)
         continue
       } else {
-        const itemStart = this.units.length
+        const itemStart = this.length
         this.push(c, base + start)
-        this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'cr-ff', run })
+        this.appendItem({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'cr-ff', run })
         start++
       }
       if (start >= n) break
@@ -492,16 +529,16 @@ class Builder {
   // EnterInline (1530-1620): the open tag, and the parent box's ShouldCreateBoxFragment when this child needs it.
   enterInline(element: number, style: number): void {
     const st = this.styles[style]!
-    this.items.push({ ...this.span(this.units.length, style, 'opaque-to-collapsing'), type: 'open-tag', element })
+    this.appendItem({ ...this.span(this.length, style, 'opaque-to-collapsing'), type: 'open-tag', element })
     // LayoutInline::ComputeInitialShouldCreateBoxFragment (layout_inline.cc:183-213): decoration background, padding or
     // margin.
     st.shouldCreateBoxFragment = hasBorder(st) || mayHavePadding(st) || mayHaveMargin(st)
     if (this.boxes.length > 0) {
-      const parent = this.styles[this.boxes[this.boxes.length - 1]!]!
+      const parent = this.styles[this.boxes[this.boxes.length - 1]!.style]!
       // ShouldCreateBoxFragmentForChild (inline_items_builder.cc:244-266).
       if (!parent.shouldCreateBoxFragment && (mayHaveMargin(st) || st.verticalAlign !== 'baseline' || fontHeightsDiffer(parent, st))) parent.shouldCreateBoxFragment = true
     }
-    this.boxes.push(style)
+    this.boxes.push({ style, open: this.items.length - 1 })
   }
 
   // InlineItem::IsEmptyItem as the builder sees it: an empty text item (AppendEmptyTextItem, 302-312, the one text item
@@ -522,22 +559,20 @@ class Builder {
   // c-d600d9b01c0ae9d7: natively a rect 0 wide at the end of `delta gamma`).
   exitInline(element: number, style: number): void {
     const st = this.styles[style]!
-    for (let i = this.items.length - 1; !st.shouldCreateBoxFragment; i--) {
-      const item = this.items[i]!
-      if (item.type === 'open-tag' && item.element === element) st.shouldCreateBoxFragment = true
-      else if (!this.isEmptyItem(item) && !(item.type === 'text' && item.endCollapseType === 'collapsible' && item.end - item.start === 1)) break
-    }
-    this.items.push({ ...this.span(this.units.length, style, 'opaque-to-collapsing'), type: 'close-tag', element })
+    // The old reverse walk stopped at the nearest blocking item or this span's open tag.
+    const open = this.boxes[this.boxes.length - 1]!.open
+    if (!st.shouldCreateBoxFragment && Math.max(this.nonOpaqueBlocking, this.opaqueBlocking) <= open) st.shouldCreateBoxFragment = true
+    this.appendItem({ ...this.span(this.length, style, 'opaque-to-collapsing'), type: 'close-tag', element })
     this.boxes.pop()
   }
 
   // AppendAtomicInline (1267-1287).
   appendAtomicInline(element: number, style: number): void {
     this.restoreTrailingCollapsibleSpaceIfRemoved()
-    const start = this.units.length
+    const start = this.length
     this.push(ORC, -1)
-    this.items.push({ ...this.span(start, style, 'not-collapsible'), type: 'atomic', element })
-    if (this.boxes.length > 0) this.styles[this.boxes[this.boxes.length - 1]!]!.shouldCreateBoxFragment = true
+    this.appendItem({ ...this.span(start, style, 'not-collapsible'), type: 'atomic', element })
+    if (this.boxes.length > 0) this.styles[this.boxes[this.boxes.length - 1]!.style]!.shouldCreateBoxFragment = true
   }
 }
 
@@ -602,9 +637,7 @@ export function buildContent(index: ContentIndex<FontDecl>, styles: ComputedStyl
     }
   }
   b.removeTrailingCollapsibleSpaceIfExists() // ExitBlock (1621-1629)
-  let text = ''
-  for (let i = 0; i < b.units.length; i += 4096) text += String.fromCharCode(...b.units.slice(i, i + 4096))
-  return { text, sourceOffsets: Int32Array.from(b.src), items: b.items, hasNonOrc16Bit: b.hasNonOrc16Bit }
+  return b.finish()
 }
 
 // Character::MaybeBidiRtl(String) (character.h:295-328).

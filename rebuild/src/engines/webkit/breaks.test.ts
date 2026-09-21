@@ -71,11 +71,11 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
         opportunity = true
       } else if (previous.box === item.box) {
         const box = p.boxes[item.box]!
-        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale, box.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks), item.start, box.style) === item.start
+        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale.name, box.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks), item.start, box.style) === item.start
       } else {
         const a = p.boxes[previous.box]!
         const b = p.boxes[item.box]!
-        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale, b.style, p.icuDefaultLocale, p.env.dictionaryBreaks)
+        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale.name, b.style, p.icuDefaultLocale, p.env.dictionaryBreaks)
       }
       if (opportunity) breaks.push(p.boxes[item.box]!.sourceStart + item.start)
     }

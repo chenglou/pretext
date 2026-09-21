@@ -7,7 +7,7 @@ import { rangeAdvance } from './lines.js'
 import { rangeAu, runContextsFor } from './measure.js'
 import { prepareGecko } from './prepare.js'
 import { advanceBefore } from './advance.js'
-import { createFontDeclarations, opticalSizeAxisOf, sameFontForTextRun } from './fonts.js'
+import { createFontDeclarations, fontTableOf, listedFontOf, extenderFontOf, opticalSizeAxisOf, sameFontForTextRun } from './fonts.js'
 import type { RunContexts } from './types.js'
 
 beforeAll(() => {
@@ -267,4 +267,311 @@ test('compiled families preserve malformed-list validation and scalar/fact short
   expect(sameFontForTextRun({ ...font, family: 'Serif' }, { ...font, family: 'serif' }, declarations)).toBe(true)
   expect(opticalSizeAxisOf({ ...font, family: 'system-ui', facts: UNKNOWN_FONT_FACTS }, declarations)).toBe(true)
   expect(opticalSizeAxisOf({ ...font, family: '"system-ui"', facts: UNKNOWN_FONT_FACTS }, declarations)).toBe(false)
+})
+
+test('many stable tab frames inspect each earlier completed frame once in a speculative pass', () => {
+  const n = 512, p = prepareGecko({ ...paragraph(''), content: Array.from({ length: n }, () => ({ kind: 'text' as const, text: 'a\t' })) }, env, true, createContextPool())
+  let reads = 0
+  p.textRuns = p.textRuns.map(run => new Proxy(run, { get(target, key, receiver) {
+    if (key === 'advancesStandIn') reads++
+    return Reflect.get(target, key, receiver)
+  } }))
+  const filled = fillLine(p, firstLine(p)!, { width: 1_000_000, left: 0, right: 0 })
+  if (filled.kind !== 'line') throw new Error('unexpected refusal')
+  expect([filled.start, filled.end, filled.next]).toEqual([0, 2 * n, null])
+  expect(linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')).toBe('a\t'.repeat(n))
+  expect(inspectLine(p, filled.line).gaps).toEqual([])
+  expect(reads).toBeLessThan(16 * n)
+})
+
+test('a known unavailable font prefix is source analysis rather than a fresh search at every Greek interior', () => {
+  const n = 512
+  const facts: NonNullable<FontDecl['facts']['fonts']>[number][] = Array.from({ length: n }, (_, i) => ({
+    family: `Absent ${i}`, realizes: false, coverage: null, ligatures: null, scriptLookups: null,
+  }))
+  facts.push({ family: font.family, realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: [['Latn', 'Grek', 'Cyrl']] })
+  const fonts = counted(facts)
+  const p = prepareGecko(paragraph('αβ'.repeat(n / 2), { whiteSpace: 'normal', font: { ...font, family: facts.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: fonts.values } } }), env, true, createContextPool())
+  let lines = 0
+  for (let start = firstLine(p); start !== null;) {
+    const filled = fillLine(p, start, { width: 15, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unexpected refusal')
+    expect(filled.end - filled.start).toBe(1)
+    expect(inspectLine(p, filled.line).gaps).toEqual([])
+    linePieces(p, filled.line)
+    lines++; start = filled.next
+  }
+  expect(lines).toBe(n)
+  expect(fonts.reads()).toBeLessThan(8 * n)
+})
+
+
+test('distinct declarations sharing one source font table do not multiply its primary-font search', () => {
+  const n = 256
+  const facts: NonNullable<FontDecl['facts']['fonts']>[number][] = Array.from({ length: n }, (_, i) => ({
+    family: `Absent ${i}`, realizes: false, coverage: null, ligatures: null, scriptLookups: null,
+  }))
+  facts.push({ family: font.family, realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: [['Latn', 'Grek']] })
+  const fonts = counted(facts), block = paragraph('')
+  block.content = Array.from({ length: n }, (_, i) => ({
+    kind: 'span', font: { ...font, family: facts.map(f => JSON.stringify(f.family)).join(','), size: 16 + i / 8, facts: { ...font.facts, fonts: fonts.values } }, letterSpacing: 0, wordSpacing: 0,
+    whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto', tabSize: 8, lang: null,
+    inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'α' }],
+  }))
+  const p = prepareGecko(block, env, false, createContextPool())
+  const filled = fillLine(p, firstLine(p)!, { width: 1_000_000, left: 0, right: 0 })
+  if (filled.kind !== 'line') throw new Error('unexpected refusal')
+  expect([filled.start, filled.end, filled.next]).toEqual([0, n, null])
+  expect(p.textRuns.length).toBe(n)
+  expect(p.textRuns.every(run => run.fontTable === p.textRuns[0]!.fontTable)).toBe(true)
+  expect(fonts.reads()).toBeLessThan(8 * n)
+})
+
+
+test('deciding many hyphen fallback breaks searches their published source points without a growing prefix', () => {
+  const n = 512, text = 'a-a-'.repeat(n) + 'a'
+  const p = prepareGecko(paragraph(text, { whiteSpace: 'normal', wordBreak: 'keep-all', overflowWrap: 'normal' }), env, true, createContextPool())
+  const original = p.inspect!.emergencyUnconfirmed
+  expect(original).toEqual([...original].sort((a, b) => a - b))
+  const points = counted(original)
+  p.inspect!.emergencyUnconfirmed = points.values
+  let lines = 0, painted = '', uncertain = 0
+  for (let start = firstLine(p); start !== null;) {
+    const filled = fillLine(p, start, { width: 35, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unexpected refusal')
+    painted += linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')
+    uncertain += inspectLine(p, filled.line).gaps.filter(g => g.gap === 'font-fallback' && g.detail.includes('emergency break')).length
+    lines++; start = filled.next
+  }
+  expect([lines, painted, uncertain]).toEqual([2 * n, text, 2 * n - 1])
+  expect(points.reads()).toBeLessThan(64 * n)
+})
+
+test('hyphen coverage keeps original indices without rewalking unavailable source families for each point', () => {
+  const n = 512, text = 'a-a-'.repeat(n) + 'a'
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = Array.from({ length: n }, (_, i) => ({
+    family: `Absent ${i}`, realizes: false, coverage: null, ligatures: null, scriptLookups: null,
+  }))
+  raw.push({ family: font.family, realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: [['Latn', 'Grek']] })
+  for (const inspect of [false, true]) {
+    const fonts = counted(raw)
+    const p = prepareGecko(paragraph(text, { whiteSpace: 'normal', wordBreak: 'keep-all', overflowWrap: 'normal', font: {
+      ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: fonts.values },
+    } }), env, inspect, createContextPool())
+    let lines = 0, painted = ''
+    for (let start = firstLine(p); start !== null;) {
+      const filled = fillLine(p, start, { width: 35, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('unexpected refusal')
+      painted += linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')
+      if (inspect) expect(inspectLine(p, filled.line).gaps).toEqual([])
+      lines++; start = filled.next
+    }
+    expect([lines, painted]).toEqual([2 * n, text])
+    expect(fonts.reads()).toBeLessThan(16 * n)
+    expect(listedFontOf(p.textRuns[0]!.fontTable, 0x61)).toBe(n)
+  }
+})
+
+test('pruned coverage preserves unknown barriers, source indices, hyphen substitution and previous-font extenders', () => {
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = [
+    { family: 'Absent', realizes: false, coverage: null, ligatures: null, scriptLookups: null },
+    { family: 'First', realizes: true, coverage: [0x2d, 0x2d, 0x61, 0x61], ligatures: null, scriptLookups: [] },
+    { family: 'Unknown', realizes: null, coverage: null, ligatures: null, scriptLookups: null },
+    { family: 'Last', realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: [['Latn']] },
+  ]
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const declarations = createFontDeclarations(), table = fontTableOf(f, declarations)
+  if (table.coverage.kind !== 'source') throw new Error('premature coverage compilation')
+  expect(table.coverage.entries.map(e => e.index)).toEqual([1, 2, 3])
+  expect(listedFontOf(table, 0x61)).toBe(1)
+  expect(listedFontOf(table, 0x2010)).toBe(1)
+  expect(listedFontOf(table, 0x2011)).toBe(1)
+  expect(listedFontOf(table, 0x62)).toBe(null)
+  expect(extenderFontOf(f, table, 1, 0x301)).toBe(null)
+  expect(extenderFontOf(f, table, null, 0x301)).toBe(null)
+  const known = { ...f, facts: { ...f.facts, fonts: raw.map((fact, i) => i === 2 ? { ...fact, realizes: false as const } : fact) } }
+  const knownTable = fontTableOf(known, declarations), base = listedFontOf(knownTable, 0x62)
+  expect(base).toBe(3)
+  expect(extenderFontOf(known, knownTable, base, 0x301)).toBe(3)
+  expect(fontTableOf({ ...f, size: 17 }, declarations)).toBe(table)
+  const empty = fontTableOf({ ...font, facts: { ...font.facts, fonts: [] } }, declarations)
+  expect(listedFontOf(empty, 0x61)).toBe(-1)
+  expect(listedFontOf(fontTableOf(font, declarations), 0x61)).toBe(null)
+})
+
+test('one Common run resolves its unchanged long source language before interior pair queries', () => {
+  const n = 256, text = '²'.repeat(n), tag = 'en-x-' + Array(n).fill('aaaa').join('-')
+  const p = prepareGecko(paragraph(text, { whiteSpace: 'normal', lang: tag }), env, true, createContextPool())
+  const run = p.textRuns[0]!, own = run.contexts.own
+  let reads = 0
+  run.contexts = { ...run.contexts, own: { ...own, settings: new Proxy(own.settings, { get(target, key, receiver) {
+    if (key === 'lang') reads++
+    return Reflect.get(target, key, receiver)
+  } }) } }
+  for (const width of [15, 64.125, 320]) {
+    let painted = ''
+    for (let start = firstLine(p); start !== null;) {
+      const filled = fillLine(p, start, { width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('unexpected refusal')
+      painted += linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')
+      inspectLine(p, filled.line)
+      start = filled.next
+    }
+    expect(painted).toBe(text)
+  }
+  expect(reads).toBeLessThan(32)
+  expect(run.commonPairKerning).toBe(true)
+})
+
+test('inherited leaves share their actual source language policy while an explicit empty tag has its own locale', () => {
+  const block = paragraph('', { lang: 'EL-x-aaaa' })
+  const child: InlineNode = { ...block, kind: 'span', lang: '', inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: '²' }] }
+  block.content = [{ kind: 'text', text: '²' }, { kind: 'text', text: '²' }, child, { kind: 'text', text: '²' }]
+  const p = prepareGecko(block, { ...env, regionalPrefsLocale: 'he' }, false, createContextPool())
+  expect(p.leaves.map(l => l.language.tag)).toEqual(['el-x-aaaa', 'el-x-aaaa', '', 'el-x-aaaa'])
+  expect(p.leaves[0]!.language).toBe(p.leaves[1]!.language)
+  expect(p.leaves[0]!.language).toBe(p.leaves[3]!.language)
+  expect(p.leaves[2]!.language.commonScript).toBe('Hebr')
+  expect(p.textRuns.every(run => run.commonPairKerning === false)).toBe(true)
+})
+test('many realized source families are matched once through their coverage intervals rather than at every hyphen', () => {
+  const n = 512, text = 'a-a-'.repeat(n) + 'a'
+  for (const inspect of [false, true]) {
+    let reads = 0
+    const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = Array.from({ length: n }, (_, i) => ({
+      family: `Present ${i}`, realizes: true, coverage: [0x1000 + i, 0x1000 + i], ligatures: null, scriptLookups: [['Latn']],
+    }))
+    raw.push({ family: font.family, realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: [['Latn']] })
+    const fonts = raw.map(fact => new Proxy(fact, { get(target, key, receiver) {
+      if (key === 'coverage') reads++
+      return Reflect.get(target, key, receiver)
+    } }))
+    const p = prepareGecko(paragraph(text, { whiteSpace: 'normal', wordBreak: 'keep-all', overflowWrap: 'normal', font: {
+      ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts },
+    } }), env, inspect, createContextPool())
+    let lines = 0, painted = ''
+    for (let start = firstLine(p); start !== null;) {
+      const filled = fillLine(p, start, { width: 35, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('unexpected refusal')
+      painted += linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')
+      if (inspect) expect(inspectLine(p, filled.line).gaps).toEqual([])
+      lines++; start = filled.next
+    }
+    expect([lines, painted]).toEqual([2 * n, text])
+    expect(reads).toBeLessThan(16 * n)
+  }
+})
+
+test('one effective known cmap keeps arbitrary binary access without first walking all its ranges', () => {
+  const rawRanges = [0x2d, 0x2d]
+  for (let i = 0; i < 4096; i++) rawRanges.push(0x1000 + 3 * i, 0x1001 + 3 * i)
+  const ranges = counted(rawRanges)
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = [
+    { family: 'Empty', realizes: true, coverage: [], ligatures: null, scriptLookups: [] },
+    { family: 'Mapped', realizes: true, coverage: ranges.values, ligatures: null, scriptLookups: [] },
+    { family: 'Unknown', realizes: null, coverage: null, ligatures: null, scriptLookups: null },
+    { family: 'Hidden', realizes: true, get coverage(): readonly number[] { throw new Error('coverage beyond unknown barrier') }, ligatures: null, scriptLookups: [] },
+  ]
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const table = fontTableOf(f, createFontDeclarations()), last = 0x1000 + 3 * 4095
+  for (const cp of [last + 1, 0x2d, 0x1001, last, 0x2010, 0x1000, 0x2011]) expect(listedFontOf(table, cp)).toBe(1)
+  for (const cp of [last + 2, 0, 0x1002, 0x10ffff]) expect(listedFontOf(table, cp)).toBe(null)
+  expect(ranges.reads()).toBeLessThan(512)
+  expect(table.coverage.kind).toBe('single')
+})
+
+test('small actual font demand does not walk huge later realized cmaps', () => {
+  const rawRanges = [0, 0x80]
+  for (let i = 0; i < 4096; i++) rawRanges.push(0x1000 + 3 * i, 0x1001 + 3 * i)
+  for (const firstCovers of [false, true]) for (const inspect of [false, true]) {
+    const first = counted([...rawRanges]), later = counted([...rawRanges]), unused = counted([...rawRanges])
+    const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = [
+      { family: 'First', realizes: true, coverage: firstCovers ? first.values : [0x100, 0x100], ligatures: null, scriptLookups: [['Latn']] },
+      { family: 'Later', realizes: true, coverage: later.values, ligatures: null, scriptLookups: [['Latn']] },
+      { family: 'Unused', realizes: true, coverage: unused.values, ligatures: null, scriptLookups: [['Latn']] },
+    ]
+    const p = prepareGecko(paragraph('a-a', { whiteSpace: 'normal', wordBreak: 'keep-all', overflowWrap: 'normal', font: {
+      ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw },
+    } }), env, inspect, createContextPool())
+    const filled = fillLine(p, firstLine(p)!, { width: 35, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unexpected refusal')
+    expect([filled.start, filled.end, filled.next]).toEqual([0, 3, null])
+    expect(linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')).toBe('a-a')
+    if (inspect) inspectLine(p, filled.line)
+    expect(first.reads() + later.reads()).toBeLessThan(128)
+    expect(unused.reads()).toBe(0)
+  }
+})
+
+test('many distinct source cells finish one bounded partition instead of repeating the whole family list', () => {
+  const n = 256
+  const rangeInputs = Array.from({ length: n }, (_, i) => counted([0x4000 + 2 * i, 0x4000 + 2 * i]))
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = rangeInputs.map((ranges, i) => ({
+    family: `Present ${i}`, realizes: true, coverage: ranges.values, ligatures: null, scriptLookups: [],
+  }))
+  const fallback = counted([0, 0x10ffff])
+  raw.push({ family: 'Mapped', realizes: true, coverage: fallback.values, ligatures: null, scriptLookups: [] })
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const table = fontTableOf(f, createFontDeclarations())
+  for (let i = 0; i < n; i++) {
+    const ordinal = (73 * i) % n
+    expect(listedFontOf(table, 0x4001 + 2 * ordinal)).toBe(n)
+    expect(listedFontOf(table, 0x4000 + 2 * ordinal)).toBe(ordinal)
+  }
+  expect(rangeInputs.reduce((sum, input) => sum + input.reads(), fallback.reads())).toBeLessThan(128 * n)
+  expect(table.coverage.kind).toBe('partition')
+})
+
+test('families sharing one immutable cmap retain its first source index without multiplying range work', () => {
+  const n = 512, rawRanges: number[] = []
+  for (let i = 0; i < 4096; i++) rawRanges.push(0x1000 + 3 * i, 0x1001 + 3 * i)
+  const ranges = counted(rawRanges)
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = Array.from({ length: n }, (_, i) => ({
+    family: `Present ${i}`, realizes: true, coverage: ranges.values, ligatures: null, scriptLookups: [],
+  }))
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const table = fontTableOf(f, createFontDeclarations())
+  expect(listedFontOf(table, 0x1000)).toBe(0)
+  expect(listedFontOf(table, 0)).toBe(-1)
+  expect(listedFontOf(table, 0x1002)).toBe(-1)
+  expect(listedFontOf(table, 0x10ffff)).toBe(-1)
+  expect(ranges.reads()).toBeLessThan(128)
+})
+
+test('first demanded cmap errors propagate without publishing an unproved source cell', () => {
+  const needed = new Proxy([0x61, 0x61], { get(target, key, receiver) {
+    if (key === '0') throw new Error('source cmap unavailable')
+    return Reflect.get(target, key, receiver)
+  } })
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = [
+    { family: 'First', realizes: true, coverage: [0x2d, 0x2d], ligatures: null, scriptLookups: [] },
+    { family: 'Needed', realizes: true, coverage: needed, ligatures: null, scriptLookups: [] },
+  ]
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const table = fontTableOf(f, createFontDeclarations())
+  expect(listedFontOf(table, 0x2d)).toBe(0)
+  expect(() => listedFontOf(table, 0x61)).toThrow('source cmap unavailable')
+  expect(() => listedFontOf(table, 0x61)).toThrow('source cmap unavailable')
+  expect(listedFontOf(table, 0x2d)).toBe(0)
+})
+
+test('coverage publication preserves earliest overlapping fonts, unknown misses and the previous font of a mark', () => {
+  const raw: NonNullable<FontDecl['facts']['fonts']>[number][] = [
+    { family: 'Early', realizes: true, coverage: [0x2d, 0x2d, 0x61, 0x61, 0x301, 0x301], ligatures: null, scriptLookups: [['Latn']] },
+    { family: 'Later', realizes: true, coverage: [0x62, 0x62, 0x301, 0x301, 0x2010, 0x2011], ligatures: null, scriptLookups: [['Latn']] },
+    { family: 'Unknown', realizes: true, coverage: null, ligatures: null, scriptLookups: null },
+    { family: 'Hidden', realizes: true, coverage: [0, 0x10ffff], ligatures: null, scriptLookups: null },
+  ]
+  const f = { ...font, family: raw.map(f => JSON.stringify(f.family)).join(','), facts: { ...font.facts, fonts: raw } }
+  const table = fontTableOf(f, createFontDeclarations())
+  expect(table.coverage.kind).toBe('source')
+  expect(listedFontOf(table, 0x61)).toBe(0)
+  expect(table.coverage.kind).not.toBe('source')
+  expect(listedFontOf(table, 0x62)).toBe(1)
+  expect(listedFontOf(table, 0x301)).toBe(0)
+  expect(extenderFontOf(f, table, listedFontOf(table, 0x62), 0x301)).toBe(1)
+  expect(listedFontOf(table, 0x2010)).toBe(0)
+  expect(listedFontOf(table, 0x2011)).toBe(0)
+  expect(listedFontOf(table, 0x63)).toBe(null)
+  expect(listedFontOf(table, 0x10ffff)).toBe(null)
 })

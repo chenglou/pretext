@@ -1,6 +1,7 @@
+import { LineGapRanges } from './line-gap-ranges.js'
 import { itemAt } from './item-sequence.js'
 // WebKit's gaps (Safari 27.0): every Canvas-versus-DOM condition the port reports, with its test, its prose, its merge rule
-// and its order (DESIGN.md §2.8, §5). Nothing outside this file builds a Gap, and nothing in it decides a line, fills one or
+// and its order (DESIGN.md §2.8, §5). line-gap-ranges.ts owns the latest-overlap merge; nothing here decides a line, fills one or
 // reads the rest of the port's stages: the rest of the port calls it at the points where a condition shows.
 // - While the paragraph is prepared (content.ts): the paragraph's gaps, the code points makeBox's coverage test can't vouch
 //   for, and the facts of each box that only gaps read.
@@ -11,11 +12,12 @@ import { itemAt } from './item-sequence.js'
 // the paragraph asks Canvas nothing that only a gap reads, and lineGaps and paragraphGaps throw on it.
 import type { WebKitEnvironment } from '../../env.js'
 import { contextFor, width as canvasWidth, type CanvasSettings, type Context } from '../../measure/canvas.js'
-import { canvasFont } from '../../measure/font.js'
-import type { FontDecl, Gap, GapName } from '../../model.js'
+import type { Gap, GapName } from '../../model.js'
 import { canBreakBefore, dictionaryRangesStartingWithMark, hasDictionaryCharacter, inBetweenRangeStartingWithMark } from './breaks.js'
-import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript } from './data.js'
-import { hasEmojiPresentation, type FamilyName } from './fonts.js'
+import { isDelimiterQuote, isPunctuation } from './data.js'
+import { hasEmojiPresentation } from './fonts.js'
+import { hasDelimiterDataOf, lineRulesOf, primaryLanguageOf } from './locale-source.js'
+import { compiledInspection, type CompiledFont } from './font-compilation.js'
 import { advancesWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isComplexCodePath, isPiecedControl, lessMeasuredSpace, measuredEnd, mergedGlyphs } from './measure.js'
 import { preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitBoxInspect, WebKitFilledLine, WebKitInspect, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
@@ -66,8 +68,6 @@ export function coveredLikeLastResort(unverified: UnverifiedCoverage | null, cp:
   if (covered === canvasWidth(unverified.lastResortContext, s)) unverified.codePoints.push(cp)
 }
 
-// The system design families CoreText resolves with the locale (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236).
-const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded']
 // localeToScriptCode's names (data.ts localeScript) of the Han, kana and Hangul scripts.
 const HAN_KANA_AND_HANGUL_SCRIPTS = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL']
 
@@ -96,33 +96,33 @@ function familyDraws(context: Context, lastResortContext: Context, cp: number): 
 // - Under Urdu and Kashmiri: the Arabic blocks, which fall back to Noto Nastaliq Urdu where Canvas has Geeza Pro (R13, R14).
 // R14 (70 languages, three sample characters of each of 321 blocks after Helvetica, Times and Geeza Pro) found no other pair;
 // it sees a font change only where advances differ, and three samples don't stand for a block.
-function hasLanguageDependentFallback(cp: number, locale: string, script: string): boolean {
-  if (HAN_KANA_AND_HANGUL_SCRIPTS.includes(script)) {
+type LanguageFallback = 'cjk' | 'arabic' | null
+function hasLanguageDependentFallback(cp: number, kind: LanguageFallback): boolean {
+  if (kind === 'cjk') {
     return (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2460 && cp <= 0x257f) || (cp >= 0x25a0 && cp <= 0x25ff) || (cp >= 0x2e80 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff)
       || (cp >= 0xa960 && cp <= 0xa97f) || (cp >= 0xac00 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe10 && cp <= 0xfe1f) || (cp >= 0xfe30 && cp <= 0xfe4f)
       || (cp >= 0xff00 && cp <= 0xffef) || (cp >= 0x1aff0 && cp <= 0x1b16f) || (cp >= 0x1f200 && cp <= 0x1f2ff) || (cp >= 0x20000 && cp <= 0x3ffff)
   }
-  const language = locale.toLowerCase().split(/[-_]/)[0]
-  if (language === 'ur' || language === 'ks') return (cp >= 0x600 && cp <= 0x6ff) || (cp >= 0x750 && cp <= 0x77f) || (cp >= 0x8a0 && cp <= 0x8ff) || (cp >= 0xfb50 && cp <= 0xfdff) || (cp >= 0xfe70 && cp <= 0xfeff)
+  if (kind === 'arabic') return (cp >= 0x600 && cp <= 0x6ff) || (cp >= 0x750 && cp <= 0x77f) || (cp >= 0x8a0 && cp <= 0x8ff) || (cp >= 0xfb50 && cp <= 0xfdff) || (cp >= 0xfe70 && cp <= 0xfeff)
   return false
 }
 
 // The box makeBox made, in box order: the facts of it that only gaps read (types.ts WebKitBoxInspect), from what its font
-// facts leave unknown, the coverage above, and its locale and text. `font` is the box's font as declared, `size` its size in
-// px at page zoom, `lang` its language, and `families` the list Canvas measures with, where `firstNamedGeneric` is the first
-// family named for Canvas (content.ts makeBox).
-export function boxMade(p: WebKitPrepared, box: WebKitBox, font: FontDecl, size: number, lang: string, families: readonly FamilyName[], firstNamedGeneric: number | null, unverified: UnverifiedCoverage | null): void {
+// facts leave unknown, the coverage above, and its locale and text. `font` owns the resolved family's pure source analysis
+// and Canvas strings for this preparation (font-compilation.ts); `rawHan` is the script classification of this leaf's inherited language before specialization.
+export function boxMade(p: WebKitPrepared, box: WebKitBox, font: CompiledFont, rawHan: boolean, unverified: UnverifiedCoverage | null): void {
   if (p.inspect === null) return
   const env = p.env
-  const facts = font.facts
+  const facts = font.declared.facts
   const text = box.text
-  const script = localeScript(box.locale)
-  let languageFallback = false
+  const language = primaryLanguageOf(box.locale)
+  const fallbackKind: LanguageFallback = HAN_KANA_AND_HANGUL_SCRIPTS.includes(box.locale.script) ? 'cjk' : language === 'ur' || language === 'ks' ? 'arabic' : null
+  let languageFallback: LanguageFallback = null
   let quote = false
   for (let i = 0; i < text.length; i++) {
     const cp = text.codePointAt(i)!
     if (cp > 0xffff) i++
-    if (hasLanguageDependentFallback(cp, box.locale, script)) languageFallback = true
+    if (hasLanguageDependentFallback(cp, fallbackKind)) languageFallback = fallbackKind
     if (isDelimiterQuote(cp)) quote = true
   }
   // rule webkit/gap/canvas-language-scope
@@ -148,28 +148,21 @@ export function boxMade(p: WebKitPrepared, box: WebKitBox, font: FontDecl, size:
   // the name to the system's reserved PingFangUI.ttc, which holds Han and no kana or U+2027, and the kana comes from system
   // fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage facts read, so
   // Canvas decides what a named family draws).
-  const cjkLocale = HAN_KANA_AND_HANGUL_SCRIPTS.includes(script)
-  let firstUnknownFamily = families.length
-  for (let i = 0; i < families.length && firstUnknownFamily === families.length; i++) {
-    const family = families[i]!
-    if (!family.quoted && ((family.name === '-webkit-standard' && cjkLocale) || SYSTEM_DESIGN_FAMILIES.includes(family.name))) firstUnknownFamily = i
-  }
+  const compiled = compiledInspection(font)
   let localeChoosesFonts: WebKitBoxInspect['localeChoosesFonts'] = null
-  if (box.locale !== '' && (firstUnknownFamily < families.length || firstNamedGeneric !== null || languageFallback)) {
-    const parts = families.map(family => family.css)
-    const named = parts.slice(0, Math.min(firstUnknownFamily, firstNamedGeneric ?? families.length))
+  if (box.locale.name !== '' && (compiled.unknownFamily || compiled.namedGeneric || languageFallback)) {
     const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-    const lastResortContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
-    const namedContext = named.length === 0 ? lastResortContext : contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
-    const listContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: parts.concat(['LastResort']).join(', ') }, size) })
-    localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric: firstNamedGeneric !== null, fallback: languageFallback, namedContext, listContext, lastResortContext }
+    const lastResortContext = contextFor(p.contexts, { ...settings, font: font.lastResortFont })
+    const namedContext = compiled.namedLastResortFont === null ? lastResortContext : contextFor(p.contexts, { ...settings, font: compiled.namedLastResortFont })
+    const listContext = contextFor(p.contexts, { ...settings, font: font.listLastResortFont })
+    localeChoosesFonts = { unknownFamily: compiled.unknownFamily, namedGeneric: compiled.namedGeneric, fallback: languageFallback, namedContext, listContext, lastResortContext }
   }
   p.inspect.boxes.push({
     monospaceUnknown: facts.monospace === null, hyphenUnknown: facts.mapsHyphen === null, unverifiedCoverage: unverified === null ? [] : unverified.codePoints,
     primaryFamilyUnknown: facts.primaryFamily === null, pairKerningUnknown: facts.pairKerning === null, localeChoosesFonts,
-    hanLocaleUnknown: env.preferredLanguages === null && lang !== '' && isHanLocale(lang),
-    quoteLocaleUnknown: env.icuDefaultLocale === null && quote && box.locale !== '' && !hasDelimiterData(box.locale),
-    dictionaryRangesStartingWithMark: env.dictionaryBreaks.kind === 'intl-segmenter-word' ? dictionaryRangesStartingWithMark(lineRules(box.locale, box.style.lineBreakMode, p.icuDefaultLocale).rules, text) : [],
+    hanLocaleUnknown: env.preferredLanguages === null && rawHan,
+    quoteLocaleUnknown: env.icuDefaultLocale === null && quote && box.locale.name !== '' && !hasDelimiterDataOf(box.locale),
+    dictionaryRangesStartingWithMark: env.dictionaryBreaks.kind === 'intl-segmenter-word' ? dictionaryRangesStartingWithMark(lineRulesOf(box.locale, box.style.lineBreakMode).rules, text) : [],
   })
 }
 
@@ -205,7 +198,7 @@ export function emergencyBreakIn8BitText(sink: GapSink, box: WebKitBox, item: We
 export function breakTestBetweenBoxes(sink: GapSink, p: WebKitPrepared, prevBox: WebKitBox, nextBox: WebKitBox): void {
   if (sink === null) return
   if (p.env.dictionaryBreaks.kind === 'intl-segmenter-word') {
-    const end = inBetweenRangeStartingWithMark(prevBox.text, nextBox.text, nextBox.locale, nextBox.style.lineBreakMode, p.icuDefaultLocale)
+    const end = inBetweenRangeStartingWithMark(prevBox.text, nextBox.text, nextBox.locale.name, nextBox.style.lineBreakMode, p.icuDefaultLocale, nextBox.locale)
     if (end !== null) {
       const at = { start: nextBox.sourceStart - Math.min(2, prevBox.text.length), end: nextBox.sourceStart + end }
       if (!sink.some(g => g.gap === 'dictionary-breaks-stand-in' && g.at !== undefined && g.at.start === at.start && g.at.end === at.end)) {
@@ -234,7 +227,7 @@ export function shapedAcrossInlineBoxes(sink: GapSink, p: WebKitPrepared, firstI
 // covers a failure only where its range touches what differs (lab scorer 5). Ranges of one gap and leaf that touch are one
 // entry.
 // The list starts as the gaps the filling raised, in their order, which the merging below reads; the decided line keeps its
-// own. Merge rule: by gap, run and overlap, scanning from the end, with extension. It throws on a paragraph prepared plain.
+// own. Merge rule: by gap, run and inclusive overlap, extending the latest matching raw entry. It throws on a paragraph prepared plain.
 export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
   const inspect = inspectOf(p, 'inspectLine')
   if (decided.gaps === null) throw new Error('the line was filled from a paragraph prepared plain, which raises no gaps')
@@ -242,15 +235,10 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
   const start = decided.from
   const gaps: Gap[] = []
   for (let k = 0; k < decided.gaps.length; k++) gaps.push({ ...decided.gaps[k]! })
+  // The final run start is indexContent's text.length, including source units with no renderer (content.ts).
+  const ranges = new LineGapRanges(gaps, p.runStarts[p.runStarts.length - 1]!)
   const add = (gap: GapName, box: WebKitBox, from: number, to: number, detail: string): void => {
-    const at = { start: box.sourceStart + from, end: box.sourceStart + to }
-    for (let k = gaps.length - 1; k >= 0; k--) {
-      const known = gaps[k]!
-      if (known.gap !== gap || known.run !== box.run || known.at === undefined || at.start > known.at.end || at.end < known.at.start) continue
-      known.at = { start: Math.min(known.at.start, at.start), end: Math.max(known.at.end, at.end) }
-      return
-    }
-    gaps.push({ gap, run: box.run, detail, at })
+    ranges.add(gap, box.run, detail, { start: box.sourceStart + from, end: box.sourceStart + to })
   }
   const end = Math.min(decided.measuredEnd, p.items.length)
   for (let index = start.itemIndex; index < end; index++) {
@@ -331,10 +319,10 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
         if (cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f)) {
           if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(localeChooses.namedContext, localeChooses.lastResortContext, cp)) {
             add('canvas-language', box, i, i + length, localeChooses.unknownFamily
-              ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
-              : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
-          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(localeChooses.listContext, localeChooses.lastResortContext, cp)) {
-            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses its system fallback font; OffscreenCanvas has no locale`)
+              ? `no named family before the one locale ${box.locale.name} resolves draws this character; OffscreenCanvas has no locale`
+              : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale.name} resolves it to by name`)
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, localeChooses.fallback) && !familyDraws(localeChooses.listContext, localeChooses.lastResortContext, cp)) {
+            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale.name} chooses its system fallback font; OffscreenCanvas has no locale`)
           }
         }
         i += length - 1
@@ -343,7 +331,7 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
     if (facts.hanLocaleUnknown) add('ui-language', box, from, to, "the Han locale becomes the first preferred language starting with zh-, and the preferred languages aren't given; laid out as zh-hans")
     if (facts.quoteLocaleUnknown) {
       for (let i = from; i < to; i++) {
-        if (isDelimiterQuote(text.charCodeAt(i))) add('ui-language', box, i, i + 1, `ICU has no delimiter data for ${box.locale}, so the quote overrides follow the WebContent process's default locale, which isn't given; laid out as en_US_POSIX`)
+        if (isDelimiterQuote(text.charCodeAt(i))) add('ui-language', box, i, i + 1, `ICU has no delimiter data for ${box.locale.name}, so the quote overrides follow the WebContent process's default locale, which isn't given; laid out as en_US_POSIX`)
       }
     }
     if (box.fixedPitchFastMeasuring && facts.unverifiedCoverage.length > 0) {
@@ -396,7 +384,7 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
       }
       if (moved) add('simplified-measuring', box, from, to, "the DOM keeps a space's shaped advance on the simplified path, where Canvas puts it back to the unshaped one")
     }
-    if (env.dictionaryBreaks.kind === 'unavailable' && hasDictionaryCharacter(lineRules(box.locale, style.lineBreakMode, p.icuDefaultLocale).rules, text, from, to)) {
+    if (env.dictionaryBreaks.kind === 'unavailable' && hasDictionaryCharacter(lineRulesOf(box.locale, style.lineBreakMode).rules, text, from, to)) {
       add('dictionary-breaks-unavailable', box, from, to, 'Thai, Lao, Khmer or Myanmar text gets no dictionary boundaries')
     }
     for (let k = 0; k < facts.dictionaryRangesStartingWithMark.length; k++) {

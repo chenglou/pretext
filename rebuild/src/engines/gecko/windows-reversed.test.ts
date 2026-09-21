@@ -8,6 +8,7 @@ import { beforeAll, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type Paragraph } from '../../model.js'
 import { advanceBefore } from './advance.js'
+import { fillLine, firstLine, inspectLine, linePieces } from './index.js'
 import { prepareGecko } from './prepare.js'
 
 // `1` before `7` is 41 au narrower; U+202D has no advance.
@@ -59,4 +60,35 @@ test('a right-to-left script in a left-to-right run has no windows, and its offs
   }
   expect(kerned).toBe(30)
   expect(unit.inWord!.windows).toEqual([])
+})
+
+test('whole-buffer numeric direction keeps its choice at every interior and at arbitrary retained widths', () => {
+  for (const text of ['١'.repeat(256), '\u202d' + '١'.repeat(128) + 'ب' + '١'.repeat(128) + '\u202c']) {
+    const paragraph: Paragraph = {
+      font: { ...font, facts: { ...font.facts, opticalSizeAxis: false } }, letterSpacing: -1.5, wordSpacing: 0, lineHeight: 20,
+      whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'ar',
+      textIndent: 0, textAlign: 'start', content: [{ kind: 'text', text }],
+    }
+    const p = prepareGecko(paragraph, env, true, createContextPool())
+    for (const run of p.textRuns) for (const unit of p.units) {
+      if (unit.kind !== 'word' || unit.tStart < run.tStart || unit.tStart >= run.tEnd) continue
+      const reversed = text.includes('ب')
+      expect(unit.reversed).toBe(reversed)
+      for (let k = 1; k < unit.tEnd - unit.tStart; k++) {
+        const reason = advanceBefore(p, run, unit.tStart + (k * 37) % (unit.tEnd - unit.tStart)).standIn
+        if (reason?.kind === 'sides') expect(reason.sides).toBe(reversed ? 'apart' : 'cluster')
+      }
+    }
+    for (const width of [15.53, 64.125, 320, 1_000_000]) {
+      let painted = ''
+      for (let start = firstLine(p); start !== null;) {
+        const filled = fillLine(p, start, { width, left: 0, right: 0 })
+        if (filled.kind !== 'line') throw new Error('unexpected refusal')
+        painted += linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')
+        expect(inspectLine(p, filled.line).geometry).not.toBeNull()
+        start = filled.next
+      }
+      expect(painted).toBe(text.replace(/[\u202d\u202c]/g, ''))
+    }
+  }
 })

@@ -1,3 +1,4 @@
+import { clampLU } from './layout-unit.js'
 // Widths from Canvas for Blink's shape results (specs/blink-lines.md §1.3-§1.4, §3, §6, §11, §12; specs/blink-gaps.md
 // §3; DESIGN.md §4.4).
 //
@@ -44,17 +45,17 @@ export const EXACT16 = 0x1000000
 
 // LayoutUnit::FromFloatCeil (layout_unit.h:134-136).
 export function luCeil(f: number): number {
-  return Math.ceil(f32(f32(f) * 64))
+  return clampLU(Math.ceil(f32(f32(f) * 64)))
 }
 
 // LayoutUnit(float), truncating (layout_unit.h:125-130).
 export function luTrunc(f: number): number {
-  return Math.trunc(f32(f32(f) * 64))
+  return clampLU(f32(f32(f) * 64))
 }
 
 // InlineLayoutUnit::ToCeil<LayoutUnit>: 16.16 to 1/64, ceiling (layout_unit.h:231-241).
 export function ceilFrom16(raw16: number): number {
-  return Math.ceil(raw16 / 1024)
+  return clampLU(Math.ceil(raw16 / 1024))
 }
 
 // TextRunLayoutUnit(float): saturated_cast<int32>(v * 65536), truncating (layout_unit.h:98-100).
@@ -390,7 +391,7 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   if (p.segmented) {
     for (let k = from + 1; k < to; k++) {
       if (p.scripts[k] !== p.scripts[k - 1] && (p.text.charCodeAt(k) & 0xfc00) !== 0xdc00) {
-        return measure16(sh, g, from, k, callStart, callEnd, noLigatures) + measure16(sh, g, k, to, callStart, callEnd, noLigatures)
+        return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, k)
       }
     }
   }
@@ -409,6 +410,23 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   if (ls16 === 0) return w + adjust
   // Non-zero effective spacing requested the map above.
   return w + adjust + letterSpacingDifference16(p, cs.s, cs.units!, scripts, ls16)
+}
+
+// A cross-script range reads segments in source order, as the former left-first recursive split did.
+// Fold their values backwards to preserve that split's exact right-associated arithmetic, without an input-sized stack.
+function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, firstEnd: number): number {
+  const widths: number[] = []
+  let start = from, end = firstEnd
+  for (;;) {
+    widths.push(measure16(sh, g, start, end, callStart, callEnd, noLigatures))
+    start = end
+    if (start === to) break
+    end = start + 1
+    while (end < to && !(sh.p.scripts[end] !== sh.p.scripts[end - 1] && (sh.p.text.charCodeAt(end) & 0xfc00) !== 0xdc00)) end++
+  }
+  let total = widths[widths.length - 1]!
+  for (let i = widths.length - 2; i >= 0; i--) total = widths[i]! + total
+  return total
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.

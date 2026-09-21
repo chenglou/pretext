@@ -140,7 +140,7 @@ export type BlinkGroup = {
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
 // fonts' and the environment's, with the ones preparation's measuring raised first; canonical once prepare ends (gaps.ts
 // canonicalGaps).
-export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; sourceRuns: OffsetRuns | null; graphemeRuns: OffsetRuns | null }
+export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; graphemeRuns: OffsetRuns | null; collapsedSourceRuns: OffsetRuns; fragmentAncestors: Int32Array }
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
 // are first needed (BlinkStyle) and what the groups keep by offset (BlinkGroup.prefix16, pair16, wide16).
@@ -169,6 +169,8 @@ export type BlinkPrepared = {
   // Per text_content unit, its source offset, or -1 for a unit Blink generated or an element's (U+200B after leading
   // spaces, a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC).
   sourceOffsets: Int32Array
+  // Fixed negative-source-offset runs, used by every plain/inspected line boundary and diagnostic range reader.
+  sourceRuns: OffsetRuns
   // Per source unit, its text_content unit, or -1 when white-space processing removed it.
   contentOffsets: Int32Array
   items: InlineItem[]

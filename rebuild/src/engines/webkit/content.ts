@@ -4,12 +4,11 @@
 // IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp.
 import type { WebKitEnvironment } from '../../env.js'
 import { contextFor, width as canvasWidth, type ContextPool } from '../../measure/canvas.js'
-import { canvasFont } from '../../measure/font.js'
-import { familyNames, genericFamilyUnder, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
+import { FontCompilation, compiledSpacingFacts } from './font-compilation.js'
 import { indexContent, styleUnder } from '../../content.js'
 import type { Paragraph, TextStyle } from '../../model.js'
 import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf } from '../../unicode/bidi.js'
-import { computedLocale, localeScript, webkitBidiData, webkitGraphemeRules } from './data.js'
+import { webkitBidiData, webkitGraphemeRules } from './data.js'
 import { boxMade, coveredLikeLastResort, newInspection, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { collectHistoryWorlds } from './history.js'
 import { buildItems } from './items.js'
@@ -70,14 +69,6 @@ function characterCanUseSimplifiedTextMeasuring(c: number, whitespaceIsCollapsed
   return !(c >= 0x3041 || c <= 0x1f || (c >= 0x7f && c <= 0x9f))
 }
 
-// CSS <generic-family> keywords (CSS Fonts 4 §4.2) and WebKit's -apple-system and -webkit- aliases: written unquoted in a
-// font-family list, since a quoted keyword names a family of that name.
-const GENERIC_FAMILY_KEYWORDS = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace', 'system-ui', 'emoji', 'math', 'fangsong', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', '-apple-system', '-webkit-standard', '-webkit-body', '-webkit-pictograph']
-
-function cssFamilyName(name: string): string {
-  return GENERIC_FAMILY_KEYWORDS.includes(name.toLowerCase()) ? name : JSON.stringify(name)
-}
-
 // InlineTextBox::hasStrongDirectionalityContent (TextUtil.cpp:486-576): TextUtil::isStrongDirectionalityCharacter
 // (TextUtil.cpp:486-515) over the code points of 16-bit content.
 function hasStrongDirectionality(text: string, is8Bit: boolean): boolean {
@@ -96,28 +87,15 @@ function hasStrongDirectionality(text: string, is8Bit: boolean): boolean {
 // (textRendererIsNeeded), which makes it a box.
 type LeafInput = { run: number; parent: number; text: string; textStyle: TextStyle; style: WebKitStyle; lang: string; rendered: boolean }
 
-function familyList(families: readonly FamilyName[]): string {
-  return families.map(family => family.css).join(', ')
-}
-
-function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): WebKitBox {
+function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number, fonts: FontCompilation): WebKitBox {
   const declared = leaf.textStyle.font
   const facts = declared.facts
-  const locale = computedLocale(leaf.lang, p.env.preferredLanguages)
-  // The list Canvas measures with (fonts.ts): each unquoted generic keyword the locale resolves to a family of its own is
-  // named, and the script's standard family appended where no listed family resolves (below). Only unquoted names are
-  // keywords. `firstNamedGeneric` is the index of the first family named either way, which gaps.ts reads.
-  const script = localeScript(locale)
-  const families = familyNames(declared.family)
-  let firstNamedGeneric: number | null = null
-  for (let i = 0; i < families.length; i++) {
-    const named = families[i]!.quoted || locale === '' ? null : genericFamilyUnder(families[i]!.name, locale, script, p.env.preferredLanguages)
-    if (named === null) continue
-    families[i] = namedFamily(named)
-    firstNamedGeneric ??= i
-  }
+  const languageSource = fonts.localeOf(leaf.lang)
+  const localeSource = languageSource.locale
+  const locale = localeSource.name
+  const choice = fonts.resolve(declared, locale, localeSource.script)
+  let font = choice.base
   const zoom = f32(p.zoom)
-  const size = f32(f32(declared.size) * zoom)
   const letterSpacing = f32(f32(leaf.textStyle.letterSpacing) * zoom)
   const wordSpacing = leaf.style.wordSpacing
   const text = leaf.text
@@ -139,27 +117,19 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): We
     if (cp > 0xffff) i++
     simplifiedMeasuring = characterCanUseSimplifiedTextMeasuring(cp, collapsed)
   }
-  // The index-0 family (FontCascadeFonts.cpp:200-218): the given fact, else the first family listed.
-  const primaryFamily = facts.primaryFamily === null ? families[0]!.name : facts.primaryFamily.toLowerCase()
-  const primaryFamilyCss = facts.primaryFamily === null ? families[0]!.css : cssFamilyName(facts.primaryFamily)
   const fixedPitch = facts.monospace === true
   // No family of the list resolves where the list followed by LastResort measures a space as LastResort alone does. The
   // settings' standard family then draws (FontCascadeFonts::realizeFallbackRangesAt, FontCascadeFonts.cpp:210-217), which the
   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
   // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
   // have either): it is named at the end of the list.
-  const standardFamily = locale === '' ? null : standardFamilyOf(script, p.env.preferredLanguages)
-  if (standardFamily !== null) {
+  if (choice.standardFamily !== null) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-    const listThenLastResort = contextFor(p.contexts, { ...plain, font: canvasFont({ ...declared, family: `${familyList(families)}, LastResort` }, size) })
-    const lastResort = contextFor(p.contexts, { ...plain, font: canvasFont({ ...declared, family: 'LastResort' }, size) })
-    if (canvasWidth(listThenLastResort, ' ') === canvasWidth(lastResort, ' ')) {
-      firstNamedGeneric ??= families.length
-      families.push(namedFamily(standardFamily))
-    }
+    const listThenLastResort = contextFor(p.contexts, { ...plain, font: font.listLastResortFont })
+    const lastResort = contextFor(p.contexts, { ...plain, font: font.lastResortFont })
+    if (canvasWidth(listThenLastResort, ' ') === canvasWidth(lastResort, ' ')) font = fonts.withStandardFamily(choice)
   }
-  const font = { ...declared, family: familyList(families) }
-  const settings = { font: canvasFont(font, size), lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+  const settings = { font: font.canvasFont, lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
   const context = contextFor(p.contexts, settings)
   const plainContext = contextFor(p.contexts, { ...settings, letterSpacing: '0px' })
   const spacedContext = wordSpacing === 0 ? context : contextFor(p.contexts, { ...settings, wordSpacing: `${wordSpacing}px` })
@@ -174,8 +144,8 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): We
   // goes to gaps.ts (unverifiedCoverage).
   let unverified: UnverifiedCoverage | null = null
   if (simplifiedMeasuring && fixedPitch) {
-    const coverageContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
-    unverified = unverifiedCoverage(p, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })
+    const coverageContext = contextFor(p.contexts, { ...settings, font: font.primaryLastResortFont, letterSpacing: '0px' })
+    unverified = unverifiedCoverage(p, { ...settings, font: font.lastResortFont, letterSpacing: '0px' })
     // Each code point of the text is tested once, where it first stands.
     const tested = new Set<number>()
     for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
@@ -189,26 +159,17 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): We
       if (simplifiedMeasuring) coveredLikeLastResort(unverified, cp, s, covered)
     }
   }
-  let spacingFacts: Array<{ coverage: readonly number[]; inputs: readonly number[] }> | null = null
-  if (letterSpacing !== 0 && facts.fonts !== undefined && facts.fonts.length === families.length) {
-    spacingFacts = []
-    for (let i = 0; i < facts.fonts.length && spacingFacts !== null; i++) {
-      const listed = facts.fonts[i]!
-      if (listed.realizes === false) continue
-      if (listed.realizes === null || listed.coverage === null || listed.spacingInputs === undefined || listed.spacingInputs === null) spacingFacts = null
-      else spacingFacts.push({ coverage: listed.coverage, inputs: listed.spacingInputs })
-    }
-  }
+  const spacingFacts = letterSpacing === 0 ? null : compiledSpacingFacts(font)
   const box: WebKitBox = {
     run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, tabPositions: tabPositions ?? NO_TAB_POSITIONS, ...characterAnalysis, simplifiedMeasuring, fixedPitch,
-    fixedPitchFastMeasuring: fixedPitch && primaryFamily !== 'courier new',
-    primaryFamily,
+    fixedPitchFastMeasuring: fixedPitch && font.primaryFamily !== 'courier new',
+    primaryFamily: font.primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
-    locale, canvasFamily: font.family,
+    locale: localeSource, canvasFamily: font.family,
     context, plainContext, spaceWidth: canvasWidth(context, ' '), spacedContext, countContext, letterSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
     spacingFacts,
   }
-  boxMade(p, box, declared, size, leaf.lang, families, firstNamedGeneric, unverified)
+  boxMade(p, box, font, languageSource.han, unverified)
   return box
 }
 
@@ -309,6 +270,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
     if (element.kind === 'atomic' || element.kind === 'wbr') textAndLineBreakOnly = false
   }
   // The box of each run, or null for a text node without a renderer.
+  const fonts = new FontCompilation(zoom, env.preferredLanguages, p.icuDefaultLocale)
   const boxOfRun: (number | null)[] = []
   for (let r = 0; r < leaves.length; r++) {
     p.runStarts.push(index.leaves[r]!.start)
@@ -316,7 +278,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
       boxOfRun.push(null)
       continue
     }
-    const box = makeBox(p, leaves[r]!, index.leaves[r]!.start)
+    const box = makeBox(p, leaves[r]!, index.leaves[r]!.start, fonts)
     reordering ||= hasStrongDirectionality(box.text, box.is8Bit)
     boxOfRun.push(p.boxes.length)
     p.boxes.push(box)

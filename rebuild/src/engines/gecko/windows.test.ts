@@ -167,12 +167,17 @@ test('several failed cuts close with the whole merged width when a later cut hol
   }
 })
 
-function countedMetadata<T extends Uint8Array | number[]>(values: T): { values: T; reads: () => number } {
+function countedMetadata<T extends Uint8Array | unknown[]>(values: T): { values: T; reads: () => number } {
   let reads = 0
   return { values: new Proxy(values, { get(target, key) {
     if (typeof key === 'string' && /^\d+$/.test(key)) reads++
     return Reflect.get(target, key, target)
   } }), reads: () => reads }
+}
+
+function groupRange(...args: Parameters<typeof groupAround>): { start: number; end: number; unconfirmed: boolean } | null {
+  const part = groupAround(...args)
+  return part === null ? null : { start: part.start, end: part.end, unconfirmed: part.unconfirmed }
 }
 
 test('a long connected optional-ligature row shares its discovered row with arbitrary interior queries', () => {
@@ -182,12 +187,12 @@ test('a long connected optional-ligature row shares its discovered row with arbi
   const flags = countedMetadata(prepared.clusterStart)
   prepared.clusterStart = flags.values
   const run = prepared.textRuns[0]!, unit = prepared.units[0]!
-  expect(groupAround(prepared, run, unit, 1)).toEqual({ start: 0, end: n, unconfirmed: true })
+  expect(groupRange(prepared, run, unit, 1)).toEqual({ start: 0, end: n, unconfirmed: true })
   expect(unit.inWord!.windows).toEqual([])
   questions = []
   for (let k = 0; k < n - 1; k++) {
     const t = 1 + (k * 37) % (n - 1)
-    expect(groupAround(prepared, run, unit, t)).toEqual({ start: 0, end: n, unconfirmed: true })
+    expect(groupRange(prepared, run, unit, t)).toEqual({ start: 0, end: n, unconfirmed: true })
   }
   expect(questions).toEqual([])
   expect(flags.reads()).toBeLessThan(16 * n)
@@ -205,17 +210,17 @@ test('a long known optional-ligature row finds strict group interiors from its o
   }] } }
   const prepared = prepareGecko({ ...paragraphOf('f'.repeat(n)), font: known }, env, false, createContextPool())
   const run = prepared.textRuns[0]!, unit = prepared.units[0]!
-  expect(groupAround(prepared, run, unit, 1)).toEqual({ start: 0, end: 2, unconfirmed: false })
-  const row = unit.inWord!.offsets[0]!.row!, edges = countedMetadata(row.edges)
-  expect(row.edges.length).toBe(n / 2 + 1)
-  row.edges = edges.values
+  expect(groupRange(prepared, run, unit, 1)).toEqual({ start: 0, end: 2, unconfirmed: false })
+  const row = unit.inWord!.offsets[0]!.row!, parts = countedMetadata(row.parts)
+  expect(row.parts.length).toBe(n / 2)
+  row.parts = parts.values
   questions = []
   for (let k = 0; k < n - 1; k++) {
     const t = 1 + (k * 37) % (n - 1)
-    expect(groupAround(prepared, run, unit, t)).toEqual(t % 2 === 0 ? null : { start: t - 1, end: t + 1, unconfirmed: false })
+    expect(groupRange(prepared, run, unit, t)).toEqual(t % 2 === 0 ? null : { start: t - 1, end: t + 1, unconfirmed: false })
   }
   expect(questions).toEqual([])
-  expect(edges.reads()).toBeLessThan(32 * n)
+  expect(parts.reads()).toBeLessThan(32 * n)
 })
 
 test('required cuts between known group edges agree without changing strict group boundaries', () => {
@@ -230,10 +235,30 @@ test('required cuts between known group edges agree without changing strict grou
   try {
     const prepared = prepareGecko({ ...paragraphOf('f'.repeat(n)), font: known }, env, false, createContextPool())
     const run = prepared.textRuns[0]!, unit = prepared.units[0]!
-    for (let t = 1; t < n; t++) expect(groupAround(prepared, run, unit, t)).toEqual(
+    for (let t = 1; t < n; t++) expect(groupRange(prepared, run, unit, t)).toEqual(
       t % 2 === 0 ? null : { start: t - 1, end: t + 1, unconfirmed: false },
     )
     expect(unit.inWord!.windows).toEqual([])
-    expect(unit.inWord!.offsets[0]!.row!.edges).toEqual(Array.from({ length: n / 2 + 1 }, (_, i) => i * 2))
+    expect([...unit.inWord!.offsets[0]!.row!.parts.map(part => part.start), n]).toEqual(Array.from({ length: n / 2 + 1 }, (_, i) => i * 2))
   } finally { requiredPairSpacing = false }
+})
+
+test('full inspection counts a connected row from its actual source parts instead of rescanning the group at every character', () => {
+  const n = 512, p = prepareGecko(paragraphOf('f'.repeat(n)), env, true, createContextPool())
+  const flags = countedMetadata(p.clusterStart)
+  p.clusterStart = flags.values
+  const filled = fillLine(p, firstLine(p)!, { width: 1_000_000, left: 0, right: 0 })
+  if (filled.kind !== 'line') throw new Error('unexpected refusal')
+  const geometry = inspectLine(p, filled.line).geometry!
+  const advances = geometry.frames.filter(f => f.kind === 'text').flatMap(f => f.characters.map(c => c.advance))
+  expect(advances.length).toBe(n)
+  expect(advances.reduce((sum, au) => sum + au, 0)).toBe(p.units[0]!.au)
+  expect(linePieces(p, filled.line).fragments.filter(f => f.kind === 'text').map(f => f.painted).join('')).toBe('f'.repeat(n))
+  expect(flags.reads()).toBeLessThan(64 * n)
+  const run = p.textRuns[0]!, unit = p.units[0]!, part = groupAround(p, run, unit, 1)!
+  expect(part.clusters).toBe(n)
+  expect(part.hasMarks).toBe(false)
+  expect(part.unconfirmed).toBe(true)
+  for (let k = 1; k < n; k++) expect(groupAround(p, run, unit, 1 + (k * 37) % (n - 1))).toBe(part)
+  expect(flags.reads()).toBeLessThan(64 * n)
 })

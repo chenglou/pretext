@@ -47,19 +47,33 @@ export function genericFamilyUnder(keyword: string, locale: string, script: stri
   if (keyword === '-webkit-standard') return standardFamilyOf(script, preferredLanguages)
   const index = CORE_TEXT_GENERICS.indexOf(keyword)
   if (index < 0 || script === 'COMMON') return null
+  const row = genericFamilyRow(locale, script)!
+  const name = webkitGenericFamilyNames[row[index]!]!
+  return name === '' ? null : name
+}
+
+// The generated row is the resolution owner: aliases share it, and every Common locale needs no row.
+export function genericFamilyRow(locale: string, script: string): readonly number[] | null {
+  if (script === 'COMMON') return null
   let language = locale.toLowerCase().replaceAll('_', '-')
   while (language !== '' && webkitGenericFamilies[language] === undefined) {
     const cut = language.lastIndexOf('-')
     language = cut < 0 ? '' : language.slice(0, cut)
   }
-  const name = webkitGenericFamilyNames[webkitGenericFamilies[language]![index]!]!
+  return webkitGenericFamilies[language]!
+}
+
+export function genericFamilyInRow(keyword: string, row: readonly number[] | null): string | null {
+  const index = CORE_TEXT_GENERICS.indexOf(keyword)
+  if (index < 0 || row === null) return null
+  const name = webkitGenericFamilyNames[row[index]!]!
   return name === '' ? null : name
 }
 
 // A font-family list as names, each marked quoted or not: a quoted keyword names a family of that name, not the generic family
 // (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9). `css` is the name as the list writes it. The list's syntax is read
 // once for every engine (font-family.ts); the names are lowercased here, as this port compares them, and the list is this
-// port's own because makeBox names generic families in it (content.ts).
+// port's own: font-compilation.ts resolves them once per declaration and source resolution profile in a preparation.
 export type FamilyName = { css: string; name: string; quoted: boolean }
 
 export function familyNames(family: string): FamilyName[] {

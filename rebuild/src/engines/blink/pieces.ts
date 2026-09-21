@@ -1,6 +1,7 @@
 // What a painter takes of a decided Blink line (model.ts LinePieces): the fragments in logical order (DESIGN.md §2.2), from
 // the line's item results, with the hanging width that says whether the line overflows its band. Nothing here reads or
 // makes gaps, limits, glyph clusters or the offset mapping: those are inspection's (inspect.ts).
+import { addLU, subLU } from './layout-unit.js'
 import type { ContentEvent } from '../../content.js'
 import type { Fragment, LinePieces, TextAlign } from '../../model.js'
 import { positionInsideGrapheme, runOfSource } from './gaps.js'
@@ -13,8 +14,9 @@ import type { BlinkPrepared, InlineItem } from './types.js'
 export type BlinkPaintFacts = { needsAccurateEndPosition: boolean }
 
 function sourceStartOf(p: BlinkPrepared, textOffset: number): number {
-  for (let t = textOffset; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return p.sourceOffsets[t]!
-  return p.index.text.length
+  if (textOffset >= p.text.length) return p.index.text.length
+  const first = p.sourceOffsets[textOffset]! >= 0 ? textOffset : p.sourceRuns.end(textOffset)
+  return first < p.text.length ? p.sourceOffsets[first]! : p.index.text.length
 }
 
 // The source units a line consumed, from where it started and where the next one starts (null after the last line):
@@ -237,17 +239,17 @@ export function trailingSpacesOf(sh: Shaper, info: LineInfo): { width: number; e
     if (itemWidth !== 0) {
       switch (p.styles[item.style]!.whiteSpace) {
         case 'normal': case 'nowrap': case 'pre-line':
-          trailing += itemWidth
+          trailing = addLU(trailing, itemWidth)
           break
         case 'pre-wrap':
           if (trailing === 0 && (info.hasForcedBreak || info.isLastLine)) {
             // Conditional hang: only the part of the trailing spaces that overflows the line hangs (:370-381).
-            const itemEnd = info.unclampedWidth - trailing
-            const actual = Math.max(0, Math.min(itemWidth, itemEnd - info.availableWidth))
+            const itemEnd = subLU(info.unclampedWidth, trailing)
+            const actual = Math.max(0, Math.min(itemWidth, subLU(itemEnd, info.availableWidth)))
             if (actual !== itemWidth) willContinue = false
-            trailing += actual
+            trailing = addLU(trailing, actual)
           } else {
-            trailing += itemWidth
+            trailing = addLU(trailing, itemWidth)
           }
           break
         case 'pre': case 'break-spaces':
@@ -293,6 +295,6 @@ export function piecesOf(p: BlinkPrepared, info: LineInfo, start: BlinkLineStart
   return {
     fragments: fragmentsOf(p, info, start.textOffset, next === null ? p.text.length : next.textOffset, range.start, range.end),
     joinsNextLine: joinsNextLine(p, next), indented: info.textIndent !== 0, align: usedTextAlign(p.paragraph.textAlign, info),
-    overflows: info.width - hangWidth - info.availableWidth > 0, facts: { needsAccurateEndPosition: info.needsAccurateEndPosition },
+    overflows: subLU(subLU(info.width, hangWidth), info.availableWidth) > 0, facts: { needsAccurateEndPosition: info.needsAccurateEndPosition },
   }
 }

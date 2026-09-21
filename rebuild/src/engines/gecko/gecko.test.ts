@@ -825,7 +825,7 @@ describe('ceiling round 2', () => {
     ]
     for (let depth = 0; depth < 128; depth++) nested = [span(nested)]
     const p = { ...block, content: [span(nested, 'ZH-hANs-cn'), leaf('six')] }
-    expect(prepareGecko(p, env, false, createContextPool()).leaves.map(leaf => leaf.lang)).toEqual([
+    expect(prepareGecko(p, env, false, createContextPool()).leaves.map(leaf => leaf.language.tag)).toEqual([
       'zh-Hans-CN', '', 'ko', '', 'zh-Hans-CN', 'invalid_tag', 'zh-Hans-CN', 'en-US',
     ])
     // Empty style language uses the supplied font locale, and stays unknown when that process fact is absent.
@@ -833,7 +833,7 @@ describe('ceiling round 2', () => {
     expect(allGaps(layout(p, { ...env, regionalPrefsLocale: null }))).toContainEqual(expect.objectContaining({
       gap: 'ui-language', run: 1, at: { start: 3, end: 6 },
     }))
-    expect(prepareGecko(paragraph([run('fresh')], 100), env, false, createContextPool()).leaves[0]!.lang).toBe('en')
+    expect(prepareGecko(paragraph([run('fresh')], 100), env, false, createContextPool()).leaves[0]!.language.tag).toBe('en')
   })
 
   test('localized empty spans create no text language, Canvas context or contentful line', () => {

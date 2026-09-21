@@ -13,7 +13,7 @@ import { width, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName } from '../../model.js'
 import { advanceBefore } from './advance.js'
-import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf, type FontDeclarations } from './fonts.js'
+import { COLOR_EMOJI_FAMILY, fontTableOf, listedFontOf, opticalSizeAxisOf, type FontDeclarations, type FontTable } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
@@ -216,10 +216,10 @@ export function letterSpacedGroups(sink: GapSink, contexts: ContextPool, run: Pi
 // the process's history, unless a listed family draws it. Both orders of the development and held-out suite
 // samples (round 4, `.artifacts/lab/gecko/r4-1`): `❤️😀︎❤️` gives U+1F600 U+FE0E 20.7px natively after one
 // history and 33.5px after the other, in 5 of the 5 history-dependent cases round 2's condition didn't name.
-export function textPresentationSearch(sink: GapSink, run: number, font: FontDecl, first: number, presentation: EmojiPresentation, next: number, at: { start: number; end: number }): void {
+export function textPresentationSearch(sink: GapSink, run: number, table: FontTable, first: number, presentation: EmojiPresentation, next: number, at: { start: number; end: number }): void {
   if (sink === null) return
   if (next === 0xfe0e && presentation === 'emoji-default') {
-    const listed = listedFontOf(font, first)
+    const listed = listedFontOf(table, first)
     if (listed === null || listed < 0) {
       sink.push({ gap: 'page-history', run, detail: `U+${first.toString(16).toUpperCase()} U+FE0E asks for a glyph without color, which only the system-wide font search finds, among the families whose character maps the process has loaded by then (gfxPlatformFontList.cpp:1474-1486)`, at })
     }
@@ -293,13 +293,13 @@ export function dictionaryBreaks(sink: GapSink, env: GeckoEnvironment, text: str
 // the prediction follows the state at measuring time. Which fonts cover U+FFFD isn't a Canvas fact, so every U+FFFD reports
 // it unless the coverage facts name a listed family for it (the round 2 held-out suite's 104 history-dependent
 // suite/U+FFFD rows: 16px natively after one history, 13.133px after another).
-export function replacementCharacters(sink: GapSink, text: string, leaves: GeckoLeaf[]): void {
+export function replacementCharacters(sink: GapSink, text: string, leaves: GeckoLeaf[], declarations: FontDeclarations): void {
   if (sink === null) return
   for (let run = 0; run < leaves.length; run++) {
     for (let s = leaves[run]!.start; s < leaves[run]!.end; s++) {
       if (text.charCodeAt(s) !== 0xfffd) continue
       // A listed family that the coverage facts say draws U+FFFD keeps it out of system fallback (fonts.ts listedFontOf).
-      const listed = listedFontOf(leaves[run]!.font, 0xfffd)
+      const listed = listedFontOf(fontTableOf(leaves[run]!.font, declarations), 0xfffd)
       if (listed !== null && listed >= 0) continue
       sink.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
     }
@@ -328,6 +328,17 @@ export function emergencyBreakUnconfirmed(inspect: GeckoInspect | null, t: numbe
   inspect.emergencyUnconfirmed.push(t)
 }
 
+// Glyph analysis publishes these points in increasing transformed-source order (prepare.ts step 4).
+function emergencyUnconfirmedAt(points: number[], t: number): boolean {
+  let lo = 0, hi = points.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (points[mid]! < t) lo = mid + 1
+    else hi = mid
+  }
+  return lo < points.length && points[lo] === t
+}
+
 // ---- A fill ----
 
 // A text frame's break scan, `r`, over tLength characters from tOffset. An emergency break after a hyphen exists where
@@ -338,7 +349,7 @@ export function emergencyBreakUnconfirmed(inspect: GeckoInspect | null, t: numbe
 export function emergencyHyphenBreak(sink: GapSink, p: GeckoPrepared, run: number, wordCanWrap: boolean, r: Measured, tOffset: number, tLength: number): void {
   if (sink === null) return
   if (r.charsFit < tLength && r.breakPriority === WORD_WRAP_BREAK && !wordCanWrap && p.breakFlags[tOffset + r.charsFit] === BREAK_EMERGENCY_WRAP &&
-    p.inspect!.emergencyUnconfirmed.includes(tOffset + r.charsFit)) {
+    emergencyUnconfirmedAt(p.inspect!.emergencyUnconfirmed, tOffset + r.charsFit)) {
     sink.push({ gap: 'font-fallback', run, detail: `offset ${p.tSource[tOffset + r.charsFit]}: the emergency break after a hyphen needs the hyphen and the letters around it in one font range, which Canvas can't show (gfxFont.cpp:741-753, gfxTextRun.cpp:2930-3000)` })
   }
 }
@@ -352,9 +363,9 @@ export type TabReason =
 // The condition under which the inline position after the line's placed frames is a stand-in, or null: a text frame whose
 // Canvas widths all are (GeckoTextRun.advancesStandIn), whose measured start or end is an in-word stand-in, or that holds a
 // stand-in tab.
-export function placedStandIn(sink: GapSink, p: GeckoPrepared, psd: SpanData): TabReason | null {
+export function placedStandIn(sink: GapSink, p: GeckoPrepared, psd: SpanData, from: number): TabReason | null {
   if (sink === null) return null
-  const stack = [{ psd, next: 0 }]
+  const stack = [{ psd, next: from }]
   while (stack.length > 0) {
     const walk = stack[stack.length - 1]!
     if (walk.next === walk.psd.frames.length) { stack.pop(); continue }

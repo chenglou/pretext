@@ -6,6 +6,8 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BoxEdge, type FontFacts, type Gap, type InlineNode, type Paragraph } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
+import { LU_MAX } from './layout-unit.js'
+import { LineBreaker } from './line-breaker.js'
 import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
 import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type BlinkFilledLine, type BlinkRefusedSlot } from './index.js'
 
@@ -749,4 +751,80 @@ describe('blink boxes of spans that hold no text', () => {
     expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'wbr' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
     expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }], { whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
   })
+})
+
+
+describe('source LayoutUnit ownership before LineInfo', () => {
+  test('position saturates on each logical item rather than clamping a cancelled final sum', () => {
+    const p = tree([
+      { kind: 'atomic', width: 33554432, height: 10, marginInlineStart: 0, marginInlineEnd: 0 },
+      span([{ kind: 'text', text: 'x' }], { start: { margin: -33554432, border: 1, padding: 0 }, whiteSpace: 'nowrap' }),
+      { kind: 'text', text: 'y' },
+    ], 100, { whiteSpace: 'nowrap', textIndent: 8 })
+    const prepared = prepare(p, env, false, createContextPool())
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect(filled.line.info.results.map(result => result.inlineSize)).toEqual([2147483392, -2147483456, 640, 0, 640])
+    expect([filled.line.info.unclampedWidth, filled.line.info.width]).toEqual([1471, 1471])
+  })
+
+  test('atomic margins are summed before adding the independently CSS-clamped border-box width', () => {
+    const p = tree([{ kind: 'atomic', width: 33554432, height: 10, marginInlineStart: 33554432, marginInlineEnd: -33554432 }], 100, { whiteSpace: 'nowrap' })
+    const prepared = prepare(p, env, false, createContextPool())
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+    const result = filled.line.info.results[0]!
+    expect([result.marginStart, result.marginEnd, result.inlineSize, filled.line.info.width]).toEqual([2147483392, -2147483520, 2147483264, 2147483264])
+  })
+
+  test('the remaining-fit width saturates before text shaping reads it', () => {
+    const p = paragraph([['x', 'text']], 100, { whiteSpace: 'nowrap', textIndent: -33554432 })
+    const prepared = prepare(p, env, false, createContextPool())
+    const breaker = new LineBreaker({ p: prepared, gaps: null }, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    expect([breaker.position, breaker.remainingAvailableWidth()]).toEqual([-2147483520, LU_MAX])
+    const info = breaker.nextLine()
+    expect([info.unclampedWidth, info.width]).toEqual([-2147482880, 0])
+  })
+
+  test('AddEpsilon stays at one raw unit after the slot and indent CSS conversions', () => {
+    const p = paragraph([['x', 'text']], 33554432, { whiteSpace: 'nowrap', textIndent: 33554432 })
+    const prepared = prepare(p, env, false, createContextPool())
+    const breaker = new LineBreaker({ p: prepared, gaps: null }, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    expect([breaker.availableWidth, breaker.remainingAvailableWidth(), breaker.canFitOnLine()]).toEqual([2147483392, 1, true])
+    const info = breaker.nextLine()
+    expect([info.lineLeft, info.lineRight, info.availableWidth, info.textIndent, info.unclampedWidth]).toEqual([0, 2147483392, 2147483392, 2147483392, LU_MAX])
+  })
+
+  test('a discarded no-result text item uses source whole-pixel +1, not AddEpsilon', () => {
+    const p = paragraph([['abcdef', 'text']], 1)
+    p.overflowWrap = 'break-word'
+    const prepared = prepare(p, env, false, createContextPool())
+    const breaker = new LineBreaker({ p: prepared, gaps: null }, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    const item = prepared.items[0]!, result = breaker.addItem(item.end)
+    expect(breaker.breakText(result, item, breaker.shapeResultOf(0), 3, 3)).toBe('overflow')
+    expect([result.inlineSize, result.shape, result.end]).toEqual([67, null, item.end])
+  })
+})
+
+test('a decorated span with a negative advance still creates a nonnegative fragment border box', () => {
+  // CreateBoxFragment clamps the geometry size after ComputeInlinePositions; the negative advance still positions x.
+  const layout = blink(tree([
+    span([{ kind: 'atomic', width: 4, height: 10, marginInlineStart: -3, marginInlineEnd: -3 }], { start: { margin: 0, border: 1, padding: 0 } }),
+    { kind: 'text', text: 'x' },
+  ], 100, { whiteSpace: 'nowrap' }))
+  expect(layout.lines.length).toBe(1)
+  expect(layout.lines[0]!.geometry.items.map(item => [item.kind, item.x, item.inlineSize])).toEqual([
+    ['atomic', -128, 256], ['text', -64, 640], ['inline-box', 0, 0],
+  ])
+})
+
+test('an atomic fragment retains its border box when its margin box saturates', () => {
+  const layout = blink(tree([
+    { kind: 'atomic', width: 33554432, height: 10, marginInlineStart: 33554432, marginInlineEnd: 0 },
+    { kind: 'text', text: 'x' },
+  ], 100, { whiteSpace: 'nowrap' }))
+  const atom = layout.lines[0]!.geometry.items.find(item => item.kind === 'atomic')!
+  expect(atom.inlineSize).toBe(2147483392)
+  expect(atom.x).toBe(2147483392)
+  expect(layout.lines[0]!.geometry.items.find(item => item.kind === 'text')!.x).toBe(2147483647)
 })

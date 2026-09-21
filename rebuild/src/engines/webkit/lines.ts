@@ -1,3 +1,4 @@
+import { appendLineRun, rightMostRun } from './run-extent.js'
 import { itemAt, sliceItems } from './item-sequence.js'
 // WebKit line filling (Safari 27.0): Line bookkeeping, InlineContentBreaker with breakWord and the carried remainder, the
 // line builders, TextOnlySimpleLineBuilder (also run inside RangeBasedLineBuilder) and LineBuilder
@@ -26,7 +27,7 @@ const F32_MAX = 3.4028234663852886e38
 
 // What filling one line reads. `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's filling
 // decides, on an inspected paragraph (gaps.ts GapSink).
-type Layout = { p: WebKitPrepared; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink }
+type Layout = { p: WebKitPrepared; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink; rightMostBeforeLastRun: number | null }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
 type LineBreakItem = SoftLineBreakItem | HardLineBreakItem
@@ -261,7 +262,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
   // The item's run: the one it expands, or one of its own.
   const run = expanded ?? textRun(p, item, f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0)), width, shapingBoundary)
   if (expanded === null) {
-    line.runs.push(run)
+    appendLineRun(L, line.runs, run)
     contentLogicalRight = f32(run.left + width)
   } else if (box.letterSpacing >= 0) {
     expandRun(p, expanded, item, width)
@@ -271,9 +272,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     if (box.style.wordSpacing >= 0) {
       withoutLastTextRun = f32(line.contentLogicalWidth - Math.max(0, expanded.width))
     } else {
-      let rightMost = 0
-      for (let i = line.runs.length - 1; i >= 0; i--) rightMost = Math.max(rightMost, f32(line.runs[i]!.left + line.runs[i]!.width))
-      withoutLastTextRun = Math.max(0, rightMost)
+      withoutLastTextRun = rightMostRun(L, line.runs)
     }
     const lastRight = f32(expanded.left + expanded.width)
     expandRun(p, expanded, item, width)
@@ -313,7 +312,8 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
 }
 
 // Line::appendInlineBoxStart (IL:289-315).
-function appendInlineBoxStart(p: WebKitPrepared, line: Line, item: InlineBoxItem, width: number): void {
+function appendInlineBoxStart(L: Layout, line: Line, item: InlineBoxItem, width: number): void {
+  const p = L.p
   const edges = spanEdges(p, item.element)
   if (startEdgeWidth(edges) !== 0) line.hanging = null
   let left = lastRunLogicalRight(line)
@@ -326,17 +326,18 @@ function appendInlineBoxStart(p: WebKitPrepared, line: Line, item: InlineBoxItem
   }
   // usedLetterSpacing of the inline box: its CSS letter spacing, which spans carry in the model.
   if (inlineBoxLetterSpacing(p, item.element) < 0) line.inlineBoxLogicalLeftStack.push(left)
-  line.runs.push(elementRun(item, left, logicalWidth))
+  appendLineRun(L, line.runs, elementRun(item, left, logicalWidth))
 }
 
 // Line::appendInlineBoxEnd (IL:317-344). Partially trimmable trailing content comes from text-spacing trim, which the model
 // doesn't have, so there is no trailing letter spacing to remove.
-function appendInlineBoxEnd(p: WebKitPrepared, line: Line, item: InlineBoxItem, width: number): void {
+function appendInlineBoxEnd(L: Layout, line: Line, item: InlineBoxItem, width: number): void {
+  const p = L.p
   const edges = spanEdges(p, item.element)
   if (endEdgeWidth(edges) !== 0) line.hanging = null
   let left = lastRunLogicalRight(line)
   if (inlineBoxLetterSpacing(p, item.element) < 0) left = Math.max(left, line.inlineBoxLogicalLeftStack.length === 0 ? 0 : line.inlineBoxLogicalLeftStack.pop()!)
-  line.runs.push(elementRun(item, left, width))
+  appendLineRun(L, line.runs, elementRun(item, left, width))
   line.contentLogicalWidth = Math.max(line.contentLogicalWidth, f32(left + width))
 }
 
@@ -346,30 +347,31 @@ function inlineBoxLetterSpacing(p: WebKitPrepared, element: number): number {
 }
 
 // Line::appendAtomicInlineBox (IL:558-574).
-function appendAtomicInlineBox(p: WebKitPrepared, line: Line, item: AtomicItem, marginBoxWidth: number): void {
+function appendAtomicInlineBox(L: Layout, line: Line, item: AtomicItem, marginBoxWidth: number): void {
+  const p = L.p
   resetTrailingContent(line)
   line.contentLogicalWidth = Math.max(line.contentLogicalWidth, f32(lastRunLogicalRight(line) + marginBoxWidth))
   const e = atomicElement(p, item.element)
   if (e.marginStart >= 0) {
-    line.runs.push(elementRun(item, lastRunLogicalRight(line), marginBoxWidth))
+    appendLineRun(L, line.runs, elementRun(item, lastRunLogicalRight(line), marginBoxWidth))
     return
   }
-  line.runs.push(elementRun(item, f32(lastRunLogicalRight(line) + e.marginStart), f32(marginBoxWidth - e.marginStart)))
+  appendLineRun(L, line.runs, elementRun(item, f32(lastRunLogicalRight(line) + e.marginStart), f32(marginBoxWidth - e.marginStart)))
 }
 
 // Line::appendLineBreak (IL:588-597): a soft line break run holds its one unit, { position, 1 } (IL:856-865); a hard line
 // break run is the <br>'s box.
-function appendLineBreak(line: Line, item: LineBreakItem): void {
+function appendLineBreak(L: Layout, line: Line, item: LineBreakItem): void {
   line.trailingSoftHyphenWidth = null
   switch (item.kind) {
-    case 'hard-line-break': line.runs.push(elementRun(item, lastRunLogicalRight(line), 0)); break
-    case 'soft-line-break': line.runs.push({ kind: 'soft-line-break', box: item.box, textStart: item.start, left: lastRunLogicalRight(line), width: 0, level: item.level }); break
+    case 'hard-line-break': appendLineRun(L, line.runs, elementRun(item, lastRunLogicalRight(line), 0)); break
+    case 'soft-line-break': appendLineRun(L, line.runs, { kind: 'soft-line-break', box: item.box, textStart: item.start, left: lastRunLogicalRight(line), width: 0, level: item.level }); break
   }
 }
 
 // Line::appendWordBreakOpportunity (IL:599-602).
-function appendWordBreakOpportunity(line: Line, item: WordBreakOpportunityItem): void {
-  line.runs.push(elementRun(item, lastRunLogicalRight(line), 0))
+function appendWordBreakOpportunity(L: Layout, line: Line, item: WordBreakOpportunityItem): void {
+  appendLineRun(L, line.runs, elementRun(item, lastRunLogicalRight(line), 0))
 }
 
 // Line::addTrailingHyphen (IL:609-619) with Line::Run::setNeedsHyphen (InlineLine.h:388-393).
@@ -1076,7 +1078,7 @@ function consumeTrailingLineBreak(b: Builder, r: SimpleResult, index: number): b
   if (r.overflowingContentLength || r.isRevert) return false
   const item = itemAt(b.L.p.items, index)
   if (index >= b.rangeEnd || !isLineBreakItem(item)) return false
-  appendLineBreak(b.line, item)
+  appendLineBreak(b.L, b.line, item)
   return true
 }
 
@@ -1230,7 +1232,7 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
     isEndOfLine = nextIndex >= b.rangeEnd || trailingLineBreak !== null
   }
   if (trailingLineBreak !== null && candidateEnd === b.rangeStart) {
-    appendLineBreak(b.line, trailingLineBreak)
+    appendLineBreak(b.L, b.line, trailingLineBreak)
     const end = { index: nextIndex, offset: 0 }
     return { end, overflowLogicalWidth: null }
   }
@@ -1263,7 +1265,7 @@ function endsWithSoftWrapOpportunity(L: Layout, previous: WebKitTextItem, next: 
   const prevBox = L.p.boxes[previous.box]!
   if (previous.box === next.box) {
     if (previous.level === next.level) return true
-    const f = makeFactory(prevBox.text, prevBox.is8Bit, prevBox.locale, prevBox.style.lineBreakMode, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
+    const f = makeFactory(prevBox.text, prevBox.is8Bit, prevBox.locale.name, prevBox.style.lineBreakMode, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks, prevBox.locale)
     return findNextBreakablePosition(f, next.start, prevBox.style) === next.start
   }
   return breakInBetween(L, prevBox, L.p.boxes[next.box]!)
@@ -1272,7 +1274,7 @@ function endsWithSoftWrapOpportunity(L: Layout, previous: WebKitTextItem, next: 
 // TextUtil::mayBreakInBetween between two boxes (gap dictionary-breaks-stand-in on the line that asks).
 function breakInBetween(L: Layout, prevBox: WebKitBox, nextBox: WebKitBox): boolean {
   breakTestBetweenBoxes(L.gaps, L.p, prevBox, nextBox)
-  return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, nextBox.style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
+  return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale.name, nextBox.style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks, nextBox.locale)
 }
 
 // nearestCommonAncestor (IFU:357-383) of two layout boxes by their parents.
@@ -1635,9 +1637,9 @@ function commitCandidateContent(b: Builder, content: Content, partial: PartialTr
     if (run.item.level !== DEFAULT_BIDI_LEVEL) b.line.hasNonDefaultBidiLevelRun = true
     switch (run.item.kind) {
       case 'text': appendText(L, b.line, run.item, run.contentWidth, boundaryFor(index)); break
-      case 'inline-box-start': appendInlineBoxStart(L.p, b.line, run.item, run.contentWidth); break
-      case 'inline-box-end': appendInlineBoxEnd(L.p, b.line, run.item, run.contentWidth); break
-      case 'atomic': appendAtomicInlineBox(L.p, b.line, run.item, run.contentWidth); break
+      case 'inline-box-start': appendInlineBoxStart(L, b.line, run.item, run.contentWidth); break
+      case 'inline-box-end': appendInlineBoxEnd(L, b.line, run.item, run.contentWidth); break
+      case 'atomic': appendAtomicInlineBox(L, b.line, run.item, run.contentWidth); break
     }
   }
   if (partial !== null && content.hasShapedContent) shapePartialLineCandidate(L, content, partial.trailingRunIndex)
@@ -1656,6 +1658,7 @@ function commitCandidateContent(b: Builder, content: Content, partial: PartialTr
 // LineBuilder::rebuildLineWithInlineContent (ILB:1813-1858)
 function rebuildLineWithInlineContent(b: Builder, lastItem: ContentItem): number {
   b.line = newLine(b.spanningInlineBoxes)
+  b.L.rightMostBeforeLastRun = null
   if (b.partialLeadingTextItem !== null && b.partialLeadingTextItem === lastItem) {
     const content = newContent()
     appendTextContent(b.L, content, b.partialLeadingTextItem, measuredItemWidth(b.L, b.partialLeadingTextItem, 0))
@@ -1795,10 +1798,10 @@ function placeInlineAndFloatContent(b: Builder, start: Position): { end: Positio
         if (candidate.trailingWordBreakOpportunity !== null) {
           // <wbr> needs to be on the line as an empty run (:576-580).
           placed++
-          appendWordBreakOpportunity(b.line, candidate.trailingWordBreakOpportunity)
+          appendWordBreakOpportunity(b.L, b.line, candidate.trailingWordBreakOpportunity)
         }
         if (candidate.trailingLineBreak !== null) {
-          appendLineBreak(b.line, candidate.trailingLineBreak)
+          appendLineBreak(b.L, b.line, candidate.trailingLineBreak)
           if (candidate.trailingLineBreak.level !== DEFAULT_BIDI_LEVEL) b.line.hasNonDefaultBidiLevelRun = true
           placed++
           isEndOfLine = true
@@ -2030,7 +2033,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
   const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? textIndent(p, start) : 0, placesSlotFloats)
-  const L: Layout = { p, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [] }
+  const L: Layout = { p, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [], rightMostBeforeLastRun: null }
   let placed: Placed
   switch (builder) {
     case 'inline-boxes-only': placed = placeInlineBoxesOnly(p, start); break

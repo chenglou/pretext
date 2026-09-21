@@ -131,7 +131,12 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
   const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
   const contentOffsets = new Int32Array(index.text.length).fill(-1)
-  for (let t = 0; t < text.length; t++) if (content.sourceOffsets[t]! >= 0) contentOffsets[content.sourceOffsets[t]!] = t
+  // Build the source-to-content map and fixed generated extents in one ascending content pass.
+  const sourceRuns = new OffsetRuns(text.length, k => {
+    const source = content.sourceOffsets[k]!
+    if (source >= 0) contentOffsets[source] = k
+    return source < 0
+  })
   const graphemeStarts = new Uint8Array(text.length + 1)
   if (is8Bit) {
     for (let i = 0; i <= text.length; i++) if (!(i > 0 && text.charCodeAt(i - 1) === 0x0d && text.charCodeAt(i) === 0x0a)) graphemeStarts[i] = 1
@@ -140,8 +145,10 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
   }
   const styles: BlinkStyle[] = []
+  const fragmentAncestors = inspect ? new Int32Array(computed.styles.length) : null
   for (let s = 0; s < computed.styles.length; s++) {
     const style = computed.styles[s]!
+    if (fragmentAncestors !== null && s > 0) fragmentAncestors[s] = style.shouldCreateBoxFragment ? s : fragmentAncestors[style.parent]!
     styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, hanKerning: null })
   }
   const rtl = paragraph.direction === 'rtl'
@@ -153,14 +160,14 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     canvasText = { narrow, spaced: narrow.replaceAll(' ', '\u2028') }
   }
   const p: BlinkPrepared = {
-    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
+    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, sourceRuns, contentOffsets,
     items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
-    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, sourceRuns: null, graphemeRuns: null },
+    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors! },
   }
   const sh: Shaper = { p, gaps }
   shapingGroups(p)
@@ -168,7 +175,6 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   fontFactsOfText(p)
   p.clusterRuns = new OffsetRuns(text.length + 1, k => !isClusterBoundary(p, k))
   if (p.inspect !== null) {
-    p.inspect.sourceRuns = new OffsetRuns(text.length, k => p.sourceOffsets[k]! < 0)
     p.inspect.graphemeRuns = new OffsetRuns(text.length + 1, k => p.graphemeStarts[k] !== 1)
   }
   for (let g = 0; g < p.groups.length; g++) {

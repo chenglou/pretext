@@ -8,6 +8,7 @@
 // characters of one shaping call is a stand-in (limits.ts positionLimit).
 import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
+import { FontCoverage, cmapCovers as covers, decidesFont } from './font-coverage.js'
 import { isMark } from './props.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkPrepared } from './types.js'
@@ -49,48 +50,10 @@ function mayUseOtherLanguageSystem(facts: LigatureFacts, locale: string | null):
   return false
 }
 
-function covers(coverage: readonly number[], cp: number): boolean {
-  let lo = 0
-  let hi = coverage.length / 2 - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    if (cp < coverage[2 * mid]!) hi = mid - 1
-    else if (cp > coverage[2 * mid + 1]!) lo = mid + 1
-    else return true
-  }
-  return false
-}
-
 // Whether listed family f of a style's font declaration maps code point cp, by its coverage fact; null when the fact isn't given.
 export function listedFontCovers(fonts: readonly ListedFontFacts[] | undefined, f: number, cp: number): boolean | null {
   if (fonts === undefined || f < 0 || f >= fonts.length || fonts[f]!.coverage === null) return null
   return covers(fonts[f]!.coverage!, cp)
-}
-
-// Default-ignorable characters and joiners take no glyph of their own that decides the font (HarfBuzzShaper keeps a cluster
-// in the font that draws its visible characters; hb-unicode.hh:170-197).
-function decidesFont(cp: number): boolean {
-  return !(cp === 0xad || cp === 0x34f || cp === 0x61c || (cp >= 0x200b && cp <= 0x200f) || (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2060 && cp <= 0x206f) ||
-    (cp >= 0xfe00 && cp <= 0xfe0f) || cp === 0xfeff)
-}
-
-// The listed family that draws text_content [a, b), a glyph cluster: the first one realized whose font maps every character
-// of it (the shaper moves a cluster with a missing glyph to the next font whole, harfbuzz_shaper.cc:560-700). -1 where a
-// family before it isn't known to be realized or to cover the cluster, or none covers it: a font the facts don't name.
-function fontOf(p: BlinkPrepared, fonts: readonly ListedFontFacts[], a: number, b: number): number {
-  for (let f = 0; f < fonts.length; f++) {
-    const font = fonts[f]!
-    if (font.realizes === false) continue
-    if (font.realizes === null || font.coverage === null) return -1
-    let all = true
-    for (let i = a; i < b && all;) {
-      const cp = p.text.codePointAt(i)!
-      i += cp > 0xffff ? 2 : 1
-      if (decidesFont(cp) && !covers(font.coverage, cp)) all = false
-    }
-    if (all) return f
-  }
-  return -1
 }
 
 type Match = { end: number; certain: boolean }
@@ -140,6 +103,8 @@ function matchPattern(p: BlinkPrepared, pattern: LigaturePattern, i: number, lim
 // first (never before a mark the string itself holds): where it ends, and whether marks were skipped after its first
 // character and after later ones. Null when the string isn't there or no mark was skipped.
 function matchAcrossMarks(text: string, at: number, limit: number, listed: string): { end: number; afterFirst: boolean; later: boolean } | null {
+  // Skipping input marks can only lengthen the literal; the final astral codepoint may end one unit past limit.
+  if (listed.length > limit - at + 1) return null
   let i = at
   let afterFirst = false
   let later = false
@@ -160,17 +125,54 @@ function matchAcrossMarks(text: string, at: number, limit: number, listed: strin
   return afterFirst || later ? { end: i, afterFirst, later } : null
 }
 
+type LocalFacts = {
+  source: LigatureFacts
+  locales: Map<string | null, boolean>
+  patterns: Map<number, LigaturePattern[]> | null
+}
+const NO_PATTERNS: readonly LigaturePattern[] = []
+
+// First-position matching consumes no leading marks. Every match therefore starts with one alternative's first UTF16
+// unit, including an alternative that names only a high surrogate. Keep the original pattern order in each bucket.
+function patternsAt(facts: LocalFacts, firstUnit: number): readonly LigaturePattern[] {
+  if (facts.patterns === null) {
+    const index = new Map<number, LigaturePattern[]>()
+    for (let n = 0; n < facts.source.patterns.length; n++) {
+      const pattern = facts.source.patterns[n]!
+      const first = pattern.positions[0]
+      // Zero positions match only the start itself, changing no cluster boundary or candidate advance.
+      if (first === undefined) continue
+      for (let a = 0; a < first.length; a++) {
+        const alternative = first[a]!
+        if (alternative.length === 0) continue
+        const unit = alternative.charCodeAt(0)
+        const bucket = index.get(unit)
+        if (bucket === undefined) index.set(unit, [pattern])
+        // Several first alternatives (or an identical repeated source pattern) need only one identical match.
+        else if (bucket[bucket.length - 1] !== pattern) bucket.push(pattern)
+      }
+    }
+    facts.patterns = index
+  }
+  return facts.patterns.get(firstUnit) ?? NO_PATTERNS
+}
+
 // Fills the prepared paragraph's `ligature`, per text_content offset what the ligature facts say about the boundary before
 // it (the constants above), and its `fontRun`, per unit of a shaping group the listed family that draws its glyph cluster
 // (-1: a font the facts don't name).
 export function fontFactsOfText(p: BlinkPrepared): void {
   const out = p.ligature
   const fontRun = p.fontRun
+  // Source facts and locale interpretation belong to this preparation, not every shaping group or emitted paragraph.
+  const coverageTables = new Map<readonly ListedFontFacts[], FontCoverage>()
+  const localFacts = new Map<LigatureFacts, LocalFacts>()
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
     const style = p.styles[group.style]!
     const fonts = style.font.facts.fonts
     if (fonts === undefined) continue
+    let coverage = coverageTables.get(fonts)
+    if (coverage === undefined) { coverage = new FontCoverage(fonts); coverageTables.set(fonts, coverage) }
     const locale = style.locale ?? p.env.uiLanguage
     // The glyph clusters before ligatures: grapheme starts HarfBuzz doesn't mark a continuation.
     const starts: number[] = []
@@ -179,13 +181,27 @@ export function fontFactsOfText(p: BlinkPrepared): void {
     starts.push(group.end)
     const fontAt: number[] = []
     for (let c = 0; c + 1 < starts.length; c++) {
-      const f = fontOf(p, fonts, starts[c]!, starts[c + 1]!)
+      const f = coverage.font(p.text, starts[c]!, starts[c + 1]!)
       fontAt.push(f)
       fontRun.fill(f, starts[c]!, starts[c + 1]!)
     }
-    // Per listed family, its ligature facts where they hold under the locale.
-    const usableFacts = fonts.map(font => font.ligatures === null || mayUseOtherLanguageSystem(font.ligatures, locale) ? null : font.ligatures)
-    const usable = (f: number): LigatureFacts | null => f < 0 ? null : usableFacts[f]!
+    // Interpret only facts a cluster's selected family actually needs, once for each applicable locale.
+    const usable = (f: number): LocalFacts | null => {
+      if (f < 0) return null
+      const source = fonts[f]!.ligatures
+      if (source === null) return null
+      let facts = localFacts.get(source)
+      if (facts === undefined) {
+        facts = { source, locales: new Map(), patterns: null }
+        localFacts.set(source, facts)
+      }
+      let allowed = facts.locales.get(locale)
+      if (allowed === undefined) {
+        allowed = !mayUseOtherLanguageSystem(source, locale)
+        facts.locales.set(locale, allowed)
+      }
+      return allowed ? facts : null
+    }
     // Lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a ligature can form over a cluster of
     // them, which the listed strings don't hold: the boundaries next to one stay unknown.
     const ignorable = (c: number): boolean => {
@@ -203,22 +219,29 @@ export function fontFactsOfText(p: BlinkPrepared): void {
       if (before < 0 || after < 0 || ignorable(c - 1) || ignorable(c)) continue
       if (before !== after) { out[starts[c]!] = LIGATURE_NONE; continue }
       const facts = usable(before)
-      if (facts !== null && facts.complete) out[starts[c]!] = LIGATURE_NONE
+      if (facts !== null && facts.source.complete) out[starts[c]!] = LIGATURE_NONE
     }
     // Ligatures form left to right in logical order, the longest listed one first: a listed string was shaped whole and
     // came out as one glyph, so the font prefers it to its shorter beginnings.
+    // This endpoint belongs to one same-font/script stretch; later candidates inside it share the endpoint.
+    let limitCluster = -1
+    // Earlier uncertain spans can only stay uncertain or become merged; later candidates write just their extension.
+    let uncertainEndCluster = 0
     for (let c = 0; c + 1 < starts.length;) {
       const f = fontAt[c]!
       const facts = usable(f)
       let next = c + 1
       if (facts !== null) {
         // The stretch of clusters in the same font and script segment.
-        let limitCluster = c
-        while (limitCluster + 1 < starts.length - 1 && fontAt[limitCluster + 1] === f && !isSegmentEdge(p, starts[limitCluster + 1]!)) limitCluster++
+        if (limitCluster < c) {
+          limitCluster = c
+          while (limitCluster + 1 < starts.length - 1 && fontAt[limitCluster + 1] === f && !isSegmentEdge(p, starts[limitCluster + 1]!)) limitCluster++
+        }
         const limit = starts[limitCluster + 1]!
         let best: Match | null = null
-        for (let n = 0; n < facts.patterns.length; n++) {
-          const pattern = facts.patterns[n]!
+        const patterns = patternsAt(facts, p.text.charCodeAt(starts[c]!))
+        for (let n = 0; n < patterns.length; n++) {
+          const pattern = patterns[n]!
           // Under letter spacing Blink turns liga, clig and calt off (font_features.cc:54-86): only `spaced` ligatures form.
           if (style.letterSpacing !== 0 && !pattern.spaced) continue
           const match = matchPattern(p, pattern, starts[c]!, limit)
@@ -228,13 +251,23 @@ export function fontFactsOfText(p: BlinkPrepared): void {
         if (best !== null) {
           // The ligature's cluster runs to the next cluster start at or after its last component's end.
           let endCluster = c + 1
-          while (starts[endCluster]! < best.end) endCluster++
-          for (let inner = c + 1; inner < endCluster; inner++) {
+          if (starts[endCluster]! < best.end) {
+            let lo = endCluster + 1, hi = starts.length
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1
+              if (starts[mid]! < best.end) lo = mid + 1
+              else hi = mid
+            }
+            endCluster = lo
+          }
+          const firstInner = best.certain ? c + 1 : Math.max(c + 1, uncertainEndCluster)
+          for (let inner = firstInner; inner < endCluster; inner++) {
             const k = starts[inner]!
             if (best.certain) out[k] = LIGATURE_MERGED
             else if (out[k] !== LIGATURE_MERGED) out[k] = LIGATURE_UNCERTAIN
           }
           if (best.certain && endCluster > c + 1) next = endCluster
+          if (!best.certain) uncertainEndCluster = Math.max(uncertainEndCluster, endCluster)
         }
       }
       c = next

@@ -1,6 +1,7 @@
 // LineBreaker::NextLine for one line (line_breaker.cc at Chrome 153; specs/blink-lines.md §4-§14 and the handlers of
 // specs/blink-gaps.md §4), with ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612). Positions and widths
 // are LayoutUnits: integers counting 1/64 of a zoomed px.
+import { addLU, subLU, negLU } from './layout-unit.js'
 import type { GapName, LineSlot, TextAlign } from '../../model.js'
 import { WS, bidiClassOf } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
@@ -213,13 +214,13 @@ export class LineBreaker {
     const zoom = p.layoutZoom
     const containerWidth = lengthLU(slot.width, zoom)
     let left = slot.left > 0 ? lengthLU(slot.left, zoom) : 0
-    let right = containerWidth - (slot.right > 0 ? lengthLU(slot.right, zoom) : 0)
+    let right = subLU(containerWidth, slot.right > 0 ? lengthLU(slot.right, zoom) : 0)
     if (p.baseLevel === 0) right = Math.max(Math.min(right, containerWidth), left)
     else left = Math.min(Math.max(left, 0), right)
     this.lineLeft = left
     this.lineRight = right
-    this.availableWidth = right - left
-    this.floatOffset = p.baseLevel === 0 ? Math.max(0, left) : Math.max(0, containerWidth - right)
+    this.availableWidth = subLU(right, left)
+    this.floatOffset = p.baseLevel === 0 ? Math.max(0, left) : Math.max(0, subLU(containerWidth, right))
     this.hasLeadingFloats = (slot.left > 0 || slot.right > 0) && !token.afterLeadingFloats
     this.iterator = new LineBreakIterator(p.text, p.is8Bit, p.styles[0]!.iterator, p.env.uiLanguage, p.env.dictionaryBreaks)
     this.current = { itemIndex: token.itemIndex, textOffset: token.textOffset }
@@ -278,11 +279,11 @@ export class LineBreaker {
   }
 
   canFitOnLine(): boolean {
-    return this.position <= this.availableWidth + 1
+    return this.position <= addLU(this.availableWidth, 1)
   }
 
   remainingAvailableWidth(): number {
-    return this.availableWidth + 1 - this.position
+    return subLU(addLU(this.availableWidth, 1), this.position)
   }
 
   lastResult(): ItemResult | null {
@@ -340,14 +341,14 @@ export class LineBreaker {
       r.hyphen = shapeHyphen(this.sh, this.items[r.itemIndex]!.style)
       this.hasAnyHyphens = true
     }
-    r.inlineSize += r.hyphen.inlineSize
+    r.inlineSize = addLU(r.inlineSize, r.hyphen.inlineSize)
     return r.hyphen.inlineSize
   }
 
   removeHyphen(): number {
     const r = this.results[this.hyphenIndex!]!
     const size = r.hyphen!.inlineSize
-    r.inlineSize -= size
+    r.inlineSize = subLU(r.inlineSize, size)
     this.hyphenIndex = null
     return size
   }
@@ -366,7 +367,7 @@ export class LineBreaker {
   // LineInfo::ComputeWidth: the item results' sizes and the applied text-indent (line_info.cc).
   computeWidth(): number {
     let w = this.appliedTextIndent
-    for (let i = 0; i < this.results.length; i++) w += this.results[i]!.inlineSize
+    for (let i = 0; i < this.results.length; i++) w = addLU(w, this.results[i]!.inlineSize)
     return w
   }
 
@@ -429,7 +430,7 @@ export class LineBreaker {
     while (this.stateNow() !== 'done') {
       if (this.atEnd()) {
         if (this.handleOverflowIfNeeded() && !this.atEnd()) continue
-        if (this.hasHyphen()) this.position -= this.removeHyphen()
+        if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
         this.isLastLine = true
         return
       }
@@ -479,13 +480,13 @@ export class LineBreaker {
       this.handleOverflow()
       return
     }
-    if (this.hasHyphen()) this.position -= this.removeHyphen()
+    if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
     const r = this.addItem(item.end)
     r.shouldCreateLineBox = true
     if (this.autoWrap) {
       const available = this.remainingAvailableWidth()
       const result = this.breakText(r, item, sr, available, available)
-      this.position += r.inlineSize
+      this.position = addLU(this.position, r.inlineSize)
       this.moveToNextOfResult(r)
       if (result === 'success') {
         if (r.end < item.end) this.handleTrailingSpaces(item, sr)
@@ -516,7 +517,7 @@ export class LineBreaker {
       r.inlineSize = Math.max(0, luCeil(r.shape.width))
     }
     this.trailingWhitespace = 'unknown'
-    this.position += r.inlineSize
+    this.position = addLU(this.position, r.inlineSize)
     this.moveToNextOfItem()
   }
 
@@ -536,7 +537,7 @@ export class LineBreaker {
       out = newShapeLineResult()
       const view = this.shapeLine(sr, r.start, Math.max(0, availableWidth), noResultIfOverflow, dontReshapeEndIfAtSpace, out)
       if (view === null) {
-        r.inlineSize = availableWidthWithHyphens + 1
+        r.inlineSize = addLU(availableWidthWithHyphens, ONE_PX)
         r.end = item.end
         return 'overflow'
       }
@@ -545,9 +546,9 @@ export class LineBreaker {
       if (out.isHyphenated) {
         const hyphenInlineSize = this.addHyphen(this.results.indexOf(r))
         if (!out.isOverflow && inlineSize <= availableWidth) {
-          const spaceForHyphen = availableWidthWithHyphens - inlineSize
+          const spaceForHyphen = subLU(availableWidthWithHyphens, inlineSize)
           if (spaceForHyphen >= 0 && hyphenInlineSize > spaceForHyphen) {
-            availableWidth -= hyphenInlineSize
+            availableWidth = subLU(availableWidth, hyphenInlineSize)
             this.removeHyphen()
             continue
           }
@@ -565,7 +566,7 @@ export class LineBreaker {
       r.canBreakAfter = true
       this.trailingWhitespace = this.iterator.breakType === 'break-character' ? 'unknown' : 'none'
     } else {
-      r.canBreakAfter = this.canBreakAfter(item)
+      r.canBreakAfter = this.canBreakAfter(item, r.itemIndex)
       this.trailingWhitespace = 'unknown'
     }
     r.mayBreakInside = !out.isOverflow
@@ -573,12 +574,12 @@ export class LineBreaker {
   }
 
   // CanBreakAfter (line_breaker.cc:1210-1267): a text item followed by an atomic inline can always break after.
-  canBreakAfter(item: InlineItem): boolean {
+  canBreakAfter(item: InlineItem, index: number): boolean {
     const canBreakAfter = this.iterator.isBreakable(item.end)
     if (item.type !== 'text') return canBreakAfter
     // TryGetAtomicInlineItemAfter (:1284-1305).
     if (item.end < this.text.length && this.char(item.end) === 0xfffc) {
-      for (let i = this.items.indexOf(item) + 1; i < this.items.length; i++) {
+      for (let i = index + 1; i < this.items.length; i++) {
         const next = this.items[i]!
         if (next.type === 'atomic') return true
         if (next.end > item.end) break
@@ -645,7 +646,7 @@ export class LineBreaker {
     const rangeStart = sr.start
     const rangeEnd = sr.end
     const rtl = sr.rtl
-    const flip = (v: number): number => rtl ? -v : v
+    const flip = (v: number): number => rtl ? negLU(v) : v
     const lineStart = this.token.textOffset
     const isStartOfWrappedLine = start !== 0 && start === lineStart && !this.previousLineHadForcedBreak
     if (start === rangeStart && availableSpace >= snappedWidth(sh, sr) && isStartSafeToBreak(sh, sr)) {
@@ -661,23 +662,23 @@ export class LineBreaker {
     if (firstSafe !== start) {
       const firstSafePosition = positionForOffset(sh, sr, firstSafe)
       lineStartResult = reshape(sh, sr, start, firstSafe, true)
-      const oldWidth = flip(firstSafePosition - startPosition)
+      const oldWidth = flip(subLU(firstSafePosition, startPosition))
       const reshaped = luCeil(widthOf16(lineStartResult.call.width16))
-      const diff = oldWidth - reshaped
+      const diff = subLU(oldWidth, reshaped)
       // The end position is the first safe offset's position plus the space less the reshape, whatever the start's position
       // is, unless the corrected space is clamped at 0: then it is the start's position itself and nothing fits. The start
       // of a wrapped line inside a joined word is a stand-in (positionLimit), so whether the clamp applies rests on it where
       // the reshape alone takes the space: natively `ب` before SHY, kasra and `ب` in Amiri is 117 units wider in the
       // paragraph than the form U+200D gives, the last `ب` 228 narrower than reshaped, the space of 129 is clamped and the
       // line overflows at SHY, where the port's 111 left 18 units (c-909a7a77bad03225).
-      if (sr.kind === 'group' && (availableSpace - reshaped <= 0 || availableSpace + diff <= 0)) {
+      if (sr.kind === 'group' && (subLU(availableSpace, reshaped) <= 0 || addLU(availableSpace, diff) <= 0)) {
         const limit = clampedStartLimit(sh.gaps, sh, sr.group, start)
-        if (limit !== null) out.clampRests = { limit, clamped: diff !== 0 && availableSpace + diff <= 0 }
+        if (limit !== null) out.clampRests = { limit, clamped: diff !== 0 && addLU(availableSpace, diff) <= 0 }
       }
-      if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
+      if (diff !== 0) availableSpace = Math.max(addLU(availableSpace, diff), 0)
       if (forceClamp) availableSpace = 0
     }
-    const endPosition = startPosition + flip(availableSpace)
+    const endPosition = addLU(startPosition, flip(availableSpace))
     let candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
     breakCandidate(sh.gaps, sh, sr, endPosition, candidate, start)
     const searched = candidate
@@ -701,7 +702,7 @@ export class LineBreaker {
     if (candidate < rangeEnd && maybeHanKerningClose(this.char(candidate)) && this.iterator.isBreakable(candidate + 1)) {
       lastSafe = previousSafeToBreak(sh, sr, candidate)
       lineEndResult = reshapeHanKerningEnd(sh, sr, lastSafe, candidate + 1)
-      const widthToLastSafe = flip(positionForOffset(sh, sr, lastSafe) - startPosition)
+      const widthToLastSafe = flip(subLU(positionForOffset(sh, sr, lastSafe), startPosition))
       if (Math.fround(Math.fround(widthToLastSafe / 64) + widthOf16(lineEndResult.call.width16)) <= Math.fround(availableSpace / 64)) candidate++
       else lineEndResult = null
     }
@@ -766,7 +767,7 @@ export class LineBreaker {
         // stand-ins that can run backwards (Geeza Pro's lam before meem, c-2dce271cf373d098: the search landed past an offset
         // whose exact position was already beyond the space). An exact position past the end says the candidate lies
         // before it, so the search runs again below that offset, and what the first search reported is dropped.
-        if (!out.isOverflow && lastSafe > start && lastSafe <= searched && flip(endPosition - positionForOffset(sh, sr, lastSafe)) < 0) {
+        if (!out.isOverflow && lastSafe > start && lastSafe <= searched && flip(subLU(endPosition, positionForOffset(sh, sr, lastSafe))) < 0) {
           dropGapsFrom(sh.gaps, given.gaps)
           this.untestedEnds.length = given.untestedEnds
           this.endTests.length = given.endTests
@@ -791,8 +792,8 @@ export class LineBreaker {
         }
         const safePosition = positionForOffset(sh, sr, lastSafe)
         lineEndResult = reshape(sh, sr, lastSafe, bo.offset)
-        const fits = widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)
-        this.recordEndTest(sr, start, isStartOfWrappedLine, lastSafe, bo.offset, flip(endPosition - safePosition) * 1024 - lineEndResult.call.width16, fits)
+        const fits = widthOf16(lineEndResult.call.width16) <= Math.fround(flip(subLU(endPosition, safePosition)) / 64)
+        this.recordEndTest(sr, start, isStartOfWrappedLine, lastSafe, bo.offset, flip(subLU(endPosition, safePosition)) * 1024 - lineEndResult.call.width16, fits)
         if (fits) break
         lineEndResult = null
         // Blink looks for its first safe offset from any wrapped line start (FirstSafeOffset), whether or not the port's
@@ -893,7 +894,7 @@ export class LineBreaker {
         r.shape = viewOf(this.sh, result, r.start, r.end)
         r.inlineSize = luCeil(r.shape.width)
       }
-      this.position += r.inlineSize
+      this.position = addLU(this.position, r.inlineSize)
       r.canBreakAfter = end < this.text.length && !isSpaceOrOtherSeparator(this.char(end))
       this.current.textOffset = end
       this.trailingWhitespace = 'preserved'
@@ -923,7 +924,7 @@ export class LineBreaker {
       case 'tab': {
         // The item's tab-size with the block's font and spacing (TabSizeAncestor), from position_ + ComputeFloatOffset()
         // (TabAlignmentWithFloats, stable; :2960-2972).
-        const sr = tabShapeResult(this.sh, item.start, item.end, (item.bidiLevel & 1) === 1, this.position + this.floatOffset, item.run, item.style)
+        const sr = tabShapeResult(this.sh, item.start, item.end, (item.bidiLevel & 1) === 1, addLU(this.position, this.floatOffset), item.run, item.style)
         this.handleText(item, sr)
         return
       }
@@ -956,7 +957,7 @@ export class LineBreaker {
       if (next.type === 'text' && next.start === next.end) { this.handleEmptyText(); continue }
       break
     }
-    if (this.hasHyphen()) this.position -= this.removeHyphen()
+    if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
     this.isForcedBreak = true
     this.isLastLine = true
     this.state = 'done'
@@ -984,7 +985,7 @@ export class LineBreaker {
     const rtlStyle = p.baseLevel === 1
     r.marginStart = lengthLU(rtlStyle ? node.marginInlineEnd : node.marginInlineStart, p.layoutZoom)
     r.marginEnd = lengthLU(rtlStyle ? node.marginInlineStart : node.marginInlineEnd, p.layoutZoom)
-    const inlineMargins = r.marginStart + r.marginEnd
+    const inlineMargins = addLU(r.marginStart, r.marginEnd)
     if (ignoreOverflowIfNegativeMargin) {
       if (inlineMargins >= remainingWidth) {
         this.results.pop() // RemoveLastItem
@@ -993,13 +994,13 @@ export class LineBreaker {
       this.state = 'continue'
       this.hasOverflow = false
     }
-    if (this.hasHyphen()) this.position -= this.removeHyphen()
+    if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
     // The border box's inline size (box-sizing: border-box, a fixed width) plus the margins (:3121-3137).
-    r.inlineSize = lengthLU(node.width, p.layoutZoom) + inlineMargins
+    r.inlineSize = addLU(lengthLU(node.width, p.layoutZoom), inlineMargins)
     r.shouldCreateLineBox = true
     // CanBreakAfterAtomicInline (:1168-1186): any atomic inline in a wrapping style.
     r.canBreakAfter = this.autoWrap
-    this.position += r.inlineSize
+    this.position = addLU(this.position, r.inlineSize)
     this.trailingWhitespace = 'none'
     this.moveToNextOfItem()
   }
@@ -1009,13 +1010,13 @@ export class LineBreaker {
     const r = this.addItem(item.end)
     const style = this.style(item.style)
     if (style.shouldCreateBoxFragment && (hasBorder(style) || mayHavePadding(style) || mayHaveMargin(style))) {
-      r.inlineSize = style.start.margin + style.start.border + style.start.padding
+      r.inlineSize = addLU(addLU(style.start.margin, style.start.border), style.start.padding)
       // Negative margins on open tags may bring the position back (:3968-3976).
       if (r.inlineSize < 0 && this.state === 'trailing') {
-        const availableWidth = this.availableWidth + 1
-        if (this.position > availableWidth && this.position + r.inlineSize <= availableWidth) this.state = 'continue'
+        const availableWidth = addLU(this.availableWidth, 1)
+        if (this.position > availableWidth && addLU(this.position, r.inlineSize) <= availableWidth) this.state = 'continue'
       }
-      this.position += r.inlineSize
+      this.position = addLU(this.position, r.inlineSize)
       if (!r.shouldCreateLineBox && !boxStartEmpty(style)) r.shouldCreateLineBox = true
     }
     this.setCurrentStyle(item.style)
@@ -1029,8 +1030,8 @@ export class LineBreaker {
     const r = this.addItem(item.end)
     const style = this.style(item.style)
     // ComputeInlineEndSize (:250-258): margin, border and padding at the inline end, whatever the box fragment.
-    r.inlineSize = style.end.margin + style.end.border + style.end.padding
-    this.position += r.inlineSize
+    r.inlineSize = addLU(addLU(style.end.margin, style.end.border), style.end.padding)
+    this.position = addLU(this.position, r.inlineSize)
     if (!r.shouldCreateLineBox && !boxEndEmpty(style)) r.shouldCreateLineBox = true
     const wasAutoWrap = this.autoWrap
     this.setCurrentStyle(style.parent)
@@ -1057,10 +1058,10 @@ export class LineBreaker {
 
   // HandleOverflow (line_breaker.cc:4076-4305).
   handleOverflow(): void {
-    const availableWidth = this.availableWidth + 1
+    const availableWidth = addLU(this.availableWidth, 1)
     const hyphenIndexBefore = this.hyphenIndex
-    if (this.hasHyphen()) this.position -= this.removeHyphen()
-    let widthToRewind = this.position - availableWidth
+    if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
+    let widthToRewind = subLU(this.position, availableWidth)
     let breakBefore = 0
     let hasBreakAnywhereIfOverflow = this.breakAnywhereIfOverflow
     for (let i = this.results.length; i > 0;) {
@@ -1068,20 +1069,20 @@ export class LineBreaker {
       hasBreakAnywhereIfOverflow ||= r.breakAnywhereIfOverflow
       if (i < this.results.length - 1 && r.canBreakAfter) {
         if (widthToRewind <= 0) {
-          this.position = availableWidth + widthToRewind
+          this.position = addLU(availableWidth, widthToRewind)
           this.rewindOverflow(i + 1)
           return
         }
         breakBefore = i + 1
       }
-      widthToRewind -= r.inlineSize
+      widthToRewind = subLU(widthToRewind, r.inlineSize)
       if (widthToRewind > 0) continue
       const item = this.items[r.itemIndex]!
       if (item.type !== 'text') continue
       if (r.end === r.start) continue
       if (widthToRewind < 0 && r.mayBreakInside) {
-        const itemAvailableWidth = -widthToRewind
-        const minAvailableWidth = r.inlineSize - ONE_PX
+        const itemAvailableWidth = negLU(widthToRewind)
+        const minAvailableWidth = subLU(r.inlineSize, ONE_PX)
         if (minAvailableWidth <= 0) {
           if (this.breakTextAtPreviousBreakOpportunity(i)) {
             this.rewindOverflow(i + 1)
@@ -1096,7 +1097,7 @@ export class LineBreaker {
         if (r.canBreakAfter && r.inlineSize <= itemAvailableWidth && r.end < before.end) {
           const newEnd = i + 1
           if (newEnd === this.results.length) {
-            this.position = availableWidth + widthToRewind + r.inlineSize
+            this.position = addLU(addLU(availableWidth, widthToRewind), r.inlineSize)
             this.current = { itemIndex: r.itemIndex, textOffset: r.end }
             this.handleTrailingSpaces(item, this.shapeResultOf(r.itemIndex))
             return
@@ -1112,8 +1113,8 @@ export class LineBreaker {
     }
     // Text-indent alone doesn't contribute to overflow on a first formatted line with leading floats (:4225-4248).
     if (this.appliedTextIndent !== 0 && widthToRewind > 0 && this.isFirstFormattedLine && this.hasLeadingFloats) {
-      this.position -= this.appliedTextIndent
-      widthToRewind -= this.appliedTextIndent
+      this.position = subLU(this.position, this.appliedTextIndent)
+      widthToRewind = subLU(widthToRewind, this.appliedTextIndent)
       this.appliedTextIndent = 0
       if (widthToRewind <= 0) {
         this.state = 'done'
@@ -1127,7 +1128,7 @@ export class LineBreaker {
     }
     // Let this line overflow (:4267-4268).
     this.hasOverflow = true
-    if (hyphenIndexBefore !== null && hyphenIndexBefore < this.results.length) this.position += this.addHyphen(hyphenIndexBefore)
+    if (hyphenIndexBefore !== null && hyphenIndexBefore < this.results.length) this.position = addLU(this.position, this.addHyphen(hyphenIndexBefore))
     if (breakBefore !== 0) {
       this.rewindOverflow(breakBefore)
       return
@@ -1280,7 +1281,7 @@ export class LineBreaker {
           if (!isSpaceLB(last)) return
           if (preservesSpaces(this.style(item.style))) { this.trailingWhitespace = 'preserved'; return }
           if (r.shape === null) return
-          this.position -= r.inlineSize
+          this.position = subLU(this.position, r.inlineSize)
           r.trimmedEnd = r.end
           if (r.end - 1 > r.start) {
             r.shape = this.truncateLineEndResult(r, r.end - 1)
@@ -1291,7 +1292,7 @@ export class LineBreaker {
             r.shape = null
             r.inlineSize = 0
           }
-          this.position += r.inlineSize
+          this.position = addLU(this.position, r.inlineSize)
           this.trailingWhitespace = 'collapsed'
           return
         }
@@ -1345,7 +1346,7 @@ export class LineBreaker {
         r.inlineSize = luCeil(r.shape.width)
         const spaces: ItemResult = {
           ...r, start: i, end, shape: truncateView(this.sh, view, i, end),
-          inlineSize: previousSize - r.inlineSize, hasOnlyBidiTrailingSpaces: true, canBreakAfter: false, hyphen: null, isHyphenated: false, trimmedEnd: null,
+          inlineSize: subLU(previousSize, r.inlineSize), hasOnlyBidiTrailingSpaces: true, canBreakAfter: false, hyphen: null, isHyphenated: false, trimmedEnd: null,
         }
         this.results.splice(index + 1, 0, spaces)
       }

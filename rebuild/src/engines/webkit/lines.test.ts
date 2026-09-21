@@ -164,6 +164,25 @@ describe('line boxes', () => {
   })
 })
 
+describe('line diagnostic source ranges', () => {
+  test('many separated storage conditions keep source ranges and decided gaps unchanged', () => {
+    const text = '!a'.repeat(256)
+    const facts = { ...UNKNOWN_FONT_FACTS, monospace: false, primaryFamily: 'Arial', mapsHyphen: true, opticalSizeAxis: false }
+    const prepared = prepare(paragraph([[text, 'text']], { width: 100000, wordBreak: 'keep-all' }, facts), env, true, createContextPool())
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 100000, left: 0, right: 0 })
+    expect(filled.kind).toBe('line')
+    if (filled.kind !== 'line') throw new Error('expected a contentful line')
+    const decided = JSON.stringify(filled.line)
+    const inspection = inspectLine(prepared, filled.line)
+    const storage = inspection.gaps.filter(value => value.gap === 'string-storage')
+    expect(storage.map(value => value.at)).toEqual(Array.from({ length: 256 }, (_, i) => ({ start: 2 * i, end: 2 * i + 1 })))
+    expect(storage.every(value => value.run === 0)).toBe(true)
+    expect(linePieces(prepared, filled.line).fragments).toEqual([{ kind: 'text', run: 0, start: 0, end: text.length, painted: text, level: 0 }])
+    expect(inspectLine(prepared, filled.line)).toEqual(inspection)
+    expect(JSON.stringify(filled.line)).toBe(decided)
+  })
+})
+
 describe('font facts (DESIGN.md §1.2)', () => {
   test('mapsHyphen false paints "-", null paints U+2010', () => {
     const narrow = { width: 45 }
@@ -928,11 +947,11 @@ describe('preparation data flow (items.ts and content.ts)', () => {
     const questions = asked
     asked = []
     const b = prepare(explicit, env, false, createContextPool())
-    expect(a.boxes.map(box => box.locale)).toEqual(['ja', '', 'ko', 'ja', 'en'])
-    expect(a.boxes.map(box => [box.text, box.locale, box.canvasFamily])).toEqual(b.boxes.map(box => [box.text, box.locale, box.canvasFamily]))
+    expect(a.boxes.map(box => box.locale.name)).toEqual(['ja', '', 'ko', 'ja', 'en'])
+    expect(a.boxes.map(box => [box.text, box.locale.name, box.canvasFamily])).toEqual(b.boxes.map(box => [box.text, box.locale.name, box.canvasFamily]))
     expect(questions).toEqual(asked)
     // A fresh paragraph has no inherited language from the previous preparation.
-    expect(prepare(paragraph([['six', 'text']]), env, false, createContextPool()).boxes[0]!.locale).toBe('en')
+    expect(prepare(paragraph([['six', 'text']]), env, false, createContextPool()).boxes[0]!.locale.name).toBe('en')
   })
 })
 
@@ -1207,4 +1226,55 @@ describe('original-box TAB range membership', () => {
     expect(boxWidth(box, count, count + 1, 0, false)).toBe(32)
     expect(boxWidth(box, count + 1, count + 2, 0, false)).toBe(8)
   })
+})
+
+
+test('each shared-font leaf still asks and chooses its own standard-family fallback', () => {
+  const oldPairAdjust = pairAdjust
+  let fallbackPairs = 0
+  const p = treeParagraph([], { ...fontWith({ ...UNKNOWN_FONT_FACTS, monospace: false }), family: 'Unknown, Arial' }, { lang: 'ja' })
+  p.content = Array.from({ length: 12 }, () => span(p, [{ kind: 'text', text: 'a' }]))
+  asked = []
+  pairAdjust = text => {
+    if (text === ' ' && asked[asked.length - 1]!.includes(', LastResort|0px| ')) return ++fallbackPairs % 2 === 0 ? 12 : 0
+    return 0
+  }
+  try {
+    const prepared = prepare(p, env, true, createContextPool())
+    expect(prepared.boxes.map(box => box.canvasFamily)).toEqual(Array.from({ length: 12 }, (_, i) => i % 2 === 0 ? 'Unknown, Arial' : 'Unknown, Arial, "Hiragino Mincho ProN"'))
+    expect(fallbackPairs).toBe(12)
+    expect(asked.filter(question => question === 'normal 400 16px LastResort|0px| ').length).toBe(12)
+  } finally {
+    pairAdjust = oldPairAdjust
+  }
+})
+
+test('signed letter and word spacing keeps the run extent across expansion, final trim and fresh resize fills', () => {
+  const oldAdvance = advance, oldPairAdjust = pairAdjust, oldLigatures = ligatures, oldContextual = contextual
+  advance = c => c === 0x20 ? 4 : 8
+  pairAdjust = () => 0
+  ligatures = {}
+  contextual = () => null
+  try {
+    const p = paragraph([['a '.repeat(64), 'text']], { letterSpacing: -.5, wordSpacing: -1 }, { ...UNKNOWN_FONT_FACTS, monospace: false })
+    const prepared = prepare(p, env, true, createContextPool())
+    const first = firstLine(prepared)!
+    const wide = fillLine(prepared, first, { width: 1e6, left: 0, right: 0 })
+    if (wide.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect(wide.next).toBeNull()
+    expect(wide.line.line.runs.length).toBe(64)
+    // This stand-in omits Canvas word spacing; the trailing-space recipe therefore gives each a an 8.5px width.
+    expect(wide.line.line.contentLogicalWidth).toBe(64 * 8.5 + 63 * 2.5)
+    expect(wide.line.line.trimmedUnit?.offset).toBe(127)
+    const oldGeometry = inspectLine(prepared, wide.line)
+    const narrow = fillLine(prepared, first, { width: 24, left: 0, right: 0 })
+    if (narrow.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect([narrow.start, narrow.end, narrow.line.line.contentLogicalWidth, narrow.line.line.runs.length]).toEqual([0, 4, 19.5, 2])
+    expect(inspectLine(prepared, wide.line)).toEqual(oldGeometry)
+  } finally {
+    advance = oldAdvance
+    pairAdjust = oldPairAdjust
+    ligatures = oldLigatures
+    contextual = oldContextual
+  }
 })

@@ -1,3 +1,4 @@
+import type { SpacingSource } from './spacing-source.js'
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
 import type { Context, ContextPool } from '../../measure/canvas.js'
@@ -52,6 +53,8 @@ export type WebKitElement = (
 ) & { depth: number }
 
 // One rendered Text node, WebKit's InlineTextBox, and the facts WebKit derives from its content and font.
+import type { LocaleSource } from './locale-source.js'
+
 export type WebKitBox = {
   run: number
   // The span the text node is a child of, or -1 for the block: the layout box parent, whose style the text takes.
@@ -79,7 +82,7 @@ export type WebKitBox = {
   // null lays out U+2010 and reports hyphen-glyph where the two measure differently.
   hyphen: string
   // computedLocale after the Han swap; '' for a null locale (specs/webkit-text.md §4.1).
-  locale: string
+  locale: LocaleSource
   // Canvas contexts: the run's font with its letter spacing and no word spacing (JS adds word spacing as WidthIterator
   // does), and the same font with no spacing (the primary font's space advance for tab stops and the fixed-pitch shortcut).
   context: Context
@@ -103,7 +106,7 @@ export type WebKitBox = {
   // The listed families that realize, in list order, each with the code points it draws and the ones its liga, clig, dlig
   // and hlig lookups can act on (ListedFontFacts.coverage and spacingInputs); null where the declaration's facts don't give
   // both for every family that may realize (measure.ts mergedGlyphs).
-  spacingFacts: ReadonlyArray<{ coverage: readonly number[]; inputs: readonly number[] }> | null
+  spacingFacts: SpacingSource | null
   // The font-family list Canvas is given: the declared list with each generic keyword the locale resolves to a family of its
   // own named (fonts.ts), and the script's standard family appended where no listed family resolves.
   canvasFamily: string
@@ -211,7 +214,7 @@ export type WebKitBoxInspect = {
   // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (gaps.ts
   // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
   // the Canvas list followed by LastResort). null: none of these.
-  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean; namedContext: Context; listContext: Context; lastResortContext: Context } | null
+  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: 'cjk' | 'arabic' | null; namedContext: Context; listContext: Context; lastResortContext: Context } | null
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
   // locale, which isn't given (gap ui-language).
   hanLocaleUnknown: boolean

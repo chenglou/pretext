@@ -67,7 +67,7 @@ function handleTextContent(p: WebKitOwnPrepared, boxIndex: number, defer: boolea
   const text = box.text
   const preserveSpaces = preservesSpacesAndTabs(style)
   const preserveNewline = preservesNewline(style)
-  const factory = makeFactory(text, box.is8Bit, box.locale, style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks)
+  const factory = makeFactory(text, box.is8Bit, box.locale.name, style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks, box.locale)
   // canCacheWidthOnInlineTextItem (IIB:777-787): preserved white space in a box with a TAB depends on position.
   const deferWhitespace = defer || (preserveSpaces && text.includes('\t'))
   const spaceWidth = deferWhitespace ? null : Math.max(0, singleSpaceWidth(box))

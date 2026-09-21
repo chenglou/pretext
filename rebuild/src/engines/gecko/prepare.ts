@@ -6,10 +6,11 @@ import type { GeckoEnvironment } from '../../env.js'
 import { bounds, contextFor, width, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
+import { shapedReversed } from './advance.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
-import { COLOR_EMOJI_FAMILY, createFontDeclarations, extenderFontOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { COLOR_EMOJI_FAMILY, createFontDeclarations, extenderFontOf, fontTableOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
 import * as gaps from './gaps.js'
-import { canonicalLanguageTag } from './likely.js'
+import { addLikelySubtags, canonicalLanguageTag, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, NO_SCRIPT_GAPS, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, runContextsFor, scriptAt, textRunScripts } from './measure.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
@@ -23,7 +24,7 @@ import {
 } from './props.js'
 import {
   KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, objectAt, spanAt, type GeckoElement, type GeckoFrame,
-  type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
+  type GeckoItem, type GeckoInspect, type GeckoLanguage, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
   type RunContexts, type ScriptRun,
 } from './types.js'
 
@@ -427,8 +428,17 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const leaves: GeckoLeaf[] = []
   const fontDeclarations = createFontDeclarations()
   // Language belongs to this document-order walk: null inherits, while an empty tag resets it.
-  let inheritedLanguage = paragraph.lang
-  const languages: string[] = []
+  type SourceLanguage = { raw: string; resolved: GeckoLanguage | null }
+  let inheritedLanguage: SourceLanguage = { raw: paragraph.lang, resolved: null }
+  const languages: SourceLanguage[] = []
+  const resolveLanguage = (source: SourceLanguage): GeckoLanguage => {
+    if (source.resolved !== null) return source.resolved
+    const tag = canonicalLanguageTag(source.raw)
+    const matching = tag === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : tag
+    const parsed = tryParseLocale(matching)
+    const likely = parsed === null ? '' : addLikelySubtags(parsed.language, parsed.script, parsed.region).script
+    return source.resolved = { tag, commonScript: likely === '' ? 'Latn' : likely }
+  }
   // No language below the final text event is consumed by this phase.
   const lastEvent = index.leaves.length === 0 ? -1 : index.leaves[index.leaves.length - 1]!.event
   for (let ev = 0; ev <= lastEvent; ev++) {
@@ -438,7 +448,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         const span = index.elements[event.element]!.node
         if (span.kind !== 'span') throw new Error(`open event ${event.element} is ${span.kind}`)
         languages.push(inheritedLanguage)
-        if (span.lang !== null) inheritedLanguage = span.lang
+        if (span.lang !== null) inheritedLanguage = { raw: span.lang, resolved: null }
         continue
       }
       case 'close': inheritedLanguage = languages.pop()!; continue
@@ -450,7 +460,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const end = indexed.start + indexed.text.length
     // A text frame reads its parent element's computed style: a text node inherits every property the model has.
     const style = styleUnder(paragraph, index, indexed.parent)
-    const lang = canonicalLanguageTag(inheritedLanguage)
+    const language = resolveLanguage(inheritedLanguage)
+    const lang = language.tag
     let is8bit = true, onlyWhitespace = true
     for (let s = indexed.start; s < end; s++) {
       const ch = text.charCodeAt(s)
@@ -459,7 +470,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       if (!is8bit && !onlyWhitespace) break
     }
     leaves.push({
-      start: indexed.start, end, parent: indexed.parent, style: geckoStyle(style), font: style.font, lang, is8bit, onlyWhitespace,
+      start: indexed.start, end, parent: indexed.parent, style: geckoStyle(style), font: style.font, language, is8bit, onlyWhitespace,
       letterSpacingAu: pxToAu(style.letterSpacing), wordSpacingAu: pxToAu(style.wordSpacing),
     })
     // lang="" leaves the style language empty (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375), and nsFontCache gives
@@ -728,7 +739,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     if (prevFrame.run === p.run) return false // a non-fluid continuation of the same node (:2130-2139)
     if (parentA === parentB) return true // one computed style (:2141-2143)
     return a.style.wordBreak === b.style.wordBreak && a.style.lineBreak === b.style.lineBreak &&
-      sameFontForTextRun(a.font, b.font, fontDeclarations) && a.lang === b.lang && (a.letterSpacingAu !== 0) === (b.letterSpacingAu !== 0)
+      sameFontForTextRun(a.font, b.font, fontDeclarations) && a.language.tag === b.language.tag && (a.letterSpacingAu !== 0) === (b.letterSpacingAu !== 0)
   }
   let offsetAt = 0
   const openStack: number[] = []
@@ -762,7 +773,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           tr.hasShy = false
           tr.hasTab = false
           const leaf = leaves[p.run]!
-          inWhitespace = transformFlow(text, p.start, p.end, leaf.is8bit, leaf.style, inWhitespace, leaf.lang, tr)
+          inWhitespace = transformFlow(text, p.start, p.end, leaf.is8bit, leaf.style, inWhitespace, leaf.language.tag, tr)
           b.hasShy ||= tr.hasShy
           b.hasTab ||= tr.hasTab
           b.is8bit &&= leaf.is8bit
@@ -851,9 +862,10 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const font = leaves[frames[b.flows[0]!.frame]!.run]!.font
     for (let t = b.tStart + 2; t < b.tEnd; t++) {
       if (g.breakFlags[t] !== BREAK_EMERGENCY_WRAP) continue
-      const before = listedFontOf(font, tUnits[t - 2]!)
-      const hyphen = listedFontOf(font, tUnits[t - 1]!)
-      const after = listedFontOf(font, tUnits[t]!)
+      const table = fontTableOf(font, fontDeclarations)
+      const before = listedFontOf(table, tUnits[t - 2]!)
+      const hyphen = listedFontOf(table, tUnits[t - 1]!)
+      const after = listedFontOf(table, tUnits[t]!)
       if (before === null || hyphen === null || after === null || (before === -1 && hyphen === -1 && after === -1)) gaps.emergencyBreakUnconfirmed(inspected, t)
       else if (before !== hyphen || hyphen !== after) g.breakFlags[t] = BREAK_NONE
     }
@@ -893,7 +905,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       }
       if (f.tEnd > f.tStart) {
         const sink: BreakSink = { breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, textRunStart: b.tStart, flowStart: f.tStart, run: runState }
-        breaker.appendText(leaf.lang, tUnits.subarray(f.tStart, f.tEnd), !b.is8bit, flags, sink)
+        breaker.appendText(leaf.language.tag, tUnits.subarray(f.tStart, f.tEnd), !b.is8bit, flags, sink)
       }
     }
   }
@@ -950,7 +962,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           let found = cp
           if (isCursiveScript(cp) && t > base + (cp >= 0x10000 ? 1 : 0)) {
             const font = leaf.font
-            let previous = listedFontOf(font, cp)
+            const table = fontTableOf(font, fontDeclarations)
+            let previous = listedFontOf(table, cp)
             let unknown = false
             for (let k = base + (cp >= 0x10000 ? 2 : 1); k <= t && !unknown; k++) {
               let mark = tUnits[k]!
@@ -960,7 +973,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               // (gfxTextRun.cpp:3309-3332).
               if (isDefaultIgnorable(mark) || (mark >= 0xfe00 && mark <= 0xfe0f) || mark === 0x200c || mark === 0x200d) continue
               if (previous === null || previous === -1) { unknown = true; break }
-              const markFont = extenderFontOf(font, previous, mark)
+              const markFont = extenderFontOf(font, table, previous, mark)
               if (markFont === null) { unknown = true; break }
               if (markFont !== previous) found = mark
               previous = markFont
@@ -1009,7 +1022,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const firstRun = frames[b.flows[0]!.frame]!.run
     const firstLeaf = leaves[firstRun]!
     const font = firstLeaf.font
-    const lang = firstLeaf.lang
+    const lang = firstLeaf.language.tag
     // The source range of the text run's characters: the text whose widths a condition of the run concerns (DESIGN.md §2.8).
     const at = b.tEnd > b.tStart ? { start: tSource[b.tStart]!, end: tSource[b.tEnd - 1]! + 1 } : { start: frames[b.flows[0]!.frame]!.start, end: frames[b.flows[0]!.frame]!.start }
     const domAu = lroundf(f32(quantize10(font.size) * 60))
@@ -1040,6 +1053,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
       direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '',
     }
+    const table = fontTableOf(font, fontDeclarations)
+    const common = firstLeaf.language.commonScript
+    const commonPairKerning = common === 'Latn' || (common === 'Grek' ? table.pairKerning.greek : common === 'Cyrl' && table.pairKerning.cyrillic)
     const shared = runContextsFor(runContexts, contexts, settings)
     const context = shared.own
     const auIn = (ctx: Context, s: string) => Math.round(width(ctx, s) * CANVAS_AU_PER_PX)
@@ -1074,13 +1090,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           if (last !== null && last.kind === 'word' && last.tEnd === t && tUnits[t - 1] === 0x200d) {
             w = rangeAu(context, run, tUnits, last.tStart, t + 1) - last.canvasAu
           }
-          unit = { kind, tStart: t, tEnd: e, canvasAu: w, au: w, startAdvance: advance, inWord: null }
+          unit = { kind, reversed: false, tStart: t, tEnd: e, canvasAu: w, au: w, startAdvance: advance, inWord: null }
           gaps.spaceMeasured(spaces, w)
           break
         }
         case 'invalid':
           gaps.invalidMet(spaces, t)
-          unit = { kind, tStart: t, tEnd: e, canvasAu: 0, au: 0, startAdvance: advance, inWord: null }
+          unit = { kind, reversed: false, tStart: t, tEnd: e, canvasAu: 0, au: 0, startAdvance: advance, inWord: null }
           break
         case 'word': {
           const w = rangeAu(context, run, tUnits, t, e)
@@ -1138,7 +1154,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               }
               const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
               const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
-              gaps.textPresentationSearch(sink, firstRun, font, first, presentation, next, clusterAt)
+              gaps.textPresentationSearch(sink, firstRun, table, first, presentation, next, clusterAt)
               if (deviceAu60 === null) {
                 gaps.pinnedEmojiFont(sink, firstRun, first, presentation, next, atCssSize, clusterAt)
                 continue
@@ -1172,19 +1188,20 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               total += delta
             }
           }
-          unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance, inWord: null }
+          unit = { kind: 'word', reversed: false, tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance, inWord: null }
           gaps.wideUnit(sink, firstRun, w, tSource[t]!, tSource[e - 1]! + 1)
           gaps.wordMeasured(spaces, t, w)
           break
         }
       }
+      if (kind === 'word') unit.reversed = shapedReversed({ tUnits }, { scriptRuns: b.scriptRuns, level: b.level }, unit, t)
       for (let k = t; k < e; k++) unitOf[k] = units.length
       units.push(unit)
       advance += unit.au
     }
     gaps.runEnded(spaces, b.tEnd)
     textRuns.push({
-      tStart: b.tStart, tEnd: b.tEnd, level: b.level, contexts: shared, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
+      tStart: b.tStart, tEnd: b.tEnd, level: b.level, contexts: shared, font, fontTable: table, commonPairKerning, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance,
       advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
@@ -1218,7 +1235,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
 
   // What the text itself can't tell Canvas: dictionary breaks, U+FFFD and the figure spaces (gaps.ts).
   gaps.dictionaryBreaks(sink, env, text)
-  gaps.replacementCharacters(sink, text, leaves)
+  gaps.replacementCharacters(sink, text, leaves, fontDeclarations)
   gaps.figureSpaces(sink, apd, text, leaves)
 
   return {

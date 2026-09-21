@@ -57,9 +57,9 @@ export function dropGapsFrom(sink: GapSink, count: number): void {
 function sourceRange(p: BlinkPrepared, from: number, to: number): { start: number; end: number } {
   const end = Math.min(to, p.text.length)
   if (from < end) {
-    const first = p.sourceOffsets[from]! >= 0 ? from : p.inspect!.sourceRuns!.end(from)
+    const first = p.sourceOffsets[from]! >= 0 ? from : p.sourceRuns.end(from)
     const lastUnit = end - 1
-    const last = p.sourceOffsets[lastUnit]! >= 0 ? lastUnit : p.inspect!.sourceRuns!.start(lastUnit) - 1
+    const last = p.sourceOffsets[lastUnit]! >= 0 ? lastUnit : p.sourceRuns.start(lastUnit) - 1
     if (first <= last) return { start: p.sourceOffsets[first]!, end: p.sourceOffsets[last]! + 1 }
   }
   return sourceOffsetAt(p, to)
@@ -69,7 +69,7 @@ function sourceRange(p: BlinkPrepared, from: number, to: number): { start: numbe
 function sourceOffsetAt(p: BlinkPrepared, k: number): { start: number; end: number } {
   let at = p.index.text.length
   if (k < p.text.length) {
-    const first = p.sourceOffsets[k]! >= 0 ? k : p.inspect!.sourceRuns!.end(k)
+    const first = p.sourceOffsets[k]! >= 0 ? k : p.sourceRuns.end(k)
     if (first < p.text.length) at = p.sourceOffsets[first]!
   }
   return { start: at, end: at }

@@ -6,7 +6,7 @@
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { DONE, NO_OVERRIDES, RuleBreakIterator } from '../../breaks/rbbi.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
-import { inRanges, webkitGraphemeRules } from './data.js'
+import { webkitGraphemeRules } from './data.js'
 import { collapsesWhiteSpace, preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitTextItem } from './types.js'
 
@@ -200,28 +200,9 @@ function glyphCountIsExact(spacedTotal: number, length: number): boolean {
 export type MergedGlyphs = { merged: boolean; pairs: Array<[number, number]>; separated: string | null; counted: boolean }
 const NOTHING_MERGED: MergedGlyphs = { merged: false, pairs: [], separated: null, counted: true }
 
-// Whether letter-spacing can change the string's shaping by the listed families' facts: false where every character is
-// drawn by a listed family that gives coverage and spacing inputs and none is an input; null where the facts don't say.
-function spacingCanChangeShaping(box: WebKitBox, s: string): boolean | null {
-  if (box.spacingFacts === null) return null
-  for (let i = 0; i < s.length; i++) {
-    const cp = s.codePointAt(i)!
-    if (cp > 0xffff) i++
-    let drawn = false
-    for (let k = 0; k < box.spacingFacts.length && !drawn; k++) {
-      const family = box.spacingFacts[k]!
-      if (!inRanges(family.coverage, cp)) continue
-      if (inRanges(family.inputs, cp)) return true
-      drawn = true
-    }
-    if (!drawn) return null
-  }
-  return false
-}
-
 export function mergedGlyphs(box: WebKitBox, text: string): MergedGlyphs {
   if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
-  if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
+  if (box.spacingFacts !== null && box.spacingFacts.canChange(text) === false) return NOTHING_MERGED
   const s = canvasString(text)
   // The string's total in the count context says whether the string can be counted, and then counts it.
   const spacedTotal = canvasWidth(box.countContext, s)

@@ -59,7 +59,7 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 - A value derived from a line is computed in the scope that asks for it and is never stored on the line: nothing writes
   a decided line after `fillLine` returns it, and `linePieces` and `inspectLine` give the same result twice and in either
   order (`tests/function-set.ts pure`).
-- Nothing writes a prepared paragraph after `prepare`, with five exceptions. All are facts of the text and its fonts,
+- Nothing writes a prepared paragraph after `prepare`, except the lazy facts below. The measured ones are facts of the text and its fonts,
   which no width and no line changes, filled on first read only because asking earlier would ask Canvas questions no
   line needs and would move the order of first asks; they go with the paragraph. The list of contexts grows where a
   recipe first asks in a context of its own (Blink's one-byte contexts in a segmented paragraph, §4.2; the contexts of
@@ -71,6 +71,11 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
   Canvas told of each context's pair placement (on the same record since the fresh-eyes follow-up), an accepted
   exception written down in §4.6. The round's other exception, an offset's record that could hold a rough advance
   before the whole one, went with the lazy plain scan in the profiling phase (§4.6).
+  Pure source interpretation also follows its existing source home: Gecko's ordered font table can replace a consulted
+  coverage view with its complete source partition; WebKit's compiled font/language owns parsed declarations, generated
+  rows, spacing-input membership and four finite locale policies. These views contain source interval membership and policy, never text-query or
+  Canvas answers. Source inputs stay fixed for their owning preparation. Blink's source font/ligature registries instead
+  disappear when `fontFactsOfText` returns; no extra source lookup survives on its prepared paragraph.
 - Nothing handed to the caller aliases prepared data: a line start is plain data, and pieces are made for their line
   (research/INCREMENTAL-API-READING.md §4; its appendix lists every prepared fact that reads across a forced break or
   over the whole text, which is what a later incremental API has to know).
@@ -81,7 +86,9 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
   else says which. A plain paragraph, what an application runs, computes no gap, no limit and none of the lab's geometry,
   and asks Canvas nothing that only those read. In each port every gap condition with its test, prose, merge rule and
   order is in `engines/<engine>/gaps.ts`, behind functions that take a sink first and return at once when it is null
-  (§2.8, §5).
+  (§2.8, §5). WebKit inspection's latest-overlap source-range overlay is local to one call. It preserves the latest
+  original ordinal and assigns only the incoming range after widening; assigning the full widened hull would overwrite
+  later seed entries. Its domain is the producer's inclusive integer content offsets, including zero and EOF.
 - *Measured values.* `width(context, text)` and `bounds(context, text)` always ask Canvas. No structure stores a
   measured value by its string; what a port needs twice it keeps as a local, hands from the step that measured it to the
   step that uses it, or sets as a field where `prepare` already measures (§4.6). What that costs in repeated questions,
@@ -116,7 +123,10 @@ Terms used throughout:
 - **Break opportunity**: an offset in the text content where a line may end.
 - **Engine units**: what a layout engine stores widths in. Blink: `LayoutUnit`, an int32 counting 1/64 of a zoomed px,
   built from 16.16 glyph advances and float32 shape widths. WebKit: float32 CSS px. Gecko: app units, integers counting
-  1/60 CSS px.
+  1/60 CSS px. Blink CSS fixed lengths use a double product clamp, float storage and then LayoutUnit conversion;
+  borders have a separate integer-pixel producer. Arithmetic saturates at each LayoutUnit owner, not at final output.
+  Physical fragment inline widths are nonnegative at creation, while margin-box advances remain signed. Ordered
+  box-edge shifts compose saturated functions in source order because saturation is not associative.
 - **Geometry**: what an engine places on a line: Blink's fragment items, WebKit's display boxes, Gecko's frames.
 - **Font fact**: something about a realized font that an engine reads and no measured width of the paragraph's text
   shows, such as the monospace trait (§1.2).
@@ -1043,8 +1053,9 @@ where it may be wrong.
   done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
   `inspectLine` starts from a copy of it. Blink snapshots its private accumulator into ordinary decided-line gap lists; a sparse inclusive source-position index preserves first-touch widening and speculative rollback without scanning all prior entries. Blink hands a list out in a canonical form, which doesn't follow how often a
   range was raised (§5). Canonicalization uses temporary per-key sorted inclusive interval components, placed in their
-  earliest original input slots; it does not scan the growing result. Fixed generated/source and grapheme exception runs
-  live only in inspected preparation; cluster exception runs describe finalized continuation/ligature flags on both paths.
+  earliest original input slots; it does not scan the growing result. Fixed generated-source runs serve plain source ranges too; cluster exception runs describe finalized
+  continuation/ligature flags on both paths. Grapheme and inverse collapsed-source runs live only in inspection.
+  Inspection alone owns the nearest actual fragment-ancestor view used when wrapped boxes reopen.
   Their ordered endpoint lookups preserve local shaping clamps. No-base context extension carries the already-proven
   interval rather than rescanning it. What else only gaps read is in `prepared.inspect`, null on a plain paragraph; nothing else says
   which of the two a paragraph is.
@@ -1063,7 +1074,8 @@ where it may be wrong.
   ignorables left out of 8-bit strings, shaping-group edges inside graphemes, joining edges at group edges), and adds each
   one that concerns the content a line's break decision measured past its end, up to the next break opportunity, to that
   line's gaps. Edge conditions (reshapes, pair adjustments at a chosen edge, positions inside graphemes) stay line gaps
-  with `at` naming the offset. A plain paragraph also computes no limit, glyph cluster or offset mapping:
+  with `at` naming the offset. A plain paragraph computes no limit-only glyph cluster or per-measurement offset map unless effective
+  spacing needs that map. Common source maps and cluster flags still serve its pieces and breaks.
   `engines/blink/limits.ts` holds the limits, and only `gaps.ts` and `inspect.ts` call it.
 - Gecko compiles exact whole-leaf ASCII whitespace participation during leaf classification; later characters in the
   node still affect justification. Real source-event ancestry is separate from synthetic bidi continuation ancestry.

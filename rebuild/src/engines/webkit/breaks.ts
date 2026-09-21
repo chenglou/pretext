@@ -3,6 +3,7 @@
 // and mayBreakInBetween (specs/webkit-text.md §5.2-§5.5, §7.4). Cited at WebKit-7625.1.29.11.27 under Source/WebCore/:
 // BP.h = rendering/BreakablePositions.h, TU = layout/formattingContexts/inline/text/TextUtil.cpp,
 // IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp, TBI = WTF/wtf/text/icu/TextBreakIteratorICU.h.
+import { lineRulesOf, type LocaleSource } from './locale-source.js'
 import type { WebKitEnvironment } from '../../env.js'
 import { RuleBreakIterator, getCategory, ruleBoundaries, type BreakRules } from '../../breaks/rbbi.js'
 import type { LineBreak } from '../../model.js'
@@ -34,14 +35,15 @@ export type BreakFactory = {
   mode: LineBreakMode
   icuDefaultLocale: string
   dictionaryBreaks: DictionaryBreaks
+  localeSource: LocaleSource | null
   secondToLast: number
   last: number
   // following[i] answers following(i - 1) in text coordinates, or -1 for UBRK_DONE; built on the first ICU query.
   following: Int32Array | null
 }
 
-export function makeFactory(text: string, is8Bit: boolean, locale: string, mode: LineBreakMode, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks): BreakFactory {
-  return { text, is8Bit, locale, mode, icuDefaultLocale, dictionaryBreaks, secondToLast: 0, last: 0, following: null }
+export function makeFactory(text: string, is8Bit: boolean, locale: string, mode: LineBreakMode, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks, localeSource: LocaleSource | null = null): BreakFactory {
+  return { text, is8Bit, locale, mode, icuDefaultLocale, dictionaryBreaks, localeSource, secondToLast: 0, last: 0, following: null }
 }
 
 // PriorContext::length counts trailing non-zero units (TextBreakIterator.h:277-283).
@@ -159,7 +161,7 @@ export function computeFollowing(f: BreakFactory): Int32Array {
   const priorLength = priorContextLength(f)
   const prior = priorLength === 2 ? String.fromCharCode(f.secondToLast, f.last) : priorLength === 1 ? String.fromCharCode(f.last) : ''
   const icuText = prior + f.text
-  const { rules, overrides } = lineRules(f.locale, f.mode, f.icuDefaultLocale)
+  const { rules, overrides } = f.localeSource === null ? lineRules(f.locale, f.mode, f.icuDefaultLocale) : lineRulesOf(f.localeSource, f.mode)
   const boundaries = ruleBoundaries(new RuleBreakIterator(rules, overrides), icuText)
   const isBoundary = new Uint8Array(icuText.length + 1)
   let segmentStart = 0
@@ -391,8 +393,8 @@ export function moveToNextBreakablePosition(startPosition: number, f: BreakFacto
 // TextUtil::mayBreakInBetween (TU:374-396): a scan over the next box with the next box's locale and mode, seeded with the
 // previous box's last two code units. A 16-bit previous box makes the next content 16-bit (:379-383). The soft-hyphen
 // rule (:388-389) needs hyphens: none, which the model never has.
-export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean, nextText: string, nextIs8Bit: boolean, nextLocale: string, style: WebKitStyle, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks): boolean {
-  const f = makeFactory(nextText, nextIs8Bit && previousIs8Bit, nextLocale, style.lineBreakMode, icuDefaultLocale, dictionaryBreaks)
+export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean, nextText: string, nextIs8Bit: boolean, nextLocale: string, style: WebKitStyle, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks, localeSource: LocaleSource | null = null): boolean {
+  const f = makeFactory(nextText, nextIs8Bit && previousIs8Bit, nextLocale, style.lineBreakMode, icuDefaultLocale, dictionaryBreaks, localeSource)
   const n = previousText.length
   f.last = n > 0 ? previousText.charCodeAt(n - 1) : 0
   f.secondToLast = n > 1 ? previousText.charCodeAt(n - 2) : 0
@@ -404,10 +406,11 @@ export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean,
 // combining mark the word segmenter stands in badly (dictionaryRangesStartingWithMark). Returns the range's end as an offset
 // into the next box's text, or null (held-out c-964d495e90c81b81: U+0E49 U+0E27 before the next node's `ยกั`, where WebKit
 // breaks between the nodes and the stand-in doesn't).
-export function inBetweenRangeStartingWithMark(previousText: string, nextText: string, nextLocale: string, mode: LineBreakMode, icuDefaultLocale: string): number | null {
+export function inBetweenRangeStartingWithMark(previousText: string, nextText: string, nextLocale: string, mode: LineBreakMode, icuDefaultLocale: string, localeSource: LocaleSource | null = null): number | null {
   const prior = previousText.slice(Math.max(0, previousText.length - 2))
   if (prior.length === 0) return null
-  const ranges = dictionaryRangesStartingWithMark(lineRules(nextLocale, mode, icuDefaultLocale).rules, prior + nextText)
+  const rules = localeSource === null ? lineRules(nextLocale, mode, icuDefaultLocale) : lineRulesOf(localeSource, mode)
+  const ranges = dictionaryRangesStartingWithMark(rules.rules, prior + nextText)
   for (let k = 0; k < ranges.length; k++) {
     const [start, end] = ranges[k]!
     if (start < prior.length && end > prior.length) return end - prior.length

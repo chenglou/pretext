@@ -1,5 +1,6 @@
 // Gecko's prepared paragraph (Firefox 156.0). The Gecko port owns this file. What a fill leaves of a line is in lines.ts.
 import type { GeckoEnvironment } from '../../env.js'
+import type { FontTable } from './fonts.js'
 import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 
@@ -20,6 +21,10 @@ export type GeckoStyle = {
   tabSize: number
 }
 
+// One consumed source language declaration, shared by inheriting leaves. Empty style tags resolve through the supplied
+// regional locale for Canvas matching while retaining their empty tag for text transformation and line breaking.
+export type GeckoLanguage = { readonly tag: string; readonly commonScript: string }
+
 // A text leaf of the paragraph, a DOM text node, with what its frames read from their parent element's computed style: a
 // text node inherits every property the model has. `run` indices name leaves.
 export type GeckoLeaf = {
@@ -31,7 +36,7 @@ export type GeckoLeaf = {
   style: GeckoStyle
   font: FontDecl
   // The style language, canonicalized (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375).
-  lang: string
+  language: GeckoLanguage
   // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
   is8bit: boolean
   // TextIsOnlyWhitespace of the whole source node (CharacterData.cpp:486-510), read by line justification.
@@ -168,6 +173,10 @@ export type GeckoTextRun = {
   // the font through GSUB and GPOS or through morx, kerx and kern state machines, where marks keep their advances
   // (FontFacts.joining, advance.ts, ligature groups).
   font: FontDecl
+  // One canonical source fact table, including original font indices and primary lookup equivalence.
+  fontTable: FontTable
+  // Whether the source language's resolved Common script selects the pair-kerning fact's lookups.
+  commonPairKerning: boolean
   // The run's script runs, which decide the script context a measured piece of a unit needs (measure.ts rangeAu).
   scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
@@ -190,6 +199,8 @@ export type GeckoTextRun = {
 // characters, a boundary U+0020 or U+00A0, or an invalid character (zero width).
 export type GeckoUnit = {
   kind: 'word' | 'space' | 'nbsp' | 'invalid'
+  // HarfBuzz's script/direction choice for this whole source buffer, compiled after glyph analysis.
+  reversed: boolean
   tStart: number
   tEnd: number
   // measureText of the unit in its text run's context and its DOM script (rangeAu), in the context's au.
@@ -227,6 +238,8 @@ export type InWordEntry = {
   group: boolean | null
   // The connected row that starts here or includes this interior cluster boundary; its records share one row (rowAround).
   row: LigatureRow | null
+  // Started clusters before this offset inside its connected row; source metadata assigned with that row.
+  rowCluster: number
   // The advance before the offset (advanceBefore).
   advance: InWordAdvance | null
   // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
@@ -247,8 +260,9 @@ export type InWordSides = {
   leftOver: boolean
 }
 
-// A row of ligature candidates: `edges` are the ends of its ligature groups, the row's own two included (advance.ts rowAround).
-export type LigatureRow = { edges: number[]; unconfirmed: boolean }
+// The actual source parts of a connected ligature-candidate row (advance.ts rowAround).
+export type LigaturePart = { start: number; end: number; firstCluster: number; clusters: number; hasMarks: boolean; unconfirmed: boolean }
+export type LigatureRow = { parts: LigaturePart[] }
 
 // The glyph advance before an offset, and why it is a stand-in where Canvas can't confirm it (advance.ts advanceBefore).
 export type InWordAdvance = { au: number; standIn: InWordReason | null }

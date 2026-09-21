@@ -150,7 +150,12 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame:
   const tabSpacing = p.tabs.spacingPrefix
   let x = 0
   let started = false
-  let standIn = gaps.placedStandIn(ll.gaps, p, ll.root)
+  const prefix = ll.tabPrefix
+  if (prefix !== null && prefix.reason === null) {
+    prefix.reason = gaps.placedStandIn(ll.gaps, p, ll.root, prefix.through)
+    prefix.through = ll.root.frames.length
+  }
+  let standIn = prefix?.reason ?? null
   let from = startT
   const positions = p.tabs.positions
   let lo = 0, hi = positions.length
@@ -338,6 +343,8 @@ type LineLayout = {
   gaps: gaps.GapSink
   consulted: number[] | null
   root: SpanData
+  // Completed root frames form an append-only prefix in this one speculative pass. A redo owns fresh state.
+  tabPrefix: { through: number; reason: gaps.TabReason | null } | null
   lineIsEmpty: boolean
   lineAtStart: boolean
   totalPlaced: number
@@ -427,7 +434,7 @@ export function computeJustification(p: GeckoPrepared, frame: number, rangeStart
   const f = p.frames[frame]!
   const leaf = p.leaves[f.run]!
   const style = leaf.style
-  const lang = leaf.lang.toLowerCase()
+  const lang = leaf.language.tag.toLowerCase()
   const cj = lang === 'ja' || lang === 'zh' || lang.startsWith('ja-') || lang.startsWith('zh-') // IsChineseOrJapanese, :3441-3454
   const arrayStart = Math.min(p.nextT[rangeStart]!, f.tEnd)
   const tEnd = Math.min(p.nextT[rangeEnd]!, f.tEnd)
@@ -638,7 +645,7 @@ function reflowPass(p: GeckoPrepared, start: GeckoLineStart, band: Band, force: 
     noWrap: !p.blockStyle.wrap, frames: [], hasNonemptyContent: false, parent: null,
   }
   const ll: LineLayout = {
-    gaps: inspect === null ? null : inspect.gaps, consulted: inspect === null ? null : inspect.consulted, root, lineIsEmpty: true, lineAtStart: true, totalPlaced: 0, trimmableISize: 0, needBackup: false, lastOpt: null,
+    gaps: inspect === null ? null : inspect.gaps, consulted: inspect === null ? null : inspect.consulted, root, tabPrefix: inspect === null ? null : { through: 0, reason: null }, lineIsEmpty: true, lineAtStart: true, totalPlaced: 0, trimmableISize: 0, needBackup: false, lastOpt: null,
     lastOptPriority: NO_BREAK, force, impactedByFloats: band.impactedByFloats, lineEndsInBR: false, lineWrapped: false,
   }
   // With floats in the band the line start is a soft break: the line can always move below them (nsBlockFrame.cpp:5289-5299).

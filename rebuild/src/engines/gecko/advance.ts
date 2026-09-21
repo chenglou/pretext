@@ -4,11 +4,10 @@
 // (gfxTextRun::GetAdvanceWidth, gfxTextRun.cpp:1214-1256; ComputeLigatureData :238-322). specs/gecko-canvas.md §3.
 import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import { firstFontScriptLookups, listedFontOf } from './fonts.js'
-import { addLikelySubtags, tryParseLocale } from './likely.js'
+import { listedFontOf } from './fonts.js'
 import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu, scriptRunIndex } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
-import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigatureRow, PairPlacement } from './types.js'
+import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigaturePart, LigatureRow, PairPlacement } from './types.js'
 
 // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
 // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
@@ -72,7 +71,7 @@ function entryAt(unit: GeckoUnit, t: number): InWordEntry {
   const offsets = inWordOf(unit).offsets
   const known = offsets[t - unit.tStart] ?? null
   if (known !== null) return known
-  const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
+  const entry: InWordEntry = { ligature: null, group: null, row: null, rowCluster: 0, advance: null, suffixAu: null }
   offsets[t - unit.tStart] = entry
   return entry
 }
@@ -137,7 +136,7 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
   const windows: GeckoUnit[] = []
   const close = (tStart: number, tEnd: number, canvasAu: number, before: number): void => {
     windows.push({
-      kind: 'word', tStart, tEnd, canvasAu, au: canvasAu + p.correctionPrefix[tEnd]! - p.correctionPrefix[tStart]!,
+      kind: 'word', reversed: unit.reversed, tStart, tEnd, canvasAu, au: canvasAu + p.correctionPrefix[tEnd]! - p.correctionPrefix[tStart]!,
       startAdvance: unit.startAdvance + before + p.correctionPrefix[tStart]! - p.correctionPrefix[unit.tStart]!,
       inWord: { groups: null, offsets: new Array<InWordEntry | null>(tEnd - tStart).fill(null), windows: [] },
     })
@@ -259,13 +258,7 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   if (group !== null) {
     const from = advanceBefore(p, run, group.start)
     const to = advanceBefore(p, run, group.end)
-    let clusters = 0
-    let before = 0
-    for (let k = group.start; k < group.end; k++) {
-      if (p.clusterStart[k] === 0 && k !== group.start) continue
-      clusters++
-      if (k < t) before++
-    }
+    const before = entryAt(unit, t).rowCluster - group.firstCluster
     // The shares are of the group alone. A mark inside the range can hold glyphs of its own, a ligature group start that
     // isn't a cluster start (gfxFont.cpp:708-769, gfxHarfBuzzShaper.cpp:1705-1786), and an advance it has goes to the part
     // it is in. HarfBuzz zeroes mark advances unless the font positions through kerx or a kern state machine
@@ -273,12 +266,12 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // Pro's lam sukun meem damma breaks into 245 and 203 au natively, halves of a 490 au group and −42 au on the damma,
     // where Canvas measures 448 au with the marks and without them. So a group holding a mark is confirmed only in a font
     // the fact calls 'opentype'.
-    let marks = false
-    for (let k = group.start; k < group.end && !marks; k++) marks = p.clusterStart[k] === 0 && (p.tUnits[k]! & 0xfc00) !== 0xdc00
+    // The row's actual source parts classify continuation marks once, with complete preparation flags.
+    const marks = group.hasMarks
     const markAdvance = marks && run.font.facts.joining !== 'opentype'
     const edges = from.standIn ?? to.standIn
     return {
-      au: from.au + before * Math.floor((to.au - from.au) / clusters),
+      au: from.au + before * Math.floor((to.au - from.au) / group.clusters),
       standIn: markAdvance ? { kind: 'group-mark-advances', at: p.tSource[t]! }
         : group.unconfirmed ? { kind: 'inside-ligature-row', at: p.tSource[t]! }
         : edges === null ? null : { kind: 'group-ends', at: p.tSource[t]!, end: edges },
@@ -286,8 +279,8 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   }
   // A ligature candidate that ends a part of a row of them (rowAround), and the facts don't say so.
   const row = rowAround(p, run, unit, t)
-  const leftOver = row !== null && row.unconfirmed
-  const reversed = shapedReversed(p, run, unit, t)
+  const leftOver = row !== null && row.parts[0]!.unconfirmed
+  const reversed = unit.reversed
   const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
@@ -607,23 +600,11 @@ function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' 
 // Whether FontFacts.pairKerning, given or asked of Canvas, describes the script run at offset t (the comment above).
 function pairFactDescribes(run: GeckoTextRun, t: number): boolean {
   const k = scriptRunIndex(run.scriptRuns, t)
-  let script = run.scriptRuns[k]!.script
-  if (script === 'Zyyy' || script === 'Zinh') {
-    const locale = tryParseLocale(run.contexts.own.settings.lang)
-    const likely = locale === null ? '' : addLikelySubtags(locale.language, locale.script, locale.region).script
-    script = likely === '' ? 'Latn' : likely
-  }
+  const script = run.scriptRuns[k]!.script
+  if (script === 'Zyyy' || script === 'Zinh') return run.commonPairKerning
   if (script === 'Latn') return true
   // The scripts that select other lookups than Latin text, which pairKerning describes.
-  const scriptLookups = firstFontScriptLookups(run.font)
-  if (scriptLookups === null || (script !== 'Grek' && script !== 'Cyrl')) return false
-  let own = -1
-  let latin = -1
-  for (let g = 0; g < scriptLookups.length; g++) {
-    if (scriptLookups[g]!.includes(script)) own = g
-    if (scriptLookups[g]!.includes('Latn')) latin = g
-  }
-  return own === latin
+  return script === 'Grek' ? run.fontTable.pairKerning.greek : script === 'Cyrl' && run.fontTable.pairKerning.cyrillic
 }
 
 // Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required
@@ -656,7 +637,7 @@ function groupAcrossAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
 function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): LigatureRow | null {
   if (!groupSpans(p, run, unit, t)) return null
   const known = entryAt(unit, t).row
-  if (known !== null && known.edges[0]! < t && t < known.edges[known.edges.length - 1]!) return known
+  if (known !== null && known.parts[0]!.start < t && t < known.parts[known.parts.length - 1]!.end) return known
   let start = t
   do {
     start--
@@ -678,40 +659,56 @@ function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numb
     if (groupAcrossAt(p, run, unit, b)) required.push(b)
     else optional = true
   }
-  if (boundaries < 2 || !optional) first.row = { edges: [start, end], unconfirmed: false }
+  let edges: number[], unconfirmed = false
+  if (boundaries < 2 || !optional) edges = [start, end]
   else {
-    const edges = listedParts(p, run, start, end)
+    const listed = listedParts(p, run, start, end)
     // A group that required forms made, which the unit's own shaping showed, can't end inside the facts' parts.
-    let agrees = edges !== null
+    let agrees = listed !== null
     let e = 0
     for (let k = 0; agrees && k < required.length; k++) {
-      while (e < edges!.length && edges![e]! < required[k]!) e++
-      agrees = e === edges!.length || edges![e]! !== required[k]!
+      while (e < listed!.length && listed![e]! < required[k]!) e++
+      agrees = e === listed!.length || listed![e]! !== required[k]!
     }
-    first.row = agrees ? { edges: edges!, unconfirmed: false } : { edges: [start, end], unconfirmed: true }
+    edges = agrees ? listed! : [start, end]
+    unconfirmed = !agrees
   }
-  // The candidate row is connected: all its interior cluster boundaries have been measured above. Give those
-  // existing offset records the one row, so later arbitrary queries use its bounds instead of rediscovering them.
-  for (let b = start + 1; b < end; b++) if (p.clusterStart[b] === 1) entryAt(unit, b).row = first.row
-  return first.row
+  // Source flags are complete before publication. One ordered source pass assigns existing cluster offsets their
+  // row ordinal and builds each actual part's count/mark classification, without rescanning a part at every interior.
+  const parts: LigaturePart[] = []
+  let ordinal = 0
+  for (let e = 0; e + 1 < edges.length; e++) {
+    const part: LigaturePart = { start: edges[e]!, end: edges[e + 1]!, firstCluster: ordinal, clusters: 0, hasMarks: false, unconfirmed }
+    for (let b = part.start; b < part.end; b++) {
+      if (p.clusterStart[b] === 1 || b === part.start) {
+        entryAt(unit, b).rowCluster = ordinal++
+        part.clusters++
+      }
+      if (p.clusterStart[b] === 0 && (p.tUnits[b]! & 0xfc00) !== 0xdc00) part.hasMarks = true
+    }
+    parts.push(part)
+  }
+  const row: LigatureRow = { parts }
+  // The candidate row is connected: every interior cluster boundary was discovered above. Share this one row.
+  for (let b = start; b < end; b++) if (p.clusterStart[b] === 1 || b === start) entryAt(unit, b).row = row
+  return row
 }
 
 // The ligature group over cluster boundary t, or null where no group spans it.
-export function groupAround(p: GeckoPrepared, run: GeckoTextRun, whole: GeckoUnit, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+export function groupAround(p: GeckoPrepared, run: GeckoTextRun, whole: GeckoUnit, t: number): LigaturePart | null {
   // No group spans a window's start (windowsOf).
   const unit = windowAt(p, run, whole, t)
   if (t === unit.tStart) return null
   const row = rowAround(p, run, unit, t)
   if (row === null) return null
-  const edges = row.edges
-  let lo = 0, hi = edges.length
+  const parts = row.parts
+  let lo = 0, hi = parts.length
   while (lo < hi) {
     const mid = (lo + hi) >>> 1
-    if (edges[mid]! <= t) lo = mid + 1
+    if (parts[mid]!.end <= t) lo = mid + 1
     else hi = mid
   }
-  return lo > 0 && lo < edges.length && edges[lo - 1]! < t
-    ? { start: edges[lo - 1]!, end: edges[lo]!, unconfirmed: row.unconfirmed } : null
+  return lo < parts.length && parts[lo]!.start < t ? parts[lo]! : null
 }
 
 // The ligature groups of a row of candidates [start, end) by the ligatures fact of the listed font that draws it
@@ -733,7 +730,7 @@ function listedParts(p: GeckoPrepared, run: GeckoTextRun, start: number, end: nu
     const cp = codePointAtT(p, k)
     const length = cp > 0xffff ? 2 : 1
     if (k + length < end && p.clusterStart[k + length] === 0) return null
-    const index = listedFontOf(run.font, cp)
+    const index = listedFontOf(run.fontTable, cp)
     if (index === null || index < 0 || (listed !== -2 && index !== listed)) return null
     listed = index
     clusters.push(String.fromCodePoint(cp))
@@ -837,7 +834,7 @@ const BIDIRECTIONAL_SCRIPTS = new Set(['Hung', 'Ital', 'Runr', 'Tfng'])
 // script run's HarfBuzz script. Gecko shapes an unresolved Common or Inherited run as Latin (gfxHarfBuzzShaper.h:83-94). A
 // natively right-to-left run shaped left-to-right with a decimal digit or a regional indicator and no letter counts as
 // left-to-right (hb-ot-shape.cc:588-645).
-function shapedReversed(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
+export function shapedReversed(p: Pick<GeckoPrepared, 'tUnits'>, run: Pick<GeckoTextRun, 'scriptRuns' | 'level'>, unit: Pick<GeckoUnit, 'tStart' | 'tEnd'>, t: number): boolean {
   const k = scriptRunIndex(run.scriptRuns, t)
   const script = run.scriptRuns[k]!.script
   const rtlRun = (run.level & 1) === 1
@@ -858,7 +855,7 @@ function shapedReversed(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
   return nativeRtl !== rtlRun
 }
 
-export function codePointAtT(p: GeckoPrepared, i: number): number {
+export function codePointAtT(p: Pick<GeckoPrepared, 'tUnits'>, i: number): number {
   const u = p.tUnits[i]!
   if ((u & 0xfc00) === 0xdc00 && i > 0 && (p.tUnits[i - 1]! & 0xfc00) === 0xd800) return 0x10000 + ((p.tUnits[i - 1]! - 0xd800) << 10) + (u - 0xdc00)
   if ((u & 0xfc00) === 0xd800 && i + 1 < p.tUnits.length && (p.tUnits[i + 1]! & 0xfc00) === 0xdc00) return 0x10000 + ((u - 0xd800) << 10) + (p.tUnits[i + 1]! - 0xdc00)

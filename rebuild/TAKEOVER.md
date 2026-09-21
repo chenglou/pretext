@@ -3,13 +3,13 @@
 2026-09-20, `rebuild-20260916`, from Claude's final `9369b7f`. The goal and routine commands are in
 [README.md](README.md). This record replaces the previous phase queue. Main's published API/source remain unchanged.
 
-2026-09-21: testing infrastructure is sufficient for the current iteration. The prior stopping decisions below concern
-their measured cohorts, not general worst-case performance. The active [general-cost audit](GENERAL_COST.md) has reopened
-that work and the previously deferred Gecko original-start guard on unbreakable inputs. Four general-cost batches repair
-ordered access, long-window bookkeeping, diagnostic gap accumulation, script/cluster witnesses and deep geometry;
-paragraph/style selection, canonical Gecko row/family analysis and alternate-world views have landed. Source/cluster
-lookup, incremental no-base extension, canonical union, deep Gecko formatting and sparse WebKit TAB analysis have also
-landed. Further Builder/font/diagnostic bookkeeping and source-preserving numeric geometry remain active prototypes.
+2026-09-21: testing infrastructure is sufficient for the current iteration. Five [general-cost checkpoints](GENERAL_COST.md)
+repair input-driven ordered access, Builder relocation, font/source interpretation, diagnostic scans and deep formatting
+and geometry. Blink numeric conversion, saturation and physical fragment producers now follow their source operation
+boundaries. The final closure passes 1,182 tests and six strict projects, preserves all replay-report fields except the
+source fingerprint, and retains the known strict Native failures. The detailed closure and practical stopping frontier
+are in that shorter record. Arbitrary supplied ligature grammar and contextual/counterfactual shaping retain costly cases; this is not a universal linear-cost claim.
+The earlier cohort stopping decisions below remain historical evidence, rather than general worst-case conclusions.
 
 ## Preservation
 
@@ -98,8 +98,8 @@ Native raw data: `.artifacts/bench/takeover-blink-coarse512-native-20260920/`; t
 also rejected or deferred with their evidence preserved.
 
 Two further candidates stopped at prototype. Replacing only Blink diagnostic canonicalization with sorted interval union preserved 10,036 adversarial/randomized outputs, but canonicalization accounted for just 38.18 ms of a 4,693.62 ms giant inspected free-answer profile (0.81%); small and un-ranged inputs could slow down. Moving Gecko's original-unit-start return before eager windows preserved 300 targeted full-output comparisons and 6,000 ordinary message comparisons, but saved no questions or shaped units in the ordinary cohort and reordered some inspected questions. Neither warranted a core change on that cohort evidence. The 2026-09-21 general audit lands the original-start
-guard after proving substantial unbreakable-word savings; the canonical-only candidate remains deferred because it
-does not repair gap accumulation. Exact proofs and stopping reports are archived as `prototypes/blink-canonical-deferred.tar.gz` and `prototypes/gecko-unit-start-deferred.tar.gz` under `.artifacts/takeover-20260920/`. These are scoped own-JS observations, not native wall-time claims.
+guard after proving substantial unbreakable-word savings. The then-deferred canonical-only prototype was later
+replaced by source-preserving raw accumulation and canonical union in the general-cost checkpoints. Exact proofs and stopping reports are archived as `prototypes/blink-canonical-deferred.tar.gz` and `prototypes/gecko-unit-start-deferred.tar.gz` under `.artifacts/takeover-20260920/`. These are scoped own-JS observations, not native wall-time claims.
 
 ## Acceptance and main requirements
 

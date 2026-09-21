@@ -2,9 +2,12 @@
 // InlineLayoutAlgorithm make of the line's item results, the fragment items in visual order at their LayoutUnit positions
 // with glyph clusters, their limits and the offset mapping (DESIGN.md §2.3). Its measuring raises gaps like the line's
 // filling does, into the list the inspection returns.
+import { addLU, subLU } from './layout-unit.js'
+import { applyBoxEdges } from './box-edges.js'
+import { reorderBoxes, type BoxData } from './box-reorder.js'
 import type { TextAlign } from '../../model.js'
 import { pairPlacement, positionInsideGrapheme, runOfSource } from './gaps.js'
-import { boxStartEmpty } from './content.js'
+import { boxStartEmpty, lengthLU } from './content.js'
 import { isSegmentEdge } from './emoji.js'
 import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkLineStart, BlinkMappingUnit, BlinkShapeRun } from './geometry.js'
 import { LIGATURE_MERGED } from './ligatures.js'
@@ -256,7 +259,7 @@ function justificationOf(sh: Shaper, info: LineInfo, space: number, endOffset: n
     }
     const view = r.shape
     const width16 = viewPrefix16(sh, view, r.end) - viewPrefix16(sh, view, r.start) + add
-    justified[i] = { added16, inlineSize: Math.max(0, luCeil(widthOf16(width16))) + (r.isHyphenated ? r.hyphen!.inlineSize : 0) }
+    justified[i] = { added16, inlineSize: addLU(Math.max(0, luCeil(widthOf16(width16))), r.isHyphenated ? r.hyphen!.inlineSize : 0) }
   }
   return justified
 }
@@ -284,26 +287,6 @@ type LineChild = {
   box: number
 }
 
-// InlineLayoutStateStack::BoxData (inline_box_state.h): a box's range of children, its line-left and line-right edges and
-// its parent box.
-type BoxData = {
-  element: number
-  start: number
-  end: number
-  hasLineLeftEdge: boolean
-  hasLineRightEdge: boolean
-  marginLineLeft: number
-  marginLineRight: number
-  mbpLineLeft: number
-  mbpLineRight: number
-  parent: number
-  // fragmented_box_data_index, 1-based, 0 for none: of a fragment that reordering cut off a box, the box it came from; of
-  // that box once its fragments are in the list, its last fragment.
-  fragmentedFrom: number
-  rectLeft: number
-  rectRight: number
-}
-
 // LogicalLineBuilder::HandleItemResults (logical_line_builder.cc:200-464) with the box states of InlineLayoutStateStack
 // (OnBeginPlaceItems, OnOpenTag, OnCloseTag, OnEndPlaceItems, AddBoxData; inline_box_state.cc:290-691), BidiReorder
 // (logical_line_builder.cc:688-760) with PrepareForReorder and UpdateAfterReorder (inline_box_state.cc:661-848), and
@@ -316,9 +299,9 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
   const leaf = (item: BlinkItem, level: number, marginLineLeft: number, inlineSize: number): void => {
     children.push({ item, level, opaque: false, fragment: true, offset: marginLineLeft, inlineSize, marginLineLeft: 0, box: 0 })
   }
-  type BoxState = { element: number; style: number; needsBoxFragment: boolean; hasStartEdge: boolean; start: number; startEdge: { margin: number; mbp: number } }
+  type BoxState = { element: number; style: number; hasStartEdge: boolean; start: number; startEdge: { margin: number; mbp: number } }
   const stack: BoxState[] = []
-  const boxes: BoxData[] = []
+  let boxes: BoxData[] = []
   const rtlStyle = p.baseLevel === 1 // spans inherit the block's direction in the model
   const placeholder = (): number => {
     children.push({ item: null, level: 0, opaque: true, fragment: false, offset: 0, inlineSize: 0, marginLineLeft: 0, box: 0 })
@@ -330,19 +313,19 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
   if (info.results.length > 0) {
     const first = p.items[info.results[0]!.itemIndex]!
     const open: number[] = []
-    for (let s = first.type === 'open-tag' ? p.styles[first.style]!.parent : first.style; s !== 0; s = p.styles[s]!.parent) open.push(s)
+    const firstStyle = first.type === 'open-tag' ? p.styles[first.style]!.parent : first.style
+    for (let s = p.inspect!.fragmentAncestors[firstStyle]!; s !== 0; s = p.inspect!.fragmentAncestors[p.styles[s]!.parent]!) open.push(s)
     for (let o = open.length - 1; o >= 0; o--) {
       const style = p.styles[open[o]!]!
       const start = children.length
-      if (style.shouldCreateBoxFragment) placeholder()
-      stack.push({ element: style.element, style: open[o]!, needsBoxFragment: style.shouldCreateBoxFragment, hasStartEdge: false, start, startEdge: { margin: 0, mbp: 0 } })
+      placeholder()
+      stack.push({ element: style.element, style: open[o]!, hasStartEdge: false, start, startEdge: { margin: 0, mbp: 0 } })
     }
   }
   // AddBoxData (inline_box_state.cc:548-630).
   const endBox = (box: BoxState, hasEndEdge: boolean): void => {
-    if (!box.needsBoxFragment) return
     const style = p.styles[box.style]!
-    const endMbp = style.end.margin + style.end.border + style.end.padding
+    const endMbp = addLU(addLU(style.end.margin, style.end.border), style.end.padding)
     let data: BoxData = {
       element: box.element, start: box.start, end: children.length,
       hasLineLeftEdge: box.hasStartEdge, marginLineLeft: box.hasStartEdge ? box.startEdge.margin : 0, mbpLineLeft: box.hasStartEdge ? box.startEdge.mbp : 0,
@@ -361,10 +344,10 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
     }
     // An empty inline box is a flat fragment now, never deferred or reordered (:612-630).
     const ph = children[data.start]!
-    ph.offset += data.marginLineLeft
-    ph.inlineSize = data.mbpLineLeft + data.mbpLineRight
+    ph.offset = addLU(ph.offset, data.marginLineLeft)
+    ph.inlineSize = addLU(data.mbpLineLeft, data.mbpLineRight)
     ph.fragment = true
-    ph.item = { kind: 'inline-box', element: data.element, x: 0, inlineSize: ph.inlineSize - data.marginLineLeft - data.marginLineRight, hasStartEdge: rtlStyle ? data.hasLineRightEdge : data.hasLineLeftEdge, hasEndEdge: rtlStyle ? data.hasLineLeftEdge : data.hasLineRightEdge }
+    ph.item = { kind: 'inline-box', element: data.element, x: 0, inlineSize: Math.max(0, subLU(subLU(ph.inlineSize, data.marginLineLeft), data.marginLineRight)), hasStartEdge: rtlStyle ? data.hasLineRightEdge : data.hasLineLeftEdge, hasEndEdge: rtlStyle ? data.hasLineLeftEdge : data.hasLineRightEdge }
   }
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
@@ -382,9 +365,9 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
         const shape = shapeOf(sh, r.shape!, r.start, r.end, r.partsKnown, (item.bidiLevel & 1) === 1, added16)
         const sizeLimit = viewPositionLimit(sh, r.shape!, r.end)
         const textItem: BlinkItem = sizeLimit === null
-          ? { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: inlineSize - hyphen, clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown }
-          : { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: inlineSize - hyphen, clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown, sizeLimit }
-        leaf(textItem, level, 0, inlineSize - hyphen)
+          ? { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: subLU(inlineSize, hyphen), clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown }
+          : { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: subLU(inlineSize, hyphen), clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown, sizeLimit }
+        leaf(textItem, level, 0, subLU(inlineSize, hyphen))
         if (r.isHyphenated) leaf({ kind: 'hyphen', run: item.run, level: item.bidiLevel, x: 0, inlineSize: hyphen }, item.bidiLevel, 0, hyphen)
         break
       }
@@ -407,22 +390,27 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
             break
         }
         break
-      case 'atomic':
-        // PlaceAtomicInline places the border box after the start margin (:470-490); the child is the margin box.
-        leaf({ kind: 'atomic', element: item.element, level: item.bidiLevel, x: 0, inlineSize: inlineSize - r.marginStart - r.marginEnd, marginStart: r.marginStart, marginEnd: r.marginEnd }, level, r.marginStart, inlineSize)
+      case 'atomic': {
+        // The fragment keeps the actual border box; saturated margin-box sums cannot recover it by subtraction.
+        const atomic = p.index.elements[item.element]!.node
+        if (atomic.kind !== 'atomic') throw new Error('atomic item has no atomic element')
+        leaf({ kind: 'atomic', element: item.element, level: item.bidiLevel, x: 0, inlineSize: lengthLU(atomic.width, p.layoutZoom), marginStart: r.marginStart, marginEnd: r.marginEnd }, level, r.marginStart, inlineSize)
         break
+      }
       case 'open-tag': {
-        const start = children.length
         const style = p.styles[item.style]!
-        if (style.shouldCreateBoxFragment) placeholder()
+        if (!style.shouldCreateBoxFragment) break
+        const start = children.length
+        placeholder()
         const sized = inlineSize !== 0 || (style.shouldCreateBoxFragment && !boxStartEmpty(style))
         stack.push({
-          element: item.element, style: item.style, needsBoxFragment: style.shouldCreateBoxFragment, hasStartEdge: true, start,
-          startEdge: sized ? { margin: style.start.margin, mbp: style.start.margin + style.start.border + style.start.padding } : { margin: 0, mbp: 0 },
+          element: item.element, style: item.style, hasStartEdge: true, start,
+          startEdge: sized ? { margin: style.start.margin, mbp: addLU(addLU(style.start.margin, style.start.border), style.start.padding) } : { margin: 0, mbp: 0 },
         })
         break
       }
       case 'close-tag': {
+        if (!p.styles[item.style]!.shouldCreateBoxFragment) break
         const box = stack.pop()
         if (box !== undefined) endBox(box, true)
         break
@@ -439,128 +427,51 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
   }
   let visual = children
   if (p.bidiEnabled && children.length > 0) {
-    // PrepareForReorder (:661-691).
-    for (let b = 0; b < boxes.length; b++) {
-      const index = b + 1
-      for (let c = boxes[b]!.start; c < boxes[b]!.end; c++) {
-        const child = children[c]!
-        let childBox = child.box
-        if (childBox === 0) { child.box = index; continue }
-        while (childBox !== index) {
-          const inner = boxes[childBox - 1]!
-          childBox = inner.parent
-          if (childBox === 0) { inner.parent = index; break }
-        }
-      }
-    }
     const order = indicesInVisualOrder(children.map(c => c.level))
     visual = order.map(i => children[i]!)
-    // UpdateAfterReorder and UpdateBoxDataFragmentRange (:692-782).
-    for (let b = 0; b < boxes.length; b++) { boxes[b]!.start = 0; boxes[b]!.end = 0 }
-    const fragmented: BoxData[] = []
-    const update = (from: number): number => {
-      let index = from
-      for (; index < visual.length; index++) {
-        const startChild = visual[index]!
-        const boxIndex = startChild.box
-        if (boxIndex === 0) continue
-        startChild.box = boxes[boxIndex - 1]!.parent
-        const startIndex = index
-        for (index++; index < visual.length; index++) {
-          const endChild = visual[index]!
-          while (endChild.box !== 0 && endChild.box < boxIndex) update(index)
-          if (boxIndex !== endChild.box) break
-          endChild.box = boxes[boxIndex - 1]!.parent
-        }
-        if (boxes[boxIndex - 1]!.end === 0) {
-          boxes[boxIndex - 1]!.start = startIndex
-          boxes[boxIndex - 1]!.end = index
-        } else {
-          // rule blink/output/box-fragment-edges
-          // A fragment takes the box's item and rect alone; its edges start unset (BoxData(other, start, end),
-          // inline_box_state.h:328-332), and the box's line-right edge moves to the last one below.
-          fragmented.push({
-            ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex, parent: 0,
-            hasLineLeftEdge: false, hasLineRightEdge: false, marginLineLeft: 0, marginLineRight: 0, mbpLineLeft: 0, mbpLineRight: 0,
-          })
-        }
-        if (boxes[boxIndex - 1]!.parent !== 0) return startIndex
-        return index
-      }
-      return index
-    }
-    for (let index = 0; index < visual.length;) index = update(index)
-    // UpdateFragmentedBoxDataEdges (:784-826): fragments go right after their box, last to first so that the places still
-    // to insert at stay, and a box that was fragmented keeps the place of its last fragment, where its line-right edge
-    // moves (UpdateFragmentEdges, :827-843).
-    fragmented.sort((a, b) => a.fragmentedFrom !== b.fragmentedFrom ? a.fragmentedFrom - b.fragmentedFrom : a.start - b.start)
-    for (let f = fragmented.length - 1; f >= 0; f--) {
-      const insertAt = fragmented[f]!.fragmentedFrom
-      boxes.splice(insertAt, 0, { ...fragmented[f]!, fragmentedFrom: 0 })
-      for (let b = 0; b < boxes.length; b++) if (boxes[b]!.fragmentedFrom >= insertAt) boxes[b]!.fragmentedFrom++
-      if (boxes[insertAt - 1]!.fragmentedFrom === 0) boxes[insertAt - 1]!.fragmentedFrom = insertAt
-    }
-    for (let b = 0; b < boxes.length; b++) {
-      const box = boxes[b]!
-      if (box.fragmentedFrom === 0 || !box.hasLineRightEdge) continue
-      const last = boxes[box.fragmentedFrom]!
-      last.hasLineRightEdge = true
-      last.marginLineRight = box.marginLineRight
-      last.mbpLineRight = box.mbpLineRight
-      box.hasLineRightEdge = false
-      box.marginLineRight = 0
-      box.mbpLineRight = 0
-    }
+    // PrepareForReorder/UpdateAfterReorder: compile the source forest and close/open only the paths that visual
+    // ordering leaves/enters. Fragment edge assignment and source output order are unchanged.
+    boxes = reorderBoxes(children, visual, boxes)
   }
   // ComputeInlinePositions (:845-935).
-  let position = p.baseLevel === 1 ? -hangWidth : 0
+  let position = p.baseLevel === 1 ? subLU(0, hangWidth) : 0
   for (let c = 0; c < visual.length; c++) {
     const child = visual[c]!
     child.marginLineLeft = child.offset
-    child.offset += position
-    if (child.fragment) position += child.inlineSize
+    child.offset = addLU(child.offset, position)
+    if (child.fragment) position = addLU(position, child.inlineSize)
   }
-  for (let b = 0; b < boxes.length; b++) {
-    const box = boxes[b]!
-    if (box.mbpLineLeft !== 0) {
-      for (let c = box.start; c < visual.length; c++) visual[c]!.offset += box.mbpLineLeft
-      position += box.mbpLineLeft
-    }
-    if (box.mbpLineRight !== 0) {
-      for (let c = box.end; c < visual.length; c++) visual[c]!.offset += box.mbpLineRight
-      position += box.mbpLineRight
-    }
-  }
+  applyBoxEdges(visual, boxes)
   const padLeft = new Array<number>(visual.length).fill(0)
   const padRight = new Array<number>(visual.length).fill(0)
   for (let b = 0; b < boxes.length; b++) {
     const box = boxes[b]!
     const startChild = visual[box.start]!
     const lastChild = visual[box.end - 1]!
-    let left = startChild.offset - startChild.marginLineLeft
-    let right = lastChild.offset - lastChild.marginLineLeft + lastChild.inlineSize
-    padLeft[box.start]! += box.mbpLineLeft
-    padRight[box.end - 1]! += box.mbpLineRight
-    left += box.marginLineLeft
-    right -= box.marginLineRight
-    left -= padLeft[box.start]!
-    right += padRight[box.end - 1]!
+    let left = subLU(startChild.offset, startChild.marginLineLeft)
+    let right = addLU(subLU(lastChild.offset, lastChild.marginLineLeft), lastChild.inlineSize)
+    padLeft[box.start] = addLU(padLeft[box.start]!, box.mbpLineLeft)
+    padRight[box.end - 1] = addLU(padRight[box.end - 1]!, box.mbpLineRight)
+    left = addLU(left, box.marginLineLeft)
+    right = subLU(right, box.marginLineRight)
+    left = subLU(left, padLeft[box.start]!)
+    right = addLU(right, padRight[box.end - 1]!)
     box.rectLeft = left
     box.rectRight = right
   }
   const rtl = p.baseLevel === 1
-  const lineBoxLeft = info.lineLeft + alignOffset + (rtl ? 0 : info.textIndent)
+  const lineBoxLeft = addLU(addLU(info.lineLeft, alignOffset), rtl ? 0 : info.textIndent)
   const out: BlinkItem[] = []
   for (let c = 0; c < visual.length; c++) {
     const child = visual[c]!
     if (child.item === null) continue
-    child.item.x = lineBoxLeft + child.offset
+    child.item.x = addLU(lineBoxLeft, child.offset)
     out.push(child.item)
   }
   for (let b = 0; b < boxes.length; b++) {
     const box = boxes[b]!
     out.push({
-      kind: 'inline-box', element: box.element, x: lineBoxLeft + box.rectLeft, inlineSize: box.rectRight - box.rectLeft,
+      kind: 'inline-box', element: box.element, x: addLU(lineBoxLeft, box.rectLeft), inlineSize: Math.max(0, subLU(box.rectRight, box.rectLeft)),
       hasStartEdge: rtlStyle ? box.hasLineRightEdge : box.hasLineLeftEdge, hasEndEdge: rtlStyle ? box.hasLineLeftEdge : box.hasLineRightEdge,
     })
   }
@@ -595,8 +506,9 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, sta
   let run = sourceStart < sourceEnd ? runOfSource(p, sourceStart) : 0
   // Where a removed source unit's collapsed unit maps to: the length of text_content when it was collapsed
   // (offset_mapping_builder.cc:95-117), the end of the last unit kept before it.
-  let collapsedAt = 0
-  for (let s = sourceStart - 1; s >= 0; s--) if (p.contentOffsets[s]! >= 0) { collapsedAt = p.contentOffsets[s]! + 1; break }
+  let before = sourceStart - 1
+  if (before >= 0 && p.contentOffsets[before]! < 0) before = p.inspect!.collapsedSourceRuns.start(before) - 1
+  let collapsedAt = before < 0 ? 0 : p.contentOffsets[before]! + 1
   let t = start.textOffset
   for (let s = sourceStart; s < sourceEnd; s++) {
     while (run + 1 < leaves.length && leaves[run + 1]!.start <= s) run++
@@ -627,7 +539,7 @@ export function geometryOf(sh: Shaper, info: LineInfo, start: BlinkLineStart): B
   // ApplyTextAlign's space: AvailableWidth − WidthForAlignment, the unclamped width less the hanging width
   // (inline_layout_algorithm.cc:949-952, line_info.h:157-167). Justification that finds opportunities expands the item
   // results and moves nothing; otherwise the line falls back to start (:955-968).
-  const space = info.availableWidth - (info.unclampedWidth - hangWidth)
+  const space = subLU(info.availableWidth, subLU(info.unclampedWidth, hangWidth))
   const justified = align === 'justify' ? justificationOf(sh, info, space, trailingSpaces.endOffset) : null
   const alignOffset = justified !== null ? 0 : lineOffsetForTextAlign(align === 'justify' ? 'start' : align, p.baseLevel === 1, space)
   return {
