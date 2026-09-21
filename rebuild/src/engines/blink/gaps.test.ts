@@ -2,6 +2,7 @@
 // (paint-rules.ts lineStartScript).
 import { describe, expect, test } from 'bun:test'
 import type { Gap } from '../../model.js'
+import { GapAccumulator } from './gap-accumulator.js'
 import { canonicalGaps } from './gaps.js'
 import { blinkPaintRules } from './paint-rules.js'
 
@@ -53,5 +54,100 @@ describe('blink painter script rule', () => {
     expect(Array.from(rule.scriptsOf('((( ', false, 'rtl'))).toEqual([COMMON, COMMON, COMMON, COMMON])
     // With a letter the brackets take its script either way.
     expect(Array.from(rule.scriptsOf('((a', false, 'rtl'))).toEqual([LATIN, LATIN, LATIN])
+  })
+})
+
+// The raw list deliberately widens only its first touching entry. Checkpoints remove appended entries, not those widenings.
+describe('blink raw gap accumulation', () => {
+  test('a bridge widens the first raise without consuming the later raw entry', () => {
+    const gaps = new GapAccumulator(32)
+    gaps.add('script-context', 0, 'd', { start: 0, end: 2 })
+    gaps.add('script-context', 0, 'd', { start: 4, end: 6 })
+    const checkpoint = gaps.length
+    gaps.add('script-context', 0, 'd', { start: 2, end: 4 })
+    gaps.add('script-context', 0, 'd', { start: 4, end: 8 })
+    gaps.add('unsafe-to-break', 0, 'u', { start: 20, end: 20 })
+    gaps.truncate(checkpoint)
+    expect(gaps.snapshot()).toEqual([gap('script-context', 0, 'd', 0, 8), gap('script-context', 0, 'd', 4, 6)])
+    expect(canonicalGaps(gaps.snapshot())).toEqual([gap('script-context', 0, 'd', 0, 8)])
+  })
+
+  test('discarded scalar and range raises can be raised again, with independent detail and run keys', () => {
+    const gaps = new GapAccumulator(32)
+    gaps.add('page-history', null, 'd')
+    gaps.add('page-history', null, 'd')
+    gaps.add('page-history', null, 'd', { start: 0, end: 0 })
+    gaps.add('page-history', 0, 'd', { start: 0, end: 0 })
+    gaps.add('page-history', null, 'd\0x', { start: 0, end: 0 })
+    gaps.truncate(1)
+    gaps.add('page-history', null, 'd', { start: 16, end: 16 })
+    gaps.add('page-history', null, 'd')
+    expect(gaps.snapshot()).toEqual([gap('page-history', null, 'd'), gap('page-history', null, 'd', 16, 16)])
+    gaps.truncate(0)
+    gaps.add('page-history', null, 'd')
+    expect(gaps.snapshot()).toEqual([gap('page-history', null, 'd')])
+  })
+
+  test('restoring raw overlaps preserves first-raise priority and copies the input ranges', () => {
+    const raw = [gap('script-context', 0, 'd', 0, 8), gap('script-context', 0, 'd', 4, 6)]
+    const gaps = new GapAccumulator(32, raw)
+    gaps.add('script-context', 0, 'd', { start: 6, end: 10 })
+    expect(gaps.snapshot()).toEqual([gap('script-context', 0, 'd', 0, 10), gap('script-context', 0, 'd', 4, 6)])
+    expect(raw).toEqual([gap('script-context', 0, 'd', 0, 8), gap('script-context', 0, 'd', 4, 6)])
+    gaps.truncate(1)
+    gaps.add('script-context', 0, 'd', { start: 20, end: 20 })
+    expect(gaps.snapshot()).toEqual([gap('script-context', 0, 'd', 0, 10), gap('script-context', 0, 'd', 20, 20)])
+  })
+
+  test('zero-length sources and long touching growth retain one raw range', () => {
+    const empty = new GapAccumulator(0)
+    empty.add('script-context', null, 'd', { start: 0, end: 0 })
+    expect(empty.snapshot()).toEqual([gap('script-context', null, 'd', 0, 0)])
+    const gaps = new GapAccumulator(4096)
+    for (let end = 1; end <= 4096; end++) gaps.add('script-context', 0, 'd', { start: end - 1, end })
+    expect(gaps.snapshot()).toEqual([gap('script-context', 0, 'd', 0, 4096)])
+    gaps.truncate(0)
+    gaps.add('script-context', 0, 'd', { start: 4000, end: 4000 })
+    expect(gaps.snapshot()).toEqual([gap('script-context', 0, 'd', 4000, 4000)])
+  })
+
+  test('mixed first-touch, repeated and speculative raises keep the raw contract', () => {
+    // Independent flat-list oracle states the existing first-touch rule, including its retained widening on rollback.
+    const raise = (raw: Gap[], name: Gap['gap'], run: number | null, detail: string, at?: { start: number; end: number }): void => {
+      for (const g of raw) {
+        if (g.gap !== name || g.run !== run || g.detail !== detail) continue
+        if (at === undefined) { if (g.at === undefined) return }
+        else if (g.at !== undefined && at.start <= g.at.end && at.end >= g.at.start) {
+          g.at = { start: Math.min(g.at.start, at.start), end: Math.max(g.at.end, at.end) }
+          return
+        }
+      }
+      raw.push(at === undefined ? gap(name, run, detail) : gap(name, run, detail, at.start, at.end))
+    }
+    let seed = 339703
+    const random = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
+    const names = ['script-context', 'unsafe-to-break', 'page-history'] as const
+    for (let sequence = 0; sequence < 24; sequence++) {
+      const raw: Gap[] = []
+      let gaps = new GapAccumulator(1024)
+      for (let i = 0; i < 128; i++) {
+        if (random() < 0.15) {
+          const count = Math.floor(random() * (raw.length + 1))
+          raw.length = count
+          gaps.truncate(count)
+        } else {
+          const start = Math.floor(random() * 1025)
+          const end = Math.min(1024, start + Math.floor(random() * 20))
+          const name = names[Math.floor(random() * names.length)]!
+          const run = random() < 0.25 ? null : Math.floor(random() * 4)
+          const detail = 'd' + Math.floor(random() * 2)
+          const at = random() < 0.1 ? undefined : { start, end }
+          raise(raw, name, run, detail, at)
+          gaps.add(name, run, detail, at)
+        }
+        expect(gaps.snapshot()).toEqual(raw)
+        if (i === 63) gaps = new GapAccumulator(1024, gaps.snapshot())
+      }
+    }
   })
 })

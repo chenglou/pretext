@@ -86,15 +86,66 @@ fabricated full sweep. Supplied-font-facts native parity and all combinations ar
 Prior native rows, reference predictions and acceptance rules are retained. Captured logs and full difference proofs
 are archived with the batch evidence; a pure-refactor gate pass is not claimed.
 
+## Second batch
+
+The same input-dimension audit continues; these changes remove own-code growth without changing ordered measurement
+questions or diagnostic output:
+
+| Access or analysis | Previous growth | Current data flow |
+|---|---|---|
+| Blink raw diagnostic gaps | scan every prior gap per raise | sparse source-position first-entry index per gap/run/detail; widening and rollback retain their original order |
+| Gecko Common-script witnesses | rescan script neighbors at each offset | sparse intervals collected during the existing script scan; ordered witness lookup |
+| Gecko grapheme continuations | walk to the end of the cluster on every query | sparse continuation intervals collected during the existing correction scan |
+| Gecko run context records | search all prior Context records | preparation-local identity Map owning the existing records |
+| WebKit preserved-whitespace TAB check | search whole box for each item | one box classification per contiguous item range |
+| WebKit nested content state | mark every ancestor on each content item | two depth values representing the same true-prefix/false-suffix state |
+| WebKit alternate-history extra boundaries | test every extra boundary for each item | merge ordered boundaries through a local cursor |
+| WebKit deeply nested geometry | recurse to create/close ancestors | explicit parent and geometry stacks; source arithmetic order retained |
+
+Blink's private GapAccumulator materializes ordinary Gap[] snapshots at decided-line/output boundaries. Its index
+stores the earliest active entry at inclusive source positions; it keeps retained widenings when later speculative
+entries are discarded, removes dead groups, and coalesces uniform nodes. No text or measured answer is a key. A sole
+gap extended over 65,536 positions retains at most 33 nodes before coalescing to one; truncating all entries drops all
+nodes and groups. At 8,192 disjoint ranges, 33,550,336 old list visits become roughly 229,000 indexed visits. Ordinary
+stand-in inspection adds a small constant cost (about 0.3% Latin and 2.5% Arabic); the general design avoids an unbounded
+quadratic fallback. Complete raw-state comparisons include 102,225 raised/widened/truncated states and 40 full engine
+comparisons, with exact ordered Canvas questions.
+
+Gecko preserves 1,023 complete prepared/layout/pieces/inspection comparisons and all ordered questions. The sparse
+metadata is empty/shared on ordinary single-unit Latin. A 2,050-unit Han/Common case replaces 1,049,600 neighbor reads
+with 1,024 ordered interval lookups and the existing one-time character classification. A 2,049-unit combining cluster
+replaces 2,096,128 repeated continuation reads with 2,048 lookups; preparation still asks one 2,049-unit question and
+filling asks none. At 2,048 distinct one-character font runs, 2,096,128 context-record visits become 2,048 identity lookups.
+
+WebKit preserves 580 complete engine comparisons and 250 rich geometry comparisons over 10,126 lines, including all
+ordered questions. A real deferred-bidi 2,048-unit box replaces 2,097,152 nominal TAB-search units with one 2,048-unit
+classification. Depth/content 1,024 replaces 1,048,576 ancestor writes with constant-time state changes. A legitimate
+513-item alternate world replaces 65,792 boundary tests with 1,025. Geometry survives 65,536 ancestors without recursive
+call-stack growth; the previous engine could fail at 32,768. These are stand-in/operation-budget results, not native
+browser timing claims.
+
+Fresh certified MF1000 native checks at `.artifacts/tests/main-native-runs/general-cost-20260921-r2/` preserve all
+statuses and ranges above. Chrome/WebKit complete reports are exact; Firefox changes only four existing native geometry
+review details. Fresh input-only checks at `.artifacts/tests/general-cost-native-20260921-r3/` preserve every complete
+result of the preceding 32/64/34-case runs, including the six pre-existing Firefox misses. Sources are sealed before and
+after every native job; the strict failures remain visible. The 25 all-engine quick gates finish in 208.5 seconds:
+1,069 tests and six strict projects pass, with exactly the preceding replay counts and question classifications, no new
+skips, and the same deliberate aggregate exit 1. All 393,720 replayable plain/pure observations pass; 244 remain skipped
+for the first batch's unrecorded questions. Second-batch logs, reports and temporary proofs are preserved under
+`.artifacts/general-cost-20260921-r2/`.
+
 ## Remaining general frontier
 
-The next batch targets measured avoidable growth: Common-script witness searches, grapheme continuation scans,
-engine-local context-record lookup, WebKit preserved-whitespace TAB scans, nested content propagation, alternate-history
-boundary scans and deep geometry recursion. Diagnostic gap accumulation still linearly searches the growing raw list;
-its first-touch widening and rollback semantics require a different representation, not canonicalization alone.
+Measured avoidable work remains: Blink repeatedly selects paragraph gaps per line and rescans all items per diagnostic
+style; WebKit allocates whole paragraph item and mapping arrays per genuinely differing alternate world; Gecko can
+rediscover a connected candidate row per offset and compare ordered cuts with nested membership searches. These are
+active prototypes rather than accepted costs. Blink source/grapheme mapping across many distinct spans also warrants
+ordered boundary access.
 
-Two broader questions remain explicit. Blink box-edge suffix shifts repeat over visual children and need a deliberate
-numeric model before reassociation. Signed spacing can make a fixed pixel-width shaping window unbounded in source
-length. Gecko units that fail all certified additive cuts still require long per-offset Canvas recipes: question counts
-can be linear while total shaped units are quadratic. Removing metadata scans does not close that observability cost.
-The general performance goal is not complete while substantial justified repairs remain.
+Blink box-edge suffix shifts repeat over visual children. A source-preserving ordered product of saturated LayoutUnit
+shifts is being prototyped; simple reassociation loses the source's saturating event order. The geometry numeric boundary
+must be explicit, including atomic border-box widths and nonnegative exported inline-box fragments, before it lands.
+Signed spacing can make a fixed pixel-width shaping window unbounded in source length. Gecko units that fail all
+certified additive cuts still require long per-offset Canvas recipes: question counts can be linear while total shaped
+units are quadratic. Removing metadata scans does not close that observability cost. The general performance goal is
+not complete while substantial justified repairs remain.

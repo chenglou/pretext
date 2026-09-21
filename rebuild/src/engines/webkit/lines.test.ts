@@ -10,6 +10,7 @@ import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import type { WebKitDisplayBox, WebKitLineGeometry, WebKitLineStart, WebKitTextBox } from './geometry.js'
 import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type WebKitFilledLine, type WebKitRefusedSlot } from './index.js'
 import { breakWord, firstUserPerceivedCharacterLength, itemWidth } from './measure.js'
+import { lineGeometry } from './output.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 
 // A line as the tests read it: the fill result, the pieces and the inspection together (test-lines.ts everyLine).
@@ -1038,5 +1039,81 @@ describe('complex character boundaries', () => {
     }
     expect(box.characterBoundaries).toBe(boundaries)
     expect({ pieces: linePieces(prepared, first.line), geometry: inspectLine(prepared, first.line) }).toEqual(original)
+  })
+})
+
+
+describe('logical preparation and deep display traversal', () => {
+  test('preserved whitespace widths distinguish a box with tabs from the next box without tabs', () => {
+    const texts = ['א '.repeat(128), 'א\t '.repeat(16), 'א '.repeat(64)]
+    const p = paragraph(texts.map(text => [text, 'text']), { whiteSpace: 'pre-wrap', width: 10000 })
+    const prepared = prepare(p, env, false, createContextPool())
+    const whitespace = prepared.items.filter(item => item.kind === 'text' && item.isWhitespace)
+    expect(whitespace.length).toBe(224)
+    for (const item of whitespace) {
+      if (item.kind !== 'text') throw new Error('whitespace is text')
+      expect(item.width).toBe(item.box === 1 ? null : 4)
+    }
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect(filled.next).toBeNull()
+    expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text' || fragment.kind === 'hanging').map(fragment => fragment.painted).join('')).toBe(texts.join(''))
+  })
+
+  test('content marks the open ancestors while younger empty and collapsible-only spans remain unmarked', () => {
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      const p = paragraph([], { direction: 'rtl', whiteSpace })
+      let node = span(p, [span(p, []), span(p, [{ kind: 'text', text: ' ' }]), span(p, [{ kind: 'text', text: 'א' }]), span(p, [])])
+      for (let depth = 0; depth < 256; depth++) node = span(p, [node])
+      p.content = [node]
+      const prepared = prepare(p, env, false, createContextPool())
+      const starts = prepared.items.filter(item => item.kind === 'inline-box-start')
+      expect(starts.map(item => item.level)).toEqual([...new Array<number>(257).fill(255), 1, whiteSpace === 'pre-wrap' ? 255 : 1, 255, 1])
+      expect(prepared.items.filter(item => item.kind === 'inline-box-end').every(item => item.level === 255)).toBe(true)
+      const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+      expect(filled.next).toBeNull()
+      const boxes = lineGeometry(prepared, filled.line).boxes
+      expect(textBoxes(boxes).map(box => [box.run, box.width])).toEqual(whiteSpace === 'pre-wrap' ? [[1, 8], [0, 4]] : [[1, 8]])
+    }
+  })
+
+  test('one history world consumes repeated isolate boundaries without changing its logical mappings', () => {
+    const count = 128
+    const p = paragraph([['a\u00ad\u2066b\u2069c'.repeat(count), 'text']])
+    const prepared = prepare(p, env, true, createContextPool())
+    expect(prepared.items.length).toBe(count + 1)
+    const worlds = prepared.inspect!.worlds
+    expect(worlds.length).toBe(1)
+    const world = worlds[0]!
+    expect(world.prepared.items.length).toBe(2 * count + 1)
+    expect(world.itemIndex).toEqual([0, ...Array.from({ length: count }, (_, index) => 2 * index + 1)])
+    expect(world.changed).toEqual([false, ...new Array<boolean>(count).fill(true)])
+    const ends = world.prepared.items.map(item => item.kind === 'text' ? item.end : -1)
+    expect(ends).toEqual([3, ...Array.from({ length: count - 1 }, (_, index) => [6 * index + 4, 6 * index + 9]).flat(), 6 * count - 2, 6 * count])
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 10000, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect(filled.next).toBeNull()
+    expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').map(fragment => fragment.painted).join('')).toBe('a\u00ad\u2066b\u2069c'.repeat(count))
+    expect(inspectLine(prepared, filled.line).geometry).not.toBeNull()
+  })
+
+  test('a 32768-deep valid inline tree materializes bidi geometry without using the call stack', () => {
+    const p = paragraph([], { direction: 'rtl', width: 100 })
+    let node = span(p, [{ kind: 'text', text: 'א' }])
+    const depth = 32768
+    for (let index = 1; index < depth; index++) node = span(p, [node])
+    p.content = [node]
+    const prepared = prepare(p, env, false, createContextPool())
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
+    expect([filled.start, filled.end, filled.next]).toEqual([0, 1, null])
+    const before = asked.length
+    const geometry = lineGeometry(prepared, filled.line)
+    expect(asked.length).toBe(before)
+    expect(geometry.boxes.length).toBe(depth + 1)
+    expect(geometry.boxes.every(box => box.x === 92 && box.width === 8)).toBe(true)
+    expect(geometry.boxes.slice(0, depth).map(box => box.kind === 'inline-box' ? [box.element, box.hasStartEdge, box.hasEndEdge] : null)).toEqual(Array.from({ length: depth }, (_, element) => [element, true, true]))
+    expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').map(fragment => fragment.painted)).toEqual(['א'])
   })
 })

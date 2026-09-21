@@ -180,6 +180,23 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
   const changed: boolean[] = []
   let differs = false
   let boxItems = 0
+  // Both the box's items and its extra boundaries are in logical order. Consume each extra once,
+  // merging it with the already sorted whitespace ends when the cached structure supplied those.
+  let extraIndex = 0
+  const itemEnds = (start: number, end: number, own: number[]): number[] => {
+    while (extraIndex < extra.length && extra[extraIndex]! <= start) extraIndex++
+    if (extraIndex === extra.length || extra[extraIndex]! >= end) return own
+    const ends: number[] = []
+    let ownIndex = 0
+    for (; extraIndex < extra.length && extra[extraIndex]! < end; extraIndex++) {
+      const next = extra[extraIndex]!
+      while (ownIndex < own.length && own[ownIndex]! < next) ends.push(own[ownIndex++]!)
+      ends.push(next)
+      if (own[ownIndex] === next) ownIndex++
+    }
+    while (ownIndex < own.length) ends.push(own[ownIndex++]!)
+    return ends
+  }
   const width = (item: WebKitTextItem, from: number, to: number): number | null => {
     if (item.width === null) return null
     return itemWidth(p, { ...item, start: from, end: to }, from, to, 0)
@@ -204,9 +221,7 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
         ownRun.push(following)
         runEnd = following.end
       }
-      const ends = whitespaceEnds(text, item.start, runEnd, structure, preservesNewline(box.style))
-      for (let k = 0; k < extra.length; k++) if (extra[k]! > item.start && extra[k]! < runEnd && !ends.includes(extra[k]!)) ends.push(extra[k]!)
-      ends.sort((a, b) => a - b)
+      const ends = itemEnds(item.start, runEnd, whitespaceEnds(text, item.start, runEnd, structure, preservesNewline(box.style)))
       const first = items.length
       const worldRun: WebKitTextItem[] = []
       let from = item.start
@@ -236,8 +251,7 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
       i += ownRun.length - 1
       continue
     }
-    const ends: number[] = []
-    for (let k = 0; k < extra.length; k++) if (extra[k]! > item.start && extra[k]! < item.end) ends.push(extra[k]!)
+    const ends = itemEnds(item.start, item.end, [])
     // A white-space item built from the cache is a word separator unless it starts with a preserved TAB (IIB:893).
     const isWordSeparator = item.isWhitespace ? text.charCodeAt(item.start) !== 0x09 || !preserve : item.isWordSeparator
     if (ends.length === 0 && isWordSeparator === item.isWordSeparator) {

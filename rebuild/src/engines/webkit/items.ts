@@ -220,27 +220,31 @@ function computeBidiLevels(p: WebKitPrepared): void {
   p.items = items
   if (!hasSeenOpaqueItem) return
   // setBidiLevelForOpaqueInlineItems (:730-774).
-  const hasContent: boolean[] = []
+  // In the reverse walk the marked ancestors are a true prefix of the open containers.
+  let depth = 0
+  let contentDepth = 0
   for (let index = items.length - 1; index >= 0; index--) {
     const item = items[index]!
     switch (item.kind) {
       case 'inline-box-start':
-        if (hasContent.pop() === true) item.level = OPAQUE_BIDI_LEVEL
+        if (depth <= contentDepth) item.level = OPAQUE_BIDI_LEVEL
+        depth--
+        contentDepth = Math.min(contentDepth, depth)
         break
       case 'inline-box-end':
-        hasContent.push(false)
+        depth++
         item.level = OPAQUE_BIDI_LEVEL
         break
       case 'word-break-opportunity':
         item.level = OPAQUE_BIDI_LEVEL
         break
       case 'text':
-        if (!item.isWhitespace || preservesSpacesAndTabs(p.boxes[item.box]!.style)) hasContent.fill(true)
+        if (!item.isWhitespace || preservesSpacesAndTabs(p.boxes[item.box]!.style)) contentDepth = depth
         break
       case 'soft-line-break':
       case 'hard-line-break':
       case 'atomic':
-        hasContent.fill(true)
+        contentDepth = depth
         break
     }
   }
@@ -249,13 +253,22 @@ function computeBidiLevels(p: WebKitPrepared): void {
 // computeInlineTextItemWidthsAndTextSpacing (IIB:804-856): after the splits, every non-empty item that isn't a lone ZWSP
 // and whose width doesn't depend on position.
 function computeItemWidths(p: WebKitPrepared): void {
+  // Bidi splitting retains logical order, so each box's items are contiguous.
+  let scannedBox = -1
+  let hasTabs = false
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
     if (item.kind !== 'text') continue
     const box = p.boxes[item.box]!
     const length = item.end - item.start
     if (length === 0 || (length === 1 && box.text.charCodeAt(item.start) === 0x200b)) continue
-    if (item.isWhitespace && preservesSpacesAndTabs(box.style) && box.text.includes('\t')) continue
+    if (item.isWhitespace && preservesSpacesAndTabs(box.style)) {
+      if (scannedBox !== item.box) {
+        scannedBox = item.box
+        hasTabs = box.text.includes('\t')
+      }
+      if (hasTabs) continue
+    }
     item.width = itemWidth(p, item, item.start, item.end, 0)
   }
 }

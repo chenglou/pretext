@@ -1,11 +1,13 @@
 import { beforeAll, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
-import { createContextPool } from '../../measure/canvas.js'
+import { createContextPool, type CanvasSettings, type Context } from '../../measure/canvas.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type InlineNode, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, inspectLine, linePieces } from './index.js'
 import { rangeAdvance } from './lines.js'
-import { rangeAu } from './measure.js'
+import { rangeAu, runContextsFor } from './measure.js'
 import { prepareGecko } from './prepare.js'
+import { advanceBefore } from './advance.js'
+import type { RunContexts } from './types.js'
 
 beforeAll(() => {
   class Context {
@@ -153,4 +155,69 @@ test('tab materialization keeps real break uncertainty and omits later unvisited
   }
   expect(early).toBeGreaterThan(1)
   expect(consumedWarning).toBe(true)
+})
+
+// A typed array's length getter needs its real receiver; consumers here only ask for indexed source/flag values.
+function countedUnits<T extends Uint8Array | Uint16Array>(values: T): { values: T; reads: () => number } {
+  let reads = 0
+  return { values: new Proxy(values, { get(target, key) {
+    if (typeof key === 'string' && /^\d+$/.test(key)) reads++
+    return Reflect.get(target, key, target)
+  } }), reads: () => reads }
+}
+
+test('short Common pieces use the same script witness without walking a growing neutral prefix', () => {
+  const p = prepareGecko(paragraph('漢 ' + '7 '.repeat(1024), { whiteSpace: 'normal' }), env, false, createContextPool())
+  const run = p.textRuns[0]!, units = countedUnits(p.tUnits)
+  expect(run.scriptRuns.length).toBe(1)
+  expect(Array.from(run.scriptRuns[0]!.contextGaps)).toEqual([1, p.tUnits.length])
+  let queried = 0
+  // Arbitrary access exercises both ends of the same sparse nonmatching-script interval.
+  for (let t = p.tUnits.length - 2; t >= 2; t -= 14) {
+    expect(rangeAu(run.contexts.own, run, units.values, t, t + 1)).toBe(600)
+    queried++
+  }
+  expect(units.reads()).toBeLessThan(16 * queried)
+  const latin = prepareGecko(paragraph('a'.repeat(4096), { whiteSpace: 'normal' }), env, false, createContextPool())
+  expect(latin.textRuns.every(r => r.scriptRuns.every(sr => sr.contextGaps.length === 0))).toBe(true)
+})
+
+test('every range edge of one long grapheme finds its end without repeatedly walking the remaining marks', () => {
+  const text = 'a' + '\u0301'.repeat(1024)
+  const p = prepareGecko(paragraph(text, { whiteSpace: 'normal' }), env, false, createContextPool())
+  const run = p.textRuns[0]!, flags = countedUnits(p.clusterStart)
+  expect(Array.from(p.clusterContinuations)).toEqual([1, text.length])
+  p.clusterStart = flags.values
+  let queried = 0
+  for (let t = text.length - 1; t > 0; t -= 13) {
+    expect(advanceBefore(p, run, t)).toEqual({ au: 600, standIn: { kind: 'inside-cluster', at: t, betweenMarks: t > 1 } })
+    queried++
+  }
+  // A first interior query may compile the unit's shaping windows in one linear pass.
+  expect(flags.reads()).toBeLessThan(2 * text.length + 8 * queried)
+  const latin = prepareGecko(paragraph('a'.repeat(4096), { whiteSpace: 'normal' }), env, false, createContextPool())
+  expect(latin.clusterContinuations.length).toBe(0)
+})
+
+test('distinct text-run contexts have one canonical record without scanning all earlier records', () => {
+  class Records extends Map<Context, RunContexts> {
+    reads = 0
+    override get(own: Context): RunContexts | undefined { this.reads++; return super.get(own) }
+    override values() { this.reads += this.size; return super.values() }
+    override entries() { this.reads += this.size; return super.entries() }
+    override [Symbol.iterator]() { this.reads += this.size; return super[Symbol.iterator]() }
+  }
+  const records = new Records(), pool = createContextPool(), made: RunContexts[] = []
+  const settings: CanvasSettings = {
+    font: '16px Optima', lang: 'en', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
+    textRendering: 'auto', direction: 'ltr', partition: '',
+  }
+  for (let i = 0; i < 1024; i++) made.push(runContextsFor(records, pool, { ...settings, font: `16px "Font ${i}"` }))
+  expect(records.size).toBe(1024)
+  expect(pool.size).toBe(1024)
+  // Reusing a record must preserve recipe facts already filled by a previous text run.
+  made[0]!.noLigatures = made[0]!.own
+  for (let i = 1023; i >= 0; i -= 7) expect(runContextsFor(records, pool, { ...settings, font: `16px "Font ${i}"` })).toBe(made[i]!)
+  expect(runContextsFor(records, pool, { ...settings, font: '16px "Font 0"' }).noLigatures).toBe(made[0]!.own)
+  expect(records.reads).toBeLessThan(4 * made.length)
 })

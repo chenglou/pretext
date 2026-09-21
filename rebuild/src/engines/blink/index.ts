@@ -13,6 +13,7 @@ import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFo
 import { blinkGraphemeRules } from './data.js'
 import { styleContexts } from './contexts.js'
 import { emojiPriorities, isSegmentEdge } from './emoji.js'
+import { GapAccumulator } from './gap-accumulator.js'
 import { canonicalGaps, lineGaps, preparedContent, type GapSink } from './gaps.js'
 import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
 import { hanKerningCandidates, hanKerningMayApply, measureHanKerningFontData } from './hankerning.js'
@@ -144,7 +145,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   }
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
-  const gaps: GapSink = inspect ? [] : null
+  const gaps: GapSink = inspect ? new GapAccumulator(index.text.length) : null
   let canvasText: BlinkPrepared['canvasText'] = null
   if (!inspect && is8Bit && !segmented && !text.includes('\u00ad') && styles.some(style => style.letterSpacing === 0)) {
     const narrow = text.replace(/[\v\f]/g, '\u0001')
@@ -158,7 +159,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
-    canvases, inspect: gaps === null ? null : { gaps },
+    canvases, inspect: gaps === null ? null : { gaps: [] },
   }
   const sh: Shaper = { p, gaps }
   shapingGroups(p)
@@ -169,7 +170,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)
   }
   measureGroups(sh)
-  preparedContent(p)
+  preparedContent(p, gaps)
   return p
 }
 
@@ -192,15 +193,15 @@ export type BlinkFillResult = FillResultOf<BlinkLineStart, BlinkFilledLine, Blin
 // Where the line breaks is known from the item results alone: the source range comes from the two line starts, and no
 // fragment or item is made here.
 export function fillLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkFillResult {
-  const gaps: GapSink = p.inspect === null ? null : []
+  const gaps: GapSink = p.inspect === null ? null : new GapAccumulator(p.index.text.length)
   const info = new LineBreaker({ p, gaps }, start, slot).nextLine()
   // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
   // opportunity (inline_layout_algorithm.cc:1341-1367), which lays the same line out again.
   if (info.hasOverflow && info.availableWidth !== lengthLU(slot.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
-    return { kind: 'below-floats', line: { engine: 'blink', kind: 'below-floats', info, start, gaps }, next: start }
+    return { kind: 'below-floats', line: { engine: 'blink', kind: 'below-floats', info, start, gaps: gaps?.snapshot() ?? null }, next: start }
   }
   const range = lineSourceRange(p, start, info.token)
-  return { kind: 'line', line: { engine: 'blink', kind: 'line', info, start, gaps }, start: range.start, end: range.end, next: info.token, hasLineBox: info.shouldCreateLineBox }
+  return { kind: 'line', line: { engine: 'blink', kind: 'line', info, start, gaps: gaps?.snapshot() ?? null }, start: range.start, end: range.end, next: info.token, hasLineBox: info.shouldCreateLineBox }
 }
 
 export function linePieces(p: BlinkPrepared, line: BlinkFilledLine): LinePieces<BlinkPaintFacts> {
@@ -214,8 +215,8 @@ export function inspectLine(p: BlinkPrepared, line: BlinkFilledLine | BlinkRefus
   switch (line.kind) {
     case 'line': {
       const geometry = geometryOf({ p, gaps }, line.info, line.start)
-      return { geometry, gaps: canonicalGaps(gaps) }
+      return { geometry, gaps: canonicalGaps(gaps.snapshot()) }
     }
-    case 'below-floats': return { geometry: null, gaps: canonicalGaps(gaps) }
+    case 'below-floats': return { geometry: null, gaps: canonicalGaps(gaps.snapshot()) }
   }
 }

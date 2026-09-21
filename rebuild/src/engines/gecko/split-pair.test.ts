@@ -46,7 +46,7 @@ test('a lone high surrogate that ends a text run is measured behind a character 
   const p = prepareGecko(paragraph, env, false, createContextPool())
   // A text run a font: the first ends inside the pair and is Han by its first character.
   expect(p.textRuns.length).toBe(2)
-  expect(p.textRuns[0]!.scriptRuns).toEqual([{ limit: 2, script: 'Hani' }])
+  expect(p.textRuns[0]!.scriptRuns.map(({ limit, script }) => ({ limit, script }))).toEqual([{ limit: 2, script: 'Hani' }])
   for (let start = firstGeckoLine(p); start !== null;) {
     const filled = fillLine(p, start, { width: 1, left: 0, right: 0 })
     if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')

@@ -124,7 +124,12 @@ export type GeckoItem = { kind: 'text'; frame: number; at: number } | GeckoEdgeI
 
 // A script run gfxFontGroup::InitTextRun shapes (gfxScriptItemizer.cpp:60-243): it ends before `limit`, a transformed
 // index. 'Zyyy' stands for Common resolved from the language.
-export type ScriptRun = { limit: number; script: string }
+export type ScriptRun = {
+  limit: number
+  script: string
+  // Pairs [start, end) where the actual character script differs: the next/previous matching character is at an edge.
+  contextGaps: Int32Array
+}
 
 // The Canvas contexts of text runs that measure alike, and what Canvas told of their font: one record per distinct `own`
 // context of the paragraph, so per font declaration, language, direction and ligature state (prepare.ts step 7, measure.ts
@@ -309,6 +314,8 @@ export type GeckoPrepared = {
   tSource: Int32Array
   breakFlags: Uint8Array
   clusterStart: Uint8Array
+  // Pairs [start, end) of consecutive continuation flags; empty for single-unit clusters.
+  clusterContinuations: Int32Array
   isSpace: Uint8Array
   kind: Uint8Array
   // spacingPrefix[t]: letter and word spacing after the characters before t, in au (nsTextFrame.cpp:4089-4295).

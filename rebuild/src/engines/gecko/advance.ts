@@ -219,8 +219,14 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     // takes back, so Canvas totals show nothing; in Arial, positioned through GPOS, marks have no advance and the cut is
     // bounded. Canvas shows neither the shared cluster nor the advance's sign, so the port keeps the ordinary division and
     // says so here.
-    let end = t + 1
-    while (end < unit.tEnd && p.clusterStart[end] === 0) end++
+    const pairs = p.clusterContinuations
+    let lo = 0, hi = pairs.length / 2
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (pairs[mid * 2 + 1]! <= t) lo = mid + 1
+      else hi = mid
+    }
+    const end = Math.min(unit.tEnd, pairs[lo * 2 + 1]!)
     const inner = advanceBefore(p, run, end)
     const previous = (p.tUnits[t - 1]! & 0xfc00) === 0xdc00 && t - 2 >= unit.tStart ? t - 2 : t - 1
     const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.font.facts.joining !== 'opentype'

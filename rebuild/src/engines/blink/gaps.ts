@@ -1,5 +1,5 @@
 // Named Canvas-versus-DOM gaps (DESIGN.md §5): every condition of the Blink port, with its test, its prose, its merge rule
-// and its order. Nothing outside this file builds a Gap. A gap goes to one of two lists: a line's while that line is filled
+// and its order. Every raise enters here; gap-accumulator.ts stores the raw list. A gap goes to one of two lists: a line's while that line is filled
 // and inspected, for conditions of its break decisions, or the paragraph's with `at`, the source range whose widths the
 // condition concerns (model.ts Gap), for conditions of the content itself. A paragraph gap without `at` concerns the
 // environment or a font as a whole.
@@ -10,6 +10,7 @@
 // prepared plain, where every function returns at once: what a function measures to decide its condition is asked of
 // Canvas on an inspected paragraph alone.
 import type { Gap, GapName } from '../../model.js'
+import { GapAccumulator } from './gap-accumulator.js'
 import { hasDictionaryCharacters, languageOf, lineTable } from './breaks.js'
 import { collapsesWhiteSpace, isSpaceLB } from './content.js'
 import { raw16Of } from './contexts.js'
@@ -27,7 +28,7 @@ import {
 import type { BlinkInspect, BlinkPrepared } from './types.js'
 
 // Where gaps go while a paragraph is prepared or a line is filled and inspected; null on a paragraph prepared plain.
-export type GapSink = Gap[] | null
+export type GapSink = GapAccumulator | null
 
 // One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge, into the first entry
 // they meet. While a list is built its grouping therefore follows the raises, the repeated ones too: a range raised again
@@ -36,21 +37,8 @@ export type GapSink = Gap[] | null
 // (shape.ts measure16), so a measurement made again regroups a list being built (clusters' prefixes carried through
 // inspect.ts shapeOf did in 3 of 67,065 recorded cases, positions kept through one binary search in 1;
 // research/ARCHITECTURE-PLAN-2.md X2). A list is handed out canonical (canonicalGaps), where grouping follows nothing.
-function addGap(gaps: Gap[], gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
-  for (let i = 0; i < gaps.length; i++) {
-    const g = gaps[i]!
-    if (g.gap !== gap || g.run !== run || g.detail !== detail) continue
-    if (at === undefined) {
-      if (g.at === undefined) return
-      continue
-    }
-    if (g.at === undefined) continue
-    if (at.start <= g.at.end && at.end >= g.at.start) {
-      g.at = { start: Math.min(g.at.start, at.start), end: Math.max(g.at.end, at.end) }
-      return
-    }
-  }
-  gaps.push(at === undefined ? { gap, run, detail } : { gap, run, detail, at: { start: at.start, end: at.end } })
+function addGap(gaps: GapAccumulator, gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
+  gaps.add(gap, run, detail, at)
 }
 
 // How many gaps a list holds, and the list cut back to that many: the line breaker drops what a search it runs again
@@ -60,7 +48,7 @@ export function gapCount(sink: GapSink): number {
 }
 
 export function dropGapsFrom(sink: GapSink, count: number): void {
-  if (sink !== null) sink.length = count
+  if (sink !== null) sink.truncate(count)
 }
 
 // The source range of text_content [from, to): from the first unit with a source offset to the last one's end. A range
@@ -134,7 +122,7 @@ const CONTEXT_DETAIL = 'a shaping call edge between joining letters in an OpenTy
 // side joins (shape.ts joinedAtEdge): at the call's own edge the letters join only when the font reads HarfBuzz's context
 // (FontFacts.joining 'opentype'), where U+200D stands in for it. Where the fact isn't given the edge decides a width, so
 // the measurement reports joining-technology.
-function callEdge(gaps: Gap[], p: BlinkPrepared, g: number, k: number, callStart: number, callEnd: number): void {
+function callEdge(gaps: GapAccumulator, p: BlinkPrepared, g: number, k: number, callStart: number, callEnd: number): void {
   if (k > callStart && k < callEnd) return
   const style = p.styles[p.groups[g]!.style]!
   switch (style.font.facts.joining) {
@@ -210,7 +198,7 @@ function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScrip
 
 // script-context for every stretch of the measured string, white space apart, that Canvas shapes under another script than
 // the paragraph does.
-function scriptContext(gaps: Gap[], p: BlinkPrepared, units: readonly number[], scripts: Uint8Array): void {
+function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly number[], scripts: Uint8Array): void {
   let start = -1
   let end = -1
   const flush = (): void => {
@@ -432,7 +420,7 @@ function styleRanges(p: BlinkPrepared, style: number): { start: number; end: num
 }
 
 // The conditions of the content, each with the source range it concerns (DESIGN.md §2.8, §5).
-function contentGaps(gaps: Gap[], p: BlinkPrepared): void {
+function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): void {
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
     if (item.type !== 'text' || item.start === item.end) continue
@@ -462,9 +450,8 @@ function contentGaps(gaps: Gap[], p: BlinkPrepared): void {
 // The gaps of the prepared content, its fonts' facts and the environment (DESIGN.md §2.8), after the ones preparation's
 // measuring raised. They end the paragraph's list, which the prepared paragraph keeps canonical from here on: a line's
 // gaps take in the ones whose ranges meet what its decision measured (lineEdgeGaps).
-export function preparedContent(p: BlinkPrepared): void {
-  if (p.inspect === null) return
-  const sink = p.inspect.gaps
+export function preparedContent(p: BlinkPrepared, sink: GapSink): void {
+  if (p.inspect === null || sink === null) return
   contentGaps(sink, p)
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
@@ -491,7 +478,7 @@ export function preparedContent(p: BlinkPrepared): void {
       addGap(sink, 'font-fallback', p.styles[group.style]!.run, 'a shaping-group edge inside a grapheme cluster', graphemeSourceRange(p, group.start))
     }
   }
-  p.inspect.gaps = canonicalGaps(sink)
+  p.inspect.gaps = canonicalGaps(sink.snapshot())
 }
 
 // What inspectLine and paragraphGaps read of a prepared paragraph; they throw on one prepared plain.
@@ -572,7 +559,7 @@ function groupAround(p: BlinkPrepared, k: number): number {
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
 // a reshape at an unsafe offset (a wrapped line start's available-width correction, a line end before a space). `margin`:
 // how many LayoutUnits the line's decision is from going the other way.
-function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, margin: number): void {
+function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: boolean, margin: number): void {
   const p = sh.p
   const g = groupAround(p, k)
   if (g < 0) return
@@ -639,7 +626,7 @@ const ITEM_EDGE_DETAIL = 'an item edge inside a shaping call (a span edge betwee
 // A text item that starts inside its shaping group at an item edge takes its glyphs from the group's result by cluster. Where
 // the port doesn't know the position of that edge (positionLimit), the line reports the condition over the clusters on both
 // sides of it.
-function itemEdgeGaps(gaps: Gap[], sh: Shaper, info: LineInfo): void {
+function itemEdgeGaps(gaps: GapAccumulator, sh: Shaper, info: LineInfo): void {
   const p = sh.p
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
@@ -653,7 +640,7 @@ function itemEdgeGaps(gaps: Gap[], sh: Shaper, info: LineInfo): void {
   }
 }
 
-function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: LineInfo, start: BlinkLineStart): void {
+function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[], info: LineInfo, start: BlinkLineStart): void {
   const p = sh.p
   // The break decision measured the content up to the next break opportunity after the line's end, the word that didn't
   // fit (ShapeLine's candidate offset lies before it, shaping_line_breaker.cc:421-480), so the content conditions there are
@@ -788,10 +775,10 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
 // The gaps a decided line's breaks rest on, in the order they were raised: the ones its filling raised, across every pass
 // of the fill, then the ones of its edges and of its item edges. A new list with entries of its own, which whatever
 // inspects the line's geometry goes on raising into (inspect.ts), so the decided line stays as the fill left it.
-export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkLineStart; gaps: Gap[] | null }): Gap[] {
+export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkLineStart; gaps: Gap[] | null }): GapAccumulator {
   const paragraph = inspected(p, 'inspectLine').gaps
   if (line.gaps === null) throw new Error('inspectLine reads a line filled from an inspected paragraph, and this one was filled plain')
-  const gaps = line.gaps.map(copyOf)
+  const gaps = new GapAccumulator(p.index.text.length, line.gaps)
   const sh: Shaper = { p, gaps }
   lineEdgeGaps(gaps, sh, paragraph, line.info, line.start)
   itemEdgeGaps(gaps, sh, line.info)

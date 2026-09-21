@@ -18,13 +18,13 @@ export function quantize7(size: number): number {
   return f32(d - t)
 }
 
-// The record of the text runs that measure with `settings` (types.ts RunContexts), made at the list's end when no record's
-// own context has them.
-export function runContextsFor(records: RunContexts[], contexts: ContextPool, settings: CanvasSettings): RunContexts {
+// One record of recipe contexts per canonical context (types.ts RunContexts). Text runs that measure alike share it.
+export function runContextsFor(records: Map<Context, RunContexts>, contexts: ContextPool, settings: CanvasSettings): RunContexts {
   const own = contextFor(contexts, settings)
-  for (let i = 0; i < records.length; i++) if (records[i]!.own === own) return records[i]!
+  const found = records.get(own)
+  if (found !== undefined) return found
   const made: RunContexts = { own, noLigatures: null, letterSpaced: null, large: null, pairPlacement: null }
-  records.push(made)
+  records.set(own, made)
   return made
 }
 
@@ -51,6 +51,7 @@ export function isInvalidChar16(ch: number): boolean {
 export const isInvalidChar8 = (ch: number) => (ch & 0x7f) < 0x20 || ch === 0x7f
 
 // A script that merges into the run around it: Common, Inherited, Unknown.
+export const NO_SCRIPT_GAPS = new Int32Array(0)
 const isCommonScript = (s: string) => s === 'Zyyy' || s === 'Zinh' || s === 'Zzzz'
 // Latin below U+02EA (gfxScriptItemizer.h:96-107).
 const fastLatin = (ch: number) => ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a) || (ch >= 0xc0 && ch <= 0xd6) ||
@@ -135,7 +136,7 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
       }
       scriptLimit++
     }
-    limits.push({ limit: scriptLimit, script: scriptCode })
+    limits.push({ limit: scriptLimit, script: scriptCode, contextGaps: NO_SCRIPT_GAPS })
   }
   return limits
 }
@@ -157,12 +158,12 @@ export function textRunScripts(units: Uint16Array, start: number, end: number, i
     const u = units[i]!
     hasLetter = is8bit ? (u & 0xdf) <= 0x5a : fastLatin(u)
   }
-  return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy' }]
+  return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy', contextGaps: NO_SCRIPT_GAPS }]
 }
 
 // The script of the character at `i` of units read up to `end`: a surrogate pair that `end` cuts is a lone surrogate, as
 // it is to the itemizer (scriptRunLimits).
-function scriptAt(units: Uint16Array, i: number, end: number): string {
+export function scriptAt(units: Uint16Array, i: number, end: number): string {
   const u = units[i]!
   if (u < 0x02ea) return fastLatin(u) ? 'Latn' : 'Zyyy'
   return scriptOf(i + 1 < end && isSurrogatePair(u, units[i + 1]!) ? combine(u, units[i + 1]!) : u)
@@ -177,6 +178,17 @@ export function scriptRunIndex(runs: readonly ScriptRun[], t: number): number {
     else hi = mid
   }
   return lo
+}
+
+// The first nonmatching-script interval whose exclusive end follows t.
+function contextGapAfter(gaps: Int32Array, t: number): number {
+  let lo = 0, hi = gaps.length / 2
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (gaps[mid * 2 + 1]! <= t) lo = mid + 1
+    else hi = mid
+  }
+  return lo * 2
 }
 
 // The script context a piece [tStart, tEnd) of a word unit needs: the DOM itemizer merges Common characters into the
@@ -197,16 +209,19 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
   for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(units, i, tEnd)
   if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
   const limit = runs[k]!.limit
-  for (let i = tStart - 1; i >= from; i--) {
-    if (scriptAt(units, i, units.length) !== domScript) continue
-    const u = units[i]!
-    if ((u & 0xfc00) === 0xdc00 && i > from) return { text: String.fromCharCode(units[i - 1]!, u), before: true }
+  const gaps = runs[k]!.contextGaps
+  let previous = tStart - 1
+  if (previous >= from && scriptAt(units, previous, units.length) !== domScript) previous = gaps[contextGapAfter(gaps, previous)]! - 1
+  if (previous >= from) {
+    const u = units[previous]!
+    if ((u & 0xfc00) === 0xdc00 && previous > from) return { text: String.fromCharCode(units[previous - 1]!, u), before: true }
     return { text: String.fromCharCode(u), before: true }
   }
-  for (let i = tEnd; i < limit; i++) {
-    if (scriptAt(units, i, units.length) !== domScript) continue
-    const u = units[i]!
-    if (isSurrogatePair(u, units[i + 1] ?? 0)) return { text: String.fromCharCode(u, units[i + 1]!), before: false }
+  let next = tEnd
+  if (next < limit && scriptAt(units, next, units.length) !== domScript) next = gaps[contextGapAfter(gaps, next) + 1]!
+  if (next < limit) {
+    const u = units[next]!
+    if (isSurrogatePair(u, units[next + 1] ?? 0)) return { text: String.fromCharCode(u, units[next + 1]!), before: false }
     return { text: String.fromCharCode(u), before: false }
   }
   // An 8-bit text run is Latin without a Latin letter (textRunScripts), and Canvas's 16-bit string itemizes Latin only with

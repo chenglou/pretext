@@ -1039,9 +1039,9 @@ where it may be wrong.
   question that inspection asked first, the plain path first asks it later (`tests/function-set.ts plain`; TESTS.md, "The
   function set's checks"). §4.7 has the questions a paragraph asks on each path.
 - Each port keeps every gap condition in one file, `engines/<engine>/gaps.ts`. A function that raises a gap takes a sink
-  first (`GapSink`: `Gap[]`, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
+  first (`GapSink`: Blink's private `GapAccumulator`, `Gap[]` in the other ports, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
   done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
-  `inspectLine` starts from a copy of it. Blink hands a list out in a canonical form, which doesn't follow how often a
+  `inspectLine` starts from a copy of it. Blink snapshots its private accumulator into ordinary decided-line gap lists; a sparse inclusive source-position index preserves first-touch widening and speculative rollback without scanning all prior entries. Blink hands a list out in a canonical form, which doesn't follow how often a
   range was raised (§5). What else only gaps read is in `prepared.inspect`, null on a plain paragraph; nothing else says
   which of the two a paragraph is.
 - WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,

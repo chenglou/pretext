@@ -298,13 +298,22 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     stack.push({ element, children })
     return children
   }
+  const missing: number[] = []
   const ensureContainer = (element: number): Node[] => {
-    for (let k = stack.length - 1; k >= 0; k--) {
-      if (stack[k]!.element !== element) continue
-      stack.length = k + 1
-      return stack[k]!.children
+    // Indexed parents precede their children. Merge the two ancestor paths to their common
+    // container, then open the missing path outward to inward, without recursive stack rescans.
+    let ancestor = stack.length - 1
+    missing.length = 0
+    while (stack[ancestor]!.element !== element) {
+      if (element > stack[ancestor]!.element) {
+        missing.push(element)
+        element = p.elements[element]!.parent
+      } else ancestor--
     }
-    return addContainer(ensureContainer(p.elements[element]!.parent), element)
+    stack.length = ancestor + 1
+    let children = stack[ancestor]!.children
+    for (let k = missing.length - 1; k >= 0; k--) children = addContainer(children, missing[k]!)
+    return children
   }
   const addLeaf = (parent: Node[], box: Exclude<WebKitDisplayBox, InlineBox>, margin: number) => {
     out.push(box)
@@ -367,7 +376,18 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     }
     // adjustVisualGeometryForDisplayBox (:728-824).
     let right = contentLineLeftEdge
-    const adjust = (node: Node) => {
+    type Adjustment = Node | { kind: 'end'; box: InlineBox; left: number; applyRight: boolean; borderPaddingRight: number; marginRight: number }
+    const pending: Adjustment[] = []
+    for (let c = rootChildren.length - 1; c >= 0; c--) pending.push(rootChildren[c]!)
+    while (pending.length > 0) {
+      const node = pending.pop()!
+      if (node.kind === 'end') {
+        if (node.applyRight) right = f32(right + node.borderPaddingRight)
+        node.box.x = f32(lineLeft + node.left)
+        node.box.width = f32(right - node.left)
+        if (node.applyRight) right = f32(right + node.marginRight)
+        continue
+      }
       if (node.kind === 'leaf') {
         const box = node.box
         if (box.kind === 'atomic') {
@@ -375,11 +395,11 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
           const marginLeft = rtlBlock ? e.marginEnd : e.marginStart
           box.x = f32(f32(lineLeft + right) + marginLeft)
           right = f32(right + e.marginBoxWidth)
-          return
+          continue
         }
         box.x = f32(lineLeft + f32(right + node.margin))
         right = f32(right + f32(box.width + node.margin))
-        return
+        continue
       }
       const box = node.box
       const e = spanEdges(p, box.element)
@@ -394,14 +414,10 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
       if (applyLeft) right = f32(right + marginLeft)
       const left = right
       if (applyLeft) right = f32(right + borderPaddingLeft)
-      for (let c = 0; c < node.children.length; c++) adjust(node.children[c]!)
       const applyRight = (ltr && isLast) || (!ltr && isFirst)
-      if (applyRight) right = f32(right + borderPaddingRight)
-      box.x = f32(lineLeft + left)
-      box.width = f32(right - left)
-      if (applyRight) right = f32(right + marginRight)
+      pending.push({ kind: 'end', box, left, applyRight, borderPaddingRight, marginRight })
+      for (let c = node.children.length - 1; c >= 0; c--) pending.push(node.children[c]!)
     }
-    for (let c = 0; c < rootChildren.length; c++) adjust(rootChildren[c]!)
   }
   // closeInlineBoxes (:1073-1087).
   for (let i = runs.length - 1; i >= 0; i--) {

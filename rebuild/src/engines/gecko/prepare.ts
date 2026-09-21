@@ -10,7 +10,7 @@ import { geckoBidiData, geckoGraphemeRules } from './data.js'
 import { COLOR_EMOJI_FAMILY, extenderFontOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
 import * as gaps from './gaps.js'
 import { canonicalLanguageTag } from './likely.js'
-import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, runContextsFor, textRunScripts } from './measure.js'
+import { CANVAS_AU_PER_PX, NO_SCRIPT_GAPS, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, runContextsFor, scriptAt, textRunScripts } from './measure.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
@@ -294,12 +294,24 @@ const WORD_CACHE_CHAR_LIMIT = 32 // gfx.font_rendering.wordcache.charlimit (Stat
 // A shaping unit as SplitAndInitTextRun cuts it (GeckoUnit), before step 7 measures it.
 type UnitRange = Pick<GeckoUnit, 'kind' | 'tStart' | 'tEnd'>
 
-function splitAndInitTextRun(g: Glyphs, runStart: number, runLen: number, run8bit: boolean, out: UnitRange[]): void {
+function splitAndInitTextRun(g: Glyphs, runStart: number, runLen: number, run8bit: boolean, out: UnitRange[], runScript: ScriptRun): void {
   if (runLen === 0) return
   let wordStart = 0
   let wordIs8bit = true
   let nextCh = g.units[runStart]!
+  let gapStart = -1
+  let contextGaps: number[] | null = null
+  const needsContext = runScript.script !== 'Zyyy' && runScript.script !== 'Zinh' && runScript.script !== 'Zzzz'
   for (let i = 0; i <= runLen; i++) {
+    const t = runStart + i
+    // Context witnesses read the complete transformed text, including a pair split across text runs, just as rangeAu.
+    const mismatch = i < runLen && needsContext && scriptAt(g.units, t, g.units.length) !== runScript.script
+    if (mismatch) {
+      if (gapStart < 0) gapStart = t
+    } else if (gapStart >= 0) {
+      ;(contextGaps ??= []).push(gapStart, t)
+      gapStart = -1
+    }
     const ch = nextCh
     nextCh = i + 1 < runLen ? g.units[runStart + i + 1]! : 0x0a
     const boundary = (ch === 0x20 || ch === 0xa0) && (run8bit || !isClusterExtender(nextCh)) // IsBoundarySpace :3317-3330
@@ -329,6 +341,7 @@ function splitAndInitTextRun(g: Glyphs, runStart: number, runLen: number, run8bi
     wordStart = i + 1
     wordIs8bit = true
   }
+  runScript.contextGaps = contextGaps === null ? NO_SCRIPT_GAPS : new Int32Array(contextGaps)
 }
 
 // gfxFontGroup::InitTextRun shapes each script run on its own (gfxTextRun.cpp:2779-2809), so no shaped word crosses a
@@ -337,7 +350,7 @@ function initTextRun(g: Glyphs, start: number, end: number, is8bit: boolean, scr
   if (end === start) return
   let runStart = start
   for (let k = 0; k < scriptRuns.length; k++) {
-    splitAndInitTextRun(g, runStart, scriptRuns[k]!.limit - runStart, is8bit, out)
+    splitAndInitTextRun(g, runStart, scriptRuns[k]!.limit - runStart, is8bit, out, scriptRuns[k]!)
     runStart = scriptRuns[k]!.limit
   }
   g.clusterStart[start] = 1
@@ -988,7 +1001,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const correction = new Int32Array(T)
   const textRuns: GeckoTextRun[] = []
   // One record per distinct context of the text runs, which the runs that measure alike share (types.ts RunContexts).
-  const runContexts: RunContexts[] = []
+  const runContexts = new Map<Context, RunContexts>()
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     const firstRun = frames[b.flows[0]!.frame]!.run
@@ -1177,10 +1190,16 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   }
   const correctionPrefix = new Int32Array(T + 1)
   const tabPositions: number[] = []
+  const continuationPairs: number[] = []
   for (let t = 0; t < T; t++) {
     correctionPrefix[t + 1] = correctionPrefix[t]! + correction[t]!
     if (g.kind[t] === KIND_TAB) tabPositions.push(t)
+    if (g.clusterStart[t] === 0) {
+      if (t === 0 || g.clusterStart[t - 1] !== 0) continuationPairs.push(t)
+    } else if (t > 0 && g.clusterStart[t - 1] === 0) continuationPairs.push(t)
   }
+  if (T > 0 && g.clusterStart[T - 1] === 0) continuationPairs.push(T)
+  const clusterContinuations = new Int32Array(continuationPairs)
 
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) reads the space, the letter spacing and the word spacing from the
   // containing block, and tab-size from the text frame (lines.ts computeTabs).
@@ -1202,7 +1221,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
 
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, lineFeeds, leaves, frames, items,
-    elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
+    elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, clusterContinuations, isSpace: g.isSpace, kind: g.kind,
     spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
