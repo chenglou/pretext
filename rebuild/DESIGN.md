@@ -1051,7 +1051,7 @@ where it may be wrong.
   (`engines/webkit/gaps.ts`) adds the conditions of every character the filling measured; `pageHistoryGaps`
   (`engines/webkit/history.ts`) then fills the line in each history world that changes what it read, and raises
   `page-history` through `gaps.ts` (`lineDiffersInHistoryWorld`, which keeps the prose and the merge rule) where the
-  world's line differs. The box facts only gaps read, made with each box, and the history worlds are in
+  world's line differs. A history world shares the final own item array through a splice view, replacing only one box's contiguous logical range. Its source-to-world map covers that range alone; changed positions are sorted absolute item indices. Ordered box ranges select only worlds affecting the line's read range. Preparation keeps a mutable array; generic filling/inspection reads either finished array or view in constant time. The box facts only gaps read, made with each box, and the history worlds are in
   `prepared.inspect`.
 - Blink reports the conditions of the content in the paragraph's gaps with `at`, computed in `prepare` from the content
   alone (control characters Canvas replaces, U+FFFC, graphemes whose Canvas strings shape under another script, default

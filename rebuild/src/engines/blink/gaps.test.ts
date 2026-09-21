@@ -2,6 +2,7 @@
 // (paint-rules.ts lineStartScript).
 import { describe, expect, test } from 'bun:test'
 import type { Gap } from '../../model.js'
+import { ParagraphGapIndex } from './paragraph-gap-index.js'
 import { GapAccumulator } from './gap-accumulator.js'
 import { canonicalGaps } from './gaps.js'
 import { blinkPaintRules } from './paint-rules.js'
@@ -147,6 +148,45 @@ describe('blink raw gap accumulation', () => {
         }
         expect(gaps.snapshot()).toEqual(raw)
         if (i === 63) gaps = new GapAccumulator(1024, gaps.snapshot())
+      }
+    }
+  })
+})
+
+describe('blink prepared paragraph gap selection', () => {
+  test('source intervals are selected in original raise order, across nested, touching and scalar entries', () => {
+    const raw = [
+      gap('script-context', 0, 'd', 8, 12), gap('script-context', 1, 'd', 0, 20), gap('page-history', null, 'd'),
+      gap('script-context', 2, 'd', 4, 6), gap('script-context', 3, 'd', 6, 6), gap('script-context', 4, 'd', 5, 8),
+    ]
+    const original = structuredClone(raw)
+    const index = new ParagraphGapIndex(raw)
+    expect(index.intersect(5, 9)).toEqual([0, 1, 3, 4, 5])
+    expect(index.intersect(6, 6)).toEqual([1, 5])
+    expect(index.intersect(12, 14)).toEqual([1])
+    expect(index.intersect(32, 36)).toEqual([])
+    expect(index.intersect(0, 20)).toEqual([0, 1, 3, 4, 5])
+    expect(raw).toEqual(original)
+    expect(new ParagraphGapIndex([]).intersect(0, 0)).toEqual([])
+  })
+
+  test('disjoint and overlapping positive source ranges agree with the original strict filter', () => {
+    let seed = 930115
+    const random = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
+    for (let sequence = 0; sequence < 32; sequence++) {
+      const raw: Gap[] = Array.from({ length: 128 }, (_, i) => {
+        const start = Math.floor(random() * 1025)
+        return random() < 0.1 ? gap('page-history', null, 'd') : gap('script-context', i, 'd', start, start + Math.floor(random() * 256))
+      })
+      const index = new ParagraphGapIndex(raw)
+      for (let query = 0; query < 64; query++) {
+        const start = Math.floor(random() * 1536) - 128, end = start + Math.floor(random() * 256)
+        const expected: number[] = []
+        for (let i = 0; i < raw.length; i++) {
+          const at = raw[i]!.at
+          if (at !== undefined && at.start < end && at.end > start) expected.push(i)
+        }
+        expect(index.intersect(start, end)).toEqual(expected)
       }
     }
   })

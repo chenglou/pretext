@@ -16,7 +16,7 @@ import { buildItems } from './items.js'
 import { isComplexCodePath } from './measure.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { boxEdges, layoutUnit, preservesNewline, webkitStyle } from './style.js'
-import type { WebKitBox, WebKitPrepared, WebKitStyle } from './types.js'
+import type { WebKitBox, WebKitOwnPrepared, WebKitStyle } from './types.js'
 
 const f32 = Math.fround
 
@@ -99,7 +99,7 @@ function familyList(families: readonly FamilyName[]): string {
   return families.map(family => family.css).join(', ')
 }
 
-function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKitBox {
+function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number): WebKitBox {
   const declared = leaf.textStyle.font
   const facts = declared.facts
   const locale = computedLocale(leaf.lang, p.env.preferredLanguages)
@@ -215,11 +215,11 @@ function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
 
 // `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts): an inspected paragraph keeps what
 // gaps.ts and history.ts read, and a plain one measures what deciding its lines takes and nothing else.
-export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean, contexts: ContextPool): WebKitPrepared {
+export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean, contexts: ContextPool): WebKitOwnPrepared {
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
-  const p: WebKitPrepared = {
+  const p: WebKitOwnPrepared = {
     env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
     builder: 'line-builder', boxes: [], runStarts: [], items: [], contexts, inspect: inspect ? newInspection(env) : null,
   }
@@ -232,9 +232,10 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
   for (let e = 0; e < index.elements.length; e++) {
     const indexed = index.elements[e]!
     const node = indexed.node
+    const depth = indexed.parent < 0 ? 1 : p.elements[indexed.parent]!.depth + 1
     switch (node.kind) {
       case 'span':
-        p.elements.push({ kind: 'span', parent: indexed.parent, style: webkitStyle(node, paragraph, zoom), edges: boxEdges(node.inlineStart, node.inlineEnd, zoom, env.devicePixelRatio), letterSpacing: f32(f32(node.letterSpacing) * f32(zoom)) })
+        p.elements.push({ kind: 'span', parent: indexed.parent, depth, style: webkitStyle(node, paragraph, zoom), edges: boxEdges(node.inlineStart, node.inlineEnd, zoom, env.devicePixelRatio), letterSpacing: f32(f32(node.letterSpacing) * f32(zoom)) })
         break
       case 'atomic': {
         // BoxGeometry of an inline-block with box-sizing: border-box (LayoutIntegrationBoxGeometryUpdater.cpp:670-706):
@@ -242,14 +243,14 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
         const marginStart = layoutUnit(f32(f32(node.marginInlineStart) * f32(zoom)))
         const marginEnd = layoutUnit(f32(f32(node.marginInlineEnd) * f32(zoom)))
         const borderBoxWidth = layoutUnit(f32(f32(node.width) * f32(zoom)))
-        p.elements.push({ kind: 'atomic', parent: indexed.parent, node, marginStart, marginEnd, borderBoxWidth, marginBoxWidth: f32(marginStart + borderBoxWidth + marginEnd) })
+        p.elements.push({ kind: 'atomic', parent: indexed.parent, depth, node, marginStart, marginEnd, borderBoxWidth, marginBoxWidth: f32(marginStart + borderBoxWidth + marginEnd) })
         break
       }
       case 'br':
-        p.elements.push({ kind: 'br', parent: indexed.parent })
+        p.elements.push({ kind: 'br', parent: indexed.parent, depth })
         break
       case 'wbr':
-        p.elements.push({ kind: 'wbr', parent: indexed.parent })
+        p.elements.push({ kind: 'wbr', parent: indexed.parent, depth })
         break
     }
   }
@@ -328,7 +329,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
 // RangeBasedLineBuilder::isEligibleForRangeInlineLayout (RangeBasedLineBuilder.cpp:36-39, :131-184) without floats: every
 // item is an inline box start or end, or one span without box edges around content the simple builder takes. Returns which of
 // the two the content is, or null where it isn't eligible.
-function rangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): 'inline-boxes-only' | 'range-based' | null {
+function rangeInlineLayout(p: WebKitOwnPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): 'inline-boxes-only' | 'range-based' | null {
   const items = p.items
   if (items.length === 0) return null
   const first = items[0]!

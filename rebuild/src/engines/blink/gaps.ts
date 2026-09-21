@@ -11,6 +11,7 @@
 // Canvas on an inspected paragraph alone.
 import type { Gap, GapName } from '../../model.js'
 import { GapAccumulator } from './gap-accumulator.js'
+import { ParagraphGapIndex } from './paragraph-gap-index.js'
 import { hasDictionaryCharacters, languageOf, lineTable } from './breaks.js'
 import { collapsesWhiteSpace, isSpaceLB } from './content.js'
 import { raw16Of } from './contexts.js'
@@ -410,20 +411,22 @@ const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis fr
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
 
 // The source ranges of the text items under a style.
-function styleRanges(p: BlinkPrepared, style: number): { start: number; end: number }[] {
+function styleRanges(p: BlinkPrepared, items: readonly number[]): { start: number; end: number }[] {
   const ranges: { start: number; end: number }[] = []
-  for (let i = 0; i < p.items.length; i++) {
-    const item = p.items[i]!
-    if (item.type === 'text' && item.style === style && item.start < item.end) ranges.push(sourceRange(p, item.start, item.end))
+  for (const index of items) {
+    const item = p.items[index]!
+    ranges.push(sourceRange(p, item.start, item.end))
   }
   return ranges
 }
 
 // The conditions of the content, each with the source range it concerns (DESIGN.md §2.8, §5).
-function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): void {
+function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): number[][] {
+  const byStyle: number[][] = Array.from({ length: p.styles.length }, () => [])
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
     if (item.type !== 'text' || item.start === item.end) continue
+    byStyle[item.style]!.push(i)
     const collapses = collapsesWhiteSpace(p.styles[item.style]!.whiteSpace)
     for (let k = item.start; k < item.end; k++) {
       const c = p.text.charCodeAt(k)
@@ -445,6 +448,7 @@ function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): void {
       addGap(gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without the running browser\'s Intl.v8BreakIterator: no break opportunities inside such runs (DESIGN.md §6.3)', sourceRange(p, item.start, item.end))
     }
   }
+  return byStyle
 }
 
 // The gaps of the prepared content, its fonts' facts and the environment (DESIGN.md §2.8), after the ones preparation's
@@ -452,10 +456,10 @@ function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): void {
 // gaps take in the ones whose ranges meet what its decision measured (lineEdgeGaps).
 export function preparedContent(p: BlinkPrepared, sink: GapSink): void {
   if (p.inspect === null || sink === null) return
-  contentGaps(sink, p)
+  const byStyle = contentGaps(sink, p)
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
-    const ranges = (): { start: number; end: number }[] => styleRanges(p, s)
+    const ranges = (): { start: number; end: number }[] => styleRanges(p, byStyle[s]!)
     if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && style.iterator.strictness === 'strict'))) {
       for (const at of ranges()) addGap(sink, 'ui-language', style.run, 'content without a locale, or ko with line-break: strict, follows Chrome\'s application locale, which isn\'t given: break tables, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3)', at)
     }
@@ -479,6 +483,7 @@ export function preparedContent(p: BlinkPrepared, sink: GapSink): void {
     }
   }
   p.inspect.gaps = canonicalGaps(sink.snapshot())
+  p.inspect.paragraphIndex = new ParagraphGapIndex(p.inspect.gaps)
 }
 
 // What inspectLine and paragraphGaps read of a prepared paragraph; they throw on one prepared plain.
@@ -648,9 +653,10 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
   const contentEnd = info.token === null ? p.text.length : info.token.textOffset
   if (info.decisionEnd > contentEnd) {
     const range = sourceRange(p, contentEnd, info.decisionEnd)
-    for (let i = 0; i < paragraph.length; i++) {
+    const matches = p.inspect!.paragraphIndex!.intersect(range.start, range.end)
+    for (const i of matches) {
       const g = paragraph[i]!
-      if (g.at !== undefined && g.at.start < range.end && g.at.end > range.start) addGap(gaps, g.gap, g.run, g.detail, g.at)
+      addGap(gaps, g.gap, g.run, g.detail, g.at!)
     }
   }
   // How far the decision is from going the other way: the line's position against the fit bound (available width + 1,

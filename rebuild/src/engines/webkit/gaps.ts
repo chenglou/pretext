@@ -1,3 +1,4 @@
+import { itemAt } from './item-sequence.js'
 // WebKit's gaps (Safari 27.0): every Canvas-versus-DOM condition the port reports, with its test, its prose, its merge rule
 // and its order (DESIGN.md §2.8, §5). Nothing outside this file builds a Gap, and nothing in it decides a line, fills one or
 // reads the rest of the port's stages: the rest of the port calls it at the points where a condition shows.
@@ -253,7 +254,7 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
   }
   const end = Math.min(decided.measuredEnd, p.items.length)
   for (let index = start.itemIndex; index < end; index++) {
-    const item = p.items[index]!
+    const item = itemAt(p.items, index)!
     if (item.kind !== 'text') continue
     const lineFrom = index === start.itemIndex ? item.start + start.offset : item.start
     if (lineFrom >= item.end) continue

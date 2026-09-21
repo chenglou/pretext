@@ -134,18 +134,78 @@ skips, and the same deliberate aggregate exit 1. All 393,720 replayable plain/pu
 for the first batch's unrecorded questions. Second-batch logs, reports and temporary proofs are preserved under
 `.artifacts/general-cost-20260921-r2/`.
 
+## Third batch
+
+| Access or analysis | Previous growth | Current data flow |
+|---|---|---|
+| Blink paragraph diagnostics | scan all paragraph gaps for every line | one static interval tree over canonical numeric gap ordinals; return matches in first-raise order |
+| Blink declared diagnostic styles | repeatedly scan all items per style | temporary per-style item buckets built in the existing pass, discarded after preparation |
+| Gecko connected candidate rows | rediscover every boundary at every queried offset | publish the same discovered row into its existing per-offset row slots once |
+| Gecko known group edges/agreement | linear edge lookup and nested membership tests | binary ordered lookup and monotone required-cut merge |
+| Gecko parsed family declarations | parse/compare long shared vectors at every adjacent frame | one preparation-local declaration-identity registry and canonical parsed-vector records; unchanged first-demand validation |
+| WebKit real alternate-history worlds | copy whole item/mapping/change arrays per world; scan all worlds for each line | splice views sharing finished own items, local maps and sorted changed positions; ordered world-range selection |
+| WebKit wrapping ancestors | recompute both root depths per sibling wrap | depth stored on the existing element record during preorder construction; walk only differing ancestor paths |
+
+Blink replaces 29,991,895 actual Bukhala paragraph-gap inspections with 388,608 interval visits plus 13,098 matching
+entries. At 2,048 same-font mark spans, 12,589,056 diagnostic style-item inspections become 2,048, with the same single
+Canvas question shaping 2,048 units. Complete output/raw-gap/question comparisons cover 112 inputs, with 42,000
+independent interval-query comparisons including overlaps and zero/reversed query ranges. The static index stores numeric
+endpoints and ordinals, not Gap/Entry back-references or measured answers; it lives in the inspected preparation. It does
+not change gap order or canonicalization.
+
+Gecko's 1,024-unit connected-row discovery drops 1,047,552 repeated boundary steps to 1,024 discovery and 1,023 once-only
+publication steps. Known-edge lookup drops 392,960 comparisons to 9,212; required-cut agreement drops 262,656 to 1,024.
+Existing offset slots share the same row; no additional row, edge vector, offset record or context is allocated. The row
+batch preserves 2,448 complete outputs and ordered questions, including nonmonotone direct offset queries. Family
+analysis preserves another 2,664 complete outputs/questions and 240 validation/short-circuit/error comparisons. With
+512 flows alternating two equivalent 512-family declarations, parsing drops 1,022 calls/7,211,232 source units to two
+calls/14,112 units; entry comparisons drop 261,632 to 512. The registry dies before preparation returns. Each distinct
+raw declaration is still validated on first demand; malformed self-equality still throws.
+
+WebKit's 1,024 genuinely differing TAB-space boxes retain 15,360 local item/map/change entries instead of 31,458,304
+whole-paragraph entries; both versions have 2,048 worlds and ask 3,072 Canvas questions shaping 4,096 units. Local views
+preserve untouched prefix/suffix object identity, map the source item containing a carried line start, and keep worlds
+in logical box order. The generic list reader is constant time; preparation retains its direct mutable array phase.
+Only necessary consumed slices materialize. A late tiny line searches matching histories rather than scanning all
+worlds. At 1,024 shared ancestors/1,024 Han sibling spans, 2,100,220 parent reads become 3,070 with identical 2,048 Canvas
+questions/units. Depth is one scalar on the existing element record, not a separate table.
+
+Temporary full-state comparisons explicitly materialize the views and maps to the old representation and omit only the
+new internal depth scalar. Existing fields/output/questions must remain exact. They cover 918 complete comparisons,
+including an independent 326-input review with atomics, break elements, empty/short leaves, mixed styles and deep Han
+siblings. No cycle or mutation of finished base items is introduced. Rotating free-answer prototypes show the expected
+large-input preparation reduction (roughly 309 ms to 4.7 ms in the 1,024-world case), and a small constant generic-reader
+cost: ordinary three-width fill/pieces/inspection adds about 3–7 microseconds per message in these controls. Those
+stand-in costs are scoped own-code evidence, not native speed claims; retain the general bounded representation.
+
+The 25 all-engine quick gates finish in 216.5 seconds: 1,079 tests/88 files and all six strict projects pass. All replay
+counts/classifications/skips remain exactly those of the preceding checkpoint: no new prediction/question differences
+and deliberate aggregate exit 1. Fresh sealed MF1000 checks at
+`.artifacts/tests/main-native-runs/general-cost-20260921-r3/` retain every status and range, with only four existing
+Firefox native geometry review details changing. The preceding 32/64/34 input-only targets have exactly identical
+complete results at `.artifacts/tests/general-cost-native-20260921-r4/`. Twenty additional Firefox row/witness/family
+inputs pass. Eleven of twelve additional WebKit real-world/deep-ancestor inputs pass; one native layout changes with
+run order (48 versus 64 lines). A fresh four-role run of the preserved second-checkpoint core has **exactly the same
+complete twelve results**, including that native variation. Both strict reviews are retained at
+`.artifacts/tests/general-cost-native-new-20260921-{r3,r3-base}/`. New targets confer no main or supplied-facts waiver.
+
 ## Remaining general frontier
 
-Measured avoidable work remains: Blink repeatedly selects paragraph gaps per line and rescans all items per diagnostic
-style; WebKit allocates whole paragraph item and mapping arrays per genuinely differing alternate world; Gecko can
-rediscover a connected candidate row per offset and compare ordered cuts with nested membership searches. These are
-active prototypes rather than accepted costs. Blink source/grapheme mapping across many distinct spans also warrants
-ordered boundary access.
+Measured avoidable work remains: Blink diagnostic source/grapheme/cluster mapping rescans long clusters and generated
+runs, and final canonical gap union still scans earlier entries. Gecko ancestor continuity and tab-origin work can
+multiply input depth by leaves; whole-leaf whitespace classification repeats across justified lines, and deep formatting
+still reaches the call-stack limit. These are active prototypes rather than accepted costs.
 
 Blink box-edge suffix shifts repeat over visual children. A source-preserving ordered product of saturated LayoutUnit
-shifts is being prototyped; simple reassociation loses the source's saturating event order. The geometry numeric boundary
-must be explicit, including atomic border-box widths and nonnegative exported inline-box fragments, before it lands.
+shifts is being prototyped; simple reassociation loses the source's saturating event order. The coherent ownership
+boundary includes LineBreaker and trailing-space geometry inputs, not merely late output clamps. Four independent tiny
+signed-margin cases confirm the source's nonnegative physical fragment law against fresh Chrome: core fragment rects
+match all eight inspected native observations after correction, versus four previously. The old observation port already
+clamped negative rectangles, so its score alone masked the bad internal physical-fragment width. This does not certify
+broader extreme breaker/shaping semantics.
+
 Signed spacing can make a fixed pixel-width shaping window unbounded in source length. Gecko units that fail all
 certified additive cuts still require long per-offset Canvas recipes: question counts can be linear while total shaped
-units are quadratic. Removing metadata scans does not close that observability cost. The general performance goal is
-not complete while substantial justified repairs remain.
+units are quadratic. Removing metadata scans does not close that observability cost. WebKit nonmonotone complex-word,
+TAB-prefix and cross-box joining recipes have related shaped-unit/counterfactual cost. The general performance goal is
+not complete while substantial justified own-code repairs remain.

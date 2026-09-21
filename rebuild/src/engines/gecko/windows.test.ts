@@ -5,7 +5,7 @@ import { beforeAll, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, linePieces, inspectLine } from './index.js'
-import { advanceBefore } from './advance.js'
+import { advanceBefore, groupAround } from './advance.js'
 import { createContextPool } from '../../measure/canvas.js'
 import { prepareGecko } from './prepare.js'
 
@@ -15,13 +15,14 @@ const advanceOf = (c: string): number => c === 'A' ? 600.4 : c === 'V' ? 590.2 :
 const glyph = (text: string, i: number): number => Math.floor(advanceOf(text[i]!) - (text[i] === 'A' && text[i + 1] === 'V' ? 41 : 0) + 0.5)
 
 let questions: string[] = []
+let requiredPairSpacing = false
 
 beforeAll(() => {
   class Ctx {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
       questions.push(s)
-      let au = this.letterSpacing === '2px' ? 120 * s.length : 0
+      let au = this.letterSpacing === '2px' ? 120 * (requiredPairSpacing && /^f+$/.test(s) ? Math.ceil(s.length / 2) : s.length) : 0
       for (let i = 0; i < s.length; i++) au += glyph(s, i)
       const width = Math.fround(au / 60)
       return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: this.letterSpacing === '0px' && s.includes('ff') ? width + 0.006 : width }
@@ -164,4 +165,75 @@ test('several failed cuts close with the whole merged width when a later cut hol
       expect(advances.reduce((sum, au) => sum + au, 0)).toBe(prepared.units[0]!.au + letterSpacing * 60 * text.length)
     }
   }
+})
+
+function countedMetadata<T extends Uint8Array | number[]>(values: T): { values: T; reads: () => number } {
+  let reads = 0
+  return { values: new Proxy(values, { get(target, key) {
+    if (typeof key === 'string' && /^\d+$/.test(key)) reads++
+    return Reflect.get(target, key, target)
+  } }), reads: () => reads }
+}
+
+test('a long connected optional-ligature row shares its discovered row with arbitrary interior queries', () => {
+  // Every ff boundary is a candidate even where actual disjoint ff glyphs would stop. Unknown ligature facts leave
+  // one unconfirmed row. Every window cut crosses a candidate, so this tests an input-sized row rather than cells.
+  const n = 1024, prepared = prepareGecko(paragraphOf('f'.repeat(n)), env, false, createContextPool())
+  const flags = countedMetadata(prepared.clusterStart)
+  prepared.clusterStart = flags.values
+  const run = prepared.textRuns[0]!, unit = prepared.units[0]!
+  expect(groupAround(prepared, run, unit, 1)).toEqual({ start: 0, end: n, unconfirmed: true })
+  expect(unit.inWord!.windows).toEqual([])
+  questions = []
+  for (let k = 0; k < n - 1; k++) {
+    const t = 1 + (k * 37) % (n - 1)
+    expect(groupAround(prepared, run, unit, t)).toEqual({ start: 0, end: n, unconfirmed: true })
+  }
+  expect(questions).toEqual([])
+  expect(flags.reads()).toBeLessThan(16 * n)
+  const offsets = unit.inWord!.offsets, row = offsets[0]!.row!
+  for (let t = 1; t < n; t++) expect(offsets[t]!.row).toBe(row)
+})
+
+test('a long known optional-ligature row finds strict group interiors from its ordered group edges', () => {
+  const n = 2048
+  const known: FontDecl = { ...font, facts: { ...font.facts, fonts: [{
+    family: font.family, realizes: true, coverage: [0x20, 0x7e], scriptLookups: [],
+    ligatures: { complete: true, languageSystems: [], patterns: [{
+      positions: [['f'], ['f']], exact: true, everyContext: true, spaced: false, acrossMark: null,
+    }] },
+  }] } }
+  const prepared = prepareGecko({ ...paragraphOf('f'.repeat(n)), font: known }, env, false, createContextPool())
+  const run = prepared.textRuns[0]!, unit = prepared.units[0]!
+  expect(groupAround(prepared, run, unit, 1)).toEqual({ start: 0, end: 2, unconfirmed: false })
+  const row = unit.inWord!.offsets[0]!.row!, edges = countedMetadata(row.edges)
+  expect(row.edges.length).toBe(n / 2 + 1)
+  row.edges = edges.values
+  questions = []
+  for (let k = 0; k < n - 1; k++) {
+    const t = 1 + (k * 37) % (n - 1)
+    expect(groupAround(prepared, run, unit, t)).toEqual(t % 2 === 0 ? null : { start: t - 1, end: t + 1, unconfirmed: false })
+  }
+  expect(questions).toEqual([])
+  expect(edges.reads()).toBeLessThan(32 * n)
+})
+
+test('required cuts between known group edges agree without changing strict group boundaries', () => {
+  const n = 128
+  const known: FontDecl = { ...font, facts: { ...font.facts, fonts: [{
+    family: font.family, realizes: true, coverage: [0x20, 0x7e], scriptLookups: [],
+    ligatures: { complete: true, languageSystems: [], patterns: [{
+      positions: [['f'], ['f']], exact: true, everyContext: true, spaced: true, acrossMark: null,
+    }] },
+  }] } }
+  requiredPairSpacing = true
+  try {
+    const prepared = prepareGecko({ ...paragraphOf('f'.repeat(n)), font: known }, env, false, createContextPool())
+    const run = prepared.textRuns[0]!, unit = prepared.units[0]!
+    for (let t = 1; t < n; t++) expect(groupAround(prepared, run, unit, t)).toEqual(
+      t % 2 === 0 ? null : { start: t - 1, end: t + 1, unconfirmed: false },
+    )
+    expect(unit.inWord!.windows).toEqual([])
+    expect(unit.inWord!.offsets[0]!.row!.edges).toEqual(Array.from({ length: n / 2 + 1 }, (_, i) => i * 2))
+  } finally { requiredPairSpacing = false }
 })

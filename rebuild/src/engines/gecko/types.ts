@@ -223,7 +223,7 @@ export type InWordEntry = {
   // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
   ligature: boolean | null
   group: boolean | null
-  // The row of ligature candidates that starts here (rowAround).
+  // The connected row that starts here or includes this interior cluster boundary; its records share one row (rowAround).
   row: LigatureRow | null
   // The advance before the offset (advanceBefore).
   advance: InWordAdvance | null

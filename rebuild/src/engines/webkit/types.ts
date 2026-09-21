@@ -40,7 +40,7 @@ export type WebKitStyle = {
 export type WebKitBoxEdges = { marginStart: number; borderStart: number; paddingStart: number; marginEnd: number; borderEnd: number; paddingEnd: number }
 
 // An element of the inline tree as a layout box.
-export type WebKitElement =
+export type WebKitElement = (
   // letterSpacing: usedLetterSpacing, float32 px at page zoom, which decides whether negative spacing may pull content left
   // of the box (InlineLine.cpp:307-309, :331-336).
   | { kind: 'span'; parent: number; style: WebKitStyle; edges: WebKitBoxEdges; letterSpacing: number }
@@ -49,6 +49,7 @@ export type WebKitElement =
   | { kind: 'atomic'; parent: number; node: AtomicInline; marginStart: number; marginEnd: number; borderBoxWidth: number; marginBoxWidth: number }
   | { kind: 'br'; parent: number }
   | { kind: 'wbr'; parent: number }
+) & { depth: number }
 
 // One rendered Text node, WebKit's InlineTextBox, and the facts WebKit derives from its content and font.
 export type WebKitBox = {
@@ -160,7 +161,7 @@ export type WebKitPrepared = {
   boxes: WebKitBox[]
   // Source offset of each run's first code unit, and the total length at runs.length.
   runStarts: number[]
-  items: WebKitItem[]
+  items: WebKitItemSequence
   // The Canvas contexts the paragraph makes its own in, one per distinct settings (measure/canvas.ts): the caller's list, a
   // page's or this paragraph's alone (index.ts prepare). The paragraph's are all made while it is prepared; the boxes and
   // the box facts hold the ones they measure in. A world shares its paragraph's.
@@ -170,6 +171,9 @@ export type WebKitPrepared = {
   // which of the two a paragraph is.
   inspect: WebKitInspect | null
 }
+
+// Only preparation owns mutable items; alternate worlds expose the broader finished-list view.
+export type WebKitOwnPrepared = WebKitPrepared & { items: WebKitItem[] }
 
 export type WebKitInspect = {
   // The paragraph's gaps: conditions of the environment alone (gaps.ts newInspection).
@@ -215,11 +219,22 @@ export type WebKitBoxInspect = {
   dictionaryRangesStartingWithMark: Array<[number, number]>
 }
 
-// A history world: the prepared paragraph with `box` built from a cached list. `itemIndex` maps each of the paragraph's own
-// item indices to the world's item that holds the own item's start, and `changed` marks the own items the world splits,
-// merges or flags otherwise. A world is an inspected paragraph without worlds of its own, so its lines are filled and
-// inspected by the functions that fill and inspect the paragraph's.
-export type WebKitHistoryWorld = { prepared: WebKitPrepared; box: number; itemIndex: number[]; changed: boolean[] }
+// The own preparation holds the mutable builder array. A history world holds a splice view over that immutable finished
+// array and its replacement box items; unchanged paragraph prefixes and suffixes are shared, not copied per world.
+export type WebKitItemSequence = WebKitItem[] | WebKitItemSplice
+export type WebKitItemSplice = {
+  base: readonly WebKitItem[]
+  start: number
+  end: number
+  replacement: WebKitItem[]
+  length: number
+}
+
+// A history world shares the finished own items outside one box's [start, end) logical item range. `itemIndex` maps only
+// that range into the replacement list (relative indices); unchanged ranks map directly through the splice. `changed`
+// contains sorted absolute own-item indices whose boundaries or flags differ. The world has no worlds of its own, and
+// uses the ordinary fill/output/inspection functions over its item view.
+export type WebKitHistoryWorld = { prepared: WebKitPrepared & { items: WebKitItemSplice }; box: number; start: number; end: number; itemIndex: number[]; changed: number[] }
 
 // ---- A line (lines.ts fills it; output.ts and gaps.ts read it) ----
 

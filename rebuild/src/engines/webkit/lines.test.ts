@@ -1,3 +1,4 @@
+import { itemAt, sliceItems, worldItemIndex } from './item-sequence.js'
 import { createContextPool } from '../../measure/canvas.js'
 // WebKit line output on worked examples of DESIGN.md §2.2-§2.4 and research/observe-webkit.md §4-§5, with a stand-in
 // Canvas whose advances are chosen per test. These pin the port's output shape (display boxes from the closed run list,
@@ -959,9 +960,9 @@ describe('history world box traversal', () => {
     expect(ownTab).toBeGreaterThanOrEqual(0)
     expect(prepared.items[ownTab]).toMatchObject({ isWordSeparator: true })
     const worlds = prepared.inspect!.worlds
-    const cachedTab = worlds.find(world => world.box === 2 && world.prepared.items.some(item => item.kind === 'text' && item.box === 2 && item.start === 1 && item.end === 3 && !item.isWordSeparator))!
+    const cachedTab = worlds.find(world => world.box === 2 && world.prepared.items.replacement.some(item => item.kind === 'text' && item.box === 2 && item.start === 1 && item.end === 3 && !item.isWordSeparator))!
     expect(cachedTab).toBeDefined()
-    expect(cachedTab.changed[ownTab]).toBe(true)
+    expect(cachedTab.changed.includes(ownTab)).toBe(true)
   })
 
   test('bidi-split boxes between short leaves retain logical world mappings', () => {
@@ -972,10 +973,10 @@ describe('history world box traversal', () => {
     const worlds = prepared.inspect!.worlds
     expect(worlds.some(world => world.box === 2)).toBe(true)
     for (const world of worlds) {
-      expect(world.itemIndex.length).toBe(prepared.items.length)
-      expect(world.changed.length).toBe(prepared.items.length)
+      expect(world.itemIndex.length).toBe(world.end - world.start)
+      expect(world.changed.every(index => index >= world.start && index < world.end)).toBe(true)
       for (let i = 0; i < prepared.items.length; i++) {
-        const own = prepared.items[i]!, mapped = world.prepared.items[world.itemIndex[i]!]!
+        const own = prepared.items[i]!, mapped = itemAt(world.prepared.items, worldItemIndex(world, i))!
         if (own.kind === 'text' || own.kind === 'soft-line-break') {
           expect(mapped.kind === 'text' || mapped.kind === 'soft-line-break').toBe(true)
           if (mapped.kind === 'text' || mapped.kind === 'soft-line-break') expect(mapped.box).toBe(own.box)
@@ -1088,8 +1089,8 @@ describe('logical preparation and deep display traversal', () => {
     const world = worlds[0]!
     expect(world.prepared.items.length).toBe(2 * count + 1)
     expect(world.itemIndex).toEqual([0, ...Array.from({ length: count }, (_, index) => 2 * index + 1)])
-    expect(world.changed).toEqual([false, ...new Array<boolean>(count).fill(true)])
-    const ends = world.prepared.items.map(item => item.kind === 'text' ? item.end : -1)
+    expect(world.changed).toEqual(Array.from({ length: count }, (_, index) => index + 1))
+    const ends = world.prepared.items.replacement.map(item => item.kind === 'text' ? item.end : -1)
     expect(ends).toEqual([3, ...Array.from({ length: count - 1 }, (_, index) => [6 * index + 4, 6 * index + 9]).flat(), 6 * count - 2, 6 * count])
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 10000, left: 0, right: 0 })
     if (filled.kind !== 'line') throw new Error('unconstrained slot refused')
@@ -1115,5 +1116,73 @@ describe('logical preparation and deep display traversal', () => {
     expect(geometry.boxes.every(box => box.x === 92 && box.width === 8)).toBe(true)
     expect(geometry.boxes.slice(0, depth).map(box => box.kind === 'inline-box' ? [box.element, box.hasStartEdge, box.hasEndEdge] : null)).toEqual(Array.from({ length: depth }, (_, element) => [element, true, true]))
     expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').map(fragment => fragment.painted)).toEqual(['א'])
+  })
+})
+
+describe('sparse alternate-history worlds', () => {
+  test('many real TAB-space worlds retain local replacements rather than whole paragraph copies', () => {
+    const count = 1024
+    const p = paragraph(Array.from({ length: count }, () => ['a\t bc', 'span'] as [string, FlatNode]), { whiteSpace: 'pre-wrap' })
+    const prepared = prepare(p, env, true, createContextPool())
+    const worlds = prepared.inspect!.worlds
+    expect(worlds.length).toBe(2 * count)
+    let retained = 0
+    for (const world of worlds) {
+      expect(world.prepared.items.base).toBe(prepared.items)
+      retained += world.prepared.items.replacement.length + world.itemIndex.length + world.changed.length
+      expect(worldItemIndex(world, 0)).toBe(0)
+      expect(worldItemIndex(world, prepared.items.length)).toBe(world.prepared.items.length)
+    }
+    expect(retained).toBeLessThanOrEqual(20 * count)
+    const world = worlds[worlds.length - 1]!
+    expect(sliceItems(world.prepared.items, 0, world.start)).toEqual(prepared.items.slice(0, world.start))
+    expect(itemAt(world.prepared.items, -1)).toBeUndefined()
+    expect(itemAt(world.prepared.items, world.prepared.items.length)).toBeUndefined()
+  })
+})
+
+describe('history selection workload', () => {
+  test('a late tiny line searches only histories that changed its read range', () => {
+    const p = paragraph(Array.from({ length: 512 }, () => ['a\t bc', 'span'] as [string, FlatNode]), { whiteSpace: 'pre-wrap' })
+    const prepared = prepare(p, env, true, createContextPool())
+    let last: WebKitFilledLine | null = null
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width: 20, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('no floats')
+      last = filled.line
+      start = filled.next
+    }
+    expect(last).not.toBeNull()
+    let worldReads = 0
+    const inspection = prepared.inspect!
+    inspection.worlds = new Proxy(inspection.worlds, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) worldReads++
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    expect(inspectLine(prepared, last!).geometry).not.toBeNull()
+    expect(worldReads).toBeLessThan(64)
+  })
+})
+
+describe('ancestor depth workload', () => {
+  test('many sibling wraps under a deep shared ancestor avoid rescanning the shared root path', () => {
+    const count = 1024, depth = 1024
+    const p = paragraph(Array.from({ length: count }, () => ['中', 'span'] as [string, FlatNode]))
+    for (let i = 0; i < depth; i++) p.content = [span(p, p.content)]
+    const prepared = prepare(p, env, false, createContextPool())
+    let parentReads = 0
+    prepared.elements = prepared.elements.map(element => new Proxy(element, {
+      get(target, key, receiver) {
+        if (key === 'parent') parentReads++
+        return Reflect.get(target, key, receiver)
+      },
+    }))
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 1e8, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('no floats')
+    expect(filled.next).toBeNull()
+    expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').length).toBe(count)
+    expect(parentReads).toBeLessThan(8 * (count + depth))
   })
 })

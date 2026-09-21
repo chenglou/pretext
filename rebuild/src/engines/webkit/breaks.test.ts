@@ -1,3 +1,4 @@
+import { itemAt } from './item-sequence.js'
 import { createContextPool } from '../../measure/canvas.js'
 // WebKit break opportunities against their sources:
 // - classify() over every code unit against data/webkit/breakable-positions/classify.tsv (BreakablePositions.h at 7625);
@@ -57,7 +58,7 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
   const forced: number[] = []
   let previous: WebKitTextItem | null = null
   for (let i = 0; i < p.items.length; i++) {
-    const item = p.items[i]!
+    const item = itemAt(p.items, i)!
     if (item.kind === 'soft-line-break') {
       forced.push(p.boxes[item.box]!.sourceStart + item.start + 1)
       previous = null

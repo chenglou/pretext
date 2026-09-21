@@ -2,6 +2,7 @@
 // the facts about realized fonts the port reads (DESIGN.md §1.2).
 import { listedFamilies } from '../../font-family.js'
 import type { FontDecl } from '../../model.js'
+import { findRecord, insertRecord, orderedRecords, type OrderedLinks, type OrderedRecords } from '../../ordered-records.js'
 
 export type FontFamilyEntry =
   | { kind: 'generic'; name: 'serif' | 'sans-serif' | 'monospace' | 'cursive' | 'fantasy' | 'math' | 'system-ui' }
@@ -48,21 +49,37 @@ export function parseFamilyList(list: string): FontFamilyEntry[] {
   return out
 }
 
-function sameFamilies(a: FontFamilyEntry[], b: FontFamilyEntry[]): boolean {
-  if (a.length !== b.length) return false
+type FamilyRecord = OrderedLinks & { families: FontFamilyEntry[] }
+// Source declarations and their canonical parsed family lists, needed only while preparing text runs and diagnostics.
+export type FontDeclarations = { byFont: Map<FontDecl, FamilyRecord>; families: OrderedRecords<FamilyRecord> }
+export function createFontDeclarations(): FontDeclarations {
+  return { byFont: new Map(), families: orderedRecords() }
+}
+
+function compareFamilies(a: FontFamilyEntry[], b: FontFamilyEntry[]): number {
+  if (a === b) return 0
+  if (a.length !== b.length) return a.length - b.length
   for (let k = 0; k < a.length; k++) {
-    const x = a[k]!
-    const y = b[k]!
-    switch (x.kind) {
-      case 'generic':
-        if (y.kind !== 'generic' || y.name !== x.name) return false
-        break
-      case 'named':
-        if (y.kind !== 'named' || y.name !== x.name || y.syntax !== x.syntax) return false
-        break
-    }
+    const x = a[k]!, y = b[k]!
+    if (x.kind !== y.kind) return x.kind < y.kind ? -1 : 1
+    if (x.name !== y.name) return x.name < y.name ? -1 : 1
+    if (x.kind === 'named' && y.kind === 'named' && x.syntax !== y.syntax) return x.syntax < y.syntax ? -1 : 1
   }
-  return true
+  return 0
+}
+const compareFamilyKey = (key: FontFamilyEntry[], record: FamilyRecord): number => compareFamilies(key, record.families)
+const compareFamilyRecords = (a: FamilyRecord, b: FamilyRecord): number => compareFamilies(a.families, b.families)
+
+function familiesFor(font: FontDecl, declarations: FontDeclarations | undefined): FontFamilyEntry[] {
+  if (declarations === undefined) return parseFamilyList(font.family)
+  const found = declarations.byFont.get(font)
+  if (found !== undefined) return found.families
+  // Demand preserves parser validation: no raw-string or declaration-identity equality skips the first parse.
+  const families = parseFamilyList(font.family)
+  const canonical = findRecord(declarations.families, families, compareFamilyKey) ?? insertRecord(declarations.families,
+    { families, left: -1, right: -1, height: 1 }, compareFamilyRecords)
+  declarations.byFont.set(font, canonical)
+  return canonical.families
 }
 
 // Servo quantize_font_size, 10 significant bits (servo/components/style/values/specified/font.rs:993-1022).
@@ -76,9 +93,9 @@ export function quantize10(size: number): number {
 // FixedPoint<u16, 6> (font.rs:92-96, :155), the quantized computed size and the parsed family list, whose FamilyName
 // equality includes the syntax (font.rs:512-533), so Arial and "Arial" differ. ContinueTextRunAcrossFrames compares
 // these (nsTextFrame.cpp:2168).
-export function sameFontForTextRun(a: FontDecl, b: FontDecl): boolean {
+export function sameFontForTextRun(a: FontDecl, b: FontDecl, declarations?: FontDeclarations): boolean {
   return a.style === b.style && Math.round(Math.fround(a.weight) * 64) === Math.round(Math.fround(b.weight) * 64) &&
-    quantize10(a.size) === quantize10(b.size) && sameFamilies(parseFamilyList(a.family), parseFamilyList(b.family))
+    quantize10(a.size) === quantize10(b.size) && compareFamilies(familiesFor(a, declarations), familiesFor(b, declarations)) === 0
 }
 
 // FontFacts.opticalSizeAxis with its documented default: true for Gecko's system-font keywords, which resolve to the
@@ -86,10 +103,10 @@ export function sameFontForTextRun(a: FontDecl, b: FontDecl): boolean {
 // Only the unquoted keyword is the generic: a quoted "system-ui" parses as a named family (SingleFontFamily::parse,
 // font.rs:707-768), so the default reads the parsed entry, not its name. A given primaryFamily names a family as the
 // browser realizes it, so the keywords there stand for themselves.
-export function opticalSizeAxisOf(font: FontDecl): boolean {
+export function opticalSizeAxisOf(font: FontDecl, declarations?: FontDeclarations): boolean {
   if (font.facts.opticalSizeAxis !== null) return font.facts.opticalSizeAxis
   if (font.facts.primaryFamily !== null) return font.facts.primaryFamily === 'system-ui' || font.facts.primaryFamily === '-apple-system'
-  const first = parseFamilyList(font.family)[0]!
+  const first = familiesFor(font, declarations)[0]!
   return (first.kind === 'generic' && first.name === 'system-ui') || (first.kind === 'named' && first.syntax === 'identifiers' && first.name === '-apple-system')
 }
 

@@ -7,7 +7,7 @@ import { bounds, contextFor, width, type Context, type ContextPool } from '../..
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
-import { COLOR_EMOJI_FAMILY, extenderFontOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { COLOR_EMOJI_FAMILY, createFontDeclarations, extenderFontOf, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
 import * as gaps from './gaps.js'
 import { canonicalLanguageTag } from './likely.js'
 import { CANVAS_AU_PER_PX, NO_SCRIPT_GAPS, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, runContextsFor, scriptAt, textRunScripts } from './measure.js'
@@ -425,6 +425,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const inspected: GeckoInspect | null = inspect ? { gaps: [], emergencyUnconfirmed: [] } : null
   const sink: gaps.GapSink = inspected === null ? null : inspected.gaps
   const leaves: GeckoLeaf[] = []
+  const fontDeclarations = createFontDeclarations()
   // Language belongs to this document-order walk: null inherits, while an empty tag resets it.
   let inheritedLanguage = paragraph.lang
   const languages: string[] = []
@@ -728,7 +729,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     if (prevFrame.run === p.run) return false // a non-fluid continuation of the same node (:2130-2139)
     if (parentA === parentB) return true // one computed style (:2141-2143)
     return a.style.wordBreak === b.style.wordBreak && a.style.lineBreak === b.style.lineBreak &&
-      sameFontForTextRun(a.font, b.font) && a.lang === b.lang && (a.letterSpacingAu !== 0) === (b.letterSpacingAu !== 0)
+      sameFontForTextRun(a.font, b.font, fontDeclarations) && a.lang === b.lang && (a.letterSpacingAu !== 0) === (b.letterSpacingAu !== 0)
   }
   let offsetAt = 0
   const openStack: number[] = []
@@ -1029,7 +1030,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // The size Canvas takes to the font cache, in au: 7 bits of the CSS size (:4207-4217).
     const canvasAuSize = quantize7(font.size) * 60
     gaps.canvasFontSize(sink, firstRun, domAu, canvasAuSize, at)
-    gaps.opticalSize(sink, firstRun, font, at)
+    gaps.opticalSize(sink, firstRun, font, at, fontDeclarations)
     // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
     // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
     const canvasLang = lang === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : lang

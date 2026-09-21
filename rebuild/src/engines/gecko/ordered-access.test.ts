@@ -7,6 +7,7 @@ import { rangeAdvance } from './lines.js'
 import { rangeAu, runContextsFor } from './measure.js'
 import { prepareGecko } from './prepare.js'
 import { advanceBefore } from './advance.js'
+import { createFontDeclarations, opticalSizeAxisOf, sameFontForTextRun } from './fonts.js'
 import type { RunContexts } from './types.js'
 
 beforeAll(() => {
@@ -220,4 +221,50 @@ test('distinct text-run contexts have one canonical record without scanning all 
   for (let i = 1023; i >= 0; i -= 7) expect(runContextsFor(records, pool, { ...settings, font: `16px "Font ${i}"` })).toBe(made[i]!)
   expect(runContextsFor(records, pool, { ...settings, font: '16px "Font 0"' }).noLigatures).toBe(made[0]!.own)
   expect(records.reads).toBeLessThan(4 * made.length)
+})
+
+test('many equivalent font flows validate each declaration once and compare canonical parsed families', () => {
+  const names = Array.from({ length: 128 }, (_, i) => `Family ${i}`)
+  let sourceReads = 0
+  const countedFont = (family: string): FontDecl => new Proxy({ ...font, family }, { get(target, key, receiver) {
+    if (key === 'family') sourceReads++
+    return Reflect.get(target, key, receiver)
+  } })
+  const a = countedFont(names.map(n => `"${n}"`).join(',')), b = countedFont(names.map(n => `'${n}'`).join(' , '))
+  const content: InlineNode[] = []
+  for (let i = 0; i < 1024; i++) content.push({
+    kind: 'span', font: i % 2 === 0 ? a : b, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal',
+    wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto', tabSize: 8, lang: null,
+    inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'a' }],
+  })
+  const block = paragraph('', { whiteSpace: 'normal', content })
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const previous = sourceReads
+    const p = prepareGecko(block, env, false, createContextPool())
+    expect(p.leaves.length).toBe(1024)
+    expect(p.textRuns.length).toBe(1)
+    // The two syntactically different quoted lists denote the same parsed families. A/B continuity must neither
+    // reparse both source lists nor compare all 128 names at every frame. A new preparation still validates both.
+    expect(sourceReads - previous).toBeLessThan(12)
+    expect(sourceReads - previous).toBeGreaterThanOrEqual(2)
+    const filled = fillLine(p, firstLine(p)!, { width: 1_000_000, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('unexpected refusal')
+    expect([filled.start, filled.end, filled.next]).toEqual([0, 1024, null])
+  }
+})
+
+test('compiled families preserve malformed-list validation and scalar/fact short circuits', () => {
+  const declarations = createFontDeclarations(), invalid = { ...font, family: '' }
+  expect(sameFontForTextRun(invalid, { ...invalid, style: 'italic' }, declarations)).toBe(false)
+  expect(sameFontForTextRun(invalid, { ...invalid, size: 18 }, declarations)).toBe(false)
+  expect(() => sameFontForTextRun(invalid, invalid, declarations)).toThrow()
+  expect(() => sameFontForTextRun(font, invalid, declarations)).toThrow()
+  expect(opticalSizeAxisOf(invalid, declarations)).toBe(false)
+  const defaultOptical = { ...invalid, facts: { ...UNKNOWN_FONT_FACTS, primaryFamily: 'Arial' } }
+  expect(opticalSizeAxisOf(defaultOptical, declarations)).toBe(false)
+  expect(() => opticalSizeAxisOf({ ...invalid, facts: UNKNOWN_FONT_FACTS }, declarations)).toThrow()
+  expect(sameFontForTextRun({ ...font, family: 'Arial' }, { ...font, family: '"Arial"' }, declarations)).toBe(false)
+  expect(sameFontForTextRun({ ...font, family: 'Serif' }, { ...font, family: 'serif' }, declarations)).toBe(true)
+  expect(opticalSizeAxisOf({ ...font, family: 'system-ui', facts: UNKNOWN_FONT_FACTS }, declarations)).toBe(true)
+  expect(opticalSizeAxisOf({ ...font, family: '"system-ui"', facts: UNKNOWN_FONT_FACTS }, declarations)).toBe(false)
 })

@@ -8,12 +8,12 @@ import { makeFactory, moveToNextBreakablePosition } from './breaks.js'
 import { webkitBidiData } from './data.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { preservesNewline, preservesSpacesAndTabs } from './style.js'
-import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type WebKitBox, type WebKitItem, type WebKitPrepared, type WebKitTextItem } from './types.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type WebKitBox, type WebKitItem, type WebKitOwnPrepared, type WebKitTextItem } from './types.js'
 
 // InlineItemsBuilder::build (IIB:121-135) over the boxes of the rendered runs (`boxOfRun`; null for a text node without a
 // renderer): the items of the tree in document order, then the bidi levels of an RTL block or of content that needs visual
 // reordering, then the widths such content deferred.
-export function buildItems<Font>(p: WebKitPrepared, index: ContentIndex<Font>, boxOfRun: readonly (number | null)[], reordering: boolean): void {
+export function buildItems<Font>(p: WebKitOwnPrepared, index: ContentIndex<Font>, boxOfRun: readonly (number | null)[], reordering: boolean): void {
   // Where each element's item sits among the source units: at the next text box after its event.
   const offsetAfter = new Array<number>(index.events.length)
   for (let ev = index.events.length - 1, next = index.text.length; ev >= 0; ev--) {
@@ -61,7 +61,7 @@ export function whitespaceRun(text: string, start: number, preserveNewline: bool
 // InlineItemsBuilder::handleTextContent (IIB:924-1051) with hyphens: manual and -webkit-nbsp-mode: normal, over the text
 // box's own style. `defer` is shouldDeferTextMeasurement's content part: the paragraph needs visual reordering
 // (IIB:1150-1154).
-function handleTextContent(p: WebKitPrepared, boxIndex: number, defer: boolean): void {
+function handleTextContent(p: WebKitOwnPrepared, boxIndex: number, defer: boolean): void {
   const box = p.boxes[boxIndex]!
   const style = box.style
   const text = box.text
@@ -117,7 +117,7 @@ export function bidiBoxContent(box: WebKitBox): string {
 // unicode-bidi: the paragraph text, ubidi_setPara, the item splits at logical run ends, and the opaque levels. Inline box
 // starts and ends and word break opportunities have no position in the paragraph (:599-618); an atomic inline is U+FFFC
 // (:596-598); a hard line break starts a paragraph with LF (handleBidiParagraphStart, :535-548, :568).
-function computeBidiLevels(p: WebKitPrepared): void {
+function computeBidiLevels(p: WebKitOwnPrepared): void {
   const sourceItems = p.items
   let paragraph = ''
   const offsets: (number | null)[] = []
@@ -252,7 +252,7 @@ function computeBidiLevels(p: WebKitPrepared): void {
 
 // computeInlineTextItemWidthsAndTextSpacing (IIB:804-856): after the splits, every non-empty item that isn't a lone ZWSP
 // and whose width doesn't depend on position.
-function computeItemWidths(p: WebKitPrepared): void {
+function computeItemWidths(p: WebKitOwnPrepared): void {
   // Bidi splitting retains logical order, so each box's items are contiguous.
   let scannedBox = -1
   let hasTabs = false

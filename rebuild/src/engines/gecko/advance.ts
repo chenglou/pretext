@@ -655,6 +655,8 @@ function groupAcrossAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
 // The ligatures fact settles it (listedParts). Without it the row stands in as one group, unconfirmed.
 function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): LigatureRow | null {
   if (!groupSpans(p, run, unit, t)) return null
+  const known = entryAt(unit, t).row
+  if (known !== null && known.edges[0]! < t && t < known.edges[known.edges.length - 1]!) return known
   let start = t
   do {
     start--
@@ -681,9 +683,16 @@ function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numb
     const edges = listedParts(p, run, start, end)
     // A group that required forms made, which the unit's own shaping showed, can't end inside the facts' parts.
     let agrees = edges !== null
-    for (let k = 0; agrees && k < required.length; k++) agrees = !edges!.includes(required[k]!)
+    let e = 0
+    for (let k = 0; agrees && k < required.length; k++) {
+      while (e < edges!.length && edges![e]! < required[k]!) e++
+      agrees = e === edges!.length || edges![e]! !== required[k]!
+    }
     first.row = agrees ? { edges: edges!, unconfirmed: false } : { edges: [start, end], unconfirmed: true }
   }
+  // The candidate row is connected: all its interior cluster boundaries have been measured above. Give those
+  // existing offset records the one row, so later arbitrary queries use its bounds instead of rediscovering them.
+  for (let b = start + 1; b < end; b++) if (p.clusterStart[b] === 1) entryAt(unit, b).row = first.row
   return first.row
 }
 
@@ -694,10 +703,15 @@ export function groupAround(p: GeckoPrepared, run: GeckoTextRun, whole: GeckoUni
   if (t === unit.tStart) return null
   const row = rowAround(p, run, unit, t)
   if (row === null) return null
-  for (let k = 0; k + 1 < row.edges.length; k++) {
-    if (row.edges[k]! < t && t < row.edges[k + 1]!) return { start: row.edges[k]!, end: row.edges[k + 1]!, unconfirmed: row.unconfirmed }
+  const edges = row.edges
+  let lo = 0, hi = edges.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (edges[mid]! <= t) lo = mid + 1
+    else hi = mid
   }
-  return null
+  return lo > 0 && lo < edges.length && edges[lo - 1]! < t
+    ? { start: edges[lo - 1]!, end: edges[lo]!, unconfirmed: row.unconfirmed } : null
 }
 
 // The ligature groups of a row of candidates [start, end) by the ligatures fact of the listed font that draws it

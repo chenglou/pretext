@@ -13,7 +13,7 @@ import { width, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName } from '../../model.js'
 import { advanceBefore } from './advance.js'
-import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
+import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf, type FontDeclarations } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
@@ -80,10 +80,10 @@ export function canvasFontSize(sink: GapSink, run: number, domAu: number, canvas
 
 // No OffscreenCanvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an
 // opsz axis, or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
-export function opticalSize(sink: GapSink, run: number, font: FontDecl, at: { start: number; end: number }): void {
+export function opticalSize(sink: GapSink, run: number, font: FontDecl, at: { start: number; end: number }, declarations: FontDeclarations): void {
   if (sink === null) return
   if (font.facts.opticalSizeAxis !== false) {
-    sink.push({ gap: 'optical-size', run, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
+    sink.push({ gap: 'optical-size', run, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font, declarations)})`, at })
   }
 }
 

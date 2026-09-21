@@ -159,7 +159,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
-    canvases, inspect: gaps === null ? null : { gaps: [] },
+    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null },
   }
   const sh: Shaper = { p, gaps }
   shapingGroups(p)

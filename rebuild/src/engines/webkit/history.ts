@@ -1,3 +1,4 @@
+import { itemAt, worldItemIndex, firstAtOrAfter } from './item-sequence.js'
 // WebKit's page history (Safari 27.0): the break position cache, which can hand a box the item ends another paragraph of the
 // process gave the same text. An inspected paragraph keeps each other item list the cache can hand one of its boxes as a
 // history world, and a decided line is laid out again in the worlds that change what it read; where a world's line differs,
@@ -13,7 +14,7 @@ import { fillLine, lineHasVisuallyNonEmptyContent, sourceOffset } from './lines.
 import { itemWidth } from './measure.js'
 import { lineGeometry } from './output.js'
 import { preservesNewline, preservesSpacesAndTabs } from './style.js'
-import type { WebKitBox, WebKitFilledLine, WebKitHistoryWorld, WebKitInspect, WebKitItem, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitFilledLine, WebKitHistoryWorld, WebKitInspect, WebKitItem, WebKitOwnPrepared, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
 
 // rule webkit/gap/page-history-worlds
 
@@ -171,13 +172,13 @@ function whitespaceEnds(text: string, start: number, end: number, structure: Whi
 
 // The paragraph's items with one box built from a cached list: the box's own ends (white space under `structure`) plus
 // `extra`, then its own bidi splits, which are the boundaries between its own items of different levels.
-function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: number, extra: readonly number[], structure: WhitespaceStructure | null): WebKitHistoryWorld | null {
+function historyWorld(p: WebKitOwnPrepared, inspect: WebKitInspect, boxIndex: number, extra: readonly number[], structure: WhitespaceStructure | null, ownStart: number, ownEnd: number): WebKitHistoryWorld | null {
   const box = p.boxes[boxIndex]!
   const text = box.text
   const preserve = preservesSpacesAndTabs(box.style)
   const items: WebKitItem[] = []
   const itemIndex: number[] = []
-  const changed: boolean[] = []
+  const changed: number[] = []
   let differs = false
   let boxItems = 0
   // Both the box's items and its extra boundaries are in logical order. Consume each extra once,
@@ -201,10 +202,9 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
     if (item.width === null) return null
     return itemWidth(p, { ...item, start: from, end: to }, from, to, 0)
   }
-  for (let i = 0; i < p.items.length; i++) {
+  for (let i = ownStart; i < ownEnd; i++) {
     const item = p.items[i]!
     itemIndex.push(items.length)
-    changed.push(false)
     if (item.kind !== 'text' || item.box !== boxIndex) {
       if (item.kind === 'soft-line-break' && item.box === boxIndex) boxItems++
       items.push(item)
@@ -215,7 +215,7 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
       // `ownRun` is the run's own items, from p.items[i] on, and `worldRun` the world's.
       const ownRun: WebKitTextItem[] = [item]
       let runEnd = item.end
-      while (i + ownRun.length < p.items.length) {
+      while (i + ownRun.length < ownEnd) {
         const following = p.items[i + ownRun.length]!
         if (following.kind !== 'text' || following.box !== boxIndex || !following.isWhitespace || following.level !== item.level || following.start !== runEnd) break
         ownRun.push(following)
@@ -239,14 +239,13 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
         if (worldItem.start !== ownItem.start || worldItem.end !== ownItem.end || worldItem.isWordSeparator !== ownItem.isWordSeparator) ownMatches = false
         if (own > 0) {
           itemIndex.push(first + k)
-          changed.push(false)
         }
       }
       for (let k = 0; k < worldRun.length; k++) items.push(worldRun[k]!)
       boxItems += worldRun.length
       if (!ownMatches) {
         differs = true
-        for (let own = 0; own < ownRun.length; own++) changed[i + own] = true
+        for (let own = 0; own < ownRun.length; own++) changed.push(i + own)
       }
       i += ownRun.length - 1
       continue
@@ -260,7 +259,7 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
       continue
     }
     differs = true
-    changed[i] = true
+    changed.push(i)
     ends.push(item.end)
     let from = item.start
     for (let k = 0; k < ends.length; k++) {
@@ -272,7 +271,8 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
     }
   }
   if (!differs || boxItems < TEXT_BREAKING_POSITION_CACHE_MINIMUM_BREAKS) return null
-  return { prepared: { ...p, items, inspect: { ...inspect, worlds: [] } }, box: boxIndex, itemIndex, changed }
+  const view = { base: p.items, start: ownStart, end: ownEnd, replacement: items, length: p.items.length + items.length - (ownEnd - ownStart) }
+  return { prepared: { ...p, items: view, inspect: { ...inspect, worlds: [] } }, box: boxIndex, start: ownStart, end: ownEnd, itemIndex, changed }
 }
 
 function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
@@ -283,7 +283,7 @@ function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
 
 // The history worlds of an inspected paragraph, once its items stand: per box, one world for each distinct item list the
 // cache can hand it.
-export function collectHistoryWorlds(p: WebKitPrepared): void {
+export function collectHistoryWorlds(p: WebKitOwnPrepared): void {
   const inspect = p.inspect
   if (inspect === null) return
   let itemCursor = 0
@@ -300,6 +300,7 @@ export function collectHistoryWorlds(p: WebKitPrepared): void {
       if ((item.kind === 'text' || item.kind === 'soft-line-break') && item.box >= b) break
       itemCursor++
     }
+    const ownStart = itemCursor
     let changesSeparator = false
     for (; itemCursor < p.items.length; itemCursor++) {
       const item = p.items[itemCursor]!
@@ -324,11 +325,11 @@ export function collectHistoryWorlds(p: WebKitPrepared): void {
     for (let k = 0; k < extras.length; k++) for (let j = 0; j < structures.length; j++) {
       // This candidate has exactly the own boundaries and separator flags.
       if (extras[k]!.length === 0 && structures[j] === null && !changesSeparator) continue
-      const world = historyWorld(p, inspect, b, extras[k]!, structures[j]!)
+      const world = historyWorld(p, inspect, b, extras[k]!, structures[j]!, ownStart, itemCursor)
       if (world === null) continue
       const boxItems: number[] = []
-      for (let i = 0; i < world.prepared.items.length; i++) {
-        const item = world.prepared.items[i]!
+      for (let i = 0; i < world.prepared.items.replacement.length; i++) {
+        const item = world.prepared.items.replacement[i]!
         if (item.kind === 'text' && item.box === b) boxItems.push(item.start, item.end, item.isWordSeparator ? 1 : 0)
       }
       if (kept.some(known => sameNumbers(known, boxItems))) continue
@@ -389,16 +390,16 @@ function lineDifference(p: WebKitPrepared, a: ComparedLine, b: ComparedLine): { 
 // `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
 function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: WebKitLineStart): WebKitLineStart | null {
   if (start.itemIndex >= p.items.length) return { ...start, itemIndex: world.prepared.items.length }
-  const own = p.items[start.itemIndex]!
-  let index = world.itemIndex[start.itemIndex]!
+  const own = itemAt(p.items, start.itemIndex)!
+  let index = worldItemIndex(world, start.itemIndex)
   if (own.kind !== 'text') return { ...start, itemIndex: index }
   const position = own.start + start.offset
   const items = world.prepared.items
   // A world maps a text item to the text item that holds its start (historyWorld), which a list of indices doesn't say.
-  let first = items[index] as WebKitTextItem
+  let first = itemAt(items, index) as WebKitTextItem
   if (first.start > own.start) return null
   while (first.end <= position) {
-    const following = items[index + 1]
+    const following = itemAt(items, index + 1)
     if (following === undefined || following.kind !== 'text' || following.box !== own.box || following.start !== first.end) return null
     first = following
     index++
@@ -420,16 +421,19 @@ export function pageHistoryGaps(p: WebKitPrepared, decided: WebKitFilledLine | W
   const start = decided.from
   const readEnd = Math.min(Math.max(decided.measuredEnd, start.itemIndex + 1), p.items.length)
   let ownLine: ComparedLine | null = null
-  for (let w = 0; w < inspect.worlds.length; w++) {
+  // Worlds are collected in logical box order, so their own ranges are ordered and disjoint across boxes.
+  let lo = 0, hi = inspect.worlds.length
+  while (lo < hi) { const mid = lo + Math.floor((hi - lo) / 2); if (inspect.worlds[mid]!.end <= start.itemIndex) lo = mid + 1; else hi = mid }
+  for (let w = lo; w < inspect.worlds.length; w++) {
     const world = inspect.worlds[w]!
-    let reads = false
-    for (let i = start.itemIndex; i < readEnd && !reads; i++) reads = world.changed[i]!
-    if (!reads) continue
+    if (world.start >= readEnd) break
+    const change = firstAtOrAfter(world.changed, start.itemIndex)
+    if (change === world.changed.length || world.changed[change]! >= readEnd) continue
     const worldStart = worldLineStart(p, world, start)
     let at: { start: number; end: number } | null
     if (worldStart === null) {
       const from = start.itemIndex === 0 && start.offset === 0 ? 0 : sourceOffset(p, { index: start.itemIndex, offset: start.offset })
-      const own = p.items[start.itemIndex]!
+      const own = itemAt(p.items, start.itemIndex)!
       at = { start: from, end: own.kind === 'text' ? p.boxes[own.box]!.sourceStart + own.end : from }
     } else {
       const inWorld = fillLine(world.prepared, worldStart, decided.slot).line
