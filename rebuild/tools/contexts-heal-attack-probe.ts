@@ -44,7 +44,7 @@ const boxes = FAMILIES.map(row => {
   document.body.append(box);
   return box;
 });
-const kept = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', OVERFLOW_WRAP, []));
+const kept = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', OVERFLOW_WRAP, lib.createContextPool()));
 const contextsAtPrepare = kept.map(p => lib.contextsHeld(p));
 const seen = FAMILIES.map(() => ({ dom: [], keptParagraph: [], preparedNow: [], contextsTheKeptParagraphHolds: [] }));
 const note = (list, value, ms, width) => { if (list.length === 0 || list[list.length - 1].value !== value) list.push({ value, fromMs: ms, atWidth: width }); };
@@ -56,7 +56,7 @@ const readAll = (k) => {
     note(seen[i].dom, Math.round(boxes[i].getBoundingClientRect().height / 40), ms, width);
     note(seen[i].keptParagraph, lib.linesOf(kept[i], width), ms, width);
     note(seen[i].contextsTheKeptParagraphHolds, lib.contextsHeld(kept[i]), ms, width);
-    note(seen[i].preparedNow, lib.linesOf(lib.prepared(TEXT, FAMILIES[i][1], 32, 'en', OVERFLOW_WRAP, []), width), ms, width);
+    note(seen[i].preparedNow, lib.linesOf(lib.prepared(TEXT, FAMILIES[i][1], 32, 'en', OVERFLOW_WRAP, lib.createContextPool()), width), ms, width);
   }
 };
 readAll(0);
@@ -87,8 +87,8 @@ const boxes = FAMILIES.map(row => {
   document.body.append(box);
   return box;
 });
-const filledAtOnce = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', 'anywhere', []));
-const filledLate = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', 'anywhere', []));
+const filledAtOnce = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', 'anywhere', lib.createContextPool()));
+const filledLate = FAMILIES.map(row => lib.prepared(TEXT, row[1], 32, 'en', 'anywhere', lib.createContextPool()));
 const seen = FAMILIES.map(() => ({ dom: [], filledAtOnce: [], filledLate: [], preparedNow: [], contextsFilledAtOnceHolds: [], contextsFilledLateHolds: [] }));
 const note = (list, value, ms) => { if (list.length === 0 || list[list.length - 1].value !== value) list.push({ value, fromMs: ms }); };
 const readAll = () => {
@@ -99,7 +99,7 @@ const readAll = () => {
     note(seen[i].contextsFilledAtOnceHolds, lib.contextsHeld(filledAtOnce[i]), ms);
     if (ms >= FIRST_FILL_MS) note(seen[i].filledLate, lib.lineEnds(filledLate[i], WIDTH), ms);
     note(seen[i].contextsFilledLateHolds, lib.contextsHeld(filledLate[i]), ms);
-    note(seen[i].preparedNow, lib.lineEnds(lib.prepared(TEXT, FAMILIES[i][1], 32, 'en', 'anywhere', []), WIDTH), ms);
+    note(seen[i].preparedNow, lib.lineEnds(lib.prepared(TEXT, FAMILIES[i][1], 32, 'en', 'anywhere', lib.createContextPool()), WIDTH), ms);
   }
 };
 readAll();

@@ -29,7 +29,7 @@ import { geckoFontChecks } from '../src/engines/gecko/checks.ts'
 import * as gecko from '../src/engines/gecko/index.ts'
 import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
 import * as webkit from '../src/engines/webkit/index.ts'
-import { detectEnvironment, fillLine, firstLine, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
+import { createContextPool, detectEnvironment, fillLine, firstLine, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
 import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
 import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
 import { installReplay, NewQuestion } from '../lab/measurements.ts'
@@ -72,17 +72,17 @@ function paragraphOf(message: ChatMessage): Paragraph {
 
 function withFontChecks(paragraph: Paragraph, env: Environment): Paragraph {
   switch (env.engine) {
-    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env), [])
-    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, [])
-    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks, [])
+    case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env), createContextPool())
+    case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, createContextPool())
+    case 'gecko': return withLearnedFontFacts(paragraph, geckoFontChecks, createContextPool())
   }
 }
 
 function prepareChecked(checked: Paragraph, env: Environment): Prepared {
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, false, []) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, false, []) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, false, []) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, false, createContextPool()) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, false, createContextPool()) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(checked, env, false, createContextPool()) }
   }
 }
 

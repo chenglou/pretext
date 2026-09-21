@@ -13,7 +13,9 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
+import { createContextPool } from '../../measure/canvas.js'
 import { fillLine, firstLine, prepare } from './index.js'
+import { adjust16 } from './shape.js'
 
 const LS = String.fromCodePoint(0x2028)
 
@@ -69,7 +71,7 @@ function paragraphIn(family: string, text: string): Paragraph {
 }
 
 function lineCount(family: string, text: string, width: number): number {
-  const prepared = prepare(paragraphIn(family, text), env, false, [])
+  const prepared = prepare(paragraphIn(family, text), env, false, createContextPool())
   let lines = 0
   let start = firstLine(prepared)
   while (start !== null) {
@@ -86,7 +88,7 @@ describe('blink cuts of a wide group: a cut before white space beside a side cut
     for (let s = 0; s < SAMPLES.length; s++) {
       const sample = SAMPLES[s]!
       asked = []
-      prepare(paragraphIn('Mono', sample.text), env, false, [])
+      prepare(paragraphIn('Mono', sample.text), env, false, createContextPool())
       // Every piece is asked first while the text is cut; the window's sides can be pieces asked again.
       let lastPiece = -1
       for (let i = 1; i < sample.pieces.length; i++) {
@@ -107,4 +109,27 @@ describe('blink cuts of a wide group: a cut before white space beside a side cut
       expect(lineCount(sample.family, sample.text, sample.width - 4)).toBe(2)
     }
   })
+})
+
+// Direct adjustment reads at cuts use both adjacent pieces; reads inside a piece use that piece alone.
+// Ask in both directions so a previous query cannot make the lookup depend on traversal order.
+test('adjustment windows at, between and around many shaping cuts', () => {
+  const text = 'abcdefghijklmnop'.repeat(32)
+  const prepared = prepare(paragraphIn('Mono', text), env, false, createContextPool())
+  expect(prepared.groups[0]!.cuts).toEqual(Array.from({ length: 33 }, (_, i) => i * 16))
+  const samples: readonly [number, number, number][] = [
+    [1, 0, 16], [16, 0, 32], [17, 16, 32], [31, 16, 32], [32, 16, 48], [33, 32, 48], [511, 496, 512],
+  ]
+  for (const order of [samples, [...samples].reverse()]) {
+    for (const [offset, from, to] of order) {
+      prepared.groups[0]!.wide16.fill(NaN)
+      asked = []
+      expect(adjust16({ p: prepared, gaps: null }, 0, offset, 0, text.length)).toBe(0)
+      expect(asked[0]).toBe(text.slice(from, to))
+    }
+  }
+  asked = []
+  expect(adjust16({ p: prepared, gaps: null }, 0, 0, 0, text.length)).toBe(0)
+  expect(adjust16({ p: prepared, gaps: null }, 0, text.length, 0, text.length)).toBe(0)
+  expect(asked).toEqual([])
 })

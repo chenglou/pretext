@@ -7,7 +7,7 @@ import { geckoFontChecks } from '../engines/gecko/checks.ts'
 import { webkitFontChecks } from '../engines/webkit/checks.ts'
 import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from '../env.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type InlineNode, type Paragraph } from '../model.ts'
-import type { Context } from './canvas.ts'
+import { createContextPool, type ContextPool } from './canvas.ts'
 import { withLearnedFontFacts, type FontChecks } from './font-checks.ts'
 import { fillLine, firstLine, prepare } from '../index.ts'
 
@@ -112,7 +112,7 @@ function checksOf(env: Environment, inspect = true): FontChecks {
 }
 
 function learn(family: string, text: string, env: Environment, facts?: FontFacts): FontFacts {
-  return withLearnedFontFacts(paragraph(family, text, facts), checksOf(env), []).font.facts
+  return withLearnedFontFacts(paragraph(family, text, facts), checksOf(env), createContextPool()).font.facts
 }
 
 describe('primaryFamily', () => {
@@ -252,7 +252,7 @@ describe('the checks\' contexts', () => {
     for (let e = 0; e < envs.length; e++) {
       // The checks run before the engine, so their contexts are the first ones a prepare makes.
       made = []
-      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!, false), [])
+      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!, false), createContextPool())
       const checks = made
       made = []
       prepare(paragraph('Prop', everyCheck), envs[e]!, false)
@@ -274,21 +274,58 @@ describe('one call', () => {
     inlineStart: { margin: 0, border: 0, padding: 0 }, inlineEnd: { margin: 0, border: 0, padding: 0 }, verticalAlign: 'baseline', children: p.content,
   })
 
+  test('an engine with no font checks keeps a large caller tree and its facts directly', () => {
+    const p = paragraph('Prop', everyCheck)
+    const content: InlineNode[] = []
+    for (let i = 0; i < 8192; i++) content.push(spanOf(p, { ...p.font, size: 16 + i / 100 }, null))
+    const input = { ...p, content }
+    const result = withLearnedFontFacts(input, geckoFontChecks, createContextPool())
+    expect(result).toBe(input)
+    expect(calls).toBe(0)
+  })
+
+  test('deep inherited and reset languages resolve without recursion or mutating the caller', () => {
+    const p = paragraph('Prop', everyCheck)
+    let content = p.content
+    const depth = 32768
+    for (let i = 0; i < depth; i++) {
+      const node = spanOf({ ...p, content }, p.font, i === 0 ? '' : i === depth - 1 ? 'ja' : null)
+      content = [node]
+    }
+    const input = { ...p, content }
+    const result = withLearnedFontFacts(input, blinkFontChecks(blink(2)), createContextPool())
+    let source = input.content
+    let learned = result.content
+    for (let i = 0; i < depth; i++) {
+      const before = source[0]!
+      const after = learned[0]!
+      if (before.kind !== 'span' || after.kind !== 'span') throw new Error('missing span')
+      if (i === 0 || i === depth - 1) {
+        expect(after.font.facts.primaryFamily).toBe('Prop')
+        expect(before.font.facts).toBe(UNKNOWN_FONT_FACTS)
+      }
+      source = before.children
+      learned = after.children
+    }
+    expect(learned[0]).toBe(p.content[0])
+    expect(new Set(asked.map(q => q.context.lang))).toEqual(new Set(['en', 'ja', '']))
+  })
+
   test('resolves a declaration once, and declarations of several sizes share their questions', () => {
     const p = paragraph('Prop', everyCheck)
-    const first = withLearnedFontFacts(p, blinkFontChecks(blink(2)), []).font.facts
+    const first = withLearnedFontFacts(p, blinkFontChecks(blink(2)), createContextPool()).font.facts
     const asked = calls
-    const same = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font }, null)] }, blinkFontChecks(blink(2)), [])
+    const same = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font }, null)] }, blinkFontChecks(blink(2)), createContextPool())
     expect(same.content[0]!.kind === 'span' && same.content[0]!.font.facts).toEqual(first)
     expect(calls).toBe(2 * asked)
     // Another size asks only the check that reads the size.
-    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, size: 20 }, null)] }, blinkFontChecks(blink(2)), [])
+    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, size: 20 }, null)] }, blinkFontChecks(blink(2)), createContextPool())
     expect(calls).toBe(3 * asked + 2)
   })
 
   test('a list that outlives the call saves the next call its contexts and none of its questions, so a font that loads between two calls shows in the second', () => {
     const p = paragraph('Late, Prop', 'ab')
-    const contexts: Context[] = []
+    const contexts = createContextPool()
     expect(withLearnedFontFacts(p, webkitFontChecks, contexts).font.facts.primaryFamily).toBe('Prop')
     const askedFirst = calls
     const madeFirst = made.length
@@ -301,7 +338,7 @@ describe('one call', () => {
   test('Gecko\'s contexts are one prepared paragraph\'s whatever list the caller keeps, so a family name that contexts learn only at their first use shows in the next call', () => {
     keepsFirstFonts = true
     const p = paragraph('Late, Prop', 'ab ab ab')
-    const lineCount = (env: Environment, contexts: Context[]): number => {
+    const lineCount = (env: Environment, contexts: ContextPool): number => {
       const prepared = prepare(p, env, false, contexts)
       let lines = 0
       for (let start = firstLine(prepared); start !== null;) {
@@ -312,28 +349,28 @@ describe('one call', () => {
       }
       return lines
     }
-    const geckoList: Context[] = []
-    const webkitList: Context[] = []
+    const geckoList = createContextPool()
+    const webkitList = createContextPool()
     expect([lineCount(gecko, geckoList), lineCount(webkit, webkitList)]).toEqual([2, 2])
     const madeFirst = made.length
     fonts = { ...fonts, Late: fixed(0.25) }
     expect(lineCount(gecko, geckoList)).toBe(1)
-    expect(geckoList.length).toBe(0)
+    expect(geckoList.size).toBe(0)
     expect(made.length).toBeGreaterThan(madeFirst)
     // The control: contexts that keep their first fonts on a list that is used, which is what WebKit's do after a loaded
     // FontFace is added. The second call makes no context and lays out with the fallback; a new list finds the family.
     const madeSecond = made.length
     expect(lineCount(webkit, webkitList)).toBe(2)
     expect(made.length).toBe(madeSecond)
-    expect(lineCount(webkit, [])).toBe(1)
+    expect(lineCount(webkit, createContextPool())).toBe(1)
   })
 
   test('a list whose settings never repeat is emptied instead of growing without end', () => {
-    const contexts: Context[] = []
+    const contexts = createContextPool()
     let most = 0
     for (let i = 0; i < 400; i++) {
       prepare(paragraph('Prop', 'ab', UNKNOWN_FONT_FACTS, 10 + i / 100), blink(2), false, contexts)
-      most = Math.max(most, contexts.length)
+      most = Math.max(most, contexts.size)
     }
     expect(most).toBeGreaterThan(512)
     expect(most).toBeLessThan(530)
@@ -343,7 +380,7 @@ describe('one call', () => {
     // WebKit's fixed-pitch check reads the space under the list the primary family check measured it under, and both
     // declarations' primary family checks read the space under the two generics alone.
     const p = paragraph('"Mono"', 'ab')
-    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: '"Prop"' }, null)] }, webkitFontChecks, [])
+    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: '"Prop"' }, null)] }, webkitFontChecks, createContextPool())
     const spaceUnder = (font: string): number => asked.filter(a => a.text === ' ' && a.context.font === font).length
     expect([spaceUnder('normal 400 16px "Mono", serif'), spaceUnder('normal 400 16px monospace'), spaceUnder('normal 400 16px serif')]).toEqual([1, 1, 1])
     for (let i = 0; i < asked.length; i++) for (let k = 0; k < i; k++) expect(asked[k]!.context === asked[i]!.context && asked[k]!.text === asked[i]!.text).toBe(false)
@@ -351,7 +388,7 @@ describe('one call', () => {
 
   test('spans take their own declaration and language', () => {
     const p = paragraph('Prop', 'ab')
-    const out = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: 'Mono' }, 'ja')] }, blinkFontChecks(blink(2)), [])
+    const out = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: 'Mono' }, 'ja')] }, blinkFontChecks(blink(2)), createContextPool())
     const learned = out.content[0]!
     expect(learned.kind === 'span' && learned.font.facts.primaryFamily).toBe('Mono')
     expect(made.some(c => c.lang === 'ja' && c.font.includes('Mono'))).toBe(true)
@@ -359,7 +396,7 @@ describe('one call', () => {
 })
 
 describe('plain Blink optical check', () => {
-  const checked = (p: Paragraph, inspect: boolean): Paragraph => withLearnedFontFacts(p, blinkFontChecks(blink(2), inspect), [])
+  const checked = (p: Paragraph, inspect: boolean): Paragraph => withLearnedFontFacts(p, blinkFontChecks(blink(2), inspect), createContextPool())
 
   test('omits only linear-sample questions while preserving named-family resolution', () => {
     const p = paragraph('Prop', 'Hello world')
@@ -425,7 +462,7 @@ describe('plain Blink optical check', () => {
     const suppliedAxis = { ...UNKNOWN_FONT_FACTS, opticalSizeAxis: false }
     expect(checked(paragraph('Missing, system-ui', 'Hello', suppliedAxis), false).font.facts).toEqual(suppliedAxis)
     expect(calls).toBe(0)
-    const atOne = withLearnedFontFacts(paragraph('Missing, system-ui', 'Hello'), blinkFontChecks(blink(1), false), [])
+    const atOne = withLearnedFontFacts(paragraph('Missing, system-ui', 'Hello'), blinkFontChecks(blink(1), false), createContextPool())
     expect(atOne.font.facts).toEqual(UNKNOWN_FONT_FACTS)
     expect(calls).toBe(0)
   })

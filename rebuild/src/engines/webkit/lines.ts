@@ -1276,10 +1276,18 @@ function breakInBetween(L: Layout, prevBox: WebKitBox, nextBox: WebKitBox): bool
 
 // nearestCommonAncestor (IFU:357-383) of two layout boxes by their parents.
 function nearestCommonAncestor(p: WebKitPrepared, firstParent: number, secondParent: number): number {
-  for (let e = secondParent; e >= 0; e = p.elements[e]!.parent) {
-    for (let ancestor = firstParent; ancestor >= 0; ancestor = p.elements[ancestor]!.parent) if (ancestor === e) return e
+  if (firstParent === secondParent) return firstParent
+  let firstDepth = 0
+  let secondDepth = 0
+  for (let e = firstParent; e >= 0; e = p.elements[e]!.parent) firstDepth++
+  for (let e = secondParent; e >= 0; e = p.elements[e]!.parent) secondDepth++
+  for (; firstDepth > secondDepth; firstDepth--) firstParent = p.elements[firstParent]!.parent
+  for (; secondDepth > firstDepth; secondDepth--) secondParent = p.elements[secondParent]!.parent
+  while (firstParent !== secondParent) {
+    firstParent = p.elements[firstParent]!.parent
+    secondParent = p.elements[secondParent]!.parent
   }
-  return -1
+  return firstParent
 }
 
 // InlineFormattingUtils::isAtSoftWrapOpportunity (IFU:385-454) for text and atomic items.

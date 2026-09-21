@@ -272,6 +272,7 @@ function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
 export function collectHistoryWorlds(p: WebKitPrepared): void {
   const inspect = p.inspect
   if (inspect === null) return
+  let itemCursor = 0
   for (let b = 0; b < p.boxes.length; b++) {
     const box = p.boxes[b]!
     if (box.text.length < TEXT_BREAKING_POSITION_CACHE_MINIMUM_LENGTH) continue
@@ -279,11 +280,19 @@ export function collectHistoryWorlds(p: WebKitPrepared): void {
     const isOwnEnd = new Array<boolean>(box.text.length + 1).fill(false)
     let hasLongWhitespace = false
     let previousWhitespaceEnd = -1
-    for (let i = 0; i < p.items.length; i++) {
-      const item = p.items[i]!
-      if ((item.kind !== 'text' && item.kind !== 'soft-line-break') || item.box !== b) continue
+    // Text leaves and their bidi splits stay contiguous in logical item order.
+    while (itemCursor < p.items.length) {
+      const item = p.items[itemCursor]!
+      if ((item.kind === 'text' || item.kind === 'soft-line-break') && item.box >= b) break
+      itemCursor++
+    }
+    let changesSeparator = false
+    for (; itemCursor < p.items.length; itemCursor++) {
+      const item = p.items[itemCursor]!
+      if ((item.kind !== 'text' && item.kind !== 'soft-line-break') || item.box !== b) break
       isOwnEnd[item.kind === 'text' ? item.end : item.start + 1] = true
       if (item.kind !== 'text' || !item.isWhitespace) continue
+      changesSeparator ||= item.isWordSeparator !== (box.text.charCodeAt(item.start) !== 0x09 || !preservesSpacesAndTabs(box.style))
       hasLongWhitespace ||= item.end - item.start > 1 || previousWhitespaceEnd === item.start
       previousWhitespaceEnd = item.end
     }
@@ -299,6 +308,8 @@ export function collectHistoryWorlds(p: WebKitPrepared): void {
     // The box's item list in each world kept so far, as start, end and word separator flag per item.
     const kept: number[][] = []
     for (let k = 0; k < extras.length; k++) for (let j = 0; j < structures.length; j++) {
+      // This candidate has exactly the own boundaries and separator flags.
+      if (extras[k]!.length === 0 && structures[j] === null && !changesSeparator) continue
       const world = historyWorld(p, inspect, b, extras[k]!, structures[j]!)
       if (world === null) continue
       const boxItems: number[] = []

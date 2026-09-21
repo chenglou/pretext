@@ -1,6 +1,6 @@
 // The Canvas contexts a style's strings are measured on, and a measured total in the port's units (specs/blink-lines.md
 // §2.3; DESIGN.md §4.4). Which of a style's contexts a string goes to is shape.ts contextsOf's.
-import { contextFor, width as canvasWidth, type Context } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { ComputedStyle, StyleContexts } from './types.js'
 
@@ -34,7 +34,7 @@ function cssSizeScale(size: number, zoom: number): number {
 // clean renderer). The scaled advances are stand-ins: Blink truncates each glyph's advance to 1/65536 px at its own size
 // (skia_text_metrics.cc:207-211), which the layout reports as optical-size (gaps.ts preparedContent). Other fonts are measured
 // at the zoomed size (specs/blink-lines.md §2.3).
-export function styleContexts(canvases: Context[], style: ComputedStyle, zoom: number, partition: string): StyleContexts {
+export function styleContexts(canvases: ContextPool, style: ComputedStyle, zoom: number, partition: string): StyleContexts {
   const cssSize = style.measuresAtCssSize
   const scale = cssSize ? cssSizeScale(style.font.size, zoom) : 1
   // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (effectiveFontSize).

@@ -6,10 +6,10 @@
 // shaping of a word wins (specs/blink-canvas.md §1.7), so engines keep texts that could shape differently apart with
 // `partition`, and a context is never reused across settings.
 //
-// The list of contexts is the caller's: one prepare's alone, or in Blink and WebKit a page's, which every prepare of the
-// page adds to and finds its contexts in (index.ts prepare has the lifetime, and why Gecko's list is always one
-// prepare's). A prepared paragraph keeps the list it was made with, and the records that measure hold their contexts by
-// reference. With a page's list a canvas has shaped what the page's earlier paragraphs asked of it, and not only this
+// The pool of contexts is the caller's: one prepare's alone, or in Blink and WebKit a page's, which every prepare of the
+// page adds to and finds its contexts in (index.ts prepare has the lifetime, and why Gecko's pool is always one
+// prepare's). A prepared paragraph keeps the pool it was made with, and the records that measure hold their contexts by
+// reference. With a page's pool a canvas has shaped what the page's earlier paragraphs asked of it, and not only this
 // paragraph's strings. That changes no answer while equal settings mean equal shaping and `partition` keeps apart the
 // strings that Chrome would shape differently on one canvas.
 //
@@ -26,6 +26,8 @@
 // canvasString) into a one-byte one before Canvas saw it (probe blink-storage S1: Amiri's 13 brackets at 48px measure
 // 285.79px as the two-byte slice, 159.12px after any keyed use of it, and 285.79px after lookups of other strings that
 // hold its characters; S5 asks through this file).
+
+import { findRecord, insertRecord, orderedRecords, type OrderedLinks } from '../ordered-records.js'
 
 export type CanvasSettings = {
   // ctx.font, a CSS font shorthand from measure/font.ts.
@@ -44,30 +46,58 @@ export type CanvasSettings = {
 // Chrome and Firefox implement CanvasTextDrawingStyles.lang; the DOM lib types don't declare it yet.
 type ContextWithLang = OffscreenCanvasRenderingContext2D & { lang: string }
 
-export type Context = { settings: CanvasSettings; ctx: ContextWithLang }
+export type Context = { readonly settings: Readonly<CanvasSettings>; readonly ctx: ContextWithLang }
 
-function sameSettings(a: CanvasSettings, b: CanvasSettings): boolean {
-  return a.font === b.font && a.lang === b.lang && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing &&
-    a.fontKerning === b.fontKerning && a.textRendering === b.textRendering && a.direction === b.direction && a.partition === b.partition
+function compareSettings(a: CanvasSettings, b: CanvasSettings): number {
+  if (a.font !== b.font) return a.font < b.font ? -1 : 1
+  if (a.lang !== b.lang) return a.lang < b.lang ? -1 : 1
+  if (a.letterSpacing !== b.letterSpacing) return a.letterSpacing < b.letterSpacing ? -1 : 1
+  if (a.wordSpacing !== b.wordSpacing) return a.wordSpacing < b.wordSpacing ? -1 : 1
+  if (a.fontKerning !== b.fontKerning) return a.fontKerning < b.fontKerning ? -1 : 1
+  if (a.textRendering !== b.textRendering) return a.textRendering < b.textRendering ? -1 : 1
+  if (a.direction !== b.direction) return a.direction < b.direction ? -1 : 1
+  return a.partition === b.partition ? 0 : a.partition < b.partition ? -1 : 1
 }
 
-// The context of `settings` in `contexts`, made at the end when none has them. A paragraph has a few contexts and a page a
-// few per font declaration, so this compares them one by one.
-export function contextFor(contexts: Context[], settings: CanvasSettings): Context {
-  for (let i = 0; i < contexts.length; i++) if (sameSettings(contexts[i]!.settings, settings)) return contexts[i]!
-  const ctx = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null
-  if (ctx === null) throw new Error('OffscreenCanvas has no 2d context')
-  // lang first: Blink resolves the font under the context's language when the font string is set (base_rendering_context_2d.cc:1201-1215).
-  ctx.lang = settings.lang
-  ctx.font = settings.font
-  ctx.letterSpacing = settings.letterSpacing
-  ctx.wordSpacing = settings.wordSpacing
-  ctx.fontKerning = settings.fontKerning
-  ctx.textRendering = settings.textRendering
-  ctx.direction = settings.direction
-  const context = { settings, ctx }
-  contexts.push(context)
-  return context
+type StoredContext = Context & OrderedLinks
+const compareRequest = (settings: CanvasSettings, context: StoredContext): number => compareSettings(settings, context.settings)
+const compareContexts = (a: StoredContext, b: StoredContext): number => compareSettings(a.settings, b.settings)
+
+// Own the lookup and creation order together. A single preparation can contain arbitrarily many
+// distinct declarations; the between-preparation size cap cannot bound a linear search inside it.
+export class ContextPool {
+  private readonly tree = orderedRecords<StoredContext>()
+
+  get size(): number { return this.tree.records.length }
+  get entries(): readonly Context[] { return this.tree.records }
+
+  clear(): void {
+    this.tree.records.length = 0
+    this.tree.root = -1
+  }
+
+  context(settings: CanvasSettings): Context {
+    const found = findRecord(this.tree, settings, compareRequest)
+    if (found !== null) return found
+    const owned = { ...settings }
+    const ctx = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null
+    if (ctx === null) throw new Error('OffscreenCanvas has no 2d context')
+    // lang first: Blink resolves the font under the context's language when the font string is set.
+    ctx.lang = settings.lang
+    ctx.font = settings.font
+    ctx.letterSpacing = settings.letterSpacing
+    ctx.wordSpacing = settings.wordSpacing
+    ctx.fontKerning = settings.fontKerning
+    ctx.textRendering = settings.textRendering
+    ctx.direction = settings.direction
+    return insertRecord(this.tree, { settings: owned, ctx, left: -1, right: -1, height: 1 }, compareContexts)
+  }
+}
+
+export function createContextPool(): ContextPool { return new ContextPool() }
+
+export function contextFor(contexts: ContextPool, settings: CanvasSettings): Context {
+  return contexts.context(settings)
 }
 
 // rule blink/measure/string-reaches-canvas-as-built

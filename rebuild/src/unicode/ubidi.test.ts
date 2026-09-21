@@ -257,6 +257,25 @@ const DIRECTED: readonly string[] = [
 ]
 
 // What Blink and WebKit get where the resolvers disagree (specs/bidi.md §7.5, measured with ICU).
+describe('large auto-direction paragraphs', () => {
+  test('each paragraph supplies its own whitespace level', () => {
+    const repeats = 8192
+    const text = 'a\nא    \n'.repeat(repeats)
+    for (const data of [blinkBidiData, webkitBidiData]) {
+      const result = resolveIcuBidi(text, 'auto', data)
+      const expected = new Uint8Array(text.length)
+      const paragraphs: { end: number; level: number }[] = []
+      for (let i = 0; i < repeats; i++) {
+        expected.fill(1, i * 8 + 2, i * 8 + 8)
+        paragraphs.push({ end: i * 8 + 2, level: 0 }, { end: i * 8 + 8, level: 1 })
+      }
+      expect(result.direction).toBe('mixed')
+      expect(result.levels).toEqual(expected)
+      expect(result.paragraphs).toEqual(paragraphs)
+    }
+  })
+})
+
 describe('ICU behaviour the engines depend on', () => {
   const data = blinkBidiData
   test('D5: Arabic-Indic digits right after letters are not mixed, so every level is 0 and Blink turns bidi off', () => {

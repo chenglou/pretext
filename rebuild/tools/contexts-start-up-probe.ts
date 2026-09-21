@@ -30,8 +30,8 @@ const boxes = FAMILIES.map(row => {
   document.body.append(box);
   return box;
 });
-const kept = FAMILIES.map(() => []);
-const remade = FAMILIES.map(() => []);
+const kept = FAMILIES.map(() => lib.createContextPool());
+const remade = FAMILIES.map(() => lib.createContextPool());
 const seen = FAMILIES.map(() => ({ dom: [], keptList: [], listRemadeAfterAdd: [], newList: [] }));
 const note = (list, lines, ms) => { if (list.length === 0 || list[list.length - 1].lines !== lines) list.push({ lines, fromMs: ms }); };
 const readAll = () => {
@@ -41,7 +41,7 @@ const readAll = () => {
     note(seen[i].dom, Math.round(boxes[i].getBoundingClientRect().height / 40), ms);
     note(seen[i].keptList, lib.lineCount(TEXT, family, 32, 'en', WIDTH, kept[i]), ms);
     note(seen[i].listRemadeAfterAdd, lib.lineCount(TEXT, family, 32, 'en', WIDTH, remade[i]), ms);
-    note(seen[i].newList, lib.lineCount(TEXT, family, 32, 'en', WIDTH, []), ms);
+    note(seen[i].newList, lib.lineCount(TEXT, family, 32, 'en', WIDTH, lib.createContextPool()), ms);
   }
 };
 let fontStarted = false;
@@ -50,7 +50,7 @@ const addLoadedFont = async () => {
   const face = new FontFace('Late Loaded', 'url(/fonts/amiri.ttf?late-loaded)');
   await face.load();
   document.fonts.add(face);
-  for (let i = 0; i < remade.length; i++) remade[i] = [];
+  for (let i = 0; i < remade.length; i++) remade[i] = lib.createContextPool();
   addedAtMs = Math.round(performance.now() - t0);
 };
 readAll();
@@ -63,7 +63,7 @@ for (let i = 0; i < boxes.length; i++) boxes[i].remove();
 const last = list => list[list.length - 1].lines;
 return {
   userAgent: navigator.userAgent, msSinceNavigationStart: Math.round(t0), addedAtMs,
-  rows: FAMILIES.map((row, i) => ({ what: row[0], family: row[1], contextsInTheKeptList: kept[i].length, keptListEqualsNewListAtTheEnd: last(seen[i].keptList) === last(seen[i].newList), newListEqualsDomAtTheEnd: last(seen[i].newList) === last(seen[i].dom), ...seen[i] })),
+  rows: FAMILIES.map((row, i) => ({ what: row[0], family: row[1], contextsInTheKeptList: kept[i].size, keptListEqualsNewListAtTheEnd: last(seen[i].keptList) === last(seen[i].newList), newListEqualsDomAtTheEnd: last(seen[i].newList) === last(seen[i].dom), ...seen[i] })),
 };
 `
 

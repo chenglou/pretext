@@ -29,6 +29,7 @@ const FIXTURES = ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'ProbeShan
 
 const PAGE = String.raw`
 const lib = await import('data:text/javascript;base64,' + LIBRARY);
+const canvas = await import('data:text/javascript;base64,' + CANVAS);
 const ua = navigator.userAgent;
 const engine = /\bFirefox\//.test(ua) ? 'gecko' : /\bChrome\//.test(ua) ? 'blink' : 'webkit';
 const env = { engine, devicePixelRatio: window.devicePixelRatio };
@@ -53,7 +54,7 @@ const style = d => ({
 const block = (d, content) => ({ ...style(d), content, lang: 'en', direction: 'ltr', lineHeight: 20, textIndent: 0, textAlign: 'start' });
 const learn = paragraph => {
   made = 0; asked = [];
-  const facts = lib.withLearnedFontFacts(paragraph, checks, []).font.facts;
+  const facts = lib.withLearnedFontFacts(paragraph, checks, canvas.createContextPool()).font.facts;
   return { facts, calls: asked.length, contexts: made, log: asked };
 };
 const domWidth = (font, html, extra) => {
@@ -109,9 +110,10 @@ async function bundled(path: string): Promise<string> {
 
 export default async function probes(): Promise<Probe[]> {
   const library = await bundled('../src/measure/font-checks.ts')
+  const canvas = await bundled('../src/measure/canvas.ts')
   const checks = { blink: await bundled('../src/engines/blink/checks.ts'), webkit: await bundled('../src/engines/webkit/checks.ts'), gecko: await bundled('../src/engines/gecko/checks.ts') }
   const declarations = labDeclarations().map(d => ({ family: d.family, weight: d.weight, style: d.style }))
-  const source = `const LIBRARY = ${JSON.stringify(library)};\nconst CHECKS = ${JSON.stringify(checks)};\nconst DECLARATIONS = ${JSON.stringify(declarations)};\n${PAGE}`
+  const source = `const LIBRARY = ${JSON.stringify(library)};\nconst CANVAS = ${JSON.stringify(canvas)};\nconst CHECKS = ${JSON.stringify(checks)};\nconst DECLARATIONS = ${JSON.stringify(declarations)};\n${PAGE}`
   return [{
     id: 'font-checks/lab-declarations',
     spec: 'rebuild/src/measure/font-checks.ts: every check, per lab font declaration, beside the DOM',

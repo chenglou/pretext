@@ -1,6 +1,6 @@
 // Gecko's prepared paragraph (Firefox 156.0). The Gecko port owns this file. What a fill leaves of a line is in lines.ts.
 import type { GeckoEnvironment } from '../../env.js'
-import type { Context } from '../../measure/canvas.js'
+import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
@@ -296,6 +296,8 @@ export type GeckoPrepared = {
   // The block's own style (the line container's), which the root span and tab widths read.
   blockStyle: GeckoStyle
   text: string
+  // Source U+000A offsets in document order; preserved-line reflow reads the next one within its frame.
+  lineFeeds: readonly number[]
   leaves: GeckoLeaf[]
   // Frames in logical order; leaves without a frame (white space at a line boundary) have none.
   frames: GeckoFrame[]
@@ -327,7 +329,7 @@ export type GeckoPrepared = {
   //   block's space plus its letter and word spacing, au.
   // - `spacingPrefix`: spacingPrefix as CalcTabWidths gets it, one character at a time, so each character is its own base
   //   (prepare.ts step 6; nsTextFrame.cpp:4345-4347).
-  tabs: { unit: number; spacingPrefix: Int32Array } | null
+  tabs: { unit: number; spacingPrefix: Int32Array; positions: readonly number[] } | null
   // pxToAu of the block's text-indent (nsLineLayout.cpp:178-201).
   textIndentAu: number
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in
@@ -337,7 +339,7 @@ export type GeckoPrepared = {
   // caller's list, a page's or this paragraph's alone (index.ts prepare). The paragraph's are the text runs' own and those
   // the recipes make from them. Only the making of a context reads the list; whoever measures holds its context by
   // reference (RunContexts).
-  contexts: Context[]
+  contexts: ContextPool
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null

@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // WebKit line output on worked examples of DESIGN.md §2.2-§2.4 and research/observe-webkit.md §4-§5, with a stand-in
 // Canvas whose advances are chosen per test. These pin the port's output shape (display boxes from the closed run list,
 // fragments, line boxes, font facts and the gaps they report) and the stage-5 rules from source (box edges, atomic inlines,
@@ -8,6 +9,7 @@ import { UNKNOWN_FONT_FACTS, type FontFacts } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import type { WebKitDisplayBox, WebKitLineGeometry, WebKitLineStart, WebKitTextBox } from './geometry.js'
 import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type WebKitFilledLine, type WebKitRefusedSlot } from './index.js'
+import { breakWord, firstUserPerceivedCharacterLength, itemWidth } from './measure.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 
 // A line as the tests read it: the fill result, the pieces and the inspection together (test-lines.ts everyLine).
@@ -76,7 +78,7 @@ function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Sized> = 
 }
 
 function layout(p: Sized, insets: Insets[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
-  const prepared = prepare(p, environment, true, [])
+  const prepared = prepare(p, environment, true, createContextPool())
   const { lines, belowFloats } = everyLine({
     first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
   }, p.width, insets)
@@ -84,7 +86,7 @@ function layout(p: Sized, insets: Insets[] = [], environment: WebKitEnvironment 
   const gaps = paragraphGaps(prepared).map(g => g.gap)
   for (const line of lines) for (const gap of line.gaps) gaps.push(gap.gap)
   for (const refused of belowFloats) for (const gap of refused.gaps) gaps.push(gap.gap)
-  return { lines, gaps, belowFloats: belowFloats.map(refused => refused.row), fonts: prepared.contexts.map(context => context.settings.font) }
+  return { lines, gaps, belowFloats: belowFloats.map(refused => refused.row), fonts: prepared.contexts.entries.map(context => context.settings.font) }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -223,7 +225,7 @@ describe('environment facts (DESIGN.md §1.4)', () => {
   })
 
   test('page zoom not given reports page-zoom on the paragraph', () => {
-    expect(paragraphGaps(prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, true, [])).map(g => g.gap)).toContain('page-zoom')
+    expect(paragraphGaps(prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, true, createContextPool())).map(g => g.gap)).toContain('page-zoom')
   })
 
   test('a quoted "system-ui" names a family, not the system design (research/CHARTER-CRITIC.md item 9)', () => {
@@ -505,7 +507,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   // Every fill result with its pieces, and what the paragraph asked of Canvas.
   function walk(p: Sized, inspect: boolean, insets: Insets[] = []) {
     asked = []
-    const prepared = prepare(p, env, inspect, [])
+    const prepared = prepare(p, env, inspect, createContextPool())
     const out: unknown[] = []
     let row = 0
     for (let start = firstLine(prepared); start !== null;) {
@@ -523,11 +525,11 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
       }
       start = filled.next
     }
-    return { prepared, lines: out, fonts: prepared.contexts.map(context => context.settings.font), asked }
+    return { prepared, lines: out, fonts: prepared.contexts.entries.map(context => context.settings.font), asked }
   }
 
   test('a plain paragraph answers neither inspectLine nor paragraphGaps', () => {
-    const prepared = prepare(paragraph([['foo bar', 'text']], { width: 30 }), env, false, [])
+    const prepared = prepare(paragraph([['foo bar', 'text']], { width: 30 }), env, false, createContextPool())
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 30, left: 0, right: 0 })
     expect(filled.line.gaps).toBeNull()
     expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
@@ -570,7 +572,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
 
   test('reading a decided line twice, in either order, gives the same pieces, geometry and gaps', () => {
     const p = paragraph([['aaa bbb ccc.', 'text']], { width: 84 })
-    const prepared = prepare(p, env, true, [])
+    const prepared = prepare(p, env, true, createContextPool())
     for (let start = firstLine(prepared); start !== null;) {
       const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       if (filled.kind === 'line') {
@@ -612,7 +614,7 @@ describe("the simple builder's plain stretch (lines.ts commitPlainStretch)", () 
   test('a break-spaces block around one span that collapses spaces fills as the builder fills the same text in two nodes, at every width', () => {
     for (const overflowWrap of ['normal', 'break-word'] as const) {
       const block = treeParagraph([], fontWith(), { whiteSpace: 'break-spaces', overflowWrap })
-      const around = (texts: string[]) => prepare({ ...block, content: [span(block, texts.map(t => ({ kind: 'text' as const, text: t })), { whiteSpace: 'normal' })] }, env, true, [])
+      const around = (texts: string[]) => prepare({ ...block, content: [span(block, texts.map(t => ({ kind: 'text' as const, text: t })), { whiteSpace: 'normal' })] }, env, true, createContextPool())
       const one = around([text])
       const two = around([text.slice(0, cut), text.slice(cut)])
       expect([one.builder, one.boxes.length, two.builder, two.boxes.length]).toEqual(['range-based', 1, 'range-based', 2])
@@ -628,7 +630,7 @@ describe('Canvas questions: every read asks Canvas, and a value needed twice in 
   // What a plain or an inspected paragraph asked of Canvas, preparing and filling every line at its width.
   function questions(p: Sized, inspect: boolean): string[] {
     asked = []
-    const prepared = prepare(p, env, inspect, [])
+    const prepared = prepare(p, env, inspect, createContextPool())
     for (let start = firstLine(prepared); start !== null;) {
       const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       if (inspect) inspectLine(prepared, filled.line)
@@ -890,7 +892,7 @@ describe('preparation data flow (items.ts and content.ts)', () => {
     const prefix = alternating + '\u00ad'
     const p = paragraph([[prefix + ' ' + 'tail '.repeat(repeats), 'text']])
     asked = []
-    const prepared = prepare(p, env, false, [])
+    const prepared = prepare(p, env, false, createContextPool())
     const text = prepared.items.filter(item => item.kind === 'text')
     const splits = text.filter(item => item.start < alternating.length)
     expect(splits.map(item => [item.start, item.end, item.level])).toEqual(
@@ -920,14 +922,121 @@ describe('preparation data flow (items.ts and content.ts)', () => {
     const nested = { ...block, content: [span(block, inherited, { lang: 'ja' }), leaf('five')] }
     const explicit = { ...block, content: ['ja', '', 'ko', 'ja', 'en'].map((lang, i) => span(block, [leaf(['one', 'two', 'three', 'four', 'five'][i]!)], { lang })) }
     asked = []
-    const a = prepare(nested, env, false, [])
+    const a = prepare(nested, env, false, createContextPool())
     const questions = asked
     asked = []
-    const b = prepare(explicit, env, false, [])
+    const b = prepare(explicit, env, false, createContextPool())
     expect(a.boxes.map(box => box.locale)).toEqual(['ja', '', 'ko', 'ja', 'en'])
     expect(a.boxes.map(box => [box.text, box.locale, box.canvasFamily])).toEqual(b.boxes.map(box => [box.text, box.locale, box.canvasFamily]))
     expect(questions).toEqual(asked)
     // A fresh paragraph has no inherited language from the previous preparation.
-    expect(prepare(paragraph([['six', 'text']]), env, false, []).boxes[0]!.locale).toBe('en')
+    expect(prepare(paragraph([['six', 'text']]), env, false, createContextPool()).boxes[0]!.locale).toBe('en')
+  })
+})
+
+describe('history world box traversal', () => {
+  test('many ordinary leaves, including short leaves, retain their own items without worlds', () => {
+    const runs: Array<[string, FlatNode]> = Array.from({ length: 128 }, (_, i) => [i % 2 === 0 ? 'abcde' : 'a', 'text'])
+    const p = paragraph(runs, { width: 4096 })
+    const prepared = prepare(p, env, true, createContextPool())
+    expect(prepared.inspect!.worlds).toEqual([])
+    expect(prepared.boxes.length).toBe(runs.length)
+    expect(prepared.items.map(item => item.kind === 'text' ? [item.box, item.start, item.end] : item.kind)).toEqual(runs.map(([text], box) => [box, 0, text.length]))
+    const start = firstLine(prepared)!
+    const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+    expect(filled.kind).toBe('line')
+    if (filled.kind !== 'line') throw new Error('ordinary leaves have no floats')
+    expect(filled.next).toBeNull()
+    expect(linePieces(prepared, filled.line).fragments.filter(fragment => fragment.kind === 'text').map(fragment => fragment.painted)).toEqual(runs.map(([text]) => text))
+    expect(inspectLine(prepared, filled.line).gaps.some(gap => gap.gap === 'page-history')).toBe(false)
+  })
+
+  test('a cached preserved tab followed by a space still changes the separator flag', () => {
+    const p = paragraph([['abcde', 'span'], ['a', 'span'], ['a\t bc', 'span'], ['z', 'span']], { whiteSpace: 'pre-wrap' })
+    const prepared = prepare(p, env, true, createContextPool())
+    const ownTab = prepared.items.findIndex(item => item.kind === 'text' && item.box === 2 && item.start === 1 && item.end === 3)
+    expect(ownTab).toBeGreaterThanOrEqual(0)
+    expect(prepared.items[ownTab]).toMatchObject({ isWordSeparator: true })
+    const worlds = prepared.inspect!.worlds
+    const cachedTab = worlds.find(world => world.box === 2 && world.prepared.items.some(item => item.kind === 'text' && item.box === 2 && item.start === 1 && item.end === 3 && !item.isWordSeparator))!
+    expect(cachedTab).toBeDefined()
+    expect(cachedTab.changed[ownTab]).toBe(true)
+  })
+
+  test('bidi-split boxes between short leaves retain logical world mappings', () => {
+    const p = paragraph([['abcde', 'span'], ['a', 'span'], ['ab((בבבב', 'span'], ['z', 'span']], { direction: 'rtl' })
+    const prepared = prepare(p, env, true, createContextPool())
+    const textItems = prepared.items.filter(item => item.kind === 'text' || item.kind === 'soft-line-break')
+    expect(textItems.map(item => item.box)).toEqual(textItems.map(item => item.box).sort((a, b) => a - b))
+    const worlds = prepared.inspect!.worlds
+    expect(worlds.some(world => world.box === 2)).toBe(true)
+    for (const world of worlds) {
+      expect(world.itemIndex.length).toBe(prepared.items.length)
+      expect(world.changed.length).toBe(prepared.items.length)
+      for (let i = 0; i < prepared.items.length; i++) {
+        const own = prepared.items[i]!, mapped = world.prepared.items[world.itemIndex[i]!]!
+        if (own.kind === 'text' || own.kind === 'soft-line-break') {
+          expect(mapped.kind === 'text' || mapped.kind === 'soft-line-break').toBe(true)
+          if (mapped.kind === 'text' || mapped.kind === 'soft-line-break') expect(mapped.box).toBe(own.box)
+        } else expect(mapped).toBe(own)
+      }
+    }
+  })
+})
+
+describe('nearest wrapping ancestor', () => {
+  test('unequal deep sibling paths read their common span wrapping policy', () => {
+    for (const whiteSpace of ['normal', 'nowrap'] as const) {
+      const p = paragraph([], { width: 20, overflowWrap: 'normal' })
+      const chain = (text: string, depth: number) => {
+        let node = span(p, [{ kind: 'text', text }])
+        for (let i = 1; i < depth; i++) node = span(p, [node])
+        return node
+      }
+      p.content = [span(p, [chain('a-', 128), chain('b', 192)], { whiteSpace })]
+      const { lines } = layout(p)
+      expect(lines.map(line => [line.start, line.end])).toEqual(whiteSpace === 'normal' ? [[0, 2], [2, 3]] : [[0, 3]])
+      expect(lines.flatMap(line => line.fragments.filter(fragment => fragment.kind === 'text').map(fragment => fragment.painted))).toEqual(['a-', 'b'])
+    }
+  })
+})
+
+describe('complex character boundaries', () => {
+  test('a keep-all item inside an emoji cluster reads original-box and suffix contexts separately', () => {
+    const prepared = prepare(paragraph([['‼️‍😀x', 'text']], { wordBreak: 'keep-all' }), env, false, createContextPool())
+    const item = prepared.items.find(item => item.kind === 'text' && item.start === 1)
+    if (item?.kind !== 'text') throw new Error('keep-all did not split after punctuation')
+    expect(firstUserPerceivedCharacterLength(prepared, item)).toBe(4)
+    const wholeWidth = itemWidth(prepared, item, item.start, item.end, 0)
+    asked = []
+    expect(breakWord(prepared, item, wholeWidth, 10, 0)).toEqual({ length: 2, logicalWidth: 8 })
+    expect(asked.map(question => question.slice(question.lastIndexOf('|') + 1))).toEqual(['️‍', '️‍😀'])
+  })
+
+  test('tiny-width complex lines keep their analysis and decided geometry across a resize', () => {
+    const text = 'ب'.repeat(256)
+    const prepared = prepare(paragraph([[text, 'text']], { overflowWrap: 'anywhere' }), env, true, createContextPool())
+    const box = prepared.boxes[0]!
+    if (box.simpleFontCodePath) throw new Error('Arabic did not select complex analysis')
+    expect(box.characterBoundaries).toEqual(Array.from({ length: text.length + 1 }, (_, offset) => offset))
+    const boundaries = box.characterBoundaries
+    const first = fillLine(prepared, firstLine(prepared)!, { width: 2, left: 0, right: 0 })
+    if (first.kind !== 'line') throw new Error('unrestricted slot refused')
+    const original = { pieces: linePieces(prepared, first.line), geometry: inspectLine(prepared, first.line) }
+    const ends: number[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const line = fillLine(prepared, start, { width: 2, left: 0, right: 0 })
+      if (line.kind !== 'line') throw new Error('unrestricted slot refused')
+      ends.push(line.end)
+      start = line.next
+    }
+    expect(ends).toEqual(Array.from({ length: text.length }, (_, offset) => offset + 1))
+    for (let start = firstLine(prepared); start !== null;) {
+      const line = fillLine(prepared, start, { width: 80, left: 0, right: 0 })
+      if (line.kind !== 'line') throw new Error('unrestricted slot refused')
+      start = line.next
+    }
+    expect(box.characterBoundaries).toBe(boundaries)
+    expect({ pieces: linePieces(prepared, first.line), geometry: inspectLine(prepared, first.line) }).toEqual(original)
   })
 })

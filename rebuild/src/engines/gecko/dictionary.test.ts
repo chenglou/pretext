@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { GeckoEnvironment } from '../../env.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph } from '../../model.js'
@@ -122,19 +123,19 @@ function outputs(prepared: ReturnType<typeof prepareGecko>): unknown[] {
 
 test('one preparation reuses each explicit dictionary locale across resets, and a new preparation has fresh machines', () => {
   installParagraphDoubles()
-  const first = prepareGecko(mixedParagraph(), env, false, [])
+  const first = prepareGecko(mixedParagraph(), env, false, createContextPool())
   expect(constructors.sort()).toEqual(['km', 'lo', 'my', 'th'])
   const firstQuestions = [...asked]
   for (const language of Object.keys(words)) expect(firstQuestions.filter(call => call.locale === language).length).toBeGreaterThan(1)
   const firstOutput = outputs(first)
   constructors = []; asked = []
-  const second = prepareGecko(mixedParagraph(), { ...env, pageLang: 'ar', contentLanguage: 'ja', regionalPrefsLocale: 'ja-jp' }, false, [])
+  const second = prepareGecko(mixedParagraph(), { ...env, pageLang: 'ar', contentLanguage: 'ja', regionalPrefsLocale: 'ja-jp' }, false, createContextPool())
   expect(constructors.sort()).toEqual(['km', 'lo', 'my', 'th'])
   expect(asked).toEqual(firstQuestions)
   expect([...second.breakFlags]).toEqual([...first.breakFlags])
   expect(outputs(second)).toEqual(firstOutput)
   constructors = []; asked = []
-  prepareGecko(mixedParagraph(), { ...env, dictionaryBreaks: { kind: 'unavailable' } }, false, [])
+  prepareGecko(mixedParagraph(), { ...env, dictionaryBreaks: { kind: 'unavailable' } }, false, createContextPool())
   expect(constructors).toEqual([])
   expect(asked).toEqual([])
 })

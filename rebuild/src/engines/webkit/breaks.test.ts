@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // WebKit break opportunities against their sources:
 // - classify() over every code unit against data/webkit/breakable-positions/classify.tsv (BreakablePositions.h at 7625);
 // - the pair table against linebreak-table-pairs.tsv;
@@ -83,7 +84,7 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
 }
 
 function breaksOf(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}): number[] {
-  return opportunities(prepareWebKit(paragraph(runs, overrides), env, true, [])).breaks
+  return opportunities(prepareWebKit(paragraph(runs, overrides), env, true, createContextPool())).breaks
 }
 
 describe('BreakablePositions data', () => {
@@ -170,7 +171,7 @@ describe('installed-browser verdicts (specs/probes-safari.md)', () => {
     expect(breaksOf([['中.abc<d', 'text']])).toEqual([5])
   })
   test('H13: U+2028 and U+2029 force breaks in normal white space', () => {
-    const p = prepareWebKit(paragraph([['a b', 'text']]), env, true, [])
+    const p = prepareWebKit(paragraph([['a b', 'text']]), env, true, createContextPool())
     expect(opportunities(p).forced).toEqual([2])
   })
   test('H15: keep-all breaks after punctuation only in 16-bit text', () => {
@@ -278,7 +279,7 @@ describe.skipIf(!existsSync(resolve(WORK, 'webkit-answers.jsonl')))('groundwork 
       }
       const p = prepareWebKit(paragraph(parts.map((part): [string, FlatNode] => [part, 'text']), {
         whiteSpace: request.whiteSpace, wordBreak: request.wordBreak, direction: request.direction, lang: request.lang ?? 'en',
-      }), env, true, [])
+      }), env, true, createContextPool())
       const actual = opportunities(p)
       compared++
       if (actual.breaks.join(' ') !== answer.breaks.join(' ') || actual.forced.join(' ') !== (answer.forced ?? []).join(' ')) {

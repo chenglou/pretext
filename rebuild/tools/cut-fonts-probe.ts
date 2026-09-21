@@ -26,7 +26,7 @@ import { join, resolve } from 'node:path'
 import type { Probe } from '../probes/types.ts'
 
 export const ENTRY = (tree: string, name: string): string => `
-import { detectEnvironment, fillLine, firstLine, prepare } from '${tree}/rebuild/src/index.ts'
+import { createContextPool, detectEnvironment, fillLine, firstLine, prepare } from '${tree}/rebuild/src/index.ts'
 import { UNKNOWN_FONT_FACTS } from '${tree}/rebuild/src/model.ts'
 import { groupPrefix16, measure16, pairAdjust16, adjust16, isClusterBoundary } from '${tree}/rebuild/src/engines/blink/shape.ts'
 
@@ -67,7 +67,7 @@ function groupsOf(prepared) {
 const shaper = prepared => ({ p: prepared.state, gaps: null })
 
 globalThis.${name} = {
-  environment, paragraphOf, lines, firstEnd, groupsOf,
+  environment, paragraphOf, lines, firstEnd, groupsOf, createContextPool,
   prepare: (paragraph, env, contexts) => prepare(paragraph, env, false, contexts),
   position16: (prepared, g, k) => groupPrefix16(shaper(prepared), g, k),
   measure16: (prepared, g, from, to) => measure16(shaper(prepared), g, from, to, prepared.state.groups[g].start, prepared.state.groups[g].end),
@@ -101,14 +101,14 @@ for (let f = 0; f < FONTS.length; f++) {
   const family = FONTS[f].startsWith('!') ? FONTS[f].slice(1) : '"' + FONTS[f] + '"';
   if (!resolves(family)) { out.push({ family: FONTS[f], resolves: false }); continue; }
   const row = { family: FONTS[f], resolves: true, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
-  const shared = SHARED ? [[], [], []] : null;
+  const shared = SHARED ? [A.createContextPool(), B.createContextPool(), B.createContextPool()] : null;
   for (let t = 0; t < TEXTS.length; t++) for (let z = 0; z < SIZES.length; z++) {
     const text = TEXTS[t].text, size = SIZES[z];
     let a, b, c;
     try {
-      a = A.prepare(A.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envA, shared === null ? [] : shared[0]);
-      b = B.prepare(B.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envB, shared === null ? [] : shared[1]);
-      c = B.prepare(B.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envB, shared === null ? [] : shared[2]);
+      a = A.prepare(A.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envA, shared === null ? A.createContextPool() : shared[0]);
+      b = B.prepare(B.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envB, shared === null ? B.createContextPool() : shared[1]);
+      c = B.prepare(B.paragraphOf(family, size, text, TEXTS[t].lang, TEXTS[t].rtl), envB, shared === null ? B.createContextPool() : shared[2]);
     } catch (error) { row.errors++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, error: String(error).slice(0, 200) }); continue; }
     row.paragraphs++;
     const ga = A.groupsOf(a), gb = B.groupsOf(b);

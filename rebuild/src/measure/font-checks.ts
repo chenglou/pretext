@@ -100,7 +100,8 @@
 // textRendering attribute, and the checks assign the default as the port's recipes do. Gecko is asked nothing.
 import { listedFamilies } from '../font-family.js'
 import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
-import { contextFor, width as canvasWidth, type Context } from './canvas.js'
+import { contextFor, width as canvasWidth, type Context, type ContextPool } from './canvas.js'
+import { findRecord, insertRecord, orderedRecords, type OrderedLinks, type OrderedRecords } from '../ordered-records.js'
 import { canvasFont } from './font.js'
 
 const PROBE_SIZE = 16
@@ -115,12 +116,16 @@ const LINEAR_SAMPLE = 'Hamburgefonstiv'
 const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong']
 
 // What one call reads and keeps while it resolves a paragraph's declarations: the caller's contexts, which the checks'
-// are made in and found in, and the call's own, few enough to compare one by one: the questions asked so far with Canvas's
-// answers, and the declarations resolved so far, each under the language its checks measured in.
+// are made in and found in, and the call's own probe answers grouped by context and declarations indexed
+// by exact fields. Both local indexes are discarded when resolution returns.
+type Declaration = { font: FontDecl; lang: string; fontsId: number }
+type ResolvedDeclaration = Declaration & OrderedLinks & { learned: FontDecl }
 type Resolution = {
-  contexts: Context[]
-  asked: { context: Context; text: string; width: number }[]
-  resolved: { font: FontDecl; lang: string; learned: FontDecl }[]
+  contexts: ContextPool
+  // At most the fixed probe strings for each context; measuring text is never used as a key.
+  asked: Map<Context, { text: string; width: number }[]>
+  resolved: OrderedRecords<ResolvedDeclaration>
+  fontTables: Map<FontFacts['fonts'], number>
 }
 
 // A family name as CSS writes it; a generic keyword stands for itself, as in FontFacts.primaryFamily.
@@ -151,26 +156,35 @@ export type FontChecks = {
   textRendering: CanvasTextRendering
 }
 
-// `found`: the declaration's contexts so far, each under the family list and size it measures. One declaration's checks
-// ask a dozen questions under four lists, so a list's font string is built, and looked up among the caller's contexts, once.
-type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string; found: { family: string; size: number; context: Context }[] }
+// One declaration's checks can walk an input-sized fallback list. Its local context records
+// avoid rebuilding font strings without restarting a growing linear scan for every family.
+type ProbeKey = { family: string; size: number }
+type ProbeContext = ProbeKey & OrderedLinks & { context: Context }
+type Probe = { resolution: Resolution; textRendering: CanvasTextRendering; font: FontDecl; lang: string; found: OrderedRecords<ProbeContext> }
+const compareProbeContext = (a: ProbeKey, b: ProbeKey): number => order(a.family, b.family) || order(a.size, b.size)
 
 function probeContext(p: Probe, family: string, size: number): Context {
-  for (let i = 0; i < p.found.length; i++) if (p.found[i]!.family === family && p.found[i]!.size === size) return p.found[i]!.context
+  const key: ProbeKey = { family, size }
+  const found = Number.isNaN(size) ? null : findRecord(p.found, key, compareProbeContext)
+  if (found !== null) return found.context
   const context = contextFor(p.resolution.contexts, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
     textRendering: p.textRendering, direction: 'ltr', partition: 'font-checks',
   })
-  p.found.push({ family, size, context })
+  if (!Number.isNaN(size)) insertRecord(p.found, { ...key, context, left: -1, right: -1, height: 1 }, compareProbeContext)
   return context
 }
 
 function width(p: Probe, family: string, size: number, text: string): number {
   const context = probeContext(p, family, size)
-  const asked = p.resolution.asked
-  for (let i = 0; i < asked.length; i++) if (asked[i]!.context === context && asked[i]!.text === text) return asked[i]!.width
+  let asked = p.resolution.asked.get(context)
+  if (asked === undefined) {
+    asked = []
+    p.resolution.asked.set(context, asked)
+  }
+  for (let i = 0; i < asked.length; i++) if (asked[i]!.text === text) return asked[i]!.width
   const measured = canvasWidth(context, text)
-  asked.push({ context, text, width: measured })
+  asked.push({ text, width: measured })
   return measured
 }
 
@@ -244,9 +258,18 @@ function joining(p: Probe): FontFacts['joining'] {
 type TextNeeds = { hyphen: boolean; joining: boolean }
 
 function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
-  for (let n = 0; n < nodes.length; n++) {
-    const node = nodes[n]!
-    if (node.kind === 'span') addTextNeeds(node.children, needs)
+  const stack: { nodes: readonly InlineNode[]; next: number }[] = [{ nodes, next: 0 }]
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!
+    if (frame.next === frame.nodes.length) {
+      stack.pop()
+      continue
+    }
+    const node = frame.nodes[frame.next++]!
+    if (node.kind === 'span') {
+      stack.push({ nodes: node.children, next: 0 })
+      continue
+    }
     if (node.kind !== 'text') continue
     for (let i = 0; i < node.text.length; i++) {
       const c = node.text.charCodeAt(i)
@@ -261,7 +284,7 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 // reads the fact and the paragraph's text can ask for it (FontChecks; each port says why it reads what it reads).
 function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
-  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang, found: [] }
+  const p: Probe = { resolution, textRendering: checks.textRendering, font, lang, found: orderedRecords() }
   const scaling = checks.opticalSizeAxis
   const asksHyphen = given.mapsHyphen === null && checks.mapsHyphen && needs.hyphen
   const asksPitch = given.monospace === null && checks.monospace
@@ -281,39 +304,65 @@ function learnedFacts(resolution: Resolution, checks: FontChecks, font: FontDecl
   return { ...given, primaryFamily: primary, mapsHyphen, monospace, opticalSizeAxis, joining: joiningFact }
 }
 
-function sameDeclaration(a: FontDecl, b: FontDecl): boolean {
-  const fa = a.facts
-  const fb = b.facts
-  return a.family === b.family && a.size === b.size && a.weight === b.weight && a.style === b.style &&
-    fa.primaryFamily === fb.primaryFamily && fa.mapsHyphen === fb.mapsHyphen && fa.monospace === fb.monospace && fa.opticalSizeAxis === fb.opticalSizeAxis &&
-    fa.joining === fb.joining && fa.pairKerning === fb.pairKerning && fa.fonts === fb.fonts
+function order(a: string | number | boolean | null, b: string | number | boolean | null): number {
+  if (a === b) return 0
+  if (a === null) return -1
+  if (b === null) return 1
+  return a < b ? -1 : 1
+}
+
+function compareDeclaration(a: Declaration, b: Declaration): number {
+  const fa = a.font.facts, fb = b.font.facts
+  return order(a.lang, b.lang) || order(a.font.family, b.font.family) || order(a.font.size, b.font.size) ||
+    order(a.font.weight, b.font.weight) || order(a.font.style, b.font.style) || order(fa.primaryFamily, fb.primaryFamily) ||
+    order(fa.mapsHyphen, fb.mapsHyphen) || order(fa.monospace, fb.monospace) || order(fa.opticalSizeAxis, fb.opticalSizeAxis) ||
+    order(fa.joining, fb.joining) || order(fa.pairKerning, fb.pairKerning) || order(a.fontsId, b.fontsId)
 }
 
 function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (font: FontDecl, lang: string) => FontDecl): InlineNode[] {
   const out: InlineNode[] = []
-  for (let n = 0; n < nodes.length; n++) {
-    const node = nodes[n]!
-    if (node.kind !== 'span') {
-      out.push(node)
+  const stack: { nodes: readonly InlineNode[]; next: number; lang: string; out: InlineNode[] }[] = [{ nodes, next: 0, lang, out }]
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!
+    if (frame.next === frame.nodes.length) {
+      stack.pop()
       continue
     }
-    const own = node.lang ?? lang
-    out.push({ ...node, font: learn(node.font, own), children: withLearnedFactsIn(node.children, own, learn) })
+    const node = frame.nodes[frame.next++]!
+    if (node.kind !== 'span') {
+      frame.out.push(node)
+      continue
+    }
+    const own = node.lang ?? frame.lang
+    const children: InlineNode[] = []
+    frame.out.push({ ...node, font: learn(node.font, own), children })
+    stack.push({ nodes: node.children, next: 0, lang: own, out: children })
   }
   return out
 }
 
 // The paragraph with every font declaration's null facts asked of Canvas, as the engine's port asks for them.
-export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, contexts: Context[]): Paragraph {
+export function withLearnedFontFacts(paragraph: Paragraph, checks: FontChecks, contexts: ContextPool): Paragraph {
+  // An engine with no checks keeps the caller's facts directly. In particular Gecko needs no
+  // text scan, declaration resolution or copied inline tree before its own content traversal.
+  if (!checks.primaryFamily && !checks.mapsHyphen && !checks.monospace && checks.opticalSizeAxis === null && !checks.joining) return paragraph
   const needs: TextNeeds = { hyphen: false, joining: false }
-  addTextNeeds(paragraph.content, needs)
-  const resolution: Resolution = { contexts, asked: [], resolved: [] }
+  if (checks.mapsHyphen || checks.joining) addTextNeeds(paragraph.content, needs)
+  const resolution: Resolution = { contexts, asked: new Map(), resolved: orderedRecords(), fontTables: new Map([[undefined, 0]]) }
   const learn = (font: FontDecl, elementLang: string): FontDecl => {
     const lang = checks.contextTakesLang ? elementLang : ''
-    const resolved = resolution.resolved
-    for (let i = 0; i < resolved.length; i++) if (resolved[i]!.lang === lang && sameDeclaration(resolved[i]!.font, font)) return resolved[i]!.learned
+    // NaN declarations did not compare equal in the original exact-field lookup either.
+    if (Number.isNaN(font.size) || Number.isNaN(font.weight)) return { ...font, facts: learnedFacts(resolution, checks, font, lang, needs) }
+    let fontsId = resolution.fontTables.get(font.facts.fonts)
+    if (fontsId === undefined) {
+      fontsId = resolution.fontTables.size
+      resolution.fontTables.set(font.facts.fonts, fontsId)
+    }
+    const key: Declaration = { font, lang, fontsId }
+    const found = findRecord(resolution.resolved, key, compareDeclaration)
+    if (found !== null) return found.learned
     const learned = { ...font, facts: learnedFacts(resolution, checks, font, lang, needs) }
-    resolved.push({ font, lang, learned })
+    insertRecord(resolution.resolved, { ...key, learned, left: -1, right: -1, height: 1 }, compareDeclaration)
     return learned
   }
   return { ...paragraph, font: learn(paragraph.font, paragraph.lang), content: withLearnedFactsIn(paragraph.content, paragraph.lang, learn) }

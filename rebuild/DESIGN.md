@@ -48,7 +48,7 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 | Data | What it holds | Made by | Lives as long as | Depends on the width |
 |---|---|---|---|---|
 | Input | the `Paragraph` tree (§1.1), the `Environment` (§1.4), a `LineSlot { width, left, right }` per line (§2.9) | the caller | the caller's scope | the slot only |
-| List of contexts | the Canvas contexts a page has made, each found by its settings (§4.6, "A page's list of contexts"); nothing derived from them | the caller, as an empty array; `prepare` starts one per call when it is given none, and at every call in Gecko | the page, in Blink and in WebKit until the page adds a loaded FontFace; one prepared paragraph in Gecko, and wherever none is handed over | no |
+| Context pool | the Canvas contexts a page has made, each found by its settings (§4.6, "A page's list of contexts"); nothing derived from them | the caller, with `createContextPool()`; `prepare` starts one per call when it is given none, and at every call in Gecko | the page, in Blink and in WebKit until the page adds a loaded FontFace; one prepared paragraph in Gecko, and wherever none is handed over | no |
 | Prepared paragraph | the engine's content, items, styles and break data, the widths it knows before filling lines, references to the Canvas contexts it measures in (§4.6), the environment, and `inspect`: a record on a paragraph prepared for inspection, null on a plain one | `prepare` | the caller keeps it | no: one prepared paragraph serves any width |
 | Line start | where the next line starts: small plain data that names positions in the prepared paragraph's lists and holds nothing of it (§2.7) | `firstLine`, a fill result's `next` | the caller's scope; it survives JSON | no |
 | Decided line | the engine's own record of one filled line (Blink's `LineInfo` with its results, WebKit's closed `Line` with its rect, Gecko's last reflow pass), and on an inspected paragraph the gaps its filling raised, in order | `fillLine` | the caller's scope; counting lines drops it | yes |
@@ -1216,7 +1216,7 @@ call; `prepare` takes the list its Canvas contexts are found and made in (§4.6)
 it measures in by reference:
 
 ```ts
-prepare(paragraph: Paragraph, env: Env, inspect: boolean, contexts: Context[]): Prepared
+prepare(paragraph: Paragraph, env: Env, inspect: boolean, contexts?: ContextPool): Prepared
 firstLine(prepared: Prepared): Start | null
 fillLine(prepared: Prepared, start: Start, slot: LineSlot): FillResultOf<Start, FilledLine, RefusedSlot>
 linePieces(prepared: Prepared, line: FilledLine): LinePieces<PaintFacts>
@@ -1273,8 +1273,8 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   `gfxFont::SplitAndInitTextRun` sets the glyph flags (`prepare.ts` `splitAndInitTextRun`), and the measuring step reads
   those units. What measuring found inside a unit is on the unit (`GeckoUnit.inWord`, §4.6). Text runs that measure
   alike share one record of their Canvas contexts (`RunContexts`, held as `GeckoTextRun.contexts`), and what Canvas told
-  of a context's pair placement is on that record (`RunContexts.pairPlacement`, §4.6). A frame's tabs are one
-  ordered list with each tab's stand-in reason (`lines.ts` `Tab`), one shared empty list where a run has no tab. Reflow's
+  of a context's pair placement is on that record (`RunContexts.pairPlacement`, §4.6). A frame's tabs are the consumed prefix of one
+  reflow-local ordered list with each tab's stand-in reason (`lines.ts` `Tab`), one shared empty list where a run has no tab. Reflow's
   frame records and placement's are separate types (§2.9). A character's properties are one packed number, found by
   binary search in the generated runs of all of Unicode; `props.ts` reads those of U+0000 to U+00FF by index, from 256
   numbers it makes from the runs when the module loads and keeps for the life of the page (the profiling phase, §4.7).
@@ -1675,8 +1675,8 @@ tab rests on and the in-word report's positions.
 
 ### 4.6 Contexts, and values kept instead of asked again
 
-A port asks Canvas through three functions of `measure/canvas.ts`, which is all the file holds.
-`contextFor(contexts, settings)` finds a context in a paragraph's few by comparing its settings, and makes it when none
+A port asks Canvas through three functions of `measure/canvas.ts`, alongside the pool factory and type.
+`contextFor(contexts, settings)` finds a context by an AVL lookup over the exact settings fields, and makes it when none
 has them. `width(context, text)` and `bounds(context, text)` always ask Canvas: what is measured twice is asked twice, so
 a value needed twice is kept by the code that needs it. The string a port built reaches Canvas as the object it is, never
 as a key (research/BLINK-STRING-STORAGE.md). Measuring the same text in the same context again returns the same bits in
@@ -1830,18 +1830,17 @@ the port measures. The primary family check beside it does decide measuring, whe
 and the realized one is the system font (research/PROFILING-START.md, item 1).
 
 **A page's list of contexts** (the profiling phase's item 1, research/PROFILING-START.md). `prepare(paragraph, env,
-inspect, contexts)` takes a plain `Context[]` (`measure/canvas.ts`): the Canvas contexts a page has made, the engine's
-and the checks' in one list, each found by its settings. The three engines take the list (`engines/blink/index.ts`
-`prepare`, `engines/webkit/content.ts` `prepareWebKit`, `engines/gecko/prepare.ts` `prepareGecko`) and so do the checks
-(`measure/font-checks.ts` `withLearnedFontFacts`). Nothing derived from the contexts is kept: the list has no type of
-its own and nothing makes one but `[]`, and the font checks ask Canvas their questions again at every `prepare`, on the
-kept contexts. A prototype also kept the checks' questions with Canvas's answers; its review measured that the list
-alone pays nearly as much and that the kept answers were the one part that went stale silently
-(research/PERF-LIFETIME.md), so this smaller form was built.
+inspect, contexts)` takes a `ContextPool` made with `createContextPool()` (`measure/canvas.ts`). The engines and font
+checks share its Canvas records, found by their exact settings. The 2026-09-21 audit replaces a linear array search
+with an insertion-only AVL; records stay in creation order, links are indices in that same collection, and settings
+are copied once on creation. No measurement text or answer is a key or pooled value. Font checks ask their questions
+again at every preparation; their temporary fixed probe reuse is indexed by Context identity and discarded afterward.
+A previous answer-retaining prototype went stale silently (research/PERF-LIFETIME.md). Current cost and validation
+are in [GENERAL_COST.md](GENERAL_COST.md).
 
 - *Lifetime.* The caller's, in Blink and WebKit: a page's, or one call's. A call that is given none starts an empty
   list, and then nothing outlives a prepared paragraph, which is what the lab's usual predictors do, so a recorded case
-  stays what one paragraph asks and tier 1 stays sound per case. A page keeps one array and hands it to every
+  stays what one paragraph asks and tier 1 stays sound per case. A page keeps one pool and hands it to every
   `prepare`. Gecko's contexts are one prepared paragraph's whatever the caller hands over (since 2026-09-20 `index.ts`
   `prepare` starts a list of its own there, for the checks and the port): a kept Firefox context can answer otherwise
   than a new one, and no page can know when (the next bullet; research/CONTEXTS-HEAL.md has the study and its review).
@@ -1892,33 +1891,14 @@ alone pays nearly as much and that the kept answers were the one part that went 
     and for `system-ui` at three sizes (0 of 135 pairs differ, 0 of 90 widths asked again moved), and a font string
     measures the same at every factor. Not probed: a real move between displays and the browser's own zoom, which the
     emulation stands in for.
-- *What bounds it.* The distinct settings a page measures with: about 8 contexts per font declaration in Blink and 3 in
-  WebKit and Gecko (a plain paragraph; `tools/contexts-bound.ts`). The chat mix holds 24 contexts in Chrome and 11 in
-  webkit-host for 1,000 messages, and Firefox holds none (its 13 were the page's before 2026-09-20), and on the tier
-  sets a document's list makes 1.81 contexts a case in Chrome, 0.42 in Firefox and 0.20 in webkit-host, where a list a
-  case makes 15.75, 4.62 and 7.77, for the same `measureText` calls (736.24, 120.23 and 85.90 a case without facts,
-  inspected; Firefox's 0.42 is from before 2026-09-20, and a document's list there now makes what a list a case
-  makes). Settings that never repeat (an
-  animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so `prepare`,
-  which sees both of the list's users, empties a list longer than 512 contexts; prepared paragraphs hold theirs by
-  reference and keep them. The number comes from the search's cost: a lookup compares
-  settings one by one at 4 to 6 ns each (JavaScriptCore and V8, 2026-09-19), a plain paragraph makes 15 lookups in
-  Blink, 12 in WebKit and 3 in Gecko, and with every context of the list used in turn it compares 5.6 settings per
-  context held in Blink, 4.1 in WebKit and 1.5 in Gecko. At 512 contexts that is about 17 µs a paragraph in Chrome,
-  where the list saves about 90 µs a chat message, and 9.5 µs in webkit-host, where it saves about 9.7 µs:
-  the largest power of two at which no engine's page pays more to search its list than the list saves. At 1,024 the
-  webkit-host page would pay 19 µs. A Map keyed by the settings would make the search flat, at a key string built per
-  lookup; it was not built, because a page's common declarations are met first and sit at the front of the list, and
-  the chat page's 24 contexts cost about 1 µs a message to search. The bound is a cliff: a Chrome page that uses 60
-  font families in turn holds 484 contexts and makes none again, and one that uses 64 has its list emptied in every
-  cycle and makes 8.06 contexts a paragraph where a list a call makes 10.19 (`tools/contexts-bound.ts`, stand-in
-  Canvas), so past it a page pays about what every page paid before the list. With 10,000 declarations that never
-  repeat (a size per paragraph) the list never holds more than 514 contexts and a `prepare` makes 6.05 contexts where
-  a list a call makes 10, because the checks measure at 16px whatever the size. What a kept canvas holds inside the
-  browser is the browser's to bound: Chrome keeps at most 32,768 strings and 32,768 words per canvas and drops the
-  least recently used half when either fills (frame_shape_cache.cc:12-16, :93-104, whose comment puts 320,000 nodes at
-  about 700 MB), so a page's busiest canvas can hold tens of megabytes where main's one canvas, which is asked words
-  that repeat, fills slowly; fewer distinct questions (items 2 and 6) shrink it.
+- *What bounds it.* The retained pool clears at preparation entry when it holds more than 512 contexts, preserving
+  the previous lifetime rule. Input-sized declarations inside one preparation can exceed that cap, so lookup remains
+  logarithmic in the record count rather than relying on the cap. Clearing inside preparation would change Chrome's
+  shaping history. Prepared records retain their Context references across pool clear. The original cap/search timing
+  study was for the linear array (research/PROFILING-START.md; `tools/contexts-bound.ts` now reports ns per lookup).
+  Native cache retention is the browser's: Chrome keeps at most 32,768 strings and 32,768 words per canvas and evicts
+  the least recently used half (frame_shape_cache.cc:12-16, :93-104); WebKit and Gecko retain words per font. A page with
+  many canvases can still retain substantial native shaping data. No measured-answer cache is added by the pool.
 - *Chrome's history.* Chrome keeps shaped words per canvas and the first shaping wins (§4.2), so with a page's list a
   canvas has shaped what the page's earlier paragraphs asked. No answer changes, because a context's settings hold
   everything Chrome's shaping reads but the string's storage, and `partition` already names the storage for every

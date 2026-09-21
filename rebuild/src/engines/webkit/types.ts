@@ -1,6 +1,6 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
-import type { Context } from '../../measure/canvas.js'
+import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { AtomicInline, FillResultOf, Gap, LineSlot, Paragraph, TextAlign } from '../../model.js'
 import type { WebKitLineStart } from './geometry.js'
 
@@ -61,8 +61,6 @@ export type WebKitBox = {
   text: string
   // Stored as Latin-1: every code unit is at most U+00FF, what JS-created nodes get (gap string-storage).
   is8Bit: boolean
-  // RenderText::canUseSimpleFontCodePath: FontCascade::characterRangeCodePath isn't Complex.
-  simpleFontCodePath: boolean
   // InlineTextBox::canUseSimplifiedContentMeasuring (RenderText.cpp:480-524). The primary-font coverage condition is tested
   // only for fixed-pitch boxes, the only ones that read the result.
   simplifiedMeasuring: boolean
@@ -106,7 +104,12 @@ export type WebKitBox = {
   // The font-family list Canvas is given: the declared list with each generic keyword the locale resolves to a family of its
   // own named (fonts.ts), and the script's standard family appended where no listed family resolves.
   canvasFamily: string
-}
+} & (
+  // RenderText::canUseSimpleFontCodePath. Only complex boxes need ICU character analysis;
+  // firstUserPerceivedCharacterLength reads the next original-box boundary even inside a cluster.
+  | { simpleFontCodePath: true; characterBoundaries: null }
+  | { simpleFontCodePath: false; characterBoundaries: readonly number[] }
+)
 
 // UBIDI_DEFAULT_LTR, the level of items built without bidi (IIB:907, 977, 987, 1031).
 export const DEFAULT_BIDI_LEVEL = 254
@@ -161,7 +164,7 @@ export type WebKitPrepared = {
   // The Canvas contexts the paragraph makes its own in, one per distinct settings (measure/canvas.ts): the caller's list, a
   // page's or this paragraph's alone (index.ts prepare). The paragraph's are all made while it is prepared; the boxes and
   // the box facts hold the ones they measure in. A world shares its paragraph's.
-  contexts: Context[]
+  contexts: ContextPool
   // What the paragraph keeps only for inspectLine and paragraphGaps; null on a paragraph prepared plain, which computes no
   // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts, history.ts). Nothing else says
   // which of the two a paragraph is.

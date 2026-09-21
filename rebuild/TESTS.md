@@ -46,6 +46,12 @@ predictions in both facts configurations, and the exported functions' plain/pure
 populations. The all-engine check takes about three minutes in this takeover. It uses recorded Canvas answers and
 protects prior output; it cannot establish native correctness or the cost of changed measurement questions.
 
+A deliberate core change can produce nonzero replay gates. Retain the actual result, inspect complete differences,
+and prove the intended behavior independently; do not rename it a pure refactor or silently replace reference output.
+The 2026-09-21 batch changes only diagnostics among complete replayable predictions; it preserves prior native fast
+obligations and classifies targeted misses against the preserved core. [GENERAL_COST.md](GENERAL_COST.md) records its
+skips and remaining native work.
+
 A changed Canvas question or encoding needs targeted native protocol/output evidence. A changed acceptance rule
 needs a planted defect demonstrating the old false green. Conservative replay rules may request browser evaluation
 for storage or repetition changes; any skipped request needs its actual narrower evidence recorded, not a fabricated

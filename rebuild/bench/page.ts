@@ -18,7 +18,7 @@ import * as webkit from '../src/engines/webkit/index.ts'
 import {
   detectEnvironment, fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
 } from '../src/index.ts'
-import type { Context as CanvasContext } from '../src/measure/canvas.ts'
+import { createContextPool, type ContextPool } from '../src/measure/canvas.ts'
 import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
 import { UNKNOWN_FONT_FACTS, type BoxEdge, type FontDecl, type InlineNode, type Paragraph } from '../src/model.ts'
 import type {
@@ -319,7 +319,7 @@ function variantsFor(row: RowSpec, c: Context): Variant[] {
 
 // index.ts prepare() in its two halves, so the bench can time them apart and run the second alone: the runtime font checks
 // (measure/font-checks.ts), then the engine's own prepare on the paragraph with the facts Canvas answered.
-function withFontChecks(paragraph: Paragraph, env: Environment, contexts: CanvasContext[]): Paragraph {
+function withFontChecks(paragraph: Paragraph, env: Environment, contexts: ContextPool): Paragraph {
   switch (env.engine) {
     case 'blink': return withLearnedFontFacts(paragraph, blinkFontChecks(env, false), contexts)
     case 'webkit': return withLearnedFontFacts(paragraph, webkitFontChecks, contexts)
@@ -327,7 +327,7 @@ function withFontChecks(paragraph: Paragraph, env: Environment, contexts: Canvas
   }
 }
 
-function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean, contexts: CanvasContext[]): Prepared {
+function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean, contexts: ContextPool): Prepared {
   switch (env.engine) {
     case 'blink': return { engine: 'blink', state: blink.prepare(checked, env, inspect, contexts) }
     case 'webkit': return { engine: 'webkit', state: webkit.prepare(checked, env, inspect, contexts) }
@@ -340,11 +340,11 @@ function prepareChecked(checked: Paragraph, env: Environment, inspect: boolean, 
 // prepare() makes its contexts anew whatever list it is handed (src/index.ts prepare), so 'both' measures there what a
 // list a message measures; 'checks' and 'contexts' call the port itself and still share, as the study they were built
 // for did.
-function prepareKeeping(paragraph: Paragraph, env: Environment, kept: Kept, page: CanvasContext[]): Prepared {
+function prepareKeeping(paragraph: Paragraph, env: Environment, kept: Kept, page: ContextPool): Prepared {
   switch (kept) {
     case 'both': return prepare(paragraph, env, false, page)
-    case 'checks': return prepareChecked(withFontChecks(paragraph, env, page), env, false, [])
-    case 'contexts': return prepareChecked(withFontChecks(paragraph, env, []), env, false, page)
+    case 'checks': return prepareChecked(withFontChecks(paragraph, env, page), env, false, createContextPool())
+    case 'contexts': return prepareChecked(withFontChecks(paragraph, env, createContextPool()), env, false, page)
   }
 }
 
@@ -419,7 +419,7 @@ function scratchChat(inputs: ChatInputs, env: Environment, mode: Mode): number {
 // The same in count mode with a list of contexts started here, as a page that lays its messages out from nothing starts
 // one first: the contexts are paid for once inside the timing, and nothing of an earlier repetition is left.
 function scratchChatKeeping(inputs: ChatInputs, env: Environment, kept: Kept): number {
-  const page: CanvasContext[] = []
+  const page = createContextPool()
   let lineBoxes = 0
   for (let i = 0; i < inputs.paragraphs.length; i++) lineBoxes += fillAll(prepareKeeping(inputs.paragraphs[i]!, env, kept, page), inputs.chat.width, 'count', null)
   return lineBoxes
@@ -427,7 +427,7 @@ function scratchChatKeeping(inputs: ChatInputs, env: Environment, kept: Kept): n
 
 // Every message prepared plain and filled at the first width, all of them kept: what an app holds before a resize. With
 // `page`, every message is prepared with that one list of contexts; without, each with its own.
-function prepareAllChat(inputs: ChatInputs, env: Environment, page: CanvasContext[] | undefined): Prepared[] {
+function prepareAllChat(inputs: ChatInputs, env: Environment, page: ContextPool | undefined): Prepared[] {
   const prepared: Prepared[] = []
   for (let i = 0; i < inputs.paragraphs.length; i++) {
     prepared.push(prepare(inputs.paragraphs[i]!, env, false, page))
@@ -455,11 +455,11 @@ function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
   for (let i = 0; i < n; i++) handles.push(mainPrepareChat(inputs.main[i]!, font))
   // The font checks run here, once a paragraph, outside every timing.
   const checked: Paragraph[] = []
-  for (let i = 0; i < n; i++) checked.push(withFontChecks(inputs.paragraphs[i]!, env, []))
+  for (let i = 0; i < n; i++) checked.push(withFontChecks(inputs.paragraphs[i]!, env, createContextPool()))
   let fresh: Prepared[] = []
   const met = prepareAllChat(inputs, env, undefined)
   sink += resizeChat(met, resizeWidths)
-  const metKeeping = prepareAllChat(inputs, env, [])
+  const metKeeping = prepareAllChat(inputs, env, createContextPool())
   sink += resizeChat(metKeeping, resizeWidths)
   const keeping = (kept: Kept, what: string): Variant => ({
     name: `rebuild scratch, count, page keeps ${kept}`, library: 'rebuild', baseline: 'rebuild scratch, count', layouts: n, setup: null,
@@ -489,7 +489,7 @@ function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
       desc: 'the same, on paragraphs whose font facts were asked of Canvas outside the timing: the engine\'s prepare() alone, then every line; count mode',
       run: () => {
         let lineBoxes = 0
-        for (let i = 0; i < n; i++) lineBoxes += fillAll(prepareChecked(checked[i]!, env, false, []), width, 'count', null)
+        for (let i = 0; i < n; i++) lineBoxes += fillAll(prepareChecked(checked[i]!, env, false, createContextPool()), width, 'count', null)
         return lineBoxes
       },
     },
@@ -505,7 +505,7 @@ function chatVariants(c: Context, inputs: ChatInputs): Variant[] {
     {
       name: `rebuild first resize×${w}, count, page keeps both`, library: 'rebuild', baseline: `rebuild first resize×${w}, count`, layouts: n * w,
       desc: 'the same on paragraphs prepared with one list of contexts, so the messages share their Canvas contexts',
-      setup: () => { fresh = prepareAllChat(inputs, env, []) },
+      setup: () => { fresh = prepareAllChat(inputs, env, createContextPool()) },
       run: () => resizeChat(fresh, resizeWidths),
     },
     {
@@ -670,7 +670,7 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
     const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
     document.title = `bench headline resize ${chat.sets[s]!.id}, one list of contexts`
     let start = performance.now()
-    const prepared = prepareAllChat(inputs, c.env, [])
+    const prepared = prepareAllChat(inputs, c.env, createContextPool())
     const prepareAndFillMs = performance.now() - start
     start = performance.now()
     sink += resizeChat(prepared, chat.resizeWidths)
@@ -816,7 +816,7 @@ function checkedRanges(inputs: ChatInputs, env: Environment): number[] {
   const ranges: number[] = []
   const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
   for (let i = 0; i < inputs.paragraphs.length; i++) {
-    const own: CanvasContext[] = []
+    const own = createContextPool()
     const prepared = prepareChecked(withFontChecks(inputs.paragraphs[i]!, env, own), env, false, own)
     for (let w = 0; w < widths.length; w++) fillAll(prepared, widths[w]!, 'count', ranges)
   }
@@ -827,7 +827,7 @@ function checkedRanges(inputs: ChatInputs, env: Environment): number[] {
 function keepingRanges(inputs: ChatInputs, env: Environment, kept: Kept): number[] {
   const ranges: number[] = []
   const widths = [inputs.chat.width, ...inputs.chat.resizeWidths]
-  const page: CanvasContext[] = []
+  const page = createContextPool()
   for (let i = 0; i < inputs.paragraphs.length; i++) {
     const prepared = prepareKeeping(inputs.paragraphs[i]!, env, kept, page)
     for (let w = 0; w < widths.length; w++) fillAll(prepared, widths[w]!, 'count', ranges)
@@ -905,13 +905,13 @@ function chatPhases(c: Context, chat: ChatPlan, setIndex: number, keeping: boole
     const prep = noTotals()
     const fill = noTotals()
     const byKind = new Map<ChatKind, KindTotals>()
-    const page: CanvasContext[] = []
+    const page = createContextPool()
     for (let i = 0; i < inputs.paragraphs.length; i++) {
       const callsBefore = canvasWork.measureTextCalls
       const contextsBefore = canvasWork.contexts
       let work = { ...canvasWork }
       let start = performance.now()
-      const contexts = keeping ? page : []
+      const contexts = keeping ? page : createContextPool()
       const checked = withFontChecks(inputs.paragraphs[i]!, env, contexts)
       const checksMs = addPhase(check, start, work)
       work = { ...canvasWork }

@@ -619,7 +619,12 @@ function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: numb
   if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   let i = 0
-  while (i + 1 < cuts.length && cuts[i + 1]! <= k) i++
+  let end = cuts.length - 1
+  while (i < end) {
+    const mid = (i + end + 1) >> 1
+    if (cuts[mid]! <= k) i = mid
+    else end = mid - 1
+  }
   const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
   const to = cuts[i + 1] ?? group.end
   return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
@@ -652,8 +657,9 @@ function beforeWhiteSpace(p: BlinkPrepared, k: number, lo: number, hi: number): 
 function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number, cutTotals: CutTotals): boolean {
   const p = sh.p
   const group = p.groups[g]!
-  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0 &&
-    pairAdjust16(sh, g, k, group.start, group.end) === 0
+  // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
+  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
+    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
 }
 
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
@@ -727,16 +733,17 @@ export function measureGroups(sh: Shaper): void {
     const zero = [false]
     addPieces(sh, g, group.start, group.end, cuts, totals, zero)
     const prefix = [0]
-    for (let i = 0; i < totals.length; i++) prefix.push(prefix[i]! + totals[i]!)
     group.cuts = cuts
     group.prefixAtCut = prefix
     // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
+    // Combine each piece's total and its right cut's correction before carrying that advance into the next prefix.
     for (let i = 1; i < cuts.length - 1; i++) {
       const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
       // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
       if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
-      for (let j = i; j < prefix.length; j++) prefix[j]! += d
+      prefix.push(prefix[i - 1]! + (totals[i - 1]! + d))
     }
+    prefix.push(prefix[prefix.length - 1]! + totals[totals.length - 1]!)
   }
 }
 

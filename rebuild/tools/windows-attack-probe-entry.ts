@@ -1,7 +1,7 @@
 // The page side of tools/windows-attack-probe.ts: the Gecko port of the tree this is bundled from, behind one function
 // that prepares a paragraph of one text node and reads the advance before every cluster start, then fills lines at
 // widths that put breaks beside the 16th, 32nd and 48th cluster. Nothing here reads the DOM.
-import { detectEnvironment } from '../src/index.ts'
+import { createContextPool, detectEnvironment } from '../src/index.ts'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../src/model.ts'
 import { advanceBefore } from '../src/engines/gecko/advance.ts'
 import { fillLine, firstLine } from '../src/engines/gecko/index.ts'
@@ -39,7 +39,7 @@ function linesAt(prepared: ReturnType<typeof prepareGecko>, width: number): numb
 // its stand-in reason ('' where the port calls the advance exact). Then the long units' windows where the tree has them,
 // and the lines' ends at each width, plain and inspected.
 function dump(s: Sample, env: GeckoEnvironment): unknown {
-  const p = prepareGecko(paragraphOf(s), env, false, [])
+  const p = prepareGecko(paragraphOf(s), env, false, createContextPool())
   const src: number[] = []
   const au: number[] = []
   const kinds: string[] = []
@@ -73,7 +73,7 @@ function dump(s: Sample, env: GeckoEnvironment): unknown {
   widths.push(total / 60 / 3.7)
   const lines: number[][] = []
   for (let k = 0; k < widths.length; k++) lines.push(linesAt(p, widths[k]!))
-  const inspected = prepareGecko(paragraphOf(s), env, true, [])
+  const inspected = prepareGecko(paragraphOf(s), env, true, createContextPool())
   const inspectedLines: number[][] = []
   for (let k = 0; k < widths.length; k += 3) inspectedLines.push(linesAt(inspected, widths[k]!))
   return { units: p.units.length, src, au, kinds, windows, widths, lines, inspectedLines }

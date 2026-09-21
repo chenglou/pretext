@@ -9,7 +9,7 @@
 // Gecko's lists aren't merged: a condition that shows twice is listed twice, as when both passes of a redo meet the same
 // emergency break. Only the in-word report is sorted.
 import type { GeckoEnvironment } from '../../env.js'
-import { width, type Context } from '../../measure/canvas.js'
+import { width, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName } from '../../model.js'
 import { advanceBefore } from './advance.js'
@@ -189,7 +189,7 @@ export function runEnded(test: SpaceTest | null, end: number): void {
 // goes by the same two flags (CanvasRenderingContext2D.cpp:4759-4790): W at 2px less W at 0.001px, over 2px, counts the
 // unit's groups (probe gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer,
 // Canvas doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
-export function letterSpacedGroups(sink: GapSink, contexts: Context[], run: Pick<GeckoTextRun, 'contexts' | 'scriptRuns' | 'tStart'>,
+export function letterSpacedGroups(sink: GapSink, contexts: ContextPool, run: Pick<GeckoTextRun, 'contexts' | 'scriptRuns' | 'tStart'>,
   leaf: number, letterSpacing: number, tUnits: Uint16Array, tSource: Int32Array, clusterStart: Uint8Array, spacingPrefix: Int32Array, t: number, e: number, w: number): void {
   if (sink === null || letterSpacing === 0) return
   let clusters = 0

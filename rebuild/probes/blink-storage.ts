@@ -300,9 +300,9 @@ const S5 = `
     } finally {
       proto.measureText = measureText
     }
-    const settingsOf = ctx => prepared.state.canvases.find(context => context.ctx === ctx).settings
+    const settingsOf = ctx => prepared.state.canvases.entries.find(context => context.ctx === ctx).settings
     const asks = calls.filter(call => call.text === run).map(call => ({ partition: settingsOf(call.ctx).partition, letterSpacing: settingsOf(call.ctx).letterSpacing, width: call.width }))
-    out[order] = { asks, contexts: prepared.state.canvases.length, lines }
+    out[order] = { asks, contexts: prepared.state.canvases.size, lines }
     const plain = asks.filter(ask => ask.letterSpacing === '0px')
     const partitions = [...new Set(plain.map(ask => ask.partition))]
     expect(order + ': the brackets are first asked in both storages, in this order', partitions.join(), order === 'two-byte first' ? '16bit,8bit' : '8bit,16bit')

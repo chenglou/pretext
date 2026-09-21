@@ -1,16 +1,13 @@
 // What a page's list of Canvas contexts costs a page with many font declarations (src/index.ts prepare, "Bounded by"): a
-// review's check of research/PROFILING-START.md item 1, and what prepare's bound was decided from. A context is found by
-// comparing settings one by one, so the search grows with what the page has used.
+// review's check of research/PROFILING-START.md item 1, and what prepare's bound was decided from. The current pool finds a context
+// by an ordered settings lookup; the original cap study used a linear array.
 //
 //   bun rebuild/tools/contexts-bound.ts [--prepares=N] [--rounds=N] [--cycles=D[,D...]]
 //
-// The search alone, first: the library's contextFor over lists of 16 to 4,096 contexts whose settings are strings built at
-// run time, as the ports build theirs, every context looked up in turn: nanoseconds a settings compared, the best of
-// seven passes. Under bun that is JavaScriptCore, which is WebKit's; the same loop under node's V8 gave 5 to 7 ns where
-// bun gave 4 to 5 (2026-09-19, load 12). With the settings a plain paragraph compares per context the list holds
-// (counted once on a scratch copy with a counter in contextFor, prepare and every line at 320 px: Blink 15 lookups a
-// paragraph and 5.6 settings per context held, WebKit 12 and 4.1, Gecko 3 and 1.5) it gives what a page that uses all its
-// contexts in turn pays to search them: at 512 contexts 17 µs a paragraph in Chrome, 9.5 µs in WebKit, 5 µs in Gecko.
+// The search alone, first: current ContextPool lookup over 16 to 4,096 contexts whose settings are strings built at
+// run time. Every context is looked up in creation order; report nanoseconds per lookup, the best of seven passes.
+// The 2026-09-19 study used a linear array and reported nanoseconds per settings comparison. Its comparison counts and
+// cap tradeoff are historical (research/PROFILING-START.md), not denominators for the current logarithmic lookup.
 //
 // Then prepares under the stand-in Canvas, Blink's port (it makes the most contexts a declaration), one English
 // sentence, unknown font facts. There a context costs nothing to make, so a list a call is the floor:
@@ -23,7 +20,7 @@
 // for one list, the two taking turns in every round: the median of the rounds and their range. Times depend on the
 // machine's load, and the stand-in's own work is most of them; the list's length and the contexts made don't.
 import { PINNED_BUILDS, type BlinkEnvironment } from '../src/env.ts'
-import { prepare, UNKNOWN_FONT_FACTS, type Context, type Paragraph } from '../src/index.ts'
+import { prepare, UNKNOWN_FONT_FACTS, createContextPool, type Paragraph } from '../src/index.ts'
 import { contextFor, type CanvasSettings } from '../src/measure/canvas.ts'
 import { installStandInCanvas } from './stand-in-canvas.ts'
 
@@ -57,7 +54,7 @@ const standIn = installStandInCanvas({ userAgent: USER_AGENT, devicePixelRatio: 
 type Run = { microseconds: number; contextsMade: number; mostContexts: number }
 
 function run(kind: Kind, distinct: number, shared: boolean): Run {
-  const contexts: Context[] = []
+  const contexts = createContextPool()
   // A page that repeats its declarations has met them all before the timed prepares.
   if (shared && distinct < PREPARES) for (let i = 0; i < distinct; i++) prepare(paragraph(kind, i, distinct), ENV, false, contexts)
   standIn.reset()
@@ -66,7 +63,7 @@ function run(kind: Kind, distinct: number, shared: boolean): Run {
   for (let i = 0; i < PREPARES; i++) {
     if (shared) prepare(paragraph(kind, i, distinct), ENV, false, contexts)
     else prepare(paragraph(kind, i, distinct), ENV, false)
-    if (contexts.length > mostContexts) mostContexts = contexts.length
+    if (contexts.size > mostContexts) mostContexts = contexts.size
   }
   return { microseconds: (performance.now() - from) / PREPARES * 1000, contextsMade: standIn.asked().contexts / PREPARES, mostContexts }
 }
@@ -100,7 +97,7 @@ function settingsOf(k: number, part: number): CanvasSettings {
 }
 
 function searchAlone(length: number): void {
-  const list: Context[] = []
+  const list = createContextPool()
   const asks: CanvasSettings[] = []
   for (let i = 0; i < length; i++) {
     contextFor(list, settingsOf(i >> 3, i & 7))
@@ -111,11 +108,11 @@ function searchAlone(length: number): void {
   let found = 0
   for (let pass = 0; pass < 7; pass++) {
     const from = performance.now()
-    for (let r = 0; r < rounds; r++) for (let i = 0; i < length; i++) if (contextFor(list, asks[i]!) === list[i]) found++
+    for (let r = 0; r < rounds; r++) for (let i = 0; i < length; i++) if (contextFor(list, asks[i]!) === list.entries[i]) found++
     best = Math.min(best, (performance.now() - from) / (rounds * length))
   }
   if (found !== 7 * rounds * length) throw new Error('a lookup made a context')
-  console.log(`search alone, ${length} contexts: ${(best * 1e6 / ((length + 1) / 2)).toFixed(1)} ns a settings compared, ${(best * 1000).toFixed(2)} us a lookup`)
+  console.log(`search alone, ${length} contexts: ${(best * 1e6).toFixed(1)} ns a lookup, ${(best * 1000).toFixed(2)} us a lookup`)
 }
 
 const lengths = [16, 64, 256, 512, 1024, 4096]

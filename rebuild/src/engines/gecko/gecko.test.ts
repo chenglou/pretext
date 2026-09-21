@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // Gecko port tests on the specs' worked examples and installed Firefox 156 verdicts (specs/probes-firefox.md), with a
 // stand-in OffscreenCanvas: every code point of 16px Courier New is 576 au (specs/gecko-lines.md §2.5), so widths are
 // known without a browser. Break scans come from the groundwork oracle's unit cases
@@ -427,7 +428,7 @@ describe('gecko engine output', () => {
   })
   test('in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes', () => {
     const p = paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' })
-    const prepared = prepareGecko(p, env, true, [])
+    const prepared = prepareGecko(p, env, true, createContextPool())
     const before = geckoParagraphGaps(prepared).length
     const slot = { width: p.width, left: 0, right: 0 }
     const first = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
@@ -481,7 +482,7 @@ describe('gecko engine output', () => {
     expect(allGaps(layout(paragraph([run('a')], 500))).map(g => g.gap)).not.toContain('optical-size')
   })
   test('nsLineBreaker takes Chinese or Japanese from likely subtags (specs/gecko-oracle-replay.md §4.1)', () => {
-    const p = (lang: string) => prepareGecko(paragraph([run('あ；', 'span')], 100, { lineBreak: 'loose', lang }), env, true, [])
+    const p = (lang: string) => prepareGecko(paragraph([run('あ；', 'span')], 100, { lineBreak: 'loose', lang }), env, true, createContextPool())
     expect(p('yue').breakFlags[1]).toBe(BREAK_NORMAL)
     expect(p('ko').breakFlags[1]).not.toBe(BREAK_NORMAL)
   })
@@ -547,7 +548,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
   test('the space-in-shaping test reads Canvas widths only below 2^18 px (CanvasRenderingContext2D.cpp:5277)', () => {
     // 9,134 words of `aa ` are 15,783,552 au, 263,059.2px: measureText's float width is 1/32 px steps there and reads back
     // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
-    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, true, [])
+    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, true, createContextPool())
     expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
     expect(geckoParagraphGaps(long).map(g => g.gap)).toEqual([])
   })
@@ -583,7 +584,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
 
 // Break positions of one text node, as the groundwork oracle reports them.
 function breaks(text: string, whiteSpace: Paragraph['whiteSpace'] = 'normal', wordBreak: Paragraph['wordBreak'] = 'normal') {
-  const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, wordBreak }), env, true, [])
+  const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, wordBreak }), env, true, createContextPool())
   const normal: number[] = []
   const emergency: number[] = []
   for (let t = 1; t < p.tUnits.length; t++) {
@@ -646,7 +647,7 @@ describe('gecko break opportunities (groundwork oracle unit cases)', () => {
 
 describe('gecko TransformText (specs/gecko-text.md §6.3)', () => {
   const transformed = (text: string, whiteSpace: Paragraph['whiteSpace'] = 'normal', lang = 'en') => {
-    const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, lang }), env, true, [])
+    const p = prepareGecko(paragraph([run(text, 'span')], 100, { whiteSpace, lang }), env, true, createContextPool())
     return String.fromCharCode(...p.tUnits)
   }
   test('collapsing and segment breaks', () => {
@@ -734,7 +735,7 @@ describe('gecko inline structure', () => {
 
   test('a <br> in an RTL block appends U+2028 and ends the bidi paragraph, so the space before it takes the paragraph level (nsBidiPresUtils.cpp:1381-1384)', () => {
     const p = block([leaf('ab '), { kind: 'br' }, leaf('cd')], 500, { direction: 'rtl' })
-    expect(prepareGecko(p, env, true, []).elements.map(e => e.kind === 'span' ? -1 : e.level)).toEqual([1])
+    expect(prepareGecko(p, env, true, createContextPool()).elements.map(e => e.kind === 'span' ? -1 : e.level)).toEqual([1])
     const l = layout(p)
     expect(l.lines.map(line => textFrames(line).map(f => [f.level, f.x, f.width]))).toEqual([[[2, 30000 - 1152, 1152], [1, 30000 - 1152, 0]], [[2, 30000 - 1152, 1152]]])
     expect(l.lines[0]!.geometry.frames.find(f => f.kind === 'br')!.x).toBe(30000 - 1152)
@@ -824,7 +825,7 @@ describe('ceiling round 2', () => {
     ]
     for (let depth = 0; depth < 128; depth++) nested = [span(nested)]
     const p = { ...block, content: [span(nested, 'ZH-hANs-cn'), leaf('six')] }
-    expect(prepareGecko(p, env, false, []).leaves.map(leaf => leaf.lang)).toEqual([
+    expect(prepareGecko(p, env, false, createContextPool()).leaves.map(leaf => leaf.lang)).toEqual([
       'zh-Hans-CN', '', 'ko', '', 'zh-Hans-CN', 'invalid_tag', 'zh-Hans-CN', 'en-US',
     ])
     // Empty style language uses the supplied font locale, and stays unknown when that process fact is absent.
@@ -832,7 +833,7 @@ describe('ceiling round 2', () => {
     expect(allGaps(layout(p, { ...env, regionalPrefsLocale: null }))).toContainEqual(expect.objectContaining({
       gap: 'ui-language', run: 1, at: { start: 3, end: 6 },
     }))
-    expect(prepareGecko(paragraph([run('fresh')], 100), env, false, []).leaves[0]!.lang).toBe('en')
+    expect(prepareGecko(paragraph([run('fresh')], 100), env, false, createContextPool()).leaves[0]!.lang).toBe('en')
   })
 
   test('localized empty spans create no text language, Canvas context or contentful line', () => {
@@ -845,7 +846,7 @@ describe('ceiling round 2', () => {
     expect(measured.measure).toEqual({ contexts: [], calls: [] })
     expect(measured.lines.some(line => line.hasLineBox)).toBe(false)
     expect(measured.lines.flatMap(line => line.fragments).some(fragment => fragment.kind === 'text')).toBe(false)
-    expect(prepareGecko(p, env, false, []).leaves).toEqual([])
+    expect(prepareGecko(p, env, false, createContextPool()).leaves).toEqual([])
   })
 
   test('lang="" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)', () => {
@@ -1050,7 +1051,7 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
   // Every line of a paragraph as an application reads it: the fill result and the pieces.
   function plainWalk(p: Sized, inspect: boolean): { lines: unknown[]; calls: number } {
     const measure: StubLog = asked = { contexts: [], calls: [] }
-    const prepared = prepareGecko(p, env, inspect, [])
+    const prepared = prepareGecko(p, env, inspect, createContextPool())
     const lines: unknown[] = []
     for (let start = firstLine(prepared); start !== null;) {
       const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
@@ -1087,7 +1088,7 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
   })
 
   test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
-    const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false, [])
+    const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false, createContextPool())
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
     expect(prepared.inspect).toBeNull()
     expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
@@ -1107,7 +1108,7 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
   test('paragraphGaps hands out copies: writing into them doesn\'t reach the prepared paragraph', () => {
     // A size off Canvas's grid in a font whose opsz axis isn't known: two gaps made with one `at` (prepare.ts step 7).
     const system = { ...courier, size: 16.8, facts: { ...facts, opticalSizeAxis: null } }
-    const prepared = prepareGecko(paragraph([run('aa '), run('bb', 'span', { font: system })], 500), env, true, [])
+    const prepared = prepareGecko(paragraph([run('aa '), run('bb', 'span', { font: system })], 500), env, true, createContextPool())
     const first = geckoParagraphGaps(prepared)
     expect(first.map(g => g.gap)).toEqual(['font-size-quantization', 'optical-size'])
     const kept = JSON.stringify(first)
@@ -1120,7 +1121,7 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
 
   test('linePieces and inspectLine don\'t write the decided line: justified, trimmed and read twice in either order', () => {
     const p = paragraph([run('aa bb cc dd ee ff')], 60, { textAlign: 'justify' })
-    const prepared = prepareGecko(p, env, true, [])
+    const prepared = prepareGecko(p, env, true, createContextPool())
     const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
     if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
     const before = JSON.stringify(filled.line.root, (key, value: unknown) => key === 'parent' || key === 'run' ? undefined : value)
@@ -1159,7 +1160,7 @@ describe('what measuring found is kept per offset, and nothing by string (resear
   test('an offset inside a unit is measured once: filling the paragraph again asks Canvas nothing', () => {
     const p = paragraph([run('abcdefgh ijklmnop')], 40, { overflowWrap: 'anywhere' })
     const measure: StubLog = asked = { contexts: [], calls: [] }
-    const prepared = prepareGecko(p, env, false, [])
+    const prepared = prepareGecko(p, env, false, createContextPool())
     const first = fillAll(prepared, 40)
     const calls = measure.calls.length
     expect(calls).toBeGreaterThan(0)
@@ -1192,7 +1193,7 @@ describe('the model clean-up (research/ARCHITECTURE-PLAN-2.md §8, X3)', () => {
   })
 
   test('a unit holds nothing of its inside until a line asks, and a line start is plain data', () => {
-    const prepared = prepareGecko(paragraph([run('abcdefgh ijkl')], 40, { overflowWrap: 'anywhere' }), env, false, [])
+    const prepared = prepareGecko(paragraph([run('abcdefgh ijkl')], 40, { overflowWrap: 'anywhere' }), env, false, createContextPool())
     expect(prepared.units.map(u => u.inWord)).toEqual([null, null, null])
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
     expect(prepared.units[0]!.inWord).not.toBeNull()

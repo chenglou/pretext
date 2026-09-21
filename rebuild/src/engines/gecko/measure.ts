@@ -1,7 +1,7 @@
 // What the Gecko port asks Canvas for a range of transformed text (Firefox 156.0): the contexts text runs measure in, the
 // script runs gfxFontGroup::InitTextRun shapes, the script context a piece of a shaping unit needs, and rangeAu, the one
 // recipe every unit, prefix and suffix goes through. specs/gecko-canvas.md §2-§3.
-import { contextFor, width, type CanvasSettings, type Context } from '../../measure/canvas.js'
+import { contextFor, width, type CanvasSettings, type Context, type ContextPool } from '../../measure/canvas.js'
 import { AL, R, bidiClassOf } from '../../unicode/bidi.js'
 import { geckoBidiData } from './data.js'
 import { hasScript, isBidiControl, isBidiMirrored, isClosePunctuation, isClusterExtender, isOpenPunctuation, openingMirror, scriptOf } from './props.js'
@@ -20,7 +20,7 @@ export function quantize7(size: number): number {
 
 // The record of the text runs that measure with `settings` (types.ts RunContexts), made at the list's end when no record's
 // own context has them.
-export function runContextsFor(records: RunContexts[], contexts: Context[], settings: CanvasSettings): RunContexts {
+export function runContextsFor(records: RunContexts[], contexts: ContextPool, settings: CanvasSettings): RunContexts {
   const own = contextFor(contexts, settings)
   for (let i = 0; i < records.length; i++) if (records[i]!.own === own) return records[i]!
   const made: RunContexts = { own, noLigatures: null, letterSpaced: null, large: null, pairPlacement: null }
@@ -30,11 +30,11 @@ export function runContextsFor(records: RunContexts[], contexts: Context[], sett
 
 // A run's context with letter spacing 0.001px, and with 2px: found in the paragraph's list or made at its end where a recipe
 // first asks, and read from the record from then on.
-export function noLigaturesContext(contexts: Context[], run: RunContexts): Context {
+export function noLigaturesContext(contexts: ContextPool, run: RunContexts): Context {
   return run.noLigatures ??= contextFor(contexts, { ...run.own.settings, letterSpacing: '0.001px' })
 }
 
-export function letterSpacedContext(contexts: Context[], run: RunContexts): Context {
+export function letterSpacedContext(contexts: ContextPool, run: RunContexts): Context {
   return run.letterSpaced ??= contextFor(contexts, { ...run.own.settings, letterSpacing: '2px' })
 }
 
@@ -168,15 +168,25 @@ function scriptAt(units: Uint16Array, i: number, end: number): string {
   return scriptOf(i + 1 < end && isSurrogatePair(u, units[i + 1]!) ? combine(u, units[i + 1]!) : u)
 }
 
+// The itemizer's ordered limits: the first script run whose exclusive end is after t.
+export function scriptRunIndex(runs: readonly ScriptRun[], t: number): number {
+  let lo = 0, hi = runs.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (runs[mid]!.limit <= t) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
 // The script context a piece [tStart, tEnd) of a word unit needs: the DOM itemizer merges Common characters into the
 // script run around them (gfxScriptItemizer.cpp:60-243), and HarfBuzz shapes with that run's script (CJK runs without
 // kern, gfxHarfBuzzShaper.cpp:1405-1438). When the piece measured alone itemizes to another script, a character of the
 // DOM's script from the same script run, before or after the piece, gives Canvas that script.
 function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: number, tStart: number, tEnd: number):
   { text: string; before: boolean } | null {
-  let from = runStart
-  let k = 0
-  while (runs[k]!.limit <= tStart) { from = runs[k]!.limit; k++ }
+  const k = scriptRunIndex(runs, tStart)
+  const from = k === 0 ? runStart : runs[k - 1]!.limit
   const domScript = runs[k]!.script
   if (isCommonScript(domScript)) return null
   // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851), whose first script run takes
@@ -244,8 +254,8 @@ export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' |
   // as in the DOM, where `U+0308 U+093E b` alone and after ZWSP measure 1429 au; `x U+2028 U+202F` gives U+202F 0 au whole
   // as in the DOM and 192 au alone.
   if (tStart > run.tStart && tStart < tEnd && isInvalidChar16(units[tStart - 1]!) && (isClusterExtender(units[tStart]!) || units[tStart] === 0x202f)) {
-    let from = run.tStart
-    for (let k = 0; k < run.scriptRuns.length && run.scriptRuns[k]!.limit <= tStart; k++) from = run.scriptRuns[k]!.limit
+    const k = scriptRunIndex(run.scriptRuns, tStart)
+    const from = k === 0 ? run.tStart : run.scriptRuns[k - 1]!.limit
     let prefix = ''
     for (let k = from; k < tStart; k++) prefix += String.fromCharCode(units[k]!)
     return w(prefix + piece) - w(prefix)

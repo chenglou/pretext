@@ -1,6 +1,6 @@
 // The page side of tools/contexts-start-up-probe.ts: the library as a page with one list of contexts runs it, for a text in
 // a font and a language the probe names. The environment is detected again at every call.
-import { detectEnvironment, fillLine, firstLine, prepare, type Context, type Environment, type GivenFacts } from '../src/index.ts'
+import { detectEnvironment, fillLine, firstLine, prepare, createContextPool, type ContextPool, type Environment, type GivenFacts } from '../src/index.ts'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../src/model.ts'
 
 function environment(): Environment {
@@ -14,7 +14,7 @@ function environment(): Environment {
 }
 
 // How many lines the text takes at `width`, prepared plain with `contexts` as the page's list.
-function lineCount(text: string, family: string, size: number, lang: string, width: number, contexts: Context[]): number {
+function lineCount(text: string, family: string, size: number, lang: string, width: number, contexts: ContextPool): number {
   const paragraph: Paragraph = {
     letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
     font: { family, size, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }, content: [{ kind: 'text', text }], lineHeight: 40, direction: 'ltr', lang,
@@ -31,4 +31,4 @@ function lineCount(text: string, family: string, size: number, lang: string, wid
   return lines
 }
 
-;(globalThis as unknown as { contextsStartUp: unknown }).contextsStartUp = { lineCount }
+;(globalThis as unknown as { contextsStartUp: unknown }).contextsStartUp = { lineCount, createContextPool }

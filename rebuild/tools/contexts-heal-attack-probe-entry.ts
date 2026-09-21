@@ -1,6 +1,6 @@
 // The page side of tools/contexts-heal-attack-probe.ts: a paragraph prepared once and kept, its lines at any width later,
 // and how many Canvas contexts it holds. The environment is detected again at every call.
-import { detectEnvironment, fillLine, firstLine, prepare, type Context, type Environment, type GivenFacts, type Prepared } from '../src/index.ts'
+import { detectEnvironment, fillLine, firstLine, prepare, createContextPool, type ContextPool, type Environment, type GivenFacts, type Prepared } from '../src/index.ts'
 import { UNKNOWN_FONT_FACTS, type OverflowWrap, type Paragraph } from '../src/model.ts'
 
 function environment(): Environment {
@@ -13,7 +13,7 @@ function environment(): Environment {
   return detected.env
 }
 
-function prepared(text: string, family: string, size: number, lang: string, overflowWrap: OverflowWrap, contexts: Context[]): Prepared {
+function prepared(text: string, family: string, size: number, lang: string, overflowWrap: OverflowWrap, contexts: ContextPool): Prepared {
   const paragraph: Paragraph = {
     letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap, lineBreak: 'auto', tabSize: 8,
     font: { family, size, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }, content: [{ kind: 'text', text }], lineHeight: 40, direction: 'ltr', lang,
@@ -49,10 +49,10 @@ function lineEnds(kept: Prepared, width: number): string {
 // noLigaturesContext, advance.ts largeContext); -1 for the other engines, whose probes don't read it.
 function contextsHeld(kept: Prepared): number {
   switch (kept.engine) {
-    case 'gecko': return kept.state.contexts.length
+    case 'gecko': return kept.state.contexts.size
     case 'blink': return -1
     case 'webkit': return -1
   }
 }
 
-;(globalThis as unknown as { contextsHealAttack: unknown }).contextsHealAttack = { prepared, linesOf, lineEnds, contextsHeld }
+;(globalThis as unknown as { contextsHealAttack: unknown }).contextsHealAttack = { prepared, linesOf, lineEnds, contextsHeld, createContextPool }

@@ -3,7 +3,7 @@
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
 import { indexContent, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
-import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
+import { bounds, contextFor, width, type Context, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
@@ -403,7 +403,7 @@ function borderAu(px: number, apd: number): number {
 
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps: its gaps go to `sink`, with the measuring only they
 // need (gaps.ts). A plain paragraph has no sink.
-export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean, contexts: Context[]): GeckoPrepared {
+export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean, contexts: ContextPool): GeckoPrepared {
   const blockStyle = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
   const index = indexContent(paragraph)
@@ -811,7 +811,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const sourceT = tr.sourceT
   const nextT = new Int32Array(n + 1)
   nextT[n] = T
-  for (let s = n - 1; s >= 0; s--) nextT[s] = sourceT[s]! >= 0 ? sourceT[s]! : nextT[s + 1]!
+  const lineFeeds: number[] = []
+  for (let s = n - 1; s >= 0; s--) {
+    nextT[s] = sourceT[s]! >= 0 ? sourceT[s]! : nextT[s + 1]!
+    if (text.charCodeAt(s) === 0x0a) lineFeeds.push(s)
+  }
+  lineFeeds.reverse()
 
   // 4. Glyph flags per text run.
   const g: Glyphs = { units: tUnits, breakFlags: new Uint8Array(T), clusterStart: new Uint8Array(T).fill(1), isSpace: new Uint8Array(T), kind: new Uint8Array(T) }
@@ -1171,7 +1176,11 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     })
   }
   const correctionPrefix = new Int32Array(T + 1)
-  for (let t = 0; t < T; t++) correctionPrefix[t + 1] = correctionPrefix[t]! + correction[t]!
+  const tabPositions: number[] = []
+  for (let t = 0; t < T; t++) {
+    correctionPrefix[t + 1] = correctionPrefix[t]! + correction[t]!
+    if (g.kind[t] === KIND_TAB) tabPositions.push(t)
+  }
 
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) reads the space, the letter spacing and the word spacing from the
   // containing block, and tab-size from the text frame (lines.ts computeTabs).
@@ -1183,7 +1192,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       textRendering: 'auto', direction: 'ltr', partition: '',
     })
     const space = Math.round(width(context, ' ') * CANVAS_AU_PER_PX)
-    tabs = { unit: space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing), spacingPrefix: tabSpacingPrefix }
+    tabs = { unit: space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing), spacingPrefix: tabSpacingPrefix, positions: tabPositions }
   }
 
   // What the text itself can't tell Canvas: dictionary breaks, U+FFFD and the figure spaces (gaps.ts).
@@ -1192,7 +1201,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   gaps.figureSpaces(sink, apd, text, leaves)
 
   return {
-    paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
+    paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, lineFeeds, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
     spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }

@@ -4,6 +4,7 @@
 // Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer; the one width a
 // box keeps is its single space, measured as the box is made (WebKitBox.spaceWidth).
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
+import { DONE, NO_OVERRIDES, RuleBreakIterator } from '../../breaks/rbbi.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { inRanges, webkitGraphemeRules } from './data.js'
 import { collapsesWhiteSpace, preservesSpacesAndTabs, tabsAllowed } from './style.js'
@@ -537,12 +538,15 @@ export function breakWord(p: WebKitPrepared, item: WebKitTextItem, textWidth: nu
     return { length: right - start, logicalWidth: leftSideWidth }
   }
   // :354-364, the complex font path walks grapheme clusters.
-  const boundaries = graphemeBoundaries(text.slice(start, start + length), webkitGraphemeRules)
+  // The suffix has its own ICU context, which may differ from the original box at an item edge.
+  // Stop the iterator when the first prefix overflows instead of analyzing the unasked suffix.
+  const characters = new RuleBreakIterator(webkitGraphemeRules.rules, NO_OVERRIDES)
+  characters.setText(text.slice(start, start + length))
   let result: WordBreakLeft = { length: 0, logicalWidth: 0 }
-  for (let k = 1; k < boundaries.length; k++) {
-    const w = widthTo(start + boundaries[k]!)
+  for (let end = characters.next(); end !== DONE; end = characters.next()) {
+    const w = widthTo(start + end)
     if (w > availableWidth) return result
-    result = { length: boundaries[k]!, logicalWidth: w }
+    result = { length: end, logicalWidth: w }
   }
   return result
 }
@@ -554,9 +558,13 @@ export function firstUserPerceivedCharacterLength(p: WebKitPrepared, item: WebKi
   const itemLength = item.end - item.start
   if (box.is8Bit) return Math.min(itemLength, 1)
   if (box.simpleFontCodePath) return Math.min(itemLength, forwardOneCodePoint(box.text, item.start, box.text.length) - item.start)
-  const boundaries = graphemeBoundaries(box.text, webkitGraphemeRules)
-  for (let k = 0; k < boundaries.length; k++) {
-    if (boundaries[k]! > item.start) return Math.min(itemLength, boundaries[k]! - item.start)
+  const boundaries = box.characterBoundaries
+  let low = 0
+  let high = boundaries.length
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    if (boundaries[middle]! <= item.start) low = middle + 1
+    else high = middle
   }
-  return itemLength
+  return low === boundaries.length ? itemLength : Math.min(itemLength, boundaries[low]! - item.start)
 }

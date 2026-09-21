@@ -24,7 +24,7 @@ import { geckoFontChecks } from '../src/engines/gecko/checks.ts'
 import * as gecko from '../src/engines/gecko/index.ts'
 import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
 import * as webkit from '../src/engines/webkit/index.ts'
-import { detectEnvironment, fillLine, firstLine, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
+import { createContextPool, detectEnvironment, fillLine, firstLine, type Environment, type EngineName, type GivenFacts, type Prepared } from '../src/index.ts'
 import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type Paragraph } from '../src/model.ts'
 import { CHAT_LENGTH_CLASSES, CHAT_STYLE, CHAT_WIDTH, buildChat, chatText } from '../bench/cases.ts'
@@ -194,9 +194,9 @@ function paragraphOf(text: string): Paragraph {
 function prepareMessage(text: string): Prepared {
   const paragraph = paragraphOf(text)
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), []), env, false, []) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, []), env, false, []) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, []), env, false, []) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), createContextPool()), env, false, createContextPool()) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, createContextPool()), env, false, createContextPool()) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, createContextPool()), env, false, createContextPool()) }
   }
 }
 

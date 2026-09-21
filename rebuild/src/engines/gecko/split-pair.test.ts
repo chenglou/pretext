@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // A surrogate pair that a node boundary cuts, where the second node has another font: the first text run ends with the
 // high surrogate, a lone surrogate to the DOM's itemizer as to Canvas, and its script run is Han by the character before
 // it. Asked alone, the lone surrogate has no script, so the piece itemizes to Common and needs a character of the run's
@@ -42,7 +43,7 @@ test('a lone high surrogate that ends a text run is measured behind a character 
       { ...style, font: otherFont, kind: 'span', lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: low + String.fromCharCode(0x5b57) }] },
     ],
   }
-  const p = prepareGecko(paragraph, env, false, [])
+  const p = prepareGecko(paragraph, env, false, createContextPool())
   // A text run a font: the first ends inside the pair and is Han by its first character.
   expect(p.textRuns.length).toBe(2)
   expect(p.textRuns[0]!.scriptRuns).toEqual([{ limit: 2, script: 'Hani' }])

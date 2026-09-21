@@ -3,17 +3,18 @@
 // an inspected paragraph, what gaps.ts and history.ts keep of it. Cited at WebKit-7625.1.29.11.27 under Source/WebCore/:
 // IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp.
 import type { WebKitEnvironment } from '../../env.js'
-import { contextFor, width as canvasWidth, type Context } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth, type ContextPool } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { familyNames, genericFamilyUnder, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
 import { indexContent, styleUnder } from '../../content.js'
 import type { Paragraph, TextStyle } from '../../model.js'
 import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf } from '../../unicode/bidi.js'
-import { computedLocale, localeScript, webkitBidiData } from './data.js'
+import { computedLocale, localeScript, webkitBidiData, webkitGraphemeRules } from './data.js'
 import { boxMade, coveredLikeLastResort, newInspection, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { collectHistoryWorlds } from './history.js'
 import { buildItems } from './items.js'
 import { isComplexCodePath } from './measure.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { boxEdges, layoutUnit, preservesNewline, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle } from './types.js'
 
@@ -122,6 +123,9 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
   let is8Bit = true
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
   const simpleFontCodePath = !isComplexCodePath(text)
+  const characterAnalysis = simpleFontCodePath
+    ? { simpleFontCodePath: true as const, characterBoundaries: null }
+    : { simpleFontCodePath: false as const, characterBoundaries: graphemeBoundaries(text, webkitGraphemeRules) }
   let simplifiedMeasuring = simpleFontCodePath && letterSpacing === 0 && wordSpacing === 0
   const collapsed = leaf.style.collapse === 'collapse' || leaf.style.collapse === 'preserve-breaks'
   for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
@@ -190,7 +194,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
     }
   }
   const box: WebKitBox = {
-    run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, simpleFontCodePath, simplifiedMeasuring, fixedPitch,
+    run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, ...characterAnalysis, simplifiedMeasuring, fixedPitch,
     fixedPitchFastMeasuring: fixedPitch && primaryFamily !== 'courier new',
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
@@ -211,7 +215,7 @@ function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
 
 // `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts): an inspected paragraph keeps what
 // gaps.ts and history.ts read, and a plain one measures what deciding its lines takes and nothing else.
-export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean, contexts: Context[]): WebKitPrepared {
+export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean, contexts: ContextPool): WebKitPrepared {
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)

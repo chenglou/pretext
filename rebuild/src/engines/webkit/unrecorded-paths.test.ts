@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // WebKit lines on four paths that no recorded case runs, so tier 1 (tests/replay.ts) says nothing of them: the coverage map
 // (tests/coverage-map.ts) of the recorded sets lists lastValidBreakingPosition whole, the second shaping of
 // shapePartialLineCandidate, placeInlineBoxesOnly, and the line-spanning inline box that gets no display box
@@ -51,7 +52,7 @@ function boxRow(box: WebKitDisplayBox): unknown[] {
 }
 
 function layout(p: Sized, insets: Insets[] = []): { range: [number, number]; hasLineBox: boolean; boxes: unknown[][]; gaps: string[] }[] {
-  const prepared = prepare(p, env, true, [])
+  const prepared = prepare(p, env, true, createContextPool())
   const { lines } = everyLine({
     first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
   }, p.width, insets)

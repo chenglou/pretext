@@ -1,7 +1,7 @@
 // Blink's prepared paragraph (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { Context } from '../../measure/canvas.js'
+import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { FontDecl, Gap, LineBreak, OverflowWrap, Paragraph, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
@@ -191,7 +191,7 @@ export type BlinkPrepared = {
   // The Canvas contexts the paragraph makes its own in, one per settings (measure/canvas.ts contextFor): the caller's list,
   // a page's or this paragraph's alone (index.ts prepare). The styles' contexts are references into it, styles with equal
   // settings share a context, and it grows when a segmented paragraph first asks a one-byte string.
-  canvases: Context[]
+  canvases: ContextPool
   // Null on a paragraph prepared plain: it gives lines and their pieces, computes no gap, no limit, no glyph cluster and no
   // offset mapping, and asks Canvas nothing that only those read; inspectLine and paragraphGaps throw on it.
   inspect: BlinkInspect | null

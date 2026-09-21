@@ -27,7 +27,7 @@ import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geo
 import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
 import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
-import { fillLine, firstLine, linePieces, paragraphGaps, prepare, type Context } from '../src/index.ts'
+import { fillLine, firstLine, linePieces, paragraphGaps, prepare, createContextPool, type ContextPool } from '../src/index.ts'
 import {
   NO_BOX_EDGE, type FillResultOf, type FontDecl, type FontFacts, type InlineNode, type LineInspectionOf, type LinePieces, type LineSlot as LayoutSlot,
   type Paragraph as LayoutParagraph, type TextStyle,
@@ -223,7 +223,7 @@ function fillLines<Start, Line, Refused, Geometry, Facts>(engine: Engine<Start, 
 // cache of shaped words could show (specs/blink-canvas.md §1.7). `contexts` is the document's list where the predictor
 // keeps one (makePredictor); the usual predictors hand prepare none, so every case makes its own contexts, and a case's
 // record stays what one paragraph asks (research/PROFILING-START.md, "Records are per case").
-function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: Context[] | undefined): Pick<LayoutPrediction, 'layout' | 'painter'> {
+function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: ContextPool | undefined): Pick<LayoutPrediction, 'layout' | 'painter'> {
   countCanvasWork()
   const before = { ...canvasWork }
   const prepared = prepare(paragraph, env, true, contexts)
@@ -271,7 +271,7 @@ function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: nu
 // `otherWidthsFirst` fills the paragraph at those widths before, with the same calls, and keeps nothing of them, as
 // layoutParagraph's does: a plain paragraph keeps what its lines measured (Blink's groups, by offset), so what another
 // width measured answers for this one.
-function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: Context[] | undefined): LinesPrediction {
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: ContextPool | undefined): LinesPrediction {
   countCanvasWork()
   const callsBefore = canvasWork.calls
   const prepared = prepare(paragraph, env, false, contexts)
@@ -308,7 +308,7 @@ function plainLines(paragraph: LayoutParagraph, env: Environment, width: number,
 // of Canvas again. The page loads a context's fixture fonts before its first case (README.md, "Page protocol"), so the
 // list's first context is made after them.
 export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageContexts: boolean = false): Predictor {
-  const contexts: Context[] | undefined = pageContexts ? [] : undefined
+  const contexts: ContextPool | undefined = pageContexts ? createContextPool() : undefined
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
@@ -338,7 +338,7 @@ type PlainPredictor = {
 
 // `otherWidthFactors`: see plainLines' `otherWidthsFirst`; the widths are these factors of the case's.
 export function makePlainPredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageContexts: boolean = false): PlainPredictor {
-  const contexts: Context[] | undefined = pageContexts ? [] : undefined
+  const contexts: ContextPool | undefined = pageContexts ? createContextPool() : undefined
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)

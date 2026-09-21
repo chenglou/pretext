@@ -150,7 +150,7 @@ export const makeHarness = lib => {
   // Can a prepared paragraph leave the scope that made it? structuredClone is what postMessage does.
   const cloneAttempt = (c, env) => {
     const prepared = lib.prepare(paragraphOf(c), env, false);
-    const contexts = prepared.state.contexts.length;
+    const contexts = prepared.state.contexts.size;
     try { structuredClone(prepared); return { contexts, cloned: true, error: null }; } catch (error) { return { contexts, cloned: false, error: error.name + ': ' + error.message }; }
   };
   const attempt = run => { try { return { value: run() }; } catch (error) { return { threw: error.name + ': ' + error.message }; } };

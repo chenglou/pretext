@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // What a shaping group keeps by offset (types.ts BlinkGroup.prefix16, pair16, wide16), held from outside: a kept paragraph
 // against fresh ones at widths met in any order, on a stand-in Canvas that kerns a pair and widens a letter before a
 // space by what stands two letters before it, so the pair window and the wide window show different adjustments and the
@@ -79,7 +80,7 @@ const RICH = paragraphOf([
 const WIDTHS = [30, 55, 90, 140, 200, 330, 100000]
 
 test('a group without cuts asks Canvas nothing at a width it has met', () => {
-  const prepared = prepare(SHORT, env, false, [])
+  const prepared = prepare(SHORT, env, false, createContextPool())
   const first = laidOut(prepared, 60, false)
   asked = 0
   expect(laidOut(prepared, 60, false)).toBe(first)
@@ -90,16 +91,16 @@ test('a kept paragraph gives a fresh paragraph\'s lines and pieces at every widt
   for (const p of [SHORT, RICH]) {
     const orders = [WIDTHS, WIDTHS.slice().reverse(), [140, 30, 100000, 55, 330, 90, 200]]
     for (let o = 0; o < orders.length; o++) {
-      const prepared = prepare(p, env, false, [])
+      const prepared = prepare(p, env, false, createContextPool())
       for (let round = 0; round < 2; round++) {
-        for (let i = 0; i < orders[o]!.length; i++) expect(laidOut(prepared, orders[o]![i]!, false)).toBe(laidOut(prepare(p, env, false, []), orders[o]![i]!, false))
+        for (let i = 0; i < orders[o]!.length; i++) expect(laidOut(prepared, orders[o]![i]!, false)).toBe(laidOut(prepare(p, env, false, createContextPool()), orders[o]![i]!, false))
       }
     }
   }
 })
 
 test('an inspected paragraph whose pieces were read at other widths first raises every gap a fresh one raises', () => {
-  const prepared = prepare(RICH, env, true, [])
+  const prepared = prepare(RICH, env, true, createContextPool())
   for (let i = WIDTHS.length - 1; i >= 0; i--) laidOut(prepared, WIDTHS[i]!, false)
-  for (let i = 0; i < WIDTHS.length; i++) expect(laidOut(prepared, WIDTHS[i]!, true)).toBe(laidOut(prepare(RICH, env, true, []), WIDTHS[i]!, true))
+  for (let i = 0; i < WIDTHS.length; i++) expect(laidOut(prepared, WIDTHS[i]!, true)).toBe(laidOut(prepare(RICH, env, true, createContextPool()), WIDTHS[i]!, true))
 })

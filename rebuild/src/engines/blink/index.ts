@@ -6,7 +6,7 @@
 // the gaps (gaps.ts). The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { Context } from '../../measure/canvas.js'
+import type { ContextPool } from '../../measure/canvas.js'
 import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFont, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
@@ -114,7 +114,7 @@ function markContinuations(p: BlinkPrepared): void {
 
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps; a plain paragraph gives lines and pieces alone
 // (types.ts BlinkPrepared.inspect).
-export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean, canvases: Context[]): BlinkPrepared {
+export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean, canvases: ContextPool): BlinkPrepared {
   const zoom = env.devicePixelRatio
   const index = indexContent(paragraph)
   const computed = stylesOf(paragraph, index, zoom)

@@ -14,7 +14,7 @@ import type { WebKitLineGeometry, WebKitLineStart } from './engines/webkit/geome
 import * as webkit from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
 import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
-import type { Context } from './measure/canvas.js'
+import { createContextPool, type ContextPool } from './measure/canvas.js'
 import { withLearnedFontFacts } from './measure/font-checks.js'
 import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from './model.js'
 
@@ -29,7 +29,8 @@ export type {
   TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
 export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
-export type { Context } from './measure/canvas.js'
+export { createContextPool } from './measure/canvas.js'
+export type { Context, ContextPool } from './measure/canvas.js'
 export type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit } from './engines/blink/geometry.js'
 export type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry, GeckoTextFrame } from './engines/gecko/geometry.js'
 export type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './engines/webkit/geometry.js'
@@ -69,12 +70,12 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // the engines read FontFacts as the caller had given them. `inspect` prepares the paragraph for inspectLine and
 // paragraphGaps, which the lab reads; a plain paragraph gives lines and pieces alone.
 //
-// `contexts` is the list the checks and the engine find their Canvas contexts in, each by its settings, and make them in
+// `contexts` is the pool the checks and the engine find their Canvas contexts in, each by its settings, and make them in
 // (measure/canvas.ts contextFor). Nothing else is kept across calls: the checks ask Canvas again at every call.
-// Lifetime: the caller's, in Blink and WebKit. A call that is given none gets an empty list, and then nothing outlives its
-// prepared paragraph. A page that hands one list to every call pays for a context once per settings instead of once per
+// Lifetime: the caller's, in Blink and WebKit. A call that is given none gets an empty pool, and then nothing outlives its
+// prepared paragraph. A page that hands one pool to every call pays for a context once per settings instead of once per
 // paragraph.
-// Gecko's contexts are one prepared paragraph's, whatever list the caller keeps, because a kept Firefox context can answer
+// Gecko's contexts are one prepared paragraph's, whatever pool the caller keeps, because a kept Firefox context can answer
 // otherwise than a context made now and no page can know when. A context resolves its family names once, at its first
 // measurement (gfxFontGroup::EnsureFontList, gfxTextRun.cpp:1917-1990). Firefox reads the fonts' localized and legacy
 // family names after start-up: 8 s in (60 s on Windows, gfx.font_loader.delay), or from the first lookup of a name that
@@ -98,31 +99,27 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // the page's font set out of its key while the set is empty, and the set tells a context's font about a new face before
 // the face is in it, so the kept context asks again and gets the fonts it had (FontCascadeCache.cpp:104-115,
 // CSSFontSelector.cpp:526-539, CSSFontFaceSet.cpp:203-209). It stays on the fallback until the set changes again, so a
-// page that adds loaded faces starts a new list after it, where it prepares its paragraphs again. A FontFace added
+// page that adds loaded faces starts a new pool after it, where it prepares its paragraphs again. A FontFace added
 // before it loads, an @font-face rule and a face added to a set that holds one reach a kept WebKit context by
 // themselves. Every font change reaches Chrome's, whose Font asks the page's font selector for its fallback list again
 // once that list was marked invalid (font.cc:71-77, font_fallback_map.cc:29-67). probes/contexts-start-up.ts W1 to W10
 // and tools/contexts-start-up-probe.ts L2 have the routes, probes/contexts-font-load.ts the first of them.
-// Bounded by the distinct settings a page measures with (declaration, size, language, direction, letter spacing,
-// partition: about 8 contexts per declaration in Blink, 3 in WebKit and Gecko), and by MAX_CONTEXTS: settings that never
-// repeat (an animated letter spacing, a size per paragraph) would grow the list without end, and every search of it, so
-// a call that finds a longer list empties it. Prepared paragraphs hold their contexts by reference and keep theirs. The
-// number is where a list whose contexts are all used in turn still costs no engine more to search than it saves
-// (tools/contexts-bound.ts: a plain paragraph compares about 5.6 settings per context held in Blink, 4.1 in WebKit, 1.5 in
-// Gecko, at 4 to 6 ns each; at 512 that is 17 µs in Chrome, where the list saves 90 µs a chat message, and 9.5 µs in
-// WebKit, where it saves 9.7). A page past it, some 60 declarations used in turn in Chrome, makes its contexts again and
-// again, as every page did before the list. What a kept canvas holds inside the browser is the browser's to bound: Chrome
-// keeps at most 32,768 strings and 32,768 words per canvas and drops the least recently used half when either fills
-// (frame_shape_cache.cc:12-16, :93-104), WebKit and Gecko keep measured words per font.
+// The retained pool is capped between preparations so settings that never repeat do not retain canvases forever.
+// This preserves the existing 512-context lifetime rule; it is not a bound on one paragraph's declarations. Settings
+// lookup is logarithmic even when one preparation creates more contexts. Do not clear inside preparation: Chrome's
+// first shaping on a canvas affects later measurements. Prepared records hold their contexts by reference across clear.
+// What a kept canvas holds inside the browser is the browser's to bound: Chrome keeps at most 32,768 strings and 32,768
+// words per canvas and drops the least recently used half when either fills (frame_shape_cache.cc:12-16, :93-104),
+// WebKit and Gecko keep measured words per font. The former linear-search cap study remains in research/PROFILING-START.md.
 const MAX_CONTEXTS = 512
 
-export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean, contexts: Context[] = []): Prepared {
-  if (contexts.length > MAX_CONTEXTS) contexts.length = 0
+export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean, contexts: ContextPool = createContextPool()): Prepared {
+  if (contexts.size > MAX_CONTEXTS) contexts.clear()
   switch (env.engine) {
     case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env, inspect), contexts), env, inspect, contexts) }
     case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, contexts), env, inspect, contexts) }
     case 'gecko': {
-      const own: Context[] = []
+      const own = createContextPool()
       return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, own), env, inspect, own) }
     }
   }

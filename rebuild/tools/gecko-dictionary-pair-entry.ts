@@ -2,7 +2,7 @@
 import * as lib from '../src/index.ts'
 import { icu4xLineBoundaries } from '../src/engines/gecko/linebreak.ts'
 import type { Paragraph, InlineNode, FontDecl, BoxEdge } from '../src/model.ts'
-import type { Prepared, Environment, Context } from '../src/index.ts'
+import type { Prepared, Environment } from '../src/index.ts'
 
 type Part = { code: boolean; text: string }
 function environment(): Environment {
@@ -32,13 +32,13 @@ function fillAll(prepared: Prepared, width: number, detail: boolean): { lines: n
   return { lines, output }
 }
 function scratch(paragraphs: readonly Paragraph[], env: Environment): number {
-  const contexts: Context[] = []
+  const contexts = lib.createContextPool()
   let lines = 0
   for (const p of paragraphs) lines += fillAll(lib.prepare(p, env, false, contexts), 320, false).lines
   return lines
 }
 function complete(p: Paragraph, env: Environment): unknown {
-  const prepared = lib.prepare(p, env, true, [])
+  const prepared = lib.prepare(p, env, true, lib.createContextPool())
   if (prepared.engine !== 'gecko') throw new Error('wrong engine')
   return { breakFlags: [...prepared.state.breakFlags], outputs: [37, 320, 440].map(width => ({ width, ...fillAll(prepared, width, true) })), gaps: lib.paragraphGaps(prepared) }
 }

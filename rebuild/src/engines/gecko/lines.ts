@@ -50,7 +50,13 @@ const NO_TABS: readonly Tab[] = []
 // The widths of the frame's tabs in [a, b).
 function tabsIn(prov: Provider, a: number, b: number): number {
   let w = 0
-  for (let k = 0; k < prov.tabs.length; k++) if (prov.tabs[k]!.t >= a && prov.tabs[k]!.t < b) w += prov.tabs[k]!.width
+  let lo = 0, hi = prov.tabs.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (prov.tabs[mid]!.t < a) lo = mid + 1
+    else hi = mid
+  }
+  for (let k = lo; k < prov.tabs.length && prov.tabs[k]!.t < b; k++) w += prov.tabs[k]!.width
   return w
 }
 
@@ -129,8 +135,9 @@ function scanOffset(p: GeckoPrepared, prov: Provider, from: number, to: number, 
 // reason (gaps.ts placedStandIn, tabCountsFrom). A later tab counts from the stop before it; it stays a stand-in, since a
 // stand-in that crosses a stop moves every stop after it. The tabs of text run `run` in [startT, end), the measured content
 // of frame `frame`.
-function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, xForTabs: number): readonly Tab[] {
-  if (p.tabs === null || !run.hasTab) return NO_TABS
+function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, xForTabs: number):
+  { tabs: readonly Tab[]; through: (until: number) => void } | null {
+  if (p.tabs === null || !run.hasTab) return null
   // rule gecko/measure/tab-width-containing-block
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
   // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
@@ -138,25 +145,38 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame:
   const tabWidth = p.leaves[p.frames[frame]!.run]!.style.tabSize * p.tabs.unit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
-  if (tabWidth <= 0) return NO_TABS
+  if (tabWidth <= 0) return null
   const tabs: Tab[] = []
   const tabSpacing = p.tabs.spacingPrefix
   let x = xForTabs
   let standIn = gaps.placedStandIn(ll.gaps, p, ll.root)
   let from = startT
-  for (let t = startT; t < end; t++) {
-    if (p.kind[t] !== KIND_TAB) continue
-    let first = from
-    while (first < t && p.clusterStart[first] === 0) first++
-    standIn = gaps.tabCountsFrom(ll.gaps, standIn, p, run, first)
-    x += glyphBefore(p, run, t, ll.consulted) - glyphBefore(p, run, first, ll.consulted) + tabSpacing[t]! - tabSpacing[from]!
-    const nextTab = Math.ceil((x + run.minTabAdvance) / tabWidth) * tabWidth
-    const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
-    tabs.push({ t, width: w, standIn })
-    x = nextTab + tabSpacing[t + 1]! - tabSpacing[t]!
-    from = t + 1
+  const positions = p.tabs.positions
+  let lo = 0, hi = positions.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (positions[mid]! < startT) lo = mid + 1
+    else hi = mid
   }
-  return tabs
+  let next = lo
+  // The break scan asks ranges in order. Materialize only their tabs; a narrow first line must not build every tab
+  // in the frame's unconsumed suffix. This builder ends with reflow; the decided line holds only its tab records.
+  const through = (until: number): void => {
+    const limit = Math.min(until, end)
+    while (next < positions.length && positions[next]! < limit) {
+      const t = positions[next++]!
+      let first = from
+      while (first < t && p.clusterStart[first] === 0) first++
+      standIn = gaps.tabCountsFrom(ll.gaps, standIn, p, run, first)
+      x += glyphBefore(p, run, t, ll.consulted) - glyphBefore(p, run, first, ll.consulted) + tabSpacing[t]! - tabSpacing[from]!
+      const nextTab = Math.ceil((x + run.minTabAdvance) / tabWidth) * tabWidth
+      const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
+      tabs.push({ t, width: w, standIn })
+      x = nextTab + tabSpacing[t + 1]! - tabSpacing[t]!
+      from = t + 1
+    }
+  }
+  return { tabs, through }
 }
 
 // GetHyphenationBreaks (nsTextFrame.cpp:4409-4457): a soft opportunity before the first kept character after skipped
@@ -183,7 +203,7 @@ export type Measured = {
 // gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
 function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number,
   aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
-  wantTrimmable: boolean, priorityIn: number, consulted: number[] | null): Measured {
+  wantTrimmable: boolean, priorityIn: number, consulted: number[] | null, tabsThrough: ((until: number) => void) | null): Measured {
   const run = prov.run
   aMaxLength = Math.min(aMaxLength, run.tEnd - aStart)
   const end = aStart + aMaxLength
@@ -214,6 +234,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
+        tabsThrough?.(i)
         const pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted)
         const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted) : 0
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
@@ -247,7 +268,10 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
     }
   }
   const scanEnd = aborted ? pending : end
-  if (!aborted) width += scanAdvance(p, prov, aStart, end, pending, end, consulted)
+  if (!aborted) {
+    tabsThrough?.(end)
+    width += scanAdvance(p, prov, aStart, end, pending, end, consulted)
+  }
   let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, scanEnd, consulted) : 0
   let charsFit: number
   let usedHyphenation = false
@@ -452,7 +476,13 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   let length = maxContentLength
   let newLineOffset = -1
   if (style.newlineIsSignificant) {
-    const nl = p.text.indexOf('\n', offset)
+    let lo = 0, hi = p.lineFeeds.length
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (p.lineFeeds[mid]! < offset) lo = mid + 1
+      else hi = mid
+    }
+    const nl = p.lineFeeds[lo] ?? -1
     if (nl >= 0 && nl < offset + length) {
       newLineOffset = nl
       length = nl + 1 - offset
@@ -482,14 +512,15 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   // nsLineLayout.cpp:1154-1160): the sum of the span chain's inline coordinates.
   let xForTabs = 0
   for (let s: SpanData | null = psd; s !== null; s = s.parent) xForTabs += s.iCoord
+  const tabWidths = computeTabs(p, ll, run, fi, tOffset, tOffset + tLength, xForTabs)
   const prov: Provider = {
     run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: leaf.letterSpacingAu,
-    tabs: computeTabs(p, ll, run, fi, tOffset, tOffset + tLength, xForTabs),
+    tabs: tabWidths?.tabs ?? NO_TABS,
   }
   // LineIsBreakable: a placed frame or a band impacted by floats (nsLineLayout.h:151-155; nsTextFrame.cpp:11133-11135).
   const lineIsBreakable = ll.totalPlaced > 0 || ll.impactedByFloats
   const r = breakAndMeasureText(p, prov, tOffset, tLength, availWidth, lineIsBreakable ? 'none' : 'initial',
-    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, ll.consulted)
+    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, ll.consulted, tabWidths?.through ?? null)
   gaps.emergencyHyphenBreak(ll.gaps, p, f.run, style.wordCanWrap, r, tOffset, tLength)
   const originalOffset = (t: number): number => t < p.tSource.length ? p.tSource[t]! : p.text.length
   let charsFit = originalOffset(tOffset + r.charsFit) - offset
@@ -722,7 +753,13 @@ function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element:
   const hasPrev = open === null || open.split
   // Its children end at this continuation's close item; only the element's own close ends the last continuation.
   let end = el.close
-  for (let c = 0; c < el.closes.length; c++) if (el.closes[c]! >= childFrom) { end = el.closes[c]!; break }
+  let lo = 0, hi = el.closes.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (el.closes[mid]! < childFrom) lo = mid + 1
+    else hi = mid
+  }
+  if (lo < el.closes.length) end = el.closes[lo]!
   const finalClose = end === el.close
   // AllowForStartMargin: only the first continuation keeps its start margin (nsLineLayout.cpp:1110-1134).
   const startMargin = hasPrev ? 0 : el.edges.startMargin

@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // For the merge with kept positions (BlinkGroup.wide16): a cut before white space between two pieces, on a stand-in Canvas
 // where every code point is 10px wide at 16px. TEXT is 39 units and 390px, cut once at 19, before a space. The search measured
 // 0 across 19 in the window the adjustment at the cut is taken in, so a plain paragraph keeps that 0 by offset and a line that
@@ -44,7 +45,7 @@ const paragraph: Paragraph = {
 
 describe('blink cuts of a wide group: the 0 the search measured is kept by offset', () => {
   test('a line that ends at a cut before white space asks nothing across the cut', () => {
-    const prepared = prepare(paragraph, env, false, [])
+    const prepared = prepare(paragraph, env, false, createContextPool())
     asked = []
     const first = fillLine(prepared, firstLine(prepared)!, { width: 190, left: 0, right: 0 })
     if (first.kind !== 'line') throw new Error('a slot without insets never refuses a line')

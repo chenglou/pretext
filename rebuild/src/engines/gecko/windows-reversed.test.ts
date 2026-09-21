@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // A window inside a long shaping unit is measured alone, but the DOM shapes the unit in one buffer, and HarfBuzz looks
 // through that whole buffer when it decides whether to shape a right-to-left script in a left-to-right run reversed: a
 // buffer with digits and no letter stays left to right, one with a letter is reversed (advance.ts shapedReversed;
@@ -42,7 +43,7 @@ test('a right-to-left script in a left-to-right run has no windows, and its offs
     font, letterSpacing: 0, wordSpacing: 0, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto',
     tabSize: 8, direction: 'rtl', lang: 'he', textIndent: 0, textAlign: 'start', content: [{ kind: 'text', text }],
   }
-  const p = prepareGecko(paragraph, env, false, [])
+  const p = prepareGecko(paragraph, env, false, createContextPool())
   const run = p.textRuns[p.textRuns.length - 1]!
   expect(run.level).toBe(2)
   const unit = p.units[p.unitOf[run.tStart]!]!

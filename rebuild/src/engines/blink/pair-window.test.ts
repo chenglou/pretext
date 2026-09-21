@@ -1,3 +1,4 @@
+import { createContextPool } from '../../measure/canvas.js'
 // The pair window of shape.ts pairAdjust16 on a stand-in Canvas that kerns `A` with `V` by -4px at 16px, across
 // default-ignorable characters and marks, as a font's pair lookup with the IgnoreMarks flag does (and the kern and kerx
 // machine always, hb-kern.hh:58). Every other code point is 10px wide, default-ignorable characters and marks 0.
@@ -40,7 +41,7 @@ function linesOf(text: string, width: number): [number, number][] {
     wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8, content: [{ kind: 'text', text }], lineHeight: 20, direction: 'ltr',
     lang: 'en', textIndent: 0, textAlign: 'start',
   }
-  const prepared = prepare(paragraph, env, false, [])
+  const prepared = prepare(paragraph, env, false, createContextPool())
   const lines: [number, number][] = []
   let start = firstLine(prepared)
   while (start !== null) {

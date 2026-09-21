@@ -31,7 +31,7 @@ const webkitLinePairs: Uint8Array = decodeBase64(webkitLinePairsBase64)
 // Extended grapheme cluster boundaries: libicucore 78.1 char.brk, opened by NonSharedCharacterBreakIterator
 // (specs/webkit-canvas.md §2.4). Its locale (the user's text-break locale) doesn't change the table on macOS 27 (both
 // configurations load fe6dbecf).
-export const webkitGraphemeRules: GraphemeRules = { kind: 'icu-rbbi', rules: webkitBreakRules.char }
+export const webkitGraphemeRules = { kind: 'icu-rbbi', rules: webkitBreakRules.char } satisfies GraphemeRules
 
 // ICU 78.2's Bidi_Class and Bidi_Paired_Bracket, Unicode 17, with Apple's own classes for private-use U+F7F0..U+F8FF,
 // which macOS 27's libicucore reports; for unicode/ubidi.ts.

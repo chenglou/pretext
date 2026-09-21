@@ -84,9 +84,16 @@ type Ubidi = {
 // GET_PARALEVEL (ubidiimp.h:128-130) and ubidi_getParaLevelAtIndex (ubidi.cpp:643-652).
 function paraLevelAt(u: Ubidi, index: number): number {
   if (!u.defaultParaLevel || index < u.paras[0]!.limit) return u.paraLevel
-  let i = 0
-  while (i < u.paras.length && index >= u.paras[i]!.limit) i++
-  return u.paras[Math.min(i, u.paras.length - 1)]!.level
+  // Paragraph limits are ordered. Auto-direction input can contain arbitrarily many paragraphs;
+  // restarting a linear scan for each whitespace character makes level resolution quadratic.
+  let lo = 0
+  let hi = u.paras.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (index < u.paras[mid]!.limit) hi = mid
+    else lo = mid + 1
+  }
+  return u.paras[lo]!.level
 }
 
 // getDirProps states (ubidi.cpp:447-452).

@@ -6,7 +6,7 @@ import { bounds, contextFor, width, type Context } from '../../measure/canvas.js
 import { canvasFont } from '../../measure/font.js'
 import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
-import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu } from './measure.js'
+import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu, scriptRunIndex } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
 import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigatureRow, PairPlacement } from './types.js'
 
@@ -53,7 +53,9 @@ function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
 // - Where the sides don't add up, the value is the stand-in the font's pair kerning asks for, and the reason names it.
 export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): InWordAdvance {
   if (t >= run.tEnd) return { au: run.totalAdvance, standIn: null }
-  const unit = windowAt(p, run, p.units[p.unitOf[t]!]!, t)
+  const original = p.units[p.unitOf[t]!]!
+  if (t === original.tStart) return { au: original.startAdvance, standIn: null }
+  const unit = windowAt(p, run, original, t)
   if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
   const entry = entryAt(unit, t)
   if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
@@ -118,8 +120,7 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
   // HarfBuzz shapes it reversed or not by what its whole buffer holds (shapedReversed: digits without a letter stay left
   // to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM
   // shapes the unit, and places its pair adjustments on the other glyph. Such a unit keeps the long questions.
-  let k = 0
-  while (run.scriptRuns[k]!.limit <= unit.tStart) k++
+  const k = scriptRunIndex(run.scriptRuns, unit.tStart)
   if ((run.level & 1) === 0 && RTL_SCRIPTS.has(run.scriptRuns[k]!.script)) return []
   let clusters = 0
   for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
@@ -141,12 +142,13 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
       inWord: { groups: null, offsets: new Array<InWordEntry | null>(tEnd - tStart).fill(null), windows: [] },
     })
   }
-  // The open window: its start, the unit's Canvas au before it, and its own.
+  // The open window: its start and the unit's Canvas au before it. Its width is known for one cell, or for the
+  // first failed cut's two cells; a longer merged window is measured only when a holding cut closes it.
   let start = unit.tStart
   let before = 0
-  let au = rangeAu(own, run, p.tUnits, grid[0]!, grid[1]!)
+  let openAu: number | null = rangeAu(own, run, p.tUnits, grid[0]!, grid[1]!)
   // The cell before the cut, alone: its au and its ligature groups.
-  let left = au
+  let left = openAu
   let leftGroups: number | null = null
   for (let i = 1; i + 1 < grid.length; i++) {
     const g = grid[i]!
@@ -160,17 +162,20 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
       holds = leftGroups + rightGroups === groupsIn(p, run, grid[i - 1]!, grid[i + 1]!, '', '')
     }
     if (holds) {
+      const au = openAu ?? rangeAu(own, run, p.tUnits, start, g)
       close(start, g, au, before)
       before += au
       start = g
-      au = right
+      openAu = right
     } else {
-      au = start === grid[i - 1]! ? both : rangeAu(own, run, p.tUnits, start, grid[i + 1]!)
+      openAu = start === grid[i - 1]! ? both : null
     }
     left = right
     leftGroups = rightGroups
   }
-  if (windows.length === 0 || before + au !== unit.canvasAu) return []
+  if (windows.length === 0) return []
+  const au = openAu ?? rangeAu(own, run, p.tUnits, start, unit.tEnd)
+  if (before + au !== unit.canvasAu) return []
   close(start, unit.tEnd, au, before)
   return windows
 }
@@ -595,8 +600,7 @@ function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' 
 
 // Whether FontFacts.pairKerning, given or asked of Canvas, describes the script run at offset t (the comment above).
 function pairFactDescribes(run: GeckoTextRun, t: number): boolean {
-  let k = 0
-  while (run.scriptRuns[k]!.limit <= t) k++
+  const k = scriptRunIndex(run.scriptRuns, t)
   let script = run.scriptRuns[k]!.script
   if (script === 'Zyyy' || script === 'Zinh') {
     const locale = tryParseLocale(run.contexts.own.settings.lang)
@@ -814,8 +818,7 @@ const BIDIRECTIONAL_SCRIPTS = new Set(['Hung', 'Ital', 'Runr', 'Tfng'])
 // natively right-to-left run shaped left-to-right with a decimal digit or a regional indicator and no letter counts as
 // left-to-right (hb-ot-shape.cc:588-645).
 function shapedReversed(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
-  let k = 0
-  while (run.scriptRuns[k]!.limit <= t) k++
+  const k = scriptRunIndex(run.scriptRuns, t)
   const script = run.scriptRuns[k]!.script
   const rtlRun = (run.level & 1) === 1
   if (BIDIRECTIONAL_SCRIPTS.has(script)) return false
