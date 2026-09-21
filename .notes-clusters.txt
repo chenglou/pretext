@@ -1,0 +1,49 @@
+NOTES (key clusters) - findings so far, for the final report. Untracked.
+
+PART 1 source reading (Chromium 153.0.8010.48, third_party/blink/renderer/):
+- IDL: core/html/canvas/text_metrics.idl:59-67 (getIndexFromOffset, getSelectionRects, getActualBoundingBox, getTextClusters x2 behind RuntimeEnabled=ExtendedTextMetrics, Exposed=(Window,Worker)); text_cluster.idl (x, y, start, end, align, baseline). base_rendering_context_2d.idl:19-22 fillTextCluster/strokeTextCluster same flag.
+- flag: platform/runtime_enabled_features.json5:2745-2749 name ExtendedTextMetrics, origin_trial_feature_name ExtendedTextMetrics, origin_trial_allows_third_party true, status experimental.
+- measureText -> TextMetrics::Update -> MeasureRuns (text_metrics.cc:172-225): PlainTextPainter::SegmentAndShape, one RunWithOffset per PlainTextItem with x_position_ = float sum of earlier items' ShapeResult::Width() (:185-191, :222).
+- items: platform/fonts/plain_text_node.cc: bidi visual runs (:304-352), then one item per word unless !Font::CanShapeWordByWord (:377-399); words end at U+0020, TAB, ZWSP, and before CJK (:84-155); spacing applied per item with ShapeResultSpacing (:403-425); per-canvas word cache (:406-415).
+- getTextClustersImpl (text_metrics.cc:466-551): per run ShapeResult::ForEachGraphemeClusters(text, x_position_, 0, num_characters, 0, cb); cb keeps character_index, total_advance, cluster_advance (graphemes_in_cluster dropped) (:499-512); sort by start (:514-517); end = next start or run end (:519-532); OffsetCharacters(run offset) (:533); x += align delta of the cluster's own width (:534-538) ; x -= text_align_dx_ (:539); range filter (:544-549).
+- ForEachGraphemeClusters (platform/fonts/shaping/shape_result.cc:873-956): InlineLayoutUnit advance_so_far = FromFloatRound(initial) (:881-882); per run of the result (:883) so a font fallback edge continues the same sum; 8-bit text: callback per GLYPH (:925-929); 16-bit: per HarfBuzz cluster, skipping clusters with no grapheme or NO ADVANCE (:943-944); x handed out as float (shape_result.h:127-132).
+- the DOM's line breaker reads ShapeResult::ComputePositionData (shape_result.cc:2112-2175): the same InlineLayoutUnit sum of the same glyph_data.advance (TextRunLayoutUnit = 16.16 int32, InlineLayoutUnit = 16.16 int64: platform/geometry/layout_unit.h:473-475), then ToCeil<LayoutUnit>() (:2172) and ALSO glyph_data.IsSafeToBreakBefore() (:2173-2174; glyph_data.h:50,71). getTextClusters gives the sum BEFORE the ceil, as a float (exact below 256 px), and nothing of the safe-to-break bit.
+- TextCluster x_ is a double and OffsetPosition adds doubles (text_cluster.h:59, text_cluster.cc:44-47): x(align right) - x(align left) = the cluster's own advance exactly -> exact advances at any string length with two calls.
+- RTL context: default align start + direction rtl -> ctx_text_align_ right, text_align_dx_ = width (text_metrics.cc:113-126): x = right edge - width (negative). Pass {align:'left'}: x = left edge - width.
+
+PART 5 (Firefox/Safari): firefox-156.0/dom/canvas/TextMetrics.h:15-83 twelve doubles only; prefs dom.textMetrics.{actualBoundingBox,baselines,emHeight,fontBoundingBox}.enabled (modules/libpref/init/StaticPrefList.yaml:5547-5562); no getTextClusters/TextCluster/getSelectionRects/getIndexFromOffset anywhere under dom/ or gfx/. webkit-7625.1.29.11.27/Source/WebCore/html/TextMetrics.idl:27-45 twelve doubles only; no match for getTextClusters/getSelectionRects in Source/WebCore. No tentative tests for them in either tree's canvas tests.
+
+TRACKING (from the tree only): flag + origin trial name ExtendedTextMetrics (third-party allowed); use counter MeasureAs=ExtendedTextMetrics; WPT named in text_metrics.cc:318 external/wpt/html/canvas/element/text/2d.text.measure.selection-rects.tentative.html; component Blink>Canvas, public Buganizer component 1456769, canvas-dev@chromium.org (core/html/canvas/DIR_METADATA); OWNERS core/html/canvas/OWNERS. No chromestatus id and no WHATWG PR number is named in these files.
+
+PROBE text-clusters-1 (.artifacts/probes/spec-clusters/text-clusters-1/chrome-probes.json), pinned Chrome 153.0.8010.50 + --enable-blink-features=ExtendedTextMetrics, DPR 2:
+- presence: 5/5 checks: on prototype; OffscreenCanvas main thread, connected canvas, worker OffscreenCanvas all answer the same clusters.
+- semantics: ligature ffi = one cluster (1,4) x 17.151993, DOM splits the advance in 3 for carets; letter spacing 2px -> per-letter clusters, spacing inside x; word spacing on U+0020 only (U+2028 takes none: 150 vs 130 px); marks/Thai/Devanagari/emoji ZWJ sequences = one cluster; bidi: runs in visual order, sorted by start inside a run; fallback edge: one coordinate; SHY (8-bit) and U+2060/ZWSP (16-bit) are NOT reported: they fall inside the previous cluster's [start,end) while the DOM puts them at the next cluster's start; leading ZWJ unreported; DOM Range left = floor to 1/128 CSS px (1/64 zoomed) of the same x.
+- cost (load average 41 during the run; ratios only), us per call, median of 3 rounds of 4000 distinct strings, Helvetica Neue 32px: one-word strings (U+2028): len 8: width 1.98, +clusters 3.85; len 64: 6.0 / 22.4; len 256: 19.95 / 61.2; repeats: len 64: 0.75 / 12.7. prefix-after-prefix for the same positions: len 64: 233 us a string, len 256: 2849.
+
+BUILDS (branch x-spec-text-clusters):
+  81cb2ff + 788f5ae = "A": positions of a measured piece and of a reshape read from one table; cuts and their adjustments kept; safe tests as before.
+  d64951b = "C": A + every piece's table made in prepare; cluster membership (isClusterBoundary, the clusters a line lists) from the tables.
+  a815a99 = "B'": one table per shaping group at any length (second call with the other alignment from 256 px on), no measured pieces, cuts only bound the safe tests' windows.
+  274503d = "B''": B' + advance from the logical neighbour (negative letter spacing) + controls/U+FFFC as clusters of no advance. a744d90 = B'' + bench attribution.
+  tools: c3842a4 --chrome-args pass-through; f3c330d bench counts units + getTextClusters; 5ee89a9/probe commits.
+
+PORT PROBE (A, text-clusters-2, 3000 distinct paragraphs of the tier case files, facts / no facts):
+  cluster boundaries 34,819 / 34,863; told by a table 31,885 / 31,929 (the rest sit at a piece's start); equal to the last bit 31,314 (98.2%) / 31,173 (97.6%); within 1/64 px but not equal 0; off by 1/64 px or more 571 / 756.
+  units told 40,332: cluster starts agree 40,253 / 40,209; port says start, Canvas says no 77 / 121 (Geeza Pro's lam-lam-heh and other ligatures, controls); Canvas says start, port no 2.
+  DOM Range left edges (1,268 one-leaf LTR paragraphs, 13,035 boundaries): API floor-equal 12,974, within 1 LU 4, different 57 (all negative letter spacing: my sort bug, fixed in 274503d, and U+0000-type controls); port: 12,987 / 4 / 44 with facts, 12,929 / 4 / 110 without.
+  calls for the same positions: 169,545 measureText before; 46,142 measureText + 7,130 getTextClusters after (facts).
+
+TIMING + COUNTS (B' a815a99, same build flag off = base, flag on = prototype; pinned Chrome 153.0.8010.50 background window, AC power, exclusive lock, but OTHER agents' offline jobs kept the 1-minute load at 46-102; page's fixed arithmetic 27.4-32.6 ms):
+ six runs N F N | F N F (2 headline passes each). Medians of each run:
+  mix from scratch, a list of contexts per message: N 3230 4033 4264 ; F 1985 2273 2387  -> ratio by stretch 0.55, 0.55
+  mix, one list of contexts a pass:                 N 1989 2519 2611 ; F 727 909 880     -> 0.32, 0.34
+  latin scratch: N 2650 3375 3038 ; F 1689 1794 2087. one list: N 1768 2106 1935 ; F 587 643 629
+  kept then 3 widths (30,000 layouts) mix, own contexts: N 3114 3523 3227 ; F 586 784 749. shared: N 2880 3424 2889 ; F 445 469 505
+  latin own: N 2232 4365 5856 ; F 516 629 542. shared: N 2540 2774 2580 ; F 330 341 364
+ counts (200-message counting pass, don't depend on load): per message from scratch mix 199.25 -> 29.5 measureText + 1.93 getTextClusters; units 1440.5 -> 269.3; latin 193.61 -> 24.5 + 1.72; units 1538.3 -> 266.9
+  per relayout new width: mix 128.69 -> 14.86; units 518.8 -> 56.4. latin 123.61 -> 12.34; met before 128.66 -> 14.81
+  inspected path per message: 1571 -> 70.65 (mix), 1615 -> 64.25 (latin)
+  who asks (a744d90 flag): mix scratch 29.5 = safe-to-break tests 16.24 + font checks 10.74 + other 1.39 + cluster tables 1.11 + reshape totals 0.03; relayout 14.86 = safe tests 14.84
+  same lines in every run: headline 35,076 (mix) and 32,549 (latin) line boxes flag on and off; 654/639 at 320 px and 1,856/1,824 at the 3 other widths in the counting pass
+LIST (main-only Chrome list, 1,194 cases), variant C no facts + flag: pass 743 -> 1,122; of the 344 true passes of main the rebuild failed: 19 still fail (14 U+FFFC, 2 common-script-in-rtl, 2 other, 1 latin kerning); 4 pass->fail (beh SHY beh U+FFFC beh; C lacked the no-advance rule for U+FFFC); 2 uncovered failures
+SAFE EXPERIMENT (t8, uncommitted: safeToBreak skips adjust16/pairAdjust16 where a table told the group; time only, same line totals on the bench's messages): one list of contexts a pass, mix: 671, 618 ms vs B' 736 in the same stretch; latin 459, 484 vs 566. kept then 3 widths, 30,000 layouts: mix 104-106 ms own contexts, 93-94 shared (B' 631 / 433); latin 78-79 / 69-72 (B' 432 / 325). relayout asks Canvas 0.01 calls a layout. phases one list per message: checks 8 us, prepare 47-51 us, fill 3 us (B': 7, 44-51, 19-20).
