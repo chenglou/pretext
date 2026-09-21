@@ -1250,10 +1250,12 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   alike share one record of their Canvas contexts (`RunContexts`, held as `GeckoTextRun.contexts`), and what Canvas told
   of a context's pair placement is on that record (`RunContexts.pairPlacement`, §4.6). A frame's tabs are one
   ordered list with each tab's stand-in reason (`lines.ts` `Tab`), one shared empty list where a run has no tab. Reflow's
-  frame records and placement's are separate types (§2.9). Of the Maps and Sets that held a paragraph's data one is
-  left, in `inspect.ts`, which mirrors Gecko's own `nsContinuationStates` (constant lookup sets and the likely-subtags
-  tables aside). Cycles of type imports remain between `gaps.ts`, `lines.ts`, `placement.ts` and `prepare.ts`, and no
-  cycle of function imports.
+  frame records and placement's are separate types (§2.9). A character's properties are one packed number, found by
+  binary search in the generated runs of all of Unicode; `props.ts` reads those of U+0000 to U+00FF by index, from 256
+  numbers it makes from the runs when the module loads and keeps for the life of the page (the profiling phase, §4.7).
+  Of the Maps and Sets that held a paragraph's data one is left, in `inspect.ts`, which mirrors Gecko's own
+  `nsContinuationStates` (constant lookup sets and the likely-subtags tables aside). Cycles of type imports remain
+  between `gaps.ts`, `lines.ts`, `placement.ts` and `prepare.ts`, and no cycle of function imports.
 
 **Size.** Non-test lines of `rebuild/src` without generated data, at the correctness line and at the re-architecture's
 end: the shared layer 5,066 to 4,595, Blink 6,470 to 7,195, WebKit 5,699 to 6,033, Gecko 5,233 to 5,850; 22,508 to
@@ -2141,6 +2143,36 @@ the gain is per question and the text is built once a paragraph, and three timed
 On the tree they landed on, from scratch 2.68 s became 2.41 s on the mix and 2.43 s became 2.17 s on plain ASCII, 10,000
 kept messages at 3 widths 1.09 s became 0.94 s and 0.97 s became 0.84 s, and the pass with free answers 0.55 s became
 0.35 s and 0.49 s became 0.29 s. After them Canvas is 82 to 87% of a pass.
+
+**The Gecko port's own JavaScript** (the profiling phase, 2026-09-20; research/PERF-JS-PROFILE.md has the profile and
+its review). Until then every item removed Canvas questions, and nobody had profiled the port's own code. Measured in
+pinned Firefox on the tree before Gecko's `prepare` made its own contexts (§4.6), with one list of contexts a pass:
+10,000 chat messages from scratch spend 42 to 44% of their time inside `measureText`, by three methods that agree (a
+Gecko profile, the recorded calls asked alone, and a Canvas that asks every question one, two and three times, whose
+slope is the calls' cost), and a kept message laid out at a new width 34 to 36%. With every Canvas answer free
+(`tools/prof-probe.ts`: a pass's answers are recorded once and handed back in order) 52 to 54% goes, because a free
+answer also takes away the TextMetrics objects and the call's JavaScript side. So the port's own code was between 235
+and 262 ms per 10,000 plain ASCII messages and between 428 and 503 ms on the mix, about half of a first layout and the
+larger half of a relayout, and a question costs 0.22 to 0.29 µs in the browser. Three changes that ask Canvas the same
+strings on the same contexts in the same order landed (tier 1: 0 predictions and 0 questions changed; and
+`tools/prof-critic-attack.ts`, which holds two checkouts against each other over the stand-in Canvas on paragraphs built
+for these functions' edges, found every question, prepared field and line equal). The script a piece itemizes to alone
+is read from the piece, from its first character that has a script (`measure.ts` `scriptContextFor`), where every
+question made a view of the units and ran the script itemizer over it. The packed properties of U+0000 to U+00FF are
+read by index (`props.ts`, §3), where each of about ten reads per offset inside a word searched 4,985 runs. The spacing
+step walks the frames, which know their leaf and their start, where two arrays held both for every character: no time, 8
+lines fewer. In the review's pairs of fresh pages over twelve rounds a message from scratch lost 3.55 µs on plain ASCII
+and 13.9 µs on the mix, and a kept message's layouts at three widths 10.5 and 9.45 µs; in that stretch's quiet half
+10,000 messages from scratch went from 455 to 418 ms and from 880 to 740 ms, and their 30,000 layouts from 645 to 550 ms
+and from 670 to 580 ms. The owner's turns inside one page gave 5.5, 11.7, 6.1 and 7.35 µs: the two methods differ on
+plain ASCII and on relayout, and both say gain. Nearly all of it is the script check; the property table is worth 2 to 3
+µs. Reading the script in place has to stop at the piece's end, as the itemizer's view did: as first built it joined a
+high surrogate at a piece's end to a low surrogate in the next text run and asked Canvas another string there. No
+recorded case holds a pair cut by a text-run boundary, so tier 1 stayed at 0 and 0 and the review's differential found
+it; `split-pair.test.ts` holds it now. After the changes the port's own code lies between about 190 and 227 ms (ASCII)
+and between about 310 and 364 ms (mix) per 10,000 from scratch; the lower ends are the passes with free answers, and no
+removal of questions alone goes under them. What is left is questions: 76% of them on plain ASCII and 84% on the mix are
+break candidates inside each line's first word, which decide nothing when the word fits and which main never asks.
 
 ## 5. Gaps
 

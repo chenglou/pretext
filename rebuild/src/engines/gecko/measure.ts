@@ -160,10 +160,12 @@ export function textRunScripts(units: Uint16Array, start: number, end: number, i
   return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy' }]
 }
 
-function scriptAt(units: Uint16Array, i: number): string {
+// The script of the character at `i` of units read up to `end`: a surrogate pair that `end` cuts is a lone surrogate, as
+// it is to the itemizer (scriptRunLimits).
+function scriptAt(units: Uint16Array, i: number, end: number): string {
   const u = units[i]!
   if (u < 0x02ea) return fastLatin(u) ? 'Latn' : 'Zyyy'
-  return scriptOf(isSurrogatePair(u, units[i + 1] ?? 0) ? combine(u, units[i + 1]!) : u)
+  return scriptOf(i + 1 < end && isSurrogatePair(u, units[i + 1]!) ? combine(u, units[i + 1]!) : u)
 }
 
 // The script context a piece [tStart, tEnd) of a word unit needs: the DOM itemizer merges Common characters into the
@@ -177,18 +179,22 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
   while (runs[k]!.limit <= tStart) { from = runs[k]!.limit; k++ }
   const domScript = runs[k]!.script
   if (isCommonScript(domScript)) return null
-  // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851).
-  const alone = textRunScripts(units.subarray(tStart, tEnd), 0, tEnd - tStart, false)[0]!.script
-  if (alone === domScript) return null
+  // Canvas builds its text run from a 16-bit string (CanvasRenderingContext2D.cpp:4822-4851), whose first script run takes
+  // the script of the piece's first character that has one: Common characters before it join its run, and a bracket
+  // takes a script only from a run that has one (scriptRunLimits). The itemizer reads Hiragana as Katakana, so a run's
+  // script is never 'Hira', and a Hiragana piece in a 'Kana' run itemizes alone to the run's script.
+  let alone = 'Zyyy'
+  for (let i = tStart; i < tEnd && isCommonScript(alone); i++) alone = scriptAt(units, i, tEnd)
+  if (alone === domScript || (alone === 'Hira' && domScript === 'Kana')) return null
   const limit = runs[k]!.limit
   for (let i = tStart - 1; i >= from; i--) {
-    if (scriptAt(units, i) !== domScript) continue
+    if (scriptAt(units, i, units.length) !== domScript) continue
     const u = units[i]!
     if ((u & 0xfc00) === 0xdc00 && i > from) return { text: String.fromCharCode(units[i - 1]!, u), before: true }
     return { text: String.fromCharCode(u), before: true }
   }
   for (let i = tEnd; i < limit; i++) {
-    if (scriptAt(units, i) !== domScript) continue
+    if (scriptAt(units, i, units.length) !== domScript) continue
     const u = units[i]!
     if (isSurrogatePair(u, units[i + 1] ?? 0)) return { text: String.fromCharCode(u, units[i + 1]!), before: false }
     return { text: String.fromCharCode(u), before: false }
