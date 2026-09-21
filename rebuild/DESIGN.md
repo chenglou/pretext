@@ -1111,7 +1111,18 @@ source range. It makes no fragment, no Blink item and no WebKit display box, and
   rect, the source range and, inspected, the gaps its filling raised. Its types are in `types.ts` (`WebKitFilledLine`,
   `Line`, and `LineRun`, a tagged union of text, soft line break, element and line-spanning runs). `fillLine` is in
   `lines.ts`, `linePieces` and `lineGeometry` in `output.ts`, and `inspectLine` (`index.ts`) is `gaps.ts` `lineGaps`, then
-  `history.ts` `pageHistoryGaps`, then `lineGeometry`.
+  `history.ts` `pageHistoryGaps`, then `lineGeometry`. Since the profiling phase the simple builder writes what a line's
+  leading plain items leave of it in one step (`lines.ts` `commitPlainStretch`): while an item is text of the
+  paragraph's one box with its width kept, a word or one collapsible space without a trailing soft hyphen, and fits, in
+  a block that isn't `break-spaces`, it is a candidate of its own, and the run, the content width, the trimmable
+  content, the wrap opportunity list and `measuredEnd` are what the builder would have left item by item, with the same
+  float32 sums in the same order. The first item of another kind, or that doesn't fit, goes to the builder as before,
+  so every break decision is the builder's. Under a block of `break-spaces` (around one span that collapses spaces) a
+  word before white space is no candidate of its own, so the stretch isn't taken there. It is a second path through
+  one stretch of the fill, taken for its price: the builder spent about 50 ns an item on bookkeeping where a sum takes
+  6, and in webkit-host 10,000 plain ASCII chat messages went from 106 to 92 ms from scratch and a layout of a kept
+  message from 2.06 to 0.95 µs (the mix: 142 to 138 ms, 2.7 to 1.7 µs; fresh pages that hold one library each,
+  research/PERF-JS-PROFILE.md, the WebKit critic's section 1).
 - Gecko's decided line is the start, the band, the last pass's spans as reflow left them, the next position and, inspected,
   the gaps the passes raised with the in-word stand-in offsets they consulted. `fillLine` (`lines.ts`) runs the passes
   alone. `placement.ts` makes its own placed records from the line's reflowed spans (`lines.ts` `Reflowed`,
@@ -1778,9 +1789,11 @@ and `lazy-scan.test.ts` went with it.
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
 Blink word cache with them. Everything else a call keeps is local to it: the declarations it resolved, each once under
-its language, compared field by field; and the questions it asked with Canvas's answers, because checks share questions
-(the two generics alone, a family's list at the probe size, which the primary family check and the fixed-pitch check
-both read, and which declarations of several sizes share). No engine needs that list of questions for correctness, since
+its language, compared field by field; a declaration's contexts, each found once under its family list and size, since
+one declaration's checks ask a dozen questions under four lists (the profiling phase: 12 lookups a chat message became
+4, about 0.3 µs a message of 11 in webkit-host); and the questions it asked with Canvas's answers, because checks share
+questions (the two generics alone, a family's list at the probe size, which the primary family check and the fixed-pitch
+check both read, and which declarations of several sizes share). No engine needs that list of questions for correctness, since
 a question asked again gets the same answer; it is kept because deleting it only adds Canvas calls (without it 4,692
 Chrome and 27,014 webkit-host cases without facts repeat a font-check question; Gecko's checks ask nothing). The Canvas
 checks of engine detection (§1.4) make their own contexts. The checks run before the engine and don't know whether the
@@ -2367,7 +2380,12 @@ the same data, and `env.dictionaryBreaks` says which is available.
   that DOM lines inside SA runs equal it after a line start (blink-text H34).
 - **WebKit**: Safari exposes no line segmenter. JSC's `Intl.Segmenter` word granularity runs libicucore's word iterator
   with the same dictionaries. Against libicucore's own line iterator it differs on 27 of 282,337 SA positions, all in
-  ranges that start with a combining mark (`dictionary-breaks-stand-in`).
+  ranges that start with a combining mark (`dictionary-breaks-stand-in`). The port makes one segmenter at the first
+  dictionary range and keeps it for the page's life (`engines/webkit/breaks.ts` `wordSegmenter`), as it keeps its decoded
+  tables: it is fixed data, the process's default locale and nothing of any text. Making one per range cost about four
+  times what segmenting a short range does (7.8 µs against 1.9 µs under JavaScriptCore, 2026-09-20), and in webkit-host
+  1,000 Thai chat messages went from 46.2 to 20.1 µs a message with the same segmentations
+  (research/PERF-JS-PROFILE.md).
 - **Gecko**: Firefox's `Intl.Segmenter` word granularity uses ICU4X's word segmenter, and layout's per-word LSTM breaks
   equaled it on 54,589 of 54,589 SA positions (specs/gecko-text.md §10). Gecko feeds one space-delimited word at a time,
   split by language. Probe gecko-text H25 confirms it in installed Firefox 156.

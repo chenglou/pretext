@@ -101,6 +101,11 @@ function forEachDictionaryRange(rules: BreakRules, text: string, start: number, 
   }
 }
 
+// The word segmenter of every dictionary range, made at the first one and kept for the page's life, as the decoded tables
+// are: making one costs about four times what segmenting a short range does (JavaScriptCore, 2026-09-20). It is fixed
+// data: it holds the process's default locale, which a page doesn't see change, and nothing of any text.
+let wordSegmenter: Intl.Segmenter | null = null
+
 // The engines' boundaries inside an engine range, from JSC's Intl.Segmenter word granularity over that range, which runs
 // the same libicucore dictionaries (DESIGN.md §6.3, specs/webkit-gaps.md §4.2). The engines never stop before a
 // combining mark of their script (dictbe.cpp "Never stop before a combining mark", fMarkSet), and the range end is never a
@@ -113,7 +118,8 @@ function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, te
       forEachDictionaryRange(rules, text, start, end, (engine, rangeStart, rangeEnd) => {
         if (tooShortForTwoWords(engine, text, rangeStart, rangeEnd)) return
         const range = text.slice(rangeStart, rangeEnd)
-        const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'word' }).segment(range))
+        wordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+        const segments = Array.from(wordSegmenter.segment(range))
         for (let k = 1; k < segments.length; k++) {
           if (!isDictionaryMark(range.codePointAt(segments[k]!.index)!)) isBoundary[rangeStart + segments[k]!.index] = 1
         }

@@ -421,6 +421,39 @@ paragraph; the plain path went from 39.32 to 36.51 questions a paragraph, the ni
 *What could make them unsafe.* Each moves or drops a first ask, which the replay can't judge and WebKit's per-font
 caches shouldn't mind: a new recording and tier 2 in both orders.
 
+*The port's own JavaScript, profiled* (2026-09-20; research/PERF-JS-PROFILE.md: the orchestrator's reading, the WebKit
+critic's review, then the owner's report). In this engine own code is most of the time, not Canvas: of 10,000 chat
+messages from scratch in webkit-host Canvas is 33 to 43%, and a layout of a kept message asks Canvas nothing on plain
+ASCII. Four changes landed, each with the same Canvas questions in the same order and the same lines: tier 1 shows 0
+predictions and 0 questions changed on webkit-host's 63,987 cases in both configurations, and the critic's attack under
+the stand-in Canvas, base against head, found 0 differences in 300,051 family lists, 61.3 million compared steps over
+25,592 paragraphs and 750,264 line widths built to sit at a fit's edge. The numbers below are the critic's: fresh pages
+that hold one library each, taking turns.
+- *The font checks find a declaration's contexts once, and a font-family list's names are cut out in stretches*
+  (`measure/font-checks.ts`, `font-family.ts`, which all three ports run): about 0.3 µs a message each, at the edge of
+  the spread alone, and 0.6 µs as a pair (the mix −4.1%, 15 of 16 rounds; plain ASCII −5.4%, 16 of 16). A list is still
+  read at every `prepare`; once it is read at the library's boundary (below, for the API phase) the second gain is per
+  declaration, not per message.
+- *One word segmenter, kept from the first dictionary range on* (`engines/webkit/breaks.ts`): a Thai message goes from
+  46.2 to 20.1 µs (14 of 14 rounds). Nothing moves on the mix or on plain ASCII.
+- *The simple builder commits a line's leading plain items in one step* (`engines/webkit/lines.ts` `commitPlainStretch`;
+  DESIGN.md §2.9): main's flat layout loop taken back for the stretch of a line where nothing else can happen, +54
+  lines. A layout of a kept message goes from 2.06 to 0.95 µs on plain ASCII and from 2.73 to 1.67 µs on the mix (−1.1
+  and −1.0 µs, 40 of 40 and 39 of 40 rounds), and plain ASCII from scratch gains 1.4 to 1.7 µs a message (53 of 54). On
+  the mix from scratch warm pages gave 0.1 to 0.5 µs, inside the spread, and a fresh page's first pass 0.8 to 1.4 µs. It
+  is the per-item half of item 9's relayout loop over flat arrays. Under a block of `break-spaces` the stretch isn't
+  taken: there a word before white space is no candidate of its own (the critic's guard; no line differed without it).
+
+Together, head against base: plain ASCII 113.8 to 91.7 ms per 10,000 messages (−19.1%, 16 of 16 rounds; −15.5% in a
+second run) and the mix 149.2 to 138.3 ms (−8.1%, 15 of 16; −5.9% in the second). The owner's rounds in one page had
+−13.9% on the mix: quote −6 to −8%.
+
+*What is left.* After the stretch nine tenths of a kept message's layout is what a line costs, 0.3 µs a line against
+main's whole layout at 0.24 µs: the item that ends a line goes through the general breaker, and `fillLine`'s result is
+made of new objects per line, which is the API phase's shape to change. From scratch the font checks are the largest
+single item (2.35 µs of a plain ASCII message's 9.6): answers kept with the list of contexts or facts the caller gives
+come first, a box's constants second (the owner's section 7).
+
 ### 5. Units of equal text in one prepared paragraph share one record of what measuring found
 
 *What.* A word that recurs in a paragraph is measured at each occurrence. One record per distinct unit text, with the

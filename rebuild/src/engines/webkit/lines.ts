@@ -1094,18 +1094,74 @@ function simpleHandleLineEnding(b: Builder, placedEnd: Position): void {
   handleTrailingHangingContent(b.line, b.L.lineWidth, placedEnd.index === b.rangeEnd && placedEnd.offset === 0)
 }
 
+// The line's leading items while each is what most text is: text of the paragraph's one box with its width kept, a word
+// or one collapsible space, without a trailing soft hyphen, that fits. In a block that isn't break-spaces, the only kind
+// the caller takes the stretch in, each such item is a candidate of its own (it ends at a soft wrap opportunity,
+// placeInlineTextContent below), and what simpleCommitCandidateContent, appendTextFast, expandRun and
+// updateTrailingContent leave of them item by item is written here once: one run, the line's content width and
+// trimmable content, the wrap opportunity list and measuredEnd, with the same float32 sums in the same order. Returns
+// how many items it committed; the first item that isn't of that kind, or doesn't fit, goes to the builder as it is.
+function commitPlainStretch(b: Builder): number {
+  const p = b.L.p
+  const items = p.items
+  const box = p.boxes[0]!
+  if (p.boxes.length !== 1 || box.letterSpacing < 0 || preservesSpacesAndTabs(box.style)) return 0
+  const lineRight = f32(b.L.lineWidth + 1 / 64)
+  // The run's first item, its width with and without its last item, its length and its last word appended to it.
+  let first = -1
+  let width = 0
+  let widthBefore = 0
+  let textLength = 0
+  let lastNonWhitespaceContentStart: number | null = null
+  let index = b.rangeStart
+  for (; index < b.rangeEnd; index++) {
+    const item = items[index]!
+    if (item.kind !== 'text' || item.width === null || item.hasTrailingSoftHyphen) break
+    const previous = index > b.rangeStart ? items[index - 1] as WebKitTextItem : null
+    if (item.isWhitespace ? item.end - item.start !== 1 || (previous !== null && previous.isWhitespace) : isZeroWidthSpaceSeparator(p, item)) break
+    if (f32(0 + item.width) > f32(lineRight - (first < 0 ? 0 : f32(0 + width)))) break
+    if (first < 0) {
+      // White space at the line's start collapses completely (appendTextFast).
+      if (item.isWhitespace) continue
+      first = index
+      width = item.width
+    } else {
+      widthBefore = width
+      width = f32(width + item.width)
+      if (!item.isWhitespace) lastNonWhitespaceContentStart = item.start
+    }
+    textLength += item.end - item.start
+  }
+  b.measuredEnd = Math.max(b.measuredEnd, index)
+  if (first < 0) return index - b.rangeStart
+  const last = items[index - 1] as WebKitTextItem
+  const run = textRun(p, items[first] as WebKitTextItem, 0, width, null)
+  run.textLength = textLength
+  run.lastNonWhitespaceContentStart = lastNonWhitespaceContentStart
+  b.line.runs.push(run)
+  b.line.contentLogicalWidth = f32(0 + width)
+  if (last.isWhitespace) {
+    run.trailingWhitespace = { type: 'collapsible', length: 1, width: last.width! }
+    const offset = f32(f32(b.line.contentLogicalWidth - f32(0 + widthBefore)) - last.width!)
+    b.line.trimmable = { run, offset, width: f32(offset + last.width!) }
+  }
+  b.wrapOpportunityList = items.slice(first, index) as WebKitTextItem[]
+  return index - b.rangeStart
+}
+
 // placeInlineTextContent (TOS:198-262)
 function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWidth: number | null } {
   const L = b.L
   const items = L.p.items
   const style = L.p.style
   const hasWrapOpportunityBeforeWhitespace = style.collapse !== 'break-spaces'
-  let placed = 0
+  // Under a block of break-spaces a word before white space is no candidate of its own (below), so the stretch isn't taken.
+  let placed = b.partialLeadingTextItem === null && hasWrapOpportunityBeforeWhitespace ? commitPlainStretch(b) : 0
   let r = simpleResult(true)
-  let candidateStart = b.rangeStart
-  let candidateEnd = b.rangeStart
+  let candidateStart = b.rangeStart + placed
+  let candidateEnd = candidateStart
   let candidateWidth = 0
-  let nextIndex = b.rangeStart
+  let nextIndex = candidateStart
   const isAtSoftWrapOpportunityOrContentEnd = (item: WebKitTextItem): boolean => {
     if (item.isWhitespace) return true
     const next = items[nextIndex]

@@ -68,10 +68,16 @@ export function listedFamilies(list: string): ListedFamily[] {
     if (quote === '"' || quote === "'") {
       let name = ''
       i++
+      // `from`: the start of the stretch without a backslash that `name` doesn't hold yet. A name is cut out of the list
+      // in such stretches and not added to letter by letter, because a list is read at every prepare.
+      let from = i
       while (i < list.length && list[i] !== quote) {
         if (list[i] !== '\\') {
-          name += list[i++]
-        } else if (i + 1 === list.length || list[i + 1] === '\n' || list[i + 1] === '\r' || list[i + 1] === '\f') {
+          i++
+          continue
+        }
+        name += list.slice(from, i)
+        if (i + 1 === list.length || list[i + 1] === '\n' || list[i + 1] === '\r' || list[i + 1] === '\f') {
           // An escaped newline continues the string on the next line, and a backslash at the end adds nothing (§4.3.5).
           i += 2
         } else {
@@ -79,7 +85,9 @@ export function listedFamilies(list: string): ListedFamily[] {
           name += e.value
           i = e.next
         }
+        from = i
       }
+      name += list.slice(from, i)
       i++
       family = { quoted: true, name, css: list.slice(start, i) }
       while (isWhiteSpace(list[i])) i++
@@ -90,16 +98,18 @@ export function listedFamilies(list: string): ListedFamily[] {
         while (isWhiteSpace(list[i])) i++
         if (i >= list.length || list[i] === ',') break
         let identifier = ''
+        let from = i
         while (i < list.length && !isWhiteSpace(list[i]) && list[i] !== ',') {
-          if (list[i] === '\\') {
-            const e = escape(list, i)
-            identifier += e.value
-            i = e.next
-          } else {
-            identifier += list[i++]
+          if (list[i] !== '\\') {
+            i++
+            continue
           }
+          const e = escape(list, i)
+          identifier += list.slice(from, i) + e.value
+          i = e.next
+          from = i
         }
-        identifiers.push(identifier)
+        identifiers.push(identifier + list.slice(from, i))
         end = i
       }
       family = { quoted: false, name: identifiers.join(' '), css: list.slice(start, end), identifiers }
