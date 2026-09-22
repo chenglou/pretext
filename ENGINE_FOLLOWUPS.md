@@ -1,5 +1,12 @@
 # Engine Follow-ups
 
+The current bounded redo [plaintext round 3](rebuild/STATELESS_ROUND3.md) integrates exact Blink retry-search and Gecko
+adjacent-endpoint reuse. Maintained gates and fresh native cuts/scoring outcome categories stay unchanged, with existing failures,
+reviews and four Firefox native-geometry/count/issue-list variations retained. The complete foreground phase matrix supports useful repeat gains, no general preparation gain and mixed new-width
+costs. Main's resize gap remains open. Preparation source-map ownership and unfamiliar-width measurement remain open. The Gecko
+strict-raw diagnostic cannot serialize cyclic SpanData parents; observable and direct-consultation proofs cover these
+changes, but that harness limitation must be resolved before a broader internal representation rewrite.
+
 The completed bounded redo [plaintext round](rebuild/STATELESS_ROUND2.md) removes unused unsegmented Blink metadata, stores a
 single-part shape view in one record and removes inspection-only suffix scans from plain filling. Complete replay
 and fast native outcomes stay unchanged. Fresh timing shows useful Chrome repeat/growth gains, no general preparation win and mixed new-width costs; the report retains Latin cold costs and main gaps. Rich painting remains paused.

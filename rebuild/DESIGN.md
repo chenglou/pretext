@@ -55,7 +55,10 @@ A single-part Blink shape view owns the Part fields and view metadata in one obj
 one array. Direct result views and scalar endpoints preserve clipping, numbering, query order and float32 behavior
 without temporary one-part arrays. Item/shape records still serve rewind and trimming in both output modes. Plain
 finalization omits inspection's suffix scan, and handlers pass their known row indices.
-[STATELESS_ROUND2.md](STATELESS_ROUND2.md) records the controls and current timing boundary.
+[STATELESS_ROUND2.md](STATELESS_ROUND2.md) records those controls and the earlier completed phase matrix.
+[Round 3](STATELESS_ROUND3.md) adds per-fill Blink retry-candidate reuse and per-traversal Gecko adjacent-endpoint reuse.
+Both keep existing arithmetic and inspected consultation order; neither survives to a new fill or adds a measurement
+estimate. Its final phase comparison is separate from the earlier timing boundary.
 
 Blink's prepared script and fallback-priority model is now `ShapingSegments`, the primary typed buffers in
 `engines/blink/emoji.ts` for segmented paragraphs. Null owns the original unsegmented case: known Latin, zero

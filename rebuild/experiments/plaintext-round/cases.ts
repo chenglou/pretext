@@ -108,6 +108,21 @@ export function cases(growthSizes: readonly number[] = [64, 128, 256]): PlainCas
   }))
   out.push({ ...make('metadata/atomic-refusal-and-retry', '', { content: [styled([]), atom, { kind: 'text', text: ' word' }] }, null, [16, 96]), insets: [{ left: 45, right: 45 }, { left: 0, right: 0 }] })
   out.push({ ...make('float-refusal-and-retry', 'unbrokenword words here', {}, null, [96, 320]), insets: [{ left: 90, right: 0 }, { left: 20, right: 20 }] })
+  // Adjacent scan endpoint reuse must retain group-vs-share ranges, changed frame bounds and arbitrary trim queries.
+  out.push(
+    make('endpoint/overlapping-ffi-fff', 'fffifffiffifflff'.repeat(4), { overflowWrap: 'anywhere' }, null, [0, 1, 7.75, 14, 23, 37, 96, 320]),
+    make('endpoint/inside-group-frame-bounds', '', { overflowWrap: 'anywhere', content: [
+      { kind: 'text', text: 'f' }, styled([{ kind: 'text', text: 'f' }], { overflowWrap: 'anywhere' }),
+      { kind: 'text', text: 'i f' }, styled([{ kind: 'text', text: 'fi' }], { overflowWrap: 'anywhere' }), { kind: 'text', text: ' fff' },
+    ] }),
+    make('endpoint/soft-hyphen-inside-group', 'f\u00adfi ff\u00adf fffi', { overflowWrap: 'anywhere' }),
+    make('endpoint/arabic-signed-tracking', 'للَّهِللَّهِ بَسلامللَّهِ'.repeat(3), { lang: 'ar', direction: 'rtl', letterSpacing: -2.5, overflowWrap: 'anywhere' }),
+    make('endpoint/tabs-signed-tracking', 'ffi\tfff  \tAV\t\u0301x\n ff\t  ', { whiteSpace: 'pre-wrap', letterSpacing: -1.25, wordSpacing: -2.5, textAlign: 'justify' }),
+    make('endpoint/span-object-rewind', '', { overflowWrap: 'anywhere', content: [
+      { kind: 'text', text: 'ffi fff ' }, styled([{ kind: 'text', text: 'ffifff ffi' }], { inlineStart: startEdge, inlineEnd: endEdge }),
+      { kind: 'atomic', width: 45, height: 12, marginInlineStart: -3, marginInlineEnd: 4 }, { kind: 'text', text: ' fff ffi' },
+    ] }),
+  )
   const patterns: ReadonlyArray<[string, string, Partial<Paragraph>]> = [
     ['ordinary-latin', 'office AV words ', {}],
     ['unbroken-latin', 'AVoffice', {}],

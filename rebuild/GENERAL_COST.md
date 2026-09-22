@@ -1,5 +1,14 @@
 # General stateless cost
 
+The current bounded [plaintext round 3](STATELESS_ROUND3.md) removes repeated Blink retry searches and Gecko adjacent
+endpoint lookups without changing measurement rules or arithmetic. Controlled ASCII 512 prefix/map reads fall about
+41%/34%; the complete foreground matrix supports useful repeat gains. Preparation has no general gain, new-width costs
+are mixed and unchanged WebKit control variation is retained. Main's large resize gap remains open.
+The [preparation ownership account](experiments/plaintext-round/preparation-cost-account.md) separates actual consumers
+from unexamined representations: exact implicit identity source maps are a concrete next experiment. Dense maps,
+temporary source copies, per-line rollback/trim scratch, new-width Canvas work and inspected scans remain open costs.
+Neither these gains nor rejected small prototypes prove the remaining costs necessary or close general performance.
+
 2026-09-22. Testing infrastructure is sufficient for the current iteration. The general-cost work follows
 `~/github/vibescript/docs/engineering.md`: model input dimensions, repair repeated access at its source, and stop when
 further gains require substantially more machinery, assumptions or retained data. Ordinary chat timings alone do not

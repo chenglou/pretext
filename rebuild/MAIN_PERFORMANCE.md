@@ -1,5 +1,90 @@
 # Performance against main
 
+## Plaintext stateless round 3, 2026-09-22
+
+The accepted captures contain exactly 36 unique documents per browser: 108 documents and 5,400 saved rows. Ten samples
+balance five labels/order slots after two discarded warmups, with a 20ms/50-timer-step floor. Every saved before/after
+endpoint, all 108 final states and all 108 initial script snapshots are visible/focused/isolated at DPR 2.
+Boot/bookend environment records are retained separately, including 11 unfocused Chrome records; they do not
+substitute for clock guards or prove continuous focus between recorded endpoints. No samples or pause tails are
+removed.
+
+Frozen `1981939`, the integrated two-change engine and actual main `2e5e2bd` are imported directly. Each browser's
+717-file before/after source seal is exact. The 716 other inputs are identical across browsers; only startup runner
+versions differ. Chrome ran temporary owned-PID activation plus the delivery gate; Safari retained its session startup
+with the gate; Firefox ran native startup with the gate. These operations occurred before clocks. The page
+source/build inputs, captured measurement programs, library inputs, fonts, guards and timer protocol are unchanged.
+The final branch restores the original runner; its separate untimed focus diagnostic passes eight samples in all three
+browsers. Do not relabel the timing captures as original-runner executions.
+
+Complete redo cuts/continuations and post-timing counts/Canvas statistics match across all four redo labels. Ordered
+native Canvas streams and complete main cuts are not recorded by this matrix; the deterministic ordered proofs and
+fresh native accuracy workflows supply separate evidence. Repeated Canvas work is not universally zero: its actual
+volume remains in every report, including 4,216 WebKit questions on ASCII 512. Main output/ownership contracts differ,
+and line counts differ in some ordinary cohorts. These ratios are cost references, not geometry or universal
+guarantees.
+
+Current-range / frozen-range medians of matched round ratios (lower is faster):
+
+| Browser / cohort | Preparation | Preparation + count | New widths | Repeated widths |
+| --- | ---: | ---: | ---: | ---: |
+| Chrome / latin | 1.085× | 0.938× | 1.003× | 1.003× |
+| Chrome / cjk | 0.988× | 1.002× | 1.018× | 0.998× |
+| Chrome / arabic | 0.969× | 1.022× | 0.968× | 1.000× |
+| Chrome / mixed | 1.022× | 1.028× | 0.968× | 1.007× |
+| Firefox / latin | 1.003× | 0.944× | 1.035× | 0.861× |
+| Firefox / cjk | 0.993× | 0.984× | 0.755× | 0.686× |
+| Firefox / arabic | 1.003× | 0.985× | 0.974× | 0.896× |
+| Firefox / mixed | 0.991× | 1.037× | 0.914× | 0.791× |
+| Safari / latin | 0.994× | 0.995× | 0.935× | 1.000× |
+| Safari / cjk | 0.993× | 0.966× | 1.005× | 1.138× |
+| Safari / arabic | 1.049× | 1.000× | 0.985× | 1.002× |
+| Safari / mixed | 0.984× | 1.053× | 0.995× | 1.006× |
+
+Chrome ordinary repeats stay approximately unchanged. Its narrow ASCII repeat ratios at N64/128/256/512 are
+0.855/0.844/0.823/0.816. At N512, range costs 1.341ms versus 1.645ms frozen (about 18% less). Firefox ordinary full
+repeats save about 15% Latin, 31% CJK, 12% Arabic and 20% mixed; range ratios are 0.861/0.686/0.896/0.791. Its narrow
+N512 range ratio is 0.814 (1.229ms versus 1.521ms). Growing Hebrew and alternating controls also improve. These are
+retained constant-factor lookup reductions, not a new asymptotic or Canvas-work claim.
+
+Preparation has no general gain and no intentional runtime change. Identical-preparation full/range aliases show
+nontrivial variation. Chrome Latin range preparation costs 8.5% more in this capture, alongside 2.3% more full; all
+samples remain. Chrome has 62 normalized samples above three times their own label/document median; the maximum is
+1,020.795ms for current-range mixed preparation-plus-count. No cause is inferred. New widths are mixed: Firefox CJK
+full/range ratios are 0.718/0.755, while Latin full 0.842 and range 1.035 disagree. Unchanged WebKit is a negative
+control; its CJK repeat full/range ratios 1.109/1.138 are retained rather than presented as an engine improvement or
+explained away. No formal significance or GC/JIT/native cause is claimed.
+
+Current-range separate median / actual-main median:
+
+| Browser / cohort | Preparation | Preparation + count | New widths | Repeated widths |
+| --- | ---: | ---: | ---: | ---: |
+| Chrome / latin | 11.64× | 10.16× | 121.48× | 15.00× |
+| Chrome / cjk | 2.32× | 2.73× | 87.42× | 13.23× |
+| Chrome / arabic | 10.59× | 11.74× | 218.40× | 19.49× |
+| Chrome / mixed | 6.54× | 8.32× | 143.87× | 15.39× |
+| Firefox / latin | 1.06× | 2.35× | 51.46× | 13.95× |
+| Firefox / cjk | 0.39× | 2.73× | 17.79× | 12.66× |
+| Firefox / arabic | 1.58× | 2.74× | 100.59× | 13.58× |
+| Firefox / mixed | 1.13× | 3.09× | 42.36× | 10.32× |
+| Safari / latin | 0.38× | 0.40× | 3.41× | 3.70× |
+| Safari / cjk | 0.22× | 0.22× | 3.82× | 4.12× |
+| Safari / arabic | 0.47× | 0.57× | 18.45× | 18.06× |
+| Safari / mixed | 0.42× | 0.53× | 13.13× | 13.33× |
+
+WebKit preparation defers more measurement into filling, so prepare-only ratios do not compare identical work
+boundaries. Preparation-plus-count is measured directly. Main clears JS caches once per preparation batch outside
+clocks, shares segment answers across messages and retains Canvas; redo keeps normal paragraph-local ownership.
+New-width handles are prepared and filled at 320px outside clocks before 260/380/440px. Repeats keep warmed handles.
+The narrow ASCII control has four repeated texts at 24/36/48px and equal 2,120 lines. It still costs 66.53× main in
+Chrome, 39.91× in Firefox and 73.90× in WebKit; Chrome/Firefox submit zero warm Canvas questions there. Those gaps
+remain open.
+
+Foreground Retina DPR 2, AC power, Apple M5 Max; pinned Chrome 153.0.8010.50, Firefox 156.0 and Safari 27.0.
+Browser/OS history and native resources remain shared. Per-browser complete independent reconstructions are
+`final-audit/performance-{chrome,firefox,safari}.json`. The earlier pilots below remain separately named screening
+evidence and are not pooled with this complete matrix.
+
 ## Plaintext stateless follow-up, 2026-09-22
 
 The complete foreground campaign has exactly 36 unique documents per browser: 108 documents and 5,400 saved timed

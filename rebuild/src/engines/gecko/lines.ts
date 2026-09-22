@@ -13,7 +13,7 @@ import { isTrimmableChar, pxToAu } from './prepare.js'
 import { isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript } from './props.js'
 import {
   KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt, type GeckoEdgeItem, type GeckoObjectItem, type GeckoPrepared,
-  type GeckoTextRun,
+  type GeckoTextRun, type InWordAdvance,
 } from './types.js'
 
 const SHY = 0x00ad
@@ -236,6 +236,27 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
   let candHyphen = false
   let candPriority = NO_BREAK
   let aborted = false
+  // Adjacent pending intervals have the same provider and scan bounds for this one traversal. Keep the endpoint
+  // already discovered by the preceding interval; trim queries remain arbitrary ranges. The first interval still
+  // discovers its end before its start, and every logical glyph read preserves its inspection observation.
+  let pendingGlyph: InWordAdvance | null = null
+  let pendingGlyphAt = -1
+  const pendingAdvanceTo = (until: number): number => {
+    if (until <= pending) return 0
+    const endAt = scanOffset(p, prov, aStart, end, until)
+    const endGlyph = advanceBefore(p, run, endAt)
+    if (consulted !== null && endGlyph.standIn !== null) consulted.push(endAt)
+    const endAdvance = endGlyph.au
+    let startAdvance: number
+    if (pendingGlyph === null) startAdvance = glyphBefore(p, run, scanOffset(p, prov, aStart, end, pending), consulted)
+    else {
+      if (consulted !== null && pendingGlyph.standIn !== null) consulted.push(pendingGlyphAt)
+      startAdvance = pendingGlyph.au
+    }
+    pendingGlyph = endGlyph
+    pendingGlyphAt = endAt
+    return endAdvance - startAdvance + spacingIn(p, prov, pending, until, true) + tabsIn(prov, pending, until)
+  }
   for (let i = aStart; i < end; i++) {
     if (suppress !== 'initial' || i > aStart) {
       const atNaturalBreak = p.breakFlags[i] === BREAK_NORMAL
@@ -247,7 +268,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
         tabsThrough?.(i)
-        const pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted)
+        const pendingAdvance = pendingAdvanceTo(i)
         const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted) : 0
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
@@ -282,7 +303,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
   const scanEnd = aborted ? pending : end
   if (!aborted) {
     tabsThrough?.(end)
-    width += scanAdvance(p, prov, aStart, end, pending, end, consulted)
+    width += pendingAdvanceTo(end)
   }
   let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, scanEnd, consulted) : 0
   let charsFit: number

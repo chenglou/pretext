@@ -1,9 +1,18 @@
 # Takeover decisions and evidence
 
+2026-09-22, completed bounded [plaintext round 3](STATELESS_ROUND3.md): Blink reuses its immediate retry search and Gecko
+reuses adjacent range endpoints, preserving existing measurements and arithmetic. Full/count/range ordered proofs,
+1,223 tests and strict projects pass; maintained gates and fresh native outcome categories retain existing failures,
+reviews and the documented four Firefox geometry/count/issue-list variations. The complete 108-document / 5,400-row
+foreground matrix shows useful narrow Chrome and general Firefox repeat gains, no general preparation gain and mixed
+new-width costs. Main's resize gap remains large. Temporary startup experiments are dropped after the user confirms
+external focus interruptions and original startup diagnostics pass. Rich painting stays paused. Exact identity source
+maps are the next bounded ownership experiment; remaining costs are open, not proved necessary.
+
 2026-09-20, `rebuild-20260916`, from Claude's final `9369b7f`. The goal and routine commands are in
 [README.md](README.md). This record replaces the previous phase queue. Main's published API/source remain unchanged.
 
-2026-09-22, latest closure: [plaintext round2](STATELESS_ROUND2.md) removes unused unsegmented Blink metadata,
+2026-09-22, earlier completed closure: [plaintext round2](STATELESS_ROUND2.md) removes unused unsegmented Blink metadata,
 stores a single-part shape view in one record and removes two demonstrated scan factors without changing Canvas recipes.
 Final verification passes 1,215 tests and six strict projects; complete replay reports and fast native outcomes stay
 unchanged. The same strict native failures/reviews remain; no rules or references are relaxed.

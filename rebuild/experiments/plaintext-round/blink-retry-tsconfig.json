@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["./blink-retry-growth.ts", "./blink-source-counter.ts", "../../src/engines/blink/retry-candidate.test.ts"],
+  "exclude": []
+}

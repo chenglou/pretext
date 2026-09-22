@@ -157,6 +157,11 @@ type ShapeLineResult = {
   clampRests: { limit: GapName; clamped: boolean } | null
 }
 
+// A normal-break pass that returned no result has already located the same glyph position used by its immediate
+// break-character retry. Plain reads keep group positions by offset; repeating this search would only read those facts
+// again. This belongs to one fill, is consumed by the next pass, and is never a result of a different width or line.
+type RejectedCandidate = { sr: ShapeResult; start: number; position: number; before: number; offset: number }
+
 function newShapeLineResult(): ShapeLineResult {
   return { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true, clampRests: null }
 }
@@ -202,6 +207,7 @@ export class LineBreaker {
   clampedStarts: { start: number; limit: GapName }[] = []
   endTests: EndTest[] = []
   truncatedStarts: number[] = []
+  private rejectedCandidate: RejectedCandidate | null = null
 
   constructor(sh: Shaper, token: BlinkLineStart, slot: LineSlot) {
     const p = sh.p
@@ -650,6 +656,8 @@ export class LineBreaker {
   // `forceClamp` is the port's: the corrected space of a wrapped line start is taken as clamped at 0.
   shapeLineWith(sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult, candidateBefore: number, forceClamp: boolean): View | null {
     const sh = this.sh
+    const rejected = this.rejectedCandidate
+    this.rejectedCandidate = null
     const given = { availableSpace, gaps: gapCount(sh.gaps), untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
     const rangeStart = sr.start
     const rangeEnd = sr.end
@@ -687,7 +695,10 @@ export class LineBreaker {
       if (forceClamp) availableSpace = 0
     }
     const endPosition = addLU(startPosition, flip(availableSpace))
-    let candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
+    let candidate = sh.gaps === null && sr.kind === 'group' && firstSafe === start && !forceClamp &&
+      this.overrideBreakAnywhere && !noResultIfOverflow && rejected !== null && rejected.sr === sr &&
+      rejected.start === start && rejected.position === endPosition && rejected.before === candidateBefore
+      ? rejected.offset : offsetForPosition(sh, sr, endPosition, candidateBefore)
     breakCandidate(sh.gaps, sh, sr, endPosition, candidate, start)
     const searched = candidate
     // ShapeToEnd (shaping_line_breaker.cc:640-670).
@@ -726,7 +737,14 @@ export class LineBreaker {
       bo = this.previousBO(candidate, start)
       out.isOverflow = bo.offset <= start
       if (out.isOverflow) {
-        if (noResultIfOverflow) return null
+        if (noResultIfOverflow) {
+          // Keep only the policy-independent search, before any line-end reshape or hyphen fitting. An unsafe start
+          // would repeat a Canvas reshape, and inspected passes must repeat their measurements and gap events.
+          if (sh.gaps === null && sr.kind === 'group' && firstSafe === start && !forceClamp && !this.overrideBreakAnywhere) {
+            this.rejectedCandidate = { sr, start, position: endPosition, before: candidateBefore, offset: searched }
+          }
+          return null
+        }
         bo = this.nextBO(Math.max(candidate, start + 1), rangeEnd)
       }
     } else {

@@ -1,5 +1,15 @@
 # Plaintext stateless round
 
+The current bounded round is [STATELESS_ROUND3.md](../../STATELESS_ROUND3.md), frozen against
+`/private/tmp/pretext-stateless-round3-baseline-20260922` (`1981939`). The final 86-case full/count/range proofs extend the
+previous 80 cases with six Gecko endpoint controls. `gecko-endpoint.test.ts` and the Blink retry test are standalone;
+`gecko-endpoint-proof.ts` is the explicit cross-tree inspection diagnostic. `gecko-endpoint-counter.ts` and
+`blink-retry-growth.ts` count owned numeric reads separately from native speed. [Gecko endpoint evidence](gecko-endpoint.md)
+describes its integrated change; [preparation ownership](preparation-cost-account.md) records unexamined source-map
+alternatives. Deferred count-only/walk prototypes and preparation controls are preserved separately. Rich painting stays
+paused. The complete final phase matrix and explicit stopping scope are in the report; use explicit `PLAINTEXT_BASE`, `PLAINTEXT_CURRENT` and `PLAINTEXT_MAIN`
+for the round 3 performance driver rather than relying on its historical defaults.
+
 The completed bounded follow-up is [STATELESS_ROUND2.md](../../STATELESS_ROUND2.md). Use
 `--base=/private/tmp/pretext-stateless-round2-baseline-20260922` for its A6 comparison. The current probe times
 prior/current full and range plus actual main; set `PLAINTEXT_SAMPLES=10` to balance all five order slots. It adds

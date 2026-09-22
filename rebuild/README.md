@@ -11,7 +11,10 @@ research reports preserve the prior endpoint, not another task queue. Its branch
 
 The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md). The completed follow-up
 round removes unused unsegmented preparation data and simplifies Blink's line records; its evidence and stopping point
-are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). Owned rendering and rich painting remain paused.
+are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). The current [round 3](STATELESS_ROUND3.md) removes repeated
+Blink/Gecko lookups with preserved correctness outcomes and complete phase timings: useful repeat gains, no general
+preparation gain and mixed new-width costs. Main's resize gap remains open. [Preparation ownership](experiments/plaintext-round/preparation-cost-account.md) records the next
+bounded representation experiment and remaining costs. Owned rendering and rich painting remain paused.
 
 ## Core
 
