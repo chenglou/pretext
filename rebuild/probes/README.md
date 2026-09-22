@@ -161,7 +161,7 @@ Options:
   DPR, not for accuracy runs.
 - `--allow-safari-frontmost`: Safari only, no value. Skips the wait for Safari to leave the front (approved by the
   maintainer on 2026-09-16); the probe window then opens over the user's windows.
-- `--foreground`: pinned Chrome and Firefox, and installed Safari. Request activation of the dedicated window and tab for timing work. Firefox also receives its native `-foreground` switch
+- `--foreground`: pinned Chrome and Firefox, and installed Safari. Request activation of the dedicated window and tab for timing work. Chrome without emulated DPR and Firefox use normal foreground startup URLs; Firefox also receives its native `-foreground` switch
   ([Mozilla driver fix](https://bugzilla.mozilla.org/show_bug.cgi?id=1466573)). The probe
   must acquire and check actual content focus during timing; the launch flag neither proves content focus nor prevents a later focus change.
 - `--isolated`: opt in to COOP/COEP response headers for cross-origin isolation and finer timing. Default accuracy

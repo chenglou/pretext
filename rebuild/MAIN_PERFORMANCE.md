@@ -1,5 +1,14 @@
 # Performance against main
 
+## Plaintext stateless follow-up, 2026-09-22
+
+[STATELESS_ROUND2.md](STATELESS_ROUND2.md) removes unused Blink preparation data and simplifies single-part line
+shapes without changing Canvas questions. Broad fresh timing is pending; failed focus checks are excluded. One valid
+Chrome Latin repeated-width preflight improves full/full by about 9.7% and range/range by 10.6% (ten balanced pairs),
+saving 0.147ms/0.166ms per 120-message three-width batch. Current range remains 15.16× main's median on this phase.
+It supplies no preparation/new-width or general-browser claim. The full dated A6 comparison below remains historical
+evidence, not fresh timing for the changed source.
+
 ## Plaintext stateless round, 2026-09-21
 
 The bounded [stateless round](STATELESS_ROUND.md) simplifies exact source data and unused range output. Native timing

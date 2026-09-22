@@ -1,11 +1,11 @@
-// Bounded plaintext A/B probe: original redo, current redo, and actual main in one foreground page.
+// Bounded plaintext A/B probe: prior redo, current redo, and actual main in one foreground page.
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { buildMessages, STYLES } from '../../bench/cases.ts'
 import type { Probe } from '../../probes/types.ts'
 
-const base = process.env['PLAINTEXT_BASE'] ?? '/private/tmp/pretext-stateless-baseline-20260921'
+const base = process.env['PLAINTEXT_BASE'] ?? '/private/tmp/pretext-stateless-round2-baseline-20260922'
 const current = process.env['PLAINTEXT_CURRENT'] ?? resolve(import.meta.dir, '../../..')
 const withoutCursor = process.env['PLAINTEXT_WITHOUT_CURSOR']
 const main = process.env['PLAINTEXT_MAIN'] ?? '/Users/chenglou/github/pretext'
@@ -76,7 +76,7 @@ out.sink=sink;out.end=snap();return out;
 
 export default async function probes(): Promise<Probe[]> {
   let libraries='const LIBS=[];\n'
-  const variants: Array<readonly [string,string,boolean]> = [['base',base,false],['current-full',current,false],['current-range',current,true]]
+  const variants: Array<readonly [string,string,boolean]> = [['base',base,false],['base-range',base,true],['current-full',current,false],['current-range',current,true]]
   if (withoutCursor) variants.push(['without-cursor-full',withoutCursor,false],['without-cursor-range',withoutCursor,true])
   for(const [label,tree,range] of variants){
     libraries+=await bundle(redo(tree,range));libraries+=`\nLIBS.push({label:${JSON.stringify(label)},lib:globalThis.plaintextLibrary});\n`
@@ -86,11 +86,12 @@ export default async function probes(): Promise<Probe[]> {
   const cases=(['latin','cjk','arabic','mixed'] as const).map<Probe>(script=>({id:`plaintext ${script}`,spec:'Exact representation round; alternating baseline/current/main preparation, fresh and repeated widths',pageLang:STYLES[script].lang,html:'<div></div>',observe:[{kind:'script',source:`${libraries}\nconst STYLE=${JSON.stringify(STYLES[script])},TEXTS=${JSON.stringify(buildMessages(script,messages))},WIDTHS=[260,380,440],SAMPLES=${samples},PHASES=${JSON.stringify(phases)},SAMPLE_FLOOR=${sampleFloor};\n${BODY}`}]}))
   for(const n of [64,128,256,512]){const style={...STYLES.arabic,lang:'he',direction:'ltr',font:{...STYLES.arabic.font,family:'Arial'},mainFont:'16px Arial'};cases.push({id:`plaintext Hebrew ${n}`,spec:'Long single script run negative control: same Canvas measurements; own prefix bookkeeping should not rescan scripts',pageLang:'he',html:'<div></div>',observe:[{kind:'script',source:`${libraries}\nconst STYLE=${JSON.stringify(style)},TEXTS=${JSON.stringify(Array(8).fill('אבגד'.repeat(n/4)))},WIDTHS=[260,380,440],SAMPLES=${samples},PHASES=${JSON.stringify(phases)},SAMPLE_FLOOR=${sampleFloor};\n${BODY}`} ]});}
   for(const n of [64,128]){const style={...STYLES.mixed,font:{...STYLES.mixed.font,family:'Arial, sans-serif'},mainFont:'16px Arial, sans-serif'};cases.push({id:`plaintext alternating ${n}`,spec:'Many script runs negative control: primary table setup and ordinal traversal',pageLang:'en',html:'<div></div>',observe:[{kind:'script',source:`${libraries}\nconst STYLE=${JSON.stringify(style)},TEXTS=${JSON.stringify(Array(4).fill('aक'.repeat(n/2)))},WIDTHS=[260,380,440],SAMPLES=${samples},PHASES=${JSON.stringify(phases)},SAMPLE_FLOOR=${sampleFloor};\n${BODY}`} ]});}
+  for(const n of [64,128,256,512]){const style=STYLES.latin;cases.push({id: 'plaintext unbroken ASCII '+n,spec:'Long unbroken ASCII with narrow retained widths: inspection-only suffix scans must not burden plain filling',pageLang:style.lang,html:'<div></div>',observe:[{kind:'script',source: libraries+'\nconst STYLE='+JSON.stringify(style)+',TEXTS='+JSON.stringify(Array(4).fill('abcd'.repeat(n/4)))+',WIDTHS=[24,36,48],SAMPLES='+samples+',PHASES='+JSON.stringify(phases)+',SAMPLE_FLOOR='+sampleFloor+';\n'+BODY}]});}
   // Each timed phase owns a document. Fresh-width setup must not precede another phase's timed samples.
   // Growth controls recapture initial/count and repeated work; the ordinary cohorts keep all four phases.
-  return cases.flatMap(probe => phases.filter(phase => probe.id.startsWith('plaintext Hebrew') || probe.id.startsWith('plaintext alternating')
+  return cases.flatMap(probe => phases.filter(phase => probe.id.startsWith('plaintext Hebrew') || probe.id.startsWith('plaintext alternating') || probe.id.startsWith('plaintext unbroken ASCII')
     ? phase === 'prepare+count' || phase === 'repeated-widths' : true).map(phase => ({
-      ...probe, id: `${probe.id} / ${phase}`, observe: probe.observe.map(observation => observation.kind === 'script'
+      ...probe, id: `${probe.id} / ${phase}`, observe: probe.observe.map(observation => typeof observation !== 'string' && observation.kind === 'script'
         ? { ...observation, source: observation.source.replace(`PHASES=${JSON.stringify(phases)}`, `PHASES=${JSON.stringify([phase])}`) }
         : observation),
     })))

@@ -159,11 +159,10 @@ export type BlinkPrepared = {
   // the spaced string widens only U+0020. A question takes that string only when its own range holds a widened space.
   canvasText: { narrow: string; spaced: string } | null
   is8Bit: boolean
-  // RunSegmenter segments text_content: it is 16-bit with a character other than U+FFFC, or bidi is on
-  // (inline_node.cc:1256-1290). Otherwise the paragraph is one Latin segment.
-  segmented: boolean
-  // Primary ordered script ranges and per-unit segment-edge/shaping-direction facts.
-  segments: ShapingSegments
+  // RunSegmenter segments text_content: it is 16-bit with a character other than an atomic-generated U+FFFC, or bidi
+  // is on (inline_node.cc:1256-1290). Null owns the other case: one Latin segment, zero priorities/edges, LTR groups.
+  // Segmented paragraphs retain exact source scripts and per-unit segment-edge/shaping-direction facts.
+  segments: ShapingSegments | null
   // Per text_content unit, its source offset, or -1 for a unit Blink generated or an element's (U+200B after leading
   // spaces, a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC).
   sourceOffsets: Int32Array

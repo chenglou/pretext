@@ -1,6 +1,6 @@
 // Deterministic complete-state/query comparison; this is not browser accuracy or Native timing evidence.
 // bun rebuild/experiments/plaintext-round/segments-proof.ts --baseline=/path/to/baseline --out=/private/tmp/result
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../src/env.js'
@@ -11,16 +11,36 @@ import { isSegmentEdge } from '../../src/engines/blink/emoji.js'
 import { groupPrefix16 } from '../../src/engines/blink/shape.js'
 import type { BlinkPrepared } from '../../src/engines/blink/types.js'
 
-const baselineRoot = resolve(process.argv.find(arg => arg.startsWith('--baseline='))?.slice(11) ?? '/private/tmp/pretext-stateless-baseline-20260921')
+const baselineRoot = resolve(process.argv.find(arg => arg.startsWith('--baseline='))?.slice(11) ?? '/private/tmp/pretext-stateless-round2-baseline-20260922')
 const old = await import(join(baselineRoot, 'rebuild/src/engines/blink/index.ts')) as typeof current
 const oldShape = await import(join(baselineRoot, 'rebuild/src/engines/blink/shape.ts')) as { groupPrefix16: typeof groupPrefix16 }
 const oldEmoji = await import(join(baselineRoot, 'rebuild/src/engines/blink/emoji.ts')) as { isSegmentEdge: typeof isSegmentEdge }
 const oldPool = await import(join(baselineRoot, 'rebuild/src/measure/canvas.ts')) as { createContextPool: typeof createContextPool }
 const out = resolve(process.argv.find(arg => arg.startsWith('--out='))?.slice(6) ?? '/private/tmp/pretext-segments-proof')
-type SegmentColumns = { scriptEnds: Int32Array; scriptCodes: Uint8Array; flags: Uint8Array }
-type FiveColumns = { scriptStops: Int32Array; scriptCodes: Uint8Array; segmentEnds: Int32Array; priorities: Uint8Array; reversed: Uint8Array }
-// Explicit test-only source facade; production callers cannot mutate the constructor-owned partitions.
-function columns(p: BlinkPrepared): SegmentColumns { return p.segments as unknown as SegmentColumns }
+type ReferencePrepared = BlinkPrepared & { scripts?: Uint8Array; priorities?: Uint8Array; segmented?: boolean }
+// Explicit test-only source facade; production callers cannot mutate the constructor-owned partitions. Null retains no
+// columns. Reflection also supports frozen earlier two-array and five-column models without assuming current fields.
+function columns(p: BlinkPrepared): Record<string, Int32Array | Uint8Array> | null {
+  if (p.segments === null) return null
+  return p.segments as unknown as Record<string, Int32Array | Uint8Array>
+}
+function countReads(p: BlinkPrepared, count: () => void): { bytes: number; buffers: number; scripts: number } {
+  const native = p as ReferencePrepared
+  const source = native.scripts !== undefined && native.priorities !== undefined
+    ? { scripts: native.scripts, priorities: native.priorities }
+    : columns(p)
+  let bytes = 0, buffers = 0
+  for (const [key, raw] of Object.entries(source ?? {})) {
+    if (!(raw instanceof Int32Array) && !(raw instanceof Uint8Array)) throw new Error(`unexpected primary field ${key}`)
+    bytes += raw.byteLength; buffers++
+    const owner = native.scripts === undefined ? p.segments! : p
+    Object.defineProperty(owner, key, { value: new Proxy(raw, { get(target, index) {
+      if (typeof index === 'string' && /^\d+$/.test(index)) count()
+      const value = Reflect.get(target, index, target); return typeof value === 'function' ? value.bind(target) : value
+    } }) })
+  }
+  return { bytes, buffers, scripts: source?.['scriptCodes']?.length ?? (source === null ? 0 : -1) }
+}
 type Question = { font: string; direction: string; lang: string; spacing: string; text: string; width: number }
 let questions: Question[] = [], tiny = false
 const ignorable = /[\p{Mark}\p{Default_Ignorable_Code_Point}]/u
@@ -84,26 +104,72 @@ for (const [left, mid, right] of [
   if (styled) p.content = [{ kind: 'text', text: left }, { ...span(mid, false, spacing), font: { ...font, family: 'Other' } }, { kind: 'text', text: right }]
   inputs.push(p)
 }
+// Known-Latin mode is the original predicate, including empty/styled/atomic content; literal ORC, bidi and generated
+// break-opportunity controls remain separately tested. Signed spacing keeps per-question Canvas script analysis active.
+const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
+for (const spacing of [-1.5, 0, 1.5]) {
+  for (const text of ['', 'Aµÿ\u00a0B ((123))', 'AV\u00AD quux']) { const p = paragraph(text); p.letterSpacing = spacing; inputs.push(p) }
+  const empty = paragraph(''); empty.content = []; inputs.push(empty)
+  const emptyStyled = paragraph(''); const e = span('', true, spacing); e.children = []; emptyStyled.content = [e]; inputs.push(emptyStyled)
+  const styled = paragraph('Aµ'); styled.letterSpacing = spacing
+  styled.content.push({ ...span(' ((ÿ)) ', true, -spacing), font: { ...font, family: 'Other' } }); inputs.push(styled)
+  const box = paragraph(''); box.content = [atomic]; box.letterSpacing = spacing; inputs.push(box)
+  const mixed = paragraph('Aµ'); mixed.letterSpacing = spacing
+  const inside = span('ÿ B', true, -spacing); inside.children.unshift(atomic, { kind: 'br' }); mixed.content.push(inside); inputs.push(mixed)
+  const literal = paragraph('\uFFFC'); literal.letterSpacing = spacing; inputs.push(literal)
+  const literalStyled = paragraph(''); literalStyled.content = [span('\uFFFC', false, spacing)]; inputs.push(literalStyled)
+  const rtl = paragraph('AV ((123))'); rtl.direction = 'rtl'; rtl.letterSpacing = spacing; inputs.push(rtl)
+  const controls = paragraph('AV'); controls.content.push({ kind: 'wbr' }, atomic); controls.letterSpacing = spacing; inputs.push(controls)
+}
 let compareDirections = false
 function normalized(p: BlinkPrepared, reference: boolean): unknown {
   const copy = JSON.parse(JSON.stringify(p)) as Record<string, unknown>
-  const native = p as BlinkPrepared & { scripts?: Uint8Array; priorities?: Uint8Array }
-  const scripts = native.scripts === undefined ? Array.from({ length: p.text.length }, (_, k) => p.segments.scriptAt(k)) : [...native.scripts]
+  const native = p as ReferencePrepared
+  const scripts = native.scripts === undefined ? Array.from({ length: p.text.length }, (_, k) => p.segments === null ? 25 : p.segments.scriptAt(k)) : [...native.scripts]
   copy['scripts'] = scripts
+  copy['segmented'] = native.segmented ?? p.segments !== null
   const edge = reference ? oldEmoji.isSegmentEdge : isSegmentEdge
   copy['segmentEdges'] = Array.from({ length: p.text.length + 1 }, (_, k) => edge(p, k))
-  if (compareDirections) copy['shapingDirections'] = Array.from({ length: p.text.length }, (_, k) => p.segments.reversedAt(k))
+  if (compareDirections) copy['shapingDirections'] = Array.from({ length: p.text.length }, (_, k) => p.segments === null ? false : p.segments.reversedAt(k))
   // Priority category values have no consumer after compilation. Their complete consumed boundary facts are checked
   // above; queries and complete outputs additionally test every actual use. No old priority array is rebuilt in runtime.
   delete copy['priorities']
   delete copy['segments']
   return copy
 }
+// A View now owns its single Part directly; this narrowly expands only ItemResult.shape back to the former
+// parts-array model. Every Part field and all five View metadata fields remain in the equality check.
+function normalizedView(value: unknown): unknown {
+  if (value === null) return null
+  const view = value as Record<string, unknown>
+  if (Array.isArray(view['parts'])) {
+    const copy = { ...view }
+    if (copy['kind'] === 'parts') delete copy['kind']
+    return copy
+  }
+  if (view['kind'] !== 'range' && view['kind'] !== 'reshape') throw new Error('unexpected View primary kind')
+  const part = { ...view }
+  const info: Record<string, unknown> = {}
+  for (const key of ['width', 'rtl', 'startIndex', 'charIndexOffset', 'numCharacters']) {
+    if (!Object.hasOwn(part, key)) throw new Error(`missing View metadata ${key}`)
+    info[key] = part[key]
+    delete part[key]
+  }
+  return { parts: [part], ...info }
+}
+function normalizedFillResult(result: current.BlinkFillResult, inspected: boolean): unknown {
+  if (result.kind !== 'line' && result.kind !== 'below-floats') return result
+  const info = { ...result.line.info, results: result.line.info.results.map(item => ({ ...item, shape: normalizedView(item.shape) })) }
+  // The old plain paragraph computed an inspection-only suffix opportunity. Its decisionEnd was not consumed by
+  // decisions, ranges or painting. Inspected decisionEnd remains compared exactly; only this plain internal field drops.
+  if (!inspected) Reflect.deleteProperty(info, 'decisionEnd')
+  return { ...result, line: { ...result.line, info } }
+}
 function laidOut(api: typeof current, p: BlinkPrepared, width: number, inspected: boolean): unknown[] {
   const lines: unknown[] = []
   for (let start = api.firstLine(p); start !== null;) {
     const result = api.fillLine(p, start, { width, left: 0, right: 0 })
-    lines.push({ result, pieces: result.kind === 'line' ? api.linePieces(p, result.line) : null, inspected: inspected && result.kind === 'line' ? api.inspectLine(p, result.line) : null })
+    lines.push({ result: normalizedFillResult(result, inspected), pieces: result.kind === 'line' ? api.linePieces(p, result.line) : null, inspected: inspected && result.kind === 'line' ? api.inspectLine(p, result.line) : null })
     start = result.next
   }
   return lines
@@ -111,7 +177,7 @@ function laidOut(api: typeof current, p: BlinkPrepared, width: number, inspected
 function equal(a: unknown, b: unknown, label: string): void { if (!isDeepStrictEqual(a, b)) { writeFileSync('/private/tmp/pretext-segment-mismatch.json', JSON.stringify({ label, a, b }, null, 2)); throw new Error(`Mismatch: ${label}`) } }
 function fingerprint(root: string): string {
   const hash = new Bun.CryptoHasher('sha256')
-  function visit(path: string): void { for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const target = join(path, entry.name); if (entry.isDirectory()) visit(target); else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) { hash.update(target.slice(root.length)); hash.update(readFileSync(target)) } } }
+  function visit(path: string): void { for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const target = join(path, entry.name); if (entry.isDirectory()) visit(target); else if (entry.name.endsWith('.js') && existsSync(target.slice(0, -3) + '.ts')) throw new Error(`Emitted JS shadows source TS: ${target}`); else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) { hash.update(target.slice(root.length)); hash.update(readFileSync(target)) } } }
   visit(root); return hash.digest('hex')
 }
 const currentRoot = resolve(import.meta.dir, '../../src')
@@ -131,38 +197,20 @@ try {
   for (const seed of ['a', 'אבג', '١٢٣٤٥٦٧٨٩٠', 'aक', '1️⃣x']) for (const n of [64, 128, 256, 512]) {
     const text = seed.repeat(Math.ceil(n / seed.length)).slice(0, n), input = paragraph(text)
     questions = []; const a = old.prepare(input, env, false, oldPool.createContextPool()); let oldReads = 0
-    const referenceColumns = a as BlinkPrepared & { scripts?: Uint8Array; priorities?: Uint8Array }
-    let oldRetainedBytes = 0
-    if (referenceColumns.scripts !== undefined && referenceColumns.priorities !== undefined) {
-      oldRetainedBytes = referenceColumns.scripts.byteLength + referenceColumns.priorities.byteLength
-      const raw = referenceColumns.scripts
-      referenceColumns.scripts = new Proxy(raw, { get(target, key) { if (typeof key === 'string' && /^\d+$/.test(key)) oldReads++; const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value } })
-    } else {
-      const oldColumns = a.segments as unknown as FiveColumns
-      for (const key of ['scriptStops', 'scriptCodes', 'segmentEnds', 'priorities', 'reversed'] as const) {
-        const raw = oldColumns[key]; oldRetainedBytes += raw.byteLength
-        Object.defineProperty(a.segments, key, { value: new Proxy(raw, { get(target, key) { if (typeof key === 'string' && /^\d+$/.test(key)) oldReads++; const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value } }) })
-      }
-    }
+    const oldMetadata = countReads(a, () => oldReads++)
     questions = []; const oldPrefixes: number[] = []; for (let g = 0; g < a.groups.length; g++) for (let k = a.groups[g]!.start + 1; k < a.groups[g]!.end; k++) oldPrefixes.push(oldShape.groupPrefix16({ p: a, gaps: null }, g, k)); const oldQuestions = questions
     questions = []; const b = current.prepare(input, env, false, createContextPool()); let runReads = 0
-    const source = columns(b)
-    const retainedBytes = [source.scriptEnds, source.scriptCodes, source.flags].reduce((bytes, column) => bytes + column.byteLength, 0)
-    const scriptsCount = source.scriptCodes.length
-    for (const key of ['scriptEnds', 'scriptCodes', 'flags'] as const) {
-      const rawColumn = source[key]
-      Object.defineProperty(b.segments, key, { value: new Proxy(rawColumn, { get(target, key) { if (typeof key === 'string' && /^\d+$/.test(key)) runReads++; const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value } }) })
-    }
+    const newMetadata = countReads(b, () => runReads++)
     questions = []; const newPrefixes: number[] = []; for (let g = 0; g < b.groups.length; g++) for (let k = b.groups[g]!.start + 1; k < b.groups[g]!.end; k++) newPrefixes.push(groupPrefix16({ p: b, gaps: null }, g, k)); const newQuestions = questions
     equal(oldPrefixes, newPrefixes, `prefix budget ${seed}/${n}`); equal(oldQuestions, newQuestions, `questions budget ${seed}/${n}`)
     const oldPrefixReads = oldReads, newPrefixReads = runReads
     const oldEdges = Array.from({ length: text.length + 1 }, (_, k) => oldEmoji.isSegmentEdge(a, k))
     const newEdges = Array.from({ length: text.length + 1 }, (_, k) => isSegmentEdge(b, k))
     equal(oldEdges, newEdges, `complete edge facts ${seed}/${n}`)
-    budgets.push({ seed, n, oldMetadataReads: oldPrefixReads, newMetadataReads: newPrefixReads, oldEdgeReads: oldReads - oldPrefixReads, newEdgeReads: runReads - newPrefixReads, questions: newQuestions.length, scripts: scriptsCount, oldRetainedBytes, newRetainedBytes: retainedBytes, buffers: 3 })
+    budgets.push({ seed, n, oldMetadataReads: oldPrefixReads, newMetadataReads: newPrefixReads, oldEdgeReads: oldReads - oldPrefixReads, newEdgeReads: runReads - newPrefixReads, questions: newQuestions.length, scripts: newMetadata.scripts, oldRetainedBytes: oldMetadata.bytes, newRetainedBytes: newMetadata.bytes, oldBuffers: oldMetadata.buffers, buffers: newMetadata.buffers })
   }
   const after = fingerprint(currentRoot); equal(before, after, 'current source stable')
   const baselineAfter = fingerprint(baselineSourceRoot); equal(baselineBefore, baselineAfter, 'baseline source stable')
-  mkdirSync(out, { recursive: true }); const report = { kind: 'deterministic complete-state/query comparison', projections: ['primary representation is compared by complete source-script and segment-edge facts; direction facts also compared when exposed by reference', 'discarded priority categories have no remaining consumer'], nativeAccuracyEvidence: false, nativeTimingEvidence: false, source: { baselineRoot, baselineBefore, baselineAfter, currentRoot, before, after, stable: before === after && baselineBefore === baselineAfter }, inputs: inputs.length, comparisons, orderedQuestions: totalQuestions, budgets }
+  mkdirSync(out, { recursive: true }); const report = { kind: 'deterministic complete-state/query comparison', projections: ['primary representation is compared by complete source-script and segment-edge facts; direction facts also compared when exposed by reference', 'null primary fact projects known Latin, no segment edges/direction, and zero retained buffers; discarded priority categories have no remaining consumer', 'only ItemResult.shape Views expand to the former parts array, preserving every Part field and all five View metadata fields', 'only plain line.info.decisionEnd is omitted: inspection-only suffix lookahead has no plain output/decision consumer; inspected values remain exact'], nativeAccuracyEvidence: false, nativeTimingEvidence: false, source: { baselineRoot, baselineBefore, baselineAfter, currentRoot, before, after, stable: before === after && baselineBefore === baselineAfter }, inputs: inputs.length, comparisons, orderedQuestions: totalQuestions, budgets }
   writeFileSync(join(out, 'segments-proof.json'), JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify({ out, inputs: inputs.length, comparisons, orderedQuestions: totalQuestions, budgets }))
 } finally { if (originalCanvas === undefined) Reflect.deleteProperty(globalThis, 'OffscreenCanvas'); else Object.defineProperty(globalThis, 'OffscreenCanvas', originalCanvas) }

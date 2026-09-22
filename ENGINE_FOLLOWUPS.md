@@ -1,5 +1,9 @@
 # Engine Follow-ups
 
+The next redo [plaintext round](rebuild/STATELESS_ROUND2.md) removes unused unsegmented Blink metadata, stores a
+single-part shape view in one record and removes inspection-only suffix scans from plain filling. Complete replay
+and fast native outcomes stay unchanged; broad foreground timing remains pending. Rich painting remains paused.
+
 On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
 
 The completed bounded redo [plaintext stateless round](rebuild/STATELESS_ROUND.md) preserves measurement behavior while

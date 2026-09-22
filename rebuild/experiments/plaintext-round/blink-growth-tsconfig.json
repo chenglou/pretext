@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "./blink-line-growth.ts",
+    "./blink-source-counter.ts",
+    "./blink-source-counter.test.ts",
+    "./blink-view-proof.ts"
+  ],
+  "exclude": []
+}

@@ -58,10 +58,12 @@ test('cross-script questions stay in source order and retain the right-associate
 // correct five-column representation through actual extra reads, rather than through changed private field names.
 function partitionReadCount(p: ReturnType<typeof prepare>): () => number {
   let reads = 0
-  const fields = p.segments as unknown as Record<string, unknown>
+  const segments = p.segments
+  if (segments === null) return () => 0
+  const fields = segments as unknown as Record<string, unknown>
   for (const [key, source] of Object.entries(fields)) {
     if (!(source instanceof Int32Array) && !(source instanceof Uint8Array)) throw new Error(`unexpected source partition field ${key}`)
-    Object.defineProperty(p.segments, key, { value: new Proxy(source, { get(target, key) {
+    Object.defineProperty(segments, key, { value: new Proxy(source, { get(target, key) {
       if (typeof key === 'string' && /^\d+$/.test(key)) reads++
       const value = Reflect.get(target, key, target)
       return typeof value === 'function' ? value.bind(target) : value
@@ -94,7 +96,7 @@ test('dense script edges and shaping directions use constant reads per source un
   asked = []
   for (let k = 0; k < text.length; k++) {
     expect(isSegmentEdge(p, k)).toBe(k > 0)
-    expect(p.segments.reversedAt(k)).toBe(false)
+    expect(p.segments!.reversedAt(k)).toBe(false)
   }
   expect(asked).toEqual([])
   expect(reads()).toBeLessThanOrEqual(4 * text.length)
@@ -106,7 +108,7 @@ test('lone low scripts stay distinct from ignored measurement boundaries under l
     const input = paragraph('ب\uDC00ب')
     input.letterSpacing = spacing; input.direction = direction
     const p = prepare(input, env, false, createContextPool())
-    expect(Array.from({ length: p.text.length }, (_, k) => p.segments.scriptAt(k))).toEqual([2, 103, 2])
+    expect(Array.from({ length: p.text.length }, (_, k) => p.segments!.scriptAt(k))).toEqual([2, 103, 2])
     // The first source character still shapes as cursive Arabic, so the DOM and Canvas spacing rules agree.
     // A group beginning at the low must not overwrite that first character's source script.
     const g = p.groupOfUnit[0]!, group = p.groups[g]!
@@ -130,7 +132,7 @@ test('spacing follows Unknown source runs that absorb Western digits after lone 
     const input = paragraph('ب12\uDC00\uDC0134ب')
     input.letterSpacing = spacing; input.direction = direction
     const p = prepare(input, env, false, createContextPool())
-    expect(Array.from({ length: p.text.length }, (_, k) => p.segments.scriptAt(k))).toEqual([2, 2, 2, 103, 103, 103, 103, 2])
+    expect(Array.from({ length: p.text.length }, (_, k) => p.segments!.scriptAt(k))).toEqual([2, 2, 2, 103, 103, 103, 103, 2])
     const g = p.groupOfUnit[1]!
     asked = []
     // The Canvas string resolves 12 as Common, while the source resolves it as cursive Arabic, so only those two
@@ -157,7 +159,7 @@ test('script-context gaps stop at the exact source-script change hidden by lone 
 test('monotonic mapped source units cross each exact script run once', () => {
   const text = 'ب12\uDC00\uDC0134ب'.repeat(512), scripts = scriptsPerUnit(text)
   const p = prepare(paragraph(text), env, false, createContextPool()), reads = partitionReadCount(p)
-  const source = new SourceScriptCursor(p.segments, 0, scripts[0]!)
+  const source = new SourceScriptCursor(p.segments!, 0, scripts[0]!)
   asked = []
   for (let k = 0; k < text.length; k++) expect(source.at(k)).toBe(scripts[k]!)
   expect(asked).toEqual([])

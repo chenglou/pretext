@@ -22,7 +22,7 @@ import { geometryOf } from './inspect.js'
 import { fontFactsOfText } from './ligatures.js'
 import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
-import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
+import { isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import { isClusterBoundary, measureGroups, type Shaper } from './shape.js'
 import type { BlinkGroup, BlinkPrepared, BlinkStyle, InlineItem } from './types.js'
@@ -129,8 +129,6 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   // SegmentScriptRuns (inline_node.cc:1256-1290): one Latin segment unless 16-bit text with a character other than
   // U+FFFC, or bidi.
   const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
-  const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
-  const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
   const contentOffsets = new Int32Array(index.text.length).fill(-1)
   // Build the source-to-content map and fixed generated extents in one ascending content pass.
   const sourceRuns = new OffsetRuns(text.length, k => {
@@ -162,9 +160,9 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   }
   const groupOfUnit = new Int32Array(text.length).fill(-1)
   const groups = shapingGroups(bidi.items, styles, text, groupOfUnit)
-  const segments = new ShapingSegments(text, scripts, priorities, groups, groupOfUnit)
+  const segments = segmented ? new ShapingSegments(text, scriptsPerUnit(text), emojiPriorities(text), groups, groupOfUnit) : null
   const p: BlinkPrepared = {
-    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, segments, sourceOffsets: content.sourceOffsets, sourceRuns, contentOffsets,
+    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segments, sourceOffsets: content.sourceOffsets, sourceRuns, contentOffsets,
     items: bidi.items, styles, groups, bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),

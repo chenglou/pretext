@@ -3,8 +3,9 @@ import { createContextPool } from '../../measure/canvas.js'
 // Bun can compare text, mappings and requested storage modes; the fresh Chrome gate checks actual V8 encoding/answers.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
-import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph } from '../../model.js'
 import { prepare } from './index.js'
+import { isSegmentEdge } from './emoji.js'
 import { canvasString, measure16 } from './shape.js'
 
 class Context {
@@ -48,7 +49,7 @@ describe('blink compiled Canvas text', () => {
     expect(p.text).toBe('Aµÿ\u00a0B\v C\fD')
     expect(p.canvasText).toEqual({ narrow: 'Aµÿ\u00a0B\u0001 C\u0001D', spaced: 'Aµÿ\u00a0B\u0001\u2028C\u0001D' })
     // The DOM doesn't segment an eight-bit paragraph by Unicode script: even U+00B5 is shaped in the Latin segment.
-    expect(Array.from({ length: p.text.length }, (_, k) => p.segments.scriptAt(k))).toEqual(new Array(p.text.length).fill(25))
+    expect(p.segments).toBeNull()
     for (let from = 0; from <= p.text.length; from++) {
       for (let to = from; to <= p.text.length; to++) {
         for (const keepSpaces of [false, true]) {
@@ -92,11 +93,57 @@ describe('blink compiled Canvas text', () => {
     expect(canvasString(shy, 0, 3, false, false, 25, false, false)).toEqual({ s: 'ab', units: null, twoByte: false, leftOut: true })
     expect(canvasString(shy, 0, 6, false, false, 25, false, false)).toEqual({ s: 'ab\u2060\u2028cd', units: null, twoByte: true, leftOut: false })
     const segmented = prepare(paragraph('ب((((((((((((('), env, false, createContextPool())
-    expect(segmented.segmented).toBe(true)
+    expect(segmented.segments).not.toBeNull()
     expect(segmented.canvasText).toBeNull()
     expect(canvasString(segmented, 1, 14, false, false, 2, false, false)).toEqual({ s: '(((((((((((((', units: null, twoByte: true, leftOut: false })
     const plain = prepare(paragraph('ABC'), env, false, createContextPool())
     expect(canvasString(plain, 0, 3, true, false, 25, false, false)).toEqual({ s: '\u200dABC', units: null, twoByte: true, leftOut: false })
     expect(canvasString(plain, 0, 3, false, true, 25, false, false)).toEqual({ s: 'ABC\u200d', units: null, twoByte: true, leftOut: false })
   })
+})
+
+
+function styled(input: Paragraph, children: InlineNode[], spacing: number): InlineNode {
+  return { ...input, kind: 'span', font: { ...input.font, family: 'Other' }, letterSpacing: spacing, lang: null,
+    inlineStart: { margin: 0, border: 0, padding: 3 }, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children }
+}
+const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
+
+test('known Latin source facts need no segment model for empty, styled, Latin-1 and atomic content', () => {
+  const fixtures: Paragraph[] = [paragraph(''), paragraph('Aµÿ\u00a0B'), paragraph('ab\u00ad cd')]
+  const noChildren = paragraph(''); noChildren.content = []; fixtures.push(noChildren)
+  for (const spacing of [-1.5, 0, 1.5]) {
+    const empty = paragraph('', spacing); empty.content = [styled(empty, [], spacing)]; fixtures.push(empty)
+    const input = paragraph('Aµ ', spacing)
+    input.content.push(styled(input, [{ kind: 'text', text: '((ÿ))' }], -spacing)); fixtures.push(input)
+    const boxes = paragraph('', spacing); boxes.content = [atomic]; fixtures.push(boxes)
+    const mixed = paragraph('Aµ', spacing)
+    mixed.content.push(styled(mixed, [atomic, { kind: 'br' }, { kind: 'text', text: 'ÿ B' }], -spacing)); fixtures.push(mixed)
+  }
+  for (const input of fixtures) for (const inspect of [false, true]) {
+    const p = prepare(input, env, inspect, createContextPool())
+    expect(p.segments).toBeNull()
+    expect(p.bidiEnabled).toBe(false)
+    expect(p.groups.every(group => !group.rtl)).toBe(true)
+    expect(Object.hasOwn(p, 'segmented')).toBe(false)
+    for (let k = 0; k <= p.text.length; k++) expect(isSegmentEdge(p, k)).toBe(false)
+    for (let g = 0; g < p.groups.length; g++) {
+      const group = p.groups[g]!
+      expect(Number.isFinite(measure16({ p, gaps: null }, g, group.start, group.end, group.start, group.end))).toBe(true)
+    }
+  }
+})
+
+test('literal ORC, bidi and surrogate content retain exact source segmentation', () => {
+  const fixtures: Paragraph[] = []
+  for (const text of ['\uFFFC', '\u200B', '\u202EAV((123))\u202C', 'ב\uDC00ב', 'A\uD800B', 'A😀B']) fixtures.push(paragraph(text))
+  const rtl = paragraph('AV ((123))'); rtl.direction = 'rtl'; fixtures.push(rtl)
+  const numericRtl = paragraph('123'); numericRtl.direction = 'rtl'; fixtures.push(numericRtl)
+  const literalStyled = paragraph(''); literalStyled.content = [styled(literalStyled, [{ kind: 'text', text: '\uFFFC' }], 1.5)]; fixtures.push(literalStyled)
+  const split = paragraph('A\uD83D', -1.5)
+  split.content.push(styled(split, [{ kind: 'text', text: '\uDE00B' }], 1.5)); fixtures.push(split)
+  const wbr = paragraph('ab'); wbr.content.push({ kind: 'wbr' }, atomic); fixtures.push(wbr)
+  for (const input of fixtures) for (const inspect of [false, true]) {
+    expect(prepare(input, env, inspect, createContextPool()).segments).not.toBeNull()
+  }
 })

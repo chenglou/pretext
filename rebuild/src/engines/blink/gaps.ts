@@ -24,7 +24,7 @@ import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, sc
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
   joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
-  startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
+  startsClusterInsideGrapheme, viewPartAt, viewPartCount, type CanvasString, type ViewParts, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'
 
@@ -196,7 +196,7 @@ function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScrip
 // script-context for every stretch of the measured string, white space apart, that Canvas shapes under another script than
 // the paragraph does.
 function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly number[], scripts: Uint8Array, domScript: number, sourceOrdinal: number): void {
-  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments, sourceOrdinal, domScript)
+  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments!, sourceOrdinal, domScript)
   let start = -1
   let end = -1
   const flush = (): void => {
@@ -268,10 +268,10 @@ export function hanKerningEndUnknown(sink: GapSink, p: BlinkPrepared, style: num
 const GRAPHEME_CLUSTERS_DETAIL = 'a position inside a grapheme at a character HarfBuzz doesn\'t mark a continuation: the glyphs form one cluster or two as the font\'s lookups merge them (ligate_input, hb-ot-layout-gsubgpos.hh:1500-1510), which Canvas totals don\'t show; the port gives the grapheme one position'
 
 // A view edge inside a grapheme (a line edge, a bidi run edge, trailing spaces split off) takes the grapheme's position.
-export function viewEdges(sink: GapSink, p: BlinkPrepared, parts: readonly Part[]): void {
+export function viewEdges(sink: GapSink, p: BlinkPrepared, parts: ViewParts): void {
   if (sink === null) return
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!
+  for (let i = 0, count = viewPartCount(parts); i < count; i++) {
+    const part = viewPartAt(parts, i)
     const g = part.kind === 'reshape' ? part.call.group : part.sr.kind === 'group' ? part.sr.group : -1
     if (g < 0) continue
     for (const edge of [part.start, part.end]) {
@@ -437,7 +437,7 @@ function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): number[][] {
       if (c === 0xfffc) addGap(gaps, 'font-fallback', item.run, 'U+FFFC in text: Canvas measures it as U+200B', sourceRange(p, k, k + 1))
       // canvasString leaves these out of an 8-bit string (a range of a paragraph RunSegmenter doesn't segment, without
       // spaces or characters above U+00FF).
-      if (!p.segmented && (c === 0xad || c === 0x200b || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || c === 0xfeff)) {
+      if (p.segments === null && (c === 0xad || c === 0x200b || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || c === 0xfeff)) {
         addGap(gaps, 'soft-hyphen-shaping', item.run, SOFT_HYPHEN_DETAIL, sourceRange(p, k, k + 1))
       }
     }
@@ -743,7 +743,7 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
     const k = start.textOffset
     const g = groupAround(p, k)
     const first = info.results.find(r => r.start === k && r.shape !== null)
-    if (g >= 0 && p.groups[g]!.rtl && !isSegmentEdge(p, k) && first !== undefined && first.shape!.parts.length > 0 && first.shape!.parts[0]!.kind === 'range') {
+    if (g >= 0 && p.groups[g]!.rtl && !isSegmentEdge(p, k) && first !== undefined && viewPartCount(first.shape!) > 0 && viewPartAt(first.shape!, 0).kind === 'range') {
       let b = k + 1
       while (b < p.groups[g]!.end && !isClusterBoundary(p, b)) b++
       addGap(gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_START_DETAIL, sourceRange(p, k, b))
@@ -753,8 +753,8 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
     // reshaped to the item's end and keeps `ن`, where the port's reshape of `حين` alone loses it with the space
     // (c-a3b5719bcaf20813: 3762 units natively, 2533 predicted). Known only where the reshape ends at a run's first glyph
     // or at the item's end.
-    const head = first === undefined || first.shape!.parts.length === 0 ? null : first.shape!.parts[0]!
-    if (g >= 0 && p.groups[g]!.rtl && first !== undefined && head !== null && head.kind === 'reshape' && first.shape!.parts.length > 1) {
+    const head = first === undefined || viewPartCount(first.shape!) === 0 ? null : viewPartAt(first.shape!, 0)
+    if (g >= 0 && p.groups[g]!.rtl && first !== undefined && head !== null && head.kind === 'reshape' && viewPartCount(first.shape!) > 1) {
       const end = head.call.end
       const itemEnd = p.items[first.itemIndex]!.end
       if (end < itemEnd && !isSegmentEdge(p, end) && !isFontRunEdge(p, end, p.groups[g]!.start, p.groups[g]!.end)) {

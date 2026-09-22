@@ -1,6 +1,6 @@
 # General stateless cost
 
-2026-09-21. Testing infrastructure is sufficient for the current iteration. The general-cost work follows
+2026-09-22. Testing infrastructure is sufficient for the current iteration. The general-cost work follows
 `~/github/vibescript/docs/engineering.md`: model input dimensions, repair repeated access at its source, and stop when
 further gains require substantially more machinery, assumptions or retained data. Ordinary chat timings alone do not
 establish predictable worst-case cost.
@@ -17,7 +17,10 @@ It preserves measurement rules, ordered questions and numeric arithmetic. At 512
 falls from 266,231 script reads to 4,599 total buffer reads (Hebrew); the Arabic numeric control falls from 788,473 to
 4,599. These stand-in counts describe our access, not Canvas's submitted-text cost. Ordered script ends/codes serve
 measurement traversal, including exact source facts for lone low surrogates; accepted measurement boundaries separately
-ignore low starts. Direct per-unit flags serve boundary/direction readers. Three buffers contain `5S + N` bytes for S
+ignore low starts. Direct per-unit flags serve boundary/direction readers. Known-Latin unsegmented paragraphs now
+use null as their source fact, retain no script/edge/direction buffers or duplicate mode boolean, and skip two transient
+analyzer arrays plus the segment constructor. The exact original predicate and per-question Canvas analysis remain.
+Segmented paragraphs' three buffers contain `5S + N` bytes for S
 exact source-script runs and N UTF-16 units:
 517 versus the former 1,024 on 512 single-script units, or 3,072 versus 1,024 on a 512-unit alternating-script input.
 No lower peak-memory claim follows: analyzer arrays coexist during construction and typed-array objects also cost
@@ -37,7 +40,10 @@ Final native timing is mostly close to the original redo, without a broad prepar
 small consistent Chrome Latin repeat cost (0.062ms per 120 messages across three widths), alternating-script setup
 and payload growth, and an unresolved Firefox Latin new-width cost. Exact removal of repeated source rescanning is
 the main benefit. The round's record distinguishes that own-code improvement from unchanged native Canvas work;
-its next bounded experiments remove unused unsegmented metadata and simplify per-line decision records.
+the subsequent [bounded round](STATELESS_ROUND2.md) removes unused unsegmented metadata and simplifies single-part
+Blink shape views. Plain narrow ASCII lines no longer pay the N(N−1) suffix-read control; many SHY leaves no longer
+pay the N(N+1)/2 identity-search control. Inspected suffix scans and Canvas questions stay unchanged. Broader speed
+still needs reliable foreground timing; it does not follow from these counts.
 
 ## Current data flow
 

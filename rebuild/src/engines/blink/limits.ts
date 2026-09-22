@@ -6,7 +6,7 @@ import { isSegmentEdge } from './emoji.js'
 import { LIGATURE_NONE } from './ligatures.js'
 import {
   adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, joinsAcross, pairAdjust16,
-  positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, type ShapeResult, type Shaper, type View,
+  positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, viewPartAt, viewPartCount, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 
 // Whether the port knows where offset k sits inside a shaping call over [lo, hi) of group g, and the condition it rests on
@@ -72,8 +72,8 @@ export function pairPlacementUnknown(sh: Shaper, g: number, k: number, lo: numbe
 export function viewPositionLimit(sh: Shaper, view: View, k: number): GapName | null {
   const first = view.startIndex + view.charIndexOffset
   const last = first + view.numCharacters
-  for (let i = 0; i < view.parts.length; i++) {
-    const part = view.parts[i]!
+  for (let i = 0, count = viewPartCount(view); i < count; i++) {
+    const part = viewPartAt(view, i)
     const start = Math.min(Math.max(part.start, first), last)
     const end = Math.min(Math.max(part.end, first), last)
     if (k <= start) break

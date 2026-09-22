@@ -87,7 +87,7 @@ export type Shaper = {
 // rule blink/measure/contexts-per-storage
 export function contextsOf(p: BlinkPrepared, style: number, twoByte: boolean): StyleContexts {
   const st = p.styles[style]!
-  if (twoByte || !p.segmented) return st.contexts
+  if (twoByte || p.segments === null) return st.contexts
   return st.oneByteContexts ??= styleContexts(p.canvases, st, p.layoutZoom, '8bit')
 }
 
@@ -242,7 +242,7 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   }
   if (zwjAfter) { codes.push(0x200d); units?.push(-1) }
   // Whether the string keeps its default-ignorable characters as U+2060, which makes it 16-bit: in a segmented paragraph.
-  const keeps = wide || p.segmented
+  const keeps = wide || p.segments !== null
   const leftOut = !keeps && substituted.length > 0
   if (leftOut) {
     const keptCodes: number[] = []
@@ -388,7 +388,7 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // RunSegmenter splits a 16-bit paragraph at script runs, and HarfBuzzShaper shapes every segment in its own call
   // (harfbuzz_shaper.cc:1072-1101), so nothing kerns or ligates across a script edge. A range crossing one is measured per
   // segment (research/SUPERSET-blink.md §2.1 C).
-  if (!p.segmented) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, USCRIPT_LATIN)
+  if (p.segments === null) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, USCRIPT_LATIN)
   const firstOrdinal = p.segments.scriptOrdinal(from)
   let ordinal = firstOrdinal
   const domScript = p.segments.scriptForOrdinal(ordinal)
@@ -432,9 +432,9 @@ function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number
     if (end === to) break
     start = end
     const firstOrdinal = ++ordinal
-    domScript = sh.p.segments.scriptForOrdinal(ordinal)
-    end = sh.p.segments.scriptEndForOrdinal(ordinal)
-    while (end < to && (sh.p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = sh.p.segments.scriptEndForOrdinal(++ordinal)
+    domScript = sh.p.segments!.scriptForOrdinal(ordinal)
+    end = sh.p.segments!.scriptEndForOrdinal(ordinal)
+    while (end < to && (sh.p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = sh.p.segments!.scriptEndForOrdinal(++ordinal)
     sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
     end = Math.min(to, end)
   }
@@ -445,7 +445,7 @@ function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
 function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number, domScript: number, sourceOrdinal: number): number {
-  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments, sourceOrdinal, domScript)
+  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments!, sourceOrdinal, domScript)
   let adjust = 0
   for (let u = 0; u < units.length; u++) {
     const t = units[u]!
@@ -801,7 +801,8 @@ export function measureGroups(sh: Shaper): void {
 // Whether HarfBuzz shapes the call holding k over reversed text. The fixed script/priority/group partition owns
 // this direction, including hb_ensure_native_direction's numeric exception (hb-ot-shape.cc:588-644).
 function shapedReversed(p: BlinkPrepared, k: number): boolean {
-  return p.segments.reversedAt(k)
+  // Null preparation assigns Latin and disables bidi, so every group is LTR and nothing is reversed.
+  return p.segments === null ? false : p.segments.reversedAt(k)
 }
 
 // The part of pair adjustment d between the clusters on both sides of offset k that the glyph before it carries
@@ -971,7 +972,7 @@ export function previousSafeToBreak(sh: Shaper, sr: ShapeResult, k: number): num
 // ShapeResult::SnappedWidth of an item's result: the ceiling of its float width, the sum of its runs' (floatWidthOfParts).
 export function snappedWidth(sh: Shaper, sr: ShapeResult): number {
   if (sr.width16 < EXACT16 || sr.kind !== 'group') return luCeil(widthOf16(sr.width16))
-  return luCeil(floatWidthOfParts(sh, [{ kind: 'range', sr, start: sr.start, end: sr.end, index: sr.start, offset: 0, length: sr.end - sr.start }], sr.rtl))
+  return luCeil(floatWidthOfParts(sh, { kind: 'range', sr, start: sr.start, end: sr.end, index: sr.start, offset: 0, length: sr.end - sr.start }, sr.rtl))
 }
 
 // CachedPositionForOffset (shape_result.cc:2325-2363), relative to the result's start, in LayoutUnits.
@@ -1039,7 +1040,12 @@ export type ReshapePart = Extract<Part, { kind: 'reshape' }>
 
 // A ShapeResultView: parts in logical order, its width the float32 sum of each part's float width, and start_index_,
 // char_index_offset_ and num_characters_ (StartIndex() = startIndex + charIndexOffset).
-export type View = { parts: Part[]; width: number; rtl: boolean; startIndex: number; charIndexOffset: number; numCharacters: number }
+export type ViewParts = Part | { kind: 'parts'; parts: Part[] }
+type ViewInfo = { width: number; rtl: boolean; startIndex: number; charIndexOffset: number; numCharacters: number }
+export type View = ViewParts & ViewInfo
+
+export function viewPartCount(view: ViewParts): number { return view.kind === 'parts' ? view.parts.length : 1 }
+export function viewPartAt(view: ViewParts, index: number): Part { return view.kind === 'parts' ? view.parts[index]! : view }
 
 // A ShapeResultView::Segment (shape_result_view.h:77-100): the item's shape result, a reshape or a view, cut to [start, end).
 export type Segment =
@@ -1083,9 +1089,33 @@ export function partWidth16(sh: Shaper, part: Part): number {
   return slicePrefix16(sh, part, part.end) - slicePrefix16(sh, part, part.start)
 }
 
+function finishView(sh: Shaper, view: View): View {
+  viewEdges(sh.gaps, sh.p, view)
+  view.width = floatWidthOfParts(sh, view, view.rtl)
+  return view
+}
+
 function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, charIndexOffset: number, numCharacters: number): View {
-  viewEdges(sh.gaps, sh.p, parts)
-  return { parts, width: floatWidthOfParts(sh, parts, rtl), rtl, startIndex, charIndexOffset, numCharacters }
+  const info = { width: 0, rtl, startIndex, charIndexOffset, numCharacters }
+  return finishView(sh, parts.length === 1 ? { ...parts[0]!, ...info } : { kind: 'parts', parts, ...info })
+}
+
+// A result's single run needs no segment, synthetic run or one-element part arrays. Keep the same numbering and clipping
+// as PopulateRunInfoParts below, including an empty part when a zero-length cut is inside a nonempty result.
+function viewForResult(sh: Shaper, sr: ShapeResult, start: number, end: number, rtl: boolean): View {
+  const firstStart = Math.max(sr.start, start)
+  const startIndex = rtl ? firstStart : 0
+  const charIndexOffset = rtl ? 0 : firstStart
+  const numCharacters = Math.min(end, sr.end) - firstStart
+  if (sr.start === sr.end || end <= sr.start || start >= sr.end) return makeView(sh, [], rtl, startIndex, charIndexOffset, numCharacters)
+  const rangeStart = start > sr.start ? start - sr.start : 0
+  const rangeEnd = Math.min(end, sr.end) - sr.start
+  const a = Math.min(sr.end, Math.max(sr.start, sr.start + rangeStart))
+  const b = Math.max(a, Math.min(sr.end, sr.start + rangeEnd))
+  return finishView(sh, {
+    kind: 'range', sr, start: a, end: b, index: sr.start + rangeStart + startIndex - firstStart,
+    offset: rangeStart, length: rangeEnd - rangeStart, width: 0, rtl, startIndex, charIndexOffset, numCharacters,
+  })
 }
 
 // A view's float width: every part's glyphs are HarfBuzz runs, one per script segment and per stretch one font draws
@@ -1094,20 +1124,26 @@ function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, c
 // (PopulateRunInfoParts, shape_result_view.cc:215-273; InsertRun, shape_result.cc:1578-1609). Below 256 zoomed px every such
 // sum is exact; past it the float32 sum rounds by where the runs are: a line of 983 px in Geeza Pro with `!` and `:` drawn
 // by the next listed family was one LayoutUnit narrower natively than the ceiling of the exact total (c-98ab54a5eeff7b16).
-function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
+function floatWidthOfParts(sh: Shaper, parts: ViewParts, rtl: boolean): number {
   const p = sh.p
   // The advance sums before every part's two edges, measured once for the total and for the sum.
-  const start16: number[] = []
-  const end16: number[] = []
+  const count = viewPartCount(parts)
+  const start16: number[] | null = count > 1 ? [] : null
+  const end16: number[] | null = count > 1 ? [] : null
+  let singleStart16 = 0
+  let singleEnd16 = 0
   let total16 = 0
-  for (let i = 0; i < parts.length; i++) {
-    end16.push(slicePrefix16(sh, parts[i]!, parts[i]!.end))
-    start16.push(slicePrefix16(sh, parts[i]!, parts[i]!.start))
-    total16 += end16[i]! - start16[i]!
+  for (let i = 0; i < count; i++) {
+    const part = viewPartAt(parts, i)
+    const end = slicePrefix16(sh, part, part.end)
+    const start = slicePrefix16(sh, part, part.start)
+    if (count === 1) { singleEnd16 = end; singleStart16 = start }
+    else { end16!.push(end); start16!.push(start) }
+    total16 += end - start
   }
   if (total16 < EXACT16) {
     let width = 0
-    for (let i = 0; i < parts.length; i++) width = f32(width + widthOf16(end16[i]! - start16[i]!))
+    for (let i = 0; i < count; i++) width = f32(width + widthOf16(count === 1 ? singleEnd16 - singleStart16 : end16![i]! - start16![i]!))
     return width
   }
   let width = 0
@@ -1122,10 +1158,12 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
   // off (gaps.ts floatSum).
   const unknownRuns: UnknownRun[] = []
   let bits = 0
-  for (let n = 0; n < parts.length; n++) {
-    const index = rtl ? parts.length - 1 - n : n
-    const part = parts[index]!
-    if (part.kind === 'range' && part.sr.kind !== 'group') { width = f32(width + widthOf16(end16[index]! - start16[index]!)); continue }
+  for (let n = 0; n < count; n++) {
+    const index = rtl ? count - 1 - n : n
+    const part = viewPartAt(parts, index)
+    const partStart16 = count === 1 ? singleStart16 : start16![index]!
+    const partEnd16 = count === 1 ? singleEnd16 : end16![index]!
+    if (part.kind === 'range' && part.sr.kind !== 'group') { width = f32(width + widthOf16(partEnd16 - partStart16)); continue }
     const lo = part.kind === 'reshape' ? part.call.start : part.sr.start
     const hi = part.kind === 'reshape' ? part.call.end : part.sr.end
     const a = sliceEdge(p, part.start, lo, hi)
@@ -1143,8 +1181,8 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
     edges.push(b)
     // The advance sum before every run edge: the part's own two are measured, the ones between in the runs' visual order.
     const at16 = new Array<number>(edges.length)
-    at16[0] = start16[index]!
-    at16[edges.length - 1] = end16[index]!
+    at16[0] = partStart16
+    at16[edges.length - 1] = partEnd16
     for (let r = 1; r + 1 < edges.length; r++) {
       const e = rtl ? edges.length - 1 - r : r
       at16[e] = prefix(edges[e]!)
@@ -1182,11 +1220,11 @@ function endIndexOf(segment: Segment): number {
   }
 }
 
-function runsOf(segment: Segment): Part[] {
+function runsOf(segment: Segment): ViewParts {
   switch (segment.kind) {
-    case 'result': return [{ kind: 'range', sr: segment.sr, start: segment.sr.start, end: segment.sr.end, index: segment.sr.start, offset: 0, length: segment.sr.end - segment.sr.start }]
-    case 'reshape': return [{ kind: 'reshape', call: segment.call, start: segment.call.start, end: segment.call.end, index: segment.call.start, offset: 0, length: segment.call.end - segment.call.start }]
-    case 'view': return segment.view.parts
+    case 'result': return { kind: 'range', sr: segment.sr, start: segment.sr.start, end: segment.sr.end, index: segment.sr.start, offset: 0, length: segment.sr.end - segment.sr.start }
+    case 'reshape': return { kind: 'reshape', call: segment.call, start: segment.call.start, end: segment.call.end, index: segment.call.start, offset: 0, length: segment.call.end - segment.call.start }
+    case 'view': return segment.view
   }
 }
 
@@ -1198,6 +1236,7 @@ function runsOf(segment: Segment): Part[] {
 // glyph_data_range.cc:56-90): cut at 2, the letter's glyph goes with the space (specs/blink-RESULTS.md class 3, probe-zw3).
 export function viewFromSegments(sh: Shaper, rtl: boolean, segments: Segment[]): View {
   const first = segments[0]!
+  if (segments.length === 1 && first.kind === 'result') return viewForResult(sh, first.sr, first.start, first.end, rtl)
   const firstStart = Math.max(startIndexOf(first), first.start)
   const startIndex = rtl ? firstStart : 0
   const charIndexOffset = rtl ? 0 : firstStart
@@ -1211,8 +1250,8 @@ export function viewFromSegments(sh: Shaper, rtl: boolean, segments: Segment[]):
     const runs = runsOf(segment)
     const offsetForRun = segment.kind === 'view' ? segment.view.charIndexOffset : 0
     const taken: Part[] = []
-    for (let i = 0; i < runs.length; i++) {
-      const run = runs[i]!
+    for (let i = 0, count = viewPartCount(runs); i < count; i++) {
+      const run = viewPartAt(runs, i)
       let partStart = run.index + offsetForRun
       if (rtl) partStart = Math.max(partStart, run.offset)
       if (run.length === 0 || segment.end <= partStart) continue
@@ -1239,7 +1278,7 @@ export function viewFromSegments(sh: Shaper, rtl: boolean, segments: Segment[]):
 
 // ShapeResultView::Create(result, start, end).
 export function viewOf(sh: Shaper, sr: ShapeResult, start: number = sr.start, end: number = sr.end): View {
-  return viewFromSegments(sh, sr.rtl, [{ kind: 'result', sr, start, end }])
+  return viewForResult(sh, sr, start, end, sr.rtl)
 }
 
 // The 16.16 advance sum of a view's glyphs before offset k. A part numbered outside its glyphs' characters
@@ -1248,8 +1287,8 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
   const first = view.startIndex + view.charIndexOffset
   const last = first + view.numCharacters
   let sum = 0
-  for (let i = 0; i < view.parts.length; i++) {
-    const part = view.parts[i]!
+  for (let i = 0, count = viewPartCount(view); i < count; i++) {
+    const part = viewPartAt(view, i)
     const start = Math.min(Math.max(part.start, first), last)
     const end = Math.min(Math.max(part.end, first), last)
     if (start === end) {

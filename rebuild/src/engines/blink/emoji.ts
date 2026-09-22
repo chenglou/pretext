@@ -234,6 +234,6 @@ export class SourceScriptCursor {
 // Whether a RunSegmenter segment starts at text_content offset k: the script or fallback priority changes
 // (run_segmenter.cc:46-72). A group boundary alone does not make a segment edge.
 export function isSegmentEdge(p: BlinkPrepared, k: number): boolean {
-  if (!p.segmented || k <= 0 || k >= p.text.length || (p.text.charCodeAt(k) & 0xfc00) === 0xdc00) return false
+  if (p.segments === null || k <= 0 || k >= p.text.length || (p.text.charCodeAt(k) & 0xfc00) === 0xdc00) return false
   return p.segments.isEdge(k)
 }

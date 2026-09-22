@@ -51,8 +51,18 @@ comes from the existing pass-local placed count. Inspected Gecko decisions retai
 Blink and WebKit still construct scratch items/runs used by rollback and trimming, but omit the final full wrapper.
 No measurement rule, ordered Canvas question or numeric operation changes at this output boundary.
 
+A single-part Blink shape view owns the Part fields and view metadata in one object; empty/multiple-part views own
+one array. Direct result views and scalar endpoints preserve clipping, numbering, query order and float32 behavior
+without temporary one-part arrays. Item/shape records still serve rewind and trimming in both output modes. Plain
+finalization omits inspection's suffix scan, and handlers pass their known row indices.
+[STATELESS_ROUND2.md](STATELESS_ROUND2.md) records the controls and current timing boundary.
+
 Blink's prepared script and fallback-priority model is now `ShapingSegments`, the primary typed buffers in
-`engines/blink/emoji.ts`. The analyzer's per-unit arrays are consumed and discarded. Ordered script ends/codes own
+`engines/blink/emoji.ts` for segmented paragraphs. Null owns the original unsegmented case: known Latin, zero
+priorities/edges and LTR groups. It replaces the retained `segmented` boolean and skips both analyzer arrays and the
+segment constructor. Per-question Canvas script analysis and storage rules remain unchanged. The exact prepare
+predicate includes atomic-generated U+FFFC in known-Latin mode; literal U+FFFC and bidi remain segmented.
+The segmented analyzer's per-unit arrays are consumed and discarded. Ordered script ends/codes own
 measurement traversal and retain every source script, including lone low surrogates. Accepted measurement splits
 ignore boundaries that begin at lows; this does not erase the low's actual script or change the question's starting
 script. Spacing and gap readers skip low source units but follow each retained mapped unit's exact source script:
@@ -61,8 +71,8 @@ questions crossing ignored boundaries in O(mapped units + crossed runs); a quest
 keeps its known scalar script. One per-unit flags buffer owns genuine segment edges and each actual source script's shaping direction within the accepted script/priority/group-clipped call, including its numeric
 exception. A group-only edge is not a RunSegmenter edge. Boundary and direction reads are O(1); random script lookup is binary. Cross-script
 measurement walks known ordinals in source order, passing the known script downstream and preserving the previous
-right-associated sum. Unsegmented preparation already assigns Latin explicitly, so measurement carries that known
-script directly. Three buffer payloads use `5S + N` bytes for S exact source-script runs and N UTF-16 units: 517 versus the former
+right-associated sum. Unsegmented measurement carries known Latin directly; it retains no source buffers and its
+shaping direction is never reversed. Segmented three-buffer payloads use `5S + N` bytes for S exact source-script runs and N UTF-16 units: 517 versus the former
 1,024 at 512 single-script units, or 3,072 versus 1,024 when every unit changes script. Analyzer arrays coexist during
 construction, so these totals do not promise lower peak memory. The first five-column prototype saved single-run
 space but made hot boundary/direction reads binary; native repeated-layout regressions caused its rejection.

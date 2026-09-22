@@ -397,9 +397,12 @@ export class LineBreaker {
     // The first ShapeLine pass reads positions up to its candidate under the style's own break type, before an overflow
     // switches to break-character (RetryAfterOverflow), so the look-ahead is the next opportunity under that type.
     const breakType = this.iterator.breakType
-    this.iterator.breakType = this.iterator.settings.breakType
-    const decisionEnd = contentEnd >= this.text.length ? contentEnd : Math.max(contentEnd + 1, Math.min(this.text.length, this.iterator.nextBreakOpportunity(contentEnd + 1)))
-    this.iterator.breakType = breakType
+    let decisionEnd = contentEnd
+    if (this.sh.p.inspect !== null && contentEnd < this.text.length) {
+      this.iterator.breakType = this.iterator.settings.breakType
+      decisionEnd = Math.max(contentEnd + 1, Math.min(this.text.length, this.iterator.nextBreakOpportunity(contentEnd + 1)))
+      this.iterator.breakType = breakType
+    }
     return {
       decisionEnd,
       untestedEnds: this.untestedEnds,
@@ -486,10 +489,11 @@ export class LineBreaker {
     }
     if (this.hasHyphen()) this.position = subLU(this.position, this.removeHyphen())
     const r = this.addItem(item.end)
+    const resultIndex = this.results.length - 1
     r.shouldCreateLineBox = true
     if (this.autoWrap) {
       const available = this.remainingAvailableWidth()
-      const result = this.breakText(r, item, sr, available, available)
+      const result = this.breakText(r, resultIndex, item, sr, available, available)
       this.position = addLU(this.position, r.inlineSize)
       this.moveToNextOfResult(r)
       if (result === 'success') {
@@ -502,7 +506,7 @@ export class LineBreaker {
       }
       if (r.hasOnlyPreWrapTrailingSpaces) {
         this.state = 'trailing'
-        if (preservesSpaces(this.style(item.style)) && isSpaceLB(this.char(r.end - 1))) this.rewind(this.results.indexOf(r))
+        if (preservesSpaces(this.style(item.style)) && isSpaceLB(this.char(r.end - 1))) this.rewind(resultIndex)
         return
       }
       if (this.stateNow() === 'overflow') {
@@ -531,7 +535,7 @@ export class LineBreaker {
   }
 
   // BreakText (line_breaker.cc:1603-1759).
-  breakText(r: ItemResult, item: InlineItem, sr: ShapeResult, availableWidth: number, availableWidthWithHyphens: number): 'success' | 'overflow' {
+  breakText(r: ItemResult, resultIndex: number, item: InlineItem, sr: ShapeResult, availableWidth: number, availableWidthWithHyphens: number): 'success' | 'overflow' {
     const noResultIfOverflow = this.breakAnywhereIfOverflow && !this.overrideBreakAnywhere
     // SetDontReshapeEndIfAtSpace unless the line needs an accurate end position (:1655-1659).
     const dontReshapeEndIfAtSpace = !this.needsAccurateEndPosition(item)
@@ -548,7 +552,7 @@ export class LineBreaker {
       inlineSize = Math.max(0, luCeil(view.width))
       r.inlineSize = inlineSize
       if (out.isHyphenated) {
-        const hyphenInlineSize = this.addHyphen(this.results.indexOf(r))
+        const hyphenInlineSize = this.addHyphen(resultIndex)
         if (!out.isOverflow && inlineSize <= availableWidth) {
           const spaceForHyphen = subLU(availableWidthWithHyphens, inlineSize)
           if (spaceForHyphen >= 0 && hyphenInlineSize > spaceForHyphen) {
@@ -1097,7 +1101,7 @@ export class LineBreaker {
         const wasCurrentStyle = this.currentStyle
         this.setCurrentStyle(item.style)
         const before = { ...r }
-        this.breakText(r, item, this.shapeResultOf(r.itemIndex), Math.min(itemAvailableWidth, minAvailableWidth), itemAvailableWidth)
+        this.breakText(r, i, item, this.shapeResultOf(r.itemIndex), Math.min(itemAvailableWidth, minAvailableWidth), itemAvailableWidth)
         if (r.canBreakAfter && r.inlineSize <= itemAvailableWidth && r.end < before.end) {
           const newEnd = i + 1
           if (newEnd === this.results.length) {

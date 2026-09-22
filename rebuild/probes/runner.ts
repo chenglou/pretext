@@ -340,7 +340,8 @@ async function closeLaunched(pid: number, profile: string): Promise<void> {
 // activation. Headless Chrome can lay out at zoom 1 while reporting DPR 2. One attempt only.
 //
 // Chrome activates itself whenever it shows a browser window the normal way, `open -g` or not (a startup window takes
-// focus for about half a second). So Chrome starts with no window, and the driver opens its one window through the
+// focus for about half a second). Foreground runs use that normal startup, as bench/run.ts does. Background and
+// emulated-DPR runs start with no window, and the driver opens its one window through the
 // DevTools protocol with Target.createTarget { newWindow, background }, which Chrome shows inactive (as in
 // rebuild/lab/run.ts). With --chrome-emulate-dsf the driver attaches to that target, applies the device metrics override
 // before navigating, and keeps the socket open for the run, because closing the session drops the override.
@@ -350,7 +351,8 @@ async function launchChrome(url: string): Promise<Session> {
   openApp(app!.path, [
     `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
+    '--disable-renderer-backgrounding', '--window-size=1200,900',
+    ...(foreground && chromeEmulateDsf === null ? ['--new-window', url] : ['--no-startup-window', '--remote-debugging-port=0']),
     ...chromeArgs,
   ])
   const pid = await waitForPid(`${app!.path}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`)
@@ -365,6 +367,7 @@ async function launchChrome(url: string): Promise<Session> {
       await closeLaunched(pid, profile)
     },
   }
+  if (foreground && chromeEmulateDsf === null) return session
   try {
     cdp = await connectCdp(await devToolsEndpoint(profile, pid))
     if (chromeEmulateDsf === null) {

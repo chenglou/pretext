@@ -687,8 +687,8 @@ describe('blink string storage', () => {
 
   test('a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)', () => {
     const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
-    expect(prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, true, createContextPool()).segmented).toBe(true)
-    expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true, createContextPool()).segmented).toBe(false)
+    expect(prepare(paragraph([['abc', 'text'], ['\ufffc', 'span']], 2000), env, true, createContextPool()).segments).not.toBeNull()
+    expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true, createContextPool()).segments).toBeNull()
   })
 })
 
@@ -801,7 +801,7 @@ describe('source LayoutUnit ownership before LineInfo', () => {
     const prepared = prepare(p, env, false, createContextPool())
     const breaker = new LineBreaker({ p: prepared, gaps: null }, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
     const item = prepared.items[0]!, result = breaker.addItem(item.end)
-    expect(breaker.breakText(result, item, breaker.shapeResultOf(0), 3, 3)).toBe('overflow')
+    expect(breaker.breakText(result, 0, item, breaker.shapeResultOf(0), 3, 3)).toBe('overflow')
     expect([result.inlineSize, result.shape, result.end]).toEqual([67, null, item.end])
   })
 })

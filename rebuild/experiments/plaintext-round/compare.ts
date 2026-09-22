@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type { Environment, EngineName, FillResult, GivenFacts, Prepared, RangeFillResult } from '../../src/index.js'
 import { installStandInCanvas, type PageFacts } from '../../tools/stand-in-canvas.ts'
-import { cases } from './cases.ts'
+import { cases, textUnits } from './cases.ts'
 
 type Lib = Pick<typeof import('../../src/index.js'), 'prepare' | 'firstLine' | 'fillLine' | 'linePieces' | 'inspectLine' | 'paragraphGaps'> & Partial<Pick<typeof import('../../src/index.js'), 'fillLineRange'>>
 type Read = 'pieces-first' | 'inspection-first' | 'all-pieces-first'
@@ -56,10 +56,13 @@ const clone = (value: unknown): unknown => JSON.parse(JSON.stringify(value)) as 
 function seal(tree: string): string {
   const chunks: string[] = []
   function visit(dir: string): void {
-    for (const name of readdirSync(dir).sort()) {
-      const path = join(dir, name)
-      if (name.endsWith('.ts')) chunks.push(path.slice(tree.length), hash(readFileSync(path, 'utf8')))
-      else if (!name.includes('.')) visit(path)
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const path = join(dir, entry.name)
+      // Runtime .js imports can prefer an emitted sidecar over its .ts source.
+      // A TypeScript hash alone would then certify files the proof did not load.
+      if (entry.isDirectory()) visit(path)
+      else if (/\.(?:js|mjs|cjs|jsx)$/.test(entry.name)) throw new Error(`Refusing source proof with JavaScript under rebuild/src: ${path}. Run TypeScript checks with --noEmit.`)
+      else if (entry.name.endsWith('.ts')) chunks.push(path.slice(tree.length), hash(readFileSync(path, 'utf8')))
     }
   }
   visit(join(tree, 'rebuild/src'))
@@ -161,7 +164,7 @@ for (const engineName of engines) {
       let independence: string | null = null
       if (retained) for (const item of a.outputs) { const d = difference(fresh.get(item.width), item); if (d !== null) { independence = d; break } }
       else fresh.set(widths[0]!, a.outputs[0]!)
-      const row = { engine, id: c.id, growth: c.growth, units: c.paragraph.content.reduce((n, node) => n + (node.kind === 'text' ? node.text.length : 0), 0), inspect, scenario: name,
+      const row = { engine, id: c.id, growth: c.growth, units: textUnits(c.paragraph.content), inspect, scenario: name,
         layouts: widths.length, lines: a.outputs.reduce((n, o) => n + o.lines.length, 0), calls: a.calls, submittedUtf16: a.submittedUtf16,
         output, questions, independence, rawChanged: raw !== null, outputSha256: hash(JSON.stringify(a.outputs)), questionsSha256: hash(JSON.stringify(a.events)) }
       rows.push(row); layouts += widths.length; canvasCalls += a.calls; lines += row.lines

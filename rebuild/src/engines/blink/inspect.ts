@@ -15,7 +15,7 @@ import { viewPositionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
 import { lineSourceRange, trailingSpacesOf, usedTextAlign } from './pieces.js'
 import { isCjkIdeographOrSymbol, isDefaultIgnorable } from './props.js'
-import { isFontRunEdge, luCeil, partGraphemeStarts, partWidth16, slicePrefix16, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
+import { isFontRunEdge, luCeil, partGraphemeStarts, partWidth16, slicePrefix16, viewPartAt, viewPartCount, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 // BidiParagraph::IndicesInVisualOrder, ubidi_reorderVisual (ubidi.cpp): runs at or above each level from the highest down
@@ -72,11 +72,12 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
   // PositionForOffset counts the characters from the item's visual start, the logical end in RTL: where the parts count
   // fewer characters than the item has, the ones left over are the first in RTL and the last in LTR, and no run holds them.
   let counted = 0
-  for (let n = 0; n < view.parts.length; n++) counted += Math.max(0, view.parts[n]!.length)
+  const count = viewPartCount(view)
+  for (let n = 0; n < count; n++) counted += Math.max(0, viewPartAt(view, n).length)
   let position = rtl && counted < b - a ? b - counted : a
   let pending = 0
-  for (let n = 0; n < view.parts.length; n++) {
-    const part = view.parts[n]!
+  for (let n = 0; n < count; n++) {
+    const part = viewPartAt(view, n)
     const characters = Math.min(part.length, b - position)
     if (characters <= 0) {
       // A part without characters of its own keeps its glyphs: they widen the cluster next to it.

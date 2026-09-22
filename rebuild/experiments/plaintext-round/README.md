@@ -1,5 +1,12 @@
 # Plaintext stateless round
 
+The current bounded follow-up is [STATELESS_ROUND2.md](../../STATELESS_ROUND2.md). Use
+`--base=/private/tmp/pretext-stateless-round2-baseline-20260922` for its A6 comparison. The current probe times
+prior/current full and range plus actual main; set `PLAINTEXT_SAMPLES=10` to balance all five order slots. It adds
+narrow unbroken ASCII64/128/256/512 controls. The commands/capture discussion below preserves the dated first round;
+its exact previous helpers are archived separately. Generated runtime JS sidecars are rejected by the proofs and
+input seal. All TypeScript commands must use `--noEmit` explicitly.
+
 These helpers compare the frozen redo source before the round with a candidate. Owned rendering stays paused. They
 check data-flow changes under the existing deterministic `rebuild/tools/stand-in-canvas.ts`; they establish neither
 browser accuracy nor browser speed. Real Canvas history, Chrome string storage and host Unicode differences still
@@ -24,7 +31,7 @@ alternating scripts and preserved tabs/newlines.
 Run from the redo root after freezing runtime edits:
 
 ```sh
-bunx tsc -p rebuild/experiments/plaintext-round/tsconfig.json
+bunx tsc -p rebuild/experiments/plaintext-round/tsconfig.json --noEmit
 bun rebuild/experiments/plaintext-round/compare.ts --base=/private/tmp/pretext-stateless-baseline-20260921 --read=full --out=.artifacts/plaintext-round/proof-full.json
 bun rebuild/experiments/plaintext-round/compare.ts --base=/private/tmp/pretext-stateless-baseline-20260921 --read=count --out=.artifacts/plaintext-round/proof-count.json
 bun rebuild/experiments/plaintext-round/compare.ts --base=/private/tmp/pretext-stateless-baseline-20260921 --read=range --out=.artifacts/plaintext-round/proof-range.json
@@ -81,7 +88,7 @@ its JS cache outside each preparation batch and shares segment answers among mes
 survives. Redo uses its normal per-paragraph contexts. New-width handles are prepared and initially filled outside the
 clock for every repetition, in bounded chunks. These are new paragraph-level widths, not cold browser shaping.
 Repeated fills keep already-warmed handles. New documents still share browser and native-resource history; stalls
-remain in the recorded results. Compare the two current preparation controls before attributing a difference.
+remain in the recorded results. Compare the identical prior/full-range and current/full-range preparation controls before attributing a difference.
 
 Canvas calls/characters and complete redo source/continuation/line-box checks run after timing. They compare redo
 against its frozen baseline; main aggregate counts are recorded independently and do not certify equal cuts or
