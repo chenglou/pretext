@@ -62,7 +62,7 @@ describe('blink supplied ligature facts', () => {
 
   test('a same-font script edge bounds ligature matching and later Latin candidates recover', () => {
     const p = prepare(paragraph('aaकaa', [font('Mono', [0, 0x10ffff], [pattern('a', 'a'), pattern('a', 'क')])]), env, false, createContextPool())
-    expect(p.scripts[0]).not.toBe(p.scripts[2])
+    expect(p.segments.scriptAt(0)).not.toBe(p.segments.scriptAt(2))
     expect(p.ligature[1]).toBe(LIGATURE_MERGED)
     expect(p.ligature[2]).toBe(LIGATURE_NONE)
     expect(p.ligature[3]).toBe(LIGATURE_NONE)

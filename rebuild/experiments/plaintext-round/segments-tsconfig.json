@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["./segments-proof.ts"],
+  "exclude": []
+}

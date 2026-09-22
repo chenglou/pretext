@@ -1,5 +1,10 @@
 # Bench
 
+2026-09-21: the canonical `page.ts` count path now uses `fillLineRange`, without a retained full-line output.
+Full pieces and inspection still use `fillLine`. Dated results below keep their original methodology;
+[STATELESS_ROUND.md](../STATELESS_ROUND.md) and [MAIN_PERFORMANCE.md](../MAIN_PERFORMANCE.md) record the new
+plaintext comparisons. The separate realism/profiling helpers still use their documented full-fill path.
+
 `chat-night.sh` exits nonzero if any browser or the summary fails. It still attempts every browser and summarizes any
 reports that finished; no report means a failed run, even if the shell script itself reached the end.
 
@@ -150,14 +155,14 @@ document.
 
 The rebuild runs in three modes, from the least a caller reads of a line to the most:
 
-- `count`: a paragraph prepared plain, every line filled (`fillLine`), nothing more read. It is what a height takes.
+- `count`: a paragraph prepared plain, every source range filled (`fillLineRange`), nothing more read. It is what a height takes.
 - `pieces`: the same, and every line's pieces (`linePieces`), what a painter takes.
 - `inspect`: a paragraph prepared for inspection, and per line `fillLine`, `inspectLine`, then `linePieces`, then the
   paragraph's gaps: the lab's path (`rebuild/lab/predictor-core.ts`).
 
 Until the re-architecture's X1 a port computed its gaps and the geometry only the lab reads while it filled every line, so
 the three modes cost about the same. Since X1 every port computes them on request (DESIGN.md §2.8), and the modes differ
-by that work; no real run has been made since. The difference between them is what the re-architecture's later steps are
+by that work. Later foreground runs are recorded in `TAKEOVER.md` and `MAIN_PERFORMANCE.md`. The difference between them is what the re-architecture's later steps are
 measured by. The counting pass checks that the three modes give the same line ranges for every paragraph and
 width of a row, and the report flags a row where they don't.
 
@@ -252,7 +257,7 @@ and Firefox.
 
 | Question | Variant | One repetition |
 |---|---|---|
-| A. From scratch | `rebuild scratch, count` | for every message `prepare()` plain, with its font checks and new Canvas contexts, then `fillLine` over every line at 320 px; nothing kept across messages |
+| A. From scratch | `rebuild scratch, count` | for every message `prepare()` plain, with its font checks and new Canvas contexts, then `fillLineRange` over every line at 320 px; nothing kept across messages |
 | | `rebuild scratch, pieces`, `rebuild scratch, inspect` | the same in the other two modes ("Scenarios and variants"); `inspect` is the lab's path |
 | B. A resize | `rebuild first resize×3, count` | every line at 260, 380 and 440 px of paragraphs that were prepared and filled at 320 px before the repetition, outside its timing, so every width is new to them: 3,000 layouts |
 | | `rebuild resize×3 again, count` | the same on paragraphs that have been filled at these widths before. Gecko keeps what it measured inside a word on the prepared paragraph (DESIGN.md §4.6), so there this asks Canvas nothing; Blink asks the same questions again, of a canvas whose own cache has met them |
@@ -404,9 +409,10 @@ python3 .artifacts/session/with-browser-lock.py realism-chrome -- bun rebuild/be
 
 - Main keeps one measurement context for the page across `clearCache()`, so Chrome's per-canvas shaped-word cache stays
   warm. The rebuild creates new OffscreenCanvas contexts in every `prepare()` call.
-- Main's `layout()` returns a line count. The rebuild's `count` mode returns as little, but each port still builds every
-  line's fragments, engine geometry and gaps while it fills it, and logs the measureText calls of its own recipes with
-  their text and width.
+- Main's `layout()` returns a line count. The rebuild's `count` mode consumes source ranges from the same break
+  decisions as full output. Plain Gecko omits placed-frame output and unused justification metadata; Blink/WebKit
+  still build scratch items/runs for rollback and trimming. Counting reads no fragments, geometry or diagnostics.
+  Canvas work is instrumented in a separate counting pass outside the timed samples.
 - Main's cold variants also re-create its segmenters. The rebuild creates `Intl.Segmenter` objects inside its Gecko
   break code per call, keeps the WebKit port's one word segmenter from its first dictionary range on, and keeps its
   lazily decoded tables for the page's lifetime.

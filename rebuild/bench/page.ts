@@ -16,7 +16,7 @@ import * as gecko from '../src/engines/gecko/index.ts'
 import { webkitFontChecks } from '../src/engines/webkit/checks.ts'
 import * as webkit from '../src/engines/webkit/index.ts'
 import {
-  detectEnvironment, fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
+  detectEnvironment, fillLine, fillLineRange, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type EngineName, type Environment, type GivenFacts, type Prepared,
 } from '../src/index.ts'
 import { createContextPool, type ContextPool } from '../src/measure/canvas.ts'
 import { withLearnedFontFacts } from '../src/measure/font-checks.ts'
@@ -150,11 +150,20 @@ const KEPT: readonly Kept[] = ['both', 'checks', 'contexts']
 // Every line at `width`; returns the line boxes. `ranges` takes every line's source range.
 function fillAll(prepared: Prepared, width: number, mode: Mode, ranges: number[] | null): number {
   let lineBoxes = 0
+  if (mode === 'count') {
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLineRange(prepared, start, { width, left: 0, right: 0 })
+      if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
+      if (ranges !== null) ranges.push(filled.start, filled.end)
+      if (filled.hasLineBox) lineBoxes++
+      start = filled.next
+    }
+    return lineBoxes
+  }
   for (let start = firstLine(prepared); start !== null;) {
     const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
     if (filled.kind === 'below-floats') throw new Error('a slot without insets moved its line below floats')
     switch (mode) {
-      case 'count': break
       case 'pieces': sink += linePieces(prepared, filled.line).fragments.length; break
       case 'inspect':
         sink += inspectLine(prepared, filled.line).gaps.length

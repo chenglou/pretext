@@ -9,6 +9,7 @@ import { itemAt, sliceItems } from './item-sequence.js'
 // IFU = InlineFormattingUtils.cpp, ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp,
 // IDLB = display/InlineDisplayLineBuilder.cpp, LBB = InlineLineBoxBuilder.cpp.
 import { width as canvasWidth } from '../../measure/canvas.js'
+import type { RangeFillResultOf } from '../../model.js'
 import type { LineSlot } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify } from './expansion.js'
@@ -2024,7 +2025,20 @@ function placeWithLineBuilder(L: Layout, start: WebKitLineStart): Placed {
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
 // chose, then leadingInlineItemPositionForNextLine (IFU:278-298). It decides where the line breaks and what the next line
 // starts from; the line's fragments, display boxes and gaps are read from the decided line on request.
+export type WebKitRangeFillResult = RangeFillResultOf<WebKitLineStart>
+
 export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot): WebKitFillResult {
+  return fillLineDecision(p, start, slot, 'full')
+}
+
+export function fillLineRange(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot): WebKitRangeFillResult {
+  return fillLineDecision(p, start, slot, 'range')
+}
+
+// Runs still participate in collapse, trimming and rollback. Both outputs use the same builder and final status.
+function fillLineDecision(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, output: 'full'): WebKitFillResult
+function fillLineDecision(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, output: 'range'): WebKitRangeFillResult
+function fillLineDecision(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, output: 'full' | 'range'): WebKitFillResult | WebKitRangeFillResult {
   if (slot.left < 0 || slot.right < 0) throw new Error(`a line slot's insets are float widths and can't be negative (${slot.left}, ${slot.right})`)
   const hasFloats = start.hasFloats || slot.left > 0 || slot.right > 0
   const builder = hasFloats ? 'line-builder' : p.builder
@@ -2047,6 +2061,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   const placedNothing = lineContentEnd.index === start.itemIndex && lineContentEnd.offset === start.offset
   if (placedNothing && L.constrainedByFloat && !(lineContentEnd.index === itemsEnd && lineContentEnd.offset === 0)) {
     // The refused build placed the slot floats, so the next build finds them in the formatting context.
+    if (output === 'range') return { kind: 'below-floats', next: { ...start, hasFloats: true } }
     return { kind: 'below-floats', line: { engine: 'webkit', kind: 'below-floats', from: start, slot, measuredEnd: placed.measuredEnd, gaps: L.gaps }, next: { ...start, hasFloats: true } }
   }
   let next: Position = lineContentEnd
@@ -2062,17 +2077,19 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   // Line::close's isContentful (IL:87-110, 621-629): a run with content, or an inline box with decoration; undecorated
   // spans aren't contentful, so a line of collapsed white space and span edges has no line box (LineLayoutResult.h:94-105).
   const hasContentfulInFlowContent = lineHasVisuallyNonEmptyContent(p, line)
+  const nextStart: WebKitLineStart | null = isEnd ? null : {
+    engine: 'webkit', itemIndex: next.index, offset: next.offset,
+    previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: isLineBreakRun(line.runs[line.runs.length - 1]), carriedFromShaping: placed.carriedFromShaping },
+    isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
+    hasFloats,
+  }
+  if (output === 'range') return { kind: 'line', start: lineStart, end: lineEnd, next: nextStart, hasLineBox: hasContentfulInFlowContent }
   return {
     kind: 'line',
     line: { engine: 'webkit', kind: 'line', from: start, slot, builder, rect, line, start: lineStart, end: lineEnd, isLastLineOrLineEndsWithForcedLineBreak: placed.isLastLineOrLineEndsWithForcedLineBreak, measuredEnd: placed.measuredEnd, gaps: L.gaps },
     start: lineStart,
     end: lineEnd,
-    next: isEnd ? null : {
-      engine: 'webkit', itemIndex: next.index, offset: next.offset,
-      previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: isLineBreakRun(line.runs[line.runs.length - 1]), carriedFromShaping: placed.carriedFromShaping },
-      isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
-      hasFloats,
-    },
+    next: nextStart,
     hasLineBox: hasContentfulInFlowContent,
   }
 }

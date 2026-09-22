@@ -27,8 +27,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--foreground] [--require-clean] [--dry-run]'
-const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'foreground', 'require-clean', 'dry-run']
+const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--foreground] [--isolated] [--require-clean] [--dry-run]'
+const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'foreground', 'isolated', 'require-clean', 'dry-run']
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
@@ -40,9 +40,10 @@ const browserArg = args.get('browser')
 if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox' && browserArg !== 'webkit-host') fail(`--browser must be chrome, safari, firefox or webkit-host. ${USAGE}`)
 const browser: BrowserKind = browserArg
 const foreground = args.has('foreground')
+const isolated = args.has('isolated')
 const requireClean = args.has('require-clean')
-for (const flag of ['foreground', 'require-clean']) if (args.has(flag) && args.get(flag) !== '') fail(`--${flag} takes no value`)
-if (foreground && browser !== 'chrome' && browser !== 'firefox') fail('--foreground is supported by the pinned Chrome and Firefox launchers')
+for (const flag of ['foreground', 'isolated', 'require-clean']) if (args.has(flag) && args.get(flag) !== '') fail(`--${flag} takes no value`)
+if (foreground && browser === 'webkit-host') fail('--foreground is unsupported by the background WebKit host')
 // webkit-host runs installed Safari's engine, so it takes Safari's probes.
 const probeBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 // The build the run observes, read from the app bundles before launch; the output records it, so facts extracted from it
@@ -526,7 +527,7 @@ async function launchFirefox(url: string): Promise<Session> {
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   const port = await getAvailablePort()
-  openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank', ...(foreground ? ['-foreground'] : [])])
+  openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), ...(foreground ? [url, '-foreground'] : ['about:blank'])])
   const pid = await waitForPid(`${app!.path}/Contents/MacOS/firefox`, ` --profile ${profile} `)
   if (pid === null) {
     remove(profile)
@@ -539,6 +540,9 @@ async function launchFirefox(url: string): Promise<Session> {
       await closeLaunched(pid, profile)
     },
   }
+  // Start the foreground page as a normal startup URL, as bench/run.ts does. Activating an about:blank
+  // BiDi context can leave native focus in Firefox's address bar; content focus is still verified by the probe.
+  if (foreground) return session
   try {
     await waitForPort(port, pid)
     bidi = await connectBidi(port)
@@ -617,6 +621,12 @@ function launchSafariWithoutActivate(url: string): Session {
 // opens the window over the user's windows while they use Safari, with the session above. The default still waits. The
 // page reloads itself at the same URL, so the session can always identify and close its tab.
 async function launchSafari(url: string): Promise<Session> {
+  if (foreground) {
+    const session = createBrowserSession('safari', { foreground: true })
+    try { await session.navigate(url) }
+    catch (error) { await session.close(); throw error }
+    return { close: () => session.close() }
+  }
   if (allowSafariFrontmost) {
     console.log(`[probes] safari: --allow-safari-frontmost; not waiting, no activate (frontmost app: ${frontmostApp() ?? 'unknown'})`)
     return launchSafariWithoutActivate(url)
@@ -773,7 +783,11 @@ process.on('SIGTERM', () => stopRun(new Error('Terminated')))
 try {
   mkdirSync(outDir, { recursive: true })
   const bundle = await buildBundle()
-  const noStore = { 'cache-control': 'no-store' }
+  const noStore: Record<string, string> = { 'cache-control': 'no-store' }
+  if (isolated) {
+    noStore['Cross-Origin-Opener-Policy'] = 'same-origin'
+    noStore['Cross-Origin-Embedder-Policy'] = 'require-corp'
+  }
   const fetchHandler = async (request: Request): Promise<Response> => {
     lastActivity = Date.now()
     const url = new URL(request.url)
@@ -862,7 +876,7 @@ try {
   const output: ProbeOutput = {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, app, build, foreground, requireClean, runId, probesFile: probesPath, only,
+    browser, app, build, foreground, isolated, requireClean, runId, probesFile: probesPath, only,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     totals,
     envs: [...envs].map(([key, documents]) => ({ ...JSON.parse(key) as PageEnv, documents })),

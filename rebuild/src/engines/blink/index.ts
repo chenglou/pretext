@@ -8,12 +8,12 @@ import { OffsetRuns } from './offset-runs.js'
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { ContextPool } from '../../measure/canvas.js'
-import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from '../../model.js'
+import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, RangeFillResultOf } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFont, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
 import { blinkGraphemeRules } from './data.js'
 import { styleContexts } from './contexts.js'
-import { emojiPriorities, isSegmentEdge } from './emoji.js'
+import { emojiPriorities, isSegmentEdge, ShapingSegments } from './emoji.js'
 import { GapAccumulator } from './gap-accumulator.js'
 import { canonicalGaps, lineGaps, preparedContent, type GapSink } from './gaps.js'
 import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
@@ -25,7 +25,7 @@ import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import { isClusterBoundary, measureGroups, type Shaper } from './shape.js'
-import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
+import type { BlinkGroup, BlinkPrepared, BlinkStyle, InlineItem } from './types.js'
 
 export { paragraphGaps } from './gaps.js'
 export type { BlinkPaintFacts } from './pieces.js'
@@ -36,8 +36,8 @@ export type { BlinkPaintFacts } from './pieces.js'
 // only get in a paragraph with one segment (inline_item.cc:187-196, inline_node.cc:1256-1290), so it never splits a group
 // here; each segment is its own HarfBuzz call inside the group (harfbuzz_shaper.cc:1080-1101), which Canvas repeats for the
 // strings it measures.
-function shapingGroups(p: BlinkPrepared): void {
-  const items = p.items
+function shapingGroups(items: readonly InlineItem[], styles: readonly BlinkStyle[], text: string, groupOfUnit: Int32Array): BlinkGroup[] {
+  const groups: BlinkGroup[] = []
   for (let index = 0; index < items.length; index++) {
     const s = items[index]!
     if (s.type !== 'text' || s.start === s.end) continue
@@ -48,17 +48,17 @@ function shapingGroups(p: BlinkPrepared): void {
       const it = items[j]!
       if (it.type === 'control' || it.type === 'atomic') break
       if (it.type === 'open-tag') {
-        if (breaksShapingBefore(p.styles[it.style]!)) break
+        if (breaksShapingBefore(styles[it.style]!)) break
         continue
       }
       if (it.type === 'close-tag') {
-        if (breaksShapingAfter(p.styles[it.style]!)) break
+        if (breaksShapingAfter(styles[it.style]!)) break
         continue
       }
       if (it.start === it.end) continue
-      if (!sameFont(p.styles[it.style]!, p.styles[s.style]!)) break
+      if (!sameFont(styles[it.style]!, styles[s.style]!)) break
       if ((it.bidiLevel & 1) !== (s.bidiLevel & 1)) break
-      if (p.text.charCodeAt(it.start) === 0x200c) break
+      if (text.charCodeAt(it.start) === 0x200c) break
       end = it.end
       last = j
     }
@@ -67,10 +67,11 @@ function shapingGroups(p: BlinkPrepared): void {
       start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0,
       prefix16: new Float64Array(length).fill(NaN), pair16: new Float64Array(length).fill(NaN), wide16: new Float64Array(length).fill(NaN),
     }
-    p.groupOfUnit.fill(p.groups.length, group.start, group.end)
-    p.groups.push(group)
+    groupOfUnit.fill(groups.length, group.start, group.end)
+    groups.push(group)
     index = last
   }
+  return groups
 }
 
 // HarfBuzz's continuation flags per shaping call's buffer, from the call's start (hb_set_unicode_props,
@@ -159,18 +160,20 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     const narrow = text.replace(/[\v\f]/g, '\u0001')
     canvasText = { narrow, spaced: narrow.replaceAll(' ', '\u2028') }
   }
+  const groupOfUnit = new Int32Array(text.length).fill(-1)
+  const groups = shapingGroups(bidi.items, styles, text, groupOfUnit)
+  const segments = new ShapingSegments(text, scripts, priorities, groups, groupOfUnit)
   const p: BlinkPrepared = {
-    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, sourceRuns, contentOffsets,
-    items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
+    clusterRuns: null, paragraph, env, index, layoutZoom: zoom, text, canvasText, is8Bit, segmented, segments, sourceOffsets: content.sourceOffsets, sourceRuns, contentOffsets,
+    items: bidi.items, styles, groups, bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
-    groupOfUnit: new Int32Array(text.length).fill(-1),
+    groupOfUnit,
     canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors! },
   }
   const sh: Shaper = { p, gaps }
-  shapingGroups(p)
   markContinuations(p)
   fontFactsOfText(p)
   p.clusterRuns = new OffsetRuns(text.length + 1, k => !isClusterBoundary(p, k))
@@ -201,18 +204,32 @@ type Decided = { engine: 'blink'; info: LineInfo; start: BlinkLineStart; gaps: G
 export type BlinkFilledLine = Decided & { kind: 'line' }
 export type BlinkRefusedSlot = Decided & { kind: 'below-floats' }
 export type BlinkFillResult = FillResultOf<BlinkLineStart, BlinkFilledLine, BlinkRefusedSlot>
+export type BlinkRangeFillResult = RangeFillResultOf<BlinkLineStart>
 
 // Where the line breaks is known from the item results alone: the source range comes from the two line starts, and no
 // fragment or item is made here.
 export function fillLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkFillResult {
+  return fillLineDecision(p, start, slot, 'full')
+}
+
+export function fillLineRange(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkRangeFillResult {
+  return fillLineDecision(p, start, slot, 'range')
+}
+
+// Item results participate in rewinding/trimming in both outputs. A range does not retain the final line record.
+function fillLineDecision(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot, output: 'full'): BlinkFillResult
+function fillLineDecision(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot, output: 'range'): BlinkRangeFillResult
+function fillLineDecision(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot, output: 'full' | 'range'): BlinkFillResult | BlinkRangeFillResult {
   const gaps: GapSink = p.inspect === null ? null : new GapAccumulator(p.index.text.length)
   const info = new LineBreaker({ p, gaps }, start, slot).nextLine()
   // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
   // opportunity (inline_layout_algorithm.cc:1341-1367), which lays the same line out again.
   if (info.hasOverflow && info.availableWidth !== lengthLU(slot.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
+    if (output === 'range') return { kind: 'below-floats', next: start }
     return { kind: 'below-floats', line: { engine: 'blink', kind: 'below-floats', info, start, gaps: gaps?.snapshot() ?? null }, next: start }
   }
   const range = lineSourceRange(p, start, info.token)
+  if (output === 'range') return { kind: 'line', start: range.start, end: range.end, next: info.token, hasLineBox: info.shouldCreateLineBox }
   return { kind: 'line', line: { engine: 'blink', kind: 'line', info, start, gaps: gaps?.snapshot() ?? null }, start: range.start, end: range.end, next: info.token, hasLineBox: info.shouldCreateLineBox }
 }
 

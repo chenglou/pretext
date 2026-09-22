@@ -16,7 +16,7 @@ import type { WebKitPrepared } from './engines/webkit/types.js'
 import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
 import { createContextPool, type ContextPool } from './measure/canvas.js'
 import { withLearnedFontFacts } from './measure/font-checks.js'
-import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from './model.js'
+import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, RangeFillResultOf } from './model.js'
 
 export type {
   BlinkEnvironment, BlinkProcessLanguages, DetectedEngine, DetectedEnvironment, EngineName, Environment, GeckoEnvironment,
@@ -25,7 +25,7 @@ export type {
 export { PINNED_BUILDS, detectEngine, detectEnvironment } from './env.js'
 export type {
   AtomicInline, BoxEdge, CssFont, Direction, FillResultOf, FontDecl, FontFacts, Fragment, Gap, GapName, InlineElement, InlineElementOf, InlineNode,
-  InlineNodeOf, LineBreak, LineBreakElement, LineInspectionOf, LinePieces, LineSlot, OverflowWrap, Paragraph, ParagraphOf, TextAlign,
+  InlineNodeOf, LineBreak, LineBreakElement, LineInspectionOf, LinePieces, LineSlot, OverflowWrap, Paragraph, ParagraphOf, RangeFillResultOf, TextAlign,
   TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
 export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
@@ -60,6 +60,7 @@ export type LineStart = BlinkLineStart | WebKitLineStart | GeckoLineStart
 
 // What fillLine returns, the engine's record of a decided line in it, and what is read from that record.
 export type FillResult = blink.BlinkFillResult | webkit.WebKitFillResult | gecko.GeckoFillResult
+export type RangeFillResult = RangeFillResultOf<LineStart>
 export type FilledLine = blink.BlinkFilledLine | webkit.WebKitFilledLine | gecko.GeckoFilledLine
 export type RefusedSlot = blink.BlinkRefusedSlot | webkit.WebKitRefusedSlot | gecko.GeckoRefusedSlot
 export type Pieces = LinePieces<blink.BlinkPaintFacts> | LinePieces<webkit.WebKitPaintFacts> | LinePieces<gecko.GeckoPaintFacts>
@@ -158,6 +159,23 @@ export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): 
     case 'gecko':
       if (start.engine !== 'gecko') throw startMismatch(prepared.engine, start.engine)
       return gecko.fillLine(prepared.state, start, slot)
+  }
+}
+
+// The same break decision as fillLine, returning only the source range and next start. Gecko omits frame output on
+// plain preparation; Blink and WebKit still need their line records for rollback/trimming. Inspected preparations keep
+// diagnostic work used by the decisions, but return no line diagnostics. A range cannot be passed to linePieces or inspectLine.
+export function fillLineRange(prepared: Prepared, start: LineStart, slot: LineSlot): RangeFillResult {
+  switch (prepared.engine) {
+    case 'blink':
+      if (start.engine !== 'blink') throw startMismatch(prepared.engine, start.engine)
+      return blink.fillLineRange(prepared.state, start, slot)
+    case 'webkit':
+      if (start.engine !== 'webkit') throw startMismatch(prepared.engine, start.engine)
+      return webkit.fillLineRange(prepared.state, start, slot)
+    case 'gecko':
+      if (start.engine !== 'gecko') throw startMismatch(prepared.engine, start.engine)
+      return gecko.fillLineRange(prepared.state, start, slot)
   }
 }
 

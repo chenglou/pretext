@@ -9,10 +9,13 @@ is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. 
 research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
 `codex/redo-handoff-backup-20260920` (`9369b7f`), with all committed studies in a verified Git bundle.
 
+The completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md), including exact
+comparisons, measured costs and the next experiments. Owned rendering and rich painting remain paused.
+
 ## Core
 
 `src/index.ts` dispatches to `src/engines/{blink,gecko,webkit}`. Canvas supplies measurements; DOM reads and font-file
-loading are outside the core. Plain preparation computes lines and pieces. Inspection additionally computes diagnostic
+loading are outside the core. Plain preparation supports full lines/pieces or source ranges/counting. Inspection additionally computes diagnostic
 geometry and uncertainty. A paragraph should do only the work its requested output needs.
 
 Prefer fewer representations, local derived values and ordinary loops. Preserve shaping context and numeric units at
@@ -41,7 +44,7 @@ bun rebuild/tests/run-main-obligations.ts --browser=chrome \
 ```
 
 The inspected-range adapter runs the complete inspected core and omits lab diagnostic observation and painting.
-The workflow runs fresh inspected/plain preparations in both orders with no supplied font facts, then checks visible
+The plain adapter now uses `fillLineRange` without materializing pieces. The workflow runs fresh inspected/plain preparations in both orders with no supplied font facts, then checks visible
 cuts, complete source coverage, native stability and mode parity. It preserves actual child failures. Optional
 `--main-comparison` adds two diagnostic main processes. [Main obligations](tests/MAIN_OBLIGATIONS.md) explains
 certification, scope and provenance. A small feature-covering set speeds iteration; it does not replace the full corpus.

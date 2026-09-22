@@ -1,3 +1,4 @@
+import type { ShapingSegments } from './emoji.js'
 import type { OffsetRuns } from './offset-runs.js'
 // Blink's prepared paragraph (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ParagraphGapIndex } from './paragraph-gap-index.js'
@@ -161,11 +162,8 @@ export type BlinkPrepared = {
   // RunSegmenter segments text_content: it is 16-bit with a character other than U+FFFC, or bidi is on
   // (inline_node.cc:1256-1290). Otherwise the paragraph is one Latin segment.
   segmented: boolean
-  // The script each text_content unit is shaped with (ScriptRunIterator over text_content, or Latin).
-  scripts: Uint8Array
-  // The font fallback priority RunSegmenter gives each text_content unit (emoji.ts): text, or one of the emoji kinds. A
-  // change of priority ends a shaping segment like a change of script.
-  priorities: Uint8Array
+  // Primary ordered script ranges and per-unit segment-edge/shaping-direction facts.
+  segments: ShapingSegments
   // Per text_content unit, its source offset, or -1 for a unit Blink generated or an element's (U+200B after leading
   // spaces, a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC).
   sourceOffsets: Int32Array

@@ -233,6 +233,7 @@ export type PageEnv = { userAgent: string; devicePixelRatio: number; visualViewp
 export type ProbeOutput = {
   status: 'ok' | 'error'
   foreground?: boolean
+  isolated?: boolean
   requireClean?: boolean
   errors: string[]
   browser: BrowserKind

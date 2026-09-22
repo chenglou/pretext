@@ -15,7 +15,7 @@ import { ParagraphGapIndex } from './paragraph-gap-index.js'
 import { hasDictionaryCharacters, languageOf, lineTable } from './breaks.js'
 import { collapsesWhiteSpace, isSpaceLB } from './content.js'
 import { raw16Of } from './contexts.js'
-import { isSegmentEdge } from './emoji.js'
+import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
 import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
@@ -195,7 +195,8 @@ function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScrip
 
 // script-context for every stretch of the measured string, white space apart, that Canvas shapes under another script than
 // the paragraph does.
-function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly number[], scripts: Uint8Array): void {
+function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly number[], scripts: Uint8Array, domScript: number, sourceOrdinal: number): void {
+  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments, sourceOrdinal, domScript)
   let start = -1
   let end = -1
   const flush = (): void => {
@@ -212,7 +213,8 @@ function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly n
     // A default-ignorable character keeps no advance under any script: HarfBuzz zeroes it after positioning, and Blink sets
     // no buffer flag that would keep it (hb_ot_zero_width_default_ignorables, hb-ot-shape.cc:779-799). What it does to its
     // neighbours' lookups is soft-hyphen-shaping's and the cluster rules' business.
-    if (isWhiteSpace(cp) || isDefaultIgnorableHarfBuzz(cp) || scripts[u] === p.scripts[t] || shapesAlike(p, t, scripts[u]!, p.scripts[t]!)) { flush(); continue }
+    const sourceScript = source === null ? domScript : source.at(t)
+    if (isWhiteSpace(cp) || isDefaultIgnorableHarfBuzz(cp) || scripts[u] === sourceScript || shapesAlike(p, t, scripts[u]!, sourceScript)) { flush(); continue }
     if (start < 0) start = t
     end = t + 1
   }
@@ -224,13 +226,13 @@ function scriptContext(gaps: GapAccumulator, p: BlinkPrepared, units: readonly n
 // paragraph's: only a character without a script of its own can, and an 8-bit string is a Latin range shaped as Latin on
 // both sides. `scripts` are the ones the measurement itself read, for the letter spacing (shape.ts measure16); without
 // letter spacing only this condition reads them.
-export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: number, to: number, callStart: number, callEnd: number, cs: CanvasString, scripts: Uint8Array | null): void {
+export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: number, to: number, callStart: number, callEnd: number, cs: CanvasString, scripts: Uint8Array | null, domScript: number, sourceOrdinal: number = -1): void {
   if (sink === null) return
   callEdge(sink, p, g, from, callStart, callEnd)
   callEdge(sink, p, g, to, callStart, callEnd)
   const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s) : null)
   // A non-null sink requested the map in measure16.
-  if (canvasScripts !== null) scriptContext(sink, p, cs.units!, canvasScripts)
+  if (canvasScripts !== null) scriptContext(sink, p, cs.units!, canvasScripts, domScript, sourceOrdinal)
 }
 
 // ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces) ----

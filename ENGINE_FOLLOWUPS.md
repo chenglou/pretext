@@ -2,6 +2,10 @@
 
 On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
 
+The completed bounded redo [plaintext stateless round](rebuild/STATELESS_ROUND.md) preserves measurement behavior while
+simplifying primary shaping segments and exact range/count output. Owned rendering and rich painting are paused.
+Its remaining performance and coverage limits belong to that record; this ledger is not another redo task queue.
+
 Open engine work: decisions for the maintainer, known gaps and harness debt.
 
 ## Decisions

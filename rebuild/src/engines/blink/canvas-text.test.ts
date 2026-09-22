@@ -48,7 +48,7 @@ describe('blink compiled Canvas text', () => {
     expect(p.text).toBe('Aµÿ\u00a0B\v C\fD')
     expect(p.canvasText).toEqual({ narrow: 'Aµÿ\u00a0B\u0001 C\u0001D', spaced: 'Aµÿ\u00a0B\u0001\u2028C\u0001D' })
     // The DOM doesn't segment an eight-bit paragraph by Unicode script: even U+00B5 is shaped in the Latin segment.
-    expect([...p.scripts]).toEqual(new Array(p.text.length).fill(25))
+    expect(Array.from({ length: p.text.length }, (_, k) => p.segments.scriptAt(k))).toEqual(new Array(p.text.length).fill(25))
     for (let from = 0; from <= p.text.length; from++) {
       for (let to = from; to <= p.text.length; to++) {
         for (const keepSpaces of [false, true]) {

@@ -161,9 +161,12 @@ Options:
   DPR, not for accuracy runs.
 - `--allow-safari-frontmost`: Safari only, no value. Skips the wait for Safari to leave the front (approved by the
   maintainer on 2026-09-16); the probe window then opens over the user's windows.
-- `--foreground`: pinned Chrome and Firefox only. Request activation of the dedicated window and tab for timing work. Firefox also receives its native `-foreground` switch
+- `--foreground`: pinned Chrome and Firefox, and installed Safari. Request activation of the dedicated window and tab for timing work. Firefox also receives its native `-foreground` switch
   ([Mozilla driver fix](https://bugzilla.mozilla.org/show_bug.cgi?id=1466573)). The probe
   must acquire and check actual content focus during timing; the launch flag neither proves content focus nor prevents a later focus change.
+- `--isolated`: opt in to COOP/COEP response headers for cross-origin isolation and finer timing. Default accuracy
+  probes keep their existing headers. Record isolation and the observed timer step; a launch flag alone does not
+  establish timer resolution.
 - `--require-clean`: fail the run on probe or observation errors, while retaining every raw result. Use it for
   validation and timing probes that require successful observations.
 - `--dry-run`: validate the probes and print the document count without launching anything.
@@ -279,7 +282,9 @@ A failing observation is recorded as `{ kind, error }`, and the remaining observ
 
 ## Browser sessions
 
-Sessions stay in the background and never activate a window. The driver launches once and never retries.
+Sessions stay in the background by default. `--foreground` requests activation for timing; the probe must still
+check actual visible/focused endpoints. The background WebKit host does not support this option. The driver launches
+once and never retries.
 
 - Chrome: the lab's pinned copy of Chrome (`rebuild/lab/browser-build.ts`, the lab README's "Pinned browsers"), headed,
   with its own `--user-data-dir` under `.artifacts/profiles/`, started with `open -n -g -a` plus `--no-startup-window
@@ -290,7 +295,9 @@ Sessions stay in the background and never activate a window. The driver launches
   except that `--chrome-emulate-dsf` attaches to that target, sets the device metrics override, navigates, and keeps
   the socket open until the run ends.
 - Firefox: `open -n -g -a <the lab's pinned copy of Firefox> --args --new-instance --profile <.artifacts/profiles/...>
-  --remote-debugging-port <port> about:blank`, headed, then navigated over WebDriver BiDi. The BiDi session applies
+  --remote-debugging-port <port> about:blank`, headed, then navigated over WebDriver BiDi. Foreground timing uses the probe URL as its normal startup page, matching `bench/run.ts`, because activating
+  an about:blank BiDi context left content unfocused. The probe still verifies real focus. Background sessions retain
+  BiDi navigation. The BiDi session applies
   Firefox's recommended automation prefs (`remote/shared/RecommendedPreferences.sys.mjs` at 156). At 156 none of them
   touch fonts, text or layout; they cover first-run pages, telemetry, updates, focus test mode and hang timeouts.
 - Safari: the repo's AppleScript session, `createBrowserSession('safari', { foreground: false })` from

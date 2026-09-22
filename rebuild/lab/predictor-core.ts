@@ -27,7 +27,7 @@ import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geo
 import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
 import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
-import { fillLine, firstLine, linePieces, paragraphGaps, prepare, createContextPool, type ContextPool } from '../src/index.ts'
+import { fillLine, fillLineRange, firstLine, linePieces, paragraphGaps, prepare, createContextPool, type ContextPool, type RangeFillResult } from '../src/index.ts'
 import {
   NO_BOX_EDGE, type FillResultOf, type FontDecl, type FontFacts, type InlineNode, type LineInspectionOf, type LinePieces, type LineSlot as LayoutSlot,
   type Paragraph as LayoutParagraph, type TextStyle,
@@ -271,7 +271,7 @@ function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: nu
 // `otherWidthsFirst` fills the paragraph at those widths before, with the same calls, and keeps nothing of them, as
 // layoutParagraph's does: a plain paragraph keeps what its lines measured (Blink's groups, by offset), so what another
 // width measured answers for this one.
-function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: ContextPool | undefined): LinesPrediction {
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[], otherWidthsFirst: readonly number[], contexts: ContextPool | undefined, output: 'pieces' | 'range'): LinesPrediction {
   countCanvasWork()
   const callsBefore = canvasWork.calls
   const prepared = prepare(paragraph, env, false, contexts)
@@ -282,14 +282,22 @@ function plainLines(paragraph: LayoutParagraph, env: Environment, width: number,
     let row = 0
     for (let start = firstLine(prepared); start !== null;) {
       const slot = row < insets.length ? insets[row]! : FULL_WIDTH
-      const filled = fillLine(prepared, start, { width: widths[w]!, left: slot.left, right: slot.right })
+      const lineSlot = { width: widths[w]!, left: slot.left, right: slot.right }
+      let filled: RangeFillResult
+      switch (output) {
+        case 'range': filled = fillLineRange(prepared, start, lineSlot); break
+        case 'pieces': {
+          const full = fillLine(prepared, start, lineSlot)
+          if (full.kind === 'line') linePieces(prepared, full.line)
+          filled = full
+          break
+        }
+      }
       switch (filled.kind) {
         case 'below-floats':
           row++
           break
         case 'line':
-          // Read as a painting application reads them, though only the range is kept.
-          linePieces(prepared, filled.line)
           if (filled.hasLineBox) {
             lines.push({ start: filled.start, end: filled.end })
             row++
@@ -337,7 +345,7 @@ type PlainPredictor = {
 }
 
 // `otherWidthFactors`: see plainLines' `otherWidthsFirst`; the widths are these factors of the case's.
-export function makePlainPredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageContexts: boolean = false): PlainPredictor {
+export function makePlainPredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = [], pageContexts: boolean = false, output: 'pieces' | 'range' = 'pieces'): PlainPredictor {
   const contexts: ContextPool | undefined = pageContexts ? createContextPool() : undefined
   return {
     predict(c, env) {
@@ -345,7 +353,7 @@ export function makePlainPredictor(factsFor: FactsFor, otherWidthFactors: readon
       if ('error' in e) return e
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
       const width = c.paragraph.width
-      return plainLines(layoutInput(c, e.engine, factsFor), e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor), contexts)
+      return plainLines(layoutInput(c, e.engine, factsFor), e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor), contexts, output)
     },
     paint: () => null,
   }

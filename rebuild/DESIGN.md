@@ -32,16 +32,41 @@ simplicity second; performance is the phase that starts now, from numbers (§4.7
 ## How the library is built
 
 Three engine ports that barely touch each other, and a small shared layer that names no engine. Every port gives the
-same six functions over its own types (§2.9, §3), and `src/index.ts` is the one place that chooses a port:
+same functions over its own types (§2.9, §3), and `src/index.ts` is the one place that chooses a port:
 
 ```ts
 prepare(paragraph, env, inspect, contexts?): Prepared  // width-free: content, items, break data, the widths known before lines
 firstLine(prepared): Start | null
 fillLine(prepared, start, slot): FillResult       // decides one line in one slot, or refuses the slot (below floats)
+fillLineRange(prepared, start, slot): RangeFillResult // same decision, source bounds/continuation/line-box flag only
 linePieces(prepared, line): LinePieces<Facts>     // what a painter takes; a pure function
 inspectLine(prepared, line): { geometry, gaps }   // what the lab reads; a pure function; inspected paragraphs only
 paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 ```
+
+`fillLineRange` and `fillLine` share one break algorithm in each port. A range result has `start`, `end`, `next` and
+`hasLineBox`, or the same below-floats refusal. It has no decided-line record and cannot feed `linePieces` or
+`inspectLine`. Gecko plain ranges omit retained placed-frame output and justification metadata; span child presence
+comes from the existing pass-local placed count. Inspected Gecko decisions retain frames required by tab diagnostics.
+Blink and WebKit still construct scratch items/runs used by rollback and trimming, but omit the final full wrapper.
+No measurement rule, ordered Canvas question or numeric operation changes at this output boundary.
+
+Blink's prepared script and fallback-priority model is now `ShapingSegments`, the primary typed buffers in
+`engines/blink/emoji.ts`. The analyzer's per-unit arrays are consumed and discarded. Ordered script ends/codes own
+measurement traversal and retain every source script, including lone low surrogates. Accepted measurement splits
+ignore boundaries that begin at lows; this does not erase the low's actual script or change the question's starting
+script. Spacing and gap readers skip low source units but follow each retained mapped unit's exact source script:
+Unknown can absorb following COMMON digits or inherited marks. A temporary monotonic source-run cursor handles
+questions crossing ignored boundaries in O(mapped units + crossed runs); a question covered by one exact source run
+keeps its known scalar script. One per-unit flags buffer owns genuine segment edges and each actual source script's shaping direction within the accepted script/priority/group-clipped call, including its numeric
+exception. A group-only edge is not a RunSegmenter edge. Boundary and direction reads are O(1); random script lookup is binary. Cross-script
+measurement walks known ordinals in source order, passing the known script downstream and preserving the previous
+right-associated sum. Unsegmented preparation already assigns Latin explicitly, so measurement carries that known
+script directly. Three buffer payloads use `5S + N` bytes for S exact source-script runs and N UTF-16 units: 517 versus the former
+1,024 at 512 single-script units, or 3,072 versus 1,024 when every unit changes script. Analyzer arrays coexist during
+construction, so these totals do not promise lower peak memory. The first five-column prototype saved single-run
+space but made hot boundary/direction reads binary; native repeated-layout regressions caused its rejection.
+[STATELESS_ROUND.md](STATELESS_ROUND.md) records the final evidence and remaining tradeoffs.
 
 **Data and lifetimes.** Values that share a lifetime sit in one object, and there are few lifetimes:
 
@@ -52,6 +77,7 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 | Prepared paragraph | the engine's content, items, styles and break data, the widths it knows before filling lines, references to the Canvas contexts it measures in (§4.6), the environment, and `inspect`: a record on a paragraph prepared for inspection, null on a plain one | `prepare` | the caller keeps it | no: one prepared paragraph serves any width |
 | Line start | where the next line starts: small plain data that names positions in the prepared paragraph's lists and holds nothing of it (§2.7) | `firstLine`, a fill result's `next` | the caller's scope; it survives JSON | no |
 | Decided line | the engine's own record of one filled line (Blink's `LineInfo` with its results, WebKit's closed `Line` with its rect, Gecko's last reflow pass), and on an inspected paragraph the gaps its filling raised, in order | `fillLine` | the caller's scope; counting lines drops it | yes |
+| Range | source bounds, continuation and line-box flag, or below-floats continuation; no line record | `fillLineRange` | the caller's scope | yes |
 | Pieces | fragments, `joinsNextLine`, `indented`, `align`, `overflows`, the engine's facts for its painting rules (§2.1, §2.2) | `linePieces` | the caller's scope | yes |
 | Inspection | the engine's geometry of the line (§2.3-§2.5) and the gaps its breaks decide (§2.8) | `inspectLine` | the lab's row | yes |
 | Row | the frozen `ParagraphLayout` JSON a lab prediction keeps (§2.1) | the lab's adapter, `lab/predictor-core.ts` | the lab | yes |
@@ -105,8 +131,8 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
 geometry, and a layout at another width asks Canvas nothing new in the common case (§2.9; a plain Blink paragraph
 keeps the positions its lines asked for, so a width it has met asks nothing and another width asks what is new to it,
 §4.6); and each port's "next break opportunity" and "close the line here" stay
-callable outside the greedy line loop, with a line start that can be made from a source offset. No API is built for
-either yet.
+callable outside the greedy line loop, with a line start that can be made from a source offset. The range API supplies the first capability at the output boundary; it does not remove all internal scratch output.
+No separate opportunity/close API is built yet.
 
 Terms used throughout:
 
@@ -1111,6 +1137,7 @@ type LineSlot = { width: number; left: number; right: number }
 function prepare(paragraph: Paragraph, env: Environment, inspect: boolean): Prepared
 function firstLine(prepared: Prepared): LineStart | null
 function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult          // FillResultOf, §2.1
+function fillLineRange(prepared: Prepared, start: LineStart, slot: LineSlot): RangeFillResult // same break, no line record
 function linePieces(prepared: Prepared, line: FilledLine): Pieces                            // LinePieces<Facts>
 function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection    // inspected paragraphs only
 function paragraphGaps(prepared: Prepared): Gap[]                                            // inspected paragraphs only
@@ -1240,6 +1267,7 @@ it measures in by reference:
 prepare(paragraph: Paragraph, env: Env, inspect: boolean, contexts?: ContextPool): Prepared
 firstLine(prepared: Prepared): Start | null
 fillLine(prepared: Prepared, start: Start, slot: LineSlot): FillResultOf<Start, FilledLine, RefusedSlot>
+fillLineRange(prepared: Prepared, start: Start, slot: LineSlot): RangeFillResultOf<Start>
 linePieces(prepared: Prepared, line: FilledLine): LinePieces<PaintFacts>
 inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspectionOf<Geometry>
 paragraphGaps(prepared: Prepared): Gap[]

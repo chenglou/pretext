@@ -28,7 +28,7 @@ import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
-import { isSegmentEdge } from './emoji.js'
+import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
@@ -366,8 +366,8 @@ export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string)
 // script-context with it. With a letter in the range RunSegmenter gives Latin either way, and white space alone is no
 // script's (gaps.ts hasScriptNeutral).
 // rule blink/measure/spaces-stay-in-neutral-latin-range
-function spacesStay(p: BlinkPrepared, style: number, from: number, to: number): boolean {
-  if (p.scripts[from] !== USCRIPT_LATIN) return false
+function spacesStay(p: BlinkPrepared, style: number, from: number, to: number, domScript: number): boolean {
+  if (domScript !== USCRIPT_LATIN) return false
   let space = false
   let other = false
   for (let i = from; i < to; i++) {
@@ -388,17 +388,27 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // RunSegmenter splits a 16-bit paragraph at script runs, and HarfBuzzShaper shapes every segment in its own call
   // (harfbuzz_shaper.cc:1072-1101), so nothing kerns or ligates across a script edge. A range crossing one is measured per
   // segment (research/SUPERSET-blink.md §2.1 C).
-  if (p.segmented) {
-    for (let k = from + 1; k < to; k++) {
-      if (p.scripts[k] !== p.scripts[k - 1] && (p.text.charCodeAt(k) & 0xfc00) !== 0xdc00) {
-        return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, k)
-      }
-    }
-  }
+  if (!p.segmented) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, USCRIPT_LATIN)
+  const firstOrdinal = p.segments.scriptOrdinal(from)
+  let ordinal = firstOrdinal
+  const domScript = p.segments.scriptForOrdinal(ordinal)
+  let end = p.segments.scriptEndForOrdinal(ordinal)
+  // The source partition retains malformed low surrogates, while the original splitter ignores a boundary at any low.
+  // Keep the actual script at the question's start, and walk past only those ignored boundaries.
+  while (end < to && (p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = p.segments.scriptEndForOrdinal(++ordinal)
+  const sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
+  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, ordinal, end, domScript, sourceOrdinal)
+  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, domScript, sourceOrdinal)
+}
+
+// The Canvas question uses its starting script. If ignored low boundaries hide other source scripts in this question,
+// sourceOrdinal starts their correction cursor; otherwise -1 keeps the exact constant-source fast path.
+function measureSameScript16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, domScript: number, sourceOrdinal: number = -1): number {
+  const p = sh.p
   const group = p.groups[g]!
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
-  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(p, group.style, from, to), sh.gaps !== null || ls16 !== 0)
+  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), domScript, spacesStay(p, group.style, from, to, domScript), sh.gaps !== null || ls16 !== 0)
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
@@ -406,23 +416,27 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
   const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
-  measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts)
+  measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts, domScript, sourceOrdinal)
   if (ls16 === 0) return w + adjust
   // Non-zero effective spacing requested the map above.
-  return w + adjust + letterSpacingDifference16(p, cs.s, cs.units!, scripts, ls16)
+  return w + adjust + letterSpacingDifference16(p, cs.s, cs.units!, scripts, ls16, domScript, sourceOrdinal)
 }
 
 // A cross-script range reads segments in source order, as the former left-first recursive split did.
 // Fold their values backwards to preserve that split's exact right-associated arithmetic, without an input-sized stack.
-function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, firstEnd: number): number {
+function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, ordinal: number, end: number, domScript: number, sourceOrdinal: number): number {
   const widths: number[] = []
-  let start = from, end = firstEnd
+  let start = from
   for (;;) {
-    widths.push(measure16(sh, g, start, end, callStart, callEnd, noLigatures))
+    widths.push(measureSameScript16(sh, g, start, end, callStart, callEnd, noLigatures, domScript, sourceOrdinal))
+    if (end === to) break
     start = end
-    if (start === to) break
-    end = start + 1
-    while (end < to && !(sh.p.scripts[end] !== sh.p.scripts[end - 1] && (sh.p.text.charCodeAt(end) & 0xfc00) !== 0xdc00)) end++
+    const firstOrdinal = ++ordinal
+    domScript = sh.p.segments.scriptForOrdinal(ordinal)
+    end = sh.p.segments.scriptEndForOrdinal(ordinal)
+    while (end < to && (sh.p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = sh.p.segments.scriptEndForOrdinal(++ordinal)
+    sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
+    end = Math.min(to, end)
   }
   let total = widths[widths.length - 1]!
   for (let i = widths.length - 2; i >= 0; i--) total = widths[i]! + total
@@ -430,7 +444,8 @@ function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number
 }
 
 // The letter spacing the DOM gives the string's characters less what Canvas gave them.
-function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number): number {
+function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number, domScript: number, sourceOrdinal: number): number {
+  const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments, sourceOrdinal, domScript)
   let adjust = 0
   for (let u = 0; u < units.length; u++) {
     const t = units[u]!
@@ -445,7 +460,8 @@ function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readon
     // Latin run keeps it (research/SUPERSET-blink.md §2.1 B).
     const cp = p.text.codePointAt(t)!
     const canvasCp = text.codePointAt(u)!
-    const dom = !treatAsZeroWidthSpace(cp) && (!isCursiveScript(p.scripts[t]!) || treatAsSpace(cp))
+    const sourceScript = source === null ? domScript : source.at(t)
+    const dom = !treatAsZeroWidthSpace(cp) && (!isCursiveScript(sourceScript) || treatAsSpace(cp))
     const canvas = !treatAsZeroWidthSpace(canvasCp) && (!isCursiveScript(canvasScript) || treatAsSpace(canvasCp))
     if (dom !== canvas) adjust += dom ? ls16 : -ls16
   }
@@ -782,42 +798,10 @@ export function measureGroups(sh: Shaper): void {
   }
 }
 
-// hb_script_get_horizontal_direction (hb-common.cc:520-612 at harfbuzz dfdc088c) over UScriptCode numbers
-// (unicode/uscript.h): the scripts HarfBuzz shapes right to left, and the ones it gives no direction (Old Hungarian, Old
-// Italic, Runic, Tifinagh). Every other script is left to right.
-function scriptDirection(script: number): 'ltr' | 'rtl' | 'none' {
-  switch (script) {
-    case 2: case 19: case 34: case 37: case 47: case 57: case 84: case 86: case 87: case 88: case 91: case 108: case 116: case 117: case 121: case 122:
-    case 123: case 125: case 126: case 133: case 140: case 141: case 142: case 143: case 144: case 162: case 167: case 182: case 183: case 184:
-    case 185: case 189: case 192: case 194: case 201: case 209:
-      return 'rtl'
-    case 30: case 32: case 60: case 76:
-      return 'none'
-    default:
-      return 'ltr'
-  }
-}
-
-// Whether HarfBuzz shapes the call holding offset k of group g over the reversed text. A buffer whose direction isn't its
-// script's own is reversed by graphemes and shaped in the script's direction (hb_ensure_native_direction,
-// hb-ot-shape.cc:588-644): quotes or Latin letters in an RTL run are shaped left to right in visual order, so the first
-// glyph of a pair is the logically later one. An LTR run under an RTL script stays as it is when it holds a decimal digit or
-// a regional indicator and no letter (:593-630). Blink gives HarfBuzz the segment's script and the item's direction
-// (harfbuzz_shaper.cc:341-342). General categories are the running JavaScript engine's.
-function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
-  const group = p.groups[g]!
-  const direction = scriptDirection(p.scripts[Math.min(k, group.end - 1)]!)
-  if (direction === 'none') return false
-  let scriptRtl = direction === 'rtl'
-  if (scriptRtl && !group.rtl) {
-    let a = k
-    while (a > group.start && !isSegmentEdge(p, a)) a--
-    let b = k + 1
-    while (b < group.end && !isSegmentEdge(p, b)) b++
-    const text = p.text.slice(a, b)
-    if (!/\p{L}/u.test(text) && /[\p{Nd}\u{1F1E6}-\u{1F1FF}]/u.test(text)) scriptRtl = false
-  }
-  return group.rtl !== scriptRtl
+// Whether HarfBuzz shapes the call holding k over reversed text. The fixed script/priority/group partition owns
+// this direction, including hb_ensure_native_direction's numeric exception (hb-ot-shape.cc:588-644).
+function shapedReversed(p: BlinkPrepared, k: number): boolean {
+  return p.segments.reversedAt(k)
 }
 
 // The part of pair adjustment d between the clusters on both sides of offset k that the glyph before it carries
@@ -825,7 +809,7 @@ function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
 // it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
 function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   // Where HarfBuzz shaped the reversed text, its first glyph is the cluster after k.
-  const reversed = shapedReversed(sh.p, g, k)
+  const reversed = shapedReversed(sh.p, k)
   switch (sh.p.styles[sh.p.groups[g]!.style]!.font.facts.pairKerning) {
     case 'split': return reversed ? d - (d >> 1) : d >> 1
     case 'first-advance': case null: return reversed ? 0 : d

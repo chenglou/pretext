@@ -330,6 +330,11 @@ export type FillResultOf<Start, Line, Refused> =
   }
   | { kind: 'below-floats'; line: Refused; next: Start }
 
+// A decided source range without a retained line record. The same start/slot decision serves counts and full output.
+export type RangeFillResultOf<Start> =
+  | { kind: 'line'; start: number; end: number; next: Start | null; hasLineBox: boolean }
+  | { kind: 'below-floats'; next: Start }
+
 // What a painter takes of a decided line, beside its slot and whether it has a line box.
 export type LinePieces<Facts> = {
   fragments: Fragment[]

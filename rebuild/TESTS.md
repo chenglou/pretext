@@ -27,7 +27,10 @@ predictor order stability and mode parity. Main comparisons are optional predict
 identified as borrowing native state. They do not establish a fresh main certificate. Actual child failures and
 missing/invalid completion reports cannot become successful workflow exits.
 
-The focused inspected adapter retains the complete core preparation, fill and inspection; it skips only lab expected-observation generation and painting. Full geometry suites retain their original adapter. The standalone checker rejects inspected captures supplied as plain evidence.
+The focused inspected adapter retains the complete core preparation, fill and inspection; it skips only lab expected-observation generation and painting. Full geometry suites retain their original adapter. The standalone checker rejects inspected captures supplied as plain evidence. The canonical plain adapter now
+uses `fillLineRange` without pieces. Full-piece behavior remains independently covered by the function-set tests and
+the complete output/query comparison. This change preserves checker provenance, scoring and catalog certification;
+fresh native jobs exercise the actual new range path.
 
 Known core misses and observed native variation make this strict workflow nonzero. Compare the report with the
 specific open failures in `TAKEOVER.md`; no automatic history exemption or acceptance seed is applied here.

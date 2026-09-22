@@ -141,7 +141,12 @@ The focused redo adapter is `inspected-ranges-predictor.ts`: it runs the full fa
 returns contentful source ranges and the core measurement-call count. It omits the lab’s expected observation, painter
 and painter limits. The full geometry suites continue to use `no-facts-predictor.ts`. Both adapters are accepted for
 redo evidence, but opposing orders must use the same adapter and bundle. Other predictors cannot supply redo evidence.
-Plain evidence requires `plain-predictor.ts`; supplying inspected rows as plain evidence cannot establish that path's parity.
+Plain evidence requires `plain-predictor.ts`; supplying inspected rows as plain evidence cannot establish that path's parity. The canonical
+plain adapter now calls `fillLineRange` without materializing pieces; the driver records this count/range scope.
+Its full-piece factory default remains available to the independent function-set checks. A separate range adapter
+was rejected by the existing provenance guard; that incomplete attempt is retained as a checker error, not a native
+verdict. Fresh canonical jobs after integration supply the new range-path evidence. No checker, scorer, evaluator or
+auditor acceptance rule changed.
 
 This changes the focused lab protocol. WebKit’s expected-observation port can ask Canvas questions; removing that
 phase may change measurement/native cache history. Equal core traces alone do not establish equal native state. After

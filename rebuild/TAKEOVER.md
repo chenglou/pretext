@@ -3,7 +3,22 @@
 2026-09-20, `rebuild-20260916`, from Claude's final `9369b7f`. The goal and routine commands are in
 [README.md](README.md). This record replaces the previous phase queue. Main's published API/source remain unchanged.
 
-2026-09-21: testing infrastructure is sufficient for the current iteration. Five [general-cost checkpoints](GENERAL_COST.md)
+2026-09-21, latest closure: the bounded [plaintext stateless round](STATELESS_ROUND.md) consumes Blink script data
+into one exact primary model, walks fixed source boundaries, flattens its line cursor and adds ranges through each
+engine's existing break algorithm. Plain Gecko omits unused frame/justification output. Canonical plain checks and
+benchmark counts use ranges. Final verification passes 1,211 tests and six strict projects, complete-output/ordered
+question proofs, and unchanged replay outcomes. Native strict failures remain Chrome 1, Firefox 1 plus 48 reviews,
+and WebKit host 2. No acceptance rules or references were relaxed.
+
+Native gains are mostly small; this is a structural reduction of repeated source work, not a large preparation win.
+Chrome Latin repeats cost an additional 0.062ms per 120 messages across three widths; alternating setup/memory costs
+and uncertain Firefox Latin new-width cost are retained explicitly. Fresh [main comparisons](MAIN_PERFORMANCE.md)
+still show large resize gaps. Owned rendering and rich painting remain paused. The round stops with committed useful
+simplifications and a concrete next experiment: remove unused unsegmented metadata, then simplify per-line primary
+decision data. Measurement recipes and the full historical main-pass population remain unresolved.
+
+Earlier closure, 2026-09-21 (before the plaintext round): testing infrastructure is sufficient for the current
+iteration. Five [general-cost checkpoints](GENERAL_COST.md)
 repair input-driven ordered access, Builder relocation, font/source interpretation, diagnostic scans and deep formatting
 and geometry. Blink numeric conversion, saturation and physical fragment producers now follow their source operation
 boundaries. The final closure passes 1,182 tests and six strict projects, preserves all replay-report fields except the

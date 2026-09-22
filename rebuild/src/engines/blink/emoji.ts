@@ -6,7 +6,7 @@
 // only merges into a cluster of its own buffer (hb_form_clusters, hb-ot-shape.cc:578-586). `👩` ZWJ SHY is an emoji token,
 // then text: natively the ZWJ is a zero-width cluster of its own after the emoji (suite/woman-after-zwj).
 import { isEmoji, isEmojiModifierBase, isEmojiPresentation, isExtendedPictographic, isUnassigned } from './props.js'
-import type { BlinkPrepared } from './types.js'
+import type { BlinkGroup, BlinkPrepared } from './types.js'
 
 // FontFallbackPriority values the iterator gives (font_fallback_priority.h).
 export const PRIORITY_TEXT = 0
@@ -120,9 +120,120 @@ export function emojiPriorities(text: string): Uint8Array {
   return out
 }
 
-// Whether a RunSegmenter segment starts at text_content offset k: the script or the font fallback priority changes
-// (run_segmenter.cc:46-72). HarfBuzzShaper shapes every segment in its own call (harfbuzz_shaper.cc:1080-1101).
+// hb_script_get_horizontal_direction (hb-common.cc:520-612 at HarfBuzz dfdc088c), over ICU UScriptCode values.
+// Scripts without a native direction never reverse; every unlisted script is left-to-right.
+function scriptDirection(script: number): 'ltr' | 'rtl' | 'none' {
+  switch (script) {
+    case 2: case 19: case 34: case 37: case 47: case 57: case 84: case 86: case 87: case 88: case 91: case 108: case 116: case 117: case 121: case 122:
+    case 123: case 125: case 126: case 133: case 140: case 141: case 142: case 143: case 144: case 162: case 167: case 182: case 183: case 184:
+    case 185: case 189: case 192: case 194: case 201: case 209:
+      return 'rtl'
+    case 30: case 32: case 60: case 76: return 'none'
+    default: return 'ltr'
+  }
+}
+
+const SEGMENT_EDGE = 1
+const SHAPED_REVERSED = 2
+
+// Measurement consumes the exact ordered source-script partition, including lone low surrogates. Accepted script
+// splits ignore boundaries that begin at a low surrogate; they must not erase its source script. Other readers consume
+// genuine segment edges and each source script's direction within the group-clipped shaping-call segment. Those facts
+// share one flags buffer. The analyzer's script/priority arrays are discarded; no answer or second model is retained.
+export class ShapingSegments {
+  private readonly scriptEnds: Int32Array
+  private readonly scriptCodes: Uint8Array
+  private readonly flags: Uint8Array
+
+  constructor(text: string, scripts: Uint8Array, priorities: Uint8Array, groups: readonly BlinkGroup[], groupOfUnit: Int32Array) {
+    let scriptCount = text.length === 0 ? 0 : 1
+    for (let k = 1; k < text.length; k++) if (scripts[k] !== scripts[k - 1]) scriptCount++
+    this.scriptEnds = new Int32Array(scriptCount)
+    this.scriptCodes = new Uint8Array(scriptCount)
+    this.flags = new Uint8Array(text.length)
+    let script = 0
+    for (let b = 1; b <= text.length; b++) {
+      const sourceEdge = b === text.length || scripts[b] !== scripts[b - 1]
+      if (sourceEdge) {
+        this.scriptEnds[script] = b
+        this.scriptCodes[script] = scripts[b - 1]!
+        script++
+      }
+      const low = b < text.length && (text.charCodeAt(b) & 0xfc00) === 0xdc00
+      if (b < text.length && !low && (sourceEdge || priorities[b] !== priorities[b - 1])) this.flags[b] = SEGMENT_EDGE
+    }
+    let a = 0, ordinal = 0
+    for (let b = 1; b <= text.length; b++) {
+      if (b < text.length && !this.isEdge(b) && groupOfUnit[b] === groupOfUnit[b - 1]) continue
+      const group = groupOfUnit[a]!
+      // The numeric exception reads the accepted segment, clipped by its group, even when that segment contains a
+      // hidden source-script boundary at a low surrogate. The native direction still belongs to each actual source run.
+      let numericException: boolean | undefined
+      for (let part = a; part < b;) {
+        const sourceEnd = this.scriptEnds[ordinal]!
+        const end = Math.min(b, sourceEnd)
+        const direction = scriptDirection(this.scriptCodes[ordinal]!)
+        if (group >= 0 && direction !== 'none') {
+          let scriptRtl = direction === 'rtl'
+          if (scriptRtl && !groups[group]!.rtl) {
+            if (numericException === undefined) {
+              const contents = text.slice(a, b)
+              numericException = !/\p{L}/u.test(contents) && /[\p{Nd}\u{1F1E6}-\u{1F1FF}]/u.test(contents)
+            }
+            if (numericException) scriptRtl = false
+          }
+          if (groups[group]!.rtl !== scriptRtl) {
+            const edge = this.flags[part]! & SEGMENT_EDGE
+            this.flags.fill(SHAPED_REVERSED, part, end)
+            this.flags[part] = SHAPED_REVERSED | edge
+          }
+        }
+        if (end === sourceEnd) ordinal++
+        part = end
+      }
+      a = b
+    }
+  }
+
+  scriptEndForOrdinal(ordinal: number): number { return this.scriptEnds[ordinal]! }
+  scriptForOrdinal(ordinal: number): number { return this.scriptCodes[ordinal]! }
+
+  scriptOrdinal(k: number): number {
+    let lo = 0, hi = this.scriptCodes.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (this.scriptEnds[mid]! <= k) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  scriptAt(k: number): number { return this.scriptForOrdinal(this.scriptOrdinal(k)) }
+  scriptEnd(k: number): number { return this.scriptEndForOrdinal(this.scriptOrdinal(k)) }
+  isEdge(k: number): boolean { return (this.flags[k]! & SEGMENT_EDGE) !== 0 }
+  reversedAt(k: number): boolean { return (this.flags[k]! & SHAPED_REVERSED) !== 0 }
+}
+
+// A measured string maps retained source units in increasing order. Only a question crossing an ignored source-script
+// boundary needs this temporary cursor; a question wholly inside one exact source run keeps its known scalar script.
+// Each source run is visited once, so corrections cost mapped units plus crossed runs, without per-unit binary searches.
+export class SourceScriptCursor {
+  private end: number
+  constructor(private readonly segments: ShapingSegments, private ordinal: number, private script: number) {
+    this.end = segments.scriptEndForOrdinal(ordinal)
+  }
+  at(k: number): number {
+    while (k >= this.end) {
+      this.end = this.segments.scriptEndForOrdinal(++this.ordinal)
+      this.script = this.segments.scriptForOrdinal(this.ordinal)
+    }
+    return this.script
+  }
+}
+
+// Whether a RunSegmenter segment starts at text_content offset k: the script or fallback priority changes
+// (run_segmenter.cc:46-72). A group boundary alone does not make a segment edge.
 export function isSegmentEdge(p: BlinkPrepared, k: number): boolean {
   if (!p.segmented || k <= 0 || k >= p.text.length || (p.text.charCodeAt(k) & 0xfc00) === 0xdc00) return false
-  return p.scripts[k] !== p.scripts[k - 1] || p.priorities[k] !== p.priorities[k - 1]
+  return p.segments.isEdge(k)
 }

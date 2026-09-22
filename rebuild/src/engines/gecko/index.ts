@@ -15,7 +15,7 @@
 // - gaps.ts: every gap, with the measuring only a gap needs. A plain paragraph computes none of it.
 // The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
 export { prepareGecko as prepare } from './prepare.js'
-export { fillLine, firstGeckoLine as firstLine, type GeckoFillResult, type GeckoFilledLine, type GeckoRefusedSlot } from './lines.js'
+export { fillLine, fillLineRange, firstGeckoLine as firstLine, type GeckoFillResult, type GeckoRangeFillResult, type GeckoFilledLine, type GeckoRefusedSlot } from './lines.js'
 export { linePieces, type GeckoPaintFacts } from './pieces.js'
 export { inspectLine } from './inspect.js'
 export { paragraphGaps } from './gaps.js'

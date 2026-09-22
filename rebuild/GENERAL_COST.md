@@ -11,6 +11,34 @@ a claim that arbitrary text, supplied font grammar and contextual shaping now ha
 show material preparation and scalar-fill gaps; they do not support closing application performance work. Testing work
 reopens when a concrete change needs a new observable contract.
 
+The subsequent bounded [plaintext round](STATELESS_ROUND.md) replaces Blink's retained per-unit script/priority
+arrays with one representation of the consumed facts and separates exact source-range output from full line output.
+It preserves measurement rules, ordered questions and numeric arithmetic. At 512 units, single-script prefix work
+falls from 266,231 script reads to 4,599 total buffer reads (Hebrew); the Arabic numeric control falls from 788,473 to
+4,599. These stand-in counts describe our access, not Canvas's submitted-text cost. Ordered script ends/codes serve
+measurement traversal, including exact source facts for lone low surrogates; accepted measurement boundaries separately
+ignore low starts. Direct per-unit flags serve boundary/direction readers. Three buffers contain `5S + N` bytes for S
+exact source-script runs and N UTF-16 units:
+517 versus the former 1,024 on 512 single-script units, or 3,072 versus 1,024 on a 512-unit alternating-script input.
+No lower peak-memory claim follows: analyzer arrays coexist during construction and typed-array objects also cost
+space. Random script lookup is binary; cross-script measurement walks known ordinals directly. Spacing and gap
+corrections use the exact source script of mapped units. Questions crossing an ignored low-surrogate boundary use a
+temporary monotonic cursor in O(mapped units + crossed source runs); questions covered by one source run keep the
+known scalar script. Dense edge/direction reads stay O(1). An initial five-column model was rejected after consistent native repeated-layout slowdowns;
+its cursor ablation ruled out flattening the cursor as their source. The direct-flags model replaces that prototype
+rather than retaining it as a second representation.
+
+Plain Gecko ranges omit retained placed frames and unused justification output. Span child presence is derived from
+the existing pass-local placed count, rather than retained output membership. Full and range fills share one decision
+algorithm in every port. Blink/WebKit retain scratch items/runs needed for break/trim/rollback and omit only their
+terminal full wrapper. This round does not close the contextual measurement frontier below.
+
+Final native timing is mostly close to the original redo, without a broad preparation gain. Retention accepts a
+small consistent Chrome Latin repeat cost (0.062ms per 120 messages across three widths), alternating-script setup
+and payload growth, and an unresolved Firefox Latin new-width cost. Exact removal of repeated source rescanning is
+the main benefit. The round's record distinguishes that own-code improvement from unchanged native Canvas work;
+its next bounded experiments remove unused unsegmented metadata and simplify per-line decision records.
+
 ## Current data flow
 
 N is source/transformed UTF-16 units, F actual font/context records, P bidi paragraphs, B source boxes, D source depth,
@@ -27,7 +55,7 @@ concern our own access and bookkeeping. Native shaping, Intl and JS string imple
 | Blink accepted shaping pieces | one logical accumulation of corrected exact-piece advances; ordered cut lookup |
 | Blink failed safe cuts | same predicates, rejecting pair first; a zero pair still needs wider context |
 | Blink Builder state | last meaningful source event and collapse cursor; pending toggled-space epoch materializes once |
-| Blink script splitting | local worklist preserving right-associated arithmetic and question order |
+| Blink script splitting | primary shaping segments and ordinal traversal; right-associated arithmetic and question order retained |
 | Blink generated/cluster extents | maximal fixed-property runs, clipped ordered endpoint lookup; ordinary text has no entries |
 | Blink source mapping | source runs shared at preparation; collapsed inverse-source runs exist only for inspection |
 | Blink raw diagnostic gaps | sparse first-active-entry source-position index; widening and rollback preserve order |
@@ -176,7 +204,7 @@ fresh 500,797-obligation sweep, all inherited API contracts, or universal Native
 
 ## Practical frontier
 
-Stop here for this iteration. The latest source coverage and gap structures address demonstrated large factors;
+The five-checkpoint input-growth audit stopped here. The subsequent bounded plaintext result and its next stopping point are in [STATELESS_ROUND.md](STATELESS_ROUND.md). The latest source coverage and gap structures address demonstrated large factors;
 ordinary supplied-fact controls still pay small constant overhead (Blink up to about 9.6 microseconds in stand-ins,
 WebKit gap inspection about 0.51 microseconds). The singleton gap variant adds code without a measurable win and is
 rejected. These own-JS observations are not maintained Native benchmark claims.

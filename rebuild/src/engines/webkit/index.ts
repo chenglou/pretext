@@ -20,7 +20,7 @@ import type { WebKitFilledLine, WebKitPrepared, WebKitRefusedSlot } from './type
 
 export { prepareWebKit as prepare } from './content.js'
 export { paragraphGaps } from './gaps.js'
-export { fillLine } from './lines.js'
+export { fillLine, fillLineRange, type WebKitRangeFillResult } from './lines.js'
 export { linePieces, type WebKitPaintFacts } from './output.js'
 export type { WebKitFillResult, WebKitFilledLine, WebKitRefusedSlot } from './types.js'
 

@@ -91,7 +91,7 @@ export async function runWorkflow(options: Options, operations: Operations = { a
     verifyFileSeals(frozenInputs, sealFiles(frozenInputs.map(input => input.path)), 'catalog/audit inputs')
   }
   mkdirSync(dirname(out), { recursive: true }); mkdirSync(out)
-  const record = { format: 'pretext-main-native-workflow/1', redoScope: 'inspected core ranges/measurements; lab expected observation, painting and painter limits omitted', options, inputs, sources, frozenInputs, auditSource: manifest.auditSource, startedAt: new Date().toISOString(), lockBrowser: browser === 'webkit-host' ? 'safari' : browser, driverSha256: hash(import.meta.path), adoptable: false, exit: null as number | null }
+  const record = { format: 'pretext-main-native-workflow/1', redoScope: 'inspected core ranges/measurements; lab expected observation, painting and painter limits omitted', plainScope: 'count/range output without pieces', options, inputs, sources, frozenInputs, auditSource: manifest.auditSource, startedAt: new Date().toISOString(), lockBrowser: browser === 'webkit-host' ? 'safari' : browser, driverSha256: hash(import.meta.path), adoptable: false, exit: null as number | null }
   save(join(out, 'workflow.json'), record)
   let lock: Awaited<ReturnType<Operations['acquire']>> | undefined
   try {

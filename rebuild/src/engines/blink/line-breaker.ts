@@ -177,7 +177,8 @@ export class LineBreaker {
   // slot with an inset has them (inline_layout_algorithm.cc PositionLeadingFloats).
   readonly hasLeadingFloats: boolean
   results: ItemResult[] = []
-  current: { itemIndex: number; textOffset: number }
+  itemIndex: number
+  textOffset: number
   position = 0
   appliedTextIndent = 0
   state: State = 'continue'
@@ -223,7 +224,8 @@ export class LineBreaker {
     this.floatOffset = p.baseLevel === 0 ? Math.max(0, left) : Math.max(0, subLU(containerWidth, right))
     this.hasLeadingFloats = (slot.left > 0 || slot.right > 0) && !token.afterLeadingFloats
     this.iterator = new LineBreakIterator(p.text, p.is8Bit, p.styles[0]!.iterator, p.env.uiLanguage, p.env.dictionaryBreaks)
-    this.current = { itemIndex: token.itemIndex, textOffset: token.textOffset }
+    this.itemIndex = token.itemIndex
+    this.textOffset = token.textOffset
     this.previousLineHadForcedBreak = token.afterForcedBreak
     this.lineNeedsAccurateEndPosition = lineNeedsAccurateEndPosition(p.paragraph.textAlign)
     this.isFirstFormattedLine = !token.isPastFirstFormattedLine
@@ -275,7 +277,7 @@ export class LineBreaker {
   }
 
   atEnd(): boolean {
-    return this.current.itemIndex >= this.items.length
+    return this.itemIndex >= this.items.length
   }
 
   canFitOnLine(): boolean {
@@ -294,7 +296,7 @@ export class LineBreaker {
   addItem(endOffset: number): ItemResult {
     const last = this.lastResult()
     const r: ItemResult = {
-      itemIndex: this.current.itemIndex, start: this.current.textOffset, end: endOffset, inlineSize: 0, shape: null,
+      itemIndex: this.itemIndex, start: this.textOffset, end: endOffset, inlineSize: 0, shape: null,
       canBreakAfter: false, mayBreakInside: false, hasOnlyPreWrapTrailingSpaces: false, hasOnlyBidiTrailingSpaces: false,
       breakAnywhereIfOverflow: this.breakAnywhereIfOverflow, shouldCreateLineBox: last !== null && last.shouldCreateLineBox,
       hyphen: null, isHyphenated: false, trimmedEnd: null, marginStart: 0, marginEnd: 0, partsKnown: true,
@@ -305,7 +307,7 @@ export class LineBreaker {
 
   // AddEmptyItem (line_breaker.cc:600-616).
   addEmptyItem(): ItemResult {
-    const r = this.addItem(this.current.textOffset)
+    const r = this.addItem(this.textOffset)
     if (this.results.length >= 2) {
       const last = this.results[this.results.length - 2]!
       if (last.canBreakAfter) {
@@ -317,12 +319,14 @@ export class LineBreaker {
   }
 
   moveToNextOfItem(): void {
-    this.current = { itemIndex: this.current.itemIndex + 1, textOffset: this.items[this.current.itemIndex]!.end }
+    this.textOffset = this.items[this.itemIndex]!.end
+    this.itemIndex++
   }
 
   moveToNextOfResult(r: ItemResult): void {
-    this.current = { itemIndex: r.itemIndex, textOffset: r.end }
-    if (r.end === this.items[r.itemIndex]!.end) this.current.itemIndex++
+    this.itemIndex = r.itemIndex
+    this.textOffset = r.end
+    if (r.end === this.items[r.itemIndex]!.end) this.itemIndex++
   }
 
   computeCanBreakAfter(r: ItemResult): void {
@@ -389,7 +393,7 @@ export class LineBreaker {
     for (let i = 0; i < this.results.length; i++) if (this.results[i]!.shouldCreateLineBox) shouldCreateLineBox = true
     // CreateBreakToken (line_breaker.cc:4723-4744): past the first formatted line once a line isn't empty.
     const isPastFirstFormattedLine = !this.isFirstFormattedLine || shouldCreateLineBox
-    const contentEnd = this.atEnd() ? this.text.length : this.current.textOffset
+    const contentEnd = this.atEnd() ? this.text.length : this.textOffset
     // The first ShapeLine pass reads positions up to its candidate under the style's own break type, before an overflow
     // switches to break-character (RetryAfterOverflow), so the look-ahead is the next opportunity under that type.
     const breakType = this.iterator.breakType
@@ -411,7 +415,7 @@ export class LineBreaker {
       width: Math.max(0, this.position),
       unclampedWidth: this.position,
       token: this.atEnd() ? null : {
-        engine: 'blink', itemIndex: this.current.itemIndex, textOffset: this.current.textOffset, style: this.currentStyle,
+        engine: 'blink', itemIndex: this.itemIndex, textOffset: this.textOffset, style: this.currentStyle,
         afterForcedBreak: this.isForcedBreak, isPastFirstFormattedLine, afterLeadingFloats: true,
       },
       hasForcedBreak: this.isForcedBreak,
@@ -436,10 +440,10 @@ export class LineBreaker {
       }
       const last = this.lastResult()
       if (this.stateNow() === 'overflow' && last !== null && last.canBreakAfter) this.state = 'trailing'
-      const item = this.items[this.current.itemIndex]!
+      const item = this.items[this.itemIndex]!
       switch (item.type) {
         case 'text':
-          if (item.end > item.start) this.handleText(item, this.shapeResultOf(this.current.itemIndex))
+          if (item.end > item.start) this.handleText(item, this.shapeResultOf(this.itemIndex))
           else this.handleEmptyText()
           break
         case 'open-tag': this.handleOpenTag(item); break
@@ -461,16 +465,16 @@ export class LineBreaker {
       return
     }
     if (this.trailingWhitespace === 'leading') {
-      if (collapsesWhiteSpace(this.style(item.style).whiteSpace) && this.char(this.current.textOffset) === 0x20) {
-        this.current.textOffset++
-        if (this.current.textOffset === item.end) {
+      if (collapsesWhiteSpace(this.style(item.style).whiteSpace) && this.char(this.textOffset) === 0x20) {
+        this.textOffset++
+        if (this.textOffset === item.end) {
           this.handleEmptyText()
           return
         }
       }
     }
     if (this.state === 'continue' && !this.canFitOnLine()) {
-      if (this.autoWrap && isSpaceLB(this.char(this.current.textOffset))) {
+      if (this.autoWrap && isSpaceLB(this.char(this.textOffset))) {
         this.handleTrailingSpaces(item, sr)
         if (this.stateNow() !== 'done') {
           this.state = 'continue'
@@ -864,20 +868,20 @@ export class LineBreaker {
       return
     }
     const style = this.style(item.style)
-    const c = this.char(this.current.textOffset)
+    const c = this.char(this.textOffset)
     if (collapsesWhiteSpace(style.whiteSpace) && c !== 0x3000) {
       if (c !== 0x20) {
-        if (this.current.textOffset > 0 && isSpaceLB(this.char(this.current.textOffset - 1))) this.trailingWhitespace = 'collapsible'
+        if (this.textOffset > 0 && isSpaceLB(this.char(this.textOffset - 1))) this.trailingWhitespace = 'collapsible'
         this.state = 'done'
         return
       }
-      this.current.textOffset++
+      this.textOffset++
       if (this.trailingWhitespace !== 'preserved') this.trailingWhitespace = 'collapsed'
       this.results[this.results.length - 1]!.canBreakAfter = true
     } else if (style.whiteSpace !== 'break-spaces') {
-      let end = this.current.textOffset
+      let end = this.textOffset
       while (end < item.end && isSpaceOrOtherSeparator(this.char(end))) end++
-      if (end === this.current.textOffset) {
+      if (end === this.textOffset) {
         if (isSpaceOrOtherSeparator(this.char(end - 1))) this.trailingWhitespace = 'preserved'
         this.state = 'done'
         return
@@ -896,16 +900,16 @@ export class LineBreaker {
       }
       this.position = addLU(this.position, r.inlineSize)
       r.canBreakAfter = end < this.text.length && !isSpaceOrOtherSeparator(this.char(end))
-      this.current.textOffset = end
+      this.textOffset = end
       this.trailingWhitespace = 'preserved'
     }
-    if (this.current.textOffset < item.end) {
+    if (this.textOffset < item.end) {
       this.state = 'done'
       return
     }
     const last = this.lastResult()
-    if (last === null || last.itemIndex !== this.current.itemIndex) this.addEmptyItem()
-    this.current.itemIndex++
+    if (last === null || last.itemIndex !== this.itemIndex) this.addEmptyItem()
+    this.itemIndex++
     this.state = 'trailing'
   }
 
@@ -945,14 +949,14 @@ export class LineBreaker {
   // HandleForcedLineBreak (line_breaker.cc:2856-2940, specs/blink-gaps.md §4.4).
   handleForcedLineBreak(): void {
     if (this.handleOverflowIfNeeded()) return
-    const r = this.addItem(this.items[this.current.itemIndex]!.end)
+    const r = this.addItem(this.items[this.itemIndex]!.end)
     r.shouldCreateLineBox = true
     r.hasOnlyPreWrapTrailingSpaces = true
     r.hasOnlyBidiTrailingSpaces = true
     r.canBreakAfter = true
     this.moveToNextOfItem()
     while (!this.atEnd()) {
-      const next = this.items[this.current.itemIndex]!
+      const next = this.items[this.itemIndex]!
       if (next.type === 'close-tag') { this.handleCloseTag(next); continue }
       if (next.type === 'text' && next.start === next.end) { this.handleEmptyText(); continue }
       break
@@ -971,9 +975,9 @@ export class LineBreaker {
     const remainingWidth = this.remainingAvailableWidth()
     let ignoreOverflowIfNegativeMargin = false
     if (this.state === 'continue' && remainingWidth < 0) {
-      const itemIndex = this.current.itemIndex
+      const itemIndex = this.itemIndex
       this.handleOverflow()
-      if (!this.hasOverflow || itemIndex !== this.current.itemIndex) return
+      if (!this.hasOverflow || itemIndex !== this.itemIndex) return
       ignoreOverflowIfNegativeMargin = true
     }
     const r = this.addItem(item.end)
@@ -1048,7 +1052,7 @@ export class LineBreaker {
         const current = this.style(this.currentStyle)
         // ShouldBreakOnlyAfterWhiteSpace: preserved spaces that wrap (pre-wrap, break-spaces).
         const onlyAfterWhiteSpace = preservesSpaces(current) && wrapsLines(current.whiteSpace)
-        const nextIsOpenTag = !this.atEnd() && this.items[this.current.itemIndex]!.type === 'open-tag'
+        const nextIsOpenTag = !this.atEnd() && this.items[this.itemIndex]!.type === 'open-tag'
         r.canBreakAfter = isSpaceLB(this.char(r.end)) && (!onlyAfterWhiteSpace || precededByBreakableSpace) && !nextIsOpenTag
         return
       }
@@ -1098,7 +1102,8 @@ export class LineBreaker {
           const newEnd = i + 1
           if (newEnd === this.results.length) {
             this.position = addLU(addLU(availableWidth, widthToRewind), r.inlineSize)
-            this.current = { itemIndex: r.itemIndex, textOffset: r.end }
+            this.itemIndex = r.itemIndex
+            this.textOffset = r.end
             this.handleTrailingSpaces(item, this.shapeResultOf(r.itemIndex))
             return
           }
@@ -1217,11 +1222,12 @@ export class LineBreaker {
     if (newEnd > 0) {
       this.moveToNextOfResult(this.results[newEnd - 1]!)
       this.trailingWhitespace = 'unknown'
-      while (!this.atEnd() && this.items[this.current.itemIndex]!.type === 'text' && this.items[this.current.itemIndex]!.start === this.items[this.current.itemIndex]!.end) {
+      while (!this.atEnd() && this.items[this.itemIndex]!.type === 'text' && this.items[this.itemIndex]!.start === this.items[this.itemIndex]!.end) {
         this.handleEmptyText()
       }
     } else {
-      this.current = { itemIndex: this.token.itemIndex, textOffset: this.token.textOffset }
+      this.itemIndex = this.token.itemIndex
+      this.textOffset = this.token.textOffset
       this.trailingWhitespace = 'leading'
     }
     this.setCurrentStyle(this.computeCurrentStyle(newEnd))
@@ -1312,9 +1318,11 @@ export class LineBreaker {
       if (this.items[this.results[i]!.itemIndex]!.type !== 'open-tag') {
         if (i + 1 < this.results.length) {
           const end = this.results[i + 1]!
-          const index = { itemIndex: end.itemIndex, textOffset: end.start }
+          const itemIndex = end.itemIndex
+          const textOffset = end.start
           this.rewind(i + 1)
-          this.current = index
+          this.itemIndex = itemIndex
+          this.textOffset = textOffset
         }
         return
       }
