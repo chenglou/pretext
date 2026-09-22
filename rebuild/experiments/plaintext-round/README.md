@@ -1,6 +1,6 @@
 # Plaintext stateless round
 
-The current bounded follow-up is [STATELESS_ROUND2.md](../../STATELESS_ROUND2.md). Use
+The completed bounded follow-up is [STATELESS_ROUND2.md](../../STATELESS_ROUND2.md). Use
 `--base=/private/tmp/pretext-stateless-round2-baseline-20260922` for its A6 comparison. The current probe times
 prior/current full and range plus actual main; set `PLAINTEXT_SAMPLES=10` to balance all five order slots. It adds
 narrow unbroken ASCII64/128/256/512 controls. The commands/capture discussion below preserves the dated first round;
@@ -103,3 +103,5 @@ setup bounded. Available sources and raw reports for those superseded attempts a
 index distinguishes extant copies from exact recorded hashes: some earlier helper versions are unavailable. The final
 frozen source/helpers and accepted campaign are preserved completely; old attempts do not gain that completeness by
 being archived.
+
+The completed 108-document matrix and frozen three-document follow-up are separately indexed in [STATELESS_ROUND2.md](../../STATELESS_ROUND2.md). All samples and pause tails remain. The independent audit requires exactly 36 documents and 1,800 rows per browser, rejecting incomplete broad captures. Untimed startup focus is recorded separately from guarded clock endpoints.

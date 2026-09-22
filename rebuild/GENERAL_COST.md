@@ -42,8 +42,7 @@ and payload growth, and an unresolved Firefox Latin new-width cost. Exact remova
 the main benefit. The round's record distinguishes that own-code improvement from unchanged native Canvas work;
 the subsequent [bounded round](STATELESS_ROUND2.md) removes unused unsegmented metadata and simplifies single-part
 Blink shape views. Plain narrow ASCII lines no longer pay the N(N−1) suffix-read control; many SHY leaves no longer
-pay the N(N+1)/2 identity-search control. Inspected suffix scans and Canvas questions stay unchanged. Broader speed
-still needs reliable foreground timing; it does not follow from these counts.
+pay the N(N+1)/2 identity-search control. Inspected suffix scans and Canvas questions stay unchanged. The completed foreground matrix shows about 11–15% faster ordinary Chrome repeats and about 2× on the N512 narrow control. Preparation has no general gain; Latin cold costs remain explicit and new widths are mixed. Unchanged Firefox/WebKit paths are controls. Even zero-Canvas repeats retain large main gaps. See the round record for every sample, pause tail and the stopping boundary.
 
 ## Current data flow
 

@@ -9,7 +9,7 @@ is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. 
 research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
 `codex/redo-handoff-backup-20260920` (`9369b7f`), with all committed studies in a verified Git bundle.
 
-The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md). The current
+The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md). The completed follow-up
 round removes unused unsegmented preparation data and simplifies Blink's line records; its evidence and stopping point
 are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). Owned rendering and rich painting remain paused.
 

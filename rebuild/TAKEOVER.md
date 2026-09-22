@@ -3,7 +3,19 @@
 2026-09-20, `rebuild-20260916`, from Claude's final `9369b7f`. The goal and routine commands are in
 [README.md](README.md). This record replaces the previous phase queue. Main's published API/source remain unchanged.
 
-2026-09-21, latest closure: the bounded [plaintext stateless round](STATELESS_ROUND.md) consumes Blink script data
+2026-09-22, latest closure: [plaintext round2](STATELESS_ROUND2.md) removes unused unsegmented Blink metadata,
+stores a single-part shape view in one record and removes two demonstrated scan factors without changing Canvas recipes.
+Final verification passes 1,215 tests and six strict projects; complete replay reports and fast native outcomes stay
+unchanged. The same strict native failures/reviews remain; no rules or references are relaxed.
+
+The complete 108-document / 5,400-row foreground matrix shows ordinary Chrome repeats about 11–15% faster and the
+long narrow ASCII control about 2× faster. Preparation has no general gain; a frozen follow-up retains Latin cold
+costs and mixed new-width results. Main remains substantially cheaper at resize, including zero-Canvas controls.
+Next, measure remaining per-line scratch production, preserving one breaker and required rollback/trim facts.
+Width-dependent measurement is separate research. Rich painting remains paused. The dated report links exact inputs,
+complete audits and the persistent evidence/all-ref backup.
+
+2026-09-21, earlier closure: the bounded [plaintext stateless round](STATELESS_ROUND.md) consumes Blink script data
 into one exact primary model, walks fixed source boundaries, flattens its line cursor and adds ranges through each
 engine's existing break algorithm. Plain Gecko omits unused frame/justification output. Canonical plain checks and
 benchmark counts use ranges. Final verification passes 1,211 tests and six strict projects, complete-output/ordered
