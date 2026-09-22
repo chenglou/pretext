@@ -6,6 +6,8 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 
 ## Decisions
 
+- The redo [owned-rendering fixed-word experiment](rebuild/experiments/owned-rendering/README.md) is rejected as a general replacement before timing. It omits ordinary emergency wrapping and accepted rich-item behavior. Compatible shaping groups and a bounded selected-fragment measurement probe remain candidates, not adopted engine changes.
+
 - Decide on other Canvas font settings (#107), including whether a kerning-enabled Canvas is viable: Chromium layout kerns across spaces, ZWSP and soft hyphens, but default Canvas doesn't report that kerning. README says Pretext assumes default font kerning; #199 and #216 stay open in case Safari's OffscreenCanvas ever follows `fontKerning`.
 - Decide whether `prepareRichInline()` supports `whiteSpace: 'pre-wrap'` (#173, #193). Accepting it needs a native styled-inline pre-wrap oracle.
 - Revisit what rich-text editing needs from Pretext: source offsets through whitespace normalization (#90) and caret positions (#198), and whether bidi selection and copy/paste behavior stay outside this package. Do a pass over the open demo and showcase issues (#94, #99, #150, #167).

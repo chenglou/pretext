@@ -1,0 +1,218 @@
+{
+  "schema": "owned-capability-check-2",
+  "kind": "deterministic algorithm counterexamples",
+  "nativeBrowserEvidence": false,
+  "performanceEvidence": false,
+  "result": {
+    "outcome": "rejected-replacement",
+    "criticalChecks": [
+      {
+        "id": "narrow-hello-fits",
+        "caseId": "narrow-hello",
+        "width": 20,
+        "requirement": "Retain the source and keep every line within the container or one grapheme's width (20px here). No exact line breaks are required.",
+        "passed": false,
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "hello"
+          ],
+          "lineWidths": [
+            50
+          ],
+          "allowedWidth": 20
+        }
+      },
+      {
+        "id": "arabic-complete-word-fits",
+        "caseId": "arabic-complete-word",
+        "width": 20,
+        "requirement": "Retain the source and keep every line within the container or one grapheme's width (20px here). No exact line breaks are required.",
+        "passed": false,
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "سلام"
+          ],
+          "lineWidths": [
+            40
+          ],
+          "allowedWidth": 20
+        }
+      },
+      {
+        "id": "ordinary-padding-paid",
+        "caseId": "single-padded-text",
+        "width": 40,
+        "requirement": "One nonempty ordinary item with a 10px glyph and extraWidth12 must occupy22px.",
+        "passed": false,
+        "observed": {
+          "prepareError": null,
+          "lineWidths": [
+            10
+          ]
+        }
+      },
+      {
+        "id": "selected-soft-hyphen-painted-and-paid",
+        "caseId": "soft-hyphen",
+        "width": 30,
+        "requirement": "Retain abcd, fit each line, and draw/pay a visible hyphen whenever a chosen line ends at the soft hyphen. Different chosen cuts are allowed.",
+        "passed": false,
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "ab­",
+            "cd"
+          ],
+          "lineWidths": [
+            20,
+            20
+          ]
+        }
+      },
+      {
+        "id": "valid-arabic-weight-edge-accepted",
+        "caseId": "arabic-safe-grapheme-weight-change",
+        "width": 40,
+        "requirement": "The grapheme-safe Arabic weight-change boundary must be accepted; this check does not establish native joining correctness.",
+        "passed": false,
+        "observed": {
+          "prepareError": "A rich item boundary splits a contextual shaping word",
+          "count": null
+        }
+      }
+    ],
+    "failures": [
+      {
+        "id": "narrow-hello-fits",
+        "requirement": "Retain the source and keep every line within the container or one grapheme's width (20px here). No exact line breaks are required.",
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "hello"
+          ],
+          "lineWidths": [
+            50
+          ],
+          "allowedWidth": 20
+        }
+      },
+      {
+        "id": "arabic-complete-word-fits",
+        "requirement": "Retain the source and keep every line within the container or one grapheme's width (20px here). No exact line breaks are required.",
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "سلام"
+          ],
+          "lineWidths": [
+            40
+          ],
+          "allowedWidth": 20
+        }
+      },
+      {
+        "id": "ordinary-padding-paid",
+        "requirement": "One nonempty ordinary item with a 10px glyph and extraWidth12 must occupy22px.",
+        "observed": {
+          "prepareError": null,
+          "lineWidths": [
+            10
+          ]
+        }
+      },
+      {
+        "id": "selected-soft-hyphen-painted-and-paid",
+        "requirement": "Retain abcd, fit each line, and draw/pay a visible hyphen whenever a chosen line ends at the soft hyphen. Different chosen cuts are allowed.",
+        "observed": {
+          "prepareError": null,
+          "text": [
+            "ab­",
+            "cd"
+          ],
+          "lineWidths": [
+            20,
+            20
+          ]
+        }
+      },
+      {
+        "id": "valid-arabic-weight-edge-accepted",
+        "requirement": "The grapheme-safe Arabic weight-change boundary must be accepted; this check does not establish native joining correctness.",
+        "observed": {
+          "prepareError": "A rich item boundary splits a contextual shaping word",
+          "count": null
+        }
+      }
+    ]
+  },
+  "source": {
+    "files": [
+      "/Users/chenglou/github/pretext-rebuild/rebuild/experiments/owned-rendering/core.ts",
+      "/Users/chenglou/github/pretext-rebuild/rebuild/experiments/owned-rendering/bidi.ts",
+      "/Users/chenglou/github/pretext/src/layout.ts",
+      "/Users/chenglou/github/pretext/src/rich-inline.ts",
+      "/Users/chenglou/github/pretext/src/measurement.ts"
+    ],
+    "before": "fff78d95e0814cde6afd4dbb6a147da727674800f1cf9aaccd238c84d8d38482",
+    "after": "fff78d95e0814cde6afd4dbb6a147da727674800f1cf9aaccd238c84d8d38482",
+    "stable": true
+  },
+  "methodologyLimitations": [
+    "The existing browser benchmark generator marks every code part atomic. Main Markdown/rich-note code generally breaks normally; only chips/image items use never-break behavior. These atomic-code inputs cannot establish realistic feature parity.",
+    "No per-font shaping or Arabic joining behavior is modeled by this additive backend. Accepting numeric layout here is not proof of native painting correctness.",
+    "Only the five declared anchored cases are critical checks. Other count differences are observations, not automatic failures. Passing these checks alone would not establish full replacement capability."
+  ],
+  "cases": 21,
+  "widthObservations": 78,
+  "backend": {
+    "description": "10px per visible base code point (spaces included); combining marks, default ignorables and consumed bidi controls have zero advance. No kerning or font-dependent shaping. Font weight has no effect.",
+    "checks": [
+      {
+        "text": "hello",
+        "expected": 50,
+        "actual": 50
+      },
+      {
+        "text": "‭hello‬",
+        "expected": 50,
+        "actual": 50
+      },
+      {
+        "text": "‮AV‬",
+        "expected": 20,
+        "actual": 20
+      },
+      {
+        "text": "⁧‏⁩",
+        "expected": 0,
+        "actual": 0
+      },
+      {
+        "text": "é",
+        "expected": 10,
+        "actual": 10
+      },
+      {
+        "text": "ab­cd",
+        "expected": 40,
+        "actual": 40
+      },
+      {
+        "text": "ab​cd",
+        "expected": 40,
+        "actual": 40
+      },
+      {
+        "text": "a b",
+        "expected": 30,
+        "actual": 30
+      }
+    ],
+    "calls": 138
+  },
+  "mainHead": "2e5e2bdaee398784b9cf27b24ca96df2e85396b8",
+  "redoStartingHead": "f7539525defa3dd71b58293bb33fa7079278c6e4",
+  "sourceSealScope": "Only the five listed source files; raw data explicitly retains before/after hashes. Runtime worktrees had no source changes."
+}

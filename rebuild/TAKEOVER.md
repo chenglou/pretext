@@ -13,6 +13,15 @@ The earlier cohort stopping decisions below remain historical evidence, rather t
 Fresh foreground [main comparisons](MAIN_PERFORMANCE.md) still show substantial preparation and scalar-fill gaps. The
 general input-growth audit is a bounded stopping point, not a claim that application performance is finished.
 
+## Owned-rendering decision
+
+The [fixed-word prototype](experiments/owned-rendering/README.md) is rejected as a general replacement before timing.
+Narrow ordinary Latin and Arabic words overflow, valid rich style boundaries are rejected, and ordinary item chrome
+is not yet supported. Existing fixed-fragment/bidi tests do not establish those capabilities. Full-paragraph bidi and
+independent painting remain reusable research; a shared algorithm is not disproved by the prototype omissions.
+Any next probe must establish required behavior before comparing separate preparation and resize costs to main.
+Small concrete differences may earn their cost; broad restrictions and routine word overflow do not.
+
 ## Preservation
 
 `codex/redo-handoff-backup-20260920` preserves the handed-over branch. A verified all-ref bundle preserves every

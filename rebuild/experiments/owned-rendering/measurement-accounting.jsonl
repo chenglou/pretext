@@ -1,0 +1,15 @@
+{"label":"AV96","mode":"sum-graphemes","utf16":96,"graphemes":96,"calls":3,"submittedUtf16":98,"maxQuery":96}
+{"label":"AV96","mode":"pair-context","utf16":96,"graphemes":96,"calls":5,"submittedUtf16":102,"maxQuery":96}
+{"label":"AV96","mode":"segment-prefixes","utf16":96,"graphemes":96,"calls":96,"submittedUtf16":4656,"maxQuery":96}
+{"label":"AV1000","mode":"sum-graphemes","utf16":1000,"graphemes":1000,"calls":3,"submittedUtf16":1002,"maxQuery":1000}
+{"label":"AV1000","mode":"pair-context","utf16":1000,"graphemes":1000,"calls":5,"submittedUtf16":1006,"maxQuery":1000}
+{"label":"AV1000","mode":"segment-prefixes","utf16":1000,"graphemes":1000,"calls":5,"submittedUtf16":1006,"maxQuery":1000}
+{"label":"Arabic96","mode":"sum-graphemes","utf16":96,"graphemes":96,"calls":2,"submittedUtf16":97,"maxQuery":96}
+{"label":"Arabic96","mode":"pair-context","utf16":96,"graphemes":96,"calls":3,"submittedUtf16":99,"maxQuery":96}
+{"label":"Arabic96","mode":"segment-prefixes","utf16":96,"graphemes":96,"calls":96,"submittedUtf16":4656,"maxQuery":96}
+{"label":"Arabic1000","mode":"sum-graphemes","utf16":1000,"graphemes":1000,"calls":2,"submittedUtf16":1001,"maxQuery":1000}
+{"label":"Arabic1000","mode":"pair-context","utf16":1000,"graphemes":1000,"calls":3,"submittedUtf16":1003,"maxQuery":1000}
+{"label":"Arabic1000","mode":"segment-prefixes","utf16":1000,"graphemes":1000,"calls":3,"submittedUtf16":1003,"maxQuery":1000}
+{"label":"LatinUnique96","mode":"sum-graphemes","utf16":96,"graphemes":96,"calls":97,"submittedUtf16":192,"maxQuery":96}
+{"label":"LatinUnique96","mode":"pair-context","utf16":96,"graphemes":96,"calls":192,"submittedUtf16":382,"maxQuery":96}
+{"label":"LatinUnique96","mode":"segment-prefixes","utf16":96,"graphemes":96,"calls":96,"submittedUtf16":4656,"maxQuery":96}

@@ -24,7 +24,9 @@ DPR, font, input population, context ownership, power conditions and source hash
 The earlier cohort results are in `TAKEOVER.md`. [GENERAL_COST.md](GENERAL_COST.md) tracks the current general-cost
 audit and the practical stopping frontier after five checkpoints. [Performance against main](MAIN_PERFORMANCE.md)
 records the remaining application gaps; the input-growth audit did not close that work. Testing infrastructure is
-sufficient for this iteration; further work follows concrete core or native-evidence needs.
+sufficient for this iteration; further work follows concrete core or native-evidence needs. The
+[owned-rendering experiment](experiments/owned-rendering/README.md) is rejected as a general replacement: it overflows
+ordinary words and drops supported rich-item behavior. Fixed-fragment checks are not a performance win.
 
 ## Iteration
 
