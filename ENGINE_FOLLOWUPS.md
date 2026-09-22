@@ -1,6 +1,13 @@
 # Engine Follow-ups
 
-The current bounded redo [plaintext round 3](rebuild/STATELESS_ROUND3.md) integrates exact Blink retry-search and Gecko
+The current [prepared plaintext round](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) changes only the public simple counter;
+the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeat layout about 31–70% faster across the three
+browsers, with unchanged preparation, measurements and retained data. A bounded numeric ASCII experiment establishes
+Canvas-free layout on observed inputs, with unsupported families and a large preparation gap retained. General
+preparation ownership and broader native coverage come next; exact identity source maps are deferred. Rich painting
+remains paused. Snapshots are refreshed; the report names the observer correction, Safari 27 deferral and retained native failures.
+
+The completed bounded redo [plaintext round 3](rebuild/STATELESS_ROUND3.md) integrates exact Blink retry-search and Gecko
 adjacent-endpoint reuse. Maintained gates and fresh native cuts/scoring outcome categories stay unchanged, with existing failures,
 reviews and four Firefox native-geometry/count/issue-list variations retained. The complete foreground phase matrix supports useful repeat gains, no general preparation gain and mixed new-width
 costs. Main's resize gap remains open. Preparation source-map ownership and unfamiliar-width measurement remain open. The Gecko
@@ -28,6 +35,8 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Revisit what rich-text editing needs from Pretext: source offsets through whitespace normalization (#90) and caret positions (#198), and whether bidi selection and copy/paste behavior stay outside this package. Do a pass over the open demo and showcase issues (#94, #99, #150, #167).
 
 ## Line breaking
+
+- Add a versioned public WebKit `keep-all` punctuation policy now that Safari 27 ships the upstream change. At 40px, `foo。bar日本語` uses five unmodified lines versus four with grapheme spans and the current public engine, including with named covering fonts. Preserve this native failure; its maintained span count/breaks remain required, while absolute native height is explicitly deferred. Safari's UTF-16 text-box punctuation rule differs from Blink and ICU4X, so changing to either existing pair model would introduce unrelated errors. See PLATFORM_BUGS.md and RESEARCH.md.
 
 - Follow the page language in the remaining line-break rules (approved). Preparation reads `<html lang>` once and resolves it to `ja`, `ko`, `zh` or root, with no `prepare()` option; only Safari's small-kana and `ー` rule uses it so far. Remaining layers: Safari's quote rules on `ja` pages, and Chrome's quote, `〜` and `゠` rules on `zh` pages (RESEARCH.md). Pretext keeps `〜` and `゠` with any text before them, so on `zh` pages Chrome paints `a xxxx / 〜b` where Pretext gives `a / xxxx〜 / b`. Build them on the generated line-break class table, keep `setLocale()` segmenter-only, and rerun the family in each installed browser before each layer.
 - On every page, Chrome breaks after a closing curly quote before CJK text (`他说“你好”` / `然后走了`), while Pretext's closing-quote carry keeps the CJK attached. No browser treats curly single quotes around Latin text as brackets, and Firefox doesn't treat double quotes as brackets, but Pretext does. Narrow the closing-quote carry and the boundary before opening quotes to UAX #14 LB19 and LB19a.

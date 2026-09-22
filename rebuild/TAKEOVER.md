@@ -1,5 +1,14 @@
 # Takeover decisions and evidence
 
+2026-09-22, current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md): the only runtime change is the public
+simple count specialization; the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeated layout
+about 31–70% faster across Chrome, Firefox and Safari, without preparation or retained-data changes. The bounded
+ASCII preparation experiment supports Canvas-free layout on observed inputs, but does not cover the general
+main-pass population. Preparation ownership and broader numeric representations come next; exact identity source
+maps are deferred. Rich painting stays paused. All required snapshots are refreshed; 1,496 tests and the fresh three-browser
+gates pass, with Safari 27’s single native-height obligation explicitly deferred and its failures retained. The
+[round report](PREPARED_LAYOUT_EXPERIMENT.md) records the corrected fractional observer and exact validation; the dated rounds below retain their original evidence and stopping decisions.
+
 2026-09-22, completed bounded [plaintext round 3](STATELESS_ROUND3.md): Blink reuses its immediate retry search and Gecko
 reuses adjacent range endpoints, preserving existing measurements and arithmetic. Full/count/range ordered proofs,
 1,223 tests and strict projects pass; maintained gates and fresh native outcome categories retain existing failures,

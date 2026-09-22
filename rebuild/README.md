@@ -11,10 +11,16 @@ research reports preserve the prior endpoint, not another task queue. Its branch
 
 The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md). The completed follow-up
 round removes unused unsegmented preparation data and simplifies Blink's line records; its evidence and stopping point
-are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). The current [round 3](STATELESS_ROUND3.md) removes repeated
+are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). The completed [round 3](STATELESS_ROUND3.md) removes repeated
 Blink/Gecko lookups with preserved correctness outcomes and complete phase timings: useful repeat gains, no general
-preparation gain and mixed new-width costs. Main's resize gap remains open. [Preparation ownership](experiments/plaintext-round/preparation-cost-account.md) records the next
-bounded representation experiment and remaining costs. Owned rendering and rich painting remain paused.
+preparation gain and mixed new-width costs. Main's resize gap remains open.
+
+The current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md) specializes count-only layout in the public
+engine; the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeats about 31–70% faster across all three
+browsers. A bounded numeric ASCII experiment supports Canvas-free layout on observed inputs, but leaves Unicode,
+contextual shaping, broader main-pass coverage and a large preparation gap open. Preparation ownership and the next
+broader representation are the priority. [Exact identity source maps](experiments/plaintext-round/preparation-cost-account.md)
+are deferred behind that work. Owned rendering and rich painting remain paused.
 
 ## Core
 
@@ -28,8 +34,8 @@ Sampled font behavior must not silently become a guarantee about arbitrary fonts
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.
-The earlier cohort results are in `TAKEOVER.md`. [GENERAL_COST.md](GENERAL_COST.md) tracks the current general-cost
-audit and the practical stopping frontier after five checkpoints. [Performance against main](MAIN_PERFORMANCE.md)
+The earlier cohort results are in `TAKEOVER.md`. [GENERAL_COST.md](GENERAL_COST.md) tracks the general-cost
+audit, the five-checkpoint stopping point and the current prepared-data frontier. [Performance against main](MAIN_PERFORMANCE.md)
 records the remaining application gaps; the input-growth audit did not close that work. Testing infrastructure is
 sufficient for this iteration; further work follows concrete core or native-evidence needs. The
 [owned-rendering experiment](experiments/owned-rendering/README.md) is rejected as a general replacement: it overflows
@@ -74,4 +80,4 @@ need planted defects that the old rule missed. Native history and predictor orde
 The native driver holds the maintained browser lock across its sequential jobs. Run one checker per
 browser. Keep timing work foreground and verify actual page focus. Laptop/battery runs are authorized; record their
 conditions. Do not alter unrelated processes. Use large evaluations for unresolved questions that focused evidence
-cannot answer. The current work left main's public source and package surface unchanged.
+cannot answer. The current round changes public count-only layout without changing the API or package surface.

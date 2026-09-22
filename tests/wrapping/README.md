@@ -35,9 +35,20 @@ A candidate that changes the harness normalization contract gates from its own
 harness and also runs once from main's harness, so contract-masked losses stay
 visible.
 
-For fractional CSS line heights, a separate two-line strut observes the browser’s
-used line-box advance. This keeps Safari’s integer rounding out of the wrapping
-comparison; the API contract still requires the explicit requested line height.
+For fractional CSS line heights, identical spans on two independently forced
+lines observe their vertical advance. Dividing their rounded block height by two
+understates that advance in Safari 27. A count is established only when exactly
+one integer fits the unchanged 0.02px geometry allowance; invalid or ambiguous
+geometry remains unobserved. The API contract still requires the requested line
+height. Both original and extraction-stage counts use the same decoder.
+
+Safari 27 changed the maintained `foo。bar日本語` keep-all paragraph from the
+older four-line expectation to five lines; diagnostic grapheme spans still use
+four. That row retains required span count/breaks, but defers absolute native
+height while the old public WebKit policy remains. Its observed failing native
+height/source/width metrics stay in every report. This is an explicit browser
+compatibility gap, not a corrected engine or a plaintext pass. See
+[the platform ledger](../../PLATFORM_BUGS.md).
 
 Height, extracted line count/boundaries, source placement, whitespace, widths,
 selected hyphens, public API contracts and selected native rich-item heights

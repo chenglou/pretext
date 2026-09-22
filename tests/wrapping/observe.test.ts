@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { normalizeSource, type Prediction } from './contracts.ts'
-import { assess } from './observe.ts'
+import { assess, lineCountFromHeight } from './observe.ts'
 import type { NativeExtraction, NativeObservation, NativePoint, WrappingCase } from './types.ts'
 
 const base: WrappingCase = {
@@ -388,4 +388,24 @@ test('legacy geometry uses its actual layout height and materialized line count'
   expect(assess(input, oracle, { ...result, countedHeight: 96 }, 'chrome').height.status).toBe('fail')
   const discretionary = { ...input, heightSource: 'lines' as const, discretionary: { expectedText: ['a'] } }
   expect(assess(discretionary, oracle, { ...result, countedHeight: 96 }, 'chrome').height.status).toBe('pass')
+})
+
+
+test('fractional block rounding preserves one independently established count', () => {
+  const advance = 20.960000038146973
+  for (const [count, height] of [[1, 20.953125], [2, 41.90625], [3, 62.875], [4, 83.828125], [8, 167.671875], [16, 335.359375], [64, 1341.4375]]) {
+    expect(lineCountFromHeight(height!, advance)).toBe(count!)
+  }
+  for (const [height, advance] of [[NaN, 20], [20, Infinity], [-1, 20], [20, 0], [0.01, 0.01], [30, 20], [62.88000011444092 + 0.0201, 20.960000038146973]]) {
+    expect(lineCountFromHeight(height!, advance!)).toBeNull()
+  }
+  const input = { ...base, text: 'abc', lineHeight: 20.96 }
+  const oracle: NativeObservation = { height: 62.875, lineCount: 62.875 / advance, usedLineHeight: advance, lineRects: [], points: [] }
+  const correct = { ...prediction('abc', [['a', 0, 1], ['b', 1, 2], ['c', 2, 3]]), height: 62.88, countedHeight: 62.88 }
+  expect(assess(input, oracle, correct, 'safari').lineCount.status).toBe('pass')
+  for (const count of [2, 4]) {
+    const assessed = assess(input, oracle, { ...correct, lineCount: count, lines: Array(count).fill(correct.lines[0]) }, 'safari')
+    expect(assessed.height.status).toBe('pass')
+    expect(assessed.lineCount.status).toBe('fail')
+  }
 })

@@ -373,7 +373,9 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
       context: { kind: 'installed', lang: input.lang ?? (direction === 'rtl' ? 'ar' : 'en') },
       browsers: input.browsers === undefined ? ['chrome', 'safari'] : [...input.browsers],
       lineMethod: input.method ?? (family === 'pre-wrap' || family === 'keep-all' ? 'span' : 'range'),
-      heightMode: 'exact', heightSource: 'layout', required: family === 'keep-all' || family === 'symbols' ? ['height', 'lineCount', 'breaks'] : ['height', 'lineCount'],
+      heightMode: 'exact', heightSource: 'layout',
+      required: input.required === undefined ? (family === 'keep-all' || family === 'symbols' ? ['height', 'lineCount', 'breaks'] : ['height', 'lineCount']) : [...input.required],
+      ...(input.note === undefined ? {} : { note: input.note }),
     })
   }
   for (const [family, inputs] of compactOracles) for (const input of inputs) addOracle(family, input)

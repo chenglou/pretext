@@ -59,7 +59,7 @@ declare const preparedTextBrand: unique symbol
 type PreparedCore = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
-  simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
+  simpleLineWalkFastPath: boolean // Normal text can use simpler numeric walkers across layout APIs
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
   breakablePreferredBreaks: (number[] | null)[] // Preferred grapheme break ends inside breakable segments, else null
   letterSpacing: number // Extra advance between rendered graphemes on the same line

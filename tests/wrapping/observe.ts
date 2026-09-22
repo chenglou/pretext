@@ -123,16 +123,19 @@ export function observeNative(input: WrappingCase, browser: BrowserKind): Native
     const extraction = input.lineMethod === undefined ? undefined : observeLineExtraction(element, input, browser)
     let usedLineHeight = input.lineHeight
     if (!Number.isInteger(input.lineHeight)) {
-      // Safari can use integral line boxes despite retaining a fractional
-      // computed CSS line-height. Observe the strut independently of wrapping.
+      // Observe advance independently: dividing a rounded block height by
+      // its line count loses the fractional distance between its lines.
       element.style.whiteSpace = 'pre'
       element.style.width = 'max-content'
-      element.textContent = 'x\nx'
-      usedLineHeight = element.getBoundingClientRect().height / 2
+      const first = document.createElement('span')
+      const last = document.createElement('span')
+      first.textContent = last.textContent = 'x'
+      element.replaceChildren(first, document.createTextNode('\n'), last)
+      usedLineHeight = last.getBoundingClientRect().top - first.getBoundingClientRect().top
     }
     const count = origin.height / usedLineHeight
     return {
-      height: origin.height, lineCount: Math.abs(count - Math.round(count)) < 0.000001 ? Math.round(count) : count, points, lineRects,
+      height: origin.height, lineCount: lineCountFromHeight(origin.height, usedLineHeight) ?? count, points, lineRects,
       ...(usedLineHeight === input.lineHeight ? {} : { usedLineHeight }),
       ...(extraction === undefined ? {} : { extraction: { ...extraction, usedLineHeight } }),
       ...(richHeight === undefined ? {} : { richHeight }),
@@ -177,7 +180,8 @@ function lineOnGrid(rect: NativeRect, lineHeight: number, lineCount: number): nu
 }
 
 function rectLine(rect: NativeRect, input: WrappingCase, native: NativeObservation): number | null {
-  return lineOnGrid(rect, native.usedLineHeight ?? input.lineHeight, Math.round(native.lineCount))
+  const count = lineCountFromHeight(native.height, native.usedLineHeight ?? input.lineHeight)
+  return count === null ? null : lineOnGrid(rect, native.usedLineHeight ?? input.lineHeight, count)
 }
 
 export function pointLine(point: NativePoint, lineHeight: number, lineCount: number): number | null {
@@ -191,11 +195,17 @@ export function pointLine(point: NativePoint, lineHeight: number, lineCount: num
   return line
 }
 
+// A count is observed only when the existing pixel geometry allowance admits
+// exactly one integer. Fractional block rounding is not a fractional line.
+export function lineCountFromHeight(height: number, advance: number): number | null {
+  if (!Number.isFinite(height) || height < 0 || !Number.isFinite(advance) || advance <= 0) return null
+  const first = Math.max(0, Math.ceil((height - HEIGHT_TOLERANCE) / advance))
+  const last = Math.floor((height + HEIGHT_TOLERANCE) / advance)
+  return first === last && Number.isSafeInteger(first) ? first : null
+}
+
 function extractionLineCount(extraction: NativeExtraction): number | null {
-  const { height, usedLineHeight } = extraction
-  if (!Number.isFinite(height) || height < 0 || !Number.isFinite(usedLineHeight) || usedLineHeight <= 0) return null
-  const count = height / usedLineHeight
-  return Math.abs(count - Math.round(count)) < 0.000001 ? Math.round(count) : null
+  return lineCountFromHeight(extraction.height, extraction.usedLineHeight)
 }
 
 function forcedLineBounds(source: string, count: number): Array<{ start: number; end: number }> | null {
@@ -305,6 +315,8 @@ function compareExtractedBreaks(extraction: NativeExtraction, count: number, whi
 function compareSource(
   input: WrappingCase, native: NativeObservation, lines: PredictionLine[], spans: SourceSpan[], whitespace: boolean,
 ): MetricResult {
+  const count = lineCountFromHeight(native.height, native.usedLineHeight ?? input.lineHeight)
+  if (count === null) return { status: 'unobserved', reason: 'Block height and observed advance do not establish one line count.' }
   let applicable = 0
   let observed = 0
   let ambiguous = 0
@@ -315,7 +327,7 @@ function compareSource(
     // breaks also do not paint a width-bearing source rectangle.
     if (whitespace && (input.whiteSpace === 'normal' && ASCII_SPACE.test(point.text) || /[\r\n\f]/.test(point.text))) continue
     applicable++
-    const expected = pointLine(point, native.usedLineHeight ?? input.lineHeight, Math.round(native.lineCount))
+    const expected = pointLine(point, native.usedLineHeight ?? input.lineHeight, count)
     if (expected === null) { ambiguous++; continue }
     for (; spanIndex < spans.length && spans[spanIndex]!.rawEnd <= point.start; spanIndex++) { /* monotonic source view */ }
     const start = spans[spanIndex]
@@ -348,7 +360,9 @@ function compareWidths(input: WrappingCase, native: NativeObservation, lines: Pr
   // line Range geometry, including terminal SHY and signed spacing. Their
   // original tighter tolerance is part of that explicit observation protocol.
   const tolerance = input.discretionary === undefined ? WIDTH_TOLERANCE : 0.025
-  const bounds: Array<{ left: number; right: number } | undefined> = Array.from({ length: Math.round(native.lineCount) })
+  const count = lineCountFromHeight(native.height, native.usedLineHeight ?? input.lineHeight)
+  if (count === null) return { status: 'unobserved', reason: 'Block height and observed advance do not establish one line count.' }
+  const bounds: Array<{ left: number; right: number } | undefined> = Array.from({ length: count })
   for (const rect of native.lineRects) {
     if (rect.width <= RECT_EPSILON || rect.height <= RECT_EPSILON) continue
     const index = rectLine(rect, input, native)
@@ -386,11 +400,13 @@ function compareHyphens(input: WrappingCase, native: NativeObservation, lines: P
   if (input.text !== 'a\u00adb' || input.letterSpacing < 0 || input.wordBreak !== 'normal') {
     return { status: 'unobserved', reason: 'SHY selection oracle is verified only for normal word breaking in a SHY b with nonnegative spacing; raw rectangles remain available.' }
   }
+  const count = lineCountFromHeight(native.height, native.usedLineHeight ?? input.lineHeight)
+  if (count === null) return { status: 'unobserved', reason: 'Block height and observed advance do not establish one line count.' }
   const a = native.points.find(point => point.text === 'a')!
   const b = native.points.find(point => point.text === 'b')!
   const shy = native.points.find(point => point.text === '\u00ad')!
-  const aLine = pointLine(a, native.usedLineHeight ?? input.lineHeight, Math.round(native.lineCount))
-  const bLine = pointLine(b, native.usedLineHeight ?? input.lineHeight, Math.round(native.lineCount))
+  const aLine = pointLine(a, native.usedLineHeight ?? input.lineHeight, count)
+  const bLine = pointLine(b, native.usedLineHeight ?? input.lineHeight, count)
   if (aLine === null || bLine === null) return { status: 'unobserved', reason: 'The SHY control letters have ambiguous native rectangles.' }
   const nativeLines: number[] = []
   if (aLine !== bLine) {
@@ -461,8 +477,10 @@ export function assess(
   const height: MetricResult = heightMatches
     ? { status: 'pass' }
     : { status: 'fail', detail: `Predicted height ${predictedHeight}; native ${native.height}.${usedLineHeight === input.lineHeight ? '' : ` Native line boxes use ${usedLineHeight}px; equivalent predicted height ${nativeScaleHeight}.`}` }
-  let lineCount: MetricResult = predictedLineCount === native.lineCount
-    ? { status: 'pass' }
+  const observedCount = lineCountFromHeight(native.height, usedLineHeight)
+  let lineCount: MetricResult = observedCount === null
+    ? { status: 'unobserved', reason: 'Block height and observed advance do not establish one line count.' }
+    : predictedLineCount === observedCount ? { status: 'pass' }
     : { status: 'fail', detail: `Predicted ${predictedLineCount} lines; native block observation has ${native.lineCount}.` }
   let breaks: MetricResult = { status: 'unobserved', reason: 'No source line-boundary extraction was selected.' }
   if (input.lineMethod !== undefined) {

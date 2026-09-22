@@ -115,6 +115,16 @@ For one-off performance and memory work, start with `bun start` and an isolated,
 
 Bun/Node microbenchmarks are useful for quick experiments, but browser behavior needs browser measurements.
 
+For count-only changes, compare the public `prepare()`/`layout()` exports on otherwise identical source. An integer
+helper compared with public `layout()` also removes its result object and height multiplication. Keep that diagnostic
+separate from the API speed claim. [The prepared plaintext experiment](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) records
+both protocols, foreground observations and their limits.
+
+Separate preparation, preparation plus first layout, unfamiliar widths, repeated widths and retained numeric payload.
+Reusing immutable numeric data in an unfamiliar-width batch does not establish a cold CPU cache. Require zero Canvas
+calls during numeric layout, preserve native-supported source cuts/counts, and retain unsupported inputs and slow
+samples. Numeric array bytes do not measure physical heap, transient preparation or shared font/Canvas caches.
+
 For algorithmic changes, scale both source length and the number of segments,
 preferred breaks, forced lines and rich items. Include repeated punctuation,
 Arabic joins, CJK keep-all, long hyphenated URLs and internal whitespace runs.

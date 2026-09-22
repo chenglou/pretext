@@ -7,6 +7,8 @@ import type { KnipConfig } from 'knip'
 const config: KnipConfig = {
   entry: [
     'rebuild/src/index.ts',
+    // Explicitly scoped research exports; native generators are archived externally.
+    'rebuild/experiments/prepared-numeric/direct-word.ts',
     // Command-line tools (each parses its own arguments or runs on import).
     'rebuild/tools/*.ts',
     'rebuild/lab/{run,score,gate,fresh,sharded,measurements,compare-rows,triage}.ts',

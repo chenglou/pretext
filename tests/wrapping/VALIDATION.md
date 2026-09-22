@@ -17,6 +17,37 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Public count specialization and Safari 27 observation, September 22
+
+The [prepared plaintext round](../../rebuild/PREPARED_LAYOUT_EXPERIMENT.md)
+changes count-only traversal, preserving preparation and range measurements.
+The final fresh ordinary run contains 33,720 inputs, all installed browsers and
+both directions, with ten numeric source/profile reports. Main and current have
+identical metric totals and outcome categories; no lost successes, observation
+losses, new API/rich failures or execution errors. Unknown source/boundary/width
+observations remain unknown. All maintained snapshots were refreshed.
+
+The first refresh stopped on two identical main/current required Safari cases.
+The fractional strut divided rounded block height by two; actual span-distance
+advance fixes the false fractional count using the unchanged 0.02px geometry
+criterion and an exactly-one-integer decoder. Planted wrong counts still fail
+independently of matching height. The observer correction applies to both sources.
+
+Safari 27 now lays out `foo。bar日本語` at 40px as five unmodified lines versus
+four diagnostic span lines and four predicted lines, including with named
+covering fonts. `wrap-06c1e0111950efed` retains required span count/breaks but
+explicitly defers absolute native height until the versioned punctuation policy
+lands. Its failing native height/source/width metrics remain visible. This is
+not a fixed engine or a plaintext pass; earlier browser successes remain historical.
+After this explicit deferral, required gates pass. See
+[PLATFORM_BUGS.md](../../PLATFORM_BUGS.md).
+
+All 1,496 tests and root type/lint/dead-code checks pass. Package smoke and the
+minimal research strict project pass. Three full foreground Chrome/Safari
+benchmark runs refresh both snapshots at DPR 2; hot public layout reads .0295ms
+and .035ms respectively. The round report separates historical snapshot timings
+from the fair three-browser paired API comparison and names environment limits.
+
 ## Rich inline keeps a line at an unfit soft hyphen as plain text does
 
 This runtime change starts from main `491c7f1` (#324). In `prepareRichInline()`,

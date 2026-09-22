@@ -3,6 +3,8 @@ import type { KnipConfig } from 'knip'
 // Test files are in `ignore` so their imports don't count as "usage", flagging exports used only by test files as unused.
 // Tradeoff: dead code & exports within test files won't be detected. See: https://github.com/webpro-nl/knip/issues/1374. This is acceptable
 const config: KnipConfig = {
+  // Match the root TypeScript project; rebuild/ has its own checker configuration.
+  project: ['*.ts', 'pages/**/*.ts', 'scripts/**/*.ts', 'shared/**/*.ts', 'src/**/*.ts', 'tests/**/*.ts'],
   entry: [
     // Library entry points — match the `exports` field in package.json
     'src/layout.ts',

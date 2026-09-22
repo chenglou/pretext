@@ -1,11 +1,22 @@
 # General stateless cost
 
-The current bounded [plaintext round 3](STATELESS_ROUND3.md) removes repeated Blink retry searches and Gecko adjacent
+The current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md) removes range bookkeeping from public count-only
+layout. Fair public-API pairs show ordinary repeats about 31–70% faster across all three browsers, with unchanged
+preparation and retained data. The redo core matches `0bdea4d`. A bounded numeric ASCII value also supports unfamiliar
+widths without Canvas, source strings or per-line records; eager original-prefix preparation is rejected for general
+use because its submitted text grows quadratically.
+
+The smaller direct preparation still costs about 9.5–13.5× main in the captured N512 controls. General preparation
+ownership, contextual shaping, signed spacing and broader native coverage remain open. Bracket search is about 59%
+faster than global binary narrow and 17% slower wide; neither traversal nor preparation is proved necessary. Exact
+identity source maps are deferred behind the next broader prepared-data experiment. Rich painting remains paused.
+
+The completed bounded [plaintext round 3](STATELESS_ROUND3.md) removes repeated Blink retry searches and Gecko adjacent
 endpoint lookups without changing measurement rules or arithmetic. Controlled ASCII 512 prefix/map reads fall about
 41%/34%; the complete foreground matrix supports useful repeat gains. Preparation has no general gain, new-width costs
 are mixed and unchanged WebKit control variation is retained. Main's large resize gap remains open.
 The [preparation ownership account](experiments/plaintext-round/preparation-cost-account.md) separates actual consumers
-from unexamined representations: exact implicit identity source maps are a concrete next experiment. Dense maps,
+from unexamined representations; exact implicit identity source maps remain a deferred experiment. Dense maps,
 temporary source copies, per-line rollback/trim scratch, new-width Canvas work and inspected scans remain open costs.
 Neither these gains nor rejected small prototypes prove the remaining costs necessary or close general performance.
 
@@ -218,7 +229,9 @@ fresh 500,797-obligation sweep, all inherited API contracts, or universal Native
 
 ## Practical frontier
 
-The five-checkpoint input-growth audit stopped here. The subsequent bounded plaintext result and its next stopping point are in [STATELESS_ROUND.md](STATELESS_ROUND.md). The latest source coverage and gap structures address demonstrated large factors;
+The five-checkpoint input-growth audit stopped here. Subsequent bounded plaintext results are in the dated round
+reports; [PREPARED_LAYOUT_EXPERIMENT.md](PREPARED_LAYOUT_EXPERIMENT.md) records the current frontier. The source
+coverage and gap structures described here address demonstrated large factors;
 ordinary supplied-fact controls still pay small constant overhead (Blink up to about 9.6 microseconds in stand-ins,
 WebKit gap inspection about 0.51 microseconds). The singleton gap variant adds code without a measurable win and is
 rejected. These own-JS observations are not maintained Native benchmark claims.

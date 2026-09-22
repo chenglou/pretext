@@ -2,6 +2,10 @@
 
 On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
 
+The current [prepared plaintext round](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) specializes public count-only layout;
+the redo core matches `0bdea4d`. Next, test preparation ownership and broader numeric representations against main's
+genuine native successes. Exact identity source maps are deferred behind that work. Rich painting remains paused.
+
 ## 1. Engine Work
 
 - Deferred engine decisions, known gaps and harness debt live in [ENGINE_FOLLOWUPS.md](ENGINE_FOLLOWUPS.md). Finish open landings depth-first before starting new discovery.

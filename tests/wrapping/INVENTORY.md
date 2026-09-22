@@ -87,3 +87,15 @@ No valid case was removed because all implementations fail it, because it belong
 ## Fonts and observation limits
 
 See [fonts/README.md](fonts/README.md). A controlled-font byte mismatch or load failure fails the run. Named installed faces and maintained fallback stacks use ordinary CSS fallback, with the platform recorded in each report. These observations do not identify the actual selected face for every glyph or certify supplied-font fallback coverage.
+
+
+## Safari 27 keep-all obligation, September 22
+
+`wrap-06c1e0111950efed` retains its exact input, document language and span
+protocol. The browser now gives five unmodified paragraph lines while the spans
+and unchanged public engine give four. Only span line count/breaks remain
+absolute obligations; native height/source/width failures remain observed and
+main-preservation gates still apply normally. Six named/generic font controls
+reproduce the intervention difference. Earlier Safari height success is not
+reclassified retroactively. A versioned WebKit punctuation policy is deferred
+in [ENGINE_FOLLOWUPS.md](../../ENGINE_FOLLOWUPS.md).

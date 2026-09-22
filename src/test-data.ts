@@ -77,6 +77,8 @@ export type ProbeOracleCase = {
   dir?: 'ltr' | 'rtl'
   lang?: string
   method?: 'range' | 'span'
+  required?: readonly ('height' | 'lineCount' | 'breaks')[]
+  note?: string
   browsers?: readonly ('chrome' | 'safari' | 'firefox')[]
 }
 
@@ -384,6 +386,8 @@ export const KEEP_ALL_ORACLE_CASES: readonly ProbeOracleCase[] = [
   },
   {
     label: 'safari ideographic punctuation keep-all boundary',
+    required: ['lineCount', 'breaks'],
+    note: 'Safari 27 changes unmodified keep-all punctuation wrapping: five lines here, versus four with diagnostic spans. The unchanged engine still predicts four; native height/source/width failures remain recorded. See PLATFORM_BUGS.md.',
     text: 'foo。bar日本語',
     width: 120,
     font: '18px serif',

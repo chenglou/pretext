@@ -305,7 +305,63 @@ function normalizeLineStartChunkIndexFromHint(
 }
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  return walkPreparedLinesRaw(prepared, maxWidth)
+  if (!prepared.simpleLineWalkFastPath) return walkPreparedLinesRaw(prepared, maxWidth)
+  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
+  const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
+  let count = 0
+  let lineW = 0
+  let hasContent = false
+
+  // A paragraph-leading ZWSP establishes a line; resumed ZWSPs are consumed.
+  let first = 0
+  while (first < widths.length && kinds[first] === 'space') first++
+  for (let i = first; i < widths.length; i++) {
+    const kind = kinds[i]!
+    if (!hasContent && (kind === 'space' || (kind === 'zero-width-break' && i !== first))) continue
+    const w = widths[i]!
+    const breakAfter = kind === 'space' || kind === 'zero-width-break'
+    if (hasContent && lineW + w > fitLimit) {
+      if (breakAfter) { count++; lineW = 0; hasContent = false; continue }
+      count++
+      lineW = 0
+      hasContent = false
+    }
+
+    // Whole-segment admission precedes character overflow, as in the range walker.
+    const advances = breakableFitAdvances[i]!
+    if (!hasContent && w > fitLimit && advances !== null) {
+      const preferred = breakablePreferredBreaks[i]!
+      let preferredIndex = 0
+      let lastPreferredEnd = -1
+      let g = 0
+      while (g < advances.length) {
+        const gw = advances[g]!
+        if (hasContent && lineW + gw > fitLimit) {
+          count++
+          lineW = 0
+          hasContent = false
+          if (preferred !== null && lastPreferredEnd > 0) {
+            g = lastPreferredEnd
+            // This was the last preferred end visited: its successor is
+            // already the next preferred end after the resumed cursor.
+            lastPreferredEnd = -1
+            continue
+          }
+        }
+        lineW = hasContent ? lineW + gw : gw
+        hasContent = true
+        if (preferred !== null && preferred[preferredIndex] === g + 1) {
+          lastPreferredEnd = g + 1
+          preferredIndex++
+        }
+        g++
+      }
+    } else {
+      lineW = hasContent ? lineW + w : w
+      hasContent = true
+    }
+  }
+  return count + (hasContent ? 1 : 0)
 }
 
 function walkPreparedLinesSimple(

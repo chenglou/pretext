@@ -1,5 +1,33 @@
 # Performance against main
 
+## Prepared plaintext round, 2026-09-22
+
+The only runtime change is a smaller public simple counter; the redo core matches `0bdea4d`. The fair comparison
+uses public `prepare()` and `layout()` on otherwise identical source, including the same object result and height
+multiplication. Sixty foreground documents retain all 2,700 rows. Ordinary repeated-layout paired ratios are:
+
+| Browser | Latin | CJK | Arabic | Mixed |
+| --- | ---: | ---: | ---: | ---: |
+| Chrome | 0.440 | 0.341 | 0.411 | 0.616 |
+| Firefox | 0.455 | 0.471 | 0.490 | 0.692 |
+| Safari | 0.322 | 0.303 | 0.307 | 0.557 |
+
+These are about 31–70% faster, with similar unfamiliar-width gains. Preparation, measurements, retained data and
+counts are unchanged. Timed endpoints and script states are visible, focused and DPR 2; three unfocused Chrome
+boot/bookend records remain. The separate bare-counter matrix includes a wrapper difference and is not the public
+speed claim.
+
+The bounded Chrome single-word experiment retains one numeric position column and no text/context/tree in its
+returned value. Its final growth capture has 574 layouts; each of five numeric controls supports 202 layouts with
+native visible cuts/counts and zero layout Canvas calls. This empirical ASCII subset does not cover the general
+main-pass population. Signed spacing, contextual shaping and Unicode hard negatives remain explicit.
+
+At N512, the bracket search is about 59% faster than global binary search at narrow widths and 17% slower at wide
+widths. It adds no retained search structure. Direct preparation costs about 9.5–13.5× main across the captured
+identical preparation aliases; paragraph-local versus shared ownership is part of that comparison. These costs are
+open, not proved necessary. The [round report](PREPARED_LAYOUT_EXPERIMENT.md) retains complete populations, all slow
+samples, source/protocol distinctions and completed validation. Earlier dated matrices below are unchanged.
+
 ## Plaintext stateless round 3, 2026-09-22
 
 The accepted captures contain exactly 36 unique documents per browser: 108 documents and 5,400 saved rows. Ten samples

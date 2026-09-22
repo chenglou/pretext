@@ -233,9 +233,14 @@ Hangul classes and CJ), where a mark takes its base's class. It keeps `ー`, sym
 such as `★`, supplementary ideographs and, after an ideograph, `〵` or an
 ideographic variation selector, but breaks after NS letters such as `々` or `〼`,
 and after `〵` following a closing bracket. `keepAllPairModel` picks Blink's rule,
-ICU4X's, or WebKit's, whose keep-all breaks only at spaces; newer WebKit source
-also breaks after opening, closing and other punctuation there, but not after
-letters.
+ICU4X's, or the legacy WebKit profile, whose keep-all breaks only at spaces.
+Safari 27 now permits breaks after opening, closing, initial, final and other
+punctuation in a 16-bit text box, while keeping dash punctuation, symbols and
+letters. This is not the Blink or ICU4X pair rule. Grapheme span edges remove
+internal opportunities, so `foo。bar日本語` at 40px uses five unmodified lines and
+four span lines, including in named covering fonts. The current public profile
+still predicts four; the maintained native miss remains visible while a
+versioned preprocessing policy is deferred (September 22, 2026).
 
 Where the engine does not keep a pair, Pretext ends a keep-all run where UAX #14
 allows a break between the two line-break classes. The classes come from a table
@@ -983,6 +988,18 @@ Current counts belong in the `corpora/*-step10.json` snapshots, not here.
 
 ## Keeping Work Bounded
 
+Count-only layout does not need the range walker's source endpoints, paint-width bookkeeping or callbacks. The
+[prepared plaintext round](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) specializes the existing simple count path while
+keeping whole admission, ordered emergency progress and preferred-cut replay. Complex data retains the common
+walker. This removes output work without changing measurements or adding prepared state.
+
+A compact numeric value can support unfamiliar widths without Canvas during layout, but preparation remains a
+separate question. Eager original-prefix columns retain linear data while submitting quadratic text on tiny-character
+inputs. Local singles/pairs and agreement with the whole width avoid that growth but cannot certify every longer
+context: a synthetic measurement can keep those observations unchanged and alter a triple. The bounded ASCII
+experiment retains native evidence and unsupported inputs; it is not a general font guarantee or a replacement
+for main's genuinely supported behavior. Remaining preparation and traversal costs are open, not lower bounds.
+
 Small operations became quadratic when repeated over growing user text. The
 history audit found these traps; the commits retain the implementation details:
 
@@ -1025,3 +1042,13 @@ without library code showed the same split, and four extra Canvas calls per
 prepare restored the drop. Fresh text never reaches those hits. Compare submitted
 Canvas text and first cold prepares, and treat a warm-only change there as a
 cache phase until installed Safari shows it.
+
+
+Fractional native count observation must measure line advance, not average
+rounded block height. In Safari 27, 20.96px CSS yields 41.90625px for two lines
+and 62.875px for three; dividing the former by two falsely makes the latter
+3.0007457 lines. Identical independently forced-line spans measure 20.960000038px
+advance. With the existing 0.02px geometry allowance, exactly one integer count
+fits captured 1/2/3/4/8/16/64-line blocks. Ambiguous/nonfinite geometry stays
+unobserved; planted wrong counts fail independently of a correct predicted
+height. This observer correction is applied to main and current alike.
