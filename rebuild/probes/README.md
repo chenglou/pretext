@@ -43,6 +43,23 @@ may read the DOM freely; this is research, not the library.
   by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
   `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
   `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
+- `../tools/cut-fonts-probe.ts` (the cut of a wide group and, since 2026-09-23, words first; two checkouts bundled into
+  one page): every family of a list lays the same long paragraphs out by both trees, and their cuts, the positions at
+  every inner cut of either tree and at the space before it, the group totals and the lines at ordinary widths, at the
+  decided lines' own widths and beside cuts are compared (lab README, "Test tiers", has the rule it serves). For words
+  first (48de7f7) against 90e0266 in pinned Chrome over 318 families: at DPR 2, 61 of 769,917 layouts differ, all
+  Zapfino (67 of 483,099 positions, 1 group total), where the words' two-word test refuses a cut the cut search takes
+  inside a contextual form; at DPR 1, 0 of 784,173. The runs are under
+  `.artifacts/tests/runs/blink-words-first-20260923/c1/fonts-dpr{1,2}`.
+- `../tools/words2-sum-probe.ts` (words2-sum S1; the second check of words first, 2026-09-20): a sum of words against
+  Canvas's own exact totals, on short paragraphs (2 to 8 words, where a group below 256 zoomed px is Canvas's one total)
+  and on runs of consecutive pieces inside long groups, and the base against the head on its own texts, styles and
+  widths, in every installed family. For V3 at DPR 2 over 318 families it found the head off Canvas in 2 of 679,661 exact
+  short groups (Euphemia UCAS, 432,128 units) and 1,492 of 1,534,773 long layouts differing; for 48de7f7, 0 of 679,661
+  and 983, with 42,722 of its 42,842 differing positions under negative word spacing, where the base's windows hold
+  totals of 256 zoomed px or more once JS adds the spacing. `../tools/words2-sum-cases.ts` makes the differing layouts
+  lab cases, which say which tree the browser agrees with. The runs are under
+  `.artifacts/tests/runs/words2-blink-20260920/attack/sum-dpr2` and `.artifacts/tests/runs/blink-words-first-20260923/c1/sum-dpr2`.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word

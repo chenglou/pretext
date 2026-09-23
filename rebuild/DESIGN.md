@@ -2008,7 +2008,8 @@ maintainer's stance of 2026-09-23 allows for a premise no one has falsified in r
   within its windows of up to 256 zoomed px, and so does no longer: a font whose lookups read two words back loses it.
   Of round 2's differences in real fonts, Zapfino's `the` after a space is a context the two-word test sees and the cut
   search missed, and Euphemia UCAS's were the script of the whole Canvas call, which the rule for words without a script
-  of their own now keeps out (below); what this tree's fonts probe and lab cases find is in TAKEOVER.md.
+  of their own now keeps out (below). This tree's cut probe finds Zapfino's 61 layouts alone differing at DPR 2 and
+  none at DPR 1, and of its Zapfino layouts as 1,932 lab cases 15 statuses move, all from fail to pass (TAKEOVER.md).
 - *Positions inside a word stay sorted.* The walk over the cuts stands in for the search over every offset, which is
   Blink's own binary search over sorted positions (shape_result.cc:2300-2318); both give one candidate only where the
   positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it.

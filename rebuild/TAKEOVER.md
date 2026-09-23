@@ -13,8 +13,36 @@ about fonts, taken as documented defaults with named gaps: no shaping context re
 (`context-past-a-word`) and positions inside a word stay sorted (`positions-run-backwards`). An inspected paragraph cuts
 every group by the cut search alone first, which asks what it asked before words, holds every read that depends on the
 cuts against it and the walk against the search, and takes the words' values, so plain and inspected lines are the
-same. Offline on the stand-in Canvases no layout of 12,000 differs from the base where the premises hold, and every one
-that differs reports its gap where they don't. The browser evidence is in the recording commit that follows.
+same. The evidence, all in pinned Chrome 153 at DPR 2 unless named (runs under
+`.artifacts/tests/runs/blink-words-first-20260923/c1`):
+- Tier 2, recorded in both orders in both configurations: 0 status transitions against the reference of ff0f584 on all
+  69,224 cases, the exact-value tallies unchanged (316 and 839 differing values), the gates' seeds lost 0 and gained 0,
+  so they stay. The plain predictor's line ranges equal the usual run's on every case without facts. The recordings
+  pack with every case replaying exactly and are frozen at 48de7f7; an inspected paragraph now asks 90.0 M recorded
+  questions where it asked 51.0 M, since it cuts by the cut search and by words and holds every read against both.
+- The certified fast workflow and the real-text supplement give the base's outcomes case for case: 999 of 1,000 (the
+  same stable failure, `c-d0c13fd8c7aca939`) and 64 of 64.
+- The cut probe over 318 families: at DPR 2, 61 of 769,917 layouts differ, all Zapfino; at DPR 1, 0 of 784,173. The
+  Zapfino layouts as 1,932 lab cases: 13 breaks and 2 line counts go from fail to pass and none the other way.
+- The second check's sum probe: the words are off Canvas's exact total in 0 of 679,661 short groups (V3: 2, Euphemia
+  UCAS), and 983 of 1,534,771 long layouts differ from the base. Its differing layouts as 1,060 lab cases: breaks 887
+  to 987 passes (120 gained, 20 lost), line counts 1,042 to 1,054 (17 and 5), widths 87 to 755. Of the 25 passes lost,
+  18 are under negative word spacing, where the base's windows hold totals of 256 zoomed px or more once JS adds the
+  spacing, each with `context-past-a-word` on the inspected paragraph; 6 are two Euphemia UCAS paragraphs, each at
+  three widths a LayoutUnit apart, whose spaces Canvas measures alone as Common (DESIGN.md §4.6); 1 is Zapfino.
+- The second check's own 1,171 lab cases, scored against their recorded native layouts: breaks 954 to 1,017, line
+  counts 1,117 to 1,129, with 8 passes lost in four places; V3 had lost 44 breaks there, 41 in Euphemia UCAS.
+- Offline, `tools/words-attack.ts` over 11,973 seeded paragraphs at four widths (47,892 layouts a Canvas): on `usual`
+  at DPR 2 no layout differs from the base, at DPR 3 one case at four widths does, where the window rule moves a window
+  under letter spacing, and on `fine` at the lines' own widths 0 of 80,206; plain and inspected lines are equal in all.
+  Where the Canvas breaks a premise, every layout that differs from the base without the window rule reports its gap
+  (context across a space 25, two words back 9,940, negative advances 666), and the window rule moves 197, 6 and 3
+  more there without one.
+- Under the stand-in Canvas (`tools/words-count.ts`, 1,000 messages a set) a chat message is prepared and filled at
+  320px with 132.2 questions and 560 UTF-16 units where the base asks 179.5 and 1,941 (the bench's ASCII set), 157.1
+  and 780 where 198.1 and 2,049 (its mix), 175.1 and 747 where 221.5 and 2,188 (its real set) and 273.2 and 1,210 where
+  282.3 and 1,973 (eleven languages); a kept one at a new width with 27.6 and 113 where 60.5 and 264 (ASCII) and 37.2
+  and 135 where 64.5 and 272 (mix).
 
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer

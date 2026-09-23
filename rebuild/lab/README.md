@@ -607,9 +607,11 @@ must not differ where the browser doesn't side with the change.
 to the walk (`line-breaker.ts` `wordCandidate`) or to what the inspected path holds them against (DESIGN.md §4.6).
 `tools/words-attack.ts` lays seeded paragraphs of words (`tools/words-attack-cases.ts`) out by the main line's tree and
 the change's in one process on the stand-in Canvases, plain and inspected, at fixed widths and at the decided lines' own
-widths: on `usual` and `fine`, which keep both premises, no layout may differ between the trees, between the walk and
-the search, or between plain and inspected, and none may report `context-past-a-word` or `positions-run-backwards`; on
-`across`, `far` and `backwards`, which break them, every layout that differs must report its gap. 12,000 layouts take
+widths: on `usual` and `fine`, which keep both premises, no layout may differ between the walk and the search or between
+plain and inspected, and against the tree before words first only where the rule for window sides Canvas shapes as
+Common moves a window (at 48de7f7, over the 11,973 paragraphs of the seed `blink-words-first-1`, one case at four widths
+on `usual` at DPR 3); on `across`, `far` and `backwards`, which break the premises, every layout that differs from the
+tree before words first and isn't moved by that rule must report its gap. 12,000 layouts take
 about a minute and a half on ten cores. `tools/words2-sum-probe.ts` holds the words' sums against Canvas's own exact
 totals over the installed families in pinned Chrome, and the cut probe above holds the two trees' positions.
 

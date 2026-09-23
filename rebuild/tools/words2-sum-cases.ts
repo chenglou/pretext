@@ -34,7 +34,7 @@ const seen = new Set<string>()
 for (let f = 0; f < rows.length; f++) {
   const row = rows[f]!
   if (!row.resolves || row.differing === undefined || (families !== null && !families.includes(row.family))) continue
-  const family = row.family.startsWith('!') ? row.family.slice(1) : row.family
+  const family = row.family.startsWith('!') ? row.family.slice(1) : JSON.stringify(row.family)
   const taken = new Map<string, number>()
   for (let i = 0; i < row.differing.length; i++) {
     const d = row.differing[i]!
