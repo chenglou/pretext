@@ -372,6 +372,7 @@ export type GapName =
   | 'script-context'
   | 'space-in-shaping'
   | 'in-word-prefix'
+  | 'negative-word-tail'
   | 'glyph-clusters'
   | 'joining-technology'
   | 'fixed-pitch-path'

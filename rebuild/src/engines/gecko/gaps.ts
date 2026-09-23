@@ -354,6 +354,19 @@ export function emergencyHyphenBreak(sink: GapSink, p: GeckoPrepared, run: numbe
   }
 }
 
+// A scan the word scan decided (lines.ts wordScan), and the engine's loop's result over the same advances, which tests
+// every break candidate. The word scan passes over the candidates inside a word whose end fits, on a premise about fonts:
+// no tail of a shaped word has a negative advance (DESIGN.md §4.6, "Gecko's word scan"). Where the two results differ, a
+// word it passed over has a prefix wider than the room left though the whole word fits, and the line is the word scan's.
+export function negativeWordTail(sink: GapSink, p: GeckoPrepared, run: number, aStart: number, loop: Measured | null, word: Measured): void {
+  if (sink === null || loop === null) return
+  if (loop.charsFit === word.charsFit && loop.advance === word.advance && loop.trimmableChars === word.trimmableChars &&
+    loop.trimmableAdvance === word.trimmableAdvance && loop.usedHyphenation === word.usedHyphenation && loop.lastBreak === word.lastBreak &&
+    loop.breakPriority === word.breakPriority) return
+  const at = (t: number): number => t < p.tSource.length ? p.tSource[t]! : p.text.length
+  sink.push({ gap: 'negative-word-tail', run, detail: `from offset ${at(aStart)}, the engine's loop fits the text to offset ${at(aStart + loop.charsFit)} (last break ${loop.lastBreak === null ? 'none' : at(aStart + loop.lastBreak)}) and the word scan to ${at(aStart + word.charsFit)} (${word.lastBreak === null ? 'none' : at(aStart + word.lastBreak)}): the word scan passed over a word with a prefix wider than the room left, so a tail of that word has a negative advance` })
+}
+
 // Why a tab's width is a stand-in (lines.ts computeTabs): an earlier text frame of the line measures under a condition of
 // its whole text run, or the position the tab counts from rests on an in-word stand-in.
 export type TabReason =

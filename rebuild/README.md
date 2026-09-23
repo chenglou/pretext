@@ -22,6 +22,12 @@ contextual shaping, broader main-pass coverage and a large preparation gap open.
 broader representation are the priority. [Exact identity source maps](experiments/plaintext-round/preparation-cost-account.md)
 are deferred behind that work. Owned rendering and rich painting remain paused.
 
+Since 2026-09-23 Gecko decides a break scan from its shaping units' advances and passes over the candidates inside a
+word whose end fits (the word scan, DESIGN.md §4.6), on a premise about fonts the maintainer accepted; the rest of the
+redo core still matches `0bdea4d`. In Firefox it prepares new Latin and Arabic chat messages 1.6 to 1.7 times faster
+(1.5 to 1.6 times main keeping its caches, where it was 2.5 to 2.8), fills them at new widths about 3 and 9 times faster
+and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK stays where it was.
+
 ## Core
 
 `src/index.ts` dispatches to `src/engines/{blink,gecko,webkit}`. Canvas supplies measurements; DOM reads and font-file
@@ -31,6 +37,9 @@ geometry and uncertainty. A paragraph should do only the work its requested outp
 Prefer fewer representations, local derived values and ordinary loops. Preserve shaping context and numeric units at
 measurement boundaries. A smaller number of Canvas calls is neither a speed result nor a correctness argument.
 Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
+A premise about fonts that no source gives is taken only as a documented default with a named gap that inspected
+paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
+word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

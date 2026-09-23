@@ -1,5 +1,24 @@
 # Takeover decisions and evidence
 
+2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
+and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer
+accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it.
+On the port's measurements every installed face at every instance CSS can ask for keeps it (1,229,216 recorded in-word
+advances, 381,027 words in 321 families in pinned Firefox, about 2.7M more word and paragraph layouts in the attack of
+2026-09-23). Skia at a variation corner and a made-up font break it, with the gap; Firefox breaks it in Mishafi and Diwan
+Thuluth where the port can't see it, which was wrong before the word scan too (§4.6). Plain and inspected paragraphs take its lines; an
+inspected one also runs the engine's loop, so it asks exactly what it asked, and reports `negative-word-tail` where the
+two differ. Both Firefox tier 1 reports equal the base's but for the library's fingerprint, the 192 existing
+question-order cases and the citation ledger's 17 existing losses included; plain, pure, sweep and painter pass in both
+configurations; the plain path asks 25% fewer recorded questions. In pinned Firefox the certified fast workflow and the
+real-text supplement give the base's outcomes case for case (955/1/44 and 64/64), and the plain predictor's tier 2 has
+no transition, its 21 moved line ranges all on history-dependent cases whose native lines moved too. The two attacks
+find no layout that differs from the loop's on fonts that keep the premise, and a gap on every one that differs where
+the font breaks it. Timed in pinned Firefox 156 against the base in alternating runs (per 1,000 units): new Latin text
+0.63 ms where 1.04 (main keeping its caches 0.41), new Arabic text 0.81 where 1.41 (0.50), CJK unchanged (4.85 against
+4.94); first fills of that text at three new widths 0.17 where 0.49 and 0.10 where 0.93; repeated widths 0.057 where
+0.103 (Latin) and 0.054 where 0.093 (Arabic), main 0.007.
+
 2026-09-22, current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md): the only runtime change is the public
 simple count specialization; the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeated layout
 about 31–70% faster across Chrome, Firefox and Safari, without preparation or retained-data changes. The bounded

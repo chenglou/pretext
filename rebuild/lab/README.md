@@ -601,6 +601,26 @@ differ, the probe can't say which is right: `tools/cut-fonts-cases.ts` writes th
 cases, `lab/run.ts` and `lab/score.ts` hold both trees' lines against the browser's own, and no case may go from pass
 to a failure.
 
+**A change to Gecko's word scan also passes its attacks and the premise probe before it merges** (since 2026-09-23): a
+change to `engines/gecko/lines.ts` `wordScan`, to what it leaves to the engine's loop, or to the in-word recipes whose
+values it passes over (DESIGN.md §4.6). The recorded sets hold the lab's fonts alone and few words at the width where
+the premise decides. `tools/word-scan-attack.ts` lays seeded paragraphs out on a constructed Canvas that shapes like a
+font without negative advances, plain by the tree and by its edited copies (`tools/word-scan-variants.ts`: `loop`, the
+engine's loop alone, and `proven`, the word scan without its premise) and inspected by the tree, at drawn widths and at
+the widths where a break moves, each with the app units beside them: no layout may differ from the loop's, no inspected
+layout may report `negative-word-tail`, and inspected lines must be the plain ones. `--break-premise` makes the font
+break the premise, and then every layout that differs must report the gap. `--dictionary` gives the environment the
+dictionary breaks of Thai, Lao, Khmer and Myanmar (Intl.Segmenter), so a run of those scripts holds natural breaks inside
+one shaping unit, and `--scripts` draws such runs from main's corpora and words of scripts the lists leave out.
+`tools/word-scan-spaces-attack.ts` does the same for every space-like character inside words under every spacing and white-space value. A seed of 20,000 paragraphs
+takes 10 to 25 minutes on a core, `--focus` and `--all-lines` the longer. `tools/word-scan-premise-probe.ts` holds the
+tree against the loop in pinned Firefox, each word at the width of its own advance, over the installed families (the
+list of the cut probe above; `WORD_SCAN_PREMISE_CONTROL=1` first, which must find its two planted failures): no word may
+differ. It takes a few minutes in a Firefox slot. `tools/word-scan-scripts-probe.ts` (P2) with
+`WORD_SCAN_SCRIPTS_WEBFONTS=1` holds the same test on installed faces loaded at their variation corners through
+`FontFace` and on the made-up kern font `tools/negative-tail-font.ts`, beside Firefox's own lines, in about 30 seconds:
+every word that differs from the loop must report the gap.
+
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
 (25 cases a round trip against 1, and without the giants). So `sets.ts` fixes each set's parts (the suite samples keep

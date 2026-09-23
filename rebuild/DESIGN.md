@@ -1122,10 +1122,12 @@ where it may be wrong.
   arithmetic and question order. Tab origins are folded innermost-to-root only for a consumed tab.
 - Gecko's decided line keeps what its fill raised and the in-word stand-in offsets its break scans consulted, across both
   passes of a redo; `inspectLine` reports from them. What a plain paragraph doesn't ask: the characters of placed frames,
-  the space-in-shaping windows, a letter-spaced unit's group count at 2px and the positions a stand-in tab rests on. A
-  break candidate inside a word is read whole on both paths, with the questions that put a kerned pair's adjustment or
-  a joined suffix's form on one side of it (§4.4); until the profiling phase a plain scan left those out where no fit
-  test was near (§4.6).
+  the space-in-shaping windows, a letter-spaced unit's group count at 2px, the positions a stand-in tab rests on, and
+  the break candidates inside a word whose end fits, which the word scan passes over on both paths (§4.6). An inspected
+  paragraph runs the engine's loop beside the word scan, which reads every candidate whole, with the questions that put
+  a kerned pair's adjustment or a joined suffix's form on one side of it (§4.4), and reports `negative-word-tail` where
+  the two decide a scan differently; until the profiling phase a plain scan left those questions out where no fit test
+  was near (§4.6).
 
 **Nothing in the library counts or logs what it asks of Canvas.** A row's `measure` is the lab adapter's own count of
 the contexts a layout made and its `measureText` calls, taken on the page's Canvas classes (`lab/predictor-core.ts`,
@@ -1719,7 +1721,7 @@ never measures wastes calls. Engine-true output adds one kind of measurement: th
 |---|---|---|---|
 | Blink | every shaping group's words | [start, first safe) at a wrapped line start; [last safe, break) at a line end that isn't at a space, or at any line end where `NeedsAccurateEndPosition` holds; tab widths at their position; the hyphen, once per result | prefix widths at the cluster boundaries of the line's text and tab items |
 | WebKit | stored widths of word pieces and single spaces; per box its single space, measured once as the box is made (`WebKitBox.spaceWidth`) | `breakWord` prefixes from the item start (a bisection over O(log n) prefixes); widths deferred by bidi splits; preserved white space containing TAB; the hyphen string | nothing: boxes are sums of item widths |
-| Gecko | every shaping unit's advance; the space and a boundary U+00A0, each once a text run | tab stops from the containing block's space width; the hyphen run; in-word advances at break candidates, on a plain paragraph without the pair-placement and joined-suffix questions unless a fit test or an edge needs the whole advance (§4.6) | per-character advances inside the line's frames, `W(unit) − W(suffix)` at cluster starts, and the justification spacing |
+| Gecko | every shaping unit's advance; the space and a boundary U+00A0, each once a text run | tab stops from the containing block's space width; the hyphen run; in-word advances at the break candidates the engine's loop reads, which a plain paragraph reads only where the word scan leaves a scan to the loop (§4.6) | per-character advances inside the line's frames, `W(unit) − W(suffix)` at cluster starts, and the justification spacing |
 
 The third column is what the charter's tentpole 8 asks to record: it costs a Canvas call per cluster boundary of placed
 text in Blink and Gecko, which the lab counts and records like every other call (§4.6). It belongs to the inspected
@@ -1873,6 +1875,80 @@ bar. So it went: a plain paragraph's scan reads every candidate whole, as an ins
 subset of the inspected path's questions because it runs the same reads and leaves out only what gaps and inspection
 ask, and its lines are the inspected path's because both read the same advances. `rebuild/src` is 46 lines shorter,
 and `lazy-scan.test.ts` went with it.
+
+**Gecko's word scan** (2026-09-23; `lines.ts` `wordScan`; research/SPEC-WORD-SUM.md has the study of 2026-09-20, built
+on branch `x-words2-gecko`). Gecko shapes a text run word by word: a boundary space is a glyph of its own and nothing is
+shaped across it (gfxFont.cpp:3708-3900), so the advance before a shaping unit's start is the sum of the units before
+it, which `prepare` measured. A break scan is walked unit by unit with the engine's own tests at the units' starts,
+which ask Canvas nothing; what it can't decide it leaves to the engine's loop (`charScan`, the port of
+`BreakAndMeasureText`): a scan that starts, ends, trims or would break inside a unit, `break-spaces`, a text run with a
+tab (the loop asks for the tabs' widths as it reaches them, `computeTabs`), and a unit that a removed soft hyphen stands
+in or before. A unit can hold candidates inside itself: a natural break after a hyphen or between Han characters, and
+under `overflow-wrap: break-word` every cluster of a line's first word, which is most of what a chat message's fill
+asked Canvas before. The walk passes over them where the unit's end fits.
+
+That rests on a **premise about fonts**: the advance before an offset inside a word is never more than the advance
+before the word's end, so no tail of a shaped word has a negative advance. No engine source gives it and Canvas isn't
+asked for it: a glyph's advance is signed and nothing clamps it (gfxHarfBuzzShaper.cpp:1692-1721), so a font can break
+it. On the port's own measurements it holds in every installed face at every instance CSS can ask for: the 1,229,216
+advances inside words in the recorded answers include none above the word's end; in pinned Firefox 381,027 words in 321
+font families, each laid out at the width of its own advance, where the premise alone decides, give the engine's loop's
+lines (`tools/word-scan-premise-probe.ts`, probe word-scan P1; again with the landed tree on 2026-09-23); and the
+attack of 2026-09-23 (`tools/word-scan-scripts-probe.ts`, P2, and `tools/word-scan-paragraphs-probe.ts`, P3: about 2.2M
+word layouts over the dictionary scripts, Indic, Arabic, Hebrew, Tibetan, Mongolian and emoji at 9-96px, weights 100-900,
+italic, ratios 1 and 2 and 110% zoom, and 487,296 paragraph layouts against native Firefox) found no gap in them. It is
+not true of every font. HarfBuzz over 1,643 faces, variable ones at their axis corners and named instances
+(`tools/word-scan-hb-tails.py`), finds negative word tails in Mishafi, Diwan Thuluth and Skia at its lightest, narrowest
+corner. Where Canvas sees one, the word scan loses lines: Skia at that corner through `FontFace` `variationSettings`
+(9 of 71,778 web-font layouts) and a made-up kern font (`tools/negative-tail-font.ts`), each with the gap. Firefox
+itself breaks the premise in Mishafi and Diwan Thuluth on common words ending in alef and tanween after a ligature
+(`حالاً`, `صباحاً`; about 0.26% of the Arabic corpus's words in Mishafi): the mark takes back 120 or 240 of 2,048 units,
+and Firefox counts the whole ligature before the alef, which starts a grapheme inside it. The port measures that position
+at the end of the mark's cluster, so the loop and the word scan give the same wrong line there and no gap is reported;
+that is a port item of its own, older than the word scan. Skia's Light Condensed instance breaks it natively on `door.’`,
+which the port doesn't see either. The maintainer
+accepted it on 2026-09-23 as a documented default with a named gap (rebuild/README.md, "Core"), as the pair placement
+rests on "a face places all its Latin pairs one way" (§4.4). What the engine does give is checked, not believed: the
+loop adds each character's spacing inside the word (gfxTextRun.cpp:1139-1151), so the walk leaves to the loop a unit
+with inner candidates under letter spacing, one that holds a trimmable space, and one whose spacing is negative (word
+spacing reaches U+00A0 before a join control, which is inside a word and isn't trimmable), and a unit whose inner
+advances the port takes from a prefix's own width, where HarfBuzz shapes it reversed or a mark starts a cluster
+(`advance.ts` `advancesAreSuffixes`). What is left of the premise is that Canvas measures no suffix below nothing, and
+none narrower than the share of a pair's adjustment it holds.
+
+Plain and inspected paragraphs take the word scan's lines. An inspected paragraph runs the loop first, so it asks Canvas
+the questions it asked before the word scan, in their order, and holds every scan the word scan decides against the
+loop's result over the same advances; where a field of the two differs, the line reports `negative-word-tail` (§5), with
+the offsets where each breaks. On the port's numbers that is where the premise fails. Under a font whose kerning
+HarfBuzz splits between two glyphs, the port's estimate of an advance inside a word can pass the word's end where the
+engine's glyphs don't, and there the word scan would be right and the loop wrong (research/SPEC-WORD-SUM.md, section 5);
+no example was built. A plain paragraph carries no gaps, so there a font that breaks the premise gives a wrong line and
+nothing says so. `word-scan.test.ts` holds four made-up fonts that break it (the glyph before the last, a mark, a split
+pair and the last glyph each take back more than the rest of the word gives), with the wrong line pinned in both modes
+and the gap that names it. Nothing is kept: no mode, no count, nothing on the prepared paragraph (what a unit holds
+inside is read from the glyph flags of the units a scan visits).
+
+What it saves. In the recorded answers (tier 1's inputs, 63,771 cases a configuration) the plain path asks 2,779,415
+questions without facts where it asked 3,690,764 (distinct 1,866,779 against 2,549,365), and 2,725,667 with facts where
+it asked 3,594,733; the inspected path asks what it asked, and both tier 1 reports equal the ones before the word scan
+but for the library's fingerprint. On the Amdahl cohorts of 120 chat messages under the stand-in Canvas
+(rebuild/experiments/amdahl), preparation and a count at 320px make 4,947 calls where they made 20,270 in Latin, 3,511
+where 10,378 in Arabic, 16,921 where 25,961 in mixed text and 69,625 where 71,042 in CJK, and the first fills at 260,
+380 and 440px 1,205 where 19,605, 55 where 12,946, 3,791 where 13,595 and 1,804 where 1,347. Every message of every
+cohort asks a subset of the questions it asked before. CJK's first fills ask more because 7 of its 120 messages (17 to
+19 characters, one line at 320px and two at 260px) moved about 70 questions each from the count at 320px to the fill at
+260px: the loop tested every candidate of the one-unit message at 320px, and the unit kept the answers, where the word
+scan asks nothing there. From scratch and at the three widths together CJK makes 71,429 calls where it made 72,389.
+Timed in pinned Firefox 156 on 2026-09-23 (the probes of rebuild/experiments/amdahl on branch `amdahl-floor`, the base
+tree and this one in alternating runs, device pixel ratio 2, AC power, beside other jobs at load averages of 7 to 24;
+`.artifacts/bench/gecko-word-scan-20260923`), in ms per 1,000 units: text no one has measured is prepared and counted at
+320px in 0.63 where it took 1.04 (Latin; main keeping its caches takes 0.41), 0.81 where 1.41 (Arabic; 0.50) and 4.85
+where 4.94 (CJK; 1.99), the CJK difference inside the spread of its batches (paired by batch 0.98, 0.93 to 1.24); that
+text's first fills at 260, 380 and 440px take 0.17 where 0.49 (Latin) and 0.10 where 0.93 (Arabic); on the cohorts'
+repeating text, first fills at those widths take 0.10 where 0.43 (Latin), 0.07 where 0.76 (Arabic), 0.23 where 0.60
+(mixed) and 0.43 where 0.41 (CJK), and kept paragraphs laid out again at them 0.057 where 0.103, 0.054 where 0.093,
+0.103 where 0.134 and 0.261 where 0.257, where main takes 0.007 to 0.019. A change to the word scan passes its two
+attacks and the premise probe before it merges (lab/README.md, "Test tiers").
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
@@ -2320,6 +2396,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a range the paragraph shapes as Latin as an 8-bit string, one Latin segment; slice other ranges into 16-bit strings. | A grapheme without a strong character that some Canvas string the port measures (the grapheme alone, or in the pair window with its neighbour) resolves to another script than the paragraph: the brackets and digits of Arabic or Hebrew text, a curly quote or emoji beside a space in a Latin paragraph; its width can differ in fonts whose lookups depend on the script (Amiri, Noto Naskh Arabic). Reported with the grapheme's range. Since correctness round 5 the pair window reaches past a cluster of only default-ignorable characters and marks (§4.4), so the port no longer measures such a cluster alone, a string without a strong character, and the condition no longer fires there: in the recorded no-facts cases 329 line entries and 3 paragraph entries went, every one on a case that passes line count, breaks and widths with exact values, so they covered nothing. |
 | Spaces in shaping (`space-in-shaping`) | Blink, Gecko | The DOM kerns across spaces when the font's lookups involve the space glyph. Blink's word-by-word check ignores legacy `kern`, `kerx` and `morx`; Gecko shapes whole ranges when `SpaceMayParticipateInShaping` (gecko-text §7.2). | Blink: `optimizeLegibility` contexts. Gecko: measure the whole range when `au(a + ' ' + b) ≠ au(a) + au(' ') + au(b)`, a hypothesis to probe. | Blink: cross-space legacy kerning. Gecko: until the detection is verified. |
 | In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: both sides of an offset measured as the unit shapes them, joined letters with U+200D, kern splits by `pairKerning`, or where it is null by what Canvas tells from app-unit rounding (three placements; a pair is told where two are struck out, and by probe pairs only where one face draws it and the probe letters, §4.4), a joined suffix that a fallback font draws measured behind its own first letter (U+200D at a string's start takes the first font, gfxTextRun.cpp:3609-3613, :3320-3325), where the prefix's side stands in, ligature groups by shares; the position is predicted where the two sides add up to the unit (probe gecko-port F15). Blink: prefix sums and pair adjustments at cluster boundaries (the pair window reaches past a cluster that holds only default-ignorable characters and marks, as HarfBuzz's lookups do, §4.4), with the stand-ins marked (§2.3). | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. Gecko's stand-ins: a position inside a cluster, before a mark that starts a cluster, a tab after a stand-in (`CalcTabWidths`), and ligature rows the facts don't settle; the reading also holds `ComputeLigatureData`'s unbounded frame between two marks of one cluster, a Firefox bug Canvas can't show. Blink, at a chosen line edge inside a word: a line-end fit test that another last safe offset would turn around (the ceiling of that offset's position, or an uncertain first safe offset of a wrapped line start, each under or at one LayoutUnit; shaping_line_breaker.cc:309-324, :543-553); a wrapped line start whose clamped correction rests on a stand-in position, where the other outcome gives another line; the cut of an RTL view after a start reshape whose extent rests on the port's width tests alone (shape_result_view.cc:215-308). |
+| Negative word tail (`negative-word-tail`) | Gecko | The engine tests every break candidate inside a word as it scans (after a hyphen, between Han characters, every cluster of a line's first word under `overflow-wrap`); the word scan passes over them where the word's end fits, on the premise that no tail of a shaped word has a negative advance, which no source gives (§4.6). | An inspected paragraph runs the engine's loop beside every scan the word scan decides, over the same advances. | The two decide a scan differently: a word the scan passed over whole has a prefix wider than the room left, on the port's advances. On the port's measurements no installed face at an instance CSS can ask for has one; Skia at a variation corner does (§4.6), and `word-scan.test.ts` makes four up. The gap can fire where Firefox agrees with the word scan (4 layouts on that Skia corner). Firefox's own negative tails in Mishafi and Diwan Thuluth fall where the port can't see them, so no gap reports them. A plain paragraph reports nothing. |
 | Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. Blink: a position inside a grapheme at a unit HarfBuzz may start a cluster at; a chosen edge between joining letters; a chosen edge where the pair adjustment measured with liga, clig and calt off (a letter spacing, font_features.cc:54-86) differs from the one with them on. |
 | WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a line measuring a string of a simplified-path box outside the width shortcut that holds U+0020 (WidthIterator restores a space's unshaped advance, the simplified path keeps the shaped one, WidthIterator.cpp:84-120 and :473-474 against FontCascade.cpp:381-412) or whose Canvas total isn't the float32 sum of its code points' advances in order (shaping moved advances, which the two paths sum in other orders). `fixed-pitch-path`: a line measuring an item of such a box that fails T1 while `monospace` is null, or while `primaryFamily` is null and the font is fixed pitch (whether the realized family is Courier New decides the shortcut). |
 | RTL shaping across inline boxes (`rtl-shaping-across-inline-boxes`) | WebKit | `LineBuilder` reshapes complex RTL text joined across decoration-free boxes as one run (webkit-lines §9.3). | none | RTL complex-script text split over same-font spans without box edges. |

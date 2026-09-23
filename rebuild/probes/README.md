@@ -43,6 +43,42 @@ may read the DOM freely; this is research, not the library.
   by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
   `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
   `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
+- `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
+  library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
+  with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word
+  has a negative advance (DESIGN.md §4.6), and this is its test on real Canvas answers: every word of its lists
+  (a letter before every ordered pair of 33 characters that fonts kern hardest, Latin words with marks and ligatures,
+  Arabic and Hebrew with and without marks) is a paragraph of its own under `overflow-wrap: break-word` at the width
+  of its own advance, where the premise alone decides, in every family of a list, and the tree's lines must be the
+  loop's. `WORD_SCAN_PREMISE_CONTROL=1` takes 20px off Canvas's answer for every `q` in Arial and must find `xq` and
+  `axqi`. A Firefox slot is enough. Its header has the commands; the runs are under
+  `.artifacts/tests/runs/words2-gecko-20260920/attack2/premise-probe` (321 families, 381,027 words, 0 differing) and,
+  for the landed tree, `.artifacts/tests/runs/gecko-word-scan-20260923/premise-probe` (the same, and the control's two).
+- `../tools/word-scan-scripts-probe.ts` (word-scan P2; the second attack on the word scan, 2026-09-23; one library,
+  bundled with `tools/word-scan-scripts-probe-entry.ts`): P1's test over the scripts and fonts P1 leaves out. Each word
+  (every distinct token of main's corpora in Thai, Khmer, Myanmar, Devanagari, Urdu, Arabic, Hebrew and Korean, pieces
+  of the Han and kana ones, English, Lao, Tibetan and Mongolian samples, emoji sequences, Han beside Latin, made-up words
+  of the scripts the Noto faces draw) is laid out at the width of its own advance under `break-word`, and under
+  `break-all` where a dictionary break would end word wrapping, in the families that draw it, at 9 to 96px, in bold and
+  italic, with the lab's font facts and without them; the inspected paragraph must report no `negative-word-tail`.
+  `WORD_SCAN_SCRIPTS_NATIVE=1` also holds each word to Firefox's own premise: at the word's native advance (a span's
+  width) and 1 au more, Firefox must give one line. `WORD_SCAN_SCRIPTS_WEBFONTS=1` loads installed faces at the corners
+  of their variation axes through the FontFace API, which Canvas measures too, and `tools/negative-tail-font.ts`, a
+  made-up font whose kern table gives a point and a letter negative advances. `WORD_SCAN_SCRIPTS_CONTROL=1` is P1's
+  control. The runs are under `.artifacts/tests/runs/word-scan-attack-20260923/browser`: no gap in any installed face at
+  any CSS instance; Firefox itself breaks words that fit in Mishafi and Diwan Thuluth (tanween after a ligature) and in
+  Skia at its lightest, narrowest corner, where the port's advances don't show it; gaps, most of them real, only on
+  Skia's corner and the made-up font.
+- `../tools/word-scan-paragraphs-probe.ts` (word-scan P3): corpus paragraphs and the lab's snippets in their fonts,
+  at drawn widths and where the first line's last word only just fits, laid out by the tree, by the `loop` copy and
+  inspected, beside Firefox's own lines (each grapheme cluster on the line of its first positive rect: Firefox gives a
+  Thai base before a mark an empty rect). `WORD_SCAN_PARAGRAPHS_STYLES=1` adds spacing in both signs, `pre-wrap` with
+  tabs, `break-spaces`, soft hyphens, `keep-all`, `break-all` and the `line-break` values. The tree's lines must be the
+  loop's; a tree line that differs from Firefox's where the loop's doesn't is a line the word scan lost.
+- `../tools/word-scan-hb-words.ts` and `../tools/word-scan-hb-tails.py`: the premise in the font files, without a
+  browser. HarfBuzz (hb-shape, as Firefox shapes every font) over every face of a list of files, each word of the lists
+  the first tool writes whose characters the face maps, variable faces at their axis corners and named instances; the
+  tail from each grapheme start, inside a ligature cluster too, where Gecko's scan counts the ligature's whole advance.
 - The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
   (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
   (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in
