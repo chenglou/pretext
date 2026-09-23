@@ -12,7 +12,10 @@ configurations; the plain path asks 25% fewer recorded questions. In pinned Fire
 real-text supplement give the base's outcomes case for case (955/1/44 and 64/64), and the plain predictor's tier 2 has
 no transition, its 21 moved line ranges all on history-dependent cases whose native lines moved too. The two attacks
 find no layout that differs from the loop's on fonts that keep the premise, and a gap on every one that differs where
-the font breaks it.
+the font breaks it. Timed in pinned Firefox 156 against the base in alternating runs (per 1,000 units): new Latin text
+0.63 ms where 1.04 (main keeping its caches 0.41), new Arabic text 0.81 where 1.41 (0.50), CJK unchanged (4.85 against
+4.94); first fills of that text at three new widths 0.17 where 0.49 and 0.10 where 0.93; repeated widths 0.057 where
+0.103 (Latin) and 0.054 where 0.093 (Arabic), main 0.007.
 
 2026-09-22, current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md): the only runtime change is the public
 simple count specialization; the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeated layout

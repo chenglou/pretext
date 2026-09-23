@@ -24,7 +24,9 @@ are deferred behind that work. Owned rendering and rich painting remain paused.
 
 Since 2026-09-23 Gecko decides a break scan from its shaping units' advances and passes over the candidates inside a
 word whose end fits (the word scan, DESIGN.md §4.6), on a premise about fonts the maintainer accepted; the rest of the
-redo core still matches `0bdea4d`.
+redo core still matches `0bdea4d`. In Firefox it prepares new Latin and Arabic chat messages 1.6 to 1.7 times faster
+(1.5 to 1.6 times main keeping its caches, where it was 2.5 to 2.8), fills them at new widths about 3 and 9 times faster
+and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK stays where it was.
 
 ## Core
 

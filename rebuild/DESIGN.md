@@ -1926,8 +1926,17 @@ where 10,378 in Arabic, 16,921 where 25,961 in mixed text and 69,625 where 71,04
 cohort asks a subset of the questions it asked before. CJK's first fills ask more because 7 of its 120 messages (17 to
 19 characters, one line at 320px and two at 260px) moved about 70 questions each from the count at 320px to the fill at
 260px: the loop tested every candidate of the one-unit message at 320px, and the unit kept the answers, where the word
-scan asks nothing there. From scratch and at the three widths together CJK makes 71,429 calls where it made 72,389. A
-change to the word scan passes its two attacks and the premise probe before it merges (lab/README.md, "Test tiers").
+scan asks nothing there. From scratch and at the three widths together CJK makes 71,429 calls where it made 72,389.
+Timed in pinned Firefox 156 on 2026-09-23 (the probes of rebuild/experiments/amdahl on branch `amdahl-floor`, the base
+tree and this one in alternating runs, device pixel ratio 2, AC power, beside other jobs at load averages of 7 to 24;
+`.artifacts/bench/gecko-word-scan-20260923`), in ms per 1,000 units: text no one has measured is prepared and counted at
+320px in 0.63 where it took 1.04 (Latin; main keeping its caches takes 0.41), 0.81 where 1.41 (Arabic; 0.50) and 4.85
+where 4.94 (CJK; 1.99), the CJK difference inside the spread of its batches (paired by batch 0.98, 0.93 to 1.24); that
+text's first fills at 260, 380 and 440px take 0.17 where 0.49 (Latin) and 0.10 where 0.93 (Arabic); on the cohorts'
+repeating text, first fills at those widths take 0.10 where 0.43 (Latin), 0.07 where 0.76 (Arabic), 0.23 where 0.60
+(mixed) and 0.43 where 0.41 (CJK), and kept paragraphs laid out again at them 0.057 where 0.103, 0.054 where 0.093,
+0.103 where 0.134 and 0.261 where 0.257, where main takes 0.007 to 0.019. A change to the word scan passes its two
+attacks and the premise probe before it merges (lab/README.md, "Test tiers").
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
