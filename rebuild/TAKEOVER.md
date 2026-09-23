@@ -2,9 +2,11 @@
 
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer
-accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it;
-every real face checked keeps it (1,008 installed faces under HarfBuzz, 1,229,216 recorded in-word advances, 381,027
-words in 321 families in pinned Firefox, rerun on the landed tree). Plain and inspected paragraphs take its lines; an
+accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it.
+On the port's measurements every installed face at every instance CSS can ask for keeps it (1,229,216 recorded in-word
+advances, 381,027 words in 321 families in pinned Firefox, about 2.7M more word and paragraph layouts in the attack of
+2026-09-23). Skia at a variation corner and a made-up font break it, with the gap; Firefox breaks it in Mishafi and Diwan
+Thuluth where the port can't see it, which was wrong before the word scan too (§4.6). Plain and inspected paragraphs take its lines; an
 inspected one also runs the engine's loop, so it asks exactly what it asked, and reports `negative-word-tail` where the
 two differ. Both Firefox tier 1 reports equal the base's but for the library's fingerprint, the 192 existing
 question-order cases and the citation ledger's 17 existing losses included; plain, pure, sweep and painter pass in both

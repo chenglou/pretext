@@ -38,8 +38,8 @@ Prefer fewer representations, local derived values and ordinary loops. Preserve 
 measurement boundaries. A smaller number of Canvas calls is neither a speed result nor a correctness argument.
 Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
 A premise about fonts that no source gives is taken only as a documented default with a named gap that inspected
-paragraphs report, and only where every real face checked keeps it: Gecko's word scan assumes no tail of a shaped word
-has a negative advance and reports `negative-word-tail` (DESIGN.md §4.6).
+paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
+word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

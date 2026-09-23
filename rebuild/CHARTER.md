@@ -171,8 +171,10 @@ heuristic, or named here.
   closes and the source doesn't guarantee (below, under `pairKerning`; none of 1,008 installed faces does otherwise).
   The word scan (`lines/word-scan`, 2026-09-23) passes over the break candidates inside a word whose end fits on "no
   tail of a shaped word has a negative advance", a premise about fonts that no source gives and Canvas isn't asked
-  for; the maintainer accepted it as a documented default. It held in every real face checked (DESIGN.md §4.6), and an
-  inspected paragraph reports `negative-word-tail` where the engine's loop decides a scan otherwise.
+  for; the maintainer accepted it as a documented default. On the port's measurements it holds in every installed face
+  at every instance CSS can ask for, though Firefox itself breaks it in two Arabic faces where the port can't see it
+  (DESIGN.md §4.6), and an inspected paragraph reports `negative-word-tail` where the engine's loop decides a scan
+  otherwise.
 - WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
   difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
   R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.
