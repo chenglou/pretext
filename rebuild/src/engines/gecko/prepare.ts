@@ -1202,6 +1202,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     gaps.runEnded(spaces, b.tEnd)
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, level: b.level, contexts: shared, font, fontTable: table, commonPairKerning, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
+      breaksAnywhere: firstLeaf.style.wordBreak === 'break-all' || firstLeaf.style.lineBreak === 'anywhere',
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance,
       advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : font.facts.opticalSizeAxis !== false ? 'optical-size' : null,

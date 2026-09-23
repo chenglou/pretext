@@ -1,5 +1,18 @@
 # Takeover decisions and evidence
 
+2026-09-23, Gecko doesn't test for an optional ligature at a break opportunity a unit holds of itself ([DESIGN.md
+§4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-optional-ligature-at-ordinary-breaks`): between Han
+characters, after a hyphen, at a dictionary break, but not where a line breaks a word inside itself, which includes
+every boundary under `word-break: break-all` and `line-break: anywhere`. The audit's G2 dropped the ligature test
+everywhere; two reviews found real text that moves without it, all lines broken inside a word between a ligature's
+letters (Latin under `break-all`, a long German word at 100px, soft hyphens, URLs under `overflow-wrap`), so the test
+stays there, and goes where most of its questions were, on the premise that no optional ligature spans such a break
+opportunity. An inspected paragraph asks the test there and reports `in-word-prefix`, so its lines are the plain ones.
+In pinned Firefox a chat message asks 37.3 questions where it asked 47.3 (231 characters where 251), a real paragraph
+112.8 where 183.0 (960 where 1,118; CJK 144.5 where 285.1). No line moved in the chat messages, real paragraphs, width
+sweep and books, nor in the reviews' sets, the ones where the audit's form moved lines included, nor in the tier corpus
+(63,516 cases), where the audit's form lost 13.
+
 2026-09-23, a plain Gecko paragraph measures what crosses an in-word offset only where the pair placement can use it
 ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/crossing-measured-where-placed`), the first of the
 requirements audit's drops (research/REQUIREMENTS-AUDIT.md on branch `audit-requirements`). The audit's candidate G1b +

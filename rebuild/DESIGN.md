@@ -1735,6 +1735,32 @@ construction: the plain path asks a subset of its questions and gives the same v
 asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0 where 252.4 (1,118 where
 1,338), a CJK paragraph 285.1 where 376.3 (1,396 where 1,555).
 
+Gecko, the ligature test by ink box, not asked at a break opportunity a unit holds of itself (`advance.ts`
+`ordinaryBreakAt`, `ligatureAtBreak`; `gecko/measure/no-optional-ligature-at-ordinary-breaks`). An optional ligature
+(liga, clig, dlig, hlig) as wide as its parts shows in no total, and the DOM gives a range edge inside it the ligature's
+advance in shares by started clusters (ComputeLigatureData, gfxTextRun.cpp:238-322): `fi` in 14px Helvetica Neue is 217
+and 218 au in the DOM and 249 and 186 as its sides measure (probe gecko-port F9). The test (`ligatureAcross`) measures
+the pair of clusters around an in-word offset twice, in the run's context and with ligatures off (letterSpacing
+0.001px), and compares widths and ink boxes. The audit dropped it everywhere, which moved none of its real text, but the
+reviews found real text that it moves, each a line broken inside a word between the letters of a ligature: Latin under
+`word-break: break-all` in Helvetica Neue (`conf|irm`, `of|fice`), a German word too long for 100px
+(`Browserzugri|ffen`, where the drop gave `Browserzugrif|fen`), words with soft hyphens (`of­fi­cial`) and long URLs
+under `overflow-wrap` in chat bubbles: 1,432 cases lost of their sets, in Helvetica Neue, Helvetica, Hoefler Text,
+Seravek, Lucida Grande and the Latin of PingFang SC and Hiragino Sans. So the test stays wherever a line breaks a word
+inside itself (an emergency break under `overflow-wrap` or `word-break`, a soft hyphen's, and every boundary under
+`word-break: break-all` or `line-break: anywhere`), and goes only at a break opportunity that line breaking finds inside
+a unit without those two properties: between Han characters, after a hyphen, at a dictionary break in Thai, Lao, Khmer
+and Burmese, where most of its questions were. That rests on a **premise about fonts**, which no source gives: no
+optional ligature spans such a break opportunity. There an offset takes the value its sides give, as if no ligature
+formed, and a window's cut isn't held back by one; an inspected paragraph asks the test at such an offset whose value it
+would call exact and at a window's start there, and reports `in-word-prefix` where it finds a ligature
+(`ligatureAtBreak`), so its lines are the plain ones and the gap names the premise. In pinned Firefox a chat message
+asks 37.3 questions where it asked 47.3 (231 characters where 251), a real paragraph 112.8 where 183.0 (960 where
+1,118), a CJK paragraph 144.5 where 285.1 (1,115 where 1,396); the audit's drop everywhere asked 34.1, 103.7 and 141.6
+on top of the placement above. No line moved in any of the sets above, CJK included, the reviews' soft-hyphen,
+`break-all` and long-word sets too, nor any of the tier corpus's 63,516 Firefox cases, of which the audit's form lost
+13.
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 
