@@ -1,0 +1,452 @@
+diff --git a/rebuild/src/engines/blink/checks.ts b/rebuild/src/engines/blink/checks.ts
+index 434453c..e5b683a 100644
+--- a/rebuild/src/engines/blink/checks.ts
++++ b/rebuild/src/engines/blink/checks.ts
+@@ -3,6 +3,7 @@
+ import type { BlinkEnvironment } from '../../env.js'
+ import type { CanvasNeeds } from '../../measure/canvas-checks.js'
+ import type { FontChecks } from '../../measure/font-checks.js'
++import { ko } from '../../ko.js'
+ 
+ // Read from the recipes (engines/blink/contexts.ts styleContexts, hankerning.ts): `lang` per style, `letterSpacing`,
+ // `textRendering = 'optimizeLegibility'`, `direction = 'rtl'`, the ink box of HanKerning's glyph types, and a letter spacing
+@@ -25,6 +26,6 @@ const SYSTEM_FONT_FAMILIES = ['system-ui', 'blinkmacsystemfont']
+ export function blinkFontChecks(env: BlinkEnvironment, inspect = true): FontChecks {
+   return {
+     primaryFamily: false, mapsHyphen: true, monospace: false, opticalSizeAxis: { zoom: env.devicePixelRatio, cssSizeFamilies: SYSTEM_FONT_FAMILIES, checkAdvances: inspect },
+-    joining: true, contextTakesLang: true, textRendering: 'optimizeLegibility',
++    joining: !ko('B-no-S5'), contextTakesLang: true, textRendering: 'optimizeLegibility',
+   }
+ }
+diff --git a/rebuild/src/engines/blink/hankerning.ts b/rebuild/src/engines/blink/hankerning.ts
+index 31703cc..7e186ac 100644
+--- a/rebuild/src/engines/blink/hankerning.ts
++++ b/rebuild/src/engines/blink/hankerning.ts
+@@ -11,6 +11,7 @@ import {
+ } from './props.js'
+ import { raw16Of } from './contexts.js'
+ import type { BlinkPrepared } from './types.js'
++import { ko } from '../../ko.js'
+ 
+ export type HanKerningFontData = {
+   hasHalt: boolean
+@@ -42,6 +43,7 @@ export function hanKerningCandidates(text: string): Int32Array {
+ // HanKerning::MayApply (han_kerning.h:152-156) for text_content[start, end), from hanKerningCandidates: a scan of the range
+ // on every position made a 256,837-unit Arabic paragraph's positions quadratic.
+ export function hanKerningMayApply(candidates: Int32Array, start: number, end: number): boolean {
++  if (ko('B-no-B11')) return false
+   return candidates[end]! - candidates[start]! > 0
+ }
+ 
+diff --git a/rebuild/src/engines/blink/shape.ts b/rebuild/src/engines/blink/shape.ts
+index 105b3e0..b33bb1d 100644
+--- a/rebuild/src/engines/blink/shape.ts
++++ b/rebuild/src/engines/blink/shape.ts
+@@ -38,6 +38,7 @@ import {
+ } from './props.js'
+ import { scriptsPerUnit } from './script.js'
+ import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
++import { ko, cutStats } from '../../ko.js'
+ 
+ const f32 = Math.fround
+ // Float32 holds every 16.16 integer below 2^24, 256 px.
+@@ -329,6 +330,7 @@ function canvasWordEnd(s: string, start: number): number {
+ // LTR; the three characters are one RTL bidi run in either (U+3000 is WS between two AL).
+ function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
+   const st = p.styles[style]!
++  if (ko('B-no-B12')) return true
+   const probe = '\u0628\u3000\u0628'
+   return st.canvasSplitsWords ??= canvasWidth(st.contexts.ltrNoLigatures, probe) - canvasWidth(st.contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
+ }
+@@ -633,6 +635,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
+   nearA = Math.max(nearA, from)
+   nearB = Math.min(nearB, to)
+   while (whole >= EXACT16 && (a < nearA || b > nearB)) {
++    if (cutTotals !== null) { cutStats.shrinks++ }
+     if (a < nearA && (k - a >= b - k || b <= nearB)) {
+       let next = clusterStartAtOrBefore(p, a + ((k - a + 1) >> 1), lo)
+       if (next <= a) next = clusterEndAfter(p, a, hi)
+@@ -643,6 +646,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
+       b = Math.max(nearB, next)
+     }
+     whole = measure16(sh, g, a, b, lo, hi)
++    if (cutTotals !== null) cutStats.shrinkChars += b - a
+   }
+   const left = measure16(sh, g, a, k, lo, hi)
+   const right = measure16(sh, g, k, b, lo, hi)
+@@ -694,7 +698,8 @@ function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: numb
+ // unsafe-to-break at a line edge taken from it). Heuristic, registered in CHARTER.md's known deviations.
+ export function positionAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
+   if (k <= lo || k >= hi) return 0
+-  if (beforeWhiteSpace(sh.p, k, lo, hi)) return adjust16(sh, g, k, lo, hi)
++  if (ko('B-no-B3')) return 0
++  if (!ko('B-B3-pair-only') && beforeWhiteSpace(sh.p, k, lo, hi)) return adjust16(sh, g, k, lo, hi)
+   return pairAdjust16(sh, g, k, lo, hi)
+ }
+ 
+@@ -709,8 +714,16 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
+   const p = sh.p
+   const group = p.groups[g]!
+   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
+-  return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
+-    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
++  if (!(isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end))) return false
++  if (pairAdjust16(sh, g, k, group.start, group.end) !== 0) { cutStats.pairFailed++; return false }
++  // Knockout: the pair window alone decides; the halves are measured on their own. B-cut-pair-only-shy keeps the wide
++  // window in a group that holds a soft hyphen.
++  if (ko('B-cut-pair-only')) return true
++  if (ko('B-cut-pair-only-shy') && !p.text.slice(group.start, group.end).includes('\u00ad')) return true
++  cutStats.windowCalls++
++  const ok = windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
++  if (!ok) cutStats.wideFailed++
++  return ok
+ }
+ 
+ // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
+@@ -741,6 +754,9 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[],
+   const mid = a + ((b - a) >> 1)
+   let k = -1
+   let boundary = -1
++  let noSafe = false
++  let tries = 0
++  cutStats.searches++
+   for (let turn = 0; turn < 2 && k < 0; turn++) {
+     for (let d = 0; k < 0 && (mid - d > a || mid + d < b); d++) {
+       for (let side = d === 0 ? 1 : 0; side < 2 && k < 0; side++) {
+@@ -748,19 +764,26 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[],
+         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
+         if (boundary < 0) boundary = c
+         const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
+-        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, whole, cutTotals)) k = c
++        if (ko('B-cut-nosafe')) { if (besideSpace === (turn === 0)) { k = c; noSafe = true } continue }
++        if (besideSpace === (turn === 0)) { tries++; if (passesSafeTest(sh, g, c, a, b, whole, cutTotals)) { k = c; if (tries === 1) cutStats.firstPassed++; if (turn === 0) cutStats.passedBesideSpace++; else cutStats.passedElsewhere++ } }
+       }
+     }
+   }
++  cutStats.tries += tries
++  cutStats.tryHistogram[Math.min(tries, 64)]!++
+   if (boundary < 0) {
++    cutStats.uncut++
+     uncutCluster(sh.gaps, p, g, a, b)
+     cuts.push(b)
+     totals.push(whole)
+     zero.push(false)
+     return
+   }
+-  const passed = k >= 0
+-  if (!passed) {
++  const passed = k >= 0 && !noSafe
++  if (noSafe) {
++    // Knockout: the cut is taken untested; its adjustment is measured at the cut as for a cut that failed the test.
++  } else if (!passed) {
++    cutStats.unsafe++
+     k = boundary
+     unsafeCut(sh.gaps, p, g, k)
+   }
+@@ -771,6 +794,11 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[],
+   zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
+ }
+ 
++// Knockout helper: a Han, kana or Hangul letter of the BMP (no punctuation, which HanKerning reads).
++function cjkLetter(c: number): boolean {
++  return (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0x3041 && c <= 0x3096) || (c >= 0x30a1 && c <= 0x30fa) || c === 0x30fc || (c >= 0xac00 && c <= 0xd7a3)
++}
++
+ // Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
+ export function measureGroups(sh: Shaper): void {
+   const p = sh.p
+@@ -782,7 +810,26 @@ export function measureGroups(sh: Shaper): void {
+     const cuts = [group.start]
+     const totals: number[] = []
+     const zero = [false]
+-    addPieces(sh, g, group.start, group.end, cuts, totals, zero)
++    const cjkCuts = ko('B-cut-cjk') || ko('B-cut-cjk-nopair')
++    const whole = ko('B-cut-words-whole')
++    if (ko('B-cut-words') || ko('B-cut-words-nopair') || cjkCuts || whole) {
++      // Knockout: a piece per word with its trailing spaces (a cut before every letter that follows a space), each piece
++      // measured once and halved as before only where it alone is 256 zoomed px or wider. The CJK knockouts also cut
++      // between two Han, kana or Hangul letters, so such a run is measured a character at a time.
++      const nopair = ko('B-cut-words-nopair') || ko('B-cut-cjk-nopair') || whole
++      let a = group.start
++      for (let k = group.start + 1; k <= group.end; k++) {
++        const atEnd = k === group.end
++        const c0 = p.text.charCodeAt(k - 1), c1 = p.text.charCodeAt(k)
++        const edge = (c0 === 0x20 && c1 !== 0x20) || (cjkCuts && cjkLetter(c0) && cjkLetter(c1))
++        if (!atEnd && !(edge && p.graphemeStarts[k] === 1 && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end))) continue
++        // B-cut-words-whole: a piece is measured whole however wide, main's rule (a float32 total past 256 zoomed px).
++        if (whole) { cuts.push(k); totals.push(measure16(sh, g, a, k, group.start, group.end)); zero.push(false) }
++        else addPieces(sh, g, a, k, cuts, totals, zero)
++        if (!atEnd && nopair) zero[cuts.length - 1] = true
++        a = k
++      }
++    } else addPieces(sh, g, group.start, group.end, cuts, totals, zero)
+     const prefix = [0]
+     group.cuts = cuts
+     group.prefixAtCut = prefix
+@@ -946,6 +993,7 @@ function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
+       if (k <= group.start) return group.startTrim16 === 0
+       if (k >= group.end) return true
+       if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
++      if (ko('B-no-B4')) return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end)
+       return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
+         pairAdjust16(sh, sr.group, k, group.start, group.end) === 0
+     }
+@@ -1141,7 +1189,7 @@ function floatWidthOfParts(sh: Shaper, parts: ViewParts, rtl: boolean): number {
+     else { end16!.push(end); start16!.push(start) }
+     total16 += end - start
+   }
+-  if (total16 < EXACT16) {
++  if (total16 < EXACT16 || ko('B-no-floatsum')) {
+     let width = 0
+     for (let i = 0; i < count; i++) width = f32(width + widthOf16(count === 1 ? singleEnd16 - singleStart16 : end16![i]! - start16![i]!))
+     return width
+diff --git a/rebuild/src/engines/gecko/advance.ts b/rebuild/src/engines/gecko/advance.ts
+index ea3f020..992950e 100644
+--- a/rebuild/src/engines/gecko/advance.ts
++++ b/rebuild/src/engines/gecko/advance.ts
+@@ -8,6 +8,7 @@ import { listedFontOf } from './fonts.js'
+ import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu, scriptRunIndex } from './measure.js'
+ import { generalCategory, joiningType } from './props.js'
+ import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigaturePart, LigatureRow, PairPlacement } from './types.js'
++import { ko } from '../../ko.js'
+ 
+ // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
+ // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
+@@ -19,6 +20,7 @@ import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InW
+ // one that begins more than a cluster before t, doesn't show. A run with letter spacing has ligatures off in the DOM too
+ // (nsLayoutUtils.cpp:6901-6904).
+ function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
++  if (ko('G-no-G2')) return false
+   if (run.contexts.own.settings.letterSpacing !== '0px') return false
+   let a = t - 1
+   while (a > unit.tStart && p.clusterStart[a] === 0) a--
+@@ -56,11 +58,43 @@ export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): I
+   if (t === original.tStart) return { au: original.startAdvance, standIn: null }
+   const unit = windowAt(p, run, original, t)
+   if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
++  if (ko('G-cjk-sum')) {
++    const prefix = cjkPrefix(p, run, unit)
++    if (prefix !== null && p.clusterStart[t] === 1) return { au: unit.startAdvance + prefix[t - unit.tStart]! + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: null }
++  }
+   const entry = entryAt(unit, t)
+   if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
+   return entry.advance
+ }
+ 
++// Audit knockout G-cjk-sum (scratch tree only): in a unit (or window) of Han, kana, Hangul and CJK punctuation alone whose
++// clusters measured one at a time add up to the unit, the advance before a cluster is the sum of the clusters before it.
++function cjkUnit(c: number): boolean {
++  return (c >= 0x3000 && c <= 0x303f) || (c >= 0x3041 && c <= 0x30ff) || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xff00 && c <= 0xffef)
++}
++const cjkPrefixes = new WeakMap<GeckoUnit, Int32Array | null>()
++export function cjkPrefix(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): Int32Array | null {
++  const known = cjkPrefixes.get(unit)
++  if (known !== undefined) return known
++  let prefix: Int32Array | null = null
++  let all = unit.kind === 'word' && !unit.reversed
++  for (let k = unit.tStart; all && k < unit.tEnd; k++) all = cjkUnit(p.tUnits[k]!)
++  if (all) {
++    prefix = new Int32Array(unit.tEnd - unit.tStart + 1)
++    let sum = 0
++    let a = unit.tStart
++    for (let k = unit.tStart + 1; k <= unit.tEnd; k++) {
++      if (k < unit.tEnd && p.clusterStart[k] !== 1) continue
++      sum += rangeAu(run.contexts.own, run, p.tUnits, a, k)
++      for (let j = a + 1; j <= k; j++) prefix[j - unit.tStart] = sum
++      a = k
++    }
++    if (sum !== unit.canvasAu) prefix = null
++  }
++  cjkPrefixes.set(unit, prefix)
++  return prefix
++}
++
+ // What measuring found inside a unit (GeckoUnit.inWord), made when its first offset asks.
+ function inWordOf(unit: GeckoUnit): InWord {
+   if (unit.inWord === null) unit.inWord = { groups: null, offsets: new Array<InWordEntry | null>(unit.tEnd - unit.tStart).fill(null), windows: null }
+@@ -85,6 +119,7 @@ const WINDOW_CLUSTERS = 16
+ // :3564-3617), so every recipe here measures to the unit's end, and the characters sent to Canvas grow with the square
+ // of a unit's length: text without spaces is one unit. Where Canvas shows that nothing in the shaping crosses a cut
+ // (windowsOf), the text between two cuts measures alone as it does in the unit, which is all a recipe needs of a unit.
++export function windowAtForAudit(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): GeckoUnit { return windowAt(p, run, unit, t) }
+ function windowAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): GeckoUnit {
+   if (unit.tEnd - unit.tStart <= 2 * WINDOW_CLUSTERS) return unit
+   const inWord = inWordOf(unit)
+@@ -306,8 +341,8 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
+     // the other already (suffixAlone; a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
+     // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
+     // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
+-    const withCluster = a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
+-    across = withCluster - suffixAu - rangeAu(run.contexts.own, run, p.tUnits, a, t)
++    const withCluster = ko('G-no-G1b') ? 0 : a === unit.tStart ? unit.canvasAu : suffixAlone(p, run, unit, a)
++    across = ko('G-no-G1b') ? 0 : withCluster - suffixAu - rangeAu(run.contexts.own, run, p.tUnits, a, t)
+     prefixAu = unit.canvasAu - suffixAu - across
+     sides = 'cluster'
+   }
+@@ -399,6 +434,7 @@ function sidesAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: n
+ // adjustment with the second enters z, must be printable ASCII, which the preferred fonts of every language group cover
+ // before the previous font is tried (:3533-3552).
+ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a: number, t: number, R: number): { after: number | null; placement: 'first-advance' | 'split' | null } {
++  if (ko('G-no-G4')) return { after: null, placement: run.font.facts.pairKerning }
+   if (!pairFactDescribes(run, t)) return { after: null, placement: null }
+   const fact = run.font.facts.pairKerning
+   let b = t + 1
+@@ -799,6 +835,7 @@ function rowContinues(p: GeckoPrepared, pattern: { positions: readonly (readonly
+ // lam-meem and lam lam heh, U+0E24 U+0E32 in Thonburi); Arial's optional Allah ligature measures 761 au with ligatures and
+ // 957 without.
+ function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number, joiner: string): boolean {
++  if (ko('G-no-G3')) return false
+   // The unit's own count is the same at every offset, so the unit keeps it.
+   const inWord = inWordOf(unit)
+   if (inWord.groups === null) {
+diff --git a/rebuild/src/engines/gecko/lines.ts b/rebuild/src/engines/gecko/lines.ts
+index 2809951..0149bcd 100644
+--- a/rebuild/src/engines/gecko/lines.ts
++++ b/rebuild/src/engines/gecko/lines.ts
+@@ -5,7 +5,8 @@
+ // (GeckoFilledLine); placing them, the line's pieces and its inspection are read from that record (placement.ts, pieces.ts,
+ // inspect.ts), and nothing writes it after the fill.
+ import type { FillResultOf, Gap, LineSlot, RangeFillResultOf } from '../../model.js'
+-import { advanceBefore, codePointAtT, groupAround } from './advance.js'
++import { advanceBefore, cjkPrefix, codePointAtT, groupAround, windowAtForAudit } from './advance.js'
++import { ko } from '../../ko.js'
+ import * as gaps from './gaps.js'
+ import type { GeckoLineStart } from './geometry.js'
+ import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
+@@ -113,6 +114,7 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
+ function scanOffset(p: GeckoPrepared, prov: Provider, from: number, to: number, t: number): number {
+   if (t < prov.run.tEnd && p.clusterStart[t] === 1) {
+     const unit = p.units[p.unitOf[t]!]!
++    if (ko('G-cjk-sum') && cjkPrefix(p, prov.run, windowAtForAudit(p, prov.run, unit, t)) !== null) return t
+     if (t > unit.tStart) {
+       const group = groupAround(p, prov.run, unit, t)
+       if (group !== null && group.start >= from && group.end <= to) return group.end
+diff --git a/rebuild/src/engines/gecko/measure.ts b/rebuild/src/engines/gecko/measure.ts
+index 9ce86fd..9965c27 100644
+--- a/rebuild/src/engines/gecko/measure.ts
++++ b/rebuild/src/engines/gecko/measure.ts
+@@ -6,6 +6,7 @@ import { AL, R, bidiClassOf } from '../../unicode/bidi.js'
+ import { geckoBidiData } from './data.js'
+ import { hasScript, isBidiControl, isBidiMirrored, isClosePunctuation, isClusterExtender, isOpenPunctuation, openingMirror, scriptOf } from './props.js'
+ import type { GeckoTextRun, RunContexts, ScriptRun } from './types.js'
++import { ko } from '../../ko.js'
+ 
+ // A Canvas total is its text runs' au over the context's 60 app units per px (CanvasRenderingContext2D.cpp:5277, :7135-7140).
+ export const CANVAS_AU_PER_PX = 60
+@@ -275,7 +276,7 @@ export function rangeAu(context: Context, run: Pick<GeckoTextRun, 'scriptRuns' |
+     for (let k = from; k < tStart; k++) prefix += String.fromCharCode(units[k]!)
+     return w(prefix + piece) - w(prefix)
+   }
+-  const script = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
++  const script = ko('G-no-G9') ? null : scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
+   if (script === null) return w(piece)
+   return script.before ? w(script.text + ' ' + piece) - w(script.text + ' ') : w(piece + ' ' + script.text) - w(' ' + script.text)
+ }
+diff --git a/rebuild/src/engines/gecko/prepare.ts b/rebuild/src/engines/gecko/prepare.ts
+index c93b758..76fbe00 100644
+--- a/rebuild/src/engines/gecko/prepare.ts
++++ b/rebuild/src/engines/gecko/prepare.ts
+@@ -27,6 +27,7 @@ import {
+   type GeckoItem, type GeckoInspect, type GeckoLanguage, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
+   type RunContexts, type ScriptRun,
+ } from './types.js'
++import { ko } from '../../ko.js'
+ 
+ const f32 = Math.fround
+ const SHY = 0x00ad
+@@ -1137,7 +1138,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
+               // A character without the Emoji property gets text presentation in fallback, which looks for a font without
+               // color glyphs (gfxTextRun.cpp:3541-3546); a cluster extender takes the previous character's font (:3181-3194).
+               const presentation = emojiPresentation(first)
+-              if (presentation === 'text-only') continue
++              if (presentation === 'text-only' || ko('G-no-G7')) continue
+               // One measureText gives the cluster's width and its ink box, in the run's font list and in "Apple Color Emoji" alone.
+               const own = bounds(context, cluster)
+               const inEmoji = bounds(emojiFontContext(font.size), cluster)
+diff --git a/rebuild/src/engines/webkit/checks.ts b/rebuild/src/engines/webkit/checks.ts
+index de83494..7874b0c 100644
+--- a/rebuild/src/engines/webkit/checks.ts
++++ b/rebuild/src/engines/webkit/checks.ts
+@@ -2,6 +2,7 @@
+ // (measure/canvas-checks.ts) and the font facts it reads among those Canvas can answer (measure/font-checks.ts).
+ import type { CanvasNeeds } from '../../measure/canvas-checks.js'
+ import type { FontChecks } from '../../measure/font-checks.js'
++import { ko } from '../../ko.js'
+ 
+ // Read from the recipes (engines/webkit/content.ts contexts): `letterSpacing` and `wordSpacing`. Its context has no `lang`,
+ // `fontKerning` or `textRendering`, and the port assigns them their defaults only; WebKit's Canvas keeps optional ligatures
+@@ -12,5 +13,6 @@ export const webkitCanvasNeeds: CanvasNeeds = { attributes: ['letterSpacing', 'w
+ // WebKit reads primaryFamily itself (model.ts FontFacts), the hyphen and the pitch. It doesn't read opticalSizeAxis, and
+ // its Canvas shows no shaping context for joining. Its context has no language.
+ export const webkitFontChecks: FontChecks = {
+-  primaryFamily: true, mapsHyphen: true, monospace: true, opticalSizeAxis: null, joining: false, contextTakesLang: false, textRendering: 'auto',
++  get monospace() { return !ko('W-no-S3') },
++  primaryFamily: true, mapsHyphen: true, opticalSizeAxis: null, joining: false, contextTakesLang: false, textRendering: 'auto',
+ }
+diff --git a/rebuild/src/engines/webkit/content.ts b/rebuild/src/engines/webkit/content.ts
+index 5343106..caf9bda 100644
+--- a/rebuild/src/engines/webkit/content.ts
++++ b/rebuild/src/engines/webkit/content.ts
+@@ -16,6 +16,7 @@ import { isComplexCodePath } from './measure.js'
+ import { graphemeBoundaries } from '../../unicode/grapheme.js'
+ import { boxEdges, layoutUnit, preservesNewline, webkitStyle } from './style.js'
+ import type { WebKitBox, WebKitOwnPrepared, WebKitStyle } from './types.js'
++import { ko } from '../../ko.js'
+ 
+ const f32 = Math.fround
+ const NO_TAB_POSITIONS: readonly number[] = []
+@@ -123,7 +124,7 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number, fon
+   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
+   // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
+   // have either): it is named at the end of the list.
+-  if (choice.standardFamily !== null) {
++  if (choice.standardFamily !== null && !ko('W-no-W1a')) {
+     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+     const listThenLastResort = contextFor(p.contexts, { ...plain, font: font.listLastResortFont })
+     const lastResort = contextFor(p.contexts, { ...plain, font: font.lastResortFont })
+@@ -143,7 +144,7 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number, fon
+   // shortcuts; the 17.6015625px advance matching a fallback glyph's is the recipe's loss. What the recipe can't vouch for
+   // goes to gaps.ts (unverifiedCoverage).
+   let unverified: UnverifiedCoverage | null = null
+-  if (simplifiedMeasuring && fixedPitch) {
++  if (simplifiedMeasuring && fixedPitch && !ko('W-no-W1b')) {
+     const coverageContext = contextFor(p.contexts, { ...settings, font: font.primaryLastResortFont, letterSpacing: '0px' })
+     unverified = unverifiedCoverage(p, { ...settings, font: font.lastResortFont, letterSpacing: '0px' })
+     // Each code point of the text is tested once, where it first stands.
+diff --git a/rebuild/src/ko.ts b/rebuild/src/ko.ts
+new file mode 100644
+index 0000000..b375041
+--- /dev/null
++++ b/rebuild/src/ko.ts
+@@ -0,0 +1,10 @@
++// Audit knockouts (scratch tree only; never merged): research/REQUIREMENTS-AUDIT.md. A switch is on when the page sets
++// globalThis.__auditKO[name] before a paragraph is prepared.
++export function ko(name: string): boolean {
++  return (globalThis as { __auditKO?: Record<string, boolean> }).__auditKO?.[name] === true
++}
++
++// Audit counters (scratch tree only): what the cut search does, read by tools/audit/cut-stats.ts.
++export const cutStats = { searches: 0, tries: 0, firstPassed: 0, passedBesideSpace: 0, passedElsewhere: 0, unsafe: 0, uncut: 0, pairFailed: 0, wideFailed: 0, shrinks: 0, shrinkChars: 0, windowCalls: 0, tryHistogram: new Array<number>(65).fill(0) }
++
++;(globalThis as { __auditCutStats?: typeof cutStats }).__auditCutStats = cutStats
+diff --git a/rebuild/src/measure/font-checks.ts b/rebuild/src/measure/font-checks.ts
+index 10486e4..cac6a85 100644
+--- a/rebuild/src/measure/font-checks.ts
++++ b/rebuild/src/measure/font-checks.ts
+@@ -103,6 +103,7 @@ import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
+ import { contextFor, width as canvasWidth, type Context, type ContextPool } from './canvas.js'
+ import { findRecord, insertRecord, orderedRecords, type OrderedLinks, type OrderedRecords } from '../ordered-records.js'
+ import { canvasFont } from './font.js'
++import { ko } from '../ko.js'
+ 
+ const PROBE_SIZE = 16
+ const SPACE = ' '
+@@ -199,6 +200,8 @@ function draws(p: Probe, family: string, text: string): boolean | null {
+ // family before the first that does, or where a quoted name reads as a generic keyword, which primaryFamily can't say.
+ function primaryFamily(p: Probe): string | null {
+   const families = listedFamilies(p.font.family)
++  // Audit knockout: the first listed family is taken as the primary one, with no Canvas question.
++  if (ko('S-no-S1')) { const first = families[0]; return first === undefined ? null : first.quoted && GENERIC_KEYWORDS.includes(first.name.toLowerCase()) ? null : first.name }
+   for (let i = 0; i < families.length; i++) {
+     const family = families[i]!
+     const drawsSpace = draws(p, family.css, SPACE)
