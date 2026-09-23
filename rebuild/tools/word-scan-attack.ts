@@ -26,7 +26,8 @@
 // makes the font break the premise: `e` takes back a quarter of an em, so a word ending in it is narrower than its
 // prefix. Layouts may then differ from the loop's, and each must carry the gap.
 //
-//   bun rebuild/tools/word-scan-attack.ts [--seed=1] [--count=20000] [--no-spaced-nbsp] [--focus] [--all-lines] [--break-premise] [--out=<report.json>]
+//   bun rebuild/tools/word-scan-attack.ts [--seed=1] [--count=20000] [--no-spaced-nbsp] [--focus] [--all-lines] [--break-premise]
+//     [--dictionary] [--scripts] [--out=<report.json>]
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../src/env.ts'
@@ -53,6 +54,11 @@ const spacedNbsp = !options.has('no-spaced-nbsp')
 const focus = options.has('focus')
 const allLines = options.has('all-lines')
 const breakPremise = options.has('break-premise')
+// `--dictionary` gives the environment Intl.Segmenter's word dictionary for Thai, Lao, Khmer and Myanmar, so runs of those
+// scripts hold natural breaks inside one shaping unit; `--scripts` draws such runs from main's corpora and words of other
+// scripts the lists above leave out (Indic, Tibetan, Mongolian, emoji sequences, Han and kana beside Latin).
+const dictionary = options.has('dictionary')
+const scripts = options.has('scripts')
 
 // ---- A seeded stream ----
 
@@ -208,6 +214,21 @@ const ARABIC = ['مرحبا', 'بالعالم', 'اللغة', 'العربية', 
 const HEBREW = ['שלום', 'עולם', `ע${c(0x5b4)}ב${c(0x5b0)}ר${c(0x5b4)}ית`]
 const CJK = ['日本語のテキスト', '中文文本。', '한국어', '「引用」', `全角${c(0x3000)}空白`]
 const OTHER = ['ภาษาไทย', c(0x1f44d, 0x1f3fd), c(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467), c(0x1f1fa, 0x1f1f8, 0x1f1ec, 0x1f1e7), 'नमस्ते', `x${c(0x1f600)}y`, `${c(0x2061)}${ACUTE}a`]
+// Long runs without U+0020 from main's corpora (corpora/*.txt), and words of other scripts, for --scripts.
+const SA_RUNS = [
+  'เช้าวันหนึ่ง', 'พระวัชรมุกุฏ', 'พากันขี่ม้าออกเที่ยวล่าเนื้อในป่า', 'พุทธิศริระเป็นบุตรของประธาน', 'ชายหนุ่มทั้งสองขี่ม้าไปในป่า', 'พบสระใหญ่สระหนึ่งมีกำแพงล้อมรอบ', 'ภาษาไทย', 'น้ำ', 'กำ', 'ที่',
+  'ສະບາຍດີ', 'ພາສາລາວເປັນພາສາທາງການຂອງປະເທດລາວ', 'ຂ້ອຍຮັກເຈົ້າຫຼາຍໆ',
+  `${c(0x200b)}ត្មាត${c(0x200b)}បោក${c(0x200b)}ដំរី${c(0x200b)}ស`, `កាល${c(0x200b)}ពី${c(0x200b)}ព្រេង${c(0x200b)}នាយ`, `មាន${c(0x200b)}ពួក${c(0x200b)}ពល${c(0x200b)}បរិវារ${c(0x200b)}ជា${c(0x200b)}ច្រើន${c(0x200b)}អាស្រ័យ${c(0x200b)}នៅ${c(0x200b)}ក្នុង${c(0x200b)}ព្រៃ${c(0x200b)}ភ្នំ`, 'ស្ដេចត្មាតមួយ',
+  'ရှေးအခါက', 'တောအရပ်တစ်နေရာတွင်', 'ရေအိုင်တစ်အိုင်ရှိသည်။', 'ငါးမျိုးစုံတို့', 'မှီခိုနေထိုင်ရာ', `${c(0x1004, 0x103a, 0x1038)}`,
+]
+const OTHER_SCRIPTS = [
+  'रमजान', 'मनोहर,', 'वृक्षों', 'हरियाली', 'क्षत्रिय', 'श्रीमान्', 'বাংলা', 'ভাষা', 'தமிழ்', 'மொழி', 'සිංහල', 'ಕನ್ನಡ', 'ગુજરાતી', 'ਪੰਜਾਬੀ',
+  'བོད་ཡིག་ནི་བོད་པའི་ཡི་གེ་ཡིན།', 'ང་བོད་པ་ཡིན།', 'བཀྲ་ཤིས་བདེ་ལེགས།',
+  'ᠮᠣᠩᠭᠣᠯ', `ᠮᠣᠩᠭᠣᠯ${c(0x202f)}ᠤᠨ`, `ᠬᠠᠷᠠ${c(0x180e)}ᠠ`, `ᠭ${c(0x180b)}ᠠ`, 'ᠪᠢᠴᠢᠭ',
+  c(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467, 0x200d, 0x1f466), c(0x1f3f3, 0xfe0f, 0x200d, 0x1f308), c(0x1f469, 0x1f3fd, 0x200d, 0x1f4bb), c(0x31, 0xfe0f, 0x20e3), `a${c(0x1f44d, 0x1f3fd)}b`,
+  `${c(0x1f600)}${c(0x1f600)}${c(0x1f600)}`, `ok${c(0x1f44c)}`,
+  'iPhone用户', '使用Chrome浏览器', '東京2020オリンピック', '第3回', 'Unicode標準', '日本語English混在', '한국어Korean', 'Wi-Fi接続', '「OK」', 'ＡＢＣ全角', 'ｶﾀｶﾅ',
+]
 const SPACES = [' ', ' ', ' ', ' ', '  ', '   ', c(9), c(10), ` ${c(10)} `, NBSP, `${NBSP} `, ` ${NBSP}`, '', c(0x3000), ` ${SHY}`, `${SHY} `]
 
 const FAMILIES = ['Optima', 'Arial', 'Georgia', 'Menlo']
@@ -222,7 +243,7 @@ const ARABIC_DRAWN = spacedNbsp ? ARABIC : ARABIC.filter(word => !joinedNbsp(wor
 
 function words(): string {
   const roll = int(10)
-  const pool = roll < 6 ? LATIN_DRAWN : roll < 8 ? ARABIC_DRAWN : roll < 9 ? (chance(0.5) ? HEBREW : CJK) : OTHER
+  const pool = scripts && chance(0.5) ? (chance(0.6) ? SA_RUNS : OTHER_SCRIPTS) : roll < 6 ? LATIN_DRAWN : roll < 8 ? ARABIC_DRAWN : roll < 9 ? (chance(0.5) ? HEBREW : CJK) : OTHER
   const length = 1 + int(8)
   let text = chance(0.1) ? pick(SPACES) : ''
   for (let i = 0; i < length; i++) {
@@ -281,7 +302,7 @@ function paragraph(): Paragraph {
 
 const env: GeckoEnvironment = {
   engine: 'gecko', build: PINNED_BUILDS.gecko, devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, regionalPrefsLocale: 'en-us',
-  dictionaryBreaks: { kind: 'unavailable' },
+  dictionaryBreaks: dictionary ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' },
 }
 
 // A layout's lines, as ranges or with their pieces, and on an inspected paragraph its negative-word-tail gaps.
@@ -332,7 +353,7 @@ function thresholds(p: Paragraph, lo: number, hi: number, into: number[], depth:
 
 installCanvas()
 const report = {
-  seed, count, breakPremise, paragraphs: 0, layouts: 0, lines: 0, exactErrors: 0,
+  seed, count, breakPremise, dictionary, scripts, paragraphs: 0, layouts: 0, lines: 0, exactErrors: 0,
   scans: { decided: 0, left: 0, passed: 0 },
   differing: { proven: 0, premise: 0 }, modes: 0, gapped: 0, differingWithoutGap: 0,
   examples: [] as { paragraph: Paragraph; widthAu: number; mode: string; exact: string[]; word: string[]; gaps: number }[],
@@ -378,7 +399,7 @@ for (let n = 0; n < count; n++) {
 report.scans = { decided: tally.decided, left: tally.left, passed: tally.passed }
 const out = options.get('out')
 if (out !== undefined && out !== '') writeFileSync(resolve(out), `${JSON.stringify(report, null, 2)}\n`)
-console.log(`[word-scan-attack] seed ${seed}${breakPremise ? ', a font that breaks the premise' : ''}: ${report.paragraphs} paragraphs, ${report.layouts} layouts, ${report.lines} lines, ${asked} Canvas calls; ${report.exactErrors} layouts failed under the loop`)
+console.log(`[word-scan-attack] seed ${seed}${breakPremise ? ', a font that breaks the premise' : ''}${dictionary ? ', dictionary breaks' : ''}${scripts ? ', more scripts' : ''}: ${report.paragraphs} paragraphs, ${report.layouts} layouts, ${report.lines} lines, ${asked} Canvas calls; ${report.exactErrors} layouts failed under the loop`)
 console.log(`  plain scans: ${report.scans.decided} decided by the word scan, ${report.scans.passed} words passed over on the premise; ${report.scans.left} left to the loop`)
 console.log(`  layouts that differ from the loop's: without the premise ${report.differing.proven}, the tree's ${report.differing.premise}, of them without the gap ${report.differingWithoutGap}; inspected layouts with the gap ${report.gapped}; inspected lines other than plain ${report.modes}`)
 for (let i = 0; i < Math.min(8, report.examples.length); i++) {

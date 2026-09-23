@@ -609,7 +609,10 @@ font without negative advances, plain by the tree and by its edited copies (`too
 engine's loop alone, and `proven`, the word scan without its premise) and inspected by the tree, at drawn widths and at
 the widths where a break moves, each with the app units beside them: no layout may differ from the loop's, no inspected
 layout may report `negative-word-tail`, and inspected lines must be the plain ones. `--break-premise` makes the font
-break the premise, and then every layout that differs must report the gap. `tools/word-scan-spaces-attack.ts` does the
+break the premise, and then every layout that differs must report the gap. `--dictionary` gives the environment the
+dictionary breaks of Thai, Lao, Khmer and Myanmar (Intl.Segmenter), so a run of those scripts holds natural breaks inside
+one shaping unit, and `--scripts` draws such runs from main's corpora and words of scripts the lists leave out.
+`tools/word-scan-spaces-attack.ts` does the
 same for every space-like character inside words under every spacing and white-space value. A seed of 20,000 paragraphs
 takes 10 to 25 minutes on a core, `--focus` and `--all-lines` the longer. `tools/word-scan-premise-probe.ts` holds the
 tree against the loop in pinned Firefox, each word at the width of its own advance, over the installed families (the
