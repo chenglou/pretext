@@ -6,6 +6,7 @@ import { bounds, contextFor, width, type Context } from '../../measure/canvas.js
 import { canvasFont } from '../../measure/font.js'
 import { listedFontOf } from './fonts.js'
 import { CANVAS_AU_PER_PX, letterSpacedContext, noLigaturesContext, rangeAu, scriptRunIndex } from './measure.js'
+import { BREAK_NORMAL } from './linebreak.js'
 import { generalCategory, joiningType } from './props.js'
 import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, InWordSides, LigaturePart, LigatureRow, PairPlacement } from './types.js'
 
@@ -17,7 +18,8 @@ import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InW
 // ink box ends at 438 au with ligatures and 438.36 without; the DOM gives `f` 217 au and `i` 218 inside `firstname`, where
 // the recipe gives 249 and 186. Necessary, not sufficient: a ligature that moves neither the pair's width nor its box, or
 // one that begins more than a cluster before t, doesn't show. A run with letter spacing has ligatures off in the DOM too
-// (nsLayoutUtils.cpp:6901-6904).
+// (nsLayoutUtils.cpp:6901-6904). A plain paragraph doesn't ask it at a break opportunity that a unit holds of itself
+// (ordinaryBreakAt), and an inspected one asks it there only to report the offset (ligatureAtBreak).
 function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
   if (run.contexts.own.settings.letterSpacing !== '0px') return false
   let a = t - 1
@@ -55,7 +57,7 @@ export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): I
   const original = p.units[p.unitOf[t]!]!
   if (t === original.tStart) return { au: original.startAdvance, standIn: null }
   const unit = windowAt(p, run, original, t)
-  if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
+  if (t === unit.tStart) return { au: unit.startAdvance, standIn: ligatureAtBreak(p, run, original, unit, t) }
   const entry = entryAt(unit, t)
   if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
   return entry.advance
@@ -107,8 +109,9 @@ function windowAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numbe
 // - no letters join across it (joinsAcross), and no mark starts its cluster (inWordAdvance, 'mark-starts-cluster');
 // - the two cells measured alone add up to the two measured together, so no kerning, contextual form or ligature that a
 //   total shows crosses it;
-// - no optional ligature as wide as its parts spans it (ligatureAcross), and the two cells hold as many ligature groups
-//   apart as together (groupsIn), so no group that required forms made spans it.
+// - no optional ligature as wide as its parts spans it (ligatureAcross; not asked where the cut is a break opportunity that
+//   the unit holds of itself, ordinaryBreakAt), and the two cells hold as many ligature groups apart as together
+//   (groupsIn), so no group that required forms made spans it.
 // A cut that doesn't hold leaves its two cells in one window, measured whole. The windows must add up to the unit, which
 // ties every cut to the unit's own shaping. A unit of 2^18 px or more, whose width Canvas no longer gives to the app
 // unit (gaps.ts wideUnit), has windows only where its float width is exact all the same (1,400 Han characters at 200px).
@@ -154,7 +157,8 @@ function windowsOf(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit): GeckoU
     const right = rangeAu(own, run, p.tUnits, g, grid[i + 1]!)
     const both = rangeAu(own, run, p.tUnits, grid[i - 1]!, grid[i + 1]!)
     let rightGroups: number | null = null
-    let holds = left + right === both && generalCategory(codePointAtT(p, g))[0] !== 'M' && !joinsAcross(p, unit, g) && !ligatureAcross(p, run, unit, g)
+    let holds = left + right === both && generalCategory(codePointAtT(p, g))[0] !== 'M' && !joinsAcross(p, unit, g) &&
+      (ordinaryBreakAt(p, run, g) || !ligatureAcross(p, run, unit, g))
     if (holds) {
       leftGroups ??= groupsIn(p, run, grid[i - 1]!, g, '', '')
       rightGroups = groupsIn(p, run, g, grid[i + 1]!, '', '')
@@ -317,7 +321,10 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
-  return sidesAdvance(p, run, unit, t, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver })
+  const value = sidesAdvance(p, run, unit, t, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver })
+  if (value.standIn !== null) return value
+  const optional = ligatureAtBreak(p, run, unit, unit, t)
+  return optional === null ? value : { au: value.au, standIn: optional }
 }
 
 // Whether the pair placement recipe can put part of what crosses t after it (pairKernedShare), from what it looks at before
@@ -631,13 +638,38 @@ function pairFactDescribes(run: GeckoTextRun, t: number): boolean {
 }
 
 // Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required
-// shaping forms (groupAcross).
+// shaping forms (groupAcross). An optional ligature isn't looked for at a break opportunity that the unit holds of itself
+// (ordinaryBreakAt).
 function groupSpans(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
   // Not in a unit that starts inside a cluster, whose groups Canvas can't count (inWordAdvance).
   if (p.clusterStart[unit.tStart] === 0) return false
+  if (ordinaryBreakAt(p, run, t)) return groupAcrossAt(p, run, unit, t)
   const entry = entryAt(unit, t)
   if (entry.ligature === null) entry.ligature = ligatureAcross(p, run, unit, t)
   return entry.ligature || groupAcrossAt(p, run, unit, t)
+}
+
+// Whether cluster boundary t is a break opportunity that line breaking finds inside a unit without word-break: break-all
+// or line-break: anywhere: after a hyphen, between Han characters, a dictionary break in Thai, Lao, Khmer or Burmese
+// (linebreak.ts). There the port doesn't look for an optional ligature, on a PREMISE about fonts that no source
+// gives: no optional ligature spans such a break opportunity. It held on all real text measured (DESIGN.md §4.4, "Taken
+// out for speed"), where the optional ligatures are Latin letters inside a word, which a line breaks between only under
+// overflow-wrap, a soft hyphen or those two properties, and where the premise isn't taken: under word-break: break-all a
+// break opportunity between `f` and `i` is inside the `fi` of Helvetica Neue.
+function ordinaryBreakAt(p: GeckoPrepared, run: GeckoTextRun, t: number): boolean {
+  return p.breakFlags[t] === BREAK_NORMAL && !run.breaksAnywhere
+}
+
+// On an inspected paragraph, where an optional ligature spans break opportunity t, which the port takes as if none did
+// (groupSpans, windowsOf): the reason. Asked where the value comes from the offset's two sides (inWordAdvance) and at a
+// window's start; inside a group that required forms the value is the group's shares already. `whole` is the unit the pair
+// is looked for in (a window's start is tested in its unit), `unit` the one whose record keeps the answer, in the
+// offset's `ligature`, which groupSpans never reads at such an offset. A plain paragraph asks nothing.
+function ligatureAtBreak(p: GeckoPrepared, run: GeckoTextRun, whole: GeckoUnit, unit: GeckoUnit, t: number): InWordReason | null {
+  if (p.inspect === null || !ordinaryBreakAt(p, run, t) || p.clusterStart[t] === 0 || p.clusterStart[whole.tStart] === 0) return null
+  const entry = entryAt(unit, t)
+  if (entry.ligature === null) entry.ligature = ligatureAcross(p, run, whole, t)
+  return entry.ligature ? { kind: 'optional-ligature', at: p.tSource[t]! } : null
 }
 
 // groupAcross at cluster boundary t, with U+200D at the cut where letters join across it.

@@ -621,6 +621,18 @@ differ. It takes a few minutes in a Firefox slot. `tools/word-scan-scripts-probe
 `FontFace` and on the made-up kern font `tools/negative-tail-font.ts`, beside Firefox's own lines, in about 30 seconds:
 every word that differs from the loop must report the gap.
 
+**A change to what Gecko and WebKit leave unasked at break opportunities and for resolving font lists also holds the
+drops' real-text sets before it merges** (since 2026-09-23): a change to `engines/gecko/advance.ts` `ordinaryBreakAt` or
+the questions it gates, to `engines/webkit/fonts.ts` `RESOLVING_GENERICS`, or another question the plain path skips on a
+premise (DESIGN.md §4.4, "Taken out for speed"). The requirements audit dropped those questions on sets where no real
+line moved, and two reviews then moved lines with the same drops on text real pages hold under CSS the sets didn't use:
+`word-break: break-all`, soft hyphens, long words and URLs under `overflow-wrap`, font lists written for Windows. Their
+case files are kept in `.artifacts/tests/runs/drops-20260923/cases/` (`real/` the real-text review's 15 sets, 284,546
+cases, the books' per browser; `adversarial/` the other review's 10 sets, 91,336; `tier-<browser>.ndjson` the tier
+corpus as one file). `lab/run.ts --predict-only --predictor=rebuild/lab/baselines/plain-predictor.ts` runs a set with
+each of the two checkouts, the main line's and the change's, in a few minutes a browser; no case's lines may differ, and
+where they do, each differing case is observed natively and the browser must side with the change.
+
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
 (25 cases a round trip against 1, and without the giants). So `sets.ts` fixes each set's parts (the suite samples keep

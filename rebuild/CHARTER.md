@@ -174,7 +174,12 @@ heuristic, or named here.
   for; the maintainer accepted it as a documented default. On the port's measurements it holds in every installed face
   at every instance CSS can ask for, though Firefox itself breaks it in two Arabic faces where the port can't see it
   (DESIGN.md §4.6), and an inspected paragraph reports `negative-word-tail` where the engine's loop decides a scan
-  otherwise.
+  otherwise. Since the same day the port doesn't test for an optional ligature at a break opportunity that line breaking
+  finds inside a shaping unit without `word-break: break-all` or `line-break: anywhere`, between Han characters, after a
+  hyphen, at a dictionary break (`measure/no-optional-ligature-at-ordinary-breaks`), on the premise, which no source
+  gives, that none spans one; a line that breaks a word inside itself keeps the test, where real text needs it, and an
+  inspected paragraph reports `in-word-prefix` where a ligature spans such a break opportunity (DESIGN.md §4.4, "Taken
+  out for speed").
 - WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
   difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
   R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.

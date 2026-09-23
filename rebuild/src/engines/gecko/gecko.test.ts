@@ -153,8 +153,9 @@ beforeAll(() => {
       const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
       const width = Math.fround((stubAu(this.font, s, this.lang) + spacing) / 60)
       // "fi" forms a ligature as wide as its parts whose ink box ends 0.36 au further with ligatures off (probe gecko-port F9).
-      // So does "ff", which the stub keeps as wide with ligatures off.
-      const right = (s === 'fi' || s === 'ff') && this.letterSpacing !== '0px' ? width + 0.006 : width
+      // So does "ff", which the stub keeps as wide with ligatures off, and the made-up pair 丁七, an optional ligature
+      // across a break opportunity between Han characters, which no real font was found to form (DESIGN.md §4.4).
+      const right = (s === 'fi' || s === 'ff' || s === '丁七') && this.letterSpacing !== '0px' ? width + 0.006 : width
       return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: right }
     }
   }
@@ -806,11 +807,46 @@ describe('ceiling round 2', () => {
   })
 
   test('an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)', () => {
-    const l = layout(paragraph([run('fi')], 2, { overflowWrap: 'anywhere' }))
-    expect(l.lines.map(line => line.start)).toEqual([0, 1])
-    expect(l.lines.map(line => line.geometry.width)).toEqual([576, 576])
-    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
-    expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
+    // Under word-break: break-all the break between `f` and `i` is a break opportunity, and the ligature is looked for there
+    // as at an emergency break under overflow-wrap.
+    for (const extra of [{ overflowWrap: 'anywhere' as const }, { wordBreak: 'break-all' as const }]) {
+      const l = layout(paragraph([run('fi')], 2, extra))
+      expect(l.lines.map(line => line.start)).toEqual([0, 1])
+      expect(l.lines.map(line => line.geometry.width)).toEqual([576, 576])
+      expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+      expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
+    }
+  })
+
+  test('an optional ligature is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself', () => {
+    // The stand-in's made-up 丁七 is an optional ligature as wide as its parts whose ink box moves with ligatures off, as
+    // `fi`. Between Han characters is a break opportunity, where the port takes the offset as if no ligature spanned it: a
+    // plain paragraph doesn't measure the pair, and an inspected one measures it and names the offset. The lines are the
+    // same, two characters a line. Under word-break: break-all the premise isn't taken, and a plain paragraph asks too.
+    const pairs = (): number => asked.calls.filter(call => call.text === '丁七').length
+    const text = '丁七丁七漢'
+    const p = paragraph([run(text)], 20, { lang: 'zh' })
+    const inspected = layout(p)
+    expect(inspected.lines.map(line => line.start)).toEqual([0, 2, 4])
+    expect(pairs()).toBeGreaterThan(0)
+    expect(allGaps(inspected).filter(g => g.gap === 'in-word-prefix' && g.detail.includes('optional ligatures off')).length).toBeGreaterThan(0)
+    asked = { contexts: [], calls: [] }
+    const plain = prepare(p, env, false)
+    if (plain.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    const ends: number[] = []
+    for (let start = firstLine(plain.state); start !== null;) {
+      const filled = fillLine(plain.state, start, { width: 20, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('refused')
+      ends.push(filled.end)
+      start = filled.next
+    }
+    expect(ends).toEqual(inspected.lines.map(line => line.end))
+    expect(pairs()).toBe(0)
+    asked = { contexts: [], calls: [] }
+    const all = prepare(paragraph([run(text)], 20, { lang: 'zh', wordBreak: 'break-all' }), env, false)
+    if (all.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    fillLine(all.state, firstLine(all.state)!, { width: 20, left: 0, right: 0 })
+    expect(pairs()).toBeGreaterThan(0)
   })
 
   test('deep null-language spans inherit canonical tags; empty tags reset and closing spans restores the parent', () => {
