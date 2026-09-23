@@ -1,5 +1,12 @@
 # Takeover decisions and evidence
 
+2026-09-23, the Firefox and webkit-host references recorded again after the requirements audit's drops as narrowed, both
+orders and both configurations, from 4f417c9 (kept on branch `audit-drops-narrowed-rec`), whose library equals this
+branch's. Against 90e0266's references there is no status transition in either browser or configuration, widths
+included, the exact values are the same, and tier 2's gates lose nothing. Every recorded case replays exactly, and the
+plain predictor's line ranges equal the inspected ones in webkit-host on every case, and in Firefox on all but 21 cases
+whose own native lines moved between the two runs too (history-dependent), as at the word scan's merge.
+
 2026-09-23, WebKit doesn't ask whether a font list resolves where the list names `serif`, `sans-serif`, `monospace` or
 `system-ui` ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed";
 `webkit/content/list-probe-skipped-for-a-resolving-generic`). Under a Han, kana or Hangul locale each box asked two
