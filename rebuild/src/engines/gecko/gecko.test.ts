@@ -142,12 +142,13 @@ beforeAll(() => {
       asked.calls.push({ text: s })
       // Letter spacing goes after every ligature group (CanvasRenderingContext2D.cpp:4759-4790): a code point, with the
       // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here), and so
-      // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17).
+      // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17), and the made-up 三上, a group across a break opportunity between
+      // Han characters, which no real font was found to make (DESIGN.md §4.4).
       let groups = 0
       const cps = [...s]
       for (let i = 0; i < cps.length; i++) {
         if (i > 0 && (cps[i] === '‍' || cps[i] === '‌' || cps[i] === '︎' || cps[i] === '️' || /\p{M}/u.test(cps[i]!))) continue
-        if (((cps[i] === 'ا' || cps[i] === 'آ') && cps[i - 1] === 'ل') || (cps[i] === 'า' && cps[i - 1] === 'ฤ')) continue
+        if (((cps[i] === 'ا' || cps[i] === 'آ') && cps[i - 1] === 'ل') || (cps[i] === 'า' && cps[i - 1] === 'ฤ') || (cps[i] === '上' && cps[i - 1] === '三')) continue
         groups++
       }
       const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
@@ -463,6 +464,30 @@ describe('gecko engine output', () => {
     const p = paragraph([run('دلآد')], 20, { direction: 'rtl', overflowWrap: 'anywhere' })
     expect(starts(p)).toEqual([0, 1, 3])
     expect(widths(p)).toEqual([576, 1001, 576])
+  })
+  test('a group that required forms is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself', () => {
+    // The made-up group 三上 spans a break opportunity between Han characters, where the port takes the offset as if no group
+    // spanned it: the line breaks inside the group, and the lines on both sides of it name the offset. Under word-break: break-all the
+    // premise isn't taken: the group is looked for, and the scan takes it whole on 三, as the line above does lam with alef.
+    const text = '漢三上漢'
+    const p = paragraph([run(text)], 20, { lang: 'zh' })
+    expect(starts(p)).toEqual([0, 2])
+    const l = layout(p)
+    expect(allGaps(l).filter(g => g.gap === 'in-word-prefix' && g.detail.includes('which a ligature group that required shaping forms spans')).map(g => g.at)).toEqual([{ start: 2, end: 2 }, { start: 2, end: 2 }])
+    expect(starts(paragraph([run(text)], 20, { lang: 'zh', wordBreak: 'break-all' }))).toEqual([0, 1, 3])
+    // A plain paragraph gives the inspected one's lines and doesn't count groups at 2px of letter spacing.
+    asked = { contexts: [], calls: [] }
+    const plain = prepare(p, env, false)
+    if (plain.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    const ends: number[] = []
+    for (let start = firstLine(plain.state); start !== null;) {
+      const filled = fillLine(plain.state, start, { width: 20, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('refused')
+      ends.push(filled.end)
+      start = filled.next
+    }
+    expect(ends).toEqual(l.lines.map(line => line.end))
+    expect(asked.contexts.some(c => c.letterSpacing === '2px')).toBe(false)
   })
   test('glyph-clusters names a letter-spaced unit only where Canvas counts fewer ligature groups than clusters', () => {
     const spaced = (text: string) => layout(paragraph([run(text, 'span', { letterSpacing: 1 })], 500))

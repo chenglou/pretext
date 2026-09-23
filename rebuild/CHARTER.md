@@ -179,7 +179,8 @@ heuristic, or named here.
   hyphen, at a dictionary break (`measure/no-optional-ligature-at-ordinary-breaks`), on the premise, which no source
   gives, that none spans one; a line that breaks a word inside itself keeps the test, where real text needs it, and an
   inspected paragraph reports `in-word-prefix` where a ligature spans such a break opportunity (DESIGN.md §4.4, "Taken
-  out for speed").
+  out for speed"). On the same premise a group that required shaping forms isn't looked for there either
+  (`measure/no-group-at-ordinary-breaks`); an inspected paragraph reports `in-word-prefix` where one spans the offset.
 - WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
   difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
   R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.

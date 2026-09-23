@@ -1,5 +1,15 @@
 # Takeover decisions and evidence
 
+2026-09-23, Gecko doesn't look for a group that required shaping forms at a break opportunity a unit holds of itself
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-group-at-ordinary-breaks`), on the premise of the
+ligature test's entry below: no such group spans one. The audit's G3 took the premise at every break opportunity inside
+a unit, and under `word-break: break-all` it breaks inside Geeza Pro's lam ligatures on real Arabic, Persian and Hindi
+text; under `break-all` and `line-break: anywhere` the groups are looked for as before. An inspected paragraph asks the
+count there and reports `in-word-prefix` where a group spans the offset. In pinned Firefox a chat message asks 36.3
+questions where it asked 37.3 (222 characters where 231), a real paragraph 99.6 where 112.8 (858 where 960; CJK 114.5
+where 144.5). No line moved in any set, the reviews' included, nor in the tier corpus, where the audit's form lost 3
+(Geeza Pro under `break-all`).
+
 2026-09-23, Gecko doesn't test for an optional ligature at a break opportunity a unit holds of itself ([DESIGN.md
 §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-optional-ligature-at-ordinary-breaks`): between Han
 characters, after a hyphen, at a dictionary break, but not where a line breaks a word inside itself, which includes
