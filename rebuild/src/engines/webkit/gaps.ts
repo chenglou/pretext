@@ -109,8 +109,10 @@ function hasLanguageDependentFallback(cp: number, kind: LanguageFallback): boole
 
 // The box makeBox made, in box order: the facts of it that only gaps read (types.ts WebKitBoxInspect), from what its font
 // facts leave unknown, the coverage above, and its locale and text. `font` owns the resolved family's pure source analysis
-// and Canvas strings for this preparation (font-compilation.ts); `rawHan` is the script classification of this leaf's inherited language before specialization.
-export function boxMade(p: WebKitPrepared, box: WebKitBox, font: CompiledFont, rawHan: boolean, unverified: UnverifiedCoverage | null): void {
+// and Canvas strings for this preparation (font-compilation.ts); `rawHan` is the script classification of this leaf's inherited language before specialization;
+// `standardFamily` the settings' standard family of the box's locale, which draws where no family of the list resolves,
+// where makeBox didn't ask whether one does (a list that names a generic family that resolves), else null.
+export function boxMade(p: WebKitPrepared, box: WebKitBox, font: CompiledFont, rawHan: boolean, unverified: UnverifiedCoverage | null, standardFamily: string | null): void {
   if (p.inspect === null) return
   const env = p.env
   const facts = font.declared.facts
@@ -149,6 +151,13 @@ export function boxMade(p: WebKitPrepared, box: WebKitBox, font: CompiledFont, r
   // fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage facts read, so
   // Canvas decides what a named family draws).
   const compiled = compiledInspection(font)
+  // No family of the list resolves where the list followed by LastResort measures a space as LastResort alone does; the
+  // standard family then draws, which the port names in the list Canvas measures only where it asked (makeBox).
+  let unresolvedList: string | null = null
+  if (standardFamily !== null) {
+    const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+    if (canvasWidth(contextFor(p.contexts, { ...plain, font: font.listLastResortFont }), ' ') === canvasWidth(contextFor(p.contexts, { ...plain, font: font.lastResortFont }), ' ')) unresolvedList = standardFamily
+  }
   let localeChoosesFonts: WebKitBoxInspect['localeChoosesFonts'] = null
   if (box.locale.name !== '' && (compiled.unknownFamily || compiled.namedGeneric || languageFallback)) {
     const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
@@ -159,7 +168,7 @@ export function boxMade(p: WebKitPrepared, box: WebKitBox, font: CompiledFont, r
   }
   p.inspect.boxes.push({
     monospaceUnknown: facts.monospace === null, hyphenUnknown: facts.mapsHyphen === null, unverifiedCoverage: unverified === null ? [] : unverified.codePoints,
-    primaryFamilyUnknown: facts.primaryFamily === null, pairKerningUnknown: facts.pairKerning === null, localeChoosesFonts,
+    primaryFamilyUnknown: facts.primaryFamily === null, pairKerningUnknown: facts.pairKerning === null, localeChoosesFonts, unresolvedList,
     hanLocaleUnknown: env.preferredLanguages === null && rawHan,
     quoteLocaleUnknown: env.icuDefaultLocale === null && quote && box.locale.name !== '' && !hasDelimiterDataOf(box.locale),
     dictionaryRangesStartingWithMark: env.dictionaryBreaks.kind === 'intl-segmenter-word' ? dictionaryRangesStartingWithMark(lineRulesOf(box.locale, box.style.lineBreakMode).rules, text) : [],
@@ -328,6 +337,7 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
         i += length - 1
       }
     }
+    if (facts.unresolvedList !== null && from < to) add('canvas-language', box, from, to, `no family of the list resolves, though it names a generic family, so the DOM draws with the standard family locale ${box.locale.name} chooses, ${facts.unresolvedList} (FontCascadeFonts.cpp:210-217), which the port doesn't name; OffscreenCanvas has no locale`)
     if (facts.hanLocaleUnknown) add('ui-language', box, from, to, "the Han locale becomes the first preferred language starting with zh-, and the preferred languages aren't given; laid out as zh-hans")
     if (facts.quoteLocaleUnknown) {
       for (let i = from; i < to; i++) {

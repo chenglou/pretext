@@ -122,8 +122,12 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number, fon
   // settings' standard family then draws (FontCascadeFonts::realizeFallbackRangesAt, FontCascadeFonts.cpp:210-217), which the
   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
   // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
-  // have either): it is named at the end of the list.
-  if (choice.standardFamily !== null) {
+  // have either): it is named at the end of the list. A list that names serif, sans-serif, monospace or system-ui isn't
+  // asked: under a Han, kana or Hangul locale each of them is a family every WebContent process of macOS 27 has (fonts.ts
+  // RESOLVING_GENERICS; DESIGN.md §4.4, "Taken out for speed"), so the list resolves. An inspected paragraph asks it all the
+  // same and reports canvas-language where it doesn't (gaps.ts boxMade).
+  const askList = choice.standardFamily !== null && !font.namesResolvingGeneric
+  if (askList) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
     const listThenLastResort = contextFor(p.contexts, { ...plain, font: font.listLastResortFont })
     const lastResort = contextFor(p.contexts, { ...plain, font: font.lastResortFont })
@@ -169,7 +173,7 @@ function makeBox(p: WebKitOwnPrepared, leaf: LeafInput, sourceStart: number, fon
     context, plainContext, spaceWidth: canvasWidth(context, ' '), spacedContext, countContext, letterSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
     spacingFacts,
   }
-  boxMade(p, box, font, languageSource.han, unverified)
+  boxMade(p, box, font, languageSource.han, unverified, askList ? null : choice.standardFamily)
   return box
 }
 

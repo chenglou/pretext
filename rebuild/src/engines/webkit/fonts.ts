@@ -24,6 +24,12 @@ import { inRanges } from './data.js'
 import { webkitEmojiPresentationRanges, webkitGenericFamilies, webkitGenericFamilyNames } from './generated/fonts.js'
 
 const CORE_TEXT_GENERICS = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
+// The generic families a list resolves with whatever else it names: system-ui is the system font, and under a Han, kana
+// or Hangul locale serif, sans-serif and monospace are families that every WebContent process of macOS 27 has (Songti SC
+// and TC, PingFang SC, TC, HK and MO, Hiragino Mincho ProN, Hiragino Sans, AppleMyungjo, Apple SD Gothic Neo, Menlo;
+// probe land-w1a, DESIGN.md §4.4). cursive and fantasy aren't among them: under zh they are Kaiti SC, which the process
+// doesn't have (probe webkit-round4 R11). content.ts makeBox doesn't ask whether such a list resolves.
+export const RESOLVING_GENERICS: readonly string[] = ['serif', 'sans-serif', 'monospace', 'system-ui']
 const STANDARD_FAMILY_BY_SCRIPT: Readonly<Record<string, string>> = {
   TRADITIONAL_HAN: 'Songti TC', SIMPLIFIED_HAN: 'Songti SC', KATAKANA_OR_HIRAGANA: 'Hiragino Mincho ProN', HANGUL: 'AppleMyungjo',
 }

@@ -1,5 +1,17 @@
 # Takeover decisions and evidence
 
+2026-09-23, WebKit doesn't ask whether a font list resolves where the list names `serif`, `sans-serif`, `monospace` or
+`system-ui` ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed";
+`webkit/content/list-probe-skipped-for-a-resolving-generic`). Under a Han, kana or Hangul locale each box asked two
+questions to learn whether any listed family resolves and, where none did, named the locale's standard family for
+Canvas. The audit's W1a dropped the probe on the premise that every page's list ends in a generic family; lists written
+for Windows (`Meiryo`, `"Malgun Gothic"`, `"Microsoft YaHei"` alone) don't, and moved lines without it. A list that
+names one of those four always resolves on macOS 27 (probe land-w1a: 168 of 168 lists under 14 Han, kana and Hangul
+locales), so only such a list skips the probe; an inspected paragraph asks it all the same and reports `canvas-language`
+where it resolves nothing. In webkit-host a real paragraph asks 88.0 questions where it asked 88.7 (CJK 109.0 where
+111.0); chat messages, set in English, ask what they asked. No line moved in any set, the tier corpus (63,729 cases)
+included.
+
 2026-09-23, Gecko doesn't look for a group that required shaping forms at a break opportunity a unit holds of itself
 ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-group-at-ordinary-breaks`), on the premise of the
 ligature test's entry below: no such group spans one. The audit's G3 took the premise at every break opportunity inside
