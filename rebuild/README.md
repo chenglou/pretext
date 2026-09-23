@@ -30,7 +30,8 @@ and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK
 
 Since 2026-09-23 on branch `blink-words-first` Blink cuts a shaping group into words first, measuring each word once with
 its trailing space, and finds the break of a line that ends between two words from the positions at the cuts (words
-first, DESIGN.md §4.4), on two premises about fonts documented as defaults with named gaps (§4.6).
+first, DESIGN.md §4.4), and predicts the window a shrink of the wide window takes instead of measuring every window
+before it (the cut predictor), on three premises about fonts documented as defaults with named gaps (§4.6).
 
 ## Core
 
@@ -45,7 +46,8 @@ A premise about fonts that no source gives is taken only as a documented default
 paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
 word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail`; Blink's words first
 assumes no shaping context reaches more than one word past a space and that positions inside a word stay sorted, and
-reports `context-past-a-word` and `positions-run-backwards` (DESIGN.md §4.6).
+reports `context-past-a-word` and `positions-run-backwards`; its cut predictor assumes a string is never narrower than a
+window inside it and reports `nested-window-wider` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

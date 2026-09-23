@@ -9492,6 +9492,40 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/cut-predictor",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "a plain paragraph doesn't measure every window the wide window's shrink tries before the one it takes: it scales the widest window's total, or a total its caller hands down (a group of one piece, measured; the pieces' prefixes between two cuts; a half's share of the range the cut search cut by length), to each window's length, takes the first below 256 zoomed px, and measures the window before it, which must be 256 zoomed px or more, and that one, which must be less, walking back or on a window at a time where either isn't; a half estimated at twice 256 zoomed px or more isn't measured, and is a piece where a window its search measures inside it shows it below 256 zoomed px; that this takes the loop's window rests on a premise about fonts that no source gives, that a string is never narrower than a window inside it; an inspected paragraph shrinks as before and walks the prediction beside it over the same totals, reporting blink/gap/nested-window-wider where the two take other windows, and takes the prediction's; it hands on what the prediction measured and leaves the same halves unmeasured, so it asks every question a plain paragraph asks",
+   "source": "engines/blink/shape.ts windowAdjust16, predictedWindow, addPieces, adjustBetweenCuts16; DESIGN.md §4.4, §4.6",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a plain paragraph takes the windows the shrink takes, asking fewer strings of 256 zoomed px or more",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a window wider than the string around it: the shrink and the prediction take other windows, and an inspected paragraph reports nested-window-wider",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > an inspected paragraph asks every string a plain one asks where a range measures far less than its estimate"
+   ],
+   "declaredBy": "the cut predictor (branch blink-words-first, 2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/nested-window-wider",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "an inspected paragraph shrinks the wide window as before and walks the prediction of the window it takes beside it, over the same totals, and reports nested-window-wider where the two take other windows: a window measures wider than a string around it; the adjustment is the prediction's in both modes, and a plain paragraph reports nothing",
+   "source": "engines/blink/shape.ts windowAdjust16; engines/blink/gaps.ts nestedWindowWider; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a window wider than the string around it: the shrink and the prediction take other windows, and an inspected paragraph reports nested-window-wider"
+   ],
+   "declaredBy": "the cut predictor (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -10082,6 +10116,8 @@
   "blink/measure/words-first": "ab6f6d5fb6dcf222",
   "blink/gap/context-past-a-word": "2fd5da1225a4e282",
   "blink/lines/candidate-from-cuts": "94744e61077356d4",
-  "blink/gap/positions-run-backwards": "96427266229206d5"
+  "blink/gap/positions-run-backwards": "96427266229206d5",
+  "blink/measure/cut-predictor": "1aa7bbc573a90282",
+  "blink/gap/nested-window-wider": "0df78c57d58be074"
  }
 }

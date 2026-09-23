@@ -375,6 +375,7 @@ export type GapName =
   | 'negative-word-tail'
   | 'context-past-a-word'
   | 'positions-run-backwards'
+  | 'nested-window-wider'
   | 'glyph-clusters'
   | 'joining-technology'
   | 'fixed-pitch-path'

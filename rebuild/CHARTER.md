@@ -167,6 +167,10 @@ heuristic, or named here.
   premises about fonts that no source gives, taken as documented defaults under the maintainer's stance of 2026-09-23.
   An inspected paragraph holds every read that depends on the cuts against the cut search it replaces and the walk
   against the search, and reports `context-past-a-word` and `positions-run-backwards` where they differ (DESIGN.md §4.6).
+  The cut predictor (`measure/cut-predictor`) takes the window the wide window's shrink takes from a prediction confirmed
+  by the window before it, on "a string is never narrower than a window inside it", another such premise; an inspected
+  paragraph shrinks as before beside it, asks every question a plain one asks, and reports `nested-window-wider` where
+  the two take other windows.
 - Gecko: "the two sides measured with U+200D add up to the unit, so the prefix is the advance"
   (`measure/sides-add-up-is-exact`) holds to the app unit only: 6 passing Noto Nastaliq Urdu cases hold a position 1 au
   off (probe F22; F15 1,013 of 1,015). The suffix-side in-word recipe for clusters without joining forms

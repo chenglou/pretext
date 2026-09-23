@@ -189,7 +189,7 @@ type SliceResult = {
   candidateDifferWithGap: number
   differences: Difference[]
 }
-const PREMISE_GAPS = ['context-past-a-word', 'positions-run-backwards']
+const PREMISE_GAPS = ['context-past-a-word', 'positions-run-backwards', 'nested-window-wider']
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 

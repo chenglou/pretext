@@ -601,7 +601,8 @@ differ, the probe can't say which is right: `tools/cut-fonts-cases.ts` writes th
 cases, `lab/run.ts` and `lab/score.ts` hold both trees' lines against the browser's own, and no case may go from pass
 to a failure. Since words first (2026-09-23) the two trees' cuts differ by design where one of them cuts words: the probe
 compares the positions at every inner cut of either tree and at the space before it, and the group totals, and those
-must not differ where the browser doesn't side with the change.
+must not differ where the browser doesn't side with the change. The cut predictor (2026-09-23) is such a change that
+means to move nothing: its probe against words first must show 0 cuts, positions and layouts differing.
 
 **A change to Blink's words first also passes its attack** (since 2026-09-23): a change to `shape.ts` `addWordPieces`,
 to the walk (`line-breaker.ts` `wordCandidate`) or to what the inspected path holds them against (DESIGN.md §4.6).

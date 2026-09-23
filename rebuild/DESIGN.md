@@ -1691,6 +1691,25 @@ an inspected paragraph does about them and the evidence. Unit: per word, its tot
 both measure below 256 zoomed px together, the two words together and the pair window's 3; per line that ends between
 two words, the position where the word the line ends in ends.
 
+Blink, the cut predictor (`shape.ts` `windowAdjust16`, `predictedWindow`, `addPieces`, `adjustBetweenCuts16`; since
+2026-09-23). The wide window shrinks through windows that are known before any is measured, and it takes the first
+below 256 zoomed px; every total before that one says only that the window is still 256 zoomed px or more. A plain
+paragraph doesn't ask those. It scales the widest window's total (its float, 256 zoomed px or more) to each window's
+length, takes the first whose scaled total is below 256 zoomed px, and measures the window before it, which must be 256
+zoomed px or more, and that window, which must be less; where the first isn't it walks back, and where the second isn't
+it walks on, a window a step. The totals a plain paragraph's caller already has go down to the windows: a group of one
+piece is its piece, measured; between two cuts the pieces' prefixes give the window's estimate, and its total is
+measured only where the prediction needs it; and a range the cut search cuts into two gets, as its estimate, its share
+of the range's total by length, so a half estimated at twice 256 zoomed px or more isn't measured to learn that it is
+to be cut again (a window its search measures inside it says so, and where one shows it below 256 zoomed px after all it
+is a piece; where no window is measured before an unsafe cut, its total is). The shrink then takes the window it took and
+measures its two sides as before, so the cuts, the adjustments and the lines are the loop's, on a premise about fonts
+(§4.6, "Blink's cut predictor"). Unit: per shrink, two totals where it measured one a window. Under the stand-in Canvas
+(`tools/words-count.ts`, 1,000 messages a set, a list of contexts a message, 320px then 260, 380 and 440px) a message is
+prepared and filled at 320px with these questions and UTF-16 units, words first's beside them: the bench's mix 154.4 and
+659 (157.1 and 780), its real set 167.4 and 694 (175.1 and 747), the eleven languages 218.1 and 834 (273.2 and 1,210),
+plain ASCII 132.4 and 560 (132.2 and 560); the later widths ask what they asked, within 0.3 of a question.
+
 **Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
 
 Gecko, windows inside a long shaping unit (`advance.ts` `windowAt`, `windowsOf`). Every in-word recipe measures to its
@@ -2063,6 +2082,28 @@ places (two Euphemia UCAS paragraphs, each at three widths a LayoutUnit apart, a
 STIX Two Text paragraph under negative word spacing). A space measured alone as U+2028 is Common too: 1,054,720 units
 at 32px where U+0020 in an 8-bit string gives 622,592, so the pair window at every space before a letter shows an
 adjustment in Euphemia UCAS, no such space passes, and its groups are cut by the cut search, as the base does.
+
+**Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`; the recipe is in §4.4). It rests
+on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a string is never
+narrower than a window inside it, so the totals of the windows a shrink tries never rise. Then the window before the
+predicted one measuring 256 zoomed px or more says that every wider window does, and the predicted one measuring less
+says it is the first that does, which is the window the loop takes. No source gives it: an advance can be negative, and a
+contextual form or kern that a wider window holds can make it narrower than one inside it, but only by more than the text
+the wider window adds, half of one of its sides, which beside a window of 256 zoomed px is tens of pixels of text. An inspected paragraph shrinks
+as before, which asks what it asked (the words' questions and its own apart), then walks the prediction over the same
+totals, measuring a window only where the loop didn't, and reports `nested-window-wider` (§5) where the two take other
+windows, taking the prediction's, which is the plain paragraph's. What it hands on from a shrink is what the prediction
+measured, and like a plain paragraph it leaves a half estimated at twice 256 zoomed px or more unmeasured, so it searches
+where a plain paragraph searches and asks every question that one asks, which the plain path's replay of a recording
+needs: a share by length can be far off (a ZWJ sequence is many units and one glyph, a Myanmar syllable many marks), and
+such a half measures below 256 zoomed px only after a search that measuring it first skips (`cut-predictor.test.ts` pins
+one). The cut search the words are held against shrinks as before,
+measures every range and holds nothing. What a plain paragraph hands down to the windows (a group's piece, the pieces' prefixes, a half's
+share) moves no window: it is an estimate, which decides what is asked and not what is taken, but a group of one piece,
+whose measured total is the window's. Offline, `tools/words-attack.ts` over the sets `wide-group-cuts` and `runs` (14,217
+layouts at 60, 150 and 400px) gives words first's lines, widths and pieces in every layout of the usual and the fine-grid
+Canvas, and on `backwards`, where advances inside words are negative, every layout that differs reports
+`nested-window-wider`; `cut-predictor.test.ts` pins a made-up font whose window is wider than the string around it.
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
@@ -2513,6 +2554,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Negative word tail (`negative-word-tail`) | Gecko | The engine tests every break candidate inside a word as it scans (after a hyphen, between Han characters, every cluster of a line's first word under `overflow-wrap`); the word scan passes over them where the word's end fits, on the premise that no tail of a shaped word has a negative advance, which no source gives (§4.6). | An inspected paragraph runs the engine's loop beside every scan the word scan decides, over the same advances. | The two decide a scan differently: a word the scan passed over whole has a prefix wider than the room left, on the port's advances. On the port's measurements no installed face at an instance CSS can ask for has one; Skia at a variation corner does (§4.6), and `word-scan.test.ts` makes four up. The gap can fire where Firefox agrees with the word scan (4 layouts on that Skia corner). Firefox's own negative tails in Mishafi and Diwan Thuluth fall where the port can't see them, so no gap reports them. A plain paragraph reports nothing. |
 | Context past a word (`context-past-a-word`) | Blink | A group is cut at every space where the two words around it measure together what they measure apart, on the premise that no shaping context reaches more than one word past a space, which no source gives (§4.6); the cut search it replaces holds context within 256 zoomed px. | An inspected paragraph makes every read that depends on a group's cuts, a position or the wide window's adjustment, with the cut search's cuts and with the words'. | The two give another value at a read: a font whose lookups read more than one word back, or where the cut search's own windows miss a context (Zapfino, §4.4), which the browser can side with either way. No installed face was found where the premise alone fails. A difference made and taken back between two reads doesn't show. A plain paragraph reports nothing. |
 | Positions run backwards (`positions-run-backwards`) | Blink | A line that ends between two words takes its candidate from the positions at the group's cuts, which stands in for Blink's binary search over every offset on the premise that positions inside a word stay sorted (§4.6). | An inspected paragraph searches every line end the walk settles and walks it too. | The two settle on different candidates: a glyph or a pair adjustment inside a word is wider than nothing backwards. `words.test.ts` makes one up. A plain paragraph reports nothing. |
+| Nested window wider (`nested-window-wider`) | Blink | A plain paragraph predicts the window the wide window's shrink takes from the widest window's total and confirms it with the window before it, on the premise that a string is never narrower than a window inside it, which no source gives (§4.6). | An inspected paragraph shrinks as before and walks the prediction beside it over the same totals. | The two take other windows: a window measures wider than a string around it, by more than the text between them. `cut-predictor.test.ts` makes one up. A plain paragraph reports nothing. |
 | Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. Blink: a position inside a grapheme at a unit HarfBuzz may start a cluster at; a chosen edge between joining letters; a chosen edge where the pair adjustment measured with liga, clig and calt off (a letter spacing, font_features.cc:54-86) differs from the one with them on. |
 | WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a line measuring a string of a simplified-path box outside the width shortcut that holds U+0020 (WidthIterator restores a space's unshaped advance, the simplified path keeps the shaped one, WidthIterator.cpp:84-120 and :473-474 against FontCascade.cpp:381-412) or whose Canvas total isn't the float32 sum of its code points' advances in order (shaping moved advances, which the two paths sum in other orders). `fixed-pitch-path`: a line measuring an item of such a box that fails T1 while `monospace` is null, or while `primaryFamily` is null and the font is fixed pitch (whether the realized family is Courier New decides the shortcut). |
 | RTL shaping across inline boxes (`rtl-shaping-across-inline-boxes`) | WebKit | `LineBuilder` reshapes complex RTL text joined across decoration-free boxes as one run (webkit-lines §9.3). | none | RTL complex-script text split over same-font spans without box edges. |

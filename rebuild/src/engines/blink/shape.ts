@@ -30,7 +30,7 @@ import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
 import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import { GapAccumulator } from './gap-accumulator.js'
-import { contextPastAWord, floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
+import { contextPastAWord, floatSum, nestedWindowWider, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
@@ -71,12 +71,13 @@ export function widthOf16(raw16: number): number {
 
 // What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
 // GapSink: the paragraph's in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
-// `aside`: reads an inspected paragraph makes beside the layout's own, whose values and gaps decide nothing (the cut search
-// the words are held against, the walk over the cuts held against the search), so they aren't held against anything.
+// `aside`: reads an inspected paragraph makes beside the layout's own, whose gaps decide nothing, so they aren't held
+// against anything: `search`, the cut search the words are held against, which reads as the port did before words; `walk`,
+// the walk over the cuts held against the search, which reads what the layout would.
 export type Shaper = {
   p: BlinkPrepared
   gaps: GapSink
-  aside?: true
+  aside?: 'search' | 'walk'
 }
 
 // On an inspected paragraph a read of a group's own call that depends on its cuts (a position, the wide window) is made
@@ -84,7 +85,7 @@ export type Shaper = {
 // asks what it asked then and in that order, and then with the words' cuts. Where the two differ the words rest on
 // context that reaches past a word, and the read reports context-past-a-word; the layout takes the words' value.
 function heldAgainstSearch(sh: Shaper, g: number, k: number, read: (sh: Shaper) => number): number {
-  const searched = sh.gaps === null || sh.aside === true ? undefined : sh.p.inspect?.searched[g]
+  const searched = sh.gaps === null || sh.aside !== undefined ? undefined : sh.p.inspect?.searched[g]
   if (searched === undefined) return read(sh)
   const group = sh.p.groups[g]!
   const cuts = group.cuts
@@ -93,7 +94,7 @@ function heldAgainstSearch(sh: Shaper, g: number, k: number, read: (sh: Shaper) 
   group.prefixAtCut = searched.prefixAtCut
   let before: number
   try {
-    before = read({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: true })
+    before = read({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: 'search' })
   } finally {
     group.cuts = cuts
     group.prefixAtCut = prefix
@@ -637,14 +638,22 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-// `whole` is the measured total of [from, to), which the caller has or measures.
-type CutTotals = { left: number; right: number }
+// `whole` is the measured total of [from, to), which the caller has or measures, or NaN where the caller hands down
+// `estimate` instead, a total [from, to) is near (the pieces it spans), since that total would say no more than that the
+// window is 256 zoomed px or more.
+//
+// The windows the shrink tries are known before any is measured, and it takes the first below 256 zoomed px. A plain
+// paragraph doesn't measure each in turn only to learn that it is still 256 zoomed px or more: it predicts the window
+// taken (predictedWindow) and measures the one before it and that one. That takes the shrink's window on a premise about
+// fonts that no source gives, that a string is never narrower than a window inside it; an inspected paragraph shrinks as
+// before, walks the prediction beside it over the same totals, and reports nested-window-wider where the two take other
+// windows, taking the prediction's, which is the plain paragraph's (DESIGN.md §4.6, "Blink's cut predictor"). What it
+// hands back is what the prediction measured, as a plain paragraph's, so the two go on to ask the same questions.
+type CutTotals = { left: number; right: number; whole: number }
 
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number, cutTotals: CutTotals | null = null): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number, cutTotals: CutTotals | null = null, estimate: number = whole): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
-  let a = from
-  let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
   // Accepted spans stop at global cluster/code-point boundaries, so test only the newly included units.
   let checkedFrom = k
@@ -660,7 +669,10 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   }
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
-  while (whole >= EXACT16 && (a < nearA || b > nearB)) {
+  // The windows the shrink would try, widest first, and their totals once measured.
+  const as = [from]
+  const bs = [to]
+  for (let a = from, b = to; a < nearA || b > nearB;) {
     if (a < nearA && (k - a >= b - k || b <= nearB)) {
       let next = clusterStartAtOrBefore(p, a + ((k - a + 1) >> 1), lo)
       if (next <= a) next = clusterEndAfter(p, a, hi)
@@ -670,15 +682,62 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
       if (next >= b) next = clusterStartAtOrBefore(p, b - 1, lo)
       b = Math.max(nearB, next)
     }
-    whole = measure16(sh, g, a, b, lo, hi)
+    as.push(a)
+    bs.push(b)
   }
+  const totals = [whole]
+  const totalBy = (by: Shaper) => (i: number): number => {
+    const known = totals[i]
+    if (known !== undefined && !Number.isNaN(known)) return known
+    return totals[i] = measure16(by, g, as[i]!, bs[i]!, lo, hi)
+  }
+  const total = totalBy(sh)
+  let n = 0
+  // The totals a plain paragraph knows once it took its window: `whole` and the ones its prediction measured.
+  let known = totals
+  if (sh.gaps === null) {
+    n = predictedWindow(as, bs, estimate, total)
+  } else {
+    while (n + 1 < as.length && total(n) >= EXACT16) n++
+    if (sh.aside !== 'search') {
+      // A total only the prediction measures decides nothing where it takes the loop's window, so its gaps are set aside.
+      const aside = totalBy({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'walk' })
+      known = [whole]
+      const predicted = predictedWindow(as, bs, estimate, i => known[i] = aside(i))
+      if (predicted !== n) {
+        nestedWindowWider(sh.gaps, p, g, k)
+        n = predicted
+        totals[n] = NaN
+      }
+    }
+  }
+  const a = as[n]!
+  const b = bs[n]!
   const left = measure16(sh, g, a, k, lo, hi)
   const right = measure16(sh, g, k, b, lo, hi)
   if (cutTotals !== null) {
     cutTotals.left = a === from ? left : NaN
     cutTotals.right = b === to ? right : NaN
+    cutTotals.whole = known[0]!
   }
-  return whole - left - right
+  return total(n) - left - right
+}
+
+// Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first below 256 zoomed px, or the last. Predicted as
+// the first whose length, scaled from the widest window's `estimate`, is below 256 zoomed px times a margin that errs
+// toward a wider window, since a window too wide costs one more total and one too narrow walks back against the order of
+// the shrink. Then the window before it must measure 256 zoomed px or more, where it walks back, and it must measure less,
+// where it walks on (`total` measures a window once).
+const PREDICTION_MARGIN = 1.0
+
+function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, total: (i: number) => number): number {
+  const last = as.length - 1
+  const length0 = bs[0]! - as[0]!
+  let i = 0
+  while (i < last && !(estimate * ((bs[i]! - as[i]!) / length0) < EXACT16 * PREDICTION_MARGIN)) i++
+  while (i > 0 && total(i - 1) < EXACT16) i--
+  while (i < last && total(i) >= EXACT16) i++
+  return i
 }
 
 // windowAdjust16 for an offset the layout asks about: within the piece of the paragraph's group that holds k, or the two
@@ -712,11 +771,14 @@ function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: numb
 }
 
 // The wide window's adjustment across k inside group g's own call, between the cuts around k.
+// A plain paragraph hands down what the group's cuts already say of the window: a group of one piece is measured, and
+// the pieces between two cuts add up to about their window (windowAdjust16).
 function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const group = sh.p.groups[g]!
   const lo = group.start
   const hi = group.end
-  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  const plain = sh.gaps === null
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? group.prefixAtCut[1]! : measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
@@ -729,7 +791,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   while (last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
   const to = cuts[last]!
-  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
+  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? NaN : measure16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -755,13 +817,14 @@ function beforeWhiteSpace(p: BlinkPrepared, k: number, lo: number, hi: number): 
 }
 
 // Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
-// whose measured total is `whole`.
-function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number, cutTotals: CutTotals): boolean {
+// whose measured total is `cutTotals.whole`, or which is about `estimate` where the paragraph didn't measure it.
+function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, cutTotals: CutTotals, estimate: number): boolean {
   const p = sh.p
   const group = p.groups[g]!
+  const whole = cutTotals.whole
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
-    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
+    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, Number.isNaN(whole) ? estimate : whole) === 0
 }
 
 function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
@@ -819,34 +882,37 @@ function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number)
 // the cut at its end is a 0 the search measured (positionAdjust16): the pair window's at a cut that passed the safe test,
 // and before white space the wide window's, which is the search's own window where both sides of the cut are one piece
 // (adjust16 takes it between the cuts around an offset).
-function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: number = NaN): void {
+//
+// A paragraph doesn't measure a range whose total, estimated from the range it was cut from, is twice 256 zoomed px or
+// more: that total would only say that the range is to be cut, which the first window its search measures says too
+// (windowAdjust16, on its premise). Where that window shows the range below 256 zoomed px after all, it is a piece, and
+// where no window is measured before an unsafe cut, the total is. An inspected paragraph skips it too, so it searches
+// where a plain one does and asks what that one asks, where an estimate is off (a ZWJ sequence is many units and one
+// glyph); the cut search the words are held against measures every range, as before.
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: number = NaN, estimate: number = NaN): void {
   const p = sh.p
   const group = p.groups[g]!
-  const whole = Number.isNaN(knownWhole) ? measure16(sh, g, a, b, group.start, group.end) : knownWhole
-  if (whole < EXACT16) {
-    cuts.push(b)
-    totals.push(whole)
-    zero.push(false)
-    return
-  }
   // An accepted window may already have measured a child's whole range in this same shaping call.
-  const cutTotals: CutTotals = { left: NaN, right: NaN }
+  const cutTotals: CutTotals = { left: NaN, right: NaN, whole: knownWhole }
+  if (Number.isNaN(knownWhole) && !(sh.aside !== 'search' && estimate >= 2 * EXACT16)) cutTotals.whole = measure16(sh, g, a, b, group.start, group.end)
   const mid = a + ((b - a) >> 1)
   let k = -1
   let boundary = -1
-  for (let turn = 0; turn < 2 && k < 0; turn++) {
-    for (let d = 0; k < 0 && (mid - d > a || mid + d < b); d++) {
-      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0; side++) {
+  for (let turn = 0; turn < 2 && k < 0 && !(cutTotals.whole < EXACT16); turn++) {
+    for (let d = 0; k < 0 && !(cutTotals.whole < EXACT16) && (mid - d > a || mid + d < b); d++) {
+      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0 && !(cutTotals.whole < EXACT16); side++) {
         const c = side === 0 ? mid - d : mid + d
         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
         if (boundary < 0) boundary = c
         const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
-        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, whole, cutTotals)) k = c
+        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, cutTotals, estimate)) k = c
       }
     }
   }
-  if (boundary < 0) {
-    uncutCluster(sh.gaps, p, g, a, b)
+  if (k < 0 && Number.isNaN(cutTotals.whole)) cutTotals.whole = measure16(sh, g, a, b, group.start, group.end)
+  const whole = cutTotals.whole
+  if (whole < EXACT16 || boundary < 0) {
+    if (!(whole < EXACT16)) uncutCluster(sh.gaps, p, g, a, b)
     cuts.push(b)
     totals.push(whole)
     zero.push(false)
@@ -857,10 +923,11 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
     k = boundary
     unsafeCut(sh.gaps, p, g, k)
   }
+  const scale = Number.isNaN(whole) ? estimate : whole
   const first = cuts.length
-  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN)
+  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
-  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN)
+  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN, scale * ((b - k) / (b - a)))
   zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, a, k) && !measuredAsCommon(p, g, k, b)))
 }
 
@@ -971,7 +1038,7 @@ export function measureGroups(sh: Shaper): void {
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
     if (p.inspect !== null) {
-      cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: true }, g, false)
+      cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
       p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })
     }
     cutGroup(sh, g, true)

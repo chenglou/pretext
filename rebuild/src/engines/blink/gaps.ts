@@ -270,6 +270,18 @@ export function positionsRunBackwards(sink: GapSink, sh: Shaper, sr: ShapeResult
   addGap(sink, 'positions-run-backwards', p.styles[p.groups[sr.group]!.style]!.run, `from offset ${at(start)}, at ${x} LayoutUnits, the walk over the cuts settles on offset ${at(walked)} and the search over every offset on ${at(searched)}: a position inside a word lies past a later one, and the line takes the walk's candidate`, sourceRange(p, Math.min(walked, searched), Math.max(walked, searched) + 1))
 }
 
+// ---- The cut predictor (shape.ts windowAdjust16) ----
+
+const NESTED_WINDOW_WIDER_DETAIL = 'the window the shrink of the wide window takes here is not the one predicted from the total of the widest window: a string measures narrower than a window inside it, which the prediction rests on (DESIGN.md §4.6, "Blink\'s cut predictor"); the adjustment is the prediction\'s window\'s'
+
+// The shrink of the wide window across offset k of group g and the prediction of the window it takes, over the same
+// totals, take different windows (shape.ts windowAdjust16).
+export function nestedWindowWider(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
+  if (sink === null) return
+  const group = p.groups[g]!
+  addGap(sink, 'nested-window-wider', p.styles[group.style]!.run, NESTED_WINDOW_WIDER_DETAIL, clustersAround(p, Math.min(k, group.end), group.start, group.end))
+}
+
 // ---- A HanKerning trim the port adds to a shaping call (shape.ts) ----
 
 const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` through the 「「 pair trim and character types from ink bounds (han_kerning.cc:417-535)'

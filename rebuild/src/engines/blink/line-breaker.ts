@@ -858,7 +858,7 @@ export class LineBreaker {
     }
     const searched = offsetForPosition(sh, sr, x, before)
     // The walk's own measurements decide nothing here where it agrees, so their gaps are set aside.
-    const walked = walks ? this.wordCandidate({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: true }, sr, start, x) : -1
+    const walked = walks ? this.wordCandidate({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: 'walk' }, sr, start, x) : -1
     if (walked < 0 || (this.char(walked) === 0x20 ? searched === walked : searched >= walked && this.holdsNoSpace(walked, searched + 1))) return searched
     positionsRunBackwards(sh.gaps, sh, sr, x, walked, searched, start)
     return walked

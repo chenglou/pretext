@@ -1,5 +1,19 @@
 # Takeover decisions and evidence
 
+2026-09-23, Blink's cut predictor (branch `blink-words-first`, on words first; [DESIGN.md §4.4, §4.6](DESIGN.md)): the
+shrink of the wide window no longer measures every window only to learn that it is still 256 zoomed px or more. A plain
+paragraph predicts the window it takes from the widest window's total, measures the window before it and that one, and
+hands down totals the cuts already give (a group's one piece, the pieces between two cuts, a half's share of the range
+cut in two). It takes the loop's windows on a premise about fonts, that a string is never narrower than a window inside
+it, documented as a default with the named gap `nested-window-wider`, which an inspected paragraph reports where its
+loop and the prediction take other windows. An inspected paragraph hands on what the prediction measured and leaves the
+same halves unmeasured, so it asks every question a plain one asks: a first recording in which it measured them found
+31 cases without facts and 30 with them where the plain path asked a question the record lacked, all halves of emoji
+words at 80px or of Myanmar text whose share by length was far above what they measure. Under the stand-in Canvas a message of the bench's mix is prepared and
+filled at 320px with 154.4 questions and 659 UTF-16 units where words first asks 157.1 and 780, of its real set 167.4
+and 694 where 175.1 and 747, of the eleven languages 218.1 and 834 where 273.2 and 1,210; plain ASCII and the later
+widths ask what they asked. The browser evidence is in the recording commit that follows.
+
 2026-09-23, Blink's words first (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)): a shaping
 group is cut into words first, each measured once with its trailing space, and the offset between two words is a cut
 where the two words together measure their sum and the pair window shows 0; a line that ends between two words finds
