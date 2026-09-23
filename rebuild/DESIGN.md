@@ -1709,6 +1709,102 @@ DOM's. What differs:
 - A unit under a direction override (above): 32 advances, a line's width and one native break, which is why such a
   unit has no windows.
 
+**Taken out for speed** (2026-09-23; the requirements audit of that day, research/REQUIREMENTS-AUDIT.md on branch
+`audit-requirements`, measured each exactness mechanism's Canvas cost against the cases that need it, and two reviews of
+the drops it proposed looked for real text they move). What goes is a question the plain path asked that no real text
+needed: 2,485 chat messages, 4,686 real paragraphs, 86,336 cases of a width sweep and 72 whole books, laid out right in
+all three browsers with every mechanism on, and the reviews' sets (every line of main's 18 corpora at six widths, the
+CJK paragraphs at every 8px, chat with emoji and URLs, Chromium's translated UI text, `word-break: break-all`, letter
+spacing, long German, Finnish and Arabic words at 100 to 240px, soft hyphens, font lists written for Windows) move no
+line without it. A question the audit would have dropped everywhere goes only where those sets show it doesn't decide a
+line, and where that rests on a premise about fonts, the premise is named and an inspected paragraph reports each offset
+where the question would have spoken.
+
+Gecko, what crosses an in-word offset, asked only where the pair placement can use it (`advance.ts` `placesAcross`;
+`gecko/measure/crossing-measured-where-placed`). The audit's candidate was to measure what crosses an offset (the
+prefix, or the cluster before the offset alone and in front of the suffix) and to place a kerned pair's adjustment
+(`pairKernedShare`, the probe pairs) only for a word broken inside itself, which lost 39 adversarial cases where it
+dropped them everywhere. The word scan already asks no in-word offset of a word whose end fits, and what the plain path
+still asked was mostly between Han characters and in Thai, Khmer and Burmese, where no placement can use the answer:
+with no letters joined across the offset and the unit not shaped reversed, the advance is W(unit) − W(suffix) unless the
+placement recipe can put part of an adjustment after the offset, which needs a run whose script the `pairKerning` fact
+describes (Latin, Greek, Cyrillic), with the fact `split`, or unknown and printable ASCII around the offset
+(`sidesAdvance`). So a plain paragraph measures what crosses an offset only there, and elsewhere asks the suffix alone;
+an inspected one measures it everywhere for the reason, and both give the same advance. No line moves anywhere, by
+construction: the plain path asks a subset of its questions and gives the same values. In pinned Firefox a chat message
+asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0 where 252.4 (1,118 where
+1,338), a CJK paragraph 285.1 where 376.3 (1,396 where 1,555).
+
+Gecko, the ligature test by ink box, not asked at a break opportunity a unit holds of itself (`advance.ts`
+`ordinaryBreakAt`, `ligatureAtBreak`; `gecko/measure/no-optional-ligature-at-ordinary-breaks`). An optional ligature
+(liga, clig, dlig, hlig) as wide as its parts shows in no total, and the DOM gives a range edge inside it the ligature's
+advance in shares by started clusters (ComputeLigatureData, gfxTextRun.cpp:238-322): `fi` in 14px Helvetica Neue is 217
+and 218 au in the DOM and 249 and 186 as its sides measure (probe gecko-port F9). The test (`ligatureAcross`) measures
+the pair of clusters around an in-word offset twice, in the run's context and with ligatures off (letterSpacing
+0.001px), and compares widths and ink boxes. The audit dropped it everywhere, which moved none of its real text, but the
+reviews found real text that it moves, each a line broken inside a word between the letters of a ligature: Latin under
+`word-break: break-all` in Helvetica Neue (`conf|irm`, `of|fice`), a German word too long for 100px
+(`Browserzugri|ffen`, where the drop gave `Browserzugrif|fen`), words with soft hyphens (`of­fi­cial`) and long URLs
+under `overflow-wrap` in chat bubbles: 1,432 cases lost of their sets, in Helvetica Neue, Helvetica, Hoefler Text,
+Seravek, Lucida Grande and the Latin of PingFang SC and Hiragino Sans. So the test stays wherever a line breaks a word
+inside itself (an emergency break under `overflow-wrap` or `word-break`, a soft hyphen's, and every boundary under
+`word-break: break-all` or `line-break: anywhere`), and goes only at a break opportunity that line breaking finds inside
+a unit without those two properties: between Han characters, after a hyphen, at a dictionary break in Thai, Lao, Khmer
+and Burmese, where most of its questions were. That rests on a **premise about fonts**, which no source gives: no
+optional ligature spans such a break opportunity. There an offset takes the value its sides give, as if no ligature
+formed, and a window's cut isn't held back by one; an inspected paragraph asks the test at such an offset whose value it
+would call exact and at a window's start there, and reports `in-word-prefix` where it finds a ligature
+(`ligatureAtBreak`), so its lines are the plain ones and the gap names the premise. In pinned Firefox a chat message
+asks 37.3 questions where it asked 47.3 (231 characters where 251), a real paragraph 112.8 where 183.0 (960 where
+1,118), a CJK paragraph 144.5 where 285.1 (1,115 where 1,396); the audit's drop everywhere asked 34.1, 103.7 and 141.6
+on top of the placement above. No line moved in any of the sets above, CJK included, the reviews' soft-hyphen,
+`break-all` and long-word sets too, nor any of the tier corpus's 63,516 Firefox cases, of which the audit's form lost
+13.
+
+Gecko, groups that required shaping forms, not looked for at a break opportunity a unit holds of itself (`advance.ts`
+`groupSpans`, `groupAtBreak`; `gecko/measure/no-group-at-ordinary-breaks`). The letter-spacing count finds a group such
+as lam with alef (`groupAcross`): the unit, or its window, at 2px of letter spacing and at 0.001px, and then both sides
+of an offset, two to six questions, asked at every candidate inside a unit. The audit's candidate looked for groups only
+where a word is broken inside itself, not at any break opportunity inside a unit. The reviews found real text that
+moves: Arabic under `word-break: break-all`, where every boundary is a break opportunity, breaks inside Geeza Pro's lam
+ligatures, lam with alef and Allah but also lam with meem and with beh (`وال|مصاب` where Firefox gives `وا|لمصا`), and
+Persian and Hindi do the same (430 cases lost of their sets, 42 of the real-text review's). So the count goes, as the
+ligature test above, only at a break opportunity that line breaking finds inside a unit without `word-break: break-all`
+or `line-break: anywhere`, on the same **premise about fonts**: no group that required forms spans such a break
+opportunity. There the offset takes its sides' value, the scan reads the offset itself, and a group ends there; an
+inspected paragraph asks the count at such an offset whose value it would call exact and reports `in-word-prefix` where
+a group spans it (`groupAtBreak`). In pinned Firefox a chat message asks 36.3 questions where it asked 37.3 (222
+characters where 231), a real paragraph 99.6 where 112.8 (858 where 960), a CJK paragraph 114.5 where 144.5 (953 where
+1,115); the audit's form asked 33.1, 90.5 and 111.6. No line moved in any of the sets above, the reviews' Arabic,
+Persian, Hindi and Southeast Asian sets under `break-all` and at dictionary breaks too, nor any of the tier corpus's
+cases, of which the audit's form lost 3 more (Geeza Pro under `break-all`).
+
+WebKit, the probe for a list that resolves nothing, not asked where the list names a generic family that resolves
+(`content.ts` `makeBox`, `fonts.ts` `RESOLVING_GENERICS`; `webkit/content/list-probe-skipped-for-a-resolving-generic`).
+Where no family of a box's list resolves, the settings' standard family of the locale's script draws
+(FontCascadeFonts.cpp:210-217): Songti SC or TC, Hiragino Mincho ProN or AppleMyungjo under a Han, kana or Hangul
+locale, where Canvas, which has no locale, would take another. The port tells that from two questions a box, the list
+followed by LastResort and LastResort alone measuring a space alike, and then names the standard family at the end of
+the list. The audit dropped the probe, on the premise that a page's list ends in a generic family or names one it has.
+The reviews found the lists that don't: CSS written for Windows (`"Malgun Gothic"`, `Meiryo`, `"MS PGothic"`,
+`"Microsoft YaHei"` alone), where every Japanese and Korean width and a fifth of the Chinese ones lost their lines
+without it (988 cases lost of the adversarial review's sets, 1,222 of the real-text review's). Such a list resolves
+nothing on a Mac. A list that names `serif`, `sans-serif`, `monospace` or `system-ui` always resolves: `system-ui` is
+the system font, and under every Han, kana and Hangul locale the other three name families that every WebContent process
+of macOS 27 has (probe land-w1a, below). So the port asks the probe only of a list that names none of them, and a list
+that does is taken to resolve; `cursive` and `fantasy` aren't among them, since under zh they name Kaiti SC and Kaiti
+TC, which the process doesn't have (probe webkit-round4 R11, and land-w1a). An inspected paragraph asks the probe of a
+list it took to resolve and reports `canvas-language` over the box's characters on every line where it resolves nothing.
+Probe land-w1a (`.artifacts/probes/webkit-land-w1a`; webkit-host 22625.1.29.11.27, 2026-09-23; the inspected predictor
+over `"NoSuchFamilyXyz", <keyword>` under ja, ja-JP, ko, ko-KR, zh, zh-CN, zh-Hans, zh-TW, zh-Hant, zh-HK, zh-MO, yue,
+yue-Hant and zh-Hant-HK at 13, 16 and 20px, Latin text so that no other `canvas-language` hides the report): 168 of 168
+lists resolve. Two controls report what the probe finds where it is asked on the inspected path: the audit's drop
+reports `"NoSuchFamilyXyz"` alone unresolved under 13 of the 14 locales (yue names no standard family), and this tree
+taking `cursive` and `fantasy` to resolve reports them unresolved under every zh and yue-Hant locale. In webkit-host a
+real paragraph asks 88.0 questions where it asked 88.7 (CJK 109.0 where 111.0); chat messages, set in English, ask what
+they asked. No line moved in any of the sets above, the lists written for Windows included, nor any of the tier corpus's
+63,729 webkit-host cases.
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 

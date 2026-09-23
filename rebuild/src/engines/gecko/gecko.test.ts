@@ -142,19 +142,21 @@ beforeAll(() => {
       asked.calls.push({ text: s })
       // Letter spacing goes after every ligature group (CanvasRenderingContext2D.cpp:4759-4790): a code point, with the
       // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here), and so
-      // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17).
+      // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17), and the made-up 三上, a group across a break opportunity between
+      // Han characters, which no real font was found to make (DESIGN.md §4.4).
       let groups = 0
       const cps = [...s]
       for (let i = 0; i < cps.length; i++) {
         if (i > 0 && (cps[i] === '‍' || cps[i] === '‌' || cps[i] === '︎' || cps[i] === '️' || /\p{M}/u.test(cps[i]!))) continue
-        if (((cps[i] === 'ا' || cps[i] === 'آ') && cps[i - 1] === 'ل') || (cps[i] === 'า' && cps[i - 1] === 'ฤ')) continue
+        if (((cps[i] === 'ا' || cps[i] === 'آ') && cps[i - 1] === 'ل') || (cps[i] === 'า' && cps[i - 1] === 'ฤ') || (cps[i] === '上' && cps[i - 1] === '三')) continue
         groups++
       }
       const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
       const width = Math.fround((stubAu(this.font, s, this.lang) + spacing) / 60)
       // "fi" forms a ligature as wide as its parts whose ink box ends 0.36 au further with ligatures off (probe gecko-port F9).
-      // So does "ff", which the stub keeps as wide with ligatures off.
-      const right = (s === 'fi' || s === 'ff') && this.letterSpacing !== '0px' ? width + 0.006 : width
+      // So does "ff", which the stub keeps as wide with ligatures off, and the made-up pair 丁七, an optional ligature
+      // across a break opportunity between Han characters, which no real font was found to form (DESIGN.md §4.4).
+      const right = (s === 'fi' || s === 'ff' || s === '丁七') && this.letterSpacing !== '0px' ? width + 0.006 : width
       return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: right }
     }
   }
@@ -462,6 +464,30 @@ describe('gecko engine output', () => {
     const p = paragraph([run('دلآد')], 20, { direction: 'rtl', overflowWrap: 'anywhere' })
     expect(starts(p)).toEqual([0, 1, 3])
     expect(widths(p)).toEqual([576, 1001, 576])
+  })
+  test('a group that required forms is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself', () => {
+    // The made-up group 三上 spans a break opportunity between Han characters, where the port takes the offset as if no group
+    // spanned it: the line breaks inside the group, and the lines on both sides of it name the offset. Under word-break: break-all the
+    // premise isn't taken: the group is looked for, and the scan takes it whole on 三, as the line above does lam with alef.
+    const text = '漢三上漢'
+    const p = paragraph([run(text)], 20, { lang: 'zh' })
+    expect(starts(p)).toEqual([0, 2])
+    const l = layout(p)
+    expect(allGaps(l).filter(g => g.gap === 'in-word-prefix' && g.detail.includes('which a ligature group that required shaping forms spans')).map(g => g.at)).toEqual([{ start: 2, end: 2 }, { start: 2, end: 2 }])
+    expect(starts(paragraph([run(text)], 20, { lang: 'zh', wordBreak: 'break-all' }))).toEqual([0, 1, 3])
+    // A plain paragraph gives the inspected one's lines and doesn't count groups at 2px of letter spacing.
+    asked = { contexts: [], calls: [] }
+    const plain = prepare(p, env, false)
+    if (plain.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    const ends: number[] = []
+    for (let start = firstLine(plain.state); start !== null;) {
+      const filled = fillLine(plain.state, start, { width: 20, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('refused')
+      ends.push(filled.end)
+      start = filled.next
+    }
+    expect(ends).toEqual(l.lines.map(line => line.end))
+    expect(asked.contexts.some(c => c.letterSpacing === '2px')).toBe(false)
   })
   test('glyph-clusters names a letter-spaced unit only where Canvas counts fewer ligature groups than clusters', () => {
     const spaced = (text: string) => layout(paragraph([run(text, 'span', { letterSpacing: 1 })], 500))
@@ -806,11 +832,46 @@ describe('ceiling round 2', () => {
   })
 
   test('an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)', () => {
-    const l = layout(paragraph([run('fi')], 2, { overflowWrap: 'anywhere' }))
-    expect(l.lines.map(line => line.start)).toEqual([0, 1])
-    expect(l.lines.map(line => line.geometry.width)).toEqual([576, 576])
-    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
-    expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
+    // Under word-break: break-all the break between `f` and `i` is a break opportunity, and the ligature is looked for there
+    // as at an emergency break under overflow-wrap.
+    for (const extra of [{ overflowWrap: 'anywhere' as const }, { wordBreak: 'break-all' as const }]) {
+      const l = layout(paragraph([run('fi')], 2, extra))
+      expect(l.lines.map(line => line.start)).toEqual([0, 1])
+      expect(l.lines.map(line => line.geometry.width)).toEqual([576, 576])
+      expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+      expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
+    }
+  })
+
+  test('an optional ligature is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself', () => {
+    // The stand-in's made-up 丁七 is an optional ligature as wide as its parts whose ink box moves with ligatures off, as
+    // `fi`. Between Han characters is a break opportunity, where the port takes the offset as if no ligature spanned it: a
+    // plain paragraph doesn't measure the pair, and an inspected one measures it and names the offset. The lines are the
+    // same, two characters a line. Under word-break: break-all the premise isn't taken, and a plain paragraph asks too.
+    const pairs = (): number => asked.calls.filter(call => call.text === '丁七').length
+    const text = '丁七丁七漢'
+    const p = paragraph([run(text)], 20, { lang: 'zh' })
+    const inspected = layout(p)
+    expect(inspected.lines.map(line => line.start)).toEqual([0, 2, 4])
+    expect(pairs()).toBeGreaterThan(0)
+    expect(allGaps(inspected).filter(g => g.gap === 'in-word-prefix' && g.detail.includes('optional ligatures off')).length).toBeGreaterThan(0)
+    asked = { contexts: [], calls: [] }
+    const plain = prepare(p, env, false)
+    if (plain.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    const ends: number[] = []
+    for (let start = firstLine(plain.state); start !== null;) {
+      const filled = fillLine(plain.state, start, { width: 20, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('refused')
+      ends.push(filled.end)
+      start = filled.next
+    }
+    expect(ends).toEqual(inspected.lines.map(line => line.end))
+    expect(pairs()).toBe(0)
+    asked = { contexts: [], calls: [] }
+    const all = prepare(paragraph([run(text)], 20, { lang: 'zh', wordBreak: 'break-all' }), env, false)
+    if (all.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+    fillLine(all.state, firstLine(all.state)!, { width: 20, left: 0, right: 0 })
+    expect(pairs()).toBeGreaterThan(0)
   })
 
   test('deep null-language spans inherit canonical tags; empty tags reset and closing spans restores the parent', () => {
@@ -1084,6 +1145,26 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     for (const width of [2, 18.45, 18.47, 18.49]) {
       const edge = paragraph([run('KaKa', 'span', { font: optima })], width, { overflowWrap: 'anywhere', font: optima })
       expect(plainWalk(edge, false).lines).toEqual(plainWalk(edge, true).lines)
+    }
+  })
+
+  test('a plain paragraph measures what crosses an in-word offset only where the pair placement can use it', () => {
+    // Between Han characters the advance is W(unit) − W(suffix) whatever crosses the offset: the pairKerning fact doesn't
+    // describe the script, so no placement puts part of it after the offset. The inspected paragraph measures each
+    // character alone for the reason; the plain one doesn't. `KaKa` in Optima is kerned ASCII, which both measure.
+    const optima = { ...courier, family: 'Optima' }
+    const lone = (text: string): boolean => text.length === 1 && /\p{Script=Han}/u.test(text)
+    for (const width of [2, 20, 45.5, 71, 100]) {
+      const p = paragraph([run('漢字漢字漢字漢字 '), run('KaKaKa KaKa', 'span', { font: optima })], width, { overflowWrap: 'anywhere', lang: 'zh' })
+      const plain = plainWalk(p, false)
+      const plainLone = asked.calls.filter(call => lone(call.text)).length
+      const inspected = plainWalk(p, true)
+      const inspectedLone = asked.calls.filter(call => lone(call.text)).length
+      expect(plain.lines).toEqual(inspected.lines)
+      // A lone character the plain paragraph measures is the suffix of the last offset inside the unit.
+      expect(plainLone).toBeLessThanOrEqual(1)
+      if (width < 71) expect(inspectedLone).toBeGreaterThan(plainLone + 2)
+      expect(plain.calls).toBeLessThan(inspected.calls)
     }
   })
 

@@ -1,5 +1,58 @@
 # Takeover decisions and evidence
 
+2026-09-23, the Firefox and webkit-host references recorded again after the requirements audit's drops as narrowed, both
+orders and both configurations, from 4f417c9 (kept on branch `audit-drops-narrowed-rec`), whose library equals this
+branch's. Against 90e0266's references there is no status transition in either browser or configuration, widths
+included, the exact values are the same, and tier 2's gates lose nothing. Every recorded case replays exactly, and the
+plain predictor's line ranges equal the inspected ones in webkit-host on every case, and in Firefox on all but 21 cases
+whose own native lines moved between the two runs too (history-dependent), as at the word scan's merge.
+
+2026-09-23, WebKit doesn't ask whether a font list resolves where the list names `serif`, `sans-serif`, `monospace` or
+`system-ui` ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed";
+`webkit/content/list-probe-skipped-for-a-resolving-generic`). Under a Han, kana or Hangul locale each box asked two
+questions to learn whether any listed family resolves and, where none did, named the locale's standard family for
+Canvas. The audit's W1a dropped the probe on the premise that every page's list ends in a generic family; lists written
+for Windows (`Meiryo`, `"Malgun Gothic"`, `"Microsoft YaHei"` alone) don't, and moved lines without it. A list that
+names one of those four always resolves on macOS 27 (probe land-w1a: 168 of 168 lists under 14 Han, kana and Hangul
+locales), so only such a list skips the probe; an inspected paragraph asks it all the same and reports `canvas-language`
+where it resolves nothing. In webkit-host a real paragraph asks 88.0 questions where it asked 88.7 (CJK 109.0 where
+111.0); chat messages, set in English, ask what they asked. No line moved in any set, the tier corpus (63,729 cases)
+included.
+
+2026-09-23, Gecko doesn't look for a group that required shaping forms at a break opportunity a unit holds of itself
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-group-at-ordinary-breaks`), on the premise of the
+ligature test's entry below: no such group spans one. The audit's G3 took the premise at every break opportunity inside
+a unit, and under `word-break: break-all` it breaks inside Geeza Pro's lam ligatures on real Arabic, Persian and Hindi
+text; under `break-all` and `line-break: anywhere` the groups are looked for as before. An inspected paragraph asks the
+count there and reports `in-word-prefix` where a group spans the offset. In pinned Firefox a chat message asks 36.3
+questions where it asked 37.3 (222 characters where 231), a real paragraph 99.6 where 112.8 (858 where 960; CJK 114.5
+where 144.5). No line moved in any set, the reviews' included, nor in the tier corpus, where the audit's form lost 3
+(Geeza Pro under `break-all`).
+
+2026-09-23, Gecko doesn't test for an optional ligature at a break opportunity a unit holds of itself ([DESIGN.md
+§4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-optional-ligature-at-ordinary-breaks`): between Han
+characters, after a hyphen, at a dictionary break, but not where a line breaks a word inside itself, which includes
+every boundary under `word-break: break-all` and `line-break: anywhere`. The audit's G2 dropped the ligature test
+everywhere; two reviews found real text that moves without it, all lines broken inside a word between a ligature's
+letters (Latin under `break-all`, a long German word at 100px, soft hyphens, URLs under `overflow-wrap`), so the test
+stays there, and goes where most of its questions were, on the premise that no optional ligature spans such a break
+opportunity. An inspected paragraph asks the test there and reports `in-word-prefix`, so its lines are the plain ones.
+In pinned Firefox a chat message asks 37.3 questions where it asked 47.3 (231 characters where 251), a real paragraph
+112.8 where 183.0 (960 where 1,118; CJK 144.5 where 285.1). No line moved in the chat messages, real paragraphs, width
+sweep and books, nor in the reviews' sets, the ones where the audit's form moved lines included, nor in the tier corpus
+(63,516 cases), where the audit's form lost 13.
+
+2026-09-23, a plain Gecko paragraph measures what crosses an in-word offset only where the pair placement can use it
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/crossing-measured-where-placed`), the first of the
+requirements audit's drops (research/REQUIREMENTS-AUDIT.md on branch `audit-requirements`). The audit's candidate G1b +
+G4 was to ask the crossing measure and the pair placement only for a word broken inside itself. After the word scan that
+is nearly what the plain path did already; what it still asked was mostly between Han characters and in Thai, Khmer and
+Burmese, where no placement can use the answer and the advance is the unit less its suffix. Those questions now go to
+inspection alone, and both paths give the same advance, so no line can move and inspected output is unchanged. In pinned
+Firefox 156 a chat message asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0
+where 252.4 (1,118 where 1,338; CJK 285.1 where 376.3). No line moved anywhere, the adversarial corpus and both reviews'
+sets included; the knockout's 39 losses, which dropped both everywhere, don't occur.
+
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer
 accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it.

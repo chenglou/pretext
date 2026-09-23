@@ -174,7 +174,13 @@ heuristic, or named here.
   for; the maintainer accepted it as a documented default. On the port's measurements it holds in every installed face
   at every instance CSS can ask for, though Firefox itself breaks it in two Arabic faces where the port can't see it
   (DESIGN.md §4.6), and an inspected paragraph reports `negative-word-tail` where the engine's loop decides a scan
-  otherwise.
+  otherwise. Since the same day the port doesn't test for an optional ligature at a break opportunity that line breaking
+  finds inside a shaping unit without `word-break: break-all` or `line-break: anywhere`, between Han characters, after a
+  hyphen, at a dictionary break (`measure/no-optional-ligature-at-ordinary-breaks`), on the premise, which no source
+  gives, that none spans one; a line that breaks a word inside itself keeps the test, where real text needs it, and an
+  inspected paragraph reports `in-word-prefix` where a ligature spans such a break opportunity (DESIGN.md §4.4, "Taken
+  out for speed"). On the same premise a group that required shaping forms isn't looked for there either
+  (`measure/no-group-at-ordinary-breaks`); an inspected paragraph reports `in-word-prefix` where one spans the offset.
 - WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
   difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
   R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.
@@ -186,6 +192,11 @@ heuristic, or named here.
   Ethiopic word differs from Canvas under every language but am and none, R13; no lab case holds Ethiopic). History
   worlds vary one box at a time, a declared approximation: checked against the isolation protocol on 400 cases and not
   contradicted; products of worlds aren't laid out.
+- WebKit: a font list that names `serif`, `sans-serif`, `monospace` or `system-ui` is taken to resolve without the probe
+  that tells (`content/list-probe-skipped-for-a-resolving-generic`, 2026-09-23), a fact of macOS 27's fonts from probe
+  land-w1a: under every Han, kana and Hangul locale those keywords name families the WebContent process has, where
+  `cursive` and `fantasy` under zh don't. An inspected paragraph asks the probe of such a list and reports
+  `canvas-language` where it resolves nothing (DESIGN.md §4.4, "Taken out for speed").
 - Runtime font checks: `monospace` in WebKit (`measure/font-check-fixed-pitch`) is inferred from equal advances of `i`,
   `M`, `.` and the space, where WebKit reads a Core Text trait and three names Canvas doesn't show
   (FontCoreText.cpp:753-785); it is wrong for a font whose trait and advances disagree (MS-PGothic, MonotypeCorsiva).

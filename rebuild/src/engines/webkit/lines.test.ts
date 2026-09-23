@@ -428,6 +428,21 @@ describe('canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7)'
     expect(underEn.gaps).not.toContain('canvas-language')
   })
 
+  test('a list that names serif, sans-serif, monospace or system-ui is taken to resolve: a plain paragraph does not ask, and an inspected line reports one that does not', () => {
+    // Here no named family draws anything, so the list resolves nothing, which no list naming sans-serif does in a WebContent
+    // process of macOS 27 (fonts.ts RESOLVING_GENERICS). The standard family isn't named after it; the inspected line says so.
+    namedDraws = () => false
+    const p = { ...paragraph([['ab cd', 'text']], { lang: 'ko' }), font: { ...fontWith({ ...UNKNOWN_FONT_FACTS, monospace: false }), family: 'Arial, sans-serif' } }
+    const inspected = layout(p)
+    asked = []
+    const plain = prepare(p, env, false, createContextPool())
+    namedDraws = c => c < 0x80
+    expect(plain.boxes.map(box => box.canvasFamily)).toEqual(['Arial, "Apple SD Gothic Neo"'])
+    expect(asked.filter(question => question === 'normal 400 16px LastResort|0px| ').length).toBe(0)
+    expect(inspected.fonts.some(font => font.includes('AppleMyungjo'))).toBe(false)
+    expect(inspected.gaps).toContain('canvas-language')
+  })
+
   test('a character with default emoji presentation that only a generic family named for Canvas could draw is concerned', () => {
     const p = { ...paragraph([['ab ⚡ cd', 'text']], { lang: 'ja' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
     expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])

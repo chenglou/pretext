@@ -5923,14 +5923,16 @@
    "engine": "gecko",
    "area": "gap",
    "kind": "named gap",
-   "statement": "reports in-word-prefix, with the offset, at the first consulted in-word offset of a line where prefix + suffix ≠ unit, letters join across it, or the grapheme clusters on both sides measure differently in width or ink box with ligatures off (letterSpacing 0.001px)",
+   "statement": "reports in-word-prefix, with the offset, at the first consulted in-word offset of a line where prefix + suffix ≠ unit, letters join across it, or the grapheme clusters on both sides measure differently in width or ink box with ligatures off (letterSpacing 0.001px); at a break opportunity the unit holds of itself, where the port doesn't look for an optional ligature or a group that required forms (gecko/measure/no-optional-ligature-at-ordinary-breaks, gecko/measure/no-group-at-ordinary-breaks), an inspected paragraph reports that last condition, or a group that Canvas's letter-spacing count shows spanning the offset, and the value stays the sides'",
    "source": "DESIGN.md §5; gfxTextRun.cpp:238-322",
    "probes": [
     "gecko-port F9: confirmed"
    ],
    "tests": [
     "src/engines/gecko/gecko.test.ts :: in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes",
-    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)"
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)",
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an optional ligature is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself",
+    "src/engines/gecko/gecko.test.ts :: gecko engine output > a group that required forms is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself"
    ],
    "audit": "gecko C5, F4",
    "status": "current",
@@ -8833,7 +8835,7 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "ported rule",
-   "statement": "a range edge inside a ligature group takes the group's advance in equal shares per started cluster; groups are found by the ink box with ligatures off and by Canvas letter-spacing group counts, a group holding a mark is confirmed only where the joining fact says opentype, and candidates in a row are divided by the ligatures fact or stand in as one group",
+   "statement": "a range edge inside a ligature group takes the group's advance in equal shares per started cluster; groups are found by the ink box with ligatures off and by Canvas letter-spacing group counts, neither asked at a break opportunity the unit holds of itself (gecko/measure/no-optional-ligature-at-ordinary-breaks, gecko/measure/no-group-at-ordinary-breaks), a group holding a mark is confirmed only where the joining fact says opentype, and candidates in a row are divided by the ligatures fact or stand in as one group",
    "source": "gfxTextRun.cpp:238-322; hb-ot-shape.cc:189-191, :1051-1070; hb-ot-layout.cc:1917-1945; hb-aat-layout-morx-table.hh:447-600",
    "probes": [
     "gecko-port F9",
@@ -9337,7 +9339,7 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "recipe",
-   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures, and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it; a unit of a right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override) has no windows: HarfBuzz shapes it reversed or not by what its whole buffer holds (digits without a letter stay left to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit",
+   "statement": "inside a shaping unit of more than 32 code units the in-word recipes measure in a window: cuts are tried at every 16th cluster start (the last cell keeps what is left under two cells), and a cut holds where no letters join across it, no mark starts its cluster, the cells on its two sides measured alone add up to the two measured together, the pair of clusters around it has one ink box with and without ligatures (not asked at a cut that is a break opportunity the unit holds of itself, gecko/measure/no-optional-ligature-at-ordinary-breaks), and the two cells hold as many ligature groups apart as together (au at 2px of letter spacing less au at 0.001px); a cut that doesn't hold leaves its two cells in one window, measured whole; the windows must add up to the unit, else the unit has none; a window is a unit to every recipe, and the advance before it is the sum of the windows before it; a unit of a right-to-left script in a left-to-right run (a number in Arabic text, letters under a direction override) has no windows: HarfBuzz shapes it reversed or not by what its whole buffer holds (digits without a letter stay left to right), so where the unit holds a letter Canvas shapes a window of digits alone the other way round than the DOM shapes the unit",
    "source": "gfxFont.cpp:3804-3808, :3564-3617 (a word of any length is shaped in one call, cut only at 32,760 units, so no cut is exact by construction and Canvas decides each); engines/gecko/advance.ts windowAt, windowsOf; DESIGN.md §4.4; research/PROFILING-START.md item 3; hb-ot-shape.cc:588-645; engines/gecko/advance.ts shapedReversed",
    "probes": [
     "gecko-windows W1: all 13,435 cuts that hold, of 14,943 tried over 54 samples in 16 grid phases, give W(unit) − W(suffix), and 13,135 the DOM's advance, the other 300 where the long recipe misses it by the same amount",
@@ -9412,6 +9414,82 @@
     "src/engines/gecko/word-scan.test.ts :: a made-up font that breaks the premise: the word scan's wrong line, and the gap that names it > last"
    ],
    "declaredBy": "gecko word scan (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/crossing-measured-where-placed",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "on a plain paragraph, an in-word offset with no letters joined across it in a unit not shaped reversed takes W(unit) − W(suffix) without measuring what crosses it (the prefix, gecko/measure/sides-add-up-is-exact, or the cluster before it alone and in front of the suffix, gecko/measure/suffix-side-recipe) or asking the pair placement recipe, unless that recipe can put part of an adjustment after the offset: a run whose script the pairKerning fact describes (Latin, Greek and Cyrillic, Common where the run's lookups are Latin's), with the fact 'split', or unknown and printable ASCII from the cluster before the offset to the cluster after the one after it; elsewhere sidesAdvance gives that value whatever crosses the offset, so plain and inspected paragraphs give the same advance, and an inspected one still measures what crosses the offset for its reason (gecko/gap/in-word-prefix); between Han characters, in Thai, Khmer or Burmese, and in Arabic between letters that don't join, a plain paragraph asks one question an offset where it asked two to three",
+   "source": "no engine source, the port's own structure: engines/gecko/advance.ts inWordAdvance, placesAcross, sidesAdvance, pairKernedShare; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (G1b, G4) on branch audit-requirements",
+   "probes": [],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2) > a plain paragraph measures what crosses an in-word offset only where the pair placement can use it",
+    "src/engines/gecko/gecko.test.ts :: plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2) > a plain scan reads a kerned candidate as the inspected one does"
+   ],
+   "declaredBy": "requirements audit drop G1b + G4 (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/no-optional-ligature-at-ordinary-breaks",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "at a break opportunity that line breaking finds inside a shaping unit without word-break: break-all or line-break: anywhere (between Han characters, after a hyphen, a dictionary break in Thai, Lao, Khmer or Burmese; ordinaryBreakAt), the port doesn't test for an optional ligature (liga, clig, dlig and hlig: the pair of clusters around the offset in the run's context and with ligatures off, width and ink box): the offset takes the value its two measured sides give, as if none formed, where the DOM would give a ligature's advance to its clusters in equal shares (ComputeLigatureData), and a window's cut there isn't held back by one; that rests on a premise about fonts that no source gives: no optional ligature spans such a break opportunity; wherever a line breaks a word inside itself (an emergency break under overflow-wrap or word-break, a soft hyphen's, every boundary under break-all or anywhere) the test stays, since there real text needs it (the requirements audit's drop of it everywhere moved Latin under break-all in Helvetica Neue, a long German word at 100px, soft-hyphen words and URLs under overflow-wrap); it held on all real text measured (2,485 chat messages, 4,686 real paragraphs, 86,336 width-sweep cases, 72 books, and the requirements audit reviews' sets (the 18 corpora at six widths, the CJK paragraphs at every 8px, chat with emoji and URLs, Chromium's translated UI text, word-break: break-all in Latin, Arabic, CJK and chat, letter spacing, long German, Finnish and Arabic words at 100 to 240px, soft hyphens, overflow-wrap on long tokens), in pinned Firefox 156); an inspected paragraph asks the test at such an offset whose value it would otherwise call exact and at a window start there, and reports gecko/gap/in-word-prefix where it finds a ligature",
+   "source": "gfxTextRun.cpp:238-322; nsLayoutUtils.cpp:6901-6904; engines/gecko/advance.ts ordinaryBreakAt, groupSpans, windowsOf, ligatureAtBreak; engines/gecko/linebreak.ts; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (G2) on branch audit-requirements",
+   "probes": [
+    "gecko-port F9"
+   ],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an optional ligature is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself",
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)"
+   ],
+   "declaredBy": "requirements audit drop G2, narrowed after its reviews (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/no-group-at-ordinary-breaks",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "at a break opportunity that line breaking finds inside a shaping unit without word-break: break-all or line-break: anywhere (ordinaryBreakAt, as gecko/measure/no-optional-ligature-at-ordinary-breaks), the port doesn't look for a ligature group that required shaping forms either (the letter-spacing count, gecko/measure/ligature-group-shares): the offset takes the value as if no group spanned it, the scan reads the offset itself, and a group ends there; that rests on the same premise about fonts, which no source gives: no group that required forms spans such a break opportunity; under break-all and anywhere, where every boundary inside a word is a break opportunity, groups are looked for as elsewhere, since there real text needs it (the requirements audit's form moved Arabic, Persian and Hindi under break-all: Geeza Pro's lam with alef, meem and beh); it held on all real text measured (2,485 chat messages, 4,686 real paragraphs, 86,336 width-sweep cases, 72 books, and the requirements audit reviews' sets (the 18 corpora at six widths, the CJK paragraphs at every 8px, chat with emoji and URLs, Chromium's translated UI text, word-break: break-all in Latin, Arabic, CJK and chat, letter spacing, long German, Finnish and Arabic words at 100 to 240px, soft hyphens, overflow-wrap on long tokens), in pinned Firefox 156); an inspected paragraph asks the count at such an offset whose value it would otherwise call exact and reports gecko/gap/in-word-prefix where a group spans it",
+   "source": "gfxTextRun.cpp:238-322; CanvasRenderingContext2D.cpp:4759-4790; engines/gecko/advance.ts ordinaryBreakAt, groupSpans, groupAtBreak; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (G3) on branch audit-requirements",
+   "probes": [
+    "gecko-port F17"
+   ],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: gecko engine output > a group that required forms is looked for where a word is broken inside itself, not at a break opportunity the unit holds of itself"
+   ],
+   "declaredBy": "requirements audit drop G3, narrowed after its reviews (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/content/list-probe-skipped-for-a-resolving-generic",
+   "engine": "webkit",
+   "area": "content",
+   "kind": "fact",
+   "statement": "a box's font list that names serif, sans-serif, monospace or system-ui unquoted is taken to resolve, and the probe of whether any family of the list resolves (the list followed by LastResort measures a space as LastResort alone does), which a box under a Han, kana or Hangul locale asks to name the settings' standard family where none resolves, isn't asked of it: system-ui is the system font, and under every such locale serif, sans-serif and monospace name families that every WebContent process of macOS 27 has (Songti SC and TC, PingFang SC, TC, HK and MO, Hiragino Mincho ProN, Hiragino Sans, AppleMyungjo, Apple SD Gothic Neo, Menlo; probe land-w1a, 168 of 168 lists under 14 locales at three sizes); cursive and fantasy aren't taken, since under zh and yue-Hant they name Kaiti SC and Kaiti TC, which the process doesn't have; a list that names none of the four is probed as before (a list written for Windows, Meiryo or \"Malgun Gothic\" alone, resolves nothing on a Mac, where the requirements audit's drop of the probe moved lines); an inspected paragraph asks the probe of a list it took to resolve and reports webkit/gap/canvas-language over the box's characters where it resolves nothing",
+   "source": "FontCascadeFonts.cpp:210-217; engines/webkit/fonts.ts RESOLVING_GENERICS; engines/webkit/font-compilation.ts; engines/webkit/content.ts makeBox; engines/webkit/gaps.ts boxMade; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (W1a) on branch audit-requirements",
+   "probes": [
+    "webkit-round4 R7",
+    "webkit-round4 R11",
+    "land-w1a"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7) > a list that names serif, sans-serif, monospace or system-ui is taken to resolve: a plain paragraph does not ask, and an inspected line reports one that does not",
+    "src/engines/webkit/lines.test.ts :: canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7) > a list none of whose families resolves draws with the standard family, which is named after it under a Han, kana or Hangul locale",
+    "src/engines/webkit/lines.test.ts :: each shared-font leaf still asks and chooses its own standard-family fallback"
+   ],
+   "declaredBy": "requirements audit drop W1a, narrowed after its reviews (2026-09-23)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9782,7 +9860,7 @@
   "gecko/output/width-copies-lab-extent": "f3de761956687298",
   "gecko/output/positive-advance-rect-rule": "5ca194b64798c8fd",
   "gecko/output/joins-next-line": "2e47ecfeb8bfceb0",
-  "gecko/gap/in-word-prefix": "aa9ffc66afab6f18",
+  "gecko/gap/in-word-prefix": "45cf1f06b4c6a60a",
   "gecko/gap/font-size-quantization": "6172307741695de4",
   "gecko/gap/optical-size-by-family-name": "c38a9571e49846f7",
   "gecko/gap/space-in-shaping": "cd597364e788b09e",
@@ -9969,7 +10047,7 @@
   "gecko/measure/suffix-side-recipe": "38ba79c3d86e98c0",
   "gecko/measure/joined-sides-with-zwj": "c9587fae5266c931",
   "gecko/measure/pair-kerning-split": "6a0f088b368c9d5c",
-  "gecko/measure/ligature-group-shares": "27c048d8678cfc16",
+  "gecko/measure/ligature-group-shares": "0b602584ad565c7a",
   "gecko/lines/scan-takes-ligature-group-whole": "dfa9738a1198ef18",
   "gecko/spacing/base-search-bounded-by-frame": "397ec608205e311d",
   "gecko/spacing/cursive-letter-spacing-per-glyph-run": "877581a6d9e2c79b",
@@ -9998,9 +10076,13 @@
   "gecko/measure/same-face-by-kerning": "110f4a4790fb2cda",
   "gecko/measure/boundary-nbsp-as-itself": "aec883c814364e86",
   "gecko/lines/plain-scan-rough-candidates": "5098cc53f534eeef",
-  "gecko/measure/windows-in-long-units": "0d7277856f9e8826",
+  "gecko/measure/windows-in-long-units": "2bfc9c6f5c515565",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848",
   "gecko/lines/word-scan": "f460aff8db4700ce",
-  "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768"
+  "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
+  "gecko/measure/crossing-measured-where-placed": "32457a138e2697dd",
+  "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
+  "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
+  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066"
  }
 }

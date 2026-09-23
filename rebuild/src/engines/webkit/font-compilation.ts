@@ -4,7 +4,7 @@ import { SpacingSource } from './spacing-source.js'
 import { canvasFont } from '../../measure/font.js'
 import { computedLocale, isHanLocale } from './data.js'
 import { makeLocaleSource, type LocaleSource } from './locale-source.js'
-import { familyNames, genericFamilyInRow, genericFamilyRow, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
+import { RESOLVING_GENERICS, familyNames, genericFamilyInRow, genericFamilyRow, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
 
 const CJK_SCRIPTS = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL']
 const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded']
@@ -17,6 +17,8 @@ export type CompiledFont = {
   declared: FontDecl
   families: readonly FamilyName[]
   firstNamedGeneric: number | null
+  // The declared list names a generic family that always resolves (fonts.ts RESOLVING_GENERICS), unquoted.
+  namesResolvingGeneric: boolean
   cjk: boolean
   size: number
   family: string
@@ -36,8 +38,13 @@ function compile(declared: FontDecl, source: SourceFont, families: readonly Fami
   const primaryFamily = declared.facts.primaryFamily === null ? families[0]!.name : declared.facts.primaryFamily.toLowerCase()
   const primaryCss = declared.facts.primaryFamily === null ? families[0]!.css
     : GENERIC_FAMILY_KEYWORDS.includes(declared.facts.primaryFamily.toLowerCase()) ? declared.facts.primaryFamily : JSON.stringify(declared.facts.primaryFamily)
+  let namesResolvingGeneric = false
+  for (let i = 0; i < source.families.length; i++) {
+    const listed = source.families[i]!
+    if (!listed.quoted && RESOLVING_GENERICS.includes(listed.name)) namesResolvingGeneric = true
+  }
   return {
-    declared, families, firstNamedGeneric, cjk, size: source.size, family,
+    declared, families, firstNamedGeneric, namesResolvingGeneric, cjk, size: source.size, family,
     canvasFont: canvasFont({ ...declared, family }, source.size), lastResortFont: source.lastResortFont,
     listLastResortFont: canvasFont({ ...declared, family: `${family}, LastResort` }, source.size), primaryFamily,
     primaryLastResortFont: canvasFont({ ...declared, family: `${primaryCss}, LastResort` }, source.size),
