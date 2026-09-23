@@ -236,9 +236,10 @@ export type InWord = {
 
 // What measuring found about one offset inside a shaping unit, each part null until something asks for it.
 export type InWordEntry = {
-  // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), which at a break opportunity the
-  // unit holds of itself only an inspected paragraph asks (advance.ts ligatureAtBreak), and whether it shows a group that
+  // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), and whether it shows a group that
   // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
+  // At a break opportunity the unit holds of itself only an inspected paragraph asks either (advance.ts ligatureAtBreak,
+  // groupAtBreak).
   ligature: boolean | null
   group: boolean | null
   // The connected row that starts here or includes this interior cluster boundary; its records share one row (rowAround).
@@ -283,9 +284,11 @@ export type InWordReason =
   // stands in as one group, or it ends a part of one.
   | { kind: 'inside-ligature-row'; at: number }
   | { kind: 'between-ligatures'; at: number }
-  // An optional ligature spans the offset, a break opportunity the unit holds of itself, where the port doesn't look for
-  // one (advance.ts ordinaryBreakAt, ligatureAtBreak); reported by an inspected paragraph only.
+  // An optional ligature, or a group that required shaping forms, spans the offset, a break opportunity the unit holds of
+  // itself, where the port doesn't look for one (advance.ts ordinaryBreakAt, ligatureAtBreak, groupAtBreak); reported by an
+  // inspected paragraph only.
   | { kind: 'optional-ligature'; at: number }
+  | { kind: 'group-at-break'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
   // The two sides don't add up to the unit, which inside a long unit is the offset's window (`unitAu` is its width, as
   // the gap's detail prints it). `sides` is how they were measured (inWordAdvance), `au` their sum, or what the

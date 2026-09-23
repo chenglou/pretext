@@ -1761,6 +1761,24 @@ on top of the placement above. No line moved in any of the sets above, CJK inclu
 `break-all` and long-word sets too, nor any of the tier corpus's 63,516 Firefox cases, of which the audit's form lost
 13.
 
+Gecko, groups that required shaping forms, not looked for at a break opportunity a unit holds of itself (`advance.ts`
+`groupSpans`, `groupAtBreak`; `gecko/measure/no-group-at-ordinary-breaks`). The letter-spacing count finds a group such
+as lam with alef (`groupAcross`): the unit, or its window, at 2px of letter spacing and at 0.001px, and then both sides
+of an offset, two to six questions, asked at every candidate inside a unit. The audit's candidate looked for groups only
+where a word is broken inside itself, not at any break opportunity inside a unit. The reviews found real text that
+moves: Arabic under `word-break: break-all`, where every boundary is a break opportunity, breaks inside Geeza Pro's lam
+ligatures, lam with alef and Allah but also lam with meem and with beh (`وال|مصاب` where Firefox gives `وا|لمصا`), and
+Persian and Hindi do the same (430 cases lost of their sets, 42 of the real-text review's). So the count goes, as the
+ligature test above, only at a break opportunity that line breaking finds inside a unit without `word-break: break-all`
+or `line-break: anywhere`, on the same **premise about fonts**: no group that required forms spans such a break
+opportunity. There the offset takes its sides' value, the scan reads the offset itself, and a group ends there; an
+inspected paragraph asks the count at such an offset whose value it would call exact and reports `in-word-prefix` where
+a group spans it (`groupAtBreak`). In pinned Firefox a chat message asks 36.3 questions where it asked 37.3 (222
+characters where 231), a real paragraph 99.6 where 112.8 (858 where 960), a CJK paragraph 114.5 where 144.5 (953 where
+1,115); the audit's form asked 33.1, 90.5 and 111.6. No line moved in any of the sets above, the reviews' Arabic,
+Persian, Hindi and Southeast Asian sets under `break-all` and at dictionary breaks too, nor any of the tier corpus's
+cases, of which the audit's form lost 3 more (Geeza Pro under `break-all`).
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 
