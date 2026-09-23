@@ -9415,6 +9415,23 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/crossing-measured-where-placed",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "on a plain paragraph, an in-word offset with no letters joined across it in a unit not shaped reversed takes W(unit) − W(suffix) without measuring what crosses it (the prefix, gecko/measure/sides-add-up-is-exact, or the cluster before it alone and in front of the suffix, gecko/measure/suffix-side-recipe) or asking the pair placement recipe, unless that recipe can put part of an adjustment after the offset: a run whose script the pairKerning fact describes (Latin, Greek and Cyrillic, Common where the run's lookups are Latin's), with the fact 'split', or unknown and printable ASCII from the cluster before the offset to the cluster after the one after it; elsewhere sidesAdvance gives that value whatever crosses the offset, so plain and inspected paragraphs give the same advance, and an inspected one still measures what crosses the offset for its reason (gecko/gap/in-word-prefix); between Han characters, in Thai, Khmer or Burmese, and in Arabic between letters that don't join, a plain paragraph asks one question an offset where it asked two to three",
+   "source": "no engine source, the port's own structure: engines/gecko/advance.ts inWordAdvance, placesAcross, sidesAdvance, pairKernedShare; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (G1b, G4) on branch audit-requirements",
+   "probes": [],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2) > a plain paragraph measures what crosses an in-word offset only where the pair placement can use it",
+    "src/engines/gecko/gecko.test.ts :: plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2) > a plain scan reads a kerned candidate as the inspected one does"
+   ],
+   "declaredBy": "requirements audit drop G1b + G4 (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -10001,6 +10018,7 @@
   "gecko/measure/windows-in-long-units": "0d7277856f9e8826",
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848",
   "gecko/lines/word-scan": "f460aff8db4700ce",
-  "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768"
+  "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
+  "gecko/measure/crossing-measured-where-placed": "32457a138e2697dd"
  }
 }

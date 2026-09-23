@@ -1087,6 +1087,26 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     }
   })
 
+  test('a plain paragraph measures what crosses an in-word offset only where the pair placement can use it', () => {
+    // Between Han characters the advance is W(unit) − W(suffix) whatever crosses the offset: the pairKerning fact doesn't
+    // describe the script, so no placement puts part of it after the offset. The inspected paragraph measures each
+    // character alone for the reason; the plain one doesn't. `KaKa` in Optima is kerned ASCII, which both measure.
+    const optima = { ...courier, family: 'Optima' }
+    const lone = (text: string): boolean => text.length === 1 && /\p{Script=Han}/u.test(text)
+    for (const width of [2, 20, 45.5, 71, 100]) {
+      const p = paragraph([run('漢字漢字漢字漢字 '), run('KaKaKa KaKa', 'span', { font: optima })], width, { overflowWrap: 'anywhere', lang: 'zh' })
+      const plain = plainWalk(p, false)
+      const plainLone = asked.calls.filter(call => lone(call.text)).length
+      const inspected = plainWalk(p, true)
+      const inspectedLone = asked.calls.filter(call => lone(call.text)).length
+      expect(plain.lines).toEqual(inspected.lines)
+      // A lone character the plain paragraph measures is the suffix of the last offset inside the unit.
+      expect(plainLone).toBeLessThanOrEqual(1)
+      if (width < 71) expect(inspectedLone).toBeGreaterThan(plainLone + 2)
+      expect(plain.calls).toBeLessThan(inspected.calls)
+    }
+  })
+
   test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
     const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false, createContextPool())
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })

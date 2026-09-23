@@ -1,5 +1,16 @@
 # Takeover decisions and evidence
 
+2026-09-23, a plain Gecko paragraph measures what crosses an in-word offset only where the pair placement can use it
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/crossing-measured-where-placed`), the first of the
+requirements audit's drops (research/REQUIREMENTS-AUDIT.md on branch `audit-requirements`). The audit's candidate G1b +
+G4 was to ask the crossing measure and the pair placement only for a word broken inside itself. After the word scan that
+is nearly what the plain path did already; what it still asked was mostly between Han characters and in Thai, Khmer and
+Burmese, where no placement can use the answer and the advance is the unit less its suffix. Those questions now go to
+inspection alone, and both paths give the same advance, so no line can move and inspected output is unchanged. In pinned
+Firefox 156 a chat message asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0
+where 252.4 (1,118 where 1,338; CJK 285.1 where 376.3). No line moved anywhere, the adversarial corpus and both reviews'
+sets included; the knockout's 39 losses, which dropped both everywhere, don't occur.
+
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer
 accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it.

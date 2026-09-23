@@ -1709,6 +1709,32 @@ DOM's. What differs:
 - A unit under a direction override (above): 32 advances, a line's width and one native break, which is why such a
   unit has no windows.
 
+**Taken out for speed** (2026-09-23; the requirements audit of that day, research/REQUIREMENTS-AUDIT.md on branch
+`audit-requirements`, measured each exactness mechanism's Canvas cost against the cases that need it, and two reviews of
+the drops it proposed looked for real text they move). What goes is a question the plain path asked that no real text
+needed: 2,485 chat messages, 4,686 real paragraphs, 86,336 cases of a width sweep and 72 whole books, laid out right in
+all three browsers with every mechanism on, and the reviews' sets (every line of main's 18 corpora at six widths, the
+CJK paragraphs at every 8px, chat with emoji and URLs, Chromium's translated UI text, `word-break: break-all`, letter
+spacing, long German, Finnish and Arabic words at 100 to 240px, soft hyphens, font lists written for Windows) move no
+line without it. A question the audit would have dropped everywhere goes only where those sets show it doesn't decide a
+line, and where that rests on a premise about fonts, the premise is named and an inspected paragraph reports each offset
+where the question would have spoken.
+
+Gecko, what crosses an in-word offset, asked only where the pair placement can use it (`advance.ts` `placesAcross`;
+`gecko/measure/crossing-measured-where-placed`). The audit's candidate was to measure what crosses an offset (the
+prefix, or the cluster before the offset alone and in front of the suffix) and to place a kerned pair's adjustment
+(`pairKernedShare`, the probe pairs) only for a word broken inside itself, which lost 39 adversarial cases where it
+dropped them everywhere. The word scan already asks no in-word offset of a word whose end fits, and what the plain path
+still asked was mostly between Han characters and in Thai, Khmer and Burmese, where no placement can use the answer:
+with no letters joined across the offset and the unit not shaped reversed, the advance is W(unit) − W(suffix) unless the
+placement recipe can put part of an adjustment after the offset, which needs a run whose script the `pairKerning` fact
+describes (Latin, Greek, Cyrillic), with the fact `split`, or unknown and printable ASCII around the offset
+(`sidesAdvance`). So a plain paragraph measures what crosses an offset only there, and elsewhere asks the suffix alone;
+an inspected one measures it everywhere for the reason, and both give the same advance. No line moves anywhere, by
+construction: the plain path asks a subset of its questions and gives the same values. In pinned Firefox a chat message
+asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0 where 252.4 (1,118 where
+1,338), a CJK paragraph 285.1 where 376.3 (1,396 where 1,555).
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 

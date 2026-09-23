@@ -282,12 +282,18 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   const leftOver = row !== null && row.parts[0]!.unconfirmed
   const reversed = unit.reversed
   const suffixAu = joiner === '' ? suffixAlone(p, run, unit, t) : rangeAu(run.contexts.own, run, p.tUnits, t, unit.tEnd, joiner, '')
+  let a = t - 1
+  while (a > unit.tStart && p.clusterStart[a] === 0) a--
+  // Where no letters join across t and the unit isn't shaped reversed, the advance is W(unit) − W(suffix) unless the pair
+  // placement recipe can put part of what crosses t after it (placesAcross), so a plain paragraph measures nothing more;
+  // an inspected one measures what crosses t for the reason (sidesAdvance). The same value either way.
+  if (p.inspect === null && joiner === '' && !reversed && !placesAcross(p, run, unit, a, t)) {
+    return { au: unit.startAdvance + unit.canvasAu - suffixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: null }
+  }
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
   let sides: Extract<InWordReason, { kind: 'sides' }>['sides']
-  let a = t - 1
-  while (a > unit.tStart && p.clusterStart[a] === 0) a--
   const before = joiningType(codePointAtT(p, a))
   // The glyph before t is a ligature where a group ends at t, and it is the ligature that the suffix's first glyph kerns with.
   if (a > unit.tStart) {
@@ -312,6 +318,23 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     sides = 'cluster'
   }
   return sidesAdvance(p, run, unit, t, { a, across, prefixAu, suffixAu, sides, joined: joiner !== '', reversed, leftOver })
+}
+
+// Whether the pair placement recipe can put part of what crosses t after it (pairKernedShare), from what it looks at before
+// asking Canvas: a run whose script the pairKerning fact describes, a fact other than 'first-advance' (which puts all of a
+// pair's adjustment before t), and without the fact printable ASCII from the cluster before t, which starts at `a` or at
+// the start of a ligature group that ends at t, to the cluster after the one after t. Elsewhere the advance before t, with
+// no letters joined across it and the unit not shaped reversed, is W(unit) − W(suffix) whatever crosses t (sidesAdvance).
+function placesAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a: number, t: number): boolean {
+  if (!pairFactDescribes(run, t)) return false
+  const fact = run.font.facts.pairKerning
+  if (fact !== null) return fact === 'split'
+  let b = t + 1
+  while (b < unit.tEnd && p.clusterStart[b] === 0) b++
+  let b1 = b
+  if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
+  for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return false
+  return true
 }
 
 // The advance before t from its two measured sides. Two recipes ask more where the sides don't add up, each to put what
