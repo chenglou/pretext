@@ -373,6 +373,8 @@ export type GapName =
   | 'space-in-shaping'
   | 'in-word-prefix'
   | 'negative-word-tail'
+  | 'context-past-a-word'
+  | 'positions-run-backwards'
   | 'glyph-clusters'
   | 'joining-technology'
   | 'fixed-pitch-path'

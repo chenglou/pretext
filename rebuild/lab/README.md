@@ -599,7 +599,19 @@ positions and lines, and takes about an hour in a Chrome slot at device pixel ra
 resolve). A change that means to move nothing must show 0 cuts, positions and layouts differing. Where the two trees
 differ, the probe can't say which is right: `tools/cut-fonts-cases.ts` writes the differing families' paragraphs as lab
 cases, `lab/run.ts` and `lab/score.ts` hold both trees' lines against the browser's own, and no case may go from pass
-to a failure.
+to a failure. Since words first (2026-09-23) the two trees' cuts differ by design where one of them cuts words: the probe
+compares the positions at every inner cut of either tree and at the space before it, and the group totals, and those
+must not differ where the browser doesn't side with the change.
+
+**A change to Blink's words first also passes its attack** (since 2026-09-23): a change to `shape.ts` `addWordPieces`,
+to the walk (`line-breaker.ts` `wordCandidate`) or to what the inspected path holds them against (DESIGN.md §4.6).
+`tools/words-attack.ts` lays seeded paragraphs of words (`tools/words-attack-cases.ts`) out by the main line's tree and
+the change's in one process on the stand-in Canvases, plain and inspected, at fixed widths and at the decided lines' own
+widths: on `usual` and `fine`, which keep both premises, no layout may differ between the trees, between the walk and
+the search, or between plain and inspected, and none may report `context-past-a-word` or `positions-run-backwards`; on
+`across`, `far` and `backwards`, which break them, every layout that differs must report its gap. 12,000 layouts take
+about a minute and a half on ten cores. `tools/words2-sum-probe.ts` holds the words' sums against Canvas's own exact
+totals over the installed families in pinned Chrome, and the cut probe above holds the two trees' positions.
 
 **A change to Gecko's word scan also passes its attacks and the premise probe before it merges** (since 2026-09-23): a
 change to `engines/gecko/lines.ts` `wordScan`, to what it leaves to the engine's loop, or to the in-word recipes whose

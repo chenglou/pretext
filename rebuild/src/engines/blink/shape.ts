@@ -29,12 +29,13 @@ import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkGraphemeRules } from './data.js'
 import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
-import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
+import { GapAccumulator } from './gap-accumulator.js'
+import { contextPastAWord, floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
-  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
+  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptExtensionsOf, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
@@ -70,9 +71,36 @@ export function widthOf16(raw16: number): number {
 
 // What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
 // GapSink: the paragraph's in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
+// `aside`: reads an inspected paragraph makes beside the layout's own, whose values and gaps decide nothing (the cut search
+// the words are held against, the walk over the cuts held against the search), so they aren't held against anything.
 export type Shaper = {
   p: BlinkPrepared
   gaps: GapSink
+  aside?: true
+}
+
+// On an inspected paragraph a read of a group's own call that depends on its cuts (a position, the wide window) is made
+// with the cuts the cut search alone made first (BlinkInspect.searched), as the port read it before it cut words, so it
+// asks what it asked then and in that order, and then with the words' cuts. Where the two differ the words rest on
+// context that reaches past a word, and the read reports context-past-a-word; the layout takes the words' value.
+function heldAgainstSearch(sh: Shaper, g: number, k: number, read: (sh: Shaper) => number): number {
+  const searched = sh.gaps === null || sh.aside === true ? undefined : sh.p.inspect?.searched[g]
+  if (searched === undefined) return read(sh)
+  const group = sh.p.groups[g]!
+  const cuts = group.cuts
+  const prefix = group.prefixAtCut
+  group.cuts = searched.cuts
+  group.prefixAtCut = searched.prefixAtCut
+  let before: number
+  try {
+    before = read({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: true })
+  } finally {
+    group.cuts = cuts
+    group.prefixAtCut = prefix
+  }
+  const value = read(sh)
+  if (value !== before) contextPastAWord(sh.gaps, sh.p, g, k)
+  return value
 }
 
 // The contexts a string of a style is measured on, by the string's storage. Chrome keeps the strings and the words a
@@ -664,20 +692,43 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
   return kept[k - lo]!
 }
 
+// The index of the last of a group's cuts at or before offset k.
+export function lastCutAtOrBefore(cuts: readonly number[], k: number): number {
+  let lo = 0
+  let hi = cuts.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (cuts[mid]! <= k) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
 function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  if (lo !== group.start || hi !== group.end) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  return heldAgainstSearch(sh, g, k, s => adjustBetweenCuts16(s, g, k))
+}
+
+// The wide window's adjustment across k inside group g's own call, between the cuts around k.
+function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
+  const group = sh.p.groups[g]!
+  const lo = group.start
+  const hi = group.end
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
-  let i = 0
-  let end = cuts.length - 1
-  while (i < end) {
-    const mid = (i + end + 1) >> 1
-    if (cuts[mid]! <= k) i = mid
-    else end = mid - 1
-  }
-  const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
-  const to = cuts[i + 1] ?? group.end
+  const prefix = group.prefixAtCut
+  const i = lastCutAtOrBefore(cuts, k)
+  // A side that Canvas shapes as Common takes the next piece in: a word's pieces are short, and `, ` alone is no stand-in
+  // for the comma in its run. Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one shrinks
+  // back into the side, and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide space).
+  let first = cuts[i] === k ? i - 1 : i
+  let last = i + 1
+  while (first > 0 && measuredAsCommon(sh.p, g, cuts[first]!, k) && prefix[last]! - prefix[first - 1]! < EXACT16) first--
+  while (last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
+  const from = cuts[first]!
+  const to = cuts[last]!
   return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
 }
 
@@ -711,6 +762,48 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
     windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
+}
+
+function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0xad) return true
+  return false
+}
+
+// Whether [from, to) holds a character with a script of its own, one ScriptRunIterator doesn't resolve from its neighbours
+// (gaps.ts hasScriptNeutral names the others). Canvas resolves the script of a character without one (white space,
+// punctuation, digits, emoji) over the string it measures (RunSegmenter over each PlainTextItem,
+// plain_text_node.cc:400-425; script_run_iterator.cc), where the paragraph resolves it over its run; a 16-bit string
+// that holds no such character is shaped as Common, and HarfBuzz then takes the font's default lookups
+// (hb-ot-layout.cc:582-586).
+function holdsOwnScript(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp) && scriptExtensionsOf(cp).length <= 1) return true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return false
+}
+
+// Whether Canvas shapes [from, to) of group g, measured alone, under Common where the paragraph shapes it under its run's
+// script: a range of a segmented paragraph that holds a character other than white space and none with a script of its
+// own, which the port measures as a 16-bit string (canvasString), since RunSegmenter resolves such a string as Common over
+// itself (script-context), where an 8-bit one is shaped as one Latin segment, which is the paragraph's own shaping of a
+// Latin range (spacesStay). An unsegmented paragraph's windows stay as they were: what they measure was held against the
+// browser with them.
+function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number): boolean {
+  if (p.segments === null) return false
+  let other = false
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp)) return false
+    if (!isWhiteSpace(cp)) other = true
+    i += cp > 0xffff ? 2 : 1
+  }
+  if (!other) return false
+  const domScript = p.segments.scriptForOrdinal(p.segments.scriptOrdinal(from))
+  if (domScript === USCRIPT_COMMON) return false
+  const style = p.groups[g]!.style
+  return canvasString(p, from, to, false, false, domScript, spacesStay(p, style, from, to, domScript), false).twoByte
 }
 
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
@@ -768,10 +861,108 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN)
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN)
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, a, k) && !measuredAsCommon(p, g, k, b)))
 }
 
-// Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
+// The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character
+// that a lookup doesn't skip (a word of U+200B and a space would hide the letter before it from the window of the next
+// word's cut), and holds a character with a script of its own (holdsOwnScript): a word without one (digits, punctuation,
+// an emoji) stays in the piece before it, or at the group's start in the one after it, since Canvas shapes such a string
+// alone under Common where the paragraph shapes it under its run's script (16px Euphemia UCAS kerns its space 422 font
+// units narrower under Latin alone, so `👍 ` measured alone is 3.3px wider than in `fix 👍 `). Each word is measured once
+// with its trailing space, which is what a page's words repeat. The offset between two words is a cut where it passes
+// the safe test with the two words as the wide window: the two measured together are what they measure apart, and the
+// pair window shows 0. That the pieces then add up to the group rests on a premise about fonts, that no shaping context
+// reaches more than one word past a space; an inspected paragraph reports context-past-a-word where a read the cut
+// search's cuts give differs (heldAgainstSearch; DESIGN.md §4.6). Two words of 256 zoomed px or more have no exact total to hold their
+// sum against, and a window shrunk to fit can end at the space, where it can't see what the letter before the space does:
+// such an offset is no cut either. A space that doesn't pass is no cut. What is left between two cuts and isn't one word
+// below 256 zoomed px (words whose space didn't pass, a long word, text without spaces) is cut by the cut search
+// (addPieces), handed the total measured here where it is the same string. So no range of 256 zoomed px or more is
+// measured whole where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
+// A group of an unsegmented paragraph that holds SHY has no words: there a string without a space leaves SHY out and a
+// string with one carries U+2060 (canvasString; gap soft-hyphen-shaping), so a word alone and the same word with its space
+// are written in two ways, and their sums would hold the difference.
+// rule blink/measure/words-first
+function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], zero: boolean[]): void {
+  const p = sh.p
+  const group = p.groups[g]!
+  const edges = [group.start]
+  if (p.segments !== null || !holdsSoftHyphen(p, group.start, group.end)) {
+    for (let k = group.start + 1; k < group.end; k++) {
+      const cp = p.text.codePointAt(k)!
+      if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(cp) && !isDefaultIgnorableHarfBuzz(cp) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) edges.push(k)
+    }
+  }
+  edges.push(group.end)
+  const starts = [group.start]
+  for (let i = 0, seen = false; i + 1 < edges.length; i++) {
+    const own = holdsOwnScript(p, edges[i]!, edges[i + 1]!)
+    if (i > 0 && own && seen) starts.push(edges[i]!)
+    if (own) seen = true
+  }
+  starts.push(group.end)
+  const word16: number[] = []
+  for (let i = 0; i + 1 < starts.length; i++) word16.push(measure16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
+  // passes[i]: whether starts[i] is a cut; both[i]: the two words around it measured together, where asked. A sum of 256
+  // zoomed px or more can't equal an exact total, so the two words together aren't asked then.
+  const passes = [true]
+  const both = [NaN]
+  for (let i = 1; i + 1 < starts.length; i++) {
+    const sum = word16[i - 1]! + word16[i]!
+    const together = sum < EXACT16 ? measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end) : NaN
+    both.push(together)
+    passes.push(together === sum && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
+  }
+  passes.push(true)
+  // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
+  // cuts around it) is the one that just showed 0.
+  if (keepsByOffset(sh, g, group.start, group.end)) {
+    for (let i = 1; i + 1 < starts.length; i++) if (passes[i - 1]! && passes[i]! && passes[i + 1]!) group.wide16[starts[i]! - group.start] = 0
+  }
+  for (let i = 0; i + 1 < starts.length;) {
+    let j = i + 1
+    while (!passes[j]!) j++
+    if (j === i + 1 && word16[i]! < EXACT16) {
+      cuts.push(starts[j]!)
+      totals.push(word16[i]!)
+      zero.push(false)
+    } else {
+      addPieces(sh, g, starts[i]!, starts[j]!, cuts, totals, zero, j === i + 1 ? word16[i]! : j === i + 2 ? both[i + 1]! : NaN)
+    }
+    zero[cuts.length - 1] = true
+    i = j
+  }
+}
+
+// Cuts group g into pieces, words first or by the cut search alone, and sums its prefixes (the widths Blink knows before
+// filling lines).
+function cutGroup(sh: Shaper, g: number, words: boolean): void {
+  const p = sh.p
+  const group = p.groups[g]!
+  const cuts = [group.start]
+  const totals: number[] = []
+  const zero = [false]
+  if (words) addWordPieces(sh, g, cuts, totals, zero)
+  else addPieces(sh, g, group.start, group.end, cuts, totals, zero)
+  const prefix = [0]
+  group.cuts = cuts
+  group.prefixAtCut = prefix
+  // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
+  // Combine each piece's total and its right cut's correction before carrying that advance into the next prefix.
+  for (let i = 1; i < cuts.length - 1; i++) {
+    const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
+    // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
+    if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
+    prefix.push(prefix[i - 1]! + (totals[i - 1]! + d))
+  }
+  prefix.push(prefix[prefix.length - 1]! + totals[totals.length - 1]!)
+}
+
+// Cuts, prefixes and HanKerning edge trims for every group. An inspected paragraph first cuts each group by the cut search
+// alone, as the port did before it cut words, so it asks Canvas what it asked then and in that order, with the gaps that
+// search raises set aside, and keeps those cuts for the reads that are held against them (heldAgainstSearch); then it
+// cuts words.
 export function measureGroups(sh: Shaper): void {
   const p = sh.p
   for (let g = 0; g < p.groups.length; g++) {
@@ -779,22 +970,11 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
-    const cuts = [group.start]
-    const totals: number[] = []
-    const zero = [false]
-    addPieces(sh, g, group.start, group.end, cuts, totals, zero)
-    const prefix = [0]
-    group.cuts = cuts
-    group.prefixAtCut = prefix
-    // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
-    // Combine each piece's total and its right cut's correction before carrying that advance into the next prefix.
-    for (let i = 1; i < cuts.length - 1; i++) {
-      const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
-      // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
-      if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
-      prefix.push(prefix[i - 1]! + (totals[i - 1]! + d))
+    if (p.inspect !== null) {
+      cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: true }, g, false)
+      p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })
     }
-    prefix.push(prefix[prefix.length - 1]! + totals[totals.length - 1]!)
+    cutGroup(sh, g, true)
   }
 }
 
@@ -819,6 +999,10 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
 
 // The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
 export function groupPrefix16(sh: Shaper, g: number, k: number): number {
+  return sh.gaps === null ? positionAtOffset16(sh, g, k) : heldAgainstSearch(sh, g, k, s => positionAtOffset16(s, g, k))
+}
+
+function positionAtOffset16(sh: Shaper, g: number, k: number): number {
   const p = sh.p
   const group = p.groups[g]!
   if (k >= group.end) return group.prefixAtCut[group.prefixAtCut.length - 1]! - group.startTrim16 - group.endTrim16
@@ -827,17 +1011,17 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   const kept = keepsByOffset(sh, g, group.start, group.end) ? group.prefix16 : null
   if (kept !== null && !Number.isNaN(kept[k - group.start]!)) return kept[k - group.start]!
   const cuts = group.cuts
-  let lo = 0
-  let hi = cuts.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (cuts[mid]! <= k) lo = mid
-    else hi = mid - 1
-  }
-  const d = positionAdjust16(sh, g, k, group.start, group.end)
-  const pair = adjustBefore16(sh, g, d, k, group.start, group.end)
+  const lo = lastCutAtOrBefore(cuts, k)
+  const cut = cuts[lo]!
+  // Where the clusters between a cut and k hold only characters every lookup skips (holdsNoBase), the pair window of k
+  // reaches back across the cut to the cluster before it and shows the cut's own adjustment again, which prefixAtCut holds
+  // already. None of it sits between the cut and k: HarfBuzz gives those characters no advance (hb-ot-shape.cc:779-799).
+  const atCut = lo > 0 && cut !== k && holdsNoBase(p, cut, k)
+  const d = positionAdjust16(sh, g, atCut ? cut : k, group.start, group.end)
+  const pair = adjustBefore16(sh, g, d, atCut ? cut : k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
-  const base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
+  const base = cut === k || atCut ? group.prefixAtCut[lo]! - d + pair + (atCut ? measure16(sh, g, cut, k, group.start, group.end) : 0) :
+    group.prefixAtCut[lo]! + measure16(sh, g, cut, k, group.start, group.end) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
   if (kept !== null) kept[k - group.start] = base - group.startTrim16
   return base - group.startTrim16

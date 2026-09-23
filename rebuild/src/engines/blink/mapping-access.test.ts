@@ -31,7 +31,8 @@ test('many source-free lines retain the collapsed source mapping without rescann
   }
   asks = 0
   const p = prepare(paragraph, env, true, createContextPool())
-  expect(asks).toBe(1)
+  // The group's one word, once for the cut search and once for the words an inspected paragraph holds against it.
+  expect(asks).toBe(2)
   let reads = 0
   p.contentOffsets = new Proxy(p.contentOffsets, {
     get(target, key) {
@@ -56,6 +57,6 @@ test('many source-free lines retain the collapsed source mapping without rescann
   expect(lines).toBe(count)
   expect(mappingUnits).toBe(2)
   expect(items).toBe(count + 1)
-  expect(asks).toBe(1)
+  expect(asks).toBe(2)
   expect(reads).toBeLessThanOrEqual(8 * count)
 })

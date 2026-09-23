@@ -28,6 +28,10 @@ redo core still matches `0bdea4d`. In Firefox it prepares new Latin and Arabic c
 (1.5 to 1.6 times main keeping its caches, where it was 2.5 to 2.8), fills them at new widths about 3 and 9 times faster
 and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK stays where it was.
 
+Since 2026-09-23 on branch `blink-words-first` Blink cuts a shaping group into words first, measuring each word once with
+its trailing space, and finds the break of a line that ends between two words from the positions at the cuts (words
+first, DESIGN.md §4.4), on two premises about fonts documented as defaults with named gaps (§4.6).
+
 ## Core
 
 `src/index.ts` dispatches to `src/engines/{blink,gecko,webkit}`. Canvas supplies measurements; DOM reads and font-file
@@ -39,7 +43,9 @@ measurement boundaries. A smaller number of Canvas calls is neither a speed resu
 Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
 A premise about fonts that no source gives is taken only as a documented default with a named gap that inspected
 paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
-word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail` (DESIGN.md §4.6).
+word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail`; Blink's words first
+assumes no shaping context reaches more than one word past a space and that positions inside a word stay sorted, and
+reports `context-past-a-word` and `positions-run-backwards` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

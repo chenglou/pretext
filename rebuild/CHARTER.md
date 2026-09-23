@@ -161,7 +161,12 @@ heuristic, or named here.
   adjustment sits on that Canvas totals show only as a sum: the wide window before white space (probe blink-round3 R1),
   the pair window elsewhere. No source reading places a contextual adjustment, since the input glyphs of a chaining rule
   are the font's; where the two windows differ and the offset isn't before white space the position is a stand-in, and a
-  line edge taken from it reports `unsafe-to-break`.
+  line edge taken from it reports `unsafe-to-break`. Words first (`measure/words-first`, `lines/candidate-from-cuts`,
+  2026-09-23) cuts a group at every space whose two words add up, on "no shaping context reaches more than one word past
+  a space", and finds a line's candidate from the positions at the cuts, on "positions inside a word stay sorted":
+  premises about fonts that no source gives, taken as documented defaults under the maintainer's stance of 2026-09-23.
+  An inspected paragraph holds every read that depends on the cuts against the cut search it replaces and the walk
+  against the search, and reports `context-past-a-word` and `positions-run-backwards` where they differ (DESIGN.md §4.6).
 - Gecko: "the two sides measured with U+200D add up to the unit, so the prefix is the advance"
   (`measure/sides-add-up-is-exact`) holds to the app unit only: 6 passing Noto Nastaliq Urdu cases hold a position 1 au
   off (probe F22; F15 1,013 of 1,015). The suffix-side in-word recipe for clusters without joining forms

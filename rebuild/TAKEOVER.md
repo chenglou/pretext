@@ -1,5 +1,21 @@
 # Takeover decisions and evidence
 
+2026-09-23, Blink's words first (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)): a shaping
+group is cut into words first, each measured once with its trailing space, and the offset between two words is a cut
+where the two words together measure their sum and the pair window shows 0; a line that ends between two words finds
+its candidate from the positions at the cuts. It is round 2's "V3" of the word study, ported onto 90e0266 by hand, with
+three changes: a word without a character of a script of its own is no piece of its own; V3's rule that a window side
+without a script of its own takes the next piece in is kept for sides Canvas shapes as Common and bounded to windows
+below 256 zoomed px (V3's losses in Euphemia UCAS came from the script Blink gives each Canvas call, through word pieces
+and, most of them, through that rule); and a position after characters every lookup skips at a cut takes the cut's
+adjustment once (round 1's hole). It rests on two premises
+about fonts, taken as documented defaults with named gaps: no shaping context reaches more than one word past a space
+(`context-past-a-word`) and positions inside a word stay sorted (`positions-run-backwards`). An inspected paragraph cuts
+every group by the cut search alone first, which asks what it asked before words, holds every read that depends on the
+cuts against it and the walk against the search, and takes the words' values, so plain and inspected lines are the
+same. Offline on the stand-in Canvases no layout of 12,000 differs from the base where the premises hold, and every one
+that differs reports its gap where they don't. The browser evidence is in the recording commit that follows.
+
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer
 accepted as a documented default with a named gap: no tail of a shaped word has a negative advance. No source gives it.

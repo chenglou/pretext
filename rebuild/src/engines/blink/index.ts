@@ -169,7 +169,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit,
-    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors! },
+    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors!, searched: [] },
   }
   const sh: Shaper = { p, gaps }
   markContinuations(p)

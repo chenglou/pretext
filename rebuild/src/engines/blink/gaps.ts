@@ -247,6 +247,29 @@ export function unsafeCut(sink: GapSink, p: BlinkPrepared, g: number, k: number)
   addGap(sink, 'unsafe-to-break', p.styles[p.groups[g]!.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there', sourceOffsetAt(p, k))
 }
 
+// ---- Words first (shape.ts addWordPieces, line-breaker.ts candidateAt) ----
+
+const CONTEXT_PAST_A_WORD_DETAIL = 'the positions summed from words differ from the ones the cut search of a group of 256 zoomed px gives: the port cuts a group at a space where the two words around it measure together what they measure apart, on the premise that no shaping context reaches more than one word past a space, and here one does (DESIGN.md §4.6, "Blink\'s words first")'
+
+// A read of group g's own call at offset k that the cut search's cuts and the words' cuts give differently
+// (shape.ts heldAgainstSearch): a position or the wide window's adjustment there.
+export function contextPastAWord(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
+  if (sink === null) return
+  const group = p.groups[g]!
+  addGap(sink, 'context-past-a-word', p.styles[group.style]!.run, CONTEXT_PAST_A_WORD_DETAIL, clustersAround(p, Math.min(k, group.end), group.start, group.end))
+}
+
+// A line end at x whose candidate the walk over the group's cuts and the search over every offset settle differently
+// (line-breaker.ts candidateAt): a position inside a word lies past a later one, so the positions aren't sorted where
+// the two read them, which both rest on (DESIGN.md §4.6, "Blink's words first"). The line takes the walk's candidate, the plain
+// paragraph's.
+export function positionsRunBackwards(sink: GapSink, sh: Shaper, sr: ShapeResult, x: number, walked: number, searched: number, start: number): void {
+  if (sink === null || sr.kind !== 'group') return
+  const p = sh.p
+  const at = (k: number): number => sourceOffsetAt(p, k).start
+  addGap(sink, 'positions-run-backwards', p.styles[p.groups[sr.group]!.style]!.run, `from offset ${at(start)}, at ${x} LayoutUnits, the walk over the cuts settles on offset ${at(walked)} and the search over every offset on ${at(searched)}: a position inside a word lies past a later one, and the line takes the walk's candidate`, sourceRange(p, Math.min(walked, searched), Math.max(walked, searched) + 1))
+}
+
 // ---- A HanKerning trim the port adds to a shaping call (shape.ts) ----
 
 const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` through the 「「 pair trim and character types from ink bounds (han_kerning.cc:417-535)'

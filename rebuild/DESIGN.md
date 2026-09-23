@@ -1618,7 +1618,8 @@ Canvas measures 0 across the wider window, so the recipe can't guess. Which glyp
 such a cluster. Unit: per consulted offset beside such a cluster. It can't be asked once per font, because it is about
 this text's clusters, and nothing is kept.
 
-Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `passesSafeTest`, `measureGroups`;
+Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `passesSafeTest`, `cutGroup`; since
+2026-09-23 of what words first, below, leaves of a group;
 `gaps.ts` `unsafeCut`; profiling item 6). A Canvas total is an exact 16.16 value only below 256 zoomed px, so a wider
 group is measured in pieces, and the pieces add up to the group only where the two sides of a cut change nothing in
 each other. So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
@@ -1642,6 +1643,53 @@ Futura, Baskerville, Zapfino and Apple Chancery: between `ff` and `i` the pair w
 ligature that the group never forms. The wide window's adjustment added there instead still moved 37 lines that the
 search gets right, all Zapfino at 40px, whose forms reach past a window of 256 zoomed px. The test keeps a cut off such
 offsets, and no set of the tiers held one such text before the set `wide-group-cuts` (lab README, "Test tiers").
+
+Blink, words first (`shape.ts` `addWordPieces`, `cutGroup`; `line-breaker.ts` `candidateAt`, `wordCandidate`; since
+2026-09-23; the study is research/SPEC-WORD-SUM.md, round 2's form "V3" on branch `x-words2-blink`). A group is cut into
+words before the cut above runs. A word starts after a U+0020 where clusters part, nothing joins and the character isn't
+one every lookup skips, and it must hold a character with a script of its own: a word of digits, punctuation or an
+emoji stays in the piece before it, or at the group's start in the one after it. Canvas resolves such characters over the
+string it measures, and a 16-bit string that holds none is shaped as Common, under the font's default lookups
+(RunSegmenter over each Canvas item, plain_text_node.cc:400-425; script_run_iterator.cc:301, :641; hb-ot-layout.cc:582-586),
+where the paragraph shapes them under its run's script. Euphemia UCAS kerns its space 422 font units narrower under
+`latn` alone, so `👍 ` measured alone is 3.3 CSS px wider than in `fix 👍 ` (the second check of round 2, below §4.6).
+Each word is measured once with its trailing space. The offset between two words is a cut where the two words measured
+together equal their sum below 256 zoomed px and the pair window shows 0; the position there takes nothing, and a plain
+paragraph keeps that 0 as the wide window's between the cuts around the offset (`BlinkGroup.wide16`), which is the window
+the test measured. A space that doesn't pass is no cut. What is left between two cuts and isn't one word below 256
+zoomed px goes to the cut above, handed the total measured here where it is the same string: words whose space didn't
+pass, a long word, text without spaces, and every group of an unsegmented paragraph that holds SHY (there a word alone
+leaves SHY out and the word with its space carries U+2060, so their sums would hold the difference). So no range of 256
+zoomed px or more is measured whole where words are shorter than that, and what a paragraph asks doesn't grow with the
+device pixel ratio. The windows `adjust16` takes follow the cuts, so beside a word cut they are the two words. In a
+segmented paragraph a side that Canvas shapes as Common, a 16-bit string with a character other than white space and
+none with a script of its own (`measuredAsCommon`), takes the next piece in while the window stays below 256 zoomed px
+by the pieces' prefixes, since `, ` alone is no stand-in for the comma in its run: without it the Hebrew line `, זהו `
+of the cut probe's texts took another width in six families that draw no Hebrew (in pinned Chrome 214 of 1,616 layouts
+at its break widths lost their widths, 2 their breaks). A window the extension takes past 256 zoomed px shrinks back
+into the side, and the sides it shrinks to are no better: in Euphemia UCAS ` 🙏🙏` alone takes the space wide, which
+round 2's form of the rule, extending without that bound and over Latin-1 sides as well, did in 37 to 41 of the second
+check's lab cases. The same rule moves the cut search's windows where a side is such a piece, and there a cut whose
+side is one keeps no 0 it measured (`addPieces`).
+
+A line that ends between two words finds its candidate by walking the positions at the group's cuts from the line's
+start (`wordCandidate`); on a plain paragraph those are sums the group holds, so the walk asks Canvas only where the word
+the line ends in ends. The word's end is the candidate where it isn't past x, else the word's start, which stands for
+every offset of the word: ShapeLine reads the same three things of each where the word holds no white space, soft
+hyphen, HanKerning close mark or break opportunity after its start (shaping_line_breaker.cc:345-347, :392-395,
+:405-407). The walk checks what the cuts show (their positions don't run backwards, the word's end lies between its
+cuts, no spacing is negative) and leaves every other line to the search over every offset.
+
+After a cut before characters every lookup skips (U+2060 at a cut the search made where no offset passed), the pair
+window of the offset after them reaches back across the cut and shows the cut's own adjustment, which the prefix at the
+cut holds already: the position there is the cut's plus their advance, which HarfBuzz zeroes (`groupPrefix16`;
+hb-ot-shape.cc:779-799). Before 2026-09-23 it took the adjustment twice and ran backwards there, which round 1's second
+check of the word study found; words first's walk would read it.
+
+Both the cuts and the walk rest on premises about fonts that no source gives; §4.6 ("Blink's words first") has them, what
+an inspected paragraph does about them and the evidence. Unit: per word, its total; per offset between two words that
+both measure below 256 zoomed px together, the two words together and the pair window's 3; per line that ends between
+two words, the position where the word the line ends in ends.
 
 **Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
 
@@ -1806,7 +1854,9 @@ placement. Nothing is asked earlier than the engine needs it, but for the space 
     group's call before the group's cuts are made, so there it is a fact of the offset too. One entry is written
     before any read: at a cut before white space whose two sides are one piece each, the window the cut's search
     measured 0 in is the window `adjust16` takes between the cuts around the offset, so `measureGroups` writes that 0
-    and a line that ends at the cut asks nothing (`cuts-kept.test.ts`). The no-ligature adjustments are an inspected
+    and a line that ends at the cut asks nothing (`cuts-kept.test.ts`). Since words first (§4.4) a word cut whose two
+    neighbours are words of their own is the same case: the two words the test measured together are the window between
+    the cuts around it, and `addWordPieces` writes that 0. The no-ligature adjustments are an inspected
     paragraph's alone and aren't kept.
   - *Bound:* three 8-byte numbers per UTF-16 unit of the group, made with it: about 2.8 KB for a chat message of 116
     units.
@@ -1949,6 +1999,69 @@ repeating text, first fills at those widths take 0.10 where 0.43 (Latin), 0.07 w
 (mixed) and 0.43 where 0.41 (CJK), and kept paragraphs laid out again at them 0.057 where 0.103, 0.054 where 0.093,
 0.103 where 0.134 and 0.261 where 0.257, where main takes 0.007 to 0.019. A change to the word scan passes its two
 attacks and the premise probe before it merges (lab/README.md, "Test tiers").
+
+**Blink's words first** (2026-09-23; `shape.ts` `addWordPieces`, `heldAgainstSearch`; `line-breaker.ts` `candidateAt`;
+the recipe is in §4.4). It rests on two **premises about fonts**, taken as documented defaults with named gaps, as the
+maintainer's stance of 2026-09-23 allows for a premise no one has falsified in real fonts (rebuild/README.md, "Core"):
+- *No shaping context reaches more than one word past a space.* The test at a word cut shows that the two words around
+  it add up; that a group's pieces then add up to the group is the premise. The cut search it replaces holds context
+  within its windows of up to 256 zoomed px, and so does no longer: a font whose lookups read two words back loses it.
+  Of round 2's differences in real fonts, Zapfino's `the` after a space is a context the two-word test sees and the cut
+  search missed, and Euphemia UCAS's were the script of the whole Canvas call, which the rule for words without a script
+  of their own now keeps out (below); what this tree's fonts probe and lab cases find is in TAKEOVER.md.
+- *Positions inside a word stay sorted.* The walk over the cuts stands in for the search over every offset, which is
+  Blink's own binary search over sorted positions (shape_result.cc:2300-2318); both give one candidate only where the
+  positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it.
+
+An inspected paragraph holds both against the recipe it replaces. It cuts every group by the cut search alone first, as
+the port did before words (but for the rule for window sides Canvas shapes as Common, §4.4), with that search's
+gaps set aside (`measureGroups`), then cuts words. Every read of a group's
+own call that depends on its cuts, a position or the wide window's adjustment, is made with the cut search's cuts first
+and then with the words' (`heldAgainstSearch`); where the two differ the read reports `context-past-a-word` (§5). Every
+line end the walk can settle is searched first and then walked; where the two settle differently the line reports
+`positions-run-backwards`. Plain and inspected paragraphs take the words' values and the walk's candidate, so their
+lines are the same. So an inspected paragraph asks what it asked before words, in that order, and the words' questions
+after it: it can't ask exactly what it asked, since a word's total with its trailing space and two words together are
+strings the cut search never asks, and the plain path must ask a subset of the inspected path's questions (the function
+set's `plain` check). Nothing is kept for it beyond the cut search's cuts and prefixes per group
+(`BlinkInspect.searched`), and a plain paragraph keeps nothing new.
+
+What neither sees. A difference the words make and take back between two reads of a line doesn't show, and a plain
+paragraph reports nothing. The walk can't see that a position inside a word lies below an earlier one outside what it
+reads; the search can land there, and the inspected check finds exactly that. Where the cut search is itself wrong (its
+windows stop at 256 zoomed px, and Zapfino's forms reach past them, §4.4), the gap can fire where the browser agrees with
+the words.
+
+Offline, on the stand-in Canvases of `tools/words-attack.ts` (11,973 seeded paragraphs of words, `words-attack-cases.ts`
+seed `blink-words-first-1`, at 24, 64, 180 and 320px), the base tree 90e0266 and this one give the same lines, widths and
+pieces in every layout of the usual and the fine-grid Canvas; where the Canvas breaks a premise, every layout that
+differs reports its gap: context across one space (`across`, which the two-word test sees) 11 of 12,000 layouts, context
+two words back (`far`) 2,527, and negative advances inside words (`backwards`) 175, the walk's candidate there too. The
+plain and inspected lines are equal in all of them. `words.test.ts` pins a made-up font for each premise, the wrong line
+and the gap that names it.
+
+What V3 lost in Euphemia UCAS, and why (round 2's second check, 2026-09-20, the reading of its numbers on 2026-09-23,
+and this port's runs). The check found 1,492 of 1,534,773 long layouts differing from the base at DPR 2 over 318
+families, and where the browser scored them, 85 breaks fixed and 44 broken, 41 of those in Euphemia UCAS. Euphemia
+UCAS Regular is an OpenType font (GPOS, GSUB and kern; no morx or kerx): its GPOS `kern` feature applies lookup 0, a
+single adjustment of -422/2048 em on the space and the no-break space, under `latn` alone, and under DFLT and `cans`
+only lookup 1. Blink shapes an 8-bit Canvas string as Latin and runs RunSegmenter over a 16-bit one
+(harfbuzz_shaper.cc:1072-1101), which resolves a string of only characters without a script of their own as Common, so
+HarfBuzz falls back to DFLT (hb-ot-layout.cc:582-586) and the space stays wide. A fixed width per character, and every
+space 432,128 units narrower where the string holds a Latin letter or is 8-bit, reproduces all 486 range answers of the
+check's traced paragraphs. In the paragraph such words take Latin from any letter of the run, so V3's two-word test,
+asked about two such words (`👍 ` and `— `), compared two Common answers and passed. It was not a context from more than
+one word back, a fallback font or AAT tables. So a word without a character of a script of its own is no piece of its
+own (§4.4), and every word's Canvas string resolves as the paragraph does. That rule alone, on the check's 1,171 lab
+cases scored against their recorded native layouts in pinned Chrome (`--predict-only`), leaves no Euphemia UCAS case
+worse than the base: most of the 41 came from V3's window rule, which extended a side of `🙏🙏` or `» “` past 256 zoomed
+px, after which the shrink measured ` 🙏🙏` alone, Common and 432,128 units wider (a probe of the check's chat paragraph
+put that one space at offset 135, where the base and the browser have none). With the rule bounded as in §4.4 the
+check's cases go from the base's 954 to 1,017 breaks and 1,117 to 1,129 line counts, and 8 passes are lost in four
+places (two Euphemia UCAS paragraphs, each at three widths a LayoutUnit apart, a Zapfino paragraph of `word-forms`, a
+STIX Two Text paragraph under negative word spacing). A space measured alone as U+2028 is Common too: 1,054,720 units
+at 32px where U+0020 in an 8-bit string gives 622,592, so the pair window at every space before a letter shows an
+adjustment in Euphemia UCAS, no such space passes, and its groups are cut by the cut search, as the base does.
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a
@@ -2397,6 +2510,8 @@ neither the count nor the order of measuring calls shows in a row.
 | Spaces in shaping (`space-in-shaping`) | Blink, Gecko | The DOM kerns across spaces when the font's lookups involve the space glyph. Blink's word-by-word check ignores legacy `kern`, `kerx` and `morx`; Gecko shapes whole ranges when `SpaceMayParticipateInShaping` (gecko-text §7.2). | Blink: `optimizeLegibility` contexts. Gecko: measure the whole range when `au(a + ' ' + b) ≠ au(a) + au(' ') + au(b)`, a hypothesis to probe. | Blink: cross-space legacy kerning. Gecko: until the detection is verified. |
 | In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: both sides of an offset measured as the unit shapes them, joined letters with U+200D, kern splits by `pairKerning`, or where it is null by what Canvas tells from app-unit rounding (three placements; a pair is told where two are struck out, and by probe pairs only where one face draws it and the probe letters, §4.4), a joined suffix that a fallback font draws measured behind its own first letter (U+200D at a string's start takes the first font, gfxTextRun.cpp:3609-3613, :3320-3325), where the prefix's side stands in, ligature groups by shares; the position is predicted where the two sides add up to the unit (probe gecko-port F15). Blink: prefix sums and pair adjustments at cluster boundaries (the pair window reaches past a cluster that holds only default-ignorable characters and marks, as HarfBuzz's lookups do, §4.4), with the stand-ins marked (§2.3). | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. Gecko's stand-ins: a position inside a cluster, before a mark that starts a cluster, a tab after a stand-in (`CalcTabWidths`), and ligature rows the facts don't settle; the reading also holds `ComputeLigatureData`'s unbounded frame between two marks of one cluster, a Firefox bug Canvas can't show. Blink, at a chosen line edge inside a word: a line-end fit test that another last safe offset would turn around (the ceiling of that offset's position, or an uncertain first safe offset of a wrapped line start, each under or at one LayoutUnit; shaping_line_breaker.cc:309-324, :543-553); a wrapped line start whose clamped correction rests on a stand-in position, where the other outcome gives another line; the cut of an RTL view after a start reshape whose extent rests on the port's width tests alone (shape_result_view.cc:215-308). |
 | Negative word tail (`negative-word-tail`) | Gecko | The engine tests every break candidate inside a word as it scans (after a hyphen, between Han characters, every cluster of a line's first word under `overflow-wrap`); the word scan passes over them where the word's end fits, on the premise that no tail of a shaped word has a negative advance, which no source gives (§4.6). | An inspected paragraph runs the engine's loop beside every scan the word scan decides, over the same advances. | The two decide a scan differently: a word the scan passed over whole has a prefix wider than the room left, on the port's advances. On the port's measurements no installed face at an instance CSS can ask for has one; Skia at a variation corner does (§4.6), and `word-scan.test.ts` makes four up. The gap can fire where Firefox agrees with the word scan (4 layouts on that Skia corner). Firefox's own negative tails in Mishafi and Diwan Thuluth fall where the port can't see them, so no gap reports them. A plain paragraph reports nothing. |
+| Context past a word (`context-past-a-word`) | Blink | A group is cut at every space where the two words around it measure together what they measure apart, on the premise that no shaping context reaches more than one word past a space, which no source gives (§4.6); the cut search it replaces holds context within 256 zoomed px. | An inspected paragraph makes every read that depends on a group's cuts, a position or the wide window's adjustment, with the cut search's cuts and with the words'. | The two give another value at a read: a font whose lookups read more than one word back, or where the cut search's own windows miss a context (Zapfino, §4.4), which the browser can side with either way. No installed face was found where the premise alone fails. A difference made and taken back between two reads doesn't show. A plain paragraph reports nothing. |
+| Positions run backwards (`positions-run-backwards`) | Blink | A line that ends between two words takes its candidate from the positions at the group's cuts, which stands in for Blink's binary search over every offset on the premise that positions inside a word stay sorted (§4.6). | An inspected paragraph searches every line end the walk settles and walks it too. | The two settle on different candidates: a glyph or a pair adjustment inside a word is wider than nothing backwards. `words.test.ts` makes one up. A plain paragraph reports nothing. |
 | Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. Blink: a position inside a grapheme at a unit HarfBuzz may start a cluster at; a chosen edge between joining letters; a chosen edge where the pair adjustment measured with liga, clig and calt off (a letter spacing, font_features.cc:54-86) differs from the one with them on. |
 | WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a line measuring a string of a simplified-path box outside the width shortcut that holds U+0020 (WidthIterator restores a space's unshaped advance, the simplified path keeps the shaped one, WidthIterator.cpp:84-120 and :473-474 against FontCascade.cpp:381-412) or whose Canvas total isn't the float32 sum of its code points' advances in order (shaping moved advances, which the two paths sum in other orders). `fixed-pitch-path`: a line measuring an item of such a box that fails T1 while `monospace` is null, or while `primaryFamily` is null and the font is fixed pitch (whether the realized family is Courier New decides the shortcut). |
 | RTL shaping across inline boxes (`rtl-shaping-across-inline-boxes`) | WebKit | `LineBuilder` reshapes complex RTL text joined across decoration-free boxes as one run (webkit-lines §9.3). | none | RTL complex-script text split over same-font spans without box edges. |

@@ -119,7 +119,8 @@ export type BlinkGroup = {
   end: number
   style: number
   rtl: boolean
-  // [start, piece ends..., end].
+  // [start, piece ends..., end]. A piece is a word with its trailing space where the offset after the space passed the
+  // safe test, else what the cut search made of the stretch (shape.ts addWordPieces).
   cuts: number[]
   // 16.16 advance sum before each cut, including the pair adjustment at that cut, without HanKerning edge trims.
   prefixAtCut: number[]
@@ -140,8 +141,12 @@ export type BlinkGroup = {
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
 // fonts' and the environment's, with the ones preparation's measuring raised first; canonical once prepare ends (gaps.ts
-// canonicalGaps).
-export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; graphemeRuns: OffsetRuns | null; collapsedSourceRuns: OffsetRuns; fragmentAncestors: Int32Array }
+// canonicalGaps). `searched`: per group, the cuts the cut search alone made and the prefixes at them, which every read
+// that depends on the cuts is held against (shape.ts heldAgainstSearch).
+export type BlinkInspect = {
+  gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; graphemeRuns: OffsetRuns | null; collapsedSourceRuns: OffsetRuns; fragmentAncestors: Int32Array
+  searched: Array<{ cuts: number[]; prefixAtCut: number[] }>
+}
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
 // are first needed (BlinkStyle) and what the groups keep by offset (BlinkGroup.prefix16, pair16, wide16).
