@@ -5,7 +5,7 @@
 // (GeckoFilledLine); placing them, the line's pieces and its inspection are read from that record (placement.ts, pieces.ts,
 // inspect.ts), and nothing writes it after the fill.
 import type { FillResultOf, Gap, LineSlot, RangeFillResultOf } from '../../model.js'
-import { advanceBefore, codePointAtT, groupAround } from './advance.js'
+import { advanceBefore, advancesAreSuffixes, codePointAtT, groupAround } from './advance.js'
 import * as gaps from './gaps.js'
 import type { GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
@@ -212,12 +212,156 @@ export type Measured = {
   breakPriority: number
 }
 
-// gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
+// The glyph advance before a shaping unit's start, or the run's end: what advanceBefore gives there, read from the units'
+// running sum, which asks Canvas nothing.
+function unitStartAdvance(p: GeckoPrepared, run: GeckoTextRun, t: number): number {
+  return t >= run.tEnd ? run.totalAdvance : p.units[p.unitOf[t]!]!.startAdvance
+}
+
+// scanAdvance (`scan`) or rangeAdvance from a to b where both start a unit.
+function unitsAdvance(p: GeckoPrepared, prov: Provider, a: number, b: number, scan: boolean): number {
+  return unitStartAdvance(p, prov.run, b) - unitStartAdvance(p, prov.run, a) + spacingIn(p, prov, a, b, scan) + tabsIn(prov, a, b)
+}
+
+const startsUnit = (p: GeckoPrepared, run: GeckoTextRun, t: number): boolean => t >= run.tEnd || p.units[p.unitOf[t]!]!.tStart === t
+
+// BreakAndMeasureText decided from the shaping units' advances alone: the same loop, walked unit by unit; null where it
+// can't be, and the engine's loop decides (charScan). Gecko shapes a text run word by word (gfxFont::SplitAndInitTextRun,
+// gfxFont.cpp:3708-3900: a boundary space is a glyph of its own and nothing is shaped across it), so the advance before
+// a unit's start is the sum of the units before it, which `prepare` measured, and a candidate there asks Canvas nothing.
+// The loop's state at such a candidate is a function of those sums: its running width is the advance from aStart (the
+// pending advances telescope), its trimmable advance the run of spaces before it, and without a soft hyphen the test
+// that accepts a candidate and the test that aborts the scan are one (gfxTextRun.cpp:1090-1108), so the scan ends at the
+// first candidate that doesn't fit. What can't be decided here:
+// - a scan that starts or ends inside a unit, or trims from inside one, reads an advance inside a unit;
+// - break-spaces adds candidates this walk doesn't list (:1076-1082), and so does a unit that a removed soft hyphen
+//   stands in or before, where the walk stops: a hyphenation break tests the fit with the hyphen's width and aborts
+//   without it. A soft hyphen after the scan's end is reached by neither scan.
+// A unit can hold candidates inside itself: natural breaks (after a hyphen, between Han characters), and while no normal
+// break was accepted every cluster start under overflow-wrap, or the emergency break after a hyphen (:1068-1073). Their
+// advances are Canvas questions, four to five a cluster. The walk passes over them where the unit's end fits, on a
+// PREMISE about fonts that no engine source gives and Canvas isn't asked for (DESIGN.md §4.6, "Gecko's word scan"): the
+// advance before an offset inside a word is never more than the advance before the word's end, so no tail of a shaped
+// word has a negative advance (a detailed glyph's advance is signed and nothing clamps it, gfxHarfBuzzShaper.cpp:1692-1721).
+// It held in every installed face checked. Then every inner candidate fits, none aborts, and the last of them is the
+// scan's last break until a later candidate is accepted; a scan that would break at it is left to the loop, since the
+// edge's advance is asked of Canvas. Letter spacing, negative word spacing and a trimmable space inside the unit would
+// enter the inner tests, so they leave it to the loop, and so does a unit whose inner advances the port takes from a
+// prefix's width (advance.ts advancesAreSuffixes): what is left of the premise is that Canvas measures no suffix below
+// nothing and no suffix narrower than the share of a pair's adjustment it holds. An inspected paragraph holds each scan
+// decided here against the loop (breakAndMeasureText).
+function wordScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number, aWidth: number, suppress: 'none' | 'initial',
+  canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean, wantTrimmable: boolean, priorityIn: number): Measured | null {
+  const run = prov.run
+  const end = aStart + aMaxLength
+  if (isBreakSpaces || !startsUnit(p, run, aStart) || !startsUnit(p, run, end)) return null
+  let breakPriority = priorityIn
+  let lastBreak = -1
+  // Whether the last break is a passed unit's last inner candidate.
+  let lastBreakInside = false
+  let lbChars = 0
+  let lbAdvance = 0
+  let aborted = false
+  for (let k = aStart < end ? p.unitOf[aStart]! : p.units.length; k < p.units.length && p.units[k]!.tStart < end; k++) {
+    const unit = p.units[k]!
+    const t = unit.tStart
+    if (run.hasShy) for (let i = t; i < unit.tEnd; i++) if (p.tSource[i]! > 0 && p.text.charCodeAt(p.tSource[i]! - 1) === SHY) return null
+    if (t > aStart || suppress === 'none') {
+      const atBreak = p.breakFlags[t] === BREAK_NORMAL
+      const wordWrapping = (canWordWrap || (canWhitespaceWrap && p.breakFlags[t] === BREAK_EMERGENCY_WRAP)) && p.clusterStart[t] === 1 &&
+        breakPriority <= WORD_WRAP_BREAK
+      if (atBreak || wordWrapping) {
+        let trimStart = t
+        if (wantTrimmable) while (trimStart > aStart && p.isSpace[trimStart - 1] === 1) trimStart--
+        if (!startsUnit(p, run, trimStart)) return null
+        const trimmableAdvance = unitsAdvance(p, prov, trimStart, t, true)
+        const fits = unitsAdvance(p, prov, aStart, t, true) - trimmableAdvance <= aWidth
+        if (lastBreak < 0 || fits) {
+          lastBreak = t
+          lastBreakInside = false
+          lbChars = t - trimStart
+          lbAdvance = trimmableAdvance
+          breakPriority = atBreak ? NORMAL_BREAK : WORD_WRAP_BREAK
+        }
+        if (!fits) {
+          aborted = true
+          break
+        }
+      }
+    }
+    // What the unit holds after its first character: a natural break, a cluster start that word wrapping takes while
+    // it lasts, a trimmable space (U+3000, or a space before a cluster extender).
+    let natural = -1
+    let wrapping = -1
+    let space = p.isSpace[t] === 1
+    for (let i = t + 1; i < unit.tEnd; i++) {
+      if (p.breakFlags[i] === BREAK_NORMAL) natural = i
+      if (p.clusterStart[i] === 1 && (canWordWrap || (canWhitespaceWrap && p.breakFlags[i] === BREAK_EMERGENCY_WRAP))) wrapping = i
+      if (p.isSpace[i] === 1) space = true
+    }
+    if (natural >= 0 || (wrapping >= 0 && breakPriority <= WORD_WRAP_BREAK)) {
+      // The loop adds each character's spacing to its advance (gfxTextRun.cpp:1139-1151), so an inner candidate fits where
+      // the unit's end does only if no suffix of the unit holds negative spacing. A word holds word spacing where a space
+      // is no boundary: U+0020 or U+00A0 before a join control (IsBoundarySpace refuses a space before any cluster
+      // extender, gfxFont.cpp:3317-3323; word spacing goes to a space unless a combining sequence tail follows, which
+      // leaves the join controls out, nsTextFrame.cpp:879-898, :4215-4225, nsTextFrameUtils.cpp:24-30), and U+00A0 isn't
+      // trimmable (nsTextFrame.cpp:904-913). Without letter spacing every character of a frame takes the frame's one
+      // word spacing or none, so the unit's spacing is negative exactly where a suffix's is.
+      if (prov.letterSpacingAu !== 0 || space || p.scanSpacingPrefix[unit.tEnd]! < p.scanSpacingPrefix[t]! ||
+        unitsAdvance(p, prov, aStart, unit.tEnd, true) > aWidth || !advancesAreSuffixes(p, unit)) return null
+      // The first natural break ends word wrapping, so the last candidate accepted is the last natural break where
+      // the unit has one.
+      lastBreak = natural >= 0 ? natural : wrapping
+      lastBreakInside = true
+      lbChars = 0
+      lbAdvance = 0
+      breakPriority = natural >= 0 ? NORMAL_BREAK : WORD_WRAP_BREAK
+    }
+  }
+  let charsFit = -1
+  let trimmableChars = 0
+  let trimmableAdvance = 0
+  if (!aborted) {
+    let trimStart = end
+    if (wantTrimmable) while (trimStart > aStart && p.isSpace[trimStart - 1] === 1) trimStart--
+    if (!startsUnit(p, run, trimStart)) return null
+    trimmableChars = end - trimStart
+    trimmableAdvance = unitsAdvance(p, prov, trimStart, end, true)
+    if (unitsAdvance(p, prov, aStart, end, true) - trimmableAdvance <= aWidth || lastBreak < 0) charsFit = aMaxLength
+  }
+  if (charsFit < 0) {
+    if (lastBreakInside) return null
+    charsFit = lastBreak - aStart
+    trimmableChars = lbChars
+    trimmableAdvance = lbAdvance
+  }
+  return {
+    charsFit, advance: unitsAdvance(p, prov, aStart, aStart + charsFit, false), trimmableChars, trimmableAdvance, usedHyphenation: false,
+    lastBreak: charsFit === aMaxLength && lastBreak >= 0 ? lastBreak - aStart : null, breakPriority,
+  }
+}
+
+// gfxTextRun::BreakAndMeasureText: the word scan where it decides, else the engine's loop. A text run with a tab goes to the
+// loop, which asks for the tabs' widths as it reaches them (computeTabs). An inspected paragraph runs the loop first, so it
+// asks Canvas what it always asked, and reports where the word scan decides otherwise (gaps.ts negativeWordTail); the line
+// is the word scan's in both modes.
 function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number,
+  aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
+  wantTrimmable: boolean, priorityIn: number, sink: gaps.GapSink, consulted: number[] | null, tabsThrough: ((until: number) => void) | null): Measured {
+  aMaxLength = Math.min(aMaxLength, prov.run.tEnd - aStart)
+  const loop = sink === null ? null
+    : charScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn, consulted, tabsThrough)
+  const word = prov.run.hasTab ? null : wordScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn)
+  if (word === null) return loop ?? charScan(p, prov, aStart, aMaxLength, aWidth, suppress, canWordWrap, canWhitespaceWrap, isBreakSpaces, wantTrimmable, priorityIn, consulted, tabsThrough)
+  gaps.negativeWordTail(sink, p, p.frames[prov.frame]!.run, aStart, loop, word)
+  return word
+}
+
+// The engine's loop: gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
+function charScan(p: GeckoPrepared, prov: Provider, aStart: number, aMaxLength: number,
   aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
   wantTrimmable: boolean, priorityIn: number, consulted: number[] | null, tabsThrough: ((until: number) => void) | null): Measured {
   const run = prov.run
-  aMaxLength = Math.min(aMaxLength, run.tEnd - aStart)
   const end = aStart + aMaxLength
   const haveHyphenation = run.hasShy
   const hyphenWidth = run.hyphenAu + prov.letterSpacingAu // GetHyphenWidth (nsTextFrame.cpp:4388-4399)
@@ -562,7 +706,7 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   // LineIsBreakable: a placed frame or a band impacted by floats (nsLineLayout.h:151-155; nsTextFrame.cpp:11133-11135).
   const lineIsBreakable = ll.totalPlaced > 0 || ll.impactedByFloats
   const r = breakAndMeasureText(p, prov, tOffset, tLength, availWidth, lineIsBreakable ? 'none' : 'initial',
-    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, ll.consulted, tabWidths?.through ?? null)
+    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, ll.gaps, ll.consulted, tabWidths?.through ?? null)
   gaps.emergencyHyphenBreak(ll.gaps, p, f.run, style.wordCanWrap, r, tOffset, tLength)
   let charsFit = sourceOffsetAt(p, tOffset + r.charsFit) - offset
   if (offset + charsFit === newLineOffset) charsFit++

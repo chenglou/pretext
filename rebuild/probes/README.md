@@ -43,6 +43,17 @@ may read the DOM freely; this is research, not the library.
   by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
   `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
   `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
+- `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
+  library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
+  with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word
+  has a negative advance (DESIGN.md §4.6), and this is its test on real Canvas answers: every word of its lists
+  (a letter before every ordered pair of 33 characters that fonts kern hardest, Latin words with marks and ligatures,
+  Arabic and Hebrew with and without marks) is a paragraph of its own under `overflow-wrap: break-word` at the width
+  of its own advance, where the premise alone decides, in every family of a list, and the tree's lines must be the
+  loop's. `WORD_SCAN_PREMISE_CONTROL=1` takes 20px off Canvas's answer for every `q` in Arial and must find `xq` and
+  `axqi`. A Firefox slot is enough. Its header has the commands; the runs are under
+  `.artifacts/tests/runs/words2-gecko-20260920/attack2/premise-probe` (321 families, 381,027 words, 0 differing) and,
+  for the landed tree, `.artifacts/tests/runs/gecko-word-scan-20260923/premise-probe` (the same, and the control's two).
 - The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
   (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
   (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in

@@ -855,6 +855,17 @@ export function shapedReversed(p: Pick<GeckoPrepared, 'tUnits'>, run: Pick<Gecko
   return nativeRtl !== rtlRun
 }
 
+// Whether every advance inWordAdvance gives inside the unit is the unit, or its window, less a suffix Canvas measured
+// (with its joiner, and less a kerned pair's share): not where HarfBuzz shapes the unit reversed, or a mark starts a
+// cluster, where the value is a prefix's own width, which a ligature narrower than its parts makes wider than the unit
+// (14px "Courier New" draws reh yeh alef lam as one 504 au glyph, and its first three letters alone measure 1512 au).
+// The word scan's premise (lines.ts wordScan) is then about one thing, the sign of a measured suffix.
+export function advancesAreSuffixes(p: GeckoPrepared, unit: GeckoUnit): boolean {
+  if (unit.reversed) return false
+  for (let t = unit.tStart + 1; t < unit.tEnd; t++) if (p.clusterStart[t] === 1 && generalCategory(codePointAtT(p, t))[0] === 'M') return false
+  return true
+}
+
 export function codePointAtT(p: Pick<GeckoPrepared, 'tUnits'>, i: number): number {
   const u = p.tUnits[i]!
   if ((u & 0xfc00) === 0xdc00 && i > 0 && (p.tUnits[i - 1]! & 0xfc00) === 0xd800) return 0x10000 + ((p.tUnits[i - 1]! - 0xd800) << 10) + (u - 0xdc00)

@@ -73,7 +73,8 @@ test('warm adjacent scanning reads each owned source-to-unit entry within the re
     canvas.reset()
     expect(drain()).toEqual(expected)
     expect(canvas.asked().calls).toBe(0)
-    // The original adjacent-interval implementation reads 2,247 entries here; endpoint reuse reads 1,485.
-    expect(reads).toBeLessThanOrEqual(1600)
+    // The original adjacent-interval implementation reads 2,247 entries here; endpoint reuse reads 1,485, and the word
+    // scan (lines.ts wordScan) one more a scan to find that the scan starts inside the word: 1,613.
+    expect(reads).toBeLessThanOrEqual(1700)
   } finally { canvas.restore() }
 })
