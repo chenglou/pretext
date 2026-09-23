@@ -7,12 +7,31 @@ hands down totals the cuts already give (a group's one piece, the pieces between
 cut in two). It takes the loop's windows on a premise about fonts, that a string is never narrower than a window inside
 it, documented as a default with the named gap `nested-window-wider`, which an inspected paragraph reports where its
 loop and the prediction take other windows. An inspected paragraph hands on what the prediction measured and leaves the
-same halves unmeasured, so it asks every question a plain one asks: a first recording in which it measured them found
-31 cases without facts and 30 with them where the plain path asked a question the record lacked, all halves of emoji
-words at 80px or of Myanmar text whose share by length was far above what they measure. Under the stand-in Canvas a message of the bench's mix is prepared and
-filled at 320px with 154.4 questions and 659 UTF-16 units where words first asks 157.1 and 780, of its real set 167.4
-and 694 where 175.1 and 747, of the eleven languages 218.1 and 834 where 273.2 and 1,210; plain ASCII and the later
-widths ask what they asked. The browser evidence is in the recording commit that follows.
+same halves unmeasured, so it asks every question a plain one asks: a first recording in which it measured them found 31
+cases without facts and 30 with them where the plain path asked a question the record lacked, all halves of emoji words
+at 80px or of Myanmar text whose share by length was far above what they measure. Under the stand-in Canvas a message of
+the bench's mix is prepared and filled at 320px with 154.4 questions and 659 UTF-16 units where words first asks 157.1
+and 780, of its real set 167.4 and 694 where 175.1 and 747, of the eleven languages 218.1 and 834 where 273.2 and 1,210;
+plain ASCII 132.4 and 560 where 132.2 and 560, and the later widths within 0.3 of a question. The evidence, in pinned
+Chrome 153 at DPR 2 unless
+named (runs under `.artifacts/tests/runs/blink-words-first-20260923/c3`; the cut probe and the counts in `c2`,
+`counts` and `fill-counts` read the plain path, which the inspected path's fix left as it was):
+- Tier 2, recorded in both orders in both configurations: 0 status transitions against the references it replaces on
+  all 69,224 cases, the exact-value tallies unchanged (316 and 839 differing values), the gates' seeds lost 0 and gained
+  0. The plain predictor's line ranges equal the usual run's on every case without facts. The recordings pack with every
+  case replaying exactly and are frozen at 2eb0edd: an inspected paragraph asks 45,051 and 45,028 more recorded
+  questions than words first's (90.1 M and 93.4 M), the windows its walk of the prediction measures where the shrink
+  didn't.
+- The certified fast workflow and the real-text supplement: 999 of 1,000 (the same failure) and 64 of 64.
+- The cut probe against words first over 318 families: 0 cuts, positions and layouts differ, of 769,917 layouts at
+  DPR 2 and 784,173 at DPR 1.
+- Offline, `tools/words-attack.ts` against words first over the 11,973 seeded paragraphs: no layout differs on `usual`
+  at DPR 1, 2 and 3, on `fine` at the lines' own widths, or on `across`, `far` and `backwards`; on `backwards` 4
+  inspected layouts report `nested-window-wider`, with words first's lines. Plain and inspected lines are equal in all.
+- Counted in pinned Chrome (`tools/fill-counts-probe.ts`, 1,000 messages a set, from scratch at 320px): a message of the
+  bench's mix asks 146.0 calls and 602 UTF-16 units where words first asks 148.8 and 722 (its Chinese messages 313.8 and
+  1,164 where 349.4 and 2,539), a Latin one 121.8 and 501 where 121.6 and 500, and the bench's Chinese paragraph without
+  spaces, 9,428 units in one shaping group, 26,044 and 95,947 where 29,397 and 371,074.
 
 2026-09-23, Blink's words first (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)): a shaping
 group is cut into words first, each measured once with its trailing space, and the offset between two words is a cut
@@ -57,6 +76,10 @@ same. The evidence, all in pinned Chrome 153 at DPR 2 unless named (runs under
   and 780 where 198.1 and 2,049 (its mix), 175.1 and 747 where 221.5 and 2,188 (its real set) and 273.2 and 1,210 where
   282.3 and 1,973 (eleven languages); a kept one at a new width with 27.6 and 113 where 60.5 and 264 (ASCII) and 37.2
   and 135 where 64.5 and 272 (mix).
+- Counted in pinned Chrome (`tools/fill-counts-probe.ts`, 1,000 messages a set, from scratch at 320px): a message of the
+  bench's mix asks 148.8 calls and 722 UTF-16 units where the base asks 178.4 and 1,947, a Latin one 121.6 and 500
+  where 157.7 and 1,869; its Arabic messages ask more calls and fewer units (82.4 and 304 where 65.6 and 780), and the
+  bench's Chinese paragraph without spaces asks what it asked.
 
 2026-09-23, Gecko's word scan ([DESIGN.md §4.6](DESIGN.md)): a break scan is decided from the shaping units' advances
 and passes over the break candidates inside a word whose end fits. It rests on a premise about fonts that the maintainer

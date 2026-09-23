@@ -13,9 +13,10 @@
 // - `candidate`: the checkout's plain paragraph against the same with LineBreaker.wordCandidate answering -1 (the search
 //   over every offset decides every line), the same fields: the candidate alone, with the word cuts on both sides;
 // - `inspected`: the checkout's plain paragraph against its inspected one, fill results and pieces.
-// Beside them, the layouts whose inspected paragraph reports one of the two premises' gaps (context-past-a-word,
-// positions-run-backwards), and of the layouts where `trees` or `candidate` differ, the ones that report one: a stand-in
-// that keeps both premises must show none, and one that breaks a premise must show a gap on every layout that differs.
+// Beside them, the layouts whose inspected paragraph reports one of the premises' gaps (words first's context-past-a-word
+// and positions-run-backwards, the cut predictor's nested-window-wider), and of the layouts where `trees` or `candidate`
+// differ, the ones that report one: a stand-in that keeps the premises must show none, and one that breaks a premise
+// must show a gap on every layout that differs.
 // The paragraph and the environment of a case are the ones the checkout's usual predictor gives the library, as
 // tests/function-set.ts reads them.
 //

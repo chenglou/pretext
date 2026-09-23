@@ -2104,6 +2104,10 @@ whose measured total is the window's. Offline, `tools/words-attack.ts` over the 
 layouts at 60, 150 and 400px) gives words first's lines, widths and pieces in every layout of the usual and the fine-grid
 Canvas, and on `backwards`, where advances inside words are negative, every layout that differs reports
 `nested-window-wider`; `cut-predictor.test.ts` pins a made-up font whose window is wider than the string around it.
+Over the 11,973 seeded paragraphs (47,892 layouts a Canvas) no layout differs from words first's on any of the five
+Canvases, and on `backwards` 4 inspected layouts report the gap with the same lines. In pinned Chrome the cut probe
+over 318 families finds 0 cuts, positions and layouts differing from words first's at DPR 2 and 1, and tier 2 no
+transition (TAKEOVER.md).
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. Their
 contexts are made in the caller's list (below) and carry `partition: 'font-checks'`, so no engine measurement shares a

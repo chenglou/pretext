@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "chrome",
   "config": "no-facts",
-  "inputsSha256": "fad12101d0590b25c8ca57f6c09d4789c7d73c17968eab3d02de5712b795e4cf",
-  "commit": "48de7f7ab47ed3c9f2ed8c9af169e21c8da344a4",
+  "inputsSha256": "8f278ca837d47716f24d7ced08016dbbdafb30b2e1c120117102e2437e850366",
+  "commit": "2eb0edd9a3bff3923a7616e884117590e68763fc",
   "dirty": [],
-  "createdAt": "2026-09-23T13:57:20.550Z",
-  "reason": "words first in Blink (48de7f7, branch blink-words-first): a group is cut into words first and a line that ends between two words takes its candidate from the cuts; an inspected paragraph cuts every group by the cut search first and holds every read against it, so it asks new questions after the ones it asked; recorded again at 48de7f7 in both orders, 0 status transitions against the reference of ff0f584 in both configurations, 69,224 cases replay exactly",
+  "createdAt": "2026-09-23T17:46:24.511Z",
+  "reason": "the cut predictor in Blink (2eb0edd, branch blink-words-first): a plain paragraph measures the window at and before the one it predicts where the shrink measured every window, and leaves a half estimated at twice 256 zoomed px unmeasured; an inspected paragraph shrinks as before, walks the prediction beside it and hands on what the prediction measured, so it asks every question a plain one asks. Tier 2 in both orders and both configurations shows 0 status transitions against the references it replaces (c585110, whose predictions are words first's), so no prediction the ledger scores changes",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -91,6 +91,18 @@
       "commit": "ff0f5844f5a26e2688546d13c6185fdf2ebe3b35",
       "createdAt": "2026-09-21T00:47:28.644Z",
       "reason": "the JS profiling pass's confirmed changes (ff0f584): Blink's Canvas strings are built without a copy of the offsets, its properties below U+3000 read by index, and the shared font checks find a declaration's contexts once; the same questions in the same order and no line, value or status moved (0 transitions in both orders, 69,224 cases replay exactly); recorded again at the merge because the code that builds Chrome's strings changed",
+      "cases": 69224
+    },
+    {
+      "commit": "48de7f7ab47ed3c9f2ed8c9af169e21c8da344a4",
+      "createdAt": "2026-09-23T13:57:20.550Z",
+      "reason": "words first in Blink (48de7f7, branch blink-words-first): a group is cut into words first and a line that ends between two words takes its candidate from the cuts; an inspected paragraph cuts every group by the cut search first and holds every read against it, so it asks new questions after the ones it asked; recorded again at 48de7f7 in both orders, 0 status transitions against the reference of ff0f584 in both configurations, 69,224 cases replay exactly",
+      "cases": 69224
+    },
+    {
+      "commit": "c5851100b1a2445493892da4dd2a56a941e9b916",
+      "createdAt": "2026-09-23T16:23:46.261Z",
+      "reason": "the cut predictor in Blink (c585110, branch blink-words-first): a plain paragraph measures the window at and before the one it predicts where the shrink measured every window; an inspected paragraph shrinks as before and walks the prediction beside it, so it asks new questions after the ones it asked. Tier 2 in both orders and both configurations shows 0 status transitions against words first's references, so no prediction the ledger scores changes",
       "cases": 69224
     }
   ],
@@ -262,18 +274,18 @@
       },
       {
         "file": "runs/part0-027.ndjson.zst",
-        "cases": 91,
-        "sha256": "eb447181ccb55267d8fe46e379f81465729e57c53e7f967c0f016536c4298ee9"
+        "cases": 90,
+        "sha256": "b47f7228f63083d95dae3f1d8e558a75782211fb32260464fe4fa38f96a35b73"
       },
       {
         "file": "runs/part0-028.ndjson.zst",
         "cases": 88,
-        "sha256": "f0a966c1a5d91b7fcbf76477cc7398500cec56a1700b35808f909025502bfc9b"
+        "sha256": "df221eea27712aac8c33efc9f4bb6e5a9e24913931b3b7b7c43b10a3846175d7"
       },
       {
         "file": "runs/part0-029.ndjson.zst",
-        "cases": 104,
-        "sha256": "24a1ef004ca28224d86f828e6c150620ad7ddc643490118accfd700591bf22b2"
+        "cases": 105,
+        "sha256": "718ac808eb8340e3cb69012e85416d3190dc21f8018fabff03dc334d82676854"
       },
       {
         "file": "runs/part0-030.ndjson.zst",
@@ -391,13 +403,13 @@
       },
       {
         "file": "policy/part0-009.ndjson.zst",
-        "cases": 67,
-        "sha256": "4867bfefea0a63d896fd23cbf8a91c20a36c62e4f6d85bd00758279d2a835d37"
+        "cases": 66,
+        "sha256": "2ef647c05e4d60b22918a54a60b094e262b8183b9f92f5d533d5e4440e0182d6"
       },
       {
         "file": "policy/part0-010.ndjson.zst",
-        "cases": 51,
-        "sha256": "8718833a87aa2ebbcc8c9f10ec0ecc58a81321de0f6f5357e95c6599378888fc"
+        "cases": 52,
+        "sha256": "68bc9b1e92f5d57601dbf94bfbef6507e8d4eaebd6ebb10916df8682dc2e9ec4"
       },
       {
         "file": "policy/part0-011.ndjson.zst",
@@ -1334,13 +1346,13 @@
       },
       {
         "file": "suite-sample/part1-072.ndjson.zst",
-        "cases": 58,
-        "sha256": "00849568479f2e6bb20d2c7c618583ee03651356fe6dfbc2454ebbdc0bb6c16a"
+        "cases": 57,
+        "sha256": "bd2b8f08b859d36b7f700c40fce5d7f2d8d1f44cb43cc098ee31a5e5da0aa2e0"
       },
       {
         "file": "suite-sample/part1-073.ndjson.zst",
-        "cases": 60,
-        "sha256": "73c4477a0d15e34d548cbe9875f1bc7c4950b0d96c4e84bd8fac0b29184559fc"
+        "cases": 61,
+        "sha256": "ce5bee99ae0d088de347b4574e7a461638012d8092bf3555cee7353cb218a619"
       },
       {
         "file": "suite-sample/part1-074.ndjson.zst",
@@ -1494,13 +1506,13 @@
       },
       {
         "file": "suite-sample/part2-017.ndjson.zst",
-        "cases": 131,
-        "sha256": "6fb59ef4ebae2bb76c740ba92d4c309b5534195a35e56b316d540b31fb57b075"
+        "cases": 130,
+        "sha256": "43cd4fe0063df45ea246a671e3f7e8c7a12e6fb3db2d220da88baf7102a35604"
       },
       {
         "file": "suite-sample/part2-018.ndjson.zst",
-        "cases": 51,
-        "sha256": "8a532cfb8e94a5555d20ab6f8c3a2bc5f86e4133cd1b73fbb81131286f0e82b1"
+        "cases": 52,
+        "sha256": "44334387118a8f352c5a5bb43bac49eec051802dc0998ab3c9c617d7b9ff7618"
       },
       {
         "file": "suite-sample/part2-019.ndjson.zst",
@@ -1866,43 +1878,43 @@
       },
       {
         "file": "families/part0-018.ndjson.zst",
-        "cases": 173,
-        "sha256": "093ad995151c7ded49c9cc4025de225cb0656487dc386628f695427a8e175705"
+        "cases": 172,
+        "sha256": "834db078150377bc98602ceecc3e0a3476bfe82f2b98cf7ea5c43bf4baa80685"
       },
       {
         "file": "families/part0-019.ndjson.zst",
         "cases": 170,
-        "sha256": "14e442490103d5d2597affb8aa478d32d718fe5734048a1cd982d43e66e46bca"
+        "sha256": "c0f0b3e29c983c16a40d0a98d165fbf818c7cbd93beca8e95571fd50e18f896f"
       },
       {
         "file": "families/part0-020.ndjson.zst",
-        "cases": 117,
-        "sha256": "23940ebf96e28850e278902270615146989cff3e2e795a3280a00957fd2f5ca4"
+        "cases": 116,
+        "sha256": "524fc0df24da8818d7bc15a1a879a844603e28639d476c27603adfbc9f08a297"
       },
       {
         "file": "families/part0-021.ndjson.zst",
-        "cases": 61,
-        "sha256": "dd6a692dab358f292740f5d0d6b8751dd700db5fd874310f0957b34ceecc9806"
+        "cases": 62,
+        "sha256": "754a98570e473fb584ca14b84d4e85516db104c85ceb03bf7f256e873156924f"
       },
       {
         "file": "families/part0-022.ndjson.zst",
-        "cases": 50,
-        "sha256": "6fb87073bee04f69a58a24a4b56dd873293800b6fa0577ba2290c83bfc5f52ce"
+        "cases": 46,
+        "sha256": "a61761e583f69758bf7a282c67b29bdbb72168d01087318edcf162759073d8b5"
       },
       {
         "file": "families/part0-023.ndjson.zst",
-        "cases": 77,
-        "sha256": "c4343ffc202250c9824b66fef8b424c455afdcef92e20979de9382631324c740"
+        "cases": 79,
+        "sha256": "2d38cb1e0f07a3f8062b5d43c6f0e6f2c0d714022ac429aa3c4bbaaa7b48f699"
       },
       {
         "file": "families/part0-024.ndjson.zst",
         "cases": 57,
-        "sha256": "af7553d38e9ebe019e652983f1a32444afee3c837c1c93c55991fb39580a4ae1"
+        "sha256": "017dec6f339e2ed661791ca0bde8041a4bc56f7daf8284c04a6694f4fb49bb33"
       },
       {
         "file": "families/part0-025.ndjson.zst",
-        "cases": 48,
-        "sha256": "6f4f619db8e9562bee8d98b5be447528628db9c00f82b763e1fc33e16a742b45"
+        "cases": 51,
+        "sha256": "89202d6c2fc2e7ff374fa9c823d97fbada41fe7edf40d5b81783e2fcdd0d725d"
       },
       {
         "file": "families/part0-026.ndjson.zst",
@@ -2121,38 +2133,38 @@
       },
       {
         "file": "families/part0-069.ndjson.zst",
-        "cases": 74,
-        "sha256": "75061e159f38209a44412ddd0f2397ebe57af25683c99ab24e9b6b981367cf1b"
+        "cases": 73,
+        "sha256": "10d94f17074064ade1d1aefbe514c2bec103bd277e220b31cd72e1c9458ad5fd"
       },
       {
         "file": "families/part0-070.ndjson.zst",
-        "cases": 224,
-        "sha256": "4b12c7f86b9a32e7abf3d40a8e34e1059c793f858c77befe11095ff5e8e65f1f"
+        "cases": 223,
+        "sha256": "210a85ad8001857fca79a00a3e0976026ee96b614c077ec06315f7ed026a9b05"
       },
       {
         "file": "families/part0-071.ndjson.zst",
-        "cases": 159,
-        "sha256": "706941abd93a1215197aecc77939ab981e84d0425eea7eb6826f2305ea6ce062"
+        "cases": 160,
+        "sha256": "c4b518093f1e06b84c26ae36421fe6fb9452cba0507672aab689d5f7052a86be"
       },
       {
         "file": "families/part0-072.ndjson.zst",
-        "cases": 171,
-        "sha256": "c837f17905dad0d2833dedd81cdfd08d856f6f973df1d952bca53ea91c0ba2ee"
+        "cases": 169,
+        "sha256": "c2fa3917b1c0fb2fce806e6839a0d95c998d4d59ddc59fb73f5239df0ca90414"
       },
       {
         "file": "families/part0-073.ndjson.zst",
-        "cases": 181,
-        "sha256": "a19f94d82e08ccd73ebefd522dc095e6269008b8456484798a9819c783888400"
+        "cases": 179,
+        "sha256": "66546b61b62096f132f53e8efec4765af749d1e741229c8bee056f53651635d4"
       },
       {
         "file": "families/part0-074.ndjson.zst",
-        "cases": 192,
-        "sha256": "7b4f1349593bdab74d51666d3d723534dae3189640046a578e478a8735f8ab89"
+        "cases": 194,
+        "sha256": "00030b40a00162f51586cf187dc91e9f1b143f127dc607c1469c9a006990bc91"
       },
       {
         "file": "families/part0-075.ndjson.zst",
-        "cases": 71,
-        "sha256": "40e1e2c2b4469f8d2d45bb022d60e1ea5b0e9e70855753fd600ee3f3af9f43bc"
+        "cases": 74,
+        "sha256": "40dc40dcc98932cab04dcae985d2a76096de7da35417d113d18dbffa46ff4965"
       }
     ],
     "features": [
@@ -2821,13 +2833,13 @@
       },
       {
         "file": "heldout-policy/part0-005.ndjson.zst",
-        "cases": 68,
-        "sha256": "ad4cf8f610d4b1d3ded58f95e00bd96d44c10dded8fe7cb380f238db84b878b4"
+        "cases": 67,
+        "sha256": "a29dd2e8c7a5b39eda7f4b85cf885e6debf1cc2d95b90b68f3b1e4129c23bedf"
       },
       {
         "file": "heldout-policy/part0-006.ndjson.zst",
-        "cases": 38,
-        "sha256": "c29b12013c39ee12677deb417be1cf4d8acdca25775efb65bc78d08dc499cebc"
+        "cases": 39,
+        "sha256": "28c12acc7c5864136492bdaabef19173806e56573ae8133611ce72832bf44793"
       },
       {
         "file": "heldout-policy/part0-007.ndjson.zst",
@@ -2886,13 +2898,13 @@
       },
       {
         "file": "heldout-policy/part0-018.ndjson.zst",
-        "cases": 79,
-        "sha256": "3051ecb7bb82a6dc404f5b6cc7d50bcd380c02554f8ac381014e7e182008c06b"
+        "cases": 78,
+        "sha256": "fa8b4054324b90d2b243292356c7e591b80733bfeadf8286ede3993fdf24f2d1"
       },
       {
         "file": "heldout-policy/part0-019.ndjson.zst",
-        "cases": 91,
-        "sha256": "45952bb484970ad4130959d9be979f2af6ae6bdb6b133d192792da9d77cefadf"
+        "cases": 92,
+        "sha256": "46dc3ddc74ee33c0abc4d14d073667f8358ff466b4f15f42d2584b50837cee14"
       },
       {
         "file": "heldout-policy/part0-020.ndjson.zst",
@@ -3310,7 +3322,7 @@
   },
   "cases": 69224,
   "ledger": {
-    "headerSha256": "9941ddc044a71773e96f254f30c1f715feed943cab5e6add7a9a12c66df2804d",
+    "headerSha256": "ff73a9193f1748a3524dcb7ece41670f1218e453fbadc07abfc59b280a4fdf8f",
     "entriesSha256": "6d65187c7acaae6f3f998f25665f82f60a521de5d206b79b0915f19fc5988d4c"
   }
 }
