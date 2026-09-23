@@ -60,6 +60,29 @@ may read the DOM freely; this is research, not the library.
   totals of 256 zoomed px or more once JS adds the spacing. `../tools/words2-sum-cases.ts` makes the differing layouts
   lab cases, which say which tree the browser agrees with. The runs are under
   `.artifacts/tests/runs/words2-blink-20260920/attack/sum-dpr2` and `.artifacts/tests/runs/blink-words-first-20260923/c1/sum-dpr2`.
+- `../tools/bwf-constructed-probe.ts` (bwf-constructed; the constructed attack on words first and the cut predictor,
+  2026-09-23; two checkouts bundled into one page, one probe per page language): lab cases from
+  `../tools/bwf-constructed-cases.ts` (long runs without a space that passes in many scripts, words near 256 zoomed px,
+  letter and word spacing of both signs far enough to make advances negative, tabs, soft hyphens, default-ignorable and
+  bidi controls at word edges, words without a script of their own, Korean, right-to-left text, lines that start inside
+  a word, inline boxes inside words, very large sizes, repeated short words in fonts with contextual forms) are laid out
+  plain by both trees at the case's width, ordinary widths and the head's lines' own widths with one LayoutUnit to either
+  side, and the head's inspected paragraph at three widths counts every gap of a premise. `../tools/bwf-sweep-probe.ts`
+  sweeps chosen cases' widths in steps of a fraction of a px, with the gaps' details. `../tools/bwf-constructed-verdict.ts`
+  makes lab cases of the differing layouts (from either probe or from a `words-attack.ts` report) and compares the two
+  trees' scores against the browser's own lines; `../tools/scale-cases.ts` turns a layout found at DPR 1 or 3 into its
+  DPR 2 equivalent, since the lab observes at the machine's ratio and Blink breaks in zoomed px.
+  `../tools/nested-window-probe.ts` (nested-window N1) tests the cut predictor's premise directly: around offsets of long
+  runs it builds the wide window's shrink as `windowAdjust16` does and measures every window on Canvas, counting windows
+  wider than the one around them and shrinks where a window below 256 px comes before one of 256 px or more. For
+  96da4af against 90e0266 in pinned Chrome 153 (runs under `.artifacts/tests/runs/bwf-attack-constructed-20260923`): the
+  premise fails in real fonts without any spacing, in Farisi, Diwan Thuluth, Mishafi, Mishafi Gold, Waseem and Noto
+  Nastaliq Urdu (a window up to 117 zoomed px wider than the one around it, and crossings of 256 at a 256 px font size),
+  and under negative letter spacing in every font; large Arabic in those fonts reports `nested-window-wider`, and at DPR 3
+  the trees' lines differ there. Under negative word spacing both trees take a Canvas total of 256 zoomed px or more as
+  exact once the spacing JS adds brings it below 256, and words first adds a path to it: a pair of words whose test
+  failed because their total was that float becomes a piece with it (`addWordPieces` hands `both[i + 1]` to
+  `addPieces`). Zapfino at 72 zoomed px loses 11 of 42 lab cases' breaks the base passes, with `context-past-a-word`.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word
