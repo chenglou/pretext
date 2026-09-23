@@ -1779,6 +1779,32 @@ characters where 231), a real paragraph 99.6 where 112.8 (858 where 960), a CJK 
 Persian, Hindi and Southeast Asian sets under `break-all` and at dictionary breaks too, nor any of the tier corpus's
 cases, of which the audit's form lost 3 more (Geeza Pro under `break-all`).
 
+WebKit, the probe for a list that resolves nothing, not asked where the list names a generic family that resolves
+(`content.ts` `makeBox`, `fonts.ts` `RESOLVING_GENERICS`; `webkit/content/list-probe-skipped-for-a-resolving-generic`).
+Where no family of a box's list resolves, the settings' standard family of the locale's script draws
+(FontCascadeFonts.cpp:210-217): Songti SC or TC, Hiragino Mincho ProN or AppleMyungjo under a Han, kana or Hangul
+locale, where Canvas, which has no locale, would take another. The port tells that from two questions a box, the list
+followed by LastResort and LastResort alone measuring a space alike, and then names the standard family at the end of
+the list. The audit dropped the probe, on the premise that a page's list ends in a generic family or names one it has.
+The reviews found the lists that don't: CSS written for Windows (`"Malgun Gothic"`, `Meiryo`, `"MS PGothic"`,
+`"Microsoft YaHei"` alone), where every Japanese and Korean width and a fifth of the Chinese ones lost their lines
+without it (988 cases lost of the adversarial review's sets, 1,222 of the real-text review's). Such a list resolves
+nothing on a Mac. A list that names `serif`, `sans-serif`, `monospace` or `system-ui` always resolves: `system-ui` is
+the system font, and under every Han, kana and Hangul locale the other three name families that every WebContent process
+of macOS 27 has (probe land-w1a, below). So the port asks the probe only of a list that names none of them, and a list
+that does is taken to resolve; `cursive` and `fantasy` aren't among them, since under zh they name Kaiti SC and Kaiti
+TC, which the process doesn't have (probe webkit-round4 R11, and land-w1a). An inspected paragraph asks the probe of a
+list it took to resolve and reports `canvas-language` over the box's characters on every line where it resolves nothing.
+Probe land-w1a (`.artifacts/probes/webkit-land-w1a`; webkit-host 22625.1.29.11.27, 2026-09-23; the inspected predictor
+over `"NoSuchFamilyXyz", <keyword>` under ja, ja-JP, ko, ko-KR, zh, zh-CN, zh-Hans, zh-TW, zh-Hant, zh-HK, zh-MO, yue,
+yue-Hant and zh-Hant-HK at 13, 16 and 20px, Latin text so that no other `canvas-language` hides the report): 168 of 168
+lists resolve. Two controls report what the probe finds where it is asked on the inspected path: the audit's drop
+reports `"NoSuchFamilyXyz"` alone unresolved under 13 of the 14 locales (yue names no standard family), and this tree
+taking `cursive` and `fantasy` to resolve reports them unresolved under every zh and yue-Hant locale. In webkit-host a
+real paragraph asks 88.0 questions where it asked 88.7 (CJK 109.0 where 111.0); chat messages, set in English, ask what
+they asked. No line moved in any of the sets above, the lists written for Windows included, nor any of the tier corpus's
+63,729 webkit-host cases.
+
 Box edges, indents and slot insets are declared lengths, so they need no recipe: each engine converts them with its
 style system's arithmetic, and no Canvas call reads them.
 

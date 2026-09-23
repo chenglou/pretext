@@ -192,6 +192,11 @@ heuristic, or named here.
   Ethiopic word differs from Canvas under every language but am and none, R13; no lab case holds Ethiopic). History
   worlds vary one box at a time, a declared approximation: checked against the isolation protocol on 400 cases and not
   contradicted; products of worlds aren't laid out.
+- WebKit: a font list that names `serif`, `sans-serif`, `monospace` or `system-ui` is taken to resolve without the probe
+  that tells (`content/list-probe-skipped-for-a-resolving-generic`, 2026-09-23), a fact of macOS 27's fonts from probe
+  land-w1a: under every Han, kana and Hangul locale those keywords name families the WebContent process has, where
+  `cursive` and `fantasy` under zh don't. An inspected paragraph asks the probe of such a list and reports
+  `canvas-language` where it resolves nothing (DESIGN.md §4.4, "Taken out for speed").
 - Runtime font checks: `monospace` in WebKit (`measure/font-check-fixed-pitch`) is inferred from equal advances of `i`,
   `M`, `.` and the space, where WebKit reads a Core Text trait and three names Canvas doesn't show
   (FontCoreText.cpp:753-785); it is wrong for a font whose trait and advances disagree (MS-PGothic, MonotypeCorsiva).

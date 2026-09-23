@@ -9471,6 +9471,28 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "webkit/content/list-probe-skipped-for-a-resolving-generic",
+   "engine": "webkit",
+   "area": "content",
+   "kind": "fact",
+   "statement": "a box's font list that names serif, sans-serif, monospace or system-ui unquoted is taken to resolve, and the probe of whether any family of the list resolves (the list followed by LastResort measures a space as LastResort alone does), which a box under a Han, kana or Hangul locale asks to name the settings' standard family where none resolves, isn't asked of it: system-ui is the system font, and under every such locale serif, sans-serif and monospace name families that every WebContent process of macOS 27 has (Songti SC and TC, PingFang SC, TC, HK and MO, Hiragino Mincho ProN, Hiragino Sans, AppleMyungjo, Apple SD Gothic Neo, Menlo; probe land-w1a, 168 of 168 lists under 14 locales at three sizes); cursive and fantasy aren't taken, since under zh and yue-Hant they name Kaiti SC and Kaiti TC, which the process doesn't have; a list that names none of the four is probed as before (a list written for Windows, Meiryo or \"Malgun Gothic\" alone, resolves nothing on a Mac, where the requirements audit's drop of the probe moved lines); an inspected paragraph asks the probe of a list it took to resolve and reports webkit/gap/canvas-language over the box's characters where it resolves nothing",
+   "source": "FontCascadeFonts.cpp:210-217; engines/webkit/fonts.ts RESOLVING_GENERICS; engines/webkit/font-compilation.ts; engines/webkit/content.ts makeBox; engines/webkit/gaps.ts boxMade; DESIGN.md §4.4, \"Taken out for speed\"; research/REQUIREMENTS-AUDIT.md (W1a) on branch audit-requirements",
+   "probes": [
+    "webkit-round4 R7",
+    "webkit-round4 R11",
+    "land-w1a"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7) > a list that names serif, sans-serif, monospace or system-ui is taken to resolve: a plain paragraph does not ask, and an inspected line reports one that does not",
+    "src/engines/webkit/lines.test.ts :: canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7) > a list none of whose families resolves draws with the standard family, which is named after it under a Han, kana or Hangul locale",
+    "src/engines/webkit/lines.test.ts :: each shared-font leaf still asks and chooses its own standard-family fallback"
+   ],
+   "declaredBy": "requirements audit drop W1a, narrowed after its reviews (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -10060,6 +10082,7 @@
   "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
   "gecko/measure/crossing-measured-where-placed": "32457a138e2697dd",
   "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
-  "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8"
+  "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
+  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066"
  }
 }

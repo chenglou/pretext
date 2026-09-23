@@ -215,6 +215,10 @@ export type WebKitBoxInspect = {
   // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
   // the Canvas list followed by LastResort). null: none of these.
   localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: 'cjk' | 'arabic' | null; namedContext: Context; listContext: Context; lastResortContext: Context } | null
+  // No family of the list resolves though it names a generic family that does (fonts.ts RESOLVING_GENERICS), under a locale
+  // whose script names a standard family, which then draws and which the port doesn't name for Canvas (gap
+  // canvas-language; content.ts makeBox): that family, else null.
+  unresolvedList: string | null
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
   // locale, which isn't given (gap ui-language).
   hanLocaleUnknown: boolean
