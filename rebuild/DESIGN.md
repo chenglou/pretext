@@ -1623,7 +1623,10 @@ Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `pas
 group is measured in pieces, and the pieces add up to the group only where the two sides of a cut change nothing in
 each other. So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
 both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
-cut, and the pair window over one cluster on each side. The cut is the offset nearest the middle beside a space that
+cut, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
+out before the wide window, which can shrink several times, is shaped, and a zero pair still needs the wide window. The
+test's answer doesn't depend on the order, but an inspected paragraph raises the gaps of the strings it measures, so a
+rejected offset's `script-context` entries are those of the window that ruled it out. The cut is the offset nearest the middle beside a space that
 passes, else the nearest other offset that passes, else the nearest grapheme boundary, reported as `unsafe-to-break`
 (§5). The search tries the offsets beside a space first, from the middle outward, and the others only once all of those
 failed. An offset beside a space that passes wins over every other offset, so this finds the cut that trying every
