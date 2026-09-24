@@ -165,12 +165,18 @@ test('a face whose space takes another advance under Common than under Latin is 
   expect(prepared('Mono').groups[0]!.cuts.length).toBe(9)
 })
 
-test('at a zoomed font size of 60 px and more a group is cut by the cut search alone, as before words', () => {
+test('at a zoomed font size of 60 px and more, with the spacing two words take, a group is cut by the cut search alone, as before words', () => {
   // At 59px TEXT's words are cut first; at 60px, where two words of the widest installed face measure 256 zoomed px or
   // more and the word test can't be asked between them, the group is cut as a group without words is.
   const at = (size: number): BlinkPrepared => prepare({ ...paragraphIn('Mono', TEXT), font: { family: 'Mono', size, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS } }, env, false, createContextPool())
   expect(at(59).groups[0]!.words).toBe(true)
   expect(at(60).groups[0]!.words).toBe(false)
+  // Letter and word spacing widen the two words: at 50px, 2px of letter spacing on 7 characters and 3px of word spacing
+  // on 2 spaces add 20px, 4.9px of size at 4.07 em; 6px of letter spacing add 42px, 10.3px of size, past the bound.
+  const spaced = (letterSpacing: number, wordSpacing: number): BlinkPrepared => prepare({ ...paragraphIn('Mono', TEXT), letterSpacing, wordSpacing, font: { family: 'Mono', size: 50, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS } }, env, false, createContextPool())
+  expect(spaced(2, 3).groups[0]!.words).toBe(true)
+  expect(spaced(6, 0).groups[0]!.words).toBe(false)
+  expect(spaced(-6, -3).groups[0]!.words).toBe(true)
 })
 
 describe('blink candidate from the cuts', () => {

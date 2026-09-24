@@ -930,11 +930,18 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
 // whole group, as before words, never tries: Zapfino, whose short words with their spaces measure up to 4.07 em (`in the `),
 // lost lines from 64 zoomed px on at DPR 1, 2 and 3 and none at 60 (the fix round's sweep, 2026-09-23). So at 60 zoomed px
 // and more, where two words of the widest face no longer fit below 256, the group is cut by the cut search alone, and its
-// windows are the ones before words (adjustBetweenCuts16).
+// windows are the ones before words (adjustBetweenCuts16). Letter and word spacing widen the same two words: JS adds the
+// letter spacing to each of their 7 characters and the word spacing to their 2 spaces, so the bound takes the size those
+// add at 4.07 em, and 28px Zapfino at DPR 2 under 3px of letter spacing or 8px of word spacing is cut by the cut search
+// (the fix round's spacing sweep, 2026-09-24).
 const WORDS_FIRST_MAX_ZOOMED_PX = 60
+const WIDEST_PAIR_EM = 4.07
 
 function takesWords(p: BlinkPrepared, style: number): boolean {
-  return f32(f32(p.styles[style]!.font.size) * f32(p.layoutZoom)) < WORDS_FIRST_MAX_ZOOMED_PX && !spaceTakesScript(p, style)
+  const st = p.styles[style]!
+  const zoom = f32(p.layoutZoom)
+  const spacing = 7 * Math.max(0, f32(st.letterSpacing * zoom)) + 2 * Math.max(0, f32(st.wordSpacing * zoom))
+  return f32(f32(st.font.size) * zoom) + spacing / WIDEST_PAIR_EM < WORDS_FIRST_MAX_ZOOMED_PX && !spaceTakesScript(p, style)
 }
 
 function holdsSpace(p: BlinkPrepared, from: number, to: number): boolean {

@@ -1670,9 +1670,9 @@ where it may hold right-to-left text.
 
 Blink, words first (`shape.ts` `addWordPieces`, `cutGroup`; `line-breaker.ts` `candidateAt`, `wordCandidate`; since
 2026-09-23; the study is research/SPEC-WORD-SUM.md, round 2's form "V3" on branch `x-words2-blink`). A group is cut into
-words before the cut above runs, but at a zoomed font size of 60 px and more and in a face whose space takes another
-advance under Common than under Latin, where the cut above runs alone, with the windows before words (§4.6, "Blink's
-words first"). A word starts after a U+0020 where clusters part, nothing joins and the character isn't
+words before the cut above runs, but at a zoomed font size of 60 px and more, counting the size that letter and word
+spacing add to two words, and in a face whose space takes another advance under Common than under Latin, where the cut
+above runs alone, with the windows before words (§4.6, "Blink's words first"). A word starts after a U+0020 where clusters part, nothing joins and the character isn't
 one every lookup skips, and it must hold a character with a script of its own: a word of digits, punctuation or an
 emoji stays in the piece before it, or at the group's start in the one after it. Canvas resolves such characters over the
 string it measures, and a 16-bit string that holds none is shaped as Common, under the font's default lookups
@@ -2153,7 +2153,8 @@ attacks and the premise probe before it merges (lab/README.md, "Test tiers").
 
 **Blink's words first** (2026-09-23; `shape.ts` `addWordPieces`, `heldAgainstSearch`, `takesWords`; `line-breaker.ts`
 `candidateAt`; the recipe is in §4.4). It rests on two **premises about fonts**, taken as documented defaults with named
-gaps, where no installed face breaks them in pinned Chrome (rebuild/README.md, "Core"):
+gaps and bounded where installed faces break them in pinned Chrome (rebuild/README.md, "Core"), but for Athelas, where
+no bound was found that keeps more lines than it loses (below):
 - *No shaping context reaches more than one word past a space.* The test at a word cut shows that the two words around
   it add up; that a group's pieces then add up to the group is the premise. The cut search it replaces holds context
   within its windows of up to 256 zoomed px, and so does no longer: a font whose lookups read two words back loses it.
@@ -2168,7 +2169,11 @@ gaps, where no installed face breaks them in pinned Chrome (rebuild/README.md, "
   of Zapfino at DPR 1, 2 and 3 found the first losses at 64 zoomed px, none at 60, where its short words with their spaces
   (up to 4.07 em) still measure below 256 together. So a group is cut into words only below a zoomed font size of 60 px;
   at 60 and more it is cut by the cut search alone, with the windows before words, and in the sweep no layout at its
-  ordinary widths is then lost at any size. Words first is also off in a face whose space takes another advance under Common than under Latin
+  ordinary widths is then lost at any size. Letter and word spacing widen the same two words, JS adding the letter
+  spacing to their 7 characters and the word spacing to their 2 spaces, so the bound counts the size those add at 4.07
+  em (`takesWords`): the spacing sweep of the fix round (2026-09-24) found 28px Zapfino at DPR 2 losing 33 breaks and 30
+  line counts against the base under 3px of letter spacing and 8px of word spacing, and with the spacing counted it
+  loses 1 break, the `THE then` below, and gives back 4 breaks the words had right under 8px of word spacing. Words first is also off in a face whose space takes another advance under Common than under Latin
   (Euphemia UCAS, below). What the bound leaves, traced against Chrome's own positions (the fix round's window probe
   W1): one face still breaks the premise, and no bound was found that keeps more lines than it loses. HarfBuzz
   normalizes a whole shaping call otherwise once the call holds a cluster of a base and a combining mark: it decomposes
@@ -2254,7 +2259,15 @@ fix round (2026-09-23) words first doesn't run at all in such a face: where a st
 Euphemia UCAS alone of 393 installed families), its groups are cut by the cut search alone. The windows beside word cuts
 are words, and a side of one that holds no letter, a lone space or ` — 4.5 `, measures every space wide; the constructed
 attack's Euphemia UCAS paragraphs lost 13 breaks and 10 line counts that way, none with a premise's gap, where the base's
-windows, up to 256 zoomed px, hold letters.
+windows, up to 256 zoomed px, hold letters. What the fix round leaves in the face: judged on Canvas's own answers, a group under negative word
+spacing is cut finer than the base cut it, where the spacing JS adds made the base's totals look exact, and a cut the
+search falls back to beside a space takes the pair window's adjustment there, whose side of the space alone is Common and
+wide. At DPR 3, 25 of the fonts attack's layouts in 16px Euphemia UCAS with -2px word spacing lose a line the base kept
+(the window probe: from the cut at 6 of `T a T o …` every position is 9.9 zoomed px short of Chrome's), at DPR 1 and 2
+none. Both trees' pair windows beside a space are off by that much; taking the next cluster into such a side, or
+measuring a space alone as the 8-bit one, which Blink shapes as Latin, moved hundreds of other lines of the face either
+way, and a window side of white space alone taking the next piece in gained 22 layouts and lost 1 but not these
+(local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`, not adopted).
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a
