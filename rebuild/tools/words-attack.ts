@@ -3,8 +3,8 @@
 // every offset, disagree. Not a test: nothing reads its exit code but the person who runs it.
 //
 //   bun rebuild/tools/words-attack.ts --a=<base checkout> --b=<checkout> --cases=<cases.ndjson>[,<more>]
-//     [--widths=60,150,400] [--boundary=yes] [--canvas=usual|fine|across|far|backwards] [--dpr=2] [--limit=N] [--jobs=N]
-//     [--out=<report.json>]
+//     [--widths=60,150,400] [--boundary=yes] [--canvas=usual|fine|across|far|backwards|f32|script-space] [--dpr=2] [--limit=N] [--jobs=N]
+//     [--record=no-gap] [--out=<report.json>]
 //
 // tools/two-trees.ts with a plain predictor on both sides compares line ranges alone. This driver loads both checkouts'
 // function sets (src/index.ts) in one process and compares, per case and width, as JSON:
@@ -33,6 +33,10 @@
 //   the space: context that reaches more than one word past a space, which breaks words first's premise.
 // - backwards: `fine`, and some letters inside a word take a negative advance, so positions inside a word run backwards
 //   while the words' edges stay sorted: the premise of the walk that the words can't show.
+// - f32: `fine`, and the total rounded to a float, as Canvas returns it: exact below 256 px of the context's size, and
+//   off by up to half a float step above, so a total of 256 zoomed px or more that a recipe takes as exact shows.
+// - script-space: `fine`, and a space in a string with a unit above U+00FF whose nearest letter isn't Latin (or that has
+//   none) is 422/2048 em wider, as Euphemia UCAS shapes its space under Common and other scripts (DESIGN.md §4.6).
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -76,7 +80,7 @@ const WIDE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Ha
 const LETTER = /^\p{L}$/u
 const SETTINGS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction', 'fontStretch', 'fontVariantCaps', 'textAlign', 'textBaseline']
 
-export type Variant = 'fine' | 'across' | 'far' | 'backwards'
+export type Variant = 'fine' | 'across' | 'far' | 'backwards' | 'f32' | 'script-space'
 type Kind = 'none' | 'wide' | 'space' | 'letter' | 'other'
 const kinds = new Map<number, Kind>()
 function kindOf(cp: number, ch: string): Kind {
@@ -91,8 +95,30 @@ function kindOf(cp: number, ch: string): Kind {
 
 // Every value is a whole number of 1/65536 px, so a sum of them is exact in a double.
 const UNIT = 65536
+// script-space: whether each space of a string is shaped under Latin, as RunSegmenter resolves a 16-bit string (a string
+// with a unit above U+00FF; an 8-bit one is all Latin): the script of the nearest letter before it, else after it, else
+// Common. JS can't see a string's storage, so a Latin-1 string the port makes 16-bit counts as 8-bit here.
+const LATIN_LETTER = /^\p{Script=Latin}$/u
+function latinSpaces(text: string): boolean[] | null {
+  let wide = false
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) wide = true
+  if (!wide) return null
+  const chars = [...text]
+  const scriptAt: Array<boolean | null> = chars.map(ch => LETTER.test(ch) ? LATIN_LETTER.test(ch) : null)
+  const out: boolean[] = []
+  for (let i = 0; i < chars.length; i++) {
+    let latin: boolean | null = null
+    for (let j = i - 1; j >= 0 && latin === null; j--) latin = scriptAt[j]!
+    for (let j = i + 1; j < chars.length && latin === null; j++) latin = scriptAt[j]!
+    out.push(latin === true)
+  }
+  return out
+}
+
 function fineWidth(variant: Variant, size: number, seed: number, text: string, letterSpacing: number, wordSpacing: number, kerns: boolean): number {
   let total = 0
+  const latin = variant === 'script-space' ? latinSpaces(text) : null
+  let index = -1
   let previous = -1
   let previousKind: Kind = 'none'
   let beforeSpace = -1
@@ -100,6 +126,7 @@ function fineWidth(variant: Variant, size: number, seed: number, text: string, l
   let joinsNext = false
   let indexInWord = 0
   for (const ch of text) {
+    index++
     const cp = ch.codePointAt(0)!
     if (cp === 0x200d) {
       if (previousKind === 'letter') total += Math.round(size * UNIT * (((mix(seed, previous) % 5) - 2) / 32))
@@ -119,6 +146,8 @@ function fineWidth(variant: Variant, size: number, seed: number, text: string, l
     if (variant === 'far' && previousKind === 'space' && farBefore >= 0 && kind !== 'space' && mix(mix(seed ^ 17, farBefore), cp) % 4 === 0) own += Math.round(size * UNIT / 8)
     // backwards: the third character of a word and every fourth after it, by the character: narrower than nothing.
     if (variant === 'backwards' && kind !== 'space' && indexInWord >= 2 && indexInWord % 4 === 2 && mix(seed ^ 13, cp) % 3 === 0) own = -Math.round(size * UNIT / 4)
+    // script-space: a space the string shapes under Common (not Latin) is 422/2048 em wider, as Euphemia UCAS's is.
+    if (variant === 'script-space' && kind === 'space' && latin !== null && !latin[index]!) own += Math.round(size * UNIT * 422 / 2048)
     own += Math.round(letterSpacing * UNIT)
     if (cp === 0x20 || cp === 0xa0) own += Math.round(wordSpacing * UNIT)
     if (kind === 'space') {
@@ -135,7 +164,8 @@ function fineWidth(variant: Variant, size: number, seed: number, text: string, l
     joinsNext = false
     total += own
   }
-  return total / UNIT
+  // f32: Canvas's own float of the total (TextMetrics width is ShapeResult's float), exact only below 256 px.
+  return variant === 'f32' ? Math.fround(total / UNIT) : total / UNIT
 }
 
 export function installVariant(variant: Variant, env: PageFacts): { restore: () => void } {
@@ -293,7 +323,8 @@ async function work(): Promise<void> {
           result.differ[checks[k]![0]]!++
           if (checks[k]![0] === 'trees' && gaps.length > 0) result.treesDifferWithGap++
           if (checks[k]![0] === 'candidate' && gaps.length > 0) result.candidateDifferWithGap++
-          if (result.differences.length < 40) result.differences.push({ id: c.id, family: c.family, width, check: checks[k]![0], first, gaps })
+          // --record=no-gap keeps only the differences no premise's gap accounts for.
+          if (result.differences.length < 40 && !(options.get('record') === 'no-gap' && gaps.length > 0)) result.differences.push({ id: c.id, family: c.family, width, check: checks[k]![0], first, gaps })
         }
         // A decided line's own width, in px of the slot (LayoutUnits over the layout zoom), and a unit to either side.
         if (boundary && w < (asked === null ? 1 : asked.length)) {
@@ -336,7 +367,7 @@ async function run(): Promise<void> {
     while (next < slices.length) {
       const slice = slices[next++]!
       const args = ['work', `--a=${resolve(options.get('a')!)}`, `--b=${resolve(options.get('b')!)}`, `--cases=${files.join(',')}`, `--from=${slice.from}`, `--to=${slice.to}`, `--result=${slice.result}`]
-      for (const name of ['widths', 'boundary', 'canvas', 'dpr']) if (options.has(name)) args.push(`--${name}=${options.get(name)!}`)
+      for (const name of ['widths', 'boundary', 'canvas', 'dpr', 'record']) if (options.has(name)) args.push(`--${name}=${options.get(name)!}`)
       const proc = Bun.spawn(['bun', import.meta.path, ...args], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
       if (await proc.exited !== 0) failed.push(slice.from)
     }

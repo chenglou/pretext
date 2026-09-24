@@ -613,7 +613,14 @@ plain and inspected, and against the tree before words first only where the rule
 Common moves a window (at 48de7f7, over the 11,973 paragraphs of the seed `blink-words-first-1`, one case at four widths
 on `usual` at DPR 3); on `across`, `far` and `backwards`, which break the premises, every layout that differs from the
 tree before words first and isn't moved by that rule must report its gap. 12,000 layouts take
-about a minute and a half on ten cores. `tools/words2-sum-probe.ts` holds the words' sums against Canvas's own exact
+about a minute and a half on ten cores. Two more Canvases hold what `usual` and `fine` can't show: `f32` rounds every
+total to a float, as Canvas does, so a total of 256 zoomed px or more that a recipe takes as exact moves a line (the
+tree's lines on `f32` against its lines on `fine` say which tree does it), and `script-space` widens a space that a 16-bit
+string doesn't shape under Latin, as Euphemia UCAS does. `--record=no-gap` lists only the differences no premise's gap
+accounts for. The constructed cases of `tools/bwf-constructed-cases.ts` (2026-09-23) also differ from the tree before
+words first without a gap where round 1's rule for a position after characters every lookup skips at a cut applies
+(runs of default-ignorable characters and Myanmar spacing marks at unsafe cuts, at letter spacing of 1em or at 96px);
+as lab cases they moved no status in pinned Chrome. `tools/words2-sum-probe.ts` holds the words' sums against Canvas's own exact
 totals over the installed families in pinned Chrome, and the cut probe above holds the two trees' positions.
 
 **A change to Gecko's word scan also passes its attacks and the premise probe before it merges** (since 2026-09-23): a
