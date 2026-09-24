@@ -1628,6 +1628,13 @@ Canvas answer it holds was, either side of 0 (`measureTotal16`, since 2026-09-23
 spacing brought below 256 zoomed px was taken as exact, a piece's or a window's, and so was a pair of words whose sum
 failed because of that rounding: under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives
 2, and 16px Kailasa 5 where it gives 4 (the constructed attack on words first).
+Judged so, a group under negative word spacing is cut finer than before, and the new cuts meet the search's own
+stand-ins more often: the fonts attack's spacing sweep over 64 families (2026-09-24) finds the fix round losing 101
+breaks and 7 line counts against the base at DPR 2 and gaining 290 and 41, and at DPR 3 losing 270 and 71 and gaining
+245 and 72, the losses nearly all under negative word spacing: Euphemia UCAS's lone space (§4.6), Zapfino's forms, which
+reach past the search's windows (below), and soft hyphens in a paragraph without segments, which a window side without a
+space leaves out where its window carries U+2060 (`soft-hyphen-shaping`). The base's coarser cuts there were right by
+the rounding that made it wrong elsewhere.
 So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
 both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
 cut, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
@@ -2199,13 +2206,15 @@ gaps and bounded where installed faces break them in pinned Chrome (rebuild/READ
   marks, Vietnamese that mixes a combining mark with precomposed letters, and a few book paragraphs. Three faces lose
   lines to what no tree measures: in italic Gill Sans and Athelas, Chrome's ` , ` between Devanagari words is 5.6 zoomed
   px wider at 28px than either tree measures it, and the words put the difference before it where the cut search puts it
-  after (7 breaks lost and 3 gained in Gill Sans, 1 lost in Athelas); in 800 Chalkboard SE a Hebrew line with points
-  61.7px wide breaks at a word cut the base doesn't have, with the same positions (1 line count). Zapfino's `THE then`
-  at 16px, 26px wide, isn't the premise either: words first gives Chrome's positions inside `then`, where the base's are
-  11 zoomed px off, and the line differs because the port takes the offset after `the` as safe to break where Chrome,
-  with the same positions and the same space, must reshape the line's end (`in-word-prefix` and `unsafe-to-break`, which
-  the inspected paragraph reports). Measuring a position inside a word from further back (one piece back, the space
-  before its cut, or the group's start) gave the base's positions and lost other lines in the sweep.
+  after (7 breaks lost and 3 gained in Gill Sans, 1 lost in Athelas); in 800 Chalkboard SE, at the start of a line of
+  pointed Hebrew 61.7px wide, the window between the words' cuts runs to the next word's space and shows an adjustment
+  that the base's window, which ends before that space, doesn't, so the start is taken as unsafe to break and a line of
+  `. ` alone is set (1 line count; `unsafe-to-break` and `context-past-a-word` fire there). Zapfino's `THE then` at
+  16px, 26px wide, isn't the premise either: words first gives Chrome's positions inside `then`, where the base's are 11
+  zoomed px off, and the line differs because the port takes the offset after `the` as safe to break where Chrome, with
+  the same positions and the same space, must reshape the line's end (`in-word-prefix` and `unsafe-to-break`, which the
+  inspected paragraph reports). Measuring a position inside a word from further back (one piece back, the space before
+  its cut, or the group's start) gave the base's positions and lost other lines in the sweep.
 - *Positions inside a word stay sorted.* The walk over the cuts stands in for the search over every offset, which is
   Blink's own binary search over sorted positions (shape_result.cc:2300-2318); both give one candidate only where the
   positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it. No attack found a
