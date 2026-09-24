@@ -60,23 +60,23 @@ describe('blink compiled Canvas text', () => {
         }
       }
     }
-    expect(canvasString(p, 2, 5, false, false, 25, false, false)).toEqual({ s: 'ÿ\u00a0B', units: null, twoByte: false, leftOut: false })
-    expect(canvasString(p, 5, 9, false, false, 25, false, false)).toEqual({ s: '\u0001\u2028C\u0001', units: null, twoByte: true, leftOut: false })
-    expect(canvasString(p, 5, 9, false, false, 25, true, false)).toEqual({ s: '\u0001 C\u0001', units: null, twoByte: false, leftOut: false })
+    expect(canvasString(p, 2, 5, false, false, 25, false, false)).toEqual({ s: 'ÿ\u00a0B', units: null, twoByte: false })
+    expect(canvasString(p, 5, 9, false, false, 25, false, false)).toEqual({ s: '\u0001\u2028C\u0001', units: null, twoByte: true })
+    expect(canvasString(p, 5, 9, false, false, 25, true, false)).toEqual({ s: '\u0001 C\u0001', units: null, twoByte: false })
   })
 
   test('takes a space-free subrange as one-byte even beside the paragraph\'s widened spaces', () => {
     const p = prepare(paragraph('µ ((((((((((((( café'), env, false, createContextPool())
-    expect(canvasString(p, 2, 15, false, false, 25, false, false)).toEqual({ s: '(((((((((((((', units: null, twoByte: false, leftOut: false })
-    expect(canvasString(p, 1, 15, false, false, 25, false, false)).toEqual({ s: '\u2028(((((((((((((', units: null, twoByte: true, leftOut: false })
-    expect(canvasString(p, 1, 15, false, false, 25, true, false)).toEqual({ s: ' (((((((((((((', units: null, twoByte: false, leftOut: false })
+    expect(canvasString(p, 2, 15, false, false, 25, false, false)).toEqual({ s: '(((((((((((((', units: null, twoByte: false })
+    expect(canvasString(p, 1, 15, false, false, 25, false, false)).toEqual({ s: '\u2028(((((((((((((', units: null, twoByte: true })
+    expect(canvasString(p, 1, 15, false, false, 25, true, false)).toEqual({ s: ' (((((((((((((', units: null, twoByte: false })
   })
 
   test('retains general-builder mappings for spacing and skips unusable compiled data', () => {
     for (const spacing of [0.125, -0.125, 1e-12, -1e-12]) {
       const p = prepare(paragraph('aµ\u00a0b c', spacing), env, false, createContextPool())
       expect(p.canvasText).toBeNull()
-      expect(canvasString(p, 1, 5, false, false, 25)).toEqual({ s: 'µ\u00a0b\u2028', units: [1, 2, 3, 4], twoByte: true, leftOut: false })
+      expect(canvasString(p, 1, 5, false, false, 25)).toEqual({ s: 'µ\u00a0b\u2028', units: [1, 2, 3, 4], twoByte: true })
       // Tiny spacing can truncate to zero and omit its map; nonzero effective spacing must still consume one safely.
       expect(Number.isFinite(measure16({ p, gaps: null }, 0, 0, p.text.length, 0, p.text.length))).toBe(true)
     }
@@ -90,15 +90,16 @@ describe('blink compiled Canvas text', () => {
   test('leaves SHY, segmented scripts and artificial ZWJ context on the general builder', () => {
     const shy = prepare(paragraph('ab\u00ad cd'), env, false, createContextPool())
     expect(shy.canvasText).toBeNull()
-    expect(canvasString(shy, 0, 3, false, false, 25, false, false)).toEqual({ s: 'ab', units: null, twoByte: false, leftOut: true })
-    expect(canvasString(shy, 0, 6, false, false, 25, false, false)).toEqual({ s: 'ab\u2060\u2028cd', units: null, twoByte: true, leftOut: false })
+    // SHY is U+2060 whether or not the string holds a space, so a window and its sides are written alike.
+    expect(canvasString(shy, 0, 3, false, false, 25, false, false)).toEqual({ s: 'ab\u2060', units: null, twoByte: true })
+    expect(canvasString(shy, 0, 6, false, false, 25, false, false)).toEqual({ s: 'ab\u2060\u2028cd', units: null, twoByte: true })
     const segmented = prepare(paragraph('ب((((((((((((('), env, false, createContextPool())
     expect(segmented.segments).not.toBeNull()
     expect(segmented.canvasText).toBeNull()
-    expect(canvasString(segmented, 1, 14, false, false, 2, false, false)).toEqual({ s: '(((((((((((((', units: null, twoByte: true, leftOut: false })
+    expect(canvasString(segmented, 1, 14, false, false, 2, false, false)).toEqual({ s: '(((((((((((((', units: null, twoByte: true })
     const plain = prepare(paragraph('ABC'), env, false, createContextPool())
-    expect(canvasString(plain, 0, 3, true, false, 25, false, false)).toEqual({ s: '\u200dABC', units: null, twoByte: true, leftOut: false })
-    expect(canvasString(plain, 0, 3, false, true, 25, false, false)).toEqual({ s: 'ABC\u200d', units: null, twoByte: true, leftOut: false })
+    expect(canvasString(plain, 0, 3, true, false, 25, false, false)).toEqual({ s: '\u200dABC', units: null, twoByte: true })
+    expect(canvasString(plain, 0, 3, false, true, 25, false, false)).toEqual({ s: 'ABC\u200d', units: null, twoByte: true })
   })
 })
 

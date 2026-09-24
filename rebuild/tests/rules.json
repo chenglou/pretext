@@ -613,17 +613,19 @@
    "id": "blink/measure/ignorables-left-out-if-8bit",
    "engine": "blink",
    "area": "measure",
-   "kind": "ported rule",
-   "statement": "an unsegmented Latin-1 paragraph's Canvas string leaves default-ignorable characters out and stays 8-bit; every other string keeps them as U+2060 (inline_node.cc:1256-1290, harfbuzz_shaper.cc:1072-1101; V8 slices from string-slice.tq:8-33 and builtins-string-gen.cc:2154 at 6b96683d)",
+   "kind": "heuristic",
+   "statement": "where the string without the ignorable would be 8-bit, the ignorable is left out instead of substituted [removed: SHY is U+2060 in every Canvas string since the loss round (2026-09-24): left out of a string without a space and kept in one with a space, a window and its sides were written two ways]",
    "source": "fitted to the probed Latin-1 strings; the RLM before (( in Amiri is unexplained (shape.ts:200-202)",
    "probes": [
     "blink-ignorables: every probed Latin-1 string equal"
    ],
    "tests": [],
    "audit": "blink D2",
-   "status": "current",
-   "replacedBy": [],
-   "declaredBy": "blink owner (round 2, 2026-09-17)"
+   "status": "removed",
+   "replacedBy": [
+    "blink/measure/ignorables-as-word-joiner"
+   ],
+   "declaredBy": "catalogue 2026-09-16"
   },
   {
    "id": "blink/measure/v8-short-slice-storage",
@@ -9427,7 +9429,7 @@
    "engine": "blink",
    "area": "measure",
    "kind": "heuristic",
-   "statement": "below a zoomed font size of 60 px, with the size that the letter spacing of 7 characters and the word spacing of 2 spaces add at 4.07 em, a group is cut into words before anything else (at 60 and more, where two words of Zapfino, `in the ` at 4.07 em, no longer measure below 256 zoomed px together and the word test can't be asked between them, it is cut by the cut search alone, with the windows before words): a word starts after a U+0020 where clusters part and nothing joins, with a character no lookup skips, and holds a character with a script of its own (a word without one, digits, punctuation or an emoji, stays in the piece before it, or at the group's start in the one after it, since Canvas shapes a string without one as Common where the paragraph shapes it under its run's script); each word is measured once with its trailing space; the offset between two words is a cut where the two words measured together equal their sum below 256 zoomed px and the pair window shows 0, and the position there takes nothing; what is left between two cuts and isn't one word below 256 zoomed px goes to the cut search (blink/shape/wide-group-halved); a group of an unsegmented paragraph that holds SHY has no words, and neither has a group of a style whose space measures otherwise as an 8-bit U+0020 than as a lone U+2028 (Euphemia UCAS), nor a group of which one HarfBuzz call (a RunSegmenter segment) holds a character of General_Category M and a letter HarfBuzz writes otherwise in such a call (two marks or more in its full canonical decomposition, or one that composes back in a script whose shaper may decompose every letter; Athelas lacks `ở` and has `ỏ`), both of which the cut search cuts alone; in a segmented paragraph, in a group cut into words, the side after an offset of the window between the cuts around it, where Canvas shapes it as Common (a 16-bit string with a character other than white space and none with a script of its own), takes the next piece in while the window stays below 256 zoomed px by the pieces' prefixes, and a cut the search made whose side after it is one keeps no 0 it measured; the side before the offset stays, since it cancels against the prefix the position measures from the same cut; that the pieces add up to the group rests on a premise about fonts that no engine source gives, that no shaping context reaches more than one word past a space; an inspected paragraph cuts every group by the cut search alone first, which asks what the port asked before words, and makes every read that depends on the cuts with both, reporting blink/gap/context-past-a-word where they differ; plain and inspected paragraphs take the words' values",
+   "statement": "below a zoomed font size of 60 px, with the size that the letter spacing of 7 characters and the word spacing of 2 spaces add at 4.07 em, a group is cut into words before anything else (at 60 and more, where two words of Zapfino, `in the ` at 4.07 em, no longer measure below 256 zoomed px together and the word test can't be asked between them, it is cut by the cut search alone, with the windows before words): a word starts after a U+0020 where clusters part and nothing joins, with a character no lookup skips, and holds a character with a script of its own (a word without one, digits, punctuation or an emoji, stays in the piece before it, or at the group's start in the one after it, since Canvas shapes a string without one as Common where the paragraph shapes it under its run's script); each word is measured once with its trailing space; the offset between two words is a cut where the two words measured together equal their sum below 256 zoomed px and the pair window shows 0, and the position there takes nothing; what is left between two cuts and isn't one word below 256 zoomed px goes to the cut search (blink/shape/wide-group-halved); a group of a style whose space measures otherwise as an 8-bit U+0020 than as a lone U+2028 (Euphemia UCAS) has no words, nor has a group of which one HarfBuzz call (a RunSegmenter segment) holds a character of General_Category M and a letter HarfBuzz writes otherwise in such a call (two marks or more in its full canonical decomposition, or one that composes back in a script whose shaper may decompose every letter; Athelas lacks `ở` and has `ỏ`), both of which the cut search cuts alone; in a segmented paragraph, in a group cut into words, the side after an offset of the window between the cuts around it, where Canvas shapes it as Common (a 16-bit string with a character other than white space and none with a script of its own), takes the next piece in while the window stays below 256 zoomed px by the pieces' prefixes, and a cut the search made whose side after it is one keeps no 0 it measured; the side before the offset stays, since it cancels against the prefix the position measures from the same cut; that the pieces add up to the group rests on a premise about fonts that no engine source gives, that no shaping context reaches more than one word past a space; an inspected paragraph cuts every group by the cut search alone first, which asks what the port asked before words, and makes every read that depends on the cuts with both, reporting blink/gap/context-past-a-word where they differ; plain and inspected paragraphs take the words' values",
    "source": "plain_text_node.cc:365-399 (Canvas words), :400-425; harfbuzz_shaper.cc:1072-1101; script_run_iterator.cc:301, :641; hb-ot-layout.cc:582-586; hb-ot-layout-gsubgpos.hh:558-571; hb-ot-shape-normalize.cc:303-432; engines/blink/shape.ts addWordPieces, holdsOwnScript, measuredAsCommon, adjustBetweenCuts16, cutGroup, measureGroups, heldAgainstSearch, recomposesAcrossWords; engines/blink/props.ts recomposesInMarkedCall; tools/gen-blink-data.ts; DESIGN.md §4.4, §4.6; research/SPEC-WORD-SUM.md",
    "probes": [
     "the second check of words first (tools/words2-sum-probe.ts, 2026-09-20): Euphemia UCAS's GPOS kern feature moves the space by -422 font units under latn alone, so a word without a script of its own measured alone is 432,128 units (3.3 CSS px at DPR 2) wider than in its run",
@@ -9437,7 +9439,7 @@
    "tests": [
     "src/engines/blink/words.test.ts :: blink word pieces > a group is cut after every space that passes, and its positions are sums of words",
     "src/engines/blink/words.test.ts :: blink word pieces > a space whose pair window shows an adjustment is no cut, and neither is one whose two words measure otherwise together",
-    "src/engines/blink/words.test.ts :: blink word pieces > a group of an unsegmented paragraph that holds SHY has no words",
+    "src/engines/blink/words.test.ts :: blink word pieces > a group of an unsegmented paragraph that holds SHY is cut into words: SHY is U+2060 alone and beside a space alike",
     "src/engines/blink/words.test.ts :: blink word pieces > a word without a character of a script of its own stays in the piece beside it, which Canvas shapes under the script of the paragraph",
     "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > context that reaches past a word: the words give the wrong total, and an inspected paragraph reports context-past-a-word",
     "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)",
@@ -9447,7 +9449,7 @@
     "src/engines/blink/words.test.ts :: at a zoomed font size of 60 px and more, with the spacing two words take, a group is cut by the cut search alone, as before words",
     "src/engines/blink/words.test.ts :: a group whose HarfBuzz call holds a mark and a letter that recomposes in such a call is cut by the cut search alone"
    ],
-   "declaredBy": "words first (branch x-words2-blink, 2026-09-20, V3); landed on branch blink-words-first (2026-09-23) with the rule for words without a script of their own and the premise as a documented default with a named gap",
+   "declaredBy": "words first (branch x-words2-blink, 2026-09-20, V3); landed on branch blink-words-first (2026-09-23) with the rule for words without a script of their own and the premise as a documented default with a named gap; SHY groups cut into words (loss round, 2026-09-24)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9633,6 +9635,25 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/ignorables-as-word-joiner",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "fact",
+   "statement": "the default-ignorable characters Canvas turns into U+200B (SHY, ZWSP, LRM, RLM, U+202A..U+202E, U+FEFF) are U+2060 in every Canvas string, whatever the paragraph and whether the string holds a space, which makes the string 16-bit; in an 8-bit paragraph, whose only such character is SHY, the DOM shapes SHY's own glyph in one Latin segment, and a string without a Latin letter reports script-context",
+   "source": "character.h:167-175; plain_text_node.cc:47-62, 85-91; inline_node.cc:1256-1290; harfbuzz_shaper.cc:1072-1101; hb-aat-layout-common.hh:1226-1241; engines/blink/shape.ts canvasString",
+   "probes": [
+    "probe bwf-loss S1 (2026-09-24): over 399 installed families at 16 and 28px, 2,356 words of 14 with SHY measure otherwise in the DOM than without it, in 168 families, and Canvas gives each of them the DOM's width with U+2060 and none of them with SHY left out",
+    "probe blink-followups-20260917: RLM `((` in Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out"
+   ],
+   "tests": [
+    "src/engines/blink/canvas-text.test.ts :: blink compiled Canvas text > leaves SHY, segmented scripts and artificial ZWJ context on the general builder"
+   ],
+   "declaredBy": "loss round of words first (2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9672,7 +9693,7 @@
   "blink/measure/space-as-u2028": "c4c92f95001ea91a",
   "blink/measure/vt-ff-as-u0001": "8841a9d24e6b5df7",
   "blink/measure/ignorables-as-u2060": "7f4d960fc4bbb156",
-  "blink/measure/ignorables-left-out-if-8bit": "afda213c2767af0c",
+  "blink/measure/ignorables-left-out-if-8bit": "1b317adb7295f694",
   "blink/measure/v8-short-slice-storage": "34fdb58f2d0eea76",
   "blink/measure/force-16bit-string": "8cc0106eb59680b3",
   "blink/measure/word-spacing-in-js": "1a8c1e80301c2317",
@@ -10220,7 +10241,7 @@
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848",
   "gecko/lines/word-scan": "f460aff8db4700ce",
   "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
-  "blink/measure/words-first": "9e32427cf8bb08a4",
+  "blink/measure/words-first": "e13b56cb5e96e689",
   "blink/gap/context-past-a-word": "2fd5da1225a4e282",
   "blink/lines/candidate-from-cuts": "94744e61077356d4",
   "blink/gap/positions-run-backwards": "96427266229206d5",
@@ -10230,6 +10251,7 @@
   "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
   "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
   "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066",
-  "blink/measure/exact-canvas-answers": "47460338b50d3eca"
+  "blink/measure/exact-canvas-answers": "47460338b50d3eca",
+  "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e"
  }
 }

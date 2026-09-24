@@ -441,7 +441,7 @@ const SCALED_DETAIL = 'advances measured in a font made for the CSS size and sca
 
 const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis from the specified size (font_platform_data_mac.mm:170-178) and takes the platform font from a cache of the renderer process whose key holds the zoomed size alone (font_cache_key.h:53-68, font_description.cc:308-331), so text or a canvas that asked for this family at the same zoomed size under another specified size first decides the optical size of both (Chromium #489579956)'
 
-const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
+const SOFT_HYPHEN_DETAIL = 'SHY, which Canvas measures as U+2060 in a 16-bit string, where the DOM shapes SHY\'s own glyph in one Latin segment (hb-aat-layout-common.hh:1226-1241): a word\'s total is the DOM\'s in every installed family probed, and a position beside SHY rests on the pair window across it'
 
 // The source ranges of the text items under a style.
 function styleRanges(p: BlinkPrepared, items: readonly number[]): { start: number; end: number }[] {
@@ -470,8 +470,7 @@ function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): number[][] {
       }
       // Canvas turns U+FFFC into U+200B (plain_text_node.cc:52-58, character.h:167-175); the DOM shapes it with a fallback glyph.
       if (c === 0xfffc) addGap(gaps, 'font-fallback', item.run, 'U+FFFC in text: Canvas measures it as U+200B', sourceRange(p, k, k + 1))
-      // canvasString leaves these out of an 8-bit string (a range of a paragraph RunSegmenter doesn't segment, without
-      // spaces or characters above U+00FF).
+      // canvasString writes these as U+2060, which makes the string 16-bit in a paragraph RunSegmenter doesn't segment.
       if (p.segments === null && (c === 0xad || c === 0x200b || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || c === 0xfeff)) {
         addGap(gaps, 'soft-hyphen-shaping', item.run, SOFT_HYPHEN_DETAIL, sourceRange(p, k, k + 1))
       }

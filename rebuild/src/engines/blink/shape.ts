@@ -213,8 +213,8 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 
 // The string Canvas measures for text_content[from, to), with each code unit's text_content offset (-1 for added context).
 // Canvas turns U+0009..U+000D into spaces (plain_text_node.cc:49-50) and SHY into ZWSP, which splits a word (:84-113): so
-// U+0020 becomes U+2028, VT and FF become U+0001, which takes the same fallback font (blink-gaps §2.8), and SHY is left out
-// (gap soft-hyphen-shaping). CR in collapse modes is already a space, and CR and FF in preserve modes are control items.
+// U+0020 becomes U+2028, VT and FF become U+0001, which takes the same fallback font (blink-gaps §2.8), and SHY becomes
+// U+2060 (below). CR in collapse modes is already a space, and CR and FF in preserve modes are control items.
 //
 // Canvas shapes an 8-bit string as one Latin segment and runs RunSegmenter over a 16-bit one (harfbuzz_shaper.cc:1072-1101),
 // and Blink keys storage on V8's representation (to_blink_string.cc:216-227). A paragraph that RunSegmenter segments asks
@@ -232,12 +232,20 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // (hb-ot-shape.cc:951-959). U+2060 WORD JOINER has the same HarfBuzz properties (gc Cf, neither joiner nor hidden:
 // hb-ot-layout.hh:212-244), script Common, emoji category kMaxCategory and bidi class BN, and Canvas doesn't normalize it,
 // so the string carries U+2060 instead (probe blink-ignorables: emoji sequences, Geeza Pro and Amiri joining, Thai marks,
-// kerning and letter spacing all equal the DOM). In an 8-bit paragraph the DOM shapes one Latin segment without RunSegmenter
-// (inline_node.cc:1256-1290), which U+2060 would turn into a 16-bit string that Canvas segments, so there the character is
-// left out and the string stays 8-bit; a `morx` substitution across it can still differ (gap soft-hyphen-shaping). In a
-// segmented paragraph the string carries U+2060 whatever its length: probe blink-followups-20260917 gives RLM `((` in
-// Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out. The 1567 an earlier probe saw came from
-// the brackets resolving to the following Latin run's script, which script-context names.
+// kerning and letter spacing all equal the DOM). The string carries U+2060 whatever its length and whatever the paragraph:
+// probe blink-followups-20260917 gives RLM `((` in Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM
+// left out. The 1567 an earlier probe saw came from the brackets resolving to the following Latin run's script, which
+// script-context names. In an 8-bit paragraph, whose only such character is SHY, the DOM shapes one Latin segment without
+// RunSegmenter (inline_node.cc:1256-1290), and U+2060 makes the string 16-bit, which Canvas segments; its letters are Latin
+// either way, and a string without one reports script-context (gaps.ts measuredRange). Until 2026-09-24 SHY was left out
+// of such a string without a space, so that it stayed 8-bit, while one with a space, 16-bit for its U+2028, carried U+2060:
+// a window and its sides were written two ways, and a window over a space showed an adjustment its sides' way of writing
+// made (16px Helvetica Neue at DPR 2 under -3px of word spacing: `, cof`+SHY+`fee` measured 6,291 units off its sides at
+// the line start after `, `, which was taken as unsafe to break). The DOM keeps SHY's glyph in the call, where `morx` and
+// `kerx` machines see it: over 399 installed families at 16 and 28px, 2,356 words of 14 with SHY measure otherwise in the
+// DOM than without it, in 168 families, and Canvas gives each of them the DOM's width with U+2060 and none of them with SHY
+// left out (probe bwf-loss S1, 2026-09-24).
+// rule blink/measure/ignorables-as-word-joiner
 //
 // `keepSpaces`: U+0020 stays U+0020, so a Latin-1-only string stays 8-bit (measure16 spacesStay).
 //
@@ -246,25 +254,25 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
 // units is null when the measuring caller needs neither spacing corrections nor diagnostics.
-export type CanvasString = { s: string; units: number[] | null; twoByte: boolean; leftOut: boolean }
+export type CanvasString = { s: string; units: number[] | null; twoByte: boolean }
 
 export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false, mapUnits: boolean = true): CanvasString {
   const text = p.canvasText
   if (!mapUnits && text !== null && !zwjBefore && !zwjAfter) {
     const narrow = text.narrow.slice(from, to)
     const wide = !keepSpaces && narrow.includes(' ')
-    return { s: wide ? text.spaced.slice(from, to) : narrow, units: null, twoByte: wide, leftOut: false }
+    return { s: wide ? text.spaced.slice(from, to) : narrow, units: null, twoByte: wide }
   }
-  let codes: number[] = []
-  let units: number[] | null = mapUnits ? [] : null
+  const codes: number[] = []
+  const units: number[] | null = mapUnits ? [] : null
   if (zwjBefore) { codes.push(0x200d); units?.push(-1) }
   let wide = zwjBefore || zwjAfter
-  const substituted: number[] = []
+  let substituted = false
   for (let i = from; i < to; i++) {
     const c = p.text.charCodeAt(i)
     switch (c) {
       case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff:
-        substituted.push(codes.length); codes.push(0x2060); break
+        substituted = true; codes.push(0x2060); break
       case 0x20: if (keepSpaces) codes.push(0x20); else { codes.push(0x2028); wide = true } break
       case 0x0b: case 0x0c: codes.push(0x0001); break
       default: codes.push(c); if (c > 0xff) wide = true
@@ -272,20 +280,6 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
     units?.push(i)
   }
   if (zwjAfter) { codes.push(0x200d); units?.push(-1) }
-  // Whether the string keeps its default-ignorable characters as U+2060, which makes it 16-bit: in a segmented paragraph.
-  const keeps = wide || p.segments !== null
-  const leftOut = !keeps && substituted.length > 0
-  if (leftOut) {
-    const keptCodes: number[] = []
-    const keptUnits: number[] | null = units === null ? null : []
-    for (let i = 0, next = 0; i < codes.length; i++) {
-      if (next < substituted.length && substituted[next] === i) { next++; continue }
-      keptCodes.push(codes[i]!)
-      if (keptUnits !== null) keptUnits.push(units![i]!)
-    }
-    codes = keptCodes
-    units = keptUnits
-  }
   // One String.fromCharCode call where the units fit its arguments, which is every string but a long text's: no copy.
   let s = ''
   if (codes.length <= 4096) s = String.fromCharCode(...codes)
@@ -294,12 +288,12 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   // one Latin segment of an 8-bit string. A shorter range the paragraph shapes under another script gets U+2060 before it,
   // which makes the string 16-bit without a glyph or a script (the ignorables probe above: U+2060 alone measures 0, and
   // U+2060 `((` gives Amiri's DOM width where the 8-bit `((` shapes as Latin), so RunSegmenter resolves it as Common.
-  const nonLatin = keeps && !wide && substituted.length === 0 && domScript !== USCRIPT_LATIN
+  const nonLatin = p.segments !== null && !wide && !substituted && domScript !== USCRIPT_LATIN
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
-  const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: units === null ? null : [-1, ...units], twoByte, leftOut }
-  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte, leftOut }
+  const twoByte = wide || substituted || forced || prefixed
+  if (prefixed) return { s: '\u2060' + s, units: units === null ? null : [-1, ...units], twoByte }
+  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte }
 }
 
 // IsWordDelimiter<true> over the string as NormalizeSpacesAndMaybeBidi leaves it (plain_text_node.cc:26-91): U+0020, TAB and
@@ -972,11 +966,6 @@ function recomposesAcrossWords(p: BlinkPrepared, from: number, to: number): bool
   return false
 }
 
-function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
-  for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0xad) return true
-  return false
-}
-
 // Whether [from, to) holds a character with a script of its own, one ScriptRunIterator doesn't resolve from its neighbours
 // (gaps.ts hasScriptNeutral names the others). Canvas resolves the script of a character without one (white space,
 // punctuation, digits, emoji) over the string it measures (RunSegmenter over each PlainTextItem,
@@ -1092,19 +1081,14 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
 // below 256 zoomed px (words whose space didn't pass, a long word, text without spaces) is cut by the cut search
 // (addPieces), handed the total measured here where it is the same string. So no range of 256 zoomed px or more is
 // measured whole where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
-// A group of an unsegmented paragraph that holds SHY has no words: there a string without a space leaves SHY out and a
-// string with one carries U+2060 (canvasString; gap soft-hyphen-shaping), so a word alone and the same word with its space
-// are written in two ways, and their sums would hold the difference.
 // rule blink/measure/words-first
 function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], zero: boolean[]): void {
   const p = sh.p
   const group = p.groups[g]!
   const edges = [group.start]
-  if (p.segments !== null || !holdsSoftHyphen(p, group.start, group.end)) {
-    for (let k = group.start + 1; k < group.end; k++) {
-      const cp = p.text.codePointAt(k)!
-      if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(cp) && !isDefaultIgnorableHarfBuzz(cp) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) edges.push(k)
-    }
+  for (let k = group.start + 1; k < group.end; k++) {
+    const cp = p.text.codePointAt(k)!
+    if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(cp) && !isDefaultIgnorableHarfBuzz(cp) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) edges.push(k)
   }
   edges.push(group.end)
   const starts = [group.start]

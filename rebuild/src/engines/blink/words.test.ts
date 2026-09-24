@@ -107,8 +107,8 @@ describe('blink word pieces', () => {
     expect(context.prefixAtCut[context.prefixAtCut.length - 1]! / 65536).toBe(374)
   })
 
-  test('a group of an unsegmented paragraph that holds SHY has no words', () => {
-    expect(prepared('Mono', `xxxx xx${SHY}xx xxxx`).groups[0]!.cuts).toEqual([0, 15])
+  test('a group of an unsegmented paragraph that holds SHY is cut into words: SHY is U+2060 alone and beside a space alike', () => {
+    expect(prepared('Mono', `xxxx xx${SHY}xx xxxx`).groups[0]!.cuts).toEqual([0, 5, 11, 15])
   })
 
   test('a word without a character of a script of its own stays in the piece beside it, which Canvas shapes under the script of the paragraph', () => {
