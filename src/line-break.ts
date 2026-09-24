@@ -304,6 +304,8 @@ function normalizeLineStartChunkIndexFromHint(
   return normalizeLineStartInChunk(prepared, nextChunkIndex, cursor)
 }
 
+// layout()'s counter. On simple text it is walkPreparedLinesSimple() without
+// line ends, pending breaks, paint widths or a visitor; keep the two aligned.
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   if (!prepared.simpleLineWalkFastPath) return walkPreparedLinesRaw(prepared, maxWidth)
   const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
@@ -313,21 +315,21 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
   let hasContent = false
 
   // A paragraph-leading ZWSP establishes a line; resumed ZWSPs are consumed.
-  let first = 0
-  while (first < widths.length && kinds[first] === 'space') first++
-  for (let i = first; i < widths.length; i++) {
+  // Simple text never starts with a space: normalization trims it, and
+  // pre-wrap spaces take the full walker.
+  for (let i = 0; i < widths.length; i++) {
     const kind = kinds[i]!
-    if (!hasContent && (kind === 'space' || (kind === 'zero-width-break' && i !== first))) continue
+    if (!hasContent && (kind === 'space' || (kind === 'zero-width-break' && i !== 0))) continue
     const w = widths[i]!
-    const breakAfter = kind === 'space' || kind === 'zero-width-break'
     if (hasContent && lineW + w > fitLimit) {
-      if (breakAfter) { count++; lineW = 0; hasContent = false; continue }
       count++
       lineW = 0
       hasContent = false
+      // An overflowing space or ZWSP hangs and ends the line.
+      if (kind === 'space' || kind === 'zero-width-break') continue
     }
 
-    // Whole-segment admission precedes character overflow, as in the range walker.
+    // Whole-segment admission precedes character overflow, as in walkPreparedLinesSimple().
     const advances = breakableFitAdvances[i]!
     if (!hasContent && w > fitLimit && advances !== null) {
       const preferred = breakablePreferredBreaks[i]!
@@ -340,7 +342,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
           count++
           lineW = 0
           hasContent = false
-          if (preferred !== null && lastPreferredEnd > 0) {
+          if (lastPreferredEnd > 0) {
             g = lastPreferredEnd
             // This was the last preferred end visited: its successor is
             // already the next preferred end after the resumed cursor.
@@ -348,7 +350,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
             continue
           }
         }
-        lineW = hasContent ? lineW + gw : gw
+        lineW += gw
         hasContent = true
         if (preferred !== null && preferred[preferredIndex] === g + 1) {
           lastPreferredEnd = g + 1
@@ -357,7 +359,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
         g++
       }
     } else {
-      lineW = hasContent ? lineW + w : w
+      lineW += w
       hasContent = true
     }
   }

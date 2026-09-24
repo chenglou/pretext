@@ -68,7 +68,7 @@ macOS 27 denies a shell's processes access to apps' folders under
 
 For portable Chrome correctness checks, use `bun run test:wrapping --transport=playwright --browser=chrome`. This launches installed Chrome in an isolated headed browser with its native viewport. Install Chrome normally first; the adapter uses `playwright-core` without downloading another browser. Safari continues to use the native macOS path; Playwright WebKit is not treated as Safari. This transport is for correctness checks only; Playwright can emulate focus, so its visible/focused fields do not prove native tab attention. Benchmark scripts retain foreground native automation.
 
-When a probe finds a first-break mismatch, the report includes a short trace. `sN:gM` identifies a segment and grapheme; `[ours]` and `[browser]` identify the competing break positions. Safari `Range` extraction can be wrong around preserved whitespace and URL queries even when the rendered height is correct, so compare `--method=span` before changing the engine. Assign Range points to lines with the harness `pointLine()` rule, never `rects[0]`: Safari gives a line-initial character a zero-width rect at the end of the previous line.
+When a probe finds a first-break mismatch, the report includes a short trace. `sN:gM` identifies a segment and grapheme; `[ours]` and `[browser]` identify the competing break positions. Safari `Range` extraction can be wrong around preserved whitespace and URL queries even when the rendered height is correct, so compare `--method=span` before changing the engine. Assign Range points to lines with the harness `pointLine()` rule, never `rects[0]`: Safari 26 gives a line-initial character a zero-width rect at the end of the previous line; Safari 27 doesn't.
 
 ### Corpus Tooling
 
@@ -114,16 +114,6 @@ Use these for the current checked-in results:
 For one-off performance and memory work, start with `bun start` and an isolated, foreground Chrome using a throwaway profile. Reproduce the issue on [pages/benchmark.ts](pages/benchmark.ts), or on a smaller dedicated page when the benchmark is too broad.
 
 Bun/Node microbenchmarks are useful for quick experiments, but browser behavior needs browser measurements.
-
-For count-only changes, compare the public `prepare()`/`layout()` exports on otherwise identical source. An integer
-helper compared with public `layout()` also removes its result object and height multiplication. Keep that diagnostic
-separate from the API speed claim. [The prepared plaintext experiment](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) records
-both protocols, foreground observations and their limits.
-
-Separate preparation, preparation plus first layout, unfamiliar widths, repeated widths and retained numeric payload.
-Reusing immutable numeric data in an unfamiliar-width batch does not establish a cold CPU cache. Require zero Canvas
-calls during numeric layout, preserve native-supported source cuts/counts, and retain unsupported inputs and slow
-samples. Numeric array bytes do not measure physical heap, transient preparation or shared font/Canvas caches.
 
 For algorithmic changes, scale both source length and the number of segments,
 preferred breaks, forced lines and rich items. Include repeated punctuation,

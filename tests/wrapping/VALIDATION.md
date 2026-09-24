@@ -17,36 +17,133 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
-## Public count specialization and Safari 27 observation, September 22
+## `layout()` counts lines with a count-only walker
 
-The [prepared plaintext round](../../rebuild/PREPARED_LAYOUT_EXPERIMENT.md)
-changes count-only traversal, preserving preparation and range measurements.
-The final fresh ordinary run contains 33,720 inputs, all installed browsers and
-both directions, with ten numeric source/profile reports. Main and current have
-identical metric totals and outcome categories; no lost successes, observation
-losses, new API/rich failures or execution errors. Unknown source/boundary/width
-observations remain unknown. All maintained snapshots were refreshed.
+This runtime change starts from main `c22181c` (#337). `layout()` counted lines
+with the simple walker that the range APIs share, which also tracks each line's
+ends, the pending break and its paint width, and calls a visitor. On text that
+takes the simple path, `countPreparedLines()` now keeps only the line width and
+whether the line has content, in the same order as that walker. Other text still
+counts through the full walker, and preparation doesn't change.
 
-The first refresh stopped on two identical main/current required Safari cases.
-The fractional strut divided rounded block height by two; actual span-distance
-advance fixes the false fractional count using the unchanged 0.02px geometry
-criterion and an exactly-one-integer decoder. Planted wrong counts still fail
-independently of matching height. The observer correction applies to both sources.
+The installed full gate ran this change in the background against pinned
+`7c2ec51`, whose runtime sources match main: Chrome 153 through the Playwright transport,
+Safari 27.0 and Firefox 156 natively, both directions, at DPR 2. That is 161,739
+LTR and 73,671 RTL rows in Chrome, 162,489 and 73,680 in Safari, and 162,136 and
+73,716 in Firefox. On every row main and this branch return the same predictions
+and assessments, so no leg fixes or loses a metric, and there are no required
+failures, execution errors, or new API or rich failures. The numeric API checks
+find no new failures in any of the five profiles.
 
-Safari 27 now lays out `foo。bar日本語` at 40px as five unmodified lines versus
-four diagnostic span lines and four predicted lines, including with named
-covering fonts. `wrap-06c1e0111950efed` retains required span count/breaks but
-explicitly defers absolute native height until the versioned punctuation policy
-lands. Its failing native height/source/width metrics remain visible. This is
-not a fixed engine or a plaintext pass; earlier browser successes remain historical.
-After this explicit deferral, required gates pass. See
-[PLATFORM_BUGS.md](../../PLATFORM_BUGS.md).
+The ordinary snapshots were regenerated from this branch in Chrome 153, Safari 27.0
+and Firefox 156. No result moved: accuracy stays 7,680 of 7,680 in each browser,
+letter spacing 28 of 28, and the corpus sweeps 1,076, 1,090 and 984 of 1,098 in
+Chrome, Safari and Firefox, with the same mismatches. Only provenance and
+environment records change, including the hashes of `layout.ts` and
+`line-break.ts`.
 
-All 1,496 tests and root type/lint/dead-code checks pass. Package smoke and the
-minimal research strict project pass. Three full foreground Chrome/Safari
-benchmark runs refresh both snapshots at DPR 2; hot public layout reads .0295ms
-and .035ms respectively. The round report separates historical snapshot timings
-from the fair three-browser paired API comparison and names environment limits.
+Outside the browsers, the counter, the old walker on this branch and on main,
+and both `layout()` entry points agree at every width of 63,009 inputs: the
+ordinary and full suite inputs for each browser, each corpus whole and by
+paragraph under normal and keep-all, the benchmark texts at three sizes, and
+25,000 random strings built from zero-width spaces, hyphens, dashes, URLs, CJK,
+Thai, Arabic, emoji, combining marks, soft hyphens, tabs and newlines. They ran
+in the Chrome, Safari, Firefox, iOS, Android and unrecognized profiles, each
+with three fake Canvases: the unit tests' widths, irregular fractional widths
+with pair kerning, and the same rounded to 1/64 px, which makes exact ties
+common. The widths include negative, 0, NaN, Infinity, a sweep across the
+natural width, and exact fits at segment and grapheme ends from real line
+starts, each also moved by the fit epsilon and by a hair either side: 371
+million comparisons, 274 million of them on the simple path. Every sequence of
+up to five of 11 short tokens also agrees at every exact-fit and tie width under
+the Safari profile's fit epsilon, 88.4 million more. Preparation returns the
+same data as main, and `layout()` makes no Canvas calls.
+
+`bun test` and `bun run check` pass. A unit test compares the counter with the
+walker at every half pixel up to 400px and around each segment end, including
+the width where the text up to there fits with nothing to spare, for texts with
+leading and resumed zero-width spaces, a space after a zero-width space,
+preferred cuts in URLs and CJK. It fails when the leading zero-width space rule,
+the skipped space at a line start, the return to a preferred cut or the fit
+epsilon is removed, or when a line that fits exactly is counted as overflowing.
+Five more pin leading and resumed zero-width spaces at emergency widths, the
+return to a preferred cut in a URL, a shaped whole that fits where its isolated
+letters don't (it fails when the whole-segment admission is removed), a negative
+width laid out as 0 over text that measures 0, and the complex path's letter
+spacing, tabs, hard breaks and soft hyphens, each without Canvas calls during
+layout.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome 153 on the
+2560x1440 screen and Safari 27.0 on the 1440x2560 screen. Main `c22181c` ran
+three runs in each browser in the same session. Every run but this branch's
+Safari runs waited for the machine to go quiet; those started while another
+job kept two CPU cores busy. Hot `layout()` reads 0.029 ms in Chrome (0.087 on
+main, 0.088 in main's snapshot) and 0.030 ms in Safari (0.100). Long-form corpus
+`layout()` totals read 0.35 ms in Chrome (0.81) and 0.26 ms in Safari (0.97).
+`prepare()` reads 9.15 ms in Chrome (9.05) and 10.5 ms in Safari (10.5). The
+line-range and rich-inline rows don't change beyond timer resolution, and
+neither do the shape rows that take the full walker, `soft-hyphens` and the
+letter-spaced `cjk-indent-spaced`. Main's Safari snapshot came from Safari
+26.5.2, so eight Safari shape and corpus rows change their segment or Canvas
+call counts here, such as `dashes` going from 2,294 to 2,911 Canvas calls; main
+in Safari 27.0 gives the same counts as this branch on every row.
+
+## Safari 27
+
+This test-only change starts from main `2e5e2bd` (#333). macOS 27 brought Safari
+27.0, and its first installed full gate broke lines differently from the Safari
+26.5.2 rows of September 14 on 6,230 LTR and 3,599 RTL suite rows, 5,660 and 2,883
+of them with a different line count; the two #210 rows changed only in height.
+WebKit 27 changed four break rules: punctuation after an overflowing first
+character, curly quotes and guillemets, keep-all after punctuation, and
+U+2028/U+2029 ending lines. It also keeps fractional line boxes. ICU didn't
+change. Main failed two required Safari rows.
+
+`reported/#210-#211` at 20.96px keeps Safari 26's lines, but Safari 27 truncates
+the block and the strut to 1/64px, so the observer read 3.000746 lines. For
+fractional CSS line heights, a block within 1/64px per line of k strut advances
+now counts as k lines. Safari 27's heights for one to six lines at 17.3, 20.5,
+20.96 and 32px all read whole, and Safari 26's 60px over a 20px strut still reads 3.
+The height check still compares the block with the predicted lines' strut advances,
+which holds for the #210 rows' one and three lines; ENGINE_FOLLOWUPS records where
+taller fractional blocks would outgrow it.
+
+The Safari keep-all case `foo。bar日本語` read per-character spans. Safari 27 breaks
+after `。` (WebKit #312099) only inside one text node, so spans kept Safari 26's four
+lines where the paragraph has five. The case now reads the text node with Range
+rects, so `wrap-06c1e0111950efed` becomes `wrap-8bb19504eadc995e` with the same
+origin, and requires nothing until the WebKit profile models the fix.
+
+The WebKit profile will follow Safari 27 only. Safari 26, still on macOS 26 and iOS
+26, becomes a known gap, and the profile won't detect the version from the user agent.
+Safari 27's break rules reach main with break opportunities taken from WebKit's own
+data (#321), not as new hand-written rules; that change makes the keep-all case
+required again.
+
+Only the two #210 rows have a fractional line height, so the whole-count rule can't
+reach any other row. The full installed gate ran in the background on September 23
+against the pin `7c2ec51`: Chrome 153 through the Playwright transport, Safari 27.0
+and Firefox 156 natively, both directions, at DPR 2, once from this branch's harness
+and once from main's with this branch as the candidate. That is 161,739 LTR and
+73,671 RTL rows in Chrome, 162,489 and 73,680 in Safari, and 162,136 and 73,716 in
+Firefox. From this branch no leg fixes or loses a metric, and none has required
+failures or execution errors. From main's harness only Safari's LTR leg fails, on the
+two required rows above. Row by row, main's assessments differ between the two
+harnesses only in Safari LTR: `wrap-4faaad4b08f18c01`'s line count, which now passes,
+and the keep-all case. With spans main passed line count and breaks and failed
+height, source and widths; from the text node it also fails line count and breaks.
+In all six legs, the only native count that differs between the harnesses is
+`wrap-4faaad4b08f18c01`'s. `bun test` and `bun run check` pass, and the pin stays.
+
+The ordinary snapshots were regenerated from this branch in Chrome 153, Safari 27.0
+and Firefox 156. No result moved: accuracy stays 7,680 of 7,680 in each browser,
+letter spacing 28 of 28, and the corpus sweeps 1,076, 1,090 and 984 of 1,098 in
+Chrome, Safari and Firefox, with the same mismatches. None of these rows is among
+those Safari 27 moved, and all use whole-pixel line heights, which the harness
+change leaves alone. Only provenance and environment records change, including
+Safari's user agent, from 26.5.2 to 27.0. Runtime sources are unchanged, so no
+runtime benchmark was needed.
 
 ## Rich inline keeps a line at an unfit soft hyphen as plain text does
 

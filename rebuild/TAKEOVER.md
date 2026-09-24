@@ -1,5 +1,22 @@
 # Takeover decisions and evidence
 
+2026-09-23, main merged at `b17a7ac`: #337 (the Safari 27 harness) and #338 (a count-only `layout()` walker). `src/`
+and every other file main owns take main's versions, so outside `rebuild/` the branch equals main but for two things:
+`knip.config.ts` keeps its `project` line, without which `bun run check` reports 338 unused files under `rebuild/`, and
+`TODO.md` and `ENGINE_FOLLOWUPS.md` keep a line pointing here. #338 is the simpler form of the counter `62e7ec9` put in
+this branch's copy of `src/line-break.ts`; that copy, 62e7ec9's snapshot refreshes and its edits to main's harness and
+docs gave way to main's, which carry main's own Safari 27 decisions (its keep-all case requires nothing). Under
+`rebuild/` only these docs changed. `bun run check` and main's 273 tests pass. The quick gates (all engines, fresh) give
+82ddc78's results gate for gate: the six projects type-check, 1,235 unit tests pass, tier 1 is unchanged in Firefox and
+webkit-host and keeps Chrome's open 351 / 86 changed predictions (no facts / facts), and the plain and pure checks pass.
+`lab/baselines/main-predictor.ts` reads `walkLineRanges()`, which #338 left as it was, and nothing freezes its output:
+the lab's main baseline ([lab/BASELINE-main.md](lab/BASELINE-main.md)) is a dated record of 2e5e2bd, and the main
+obligations come from sealed main runs. Only the book survey's main role reads `layout()`'s count. Under the stand-in
+Canvas the counts and heights of 2e5e2bd, 62e7ec9 and #338 are the same on all 72 book cases at their two widths and 42
+more, in each engine's profile (3,096 layouts an engine, 68 of the 72 cases on the new walker), and each equals the
+lines its own `walkLineRanges()` walks. In #338's own validation the corpus sweeps, each book whole at every 10 px step,
+moved in none of the three browsers, so the book survey was not run again in a browser.
+
 2026-09-23, the Firefox and webkit-host references recorded again after the requirements audit's drops as narrowed, both
 orders and both configurations, from 4f417c9 (kept on branch `audit-drops-narrowed-rec`), whose library equals this
 branch's. Against 90e0266's references there is no status transition in either browser or configuration, widths

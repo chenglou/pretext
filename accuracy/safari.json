@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-09-22T12:15:21.382Z",
-  "suiteHash": "703079cff81830edcd1f3feb18578507eb34887d172d4e46b4b7de4398cc84b9",
+  "generatedAt": "2026-09-23T14:54:03.709Z",
+  "suiteHash": "2a39f76ab6e2d148ee3382446b9ba8fe8341b0eda322bded7db1a65cf008d875",
   "source": {
-    "revision": "0bdea4d648edfce325dc415fd71c2be5415be510",
+    "revision": "45c2739cff63bc76377c58a262eb62e27941177e",
     "files": {
       "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
       "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
       "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
       "layout.ts": "9ffb7a9d59064fc5c2760ad5ffc918c30c49b312106f10063ed826f4bdea284a",
-      "line-break.ts": "c0de30eac42caa17a59ecd7a181c63035c6d2e7dfee861aecbef67c4d4c649a5",
+      "line-break.ts": "6f16d9538f39d09398cc053c789c3d345c8715917c9cb9a6dd4cec06414aa601",
       "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
       "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
       "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",

@@ -1,34 +1,10 @@
 # Engine Follow-ups
 
-The current [prepared plaintext round](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) changes only the public simple counter;
-the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeat layout about 31–70% faster across the three
-browsers, with unchanged preparation, measurements and retained data. A bounded numeric ASCII experiment establishes
-Canvas-free layout on observed inputs, with unsupported families and a large preparation gap retained. General
-preparation ownership and broader native coverage come next; exact identity source maps are deferred. Rich painting
-remains paused. Snapshots are refreshed; the report names the observer correction, Safari 27 deferral and retained native failures.
-
-The completed bounded redo [plaintext round 3](rebuild/STATELESS_ROUND3.md) integrates exact Blink retry-search and Gecko
-adjacent-endpoint reuse. Maintained gates and fresh native cuts/scoring outcome categories stay unchanged, with existing failures,
-reviews and four Firefox native-geometry/count/issue-list variations retained. The complete foreground phase matrix supports useful repeat gains, no general preparation gain and mixed new-width
-costs. Main's resize gap remains open. Preparation source-map ownership and unfamiliar-width measurement remain open. The Gecko
-strict-raw diagnostic cannot serialize cyclic SpanData parents; observable and direct-consultation proofs cover these
-changes, but that harness limitation must be resolved before a broader internal representation rewrite.
-
-The completed bounded redo [plaintext round](rebuild/STATELESS_ROUND2.md) removes unused unsegmented Blink metadata, stores a
-single-part shape view in one record and removes inspection-only suffix scans from plain filling. Complete replay
-and fast native outcomes stay unchanged. Fresh timing shows useful Chrome repeat/growth gains, no general preparation win and mixed new-width costs; the report retains Latin cold costs and main gaps. Rich painting remains paused.
-
 On the redo branch, [rebuild/README.md](rebuild/README.md) sets the active goal and [rebuild/TAKEOVER.md](rebuild/TAKEOVER.md) records current decisions and validation. The items below concern the existing public engine.
-
-The completed bounded redo [plaintext stateless round](rebuild/STATELESS_ROUND.md) preserves measurement behavior while
-simplifying primary shaping segments and exact range/count output. Owned rendering and rich painting are paused.
-Its remaining performance and coverage limits belong to that record; this ledger is not another redo task queue.
 
 Open engine work: decisions for the maintainer, known gaps and harness debt.
 
 ## Decisions
-
-- The redo [owned-rendering fixed-word experiment](rebuild/experiments/owned-rendering/README.md) is rejected as a general replacement before timing. It omits ordinary emergency wrapping and accepted rich-item behavior. Compatible shaping groups and a bounded selected-fragment measurement probe remain candidates, not adopted engine changes.
 
 - Decide on other Canvas font settings (#107), including whether a kerning-enabled Canvas is viable: Chromium layout kerns across spaces, ZWSP and soft hyphens, but default Canvas doesn't report that kerning. README says Pretext assumes default font kerning; #199 and #216 stay open in case Safari's OffscreenCanvas ever follows `fontKerning`.
 - Decide whether `prepareRichInline()` supports `whiteSpace: 'pre-wrap'` (#173, #193). Accepting it needs a native styled-inline pre-wrap oracle.
@@ -36,8 +12,7 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 
 ## Line breaking
 
-- Add a versioned public WebKit `keep-all` punctuation policy now that Safari 27 ships the upstream change. At 40px, `foo。bar日本語` uses five unmodified lines versus four with grapheme spans and the current public engine, including with named covering fonts. Preserve this native failure; its maintained span count/breaks remain required, while absolute native height is explicitly deferred. Safari's UTF-16 text-box punctuation rule differs from Blink and ICU4X, so changing to either existing pair model would introduce unrelated errors. See PLATFORM_BUGS.md and RESEARCH.md.
-
+- Follow Safari 27 in the WebKit profile (approved). Safari 27 gives curly quotes and guillemets opening and closing classes, ends lines at U+2028 and U+2029, breaks after punctuation under keep-all (WebKit #312099), and keeps punctuation, NBSP, U+2010 and U+2013 after a first character that overflows an empty line; the keep-all and first-character rules apply only to text holding a character above U+00FF. These rules reach main with break opportunities taken from each engine's own data (#321), not as new hand-written rules in the current profile. Until then main follows Safari 26 on quotes, keep-all and overflowing first characters.
 - Follow the page language in the remaining line-break rules (approved). Preparation reads `<html lang>` once and resolves it to `ja`, `ko`, `zh` or root, with no `prepare()` option; only Safari's small-kana and `ー` rule uses it so far. Remaining layers: Safari's quote rules on `ja` pages, and Chrome's quote, `〜` and `゠` rules on `zh` pages (RESEARCH.md). Pretext keeps `〜` and `゠` with any text before them, so on `zh` pages Chrome paints `a xxxx / 〜b` where Pretext gives `a / xxxx〜 / b`. Build them on the generated line-break class table, keep `setLocale()` segmenter-only, and rerun the family in each installed browser before each layer.
 - On every page, Chrome breaks after a closing curly quote before CJK text (`他说“你好”` / `然后走了`), while Pretext's closing-quote carry keeps the CJK attached. No browser treats curly single quotes around Latin text as brackets, and Firefox doesn't treat double quotes as brackets, but Pretext does. Narrow the closing-quote carry and the boundary before opening quotes to UAX #14 LB19 and LB19a.
 - After a closing curly quote, installed Chrome on `en` and `ja` pages and Safari on `ja` pages keep small kana and `ー` with the quote, as in `a / x“value”ー / b`, where the profiles that let them start a line give `a x“value” / ーb` (`maintained/closing-punctuation`).
@@ -73,7 +48,7 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Complete the kinsoku sets with no-break-before characters outside Pretext's CJK ranges: vertical and small form variants, U+232A, U+16FE0-U+16FE3, and marks such as `‼` or `⁉` (NS), before which Pretext still breaks after text (`x foo|‼bar z`).
 - Decide kinsoku membership by a grapheme's base character, so an extender after a closing bracket doesn't cause a break before the bracket.
 - Under keep-all, confirm that the Gecko profile ends the run after `」〵` before a Latin letter too; `src/layout.test.ts` covers only an ideograph follower.
-- Under keep-all, installed Firefox keeps `”` with a following ideograph, as Safari does, where the Gecko profile ends the run after `”`. In 16px Arial with letter spacing 1.5, `あいあい”漢字kana` at 69.43px gives `あいあ / い”漢字k / ana` in Firefox and `あいあ / い” / 漢字kan / a` in Pretext.
+- Under keep-all, installed Firefox keeps `”` with a following ideograph, as Safari 26 does, where Safari 27 and the Gecko profile end the run after `”`. In 16px Arial with letter spacing 1.5, `あいあい”漢字kana` at 69.43px gives `あいあ / い”漢字k / ana` in Firefox and `あいあ / い” / 漢字kan / a` in Pretext.
 - Keep-all still differs for numeric prefixes and suffixes (`中文$100中文`), for Po symbols such as `@` and `/` in Chrome, for Blink's one-mark lookback, and for symbol and dash classes in Firefox.
 - Under keep-all, a run still ends after a Hebrew letter followed by `-`, U+2010, U+2013, U+0964, U+0965, U+104A or U+104B, where both engines keep the next character (LB21a).
 - Chrome 153 changed native results for four RTL full-width bracket rows, which main now fails. Find the mechanism, or record it as browser drift.
@@ -140,7 +115,8 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Find a witness for whether `direction: rtl` alone enables Firefox document bidi.
 - Record `Intl.Segmenter` word-likeness for emoji, U+2605 and digit strings in installed Safari and Firefox.
 - The iOS profile patch has no device evidence: iOS fonts, older iOS ICU without the Hebrew LB20a rule, EU alternative engines, and Edge's iPad desktop user agent.
-- On each new Safari, recheck WebKit changes that haven't shipped yet: first-glyph kinsoku and the 0.5ch tab minimum.
+- On each new Safari, recheck WebKit changes that haven't shipped yet: the 0.5ch tab minimum. Safari 27 shipped first-glyph kinsoku.
+- Safari 26, still on macOS 26 and iOS 26, becomes a known gap: the WebKit profile is to follow Safari 27 only, so once Safari 27's break rules land, Safari 26 differs on those shapes. The profile doesn't detect the version: only Safari's own user agent names one, and Chrome, Firefox and Edge on iOS and in-app web views name none.
 - No canvas follows an element's own `lang`, a Worker's context, or a runtime Content-Language change. Add a short README note.
 - Safari page-language attribution left two things open: why Amiri `il` at a line start measures 2.544px or 7.416px, and 1,117 Japanese width-only differences. Revisit with the content-language decision.
 
@@ -159,6 +135,8 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Cite the HTML spec for the OffscreenCanvas language snapshot in PLATFORM_BUGS.
 - Accepted losses live only in VALIDATION prose and go silent once the pin advances. If they become frequent, consider a gated `changedFailures` report.
 - Checker logs print harmless osascript -1728 errors when restoring the frontmost app; resolve the app by bundle id. Record screen and viewport per leg in the run manifest, since some Safari legs ran on the portrait screen.
+- The Safari ideographic punctuation keep-all case requires nothing until the WebKit profile models Safari 27's keep-all breaks after punctuation. Require height, line count and breaks again in that change, with a Latin-1-only control, since the rule skips such text: under keep-all in 16px Arial at 44px, Safari 27 gives `aa.bb / bbbb` for `aa.bbbbbb` and `aa. / bbbb / bā` for `aa.bbbbbā`.
+- For fractional line heights the height check still compares the block with k strut advances, although Safari 27's block is floor(64 × k × lineHeight) / 64 px, up to 1/64px + k/128px away. So it would fail Safari 27 from 5 lines at 20.96px, where the line count passes; the suite's two fractional rows have 1 and 3 lines. Give the height check and the line count the same bound, 1/64px + k/128px, before adding taller fractional rows.
 - Automation Firefox starts through LaunchServices, outside the checker's process group, so an interrupted or killed checker leaves it running with its temporary profile. Quit that instance by hand; if interrupts become common, stop the owned PID from a signal handler.
 
 ## External actions

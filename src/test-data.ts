@@ -77,9 +77,8 @@ export type ProbeOracleCase = {
   dir?: 'ltr' | 'rtl'
   lang?: string
   method?: 'range' | 'span'
-  required?: readonly ('height' | 'lineCount' | 'breaks')[]
-  note?: string
   browsers?: readonly ('chrome' | 'safari' | 'firefox')[]
+  required?: false
 }
 
 export type LetterSpacingOracleCase = ProbeOracleCase & {
@@ -384,17 +383,21 @@ export const KEEP_ALL_ORACLE_CASES: readonly ProbeOracleCase[] = [
     lineHeight: 32,
     lang: 'zh',
   },
+  // Safari 27 breaks after 。 here: keep-all breaks after punctuation in text
+  // holding a character above U+00FF (WebKit #312099). One-character spans never
+  // reach that rule, so this reads the text node with Range rects; the span
+  // protocol was wrap-06c1e0111950efed. Nothing is required until the WebKit
+  // profile models Safari 27's keep-all fix.
   {
     label: 'safari ideographic punctuation keep-all boundary',
-    required: ['lineCount', 'breaks'],
-    note: 'Safari 27 changes unmodified keep-all punctuation wrapping: five lines here, versus four with diagnostic spans. The unchanged engine still predicts four; native height/source/width failures remain recorded. See PLATFORM_BUGS.md.',
     text: 'foo。bar日本語',
     width: 120,
     font: '18px serif',
     lineHeight: 32,
     lang: 'ja',
-    method: 'span',
+    method: 'range',
     browsers: ['safari'],
+    required: false,
   },
   {
     label: 'korean no-space word',
