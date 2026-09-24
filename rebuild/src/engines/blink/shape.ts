@@ -873,16 +873,17 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
-  // The side after k, where Canvas shapes it as Common, takes the next piece in: a word's pieces are short, and ` 12 `
-  // alone is no stand-in for the digits in their Devanagari run (American Typewriter kerns them under Common and not
-  // there). Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one shrinks back into the side,
-  // and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide space). The side before k
-  // stays: a position is the prefix measured from the cut before k plus this adjustment, and that side is the same string
-  // from the same cut, so what Canvas does to it cancels; taken further in, it didn't, and in 28px Gill Sans the prefix
-  // ` .` measured alone kept a pair adjustment that the window `ה . ` counted again (the fonts attack, 2026-09-23).
+  // In a group cut into words, the side after k, where Canvas shapes it as Common, takes the next piece in: a word's
+  // pieces are short, and ` 12 ` alone is no stand-in for the digits in their Devanagari run (American Typewriter kerns
+  // them under Common and not there). Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one
+  // shrinks back into the side, and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide
+  // space). The side before k stays: a position is the prefix measured from the cut before k plus this adjustment, and
+  // that side is the same string from the same cut, so what Canvas does to it cancels; taken further in, it didn't, and in
+  // 28px Gill Sans the prefix ` .` measured alone kept a pair adjustment that the window `ה . ` counted again (the fonts
+  // attack, 2026-09-23). A group the cut search cuts alone keeps the windows before words.
   const first = cuts[i] === k ? i - 1 : i
   let last = i + 1
-  while (last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
+  while (group.words && last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
   const to = cuts[last]!
   return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
@@ -919,6 +920,21 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
     windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, whole === null ? estimate : whole.total16) === 0
+}
+
+// Whether a style's groups are cut into words first: below a zoomed font size of 60 px, and in a face whose space takes
+// the same advance under Common as under Latin (spaceTakesScript). The word test at a cut is asked only where the two
+// words around it measure below 256 zoomed px together, and where they don't, the words between tested cuts go to the cut
+// search as a stretch of a few words whose middle is a space no test saw. The search's windows there shrink below 256
+// zoomed px, narrower than a word, and a face whose forms span a whole word passes an offset that the search over the
+// whole group, as before words, never tries: Zapfino, whose short words with their spaces measure up to 4.07 em (`in the `),
+// lost lines from 64 zoomed px on at DPR 1, 2 and 3 and none at 60 (the fix round's sweep, 2026-09-23). So at 60 zoomed px
+// and more, where two words of the widest face no longer fit below 256, the group is cut by the cut search alone, and its
+// windows are the ones before words (adjustBetweenCuts16).
+const WORDS_FIRST_MAX_ZOOMED_PX = 60
+
+function takesWords(p: BlinkPrepared, style: number): boolean {
+  return f32(f32(p.styles[style]!.font.size) * f32(p.layoutZoom)) < WORDS_FIRST_MAX_ZOOMED_PX && !spaceTakesScript(p, style)
 }
 
 function holdsSpace(p: BlinkPrepared, from: number, to: number): boolean {
@@ -1027,7 +1043,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, k, b)))
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !(group.words && measuredAsCommon(p, g, k, b))))
 }
 
 // The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character
@@ -1110,7 +1126,7 @@ function cutGroup(sh: Shaper, g: number, words: boolean): void {
   const cuts = [group.start]
   const totals: number[] = []
   const zero = [false]
-  if (words) addWordPieces(sh, g, cuts, totals, zero)
+  if (words && group.words) addWordPieces(sh, g, cuts, totals, zero)
   else addPieces(sh, g, group.start, group.end, cuts, totals, zero)
   const prefix = [0]
   group.cuts = cuts
@@ -1139,11 +1155,12 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
+    group.words = holdsSpace(p, group.start, group.end) && takesWords(p, group.style)
     if (p.inspect !== null) {
       cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
       p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })
     }
-    cutGroup(sh, g, !holdsSpace(p, group.start, group.end) || !spaceTakesScript(p, group.style))
+    cutGroup(sh, g, true)
   }
 }
 

@@ -1670,8 +1670,9 @@ where it may hold right-to-left text.
 
 Blink, words first (`shape.ts` `addWordPieces`, `cutGroup`; `line-breaker.ts` `candidateAt`, `wordCandidate`; since
 2026-09-23; the study is research/SPEC-WORD-SUM.md, round 2's form "V3" on branch `x-words2-blink`). A group is cut into
-words before the cut above runs, but in a face whose space takes another advance under Common than under Latin, where the
-cut above runs alone (§4.6, "Blink's words first"). A word starts after a U+0020 where clusters part, nothing joins and the character isn't
+words before the cut above runs, but at a zoomed font size of 60 px and more and in a face whose space takes another
+advance under Common than under Latin, where the cut above runs alone, with the windows before words (§4.6, "Blink's
+words first"). A word starts after a U+0020 where clusters part, nothing joins and the character isn't
 one every lookup skips, and it must hold a character with a script of its own: a word of digits, punctuation or an
 emoji stays in the piece before it, or at the group's start in the one after it. Canvas resolves such characters over the
 string it measures, and a 16-bit string that holds none is shaped as Common, under the font's default lookups
@@ -1696,7 +1697,7 @@ into the side, and the sides it shrinks to are no better: in Euphemia UCAS ` �
 round 2's form of the rule, extending without that bound and over Latin-1 sides as well, did in 37 to 41 of the second
 check's lab cases. The same rule moves the cut search's windows where a side is such a piece, and there a cut whose
 side after it is one keeps no 0 it measured (`addPieces`). Since 2026-09-23 only the side after the offset takes a
-piece in. A position before white space is the prefix measured from the cut before it plus the window's adjustment, and
+piece in, and only in a group cut into words: a group the cut search cuts alone (above) keeps the windows before words. A position before white space is the prefix measured from the cut before it plus the window's adjustment, and
 the side before the offset is that same string from the same cut, so whatever Canvas does to it cancels; taken further
 in, it no longer did. In 28px Gill Sans at DPR 3 the prefix ` .` of a Hebrew line, measured alone, kept a pair
 adjustment that the window `ה . ` counted again, 2.8 px, and Chalkboard SE, PT Sans and Euphemia UCAS lost breaks the
@@ -2148,19 +2149,39 @@ repeating text, first fills at those widths take 0.10 where 0.43 (Latin), 0.07 w
 0.103 where 0.134 and 0.261 where 0.257, where main takes 0.007 to 0.019. A change to the word scan passes its two
 attacks and the premise probe before it merges (lab/README.md, "Test tiers").
 
-**Blink's words first** (2026-09-23; `shape.ts` `addWordPieces`, `heldAgainstSearch`; `line-breaker.ts` `candidateAt`;
-the recipe is in §4.4). It rests on two **premises about fonts**, taken as documented defaults with named gaps, as the
-maintainer's stance of 2026-09-23 allows for a premise no one has falsified in real fonts (rebuild/README.md, "Core"):
+**Blink's words first** (2026-09-23; `shape.ts` `addWordPieces`, `heldAgainstSearch`, `takesWords`; `line-breaker.ts`
+`candidateAt`; the recipe is in §4.4). It rests on two **premises about fonts**, taken as documented defaults with named
+gaps, where no installed face breaks them in pinned Chrome (rebuild/README.md, "Core"):
 - *No shaping context reaches more than one word past a space.* The test at a word cut shows that the two words around
   it add up; that a group's pieces then add up to the group is the premise. The cut search it replaces holds context
   within its windows of up to 256 zoomed px, and so does no longer: a font whose lookups read two words back loses it.
   Of round 2's differences in real fonts, Zapfino's `the` after a space is a context the two-word test sees and the cut
   search missed, and Euphemia UCAS's were the script of the whole Canvas call, which the rule for words without a script
-  of their own now keeps out (below). This tree's cut probe finds Zapfino's 61 layouts alone differing at DPR 2 and
-  none at DPR 1, and of its Zapfino layouts as 1,932 lab cases 15 statuses move, all from fail to pass (TAKEOVER.md).
+  of their own now keeps out (below). **Bounded** since the fix round (2026-09-23): the word test is asked only where two
+  words measure below 256 zoomed px together, and where they don't, words first handed the cut search stretches of a
+  few words whose middle is a space no test saw; the search's windows there shrink below a word, and Zapfino's forms,
+  which span a whole word (`the` at the start of a string takes a ligature, 25 zoomed px narrower at 72px), passed
+  offsets the search over the whole group never tries. The fonts attack found Zapfino losing lines at 72 zoomed px at
+  every weight, and the constructed attack its prose at 72 zoomed px (11 of 42 lab cases' breaks); the fix round's sweep
+  of Zapfino at DPR 1, 2 and 3 found the first losses at 64 zoomed px, none at 60, where its short words with their spaces
+  (up to 4.07 em) still measure below 256 together. So a group is cut into words only below a zoomed font size of 60 px;
+  at 60 and more it is cut by the cut search alone, with the windows before words, and in the sweep no layout at its
+  ordinary widths is then lost at any size. Words first is also off in a face whose space takes another advance under Common than under Latin
+  (Euphemia UCAS, below). What the bound leaves: a line broken inside a word reads positions inside it, measured from the
+  cut before, where a string starts, and Zapfino's whole-word forms reach there at every size (the fonts attack's
+  `THE then` at 16px and 26px wide, one layout a DPR in the sweep); the base measures from its own cuts, fewer, and errs
+  elsewhere. Measuring from one piece further back or after the space before the cut fixed that layout and lost 11 to 32
+  others in the sweep, since a prefix ends inside a word, where Zapfino takes a word-final form. And words measured alone
+  miss what a longer string holds in faces that draw a script only in part: in italic Athelas with Vietnamese, `phở`
+  alone takes its precomposed width and in its paragraph the width its decomposed letters give, 0.045 px wider, as a
+  fallback font chosen from the characters of the whole call would (FontFallbackIterator's hints); in italic Gill Sans
+  with Devanagari a word's end before ` , ` takes 2.8 px otherwise. Both trees err there, at other offsets (the fonts
+  attack's ext-dpr2-1: Athelas 19 breaks lost against 27 gained, Gill Sans 16 against 9), and no Canvas answer says which
+  font draws a character without font facts; an inspected paragraph reports `context-past-a-word` there.
 - *Positions inside a word stay sorted.* The walk over the cuts stands in for the search over every offset, which is
   Blink's own binary search over sorted positions (shape_result.cc:2300-2318); both give one candidate only where the
-  positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it.
+  positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it. No attack found a
+  face that does in pinned Chrome.
 
 An inspected paragraph holds both against the recipe it replaces. It cuts every group by the cut search alone first, as
 the port did before words (but for the rule for window sides Canvas shapes as Common, §4.4), with that search's

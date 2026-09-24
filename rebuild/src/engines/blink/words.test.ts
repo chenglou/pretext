@@ -165,6 +165,14 @@ test('a face whose space takes another advance under Common than under Latin is 
   expect(prepared('Mono').groups[0]!.cuts.length).toBe(9)
 })
 
+test('at a zoomed font size of 60 px and more a group is cut by the cut search alone, as before words', () => {
+  // At 59px TEXT's words are cut first; at 60px, where two words of the widest installed face measure 256 zoomed px or
+  // more and the word test can't be asked between them, the group is cut as a group without words is.
+  const at = (size: number): BlinkPrepared => prepare({ ...paragraphIn('Mono', TEXT), font: { family: 'Mono', size, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS } }, env, false, createContextPool())
+  expect(at(59).groups[0]!.words).toBe(true)
+  expect(at(60).groups[0]!.words).toBe(false)
+})
+
 describe('blink candidate from the cuts', () => {
   test('an inspected paragraph, which searches and walks both, reports no gap of its words and gives the plain lines, at every width', () => {
     const families = ['Mono', 'Kern', 'Context']

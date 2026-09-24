@@ -140,6 +140,9 @@ export type BlinkGroup = {
   prefix16: Float64Array
   pair16: Float64Array
   wide16: Float64Array
+  // Whether the group is cut into words first (shape.ts measureGroups, takesWords); where it isn't, it is cut by the cut
+  // search alone and its windows are the ones before words, without the rule for sides Canvas shapes as Common.
+  words: boolean
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
