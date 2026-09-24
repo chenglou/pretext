@@ -6,7 +6,8 @@
 // Common. `Far` takes 2px off a string that holds both `Q` and `Z`, a context that reaches past a word. In `Backwards` a `Q`
 // is 25px narrower than nothing, so positions inside a word run backwards. `Skip` kerns every two code units by -1px.
 // `Neutral` adds 3px to a string that holds no letter, as a string without a script of its own takes another script alone
-// than in its run. U+2060 has no advance. Measured strings carry U+2028 for U+0020 (shape.ts).
+// than in its run. In `SpaceScript` a lone U+2028, shaped as Common, is 2px wider than the 8-bit space, as Euphemia UCAS's
+// space is. U+2060 has no advance. Measured strings carry U+2028 for U+0020 (shape.ts).
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createContextPool } from '../../measure/canvas.js'
@@ -45,6 +46,7 @@ class Context {
     if (this.font.includes('Far') && text.includes('Q') && text.includes('Z')) width -= 2
     if (this.font.includes('Skip')) width -= Math.max(0, text.length - 1)
     if (this.font.includes('Neutral') && !/[a-zA-Z]/.test(text) && /\S/.test(text)) width += 3
+    if (this.font.includes('SpaceScript') && text === LS) width += 2
     return { width: width * size / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -154,6 +156,13 @@ test('a window side before the offset is never taken further in: it cancels agai
   group.cuts = [0, 5, 8]
   group.prefixAtCut = [0, 48 * 65536, 76 * 65536]
   expect(groupPrefix16({ p, gaps: null }, 0, 6) / 65536).toBe(58)
+})
+
+test('a face whose space takes another advance under Common than under Latin is cut by the cut search alone', () => {
+  // TEXT is 380px: the cut search cuts it once near its middle, inside a word, since the lone space the pair window
+  // measures beside every space is wider than in its run; words first would cut every word.
+  expect(prepared('SpaceScript').groups[0]!.cuts).toEqual([0, 20, TEXT.length])
+  expect(prepared('Mono').groups[0]!.cuts.length).toBe(9)
 })
 
 describe('blink candidate from the cuts', () => {

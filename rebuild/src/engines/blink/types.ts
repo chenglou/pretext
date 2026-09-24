@@ -78,6 +78,9 @@ export type BlinkStyle = ComputedStyle & {
   // Whether Canvas shapes the style's strings word by word (Font::CanShapeWordByWord), measured when a 16-bit string first
   // holds a word edge; null until then (shape.ts canvasSplitsWords).
   canvasSplitsWords: boolean | null
+  // Whether the style's space takes another advance under Common than under Latin, measured when words first or the cut
+  // predictor first asks; null until then (shape.ts spaceTakesScript).
+  spaceTakesScript: boolean | null
   // HanKerning::FontData, measured in prepare for a style with a shaping group HanKerning may apply to; null for the others.
   hanKerning: HanKerningFontData | null
 }

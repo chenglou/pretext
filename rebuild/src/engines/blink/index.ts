@@ -148,7 +148,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   for (let s = 0; s < computed.styles.length; s++) {
     const style = computed.styles[s]!
     if (fragmentAncestors !== null && s > 0) fragmentAncestors[s] = style.shouldCreateBoxFragment ? s : fragmentAncestors[style.parent]!
-    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, hanKerning: null })
+    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, spaceTakesScript: null, hanKerning: null })
   }
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).

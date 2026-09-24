@@ -8,6 +8,7 @@ import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createContextPool } from '../../measure/canvas.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, paragraphGaps, prepare } from './index.js'
+import { EXACT16, predictedWindow } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 let asked: { text: string; width: number }[] = []
@@ -108,5 +109,45 @@ describe('blink cut predictor', () => {
     expect([...plain.asked].filter(s => !inspected.asked.has(s))).toEqual([])
     expect(plain.p.groups[0]!.cuts).toEqual(inspected.p.groups[0]!.cuts)
     expect(plain.ends).toEqual(inspected.ends)
+  })
+
+  test('the prediction walks back past a window below 256 zoomed px plus the margin, and takes an earlier one that is exact', () => {
+    // Windows of the shrink with their totals in zoomed px: the second is exact, the third is wider than the second although
+    // it is inside it, by less than the margin of 16 zoomed px, as a joining form at a window's edge does. The loop takes the
+    // second. The estimate points at the fourth; the third, 262, is within the margin of 256, so the walk goes on back to the
+    // second, and the first, 300, vouches for nothing before it.
+    const px = [300, 250, 262, 240, 200]
+    const as = [0, 1, 2, 3, 4]
+    const bs = [20, 19, 18, 17, 16]
+    const measured = (): { asked: number[]; total: (i: number) => { total16: number; exact: boolean } } => {
+      const asked: number[] = []
+      return { asked, total: (i: number) => { if (!asked.includes(i)) asked.push(i); return { total16: px[i]! * 65536, exact: px[i]! * 65536 < EXACT16 } } }
+    }
+    const bounded = measured()
+    expect(predictedWindow(as, bs, 360 * 65536, 16 * 65536, bounded.total)).toBe(1)
+    expect(bounded.asked).toEqual([2, 1, 0])
+    // With no margin, as the prediction was before it took the premise's bound, it stops at the third and takes the fourth.
+    const unbounded = measured()
+    expect(predictedWindow(as, bs, 360 * 65536, 0, unbounded.total)).toBe(3)
+    expect(unbounded.asked).toEqual([2, 3])
+  })
+
+  test('under letter spacing, negative word spacing or a face whose space takes the script, the shrink measures every window in turn', () => {
+    const text = 'x'.repeat(400)
+    for (const spacing of [{ letterSpacing: 0.5, wordSpacing: 0 }, { letterSpacing: 0, wordSpacing: -1 }]) {
+      const strings = (inspect: boolean): string[] => {
+        asked = []
+        const paragraph: Paragraph = {
+          font: { family: 'Mono', size: 16, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }, ...spacing, whiteSpace: 'normal',
+          wordBreak: 'normal', overflowWrap: 'break-word', lineBreak: 'auto', tabSize: 8, content: [{ kind: 'text', text }], lineHeight: 20,
+          direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start',
+        }
+        prepare(paragraph, env, inspect, createContextPool())
+        return asked.filter(a => a.width >= 256).map(a => a.text)
+      }
+      const plain = strings(false)
+      expect(plain.length).toBeGreaterThan(0)
+      expect(new Set(plain)).toEqual(new Set(strings(true)))
+    }
   })
 })

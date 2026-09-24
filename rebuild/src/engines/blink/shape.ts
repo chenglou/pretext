@@ -717,15 +717,16 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   let n = 0
   // The totals a plain paragraph knows once it took its window: `whole` and the ones its prediction measured.
   let known = totals
-  if (sh.gaps === null) {
-    n = predictedWindow(as, bs, estimate, total)
+  const margin = predictionMargin16(p, p.groups[g]!.style)
+  if (sh.gaps === null && margin !== null) {
+    n = predictedWindow(as, bs, estimate, margin, total)
   } else {
     while (n + 1 < as.length && !total(n).exact) n++
-    if (sh.aside !== 'search') {
+    if (sh.gaps !== null && margin !== null && sh.aside !== 'search') {
       // A total only the prediction measures decides nothing where it takes the loop's window, so its gaps are set aside.
       const aside = totalBy({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'walk' })
       known = [whole]
-      const predicted = predictedWindow(as, bs, estimate, i => known[i] = aside(i))
+      const predicted = predictedWindow(as, bs, estimate, margin, i => known[i] = aside(i))
       if (predicted !== n) {
         nestedWindowWider(sh.gaps, p, g, k)
         n = predicted
@@ -748,18 +749,51 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
 // Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first whose total is exact, or the last. Predicted as
 // the first whose length, scaled from the widest window's `estimate`, is below 256 zoomed px times a margin that errs
 // toward a wider window, since a window too wide costs one more total and one too narrow walks back against the order of
-// the shrink. Then the window before it must not be exact, where it walks back, and it must be, where it walks on
-// (`total` measures a window once).
-const PREDICTION_MARGIN = 1.0
+// the shrink. Then it walks back: a window before it that is exact is taken instead, and one that measures at least
+// `margin` more than 256 zoomed px vouches for every window before it, which holds it (predictionMargin16); then the
+// window taken must be exact, where it walks on (`total` measures a window once).
+const PREDICTION_SCALE = 1.0
 
-function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, total: (i: number) => Total16): number {
+export function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, margin: number, total: (i: number) => Total16): number {
   const last = as.length - 1
   const length0 = bs[0]! - as[0]!
   let i = 0
-  while (i < last && !(estimate * ((bs[i]! - as[i]!) / length0) < EXACT16 * PREDICTION_MARGIN)) i++
-  while (i > 0 && total(i - 1).exact) i--
+  while (i < last && !(estimate * ((bs[i]! - as[i]!) / length0) < EXACT16 * PREDICTION_SCALE)) i++
+  for (let j = i - 1; j >= 0; j--) {
+    const t = total(j)
+    if (t.exact) i = j
+    else if (t.total16 >= EXACT16 + margin) break
+  }
   while (i < last && !total(i).exact) i++
   return i
+}
+
+// How much narrower a string can measure than a window inside it, which the prediction of the shrink's window rests on,
+// or null where no bound holds and the shrink measures every window in turn. A string is narrower than a window inside it
+// only by what the window's edges change in the forms beside them: joining, final and cascading forms, kerning. Over 393
+// installed families at 16, 48 and 96px (the fonts attack's direct probe, 2026-09-23) and the calligraphic Arabic faces
+// at up to 256 zoomed px (the constructed attack's), that is at most 0.71 of the zoomed font size (Noto Nastaliq Urdu); the
+// bound takes one. It holds only where what spacing adds grows with the text: letter spacing is out, because a character
+// Canvas resolves under a cursive script in a wider window loses the spacing it has in a narrower one, and so is negative
+// word spacing; and so is a face whose space takes another advance under Common than under Latin (spaceTakesScript),
+// where a window that loses its last letter measures every space it holds wider. At 256 zoomed px and more the margin is
+// the whole limit, and the prediction walks back through every window the shrink would try.
+// rule blink/measure/cut-predictor
+const NESTED_WINDOW_MARGIN_EM = 1
+
+function predictionMargin16(p: BlinkPrepared, style: number): number | null {
+  const st = p.styles[style]!
+  if (st.letterSpacing !== 0 || st.wordSpacing < 0 || spaceTakesScript(p, style)) return null
+  return NESTED_WINDOW_MARGIN_EM * f32(f32(st.font.size) * f32(p.layoutZoom)) * 65536
+}
+
+// Whether the style's space takes another advance where Canvas shapes it as Common than where it shapes it as Latin: an
+// 8-bit ` ` is one Latin segment, a lone U+2028, the space glyph, is Common (RunSegmenter over the string alone). Euphemia
+// UCAS's GPOS moves its space by -422 font units under latn only, and no other of 393 installed families differs (the fonts
+// attack, 2026-09-23). Asked once a style, on the contexts without spacing of each storage (contextsOf).
+function spaceTakesScript(p: BlinkPrepared, style: number): boolean {
+  const st = p.styles[style]!
+  return st.spaceTakesScript ??= canvasWidth(contextsOf(p, style, false).hyphen, ' ') !== canvasWidth(st.contexts.hyphen, '\u2028')
 }
 
 // windowAdjust16 for an offset the layout asks about: within the piece of the paragraph's group that holds k, or the two
@@ -851,6 +885,11 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
     windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, whole === null ? estimate : whole.total16) === 0
+}
+
+function holdsSpace(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0x20) return true
+  return false
 }
 
 function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
@@ -1056,7 +1095,9 @@ function cutGroup(sh: Shaper, g: number, words: boolean): void {
 // Cuts, prefixes and HanKerning edge trims for every group. An inspected paragraph first cuts each group by the cut search
 // alone, as the port did before it cut words, so it asks Canvas what it asked then and in that order, with the gaps that
 // search raises set aside, and keeps those cuts for the reads that are held against them (heldAgainstSearch); then it
-// cuts words.
+// cuts words. A group of a style whose space takes another advance under Common than under Latin (spaceTakesScript) is
+// cut by the cut search alone: words first measures words and the windows beside them alone, and a side of those that
+// holds no letter is shaped as Common, so every space in it would measure otherwise than in its run.
 export function measureGroups(sh: Shaper): void {
   const p = sh.p
   for (let g = 0; g < p.groups.length; g++) {
@@ -1068,7 +1109,7 @@ export function measureGroups(sh: Shaper): void {
       cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
       p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })
     }
-    cutGroup(sh, g, true)
+    cutGroup(sh, g, !holdsSpace(p, group.start, group.end) || !spaceTakesScript(p, group.style))
   }
 }
 

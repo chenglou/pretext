@@ -44,11 +44,15 @@ Prefer fewer representations, local derived values and ordinary loops. Preserve 
 measurement boundaries. A smaller number of Canvas calls is neither a speed result nor a correctness argument.
 Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
 A premise about fonts that no source gives is taken only as a documented default with a named gap that inspected
-paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
+paragraphs report, and only where no installed face, at any setting CSS can ask for, breaks it in the pinned browser; where
+one does, the premise is bounded, by the zoomed font size or by a property of the font Canvas can check, so that the
+recipe it replaces runs there (the maintainer, 2026-09-23: "as long as correctness is still redo's goal"): Gecko's
 word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail`; Blink's words first
 assumes no shaping context reaches more than one word past a space and that positions inside a word stay sorted, and
-reports `context-past-a-word` and `positions-run-backwards`; its cut predictor assumes a string is never narrower than a
-window inside it and reports `nested-window-wider` (DESIGN.md §4.6).
+reports `context-past-a-word` and `positions-run-backwards`; its cut predictor assumes a string is narrower than a window
+inside it by less than the zoomed font size, and runs only without letter spacing or negative word spacing and where the
+space takes the same advance under Latin as under Common, since the calligraphic Arabic faces break the premise with no
+margin at display sizes; it reports `nested-window-wider` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

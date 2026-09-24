@@ -103,13 +103,14 @@ describe('blink cuts of a wide group', () => {
   })
 
   test('a cut between two words that passed asks nothing after the tests: the adjustment a position takes there is the 0 they measured', () => {
-    // Eight words, seven offsets between them: a word each, the two words around each offset, and the pair window's three.
+    // Eight words, seven offsets between them: a word each, the two words around each offset, and the pair window's three;
+    // before them the style's space as an 8-bit string and as U+2028 (shape.ts spaceTakesScript).
     asked = []
     prepare(paragraphIn('Mono'), env, false, createContextPool())
-    expect(asked.length).toBe(8 + 7 + 7 * 3)
+    expect(asked.length).toBe(2 + 8 + 7 + 7 * 3)
     asked = []
     prepare(paragraphIn('Mono', BEFORE_SPACE), env, false, createContextPool())
-    expect(asked.length).toBe(8 + 7 + 7 * 3)
+    expect(asked.length).toBe(2 + 8 + 7 + 7 * 3)
     // Where no offset between words passes, the group is cut as a group without words is.
     asked = []
     const unsafe = prepare(paragraphIn('Every'), env, false, createContextPool())

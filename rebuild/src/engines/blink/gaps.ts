@@ -272,7 +272,7 @@ export function positionsRunBackwards(sink: GapSink, sh: Shaper, sr: ShapeResult
 
 // ---- The cut predictor (shape.ts windowAdjust16) ----
 
-const NESTED_WINDOW_WIDER_DETAIL = 'the window the shrink of the wide window takes here is not the one predicted from the total of the widest window: a string measures narrower than a window inside it, which the prediction rests on (DESIGN.md §4.6, "Blink\'s cut predictor"); the adjustment is the prediction\'s window\'s'
+const NESTED_WINDOW_WIDER_DETAIL = 'the window the shrink of the wide window takes here is not the one predicted from the total of the widest window: a string measures narrower than a window inside it by more than the zoomed font size, which the prediction rests on (DESIGN.md §4.6, "Blink\'s cut predictor"); the adjustment is the prediction\'s window\'s'
 
 // The shrink of the wide window across offset k of group g and the prediction of the window it takes, over the same
 // totals, take different windows (shape.ts windowAdjust16).
