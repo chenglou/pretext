@@ -1739,10 +1739,12 @@ to be cut again (a window its search measures inside it says so, and where one s
 is a piece; where no window is measured before an unsafe cut, its total is). The shrink then takes the window it took and
 measures its two sides as before, so the cuts, the adjustments and the lines are the loop's, on a premise about fonts
 (§4.6, "Blink's cut predictor"). Unit: per shrink, two totals where it measured one a window. Under the stand-in Canvas
-(`tools/words-count.ts`, 1,000 messages a set, a list of contexts a message, 320px then 260, 380 and 440px) a message is
-prepared and filled at 320px with these questions and UTF-16 units, words first's beside them: the bench's mix 154.4 and
-659 (157.1 and 780), its real set 167.4 and 694 (175.1 and 747), the eleven languages 218.1 and 834 (273.2 and 1,210),
-plain ASCII 132.4 and 560 (132.2 and 560); the later widths ask what they asked, within 0.3 of a question.
+(`tools/words-count.ts`, 1,000 messages a set, a list of contexts a message, 320px then 260, 380 and 440px; since the
+fix round of 2026-09-23 a lone U+2028 takes the space's advance there, as Blink maps it to the space glyph) a message is
+prepared and filled at 320px with these questions and UTF-16 units, the tree before words first beside them: the
+bench's mix 150.8 and 636 (180.0 and 1,981), its real set 161.6 and 658 (201.2 and 2,115), the eleven languages 215.0
+and 822 (268.9 and 1,927), plain ASCII 127.3 and 527 (159.5 and 1,870); at the next width, 260px, a kept mix message asks
+33.4 and 120 (60.6 and 269). The fix round's check of a style's space (§4.6) adds about two questions a message.
 
 **Recipe added in the profiling phase** (2026-09-19; research/PROFILING-START.md, item 3).
 
