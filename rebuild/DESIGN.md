@@ -1679,7 +1679,15 @@ at its break widths lost their widths, 2 their breaks). A window the extension t
 into the side, and the sides it shrinks to are no better: in Euphemia UCAS ` 🙏🙏` alone takes the space wide, which
 round 2's form of the rule, extending without that bound and over Latin-1 sides as well, did in 37 to 41 of the second
 check's lab cases. The same rule moves the cut search's windows where a side is such a piece, and there a cut whose
-side is one keeps no 0 it measured (`addPieces`).
+side after it is one keeps no 0 it measured (`addPieces`). Since 2026-09-23 only the side after the offset takes a
+piece in. A position before white space is the prefix measured from the cut before it plus the window's adjustment, and
+the side before the offset is that same string from the same cut, so whatever Canvas does to it cancels; taken further
+in, it no longer did. In 28px Gill Sans at DPR 3 the prefix ` .` of a Hebrew line, measured alone, kept a pair
+adjustment that the window `ה . ` counted again, 2.8 px, and Chalkboard SE, PT Sans and Euphemia UCAS lost breaks the
+same way (the fonts attack). On the lab cases of the three attacks and the owner's Hebrew set (5,622, pinned Chrome,
+DPR 2) the side-after form keeps every line the two-sided rule won over the base (71 line counts and 275 breaks) and
+loses 40 line counts and 67 breaks where that lost 55 and 111; with no rule the lines lose 29 and 56 but win only 45
+and 198, and the Hebrew set's widths go.
 
 A line that ends between two words finds its candidate by walking the positions at the group's cuts from the line's
 start (`wordCandidate`); on a plain paragraph those are sums the group holds, so the walk asks Canvas only where the word

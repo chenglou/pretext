@@ -805,12 +805,15 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
-  // A side that Canvas shapes as Common takes the next piece in: a word's pieces are short, and `, ` alone is no stand-in
-  // for the comma in its run. Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one shrinks
-  // back into the side, and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide space).
-  let first = cuts[i] === k ? i - 1 : i
+  // The side after k, where Canvas shapes it as Common, takes the next piece in: a word's pieces are short, and ` 12 `
+  // alone is no stand-in for the digits in their Devanagari run (American Typewriter kerns them under Common and not
+  // there). Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one shrinks back into the side,
+  // and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide space). The side before k
+  // stays: a position is the prefix measured from the cut before k plus this adjustment, and that side is the same string
+  // from the same cut, so what Canvas does to it cancels; taken further in, it didn't, and in 28px Gill Sans the prefix
+  // ` .` measured alone kept a pair adjustment that the window `ה . ` counted again (the fonts attack, 2026-09-23).
+  const first = cuts[i] === k ? i - 1 : i
   let last = i + 1
-  while (first > 0 && measuredAsCommon(sh.p, g, cuts[first]!, k) && prefix[last]! - prefix[first - 1]! < EXACT16) first--
   while (last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
   const to = cuts[last]!
@@ -951,7 +954,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, a, k) && !measuredAsCommon(p, g, k, b)))
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, k, b)))
 }
 
 // The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character

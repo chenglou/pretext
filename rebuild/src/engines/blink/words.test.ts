@@ -142,6 +142,20 @@ test('in a segmented paragraph a window side that Canvas shapes as Common takes 
   expect(asked).not.toContain(`,${LS}xxxx${LS}`)
 })
 
+test('a window side before the offset is never taken further in: it cancels against the position\'s prefix from the same cut', () => {
+  // `Script` narrows every space of a string that holds a letter. With a cut the cut search could make at 5, the position
+  // before the space at 6 is the prefix at 5, `—` measured from the cut, and the wide window's adjustment. `—` alone and
+  // the window's left side from the same cut are the same string, so whatever Canvas does to it cancels: 48 + 10 + 0.
+  // Taking the side in to `xxxx —` leaves `—` measured alone in the prefix, and ` —`, which ends the group and has no piece
+  // to take in, measured wide: 56 (the Gill Sans double count of the fonts attack, 2026-09-23).
+  const text = `xxxx \u2014 \u2014`
+  const p = prepared('Script', text)
+  const group = p.groups[0]!
+  group.cuts = [0, 5, 8]
+  group.prefixAtCut = [0, 48 * 65536, 76 * 65536]
+  expect(groupPrefix16({ p, gaps: null }, 0, 6) / 65536).toBe(58)
+})
+
 describe('blink candidate from the cuts', () => {
   test('an inspected paragraph, which searches and walks both, reports no gap of its words and gives the plain lines, at every width', () => {
     const families = ['Mono', 'Kern', 'Context']
