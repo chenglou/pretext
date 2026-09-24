@@ -1,6 +1,6 @@
 {
   "format": "pretext-painter-frozen/1",
-  "commit": "4f69813dc8c04b44ba0c468526ea92b028ec3ad3",
+  "commit": "37963dbf07b1ed54e9f33fbe6a2af785900743eb",
   "bun": "1.4.0",
   "bundles": {
     "no-facts": {

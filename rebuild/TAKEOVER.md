@@ -1,5 +1,32 @@
 # Takeover decisions and evidence
 
+2026-09-23, Chrome's references recorded again at `1e772c6`. Since `ff0f584`, where they were frozen, Chrome's tier 1 had
+shown 351 changed predictions without facts and 86 with them, 154 and 90 cases asking a Canvas question the record
+lacked, and 30,397 and 30,726 asking their questions in another order. One change made all of it: since `8075758` Blink's
+safe test asks the pair window before the wide window ([DESIGN.md](DESIGN.md), the cut of a group of 256 zoomed px or
+more), so that a nonzero pair rules an offset out before the wide window is shaped. The test gives the same answer
+either way, but a rejected offset now measures other strings, and an inspected paragraph raises the gaps of what it
+measures. Every changed prediction is in a gap list, in a case that passes all four metrics and is exact: 259 and 37
+hold the same `script-context` entries in another order, 92 and 49 hold them over other offsets (2 of them in a line's
+list too), and nothing else in a prediction moved; the new questions are pair windows the old order never reached.
+With the old order put back at `1e772c6`, tier 1 gives back every frozen prediction and question but repeats (25,865 and
+25,864 cases repeats only), so nothing else moved since `ff0f584`. `8075758`'s own notes ([GENERAL_COST.md](GENERAL_COST.md))
+call the gap changes intended; the references just weren't recorded again, and the painter differential couldn't paint
+those 505 and 176 cases. Recorded now from a clean checkout of `1e772c6`, both orders and both configurations: 0 status
+transitions and 0 exact-value changes against `ff0f584`'s ledgers (the ledgers' entries are byte for byte the same), the
+tier 2 gates lose 0 pairs and gain 0, so the adopted seeds stay, and every one of the 69,224 cases replays exactly. The
+plain predictor's line ranges equal the usual run's on every case without facts; it takes no facts, so beside the facts
+run it differs in 115 cases whose lines the lab's facts move, as in the words-first recordings. The lab README's rule for
+a change to the safe test hadn't been run for this one: the fonts probe, the old order against the new in pinned Chrome,
+finds 0 cuts, positions and layouts differing in 318 installed families, at ratio 2 (170,102 cuts, 644,318 layouts) and
+at ratio 1 (78,799 cuts, 507,040 layouts). What the order buys is small: over the tier's cases Chrome asks 50,859,752
+questions where the old order asks 50,915,739 without facts, and 53,308,502 where it asks 53,363,379 with them (0.1%).
+Chrome's tier 1 exits 0 again. The full gates (all engines, fresh) pass but for the citation ledger, and the painter
+differential paints all 69,224 Chrome cases in both configurations. The ledger's 17 lost citations are `1e772c6`'s own:
+the general-cost and plaintext rounds of 2026-09-21 and 09-22 dropped them from code comments (2 at `8075758`, 3 at `09dc717`, 8 at `0385720`, 4 at `a6ae4c6`), and
+putting them back edits files under the string storage rule, which sends Chrome's cases to tier 2, so that is a step of
+its own.
+
 2026-09-23, main merged at `b17a7ac`: #337 (the Safari 27 harness) and #338 (a count-only `layout()` walker). `src/`
 and every other file main owns take main's versions, so outside `rebuild/` the branch equals main but for two things:
 `knip.config.ts` keeps its `project` line, without which `bun run check` reports 338 unused files under `rebuild/`, and
