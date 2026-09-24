@@ -1,7 +1,7 @@
 # Browser bug dossier
 
 Candidates for browser bug reports found while rebuilding Pretext, reduced to standalone pages and checked on
-2026-09-18. **Nothing here has been filed and nobody was contacted.** Already tracked bugs stay in
+2026-09-18. **Entry 13 was reported to Chromium privately and entry 15 was filed as [Mozilla #2075174](https://bugzilla.mozilla.org/show_bug.cgi?id=2075174); nothing else here has been filed.** Already tracked bugs stay in
 `~/github/pretext/PLATFORM_BUGS.md`; this file says where a candidate is the same bug or a new facet of one.
 
 - Pages are in `pages/`. Each is one self-contained HTML file: installed macOS fonts only, an explicit `lang`, no
@@ -35,10 +35,10 @@ Candidates for browser bug reports found while rebuilding Pretext, reduced to st
 Most likely to be accepted first. Every entry is behaviour against a spec or against the browser's own other path
 (Canvas and DOM, or two kinds of canvas, disagreeing about the same text). The cause was read in source for all but
 entries 10, 12 and 13, where it is inferred. Entries 13 and 14 came later, from the engine owners' reductions in round 4;
-they keep their numbers, and their rows sit where they rank. Entries 15 and 16 came from the study of kept Canvas
-contexts of 2026-09-20 (`rebuild/research/CONTEXTS-HEAL.md`). No page was reduced for either, `pages/index.json`
-doesn't name them and no tracker was searched, so a probe is their evidence until someone reduces one, and their rows
-sit last, unranked.
+they keep their numbers, and their rows sit where they rank. Entries 15 and 16 came from the study of kept Canvas contexts of 2026-09-20 (`rebuild/research/CONTEXTS-HEAL.md`).
+Entry 15 was reduced to a page on 2026-09-24 and filed as [Mozilla #2075174](https://bugzilla.mozilla.org/show_bug.cgi?id=2075174). Its page isn't in `pages/` or `pages/index.json`:
+it has to be the first page a newly started Firefox loads, runs for 15 s and prints no `BUG …` title. Entry 16 still
+has no page and no tracker search, so a probe is its evidence until someone reduces one. Both rows sit last, unranked.
 
 | # | Browser | Bug | Page |
 |---|---|---|---|
@@ -56,7 +56,7 @@ sit last, unranked.
 | 10 | Firefox | After U+1F600 U+FE0E is shaped once in a new content process, plain U+1F600 is a missing-glyph box for a few seconds | `firefox-emoji-missing-after-text-presentation.html` |
 | 11 | Firefox | A tab misses its tab stop when its span starts inside a grapheme cluster | `firefox-tab-after-split-cluster.html` |
 | 12 | Firefox | `letter-spacing` opens a gap inside a joined Arabic word after a mark that a fallback font draws | `firefox-letter-spacing-cursive-fallback-mark.html` |
-| 15 | Firefox | A canvas context first used before Firefox has read the fonts' localized and legacy family names stays on the fallback font for as long as it lives; the DOM and a new context find the family | none yet; probe `rebuild/probes/contexts-start-up.ts` S1 |
+| 15 | Firefox | A canvas context first used before Firefox has read the fonts' localized and legacy family names stays on the fallback font for as long as it lives; the DOM and a new context find the family. Filed as [Mozilla #2075174](https://bugzilla.mozilla.org/show_bug.cgi?id=2075174) | `rebuild/platform-bugs/firefox-late-font-names.html` |
 | 16 | WebKit | A kept canvas font misses a loaded FontFace added to a font set that holds no face; a new context and the DOM use it | none yet; probe `rebuild/probes/contexts-start-up.ts` W7, W8 |
 
 New facets of bugs that are already tracked, for a comment on the existing report instead of a new one:
@@ -353,46 +353,66 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 
 ## 15. Firefox: a canvas context first used before the late family names arrive stays on the fallback font
 
-- **Browser:** Firefox 156.0, a browser that has just started. macOS 27.0.
-- **Steps:** no page yet. In a new browser, make an OffscreenCanvas context with
-  `font = '32px "ヒラギノ角ゴシック", monospace'` and measure `Hamburgefonstiv 0123` at once; three seconds later measure
-  again on the same context and on a new one, beside a DOM span in the same font.
-  `rebuild/probes/contexts-start-up.ts` S1 does this for four such names and eleven ways of touching the context.
-- **Expected:** the kept context measures what the DOM and a new context measure.
-- **Actual:** 385.33 px (monospace) everywhere at the start. After 0.6 to 1.8 s a new context and the DOM span measure
-  369.25 px (Hiragino Sans). The first context stays at 385.33 px for as long as it lives. Assigning the same font,
-  another font and back, `letterSpacing`, and `fontKerning` or `lang` changed and back from the start don't heal it.
-  `reset()` and a resize, each followed by the settings again, don't heal it either, nor does a font set that used a
-  `src: local()` rule. The same for the Chinese name of PingFang SC, the Korean name of Apple SD Gothic Neo and the
-  English legacy family name `Avenir Next Condensed Heavy`. Of 22 family names from common CSS font lists 9 behave so
-  on this Mac, `"ヒラギノ角ゴ ProN W3"` among them (`rebuild/probes/contexts-heal-attack.ts` H1). A change of the page's
-  FontFaceSet heals every such context. A page that waits twelve seconds first shows nothing. English canonical names
+- **Browser:** Firefox 156.0, the lab's pinned copy, and installed Firefox 156.0.1, each in a browser that has just
+  started. macOS 27.0.
+- **Steps:** open `rebuild/platform-bugs/firefox-late-font-names.html` as the first page
+  of a newly started Firefox: `open -n -a Firefox --args --new-instance --profile "$(mktemp -d)" file:///…/repro.html`,
+  or quit and restart a profile with the page first. A `<canvas>` context and an OffscreenCanvas context made at load
+  set `20px "ヒラギノ角ゴ ProN", monospace`, and once a second for 15 s they set it again and measure
+  `Hamburgefonstiv 0123`, beside a new OffscreenCanvas context, a DOM span, and a kept context and a span under the
+  English name `"Hiragino Kaku Gothic ProN"`. The page prints the table and a verdict.
+  `rebuild/probes/contexts-start-up.ts` S1 does the same for four such names and eleven ways of touching the context.
+- **Expected:** the kept contexts measure what the DOM and a new context measure.
+- **Actual:** 240.67 px (monospace) everywhere at first. 2 to 4 s after load a new context and the DOM span measure
+  230.77 px (Hiragino Kaku Gothic ProN), and the kept OffscreenCanvas context stays at 240.67 px to the end. The kept
+  `<canvas>` context moves to 230.80 px at the same reading only because the page sets `font` again: in a variant that
+  sets the font once at load, a `<canvas>` context and an OffscreenCanvas context both stay at 240.67 px. The English
+  name measures 230.77 px from the start. 11 of 11 starts with the page first show this (156.0 and 156.0.1, http and
+  file://, new and restarted profiles, with and without Firefox's first-run pages). Opened 15 s after start-up, every
+  column is right from the first reading (2 of 2). Chrome 153 and Safari 27 measure 230.78 px everywhere from the
+  first reading. From the probes: the same font string again, another font and back, `letterSpacing`, `fontKerning`
+  or `lang` changed and back from the start, and `reset()` or a resize followed by the settings again don't heal an
+  OffscreenCanvas context, nor does a font set that used a `src: local()` rule. A change of `fontKerning` or `lang`
+  after the names arrived heals one context once, and a change of the page's FontFaceSet heals every such context. The
+  same for the Chinese name of PingFang SC, the Korean name of Apple SD Gothic Neo and the English legacy family name
+  `Avenir Next Condensed Heavy`. Of 22 family names from common CSS font lists 9 behave so on this Mac,
+  `"ヒラギノ角ゴ ProN W3"` among them (`rebuild/probes/contexts-heal-attack.ts` H1). English canonical names
   (`"Hiragino Sans"`), generic keywords and a family that doesn't exist never moved in any run.
-- **Source:** the font group resolves its list once (`F/gfx/thebes/gfxTextRun.cpp:1917-1990`); the late names arrive by
-  `FontList::SetAliases`, which moves no generation (`F/gfx/thebes/SharedFontList.cpp:1057-1116`), and by
-  `font-info-updated`, which only `PresShell` observes (`F/layout/base/PresShell.cpp:11042-11047`); the context's own
-  font group cache hands the old group back (`F/dom/canvas/CanvasRenderingContext2D.cpp:4409-4478`). `reset()` reaches
-  `SetInitialState` (`CanvasRenderingContext2D.h:124-128`, `.cpp:1871`) and leaves the context's cache of font groups
-  alone (`:4457-4466`, `:4606-4608`). The names are read 8 s after start-up, 60 s on Windows
-  (`gfx.font_loader.delay`, `F/modules/libpref/init/StaticPrefList.yaml:7831-7838`), or from the first lookup of a name
-  that isn't ASCII, or of an ASCII name with a space whose front part is a family
+- **Source:** the font group resolves its list once (`F/gfx/thebes/gfxTextRun.cpp:1917-1990`), and again only when
+  the platform font list's generation moves or the user font set is rebuilt (`:3946-3965`). The late names arrive by
+  `FontList::SetAliases`, which moves no generation (`F/gfx/thebes/SharedFontList.cpp:1057-1116`; the generation is
+  written once, at `:726`), and by `font-info-updated`, which only `PresShell` observes
+  (`F/layout/base/PresShell.cpp:878`, `:11042-11047`); its reflow flushes the page's font cache
+  (`F/layout/base/nsPresContext.cpp:190-232`). An OffscreenCanvas returns early for the same font string and otherwise
+  gets the old group from the context's own cache (`F/dom/canvas/CanvasRenderingContext2D.cpp:4409-4478`). `reset()`
+  reaches `SetInitialState` (`CanvasRenderingContext2D.h:124-128`, `.cpp:1871`) and leaves that cache alone
+  (`:4457-4466`, `:4606-4608`). A `<canvas>` context takes its group from the page's font cache (`GetMetricsFor`,
+  `:4353`), so it heals when `font` is set after the reflow. The early return and the cache are new in 156 (Mozilla
+  #2060963, #2063742, #2064135). Before them every assignment on an OffscreenCanvas made a new font group (#2060963
+  comment 7), so there an assignment after the names arrived would have healed (155 not run). The names are read 8 s
+  after start-up, 60 s on Windows (`gfx.font_loader.delay`, `F/modules/libpref/init/StaticPrefList.yaml:7831-7838`),
+  or from the first lookup of a name that isn't ASCII, or of an ASCII name with a space whose front part is a family
   (`F/gfx/thebes/gfxPlatformFontList.cpp:1752-1781`).
-- **How sure:** high on the behaviour (2 of 2 S1 runs, the first form's run, 4 of 4 of the earlier A3 and A8 runs, and
-  the second reading's S1, H1, H2 and H5 runs). High on the cause: the once-only healing by `fontKerning` and the
-  healing by a never-seen spelling are what the cache's keys predict. Windows and Linux are from source only.
-- **Tracker:** not searched.
+- **How sure:** high on the behaviour: the page reproduces on every start (11 of 11), as did the probes (2 of 2 S1
+  runs, the first form's run, 4 of 4 of the earlier A3 and A8 runs, and the second reading's S1, H1, H2 and H5 runs).
+  High on the cause: the once-only healing by `fontKerning` and the healing by a never-seen spelling are what the
+  cache's keys predict. Windows and Linux are from source only.
+- **Tracker:** filed as [Mozilla #2075174](https://bugzilla.mozilla.org/show_bug.cgi?id=2075174) (Core, Graphics: Canvas2D), with the page. No earlier report is the same bug. Related:
+  Mozilla #2018524 (the same late names in DOM text on Windows), #950590 (the same problem for web fonts, fixed in 2013
+  by the rebuild generation check), and the three 156 changes above. The report suggests, as a guess, that
+  `EnsureFontList` also compare something `SetAliases` changes, like the shared list header's `mAliasCount`.
 - **What a page can do:** name its families by their canonical English names (`"Hiragino Sans"`, not
-  `"ヒラギノ角ゴシック"`), which resolve from the start. A font list that names the family in English right after its
-  localized name, as the classic Japanese lists do, finds the same font through the English name at once (from the
-  source's lookup order, not probed).
+  `"ヒラギノ角ゴシック"`), which resolve from the start, or list the English name before the localized one. A font
+  list that names the family in English right after its localized name, as the classic Japanese lists do, finds the
+  same font through the English name at once (from the source's lookup order, not probed).
 - **Pretext:** why Gecko's contexts are one prepared paragraph's, whatever list the caller keeps (`rebuild/src/index.ts`
   `prepare`). The rule ends the damage with the paragraphs prepared inside the window, which is from the browser's
   start until the late names are in. Those stay wrong until the page prepares them again, which nothing tells it to
   do, and one first filled after the names arrived measures with two fonts (`rebuild/tools/contexts-heal-attack-probe.ts`
   K1: 6 lines where the DOM has 3; K3: a word broken after its first character). Main keeps one context and assigns it
-  each font string in turn (`src/measurement.ts:127-176`), which is S1's "another string and back", so main's context
-  is stale the same way, on top of the widths its cache holds. What would give Gecko its list back, and with it ×0.92
-  on the chat mix and ×0.75 on plain ASCII: Firefox telling Canvas font groups about `font-info-updated`.
+  each font string in turn (`src/measurement.ts:127-180`, `:494-499`), which is S1's "another string and back", so
+  main's context is stale the same way, on top of the widths its cache holds; `clearCache()` keeps the context. What
+  would give Gecko its list back, and with it ×0.92 on the chat mix and ×0.75 on plain ASCII: a fix for [Mozilla #2075174](https://bugzilla.mozilla.org/show_bug.cgi?id=2075174).
 
 ## 16. WebKit: a kept canvas font misses a loaded FontFace added to a font set that holds no face
 
