@@ -39,9 +39,10 @@ such as `漢。` or `「漢`, and keep-all groups, are no exception: under
 `overflow-wrap: break-word`, Chromium retries an overflowing line with grapheme
 breaks, WebKit in Safari 26.5.2 breaks at an arbitrary position once the line has
 no earlier wrap opportunity, and Firefox admits a word-wrap break at every cluster
-start, all ignoring line-break classes. WebKit trunk keeps `漢。` together when not
-even `漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`), which Safari
-26.5.2 doesn't have. Several narrow rows passed only while this
+start, all ignoring line-break classes. WebKit keeps `漢。` together when not even
+`漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`); Safari 27 has this
+for text holding a character above U+00FF, and Safari 26.5.2 doesn't. Several
+narrow rows passed only while this
 missing break cancelled another error, such as a combining mark detached from its
 base by the forward carry, U+3000 not hanging, joined Arabic widths, raw controls
 or Chrome's text-spacing-trim. Firefox can
@@ -67,7 +68,8 @@ reads the LineBreak.txt class of a following letter, number or symbol, so an
 iteration mark such as `々` (NS) stays after `！`, while numeric affixes and
 opening punctuation break; other punctuation keeps its existing attachment.
 Small kana and `ー` (CJ) after EX follow the engine and page language; see
-Content Language. Safari's keep-all still breaks only at spaces. U+061B ARABIC
+Content Language. Safari 26's keep-all still breaks only at spaces; Safari 27's also
+breaks after punctuation in text holding a character above U+00FF. U+061B ARABIC
 SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a following
 Arabic word (LB29). Firefox also breaks after BA such as `|` and CL such as `}`
 before a letter or digit, which symbol chains do not model: installed Firefox
@@ -233,14 +235,9 @@ Hangul classes and CJ), where a mark takes its base's class. It keeps `ー`, sym
 such as `★`, supplementary ideographs and, after an ideograph, `〵` or an
 ideographic variation selector, but breaks after NS letters such as `々` or `〼`,
 and after `〵` following a closing bracket. `keepAllPairModel` picks Blink's rule,
-ICU4X's, or the legacy WebKit profile, whose keep-all breaks only at spaces.
-Safari 27 now permits breaks after opening, closing, initial, final and other
-punctuation in a 16-bit text box, while keeping dash punctuation, symbols and
-letters. This is not the Blink or ICU4X pair rule. Grapheme span edges remove
-internal opportunities, so `foo。bar日本語` at 40px uses five unmodified lines and
-four span lines, including in named covering fonts. The current public profile
-still predicts four; the maintained native miss remains visible while a
-versioned preprocessing policy is deferred (September 22, 2026).
+ICU4X's, or Safari 26's, whose keep-all breaks only at spaces; Safari 27 also
+breaks after opening, closing and other punctuation that isn't the text's last
+character, in text holding a character above U+00FF, but not after letters.
 
 Where the engine does not keep a pair, Pretext ends a keep-all run where UAX #14
 allows a break between the two line-break classes. The classes come from a table
@@ -988,18 +985,6 @@ Current counts belong in the `corpora/*-step10.json` snapshots, not here.
 
 ## Keeping Work Bounded
 
-Count-only layout does not need the range walker's source endpoints, paint-width bookkeeping or callbacks. The
-[prepared plaintext round](rebuild/PREPARED_LAYOUT_EXPERIMENT.md) specializes the existing simple count path while
-keeping whole admission, ordered emergency progress and preferred-cut replay. Complex data retains the common
-walker. This removes output work without changing measurements or adding prepared state.
-
-A compact numeric value can support unfamiliar widths without Canvas during layout, but preparation remains a
-separate question. Eager original-prefix columns retain linear data while submitting quadratic text on tiny-character
-inputs. Local singles/pairs and agreement with the whole width avoid that growth but cannot certify every longer
-context: a synthetic measurement can keep those observations unchanged and alter a triple. The bounded ASCII
-experiment retains native evidence and unsupported inputs; it is not a general font guarantee or a replacement
-for main's genuinely supported behavior. Remaining preparation and traversal costs are open, not lower bounds.
-
 Small operations became quadratic when repeated over growing user text. The
 history audit found these traps; the commits retain the implementation details:
 
@@ -1017,6 +1002,15 @@ The preferred-break failure needed one long hyphenated run producing many lines.
 An arbitrary continuation must seek to its starting boundary; an already
 positioned scan can carry its index. The shared complex walker's preferred-break
 lookup work is O(lines × log(cuts)); the simple batch walker carries the next cut.
+
+`layout()` needs only a count. On simple text, `countPreparedLines()` keeps just
+the line width and whether the line has content, with no line ends, pending
+breaks, paint widths or visitor calls. It keeps the simple walker's order: a
+whole segment is tried before its graphemes, each line takes at least one
+grapheme, and a line that overflows after a preferred cut resumes at that cut.
+It already holds the next cut after the one it resumes at, so it doesn't
+search. Other text still counts through the full walker. This removes work from
+the resize path without changing preparation or what it measures.
 
 Count total submitted Canvas text, not just calls. Measuring every prefix or
 suffix is quadratic even if each position triggers only one query. Safari's
@@ -1042,13 +1036,3 @@ without library code showed the same split, and four extra Canvas calls per
 prepare restored the drop. Fresh text never reaches those hits. Compare submitted
 Canvas text and first cold prepares, and treat a warm-only change there as a
 cache phase until installed Safari shows it.
-
-
-Fractional native count observation must measure line advance, not average
-rounded block height. In Safari 27, 20.96px CSS yields 41.90625px for two lines
-and 62.875px for three; dividing the former by two falsely makes the latter
-3.0007457 lines. Identical independently forced-line spans measure 20.960000038px
-advance. With the existing 0.02px geometry allowance, exactly one integer count
-fits captured 1/2/3/4/8/16/64-line blocks. Ambiguous/nonfinite geometry stays
-unobserved; planted wrong counts fail independently of a correct predicted
-height. This observer correction is applied to main and current alike.

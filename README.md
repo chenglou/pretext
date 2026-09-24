@@ -225,7 +225,7 @@ Notes:
 
 Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
 - `white-space: normal` and `pre-wrap`
-- `word-break: normal` and `keep-all`. Safari 27’s new keep-all punctuation breaks are not yet matched; no-space mixed text such as `foo。bar日本語` can use more native lines than Pretext predicts.
+- `word-break: normal` and `keep-all`
 - `overflow-wrap: break-word`. Very narrow widths can still break inside words, independent symbol runs, `keep-all` groups and kinsoku clusters such as `漢。`, but only at grapheme boundaries.
 - `line-break: auto`
 - `letter-spacing` as a numeric pixel value passed to `prepare()` / `prepareWithSegments()`

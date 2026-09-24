@@ -124,15 +124,3 @@ test('boundary, rich and flat #210 reproductions are required', () => {
   expect(ordinary.filter(input => input.origins.includes('issue/#208')).every(input => input.required?.includes('source'))).toBe(true)
   expect(ordinary.some(input => input.text === '\u200B≤100nA\u200B' && input.font === '12px Arial' && input.width === 105)).toBe(true)
 })
-
-
-test('Safari 27 keep-all native gap retains failures separately from span obligations', () => {
-  const rows = generateCases(measure, { schedule: 'ordinary', browser: 'safari' })
-  const input = rows.find(input => input.origins.includes('maintained/keep-all/safari ideographic punctuation keep-all boundary'))!
-  expect(input.id).toBe('wrap-06c1e0111950efed')
-  expect(input.required).toEqual(['lineCount', 'breaks'])
-  expect(input.note).toContain('five lines')
-  expect(input.heightSource).toBe('layout')
-  expect(input.lineMethod).toBe('span')
-  expect(rows.filter(row => row.family === 'keep-all' && row.id !== input.id).every(input => input.required?.includes('height'))).toBe(true)
-})

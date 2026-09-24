@@ -8,6 +8,7 @@
 
 ### Changed
 
+- `layout()` is two to three times faster in Chrome and Safari on text without letter spacing, preserved spaces, tabs, hard breaks, soft hyphens, no-break spaces or invisible controls other than zero-width spaces, which covers most prose (#338).
 - Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, since Safari's check for keeping a word's kerning with a following space no longer uses a generated bidi class table (#311).
 
 ### Removed

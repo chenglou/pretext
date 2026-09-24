@@ -181,6 +181,10 @@ export type GeckoTextRun = {
   scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
   hasShy: boolean
+  // The run's word-break is break-all or its line-break anywhere, which make a cluster boundary inside a word a break
+  // opportunity (linebreak.ts). One text run has one of each: a frame continues a text run only under the same two
+  // (prepare.ts continuesAcross).
+  breaksAnywhere: boolean
   // Flags::HasTrailingBreak (nsTextFrame.cpp:1835-1848): the line breaker ended on a break opportunity when this run was
   // flushed with line breaks, at a frame text can't cross other than <br> or at the block's end.
   trailingBreak: boolean
@@ -234,6 +238,8 @@ export type InWord = {
 export type InWordEntry = {
   // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), and whether it shows a group that
   // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
+  // At a break opportunity the unit holds of itself only an inspected paragraph asks either (advance.ts ligatureAtBreak,
+  // groupAtBreak).
   ligature: boolean | null
   group: boolean | null
   // The connected row that starts here or includes this interior cluster boundary; its records share one row (rowAround).
@@ -278,6 +284,11 @@ export type InWordReason =
   // stands in as one group, or it ends a part of one.
   | { kind: 'inside-ligature-row'; at: number }
   | { kind: 'between-ligatures'; at: number }
+  // An optional ligature, or a group that required shaping forms, spans the offset, a break opportunity the unit holds of
+  // itself, where the port doesn't look for one (advance.ts ordinaryBreakAt, ligatureAtBreak, groupAtBreak); reported by an
+  // inspected paragraph only.
+  | { kind: 'optional-ligature'; at: number }
+  | { kind: 'group-at-break'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
   // The two sides don't add up to the unit, which inside a long unit is the offset's window (`unitAu` is its width, as
   // the gap's detail prints it). `sides` is how they were measured (inWordAdvance), `au` their sum, or what the

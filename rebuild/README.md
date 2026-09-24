@@ -16,7 +16,8 @@ Blink/Gecko lookups with preserved correctness outcomes and complete phase timin
 preparation gain and mixed new-width costs. Main's resize gap remains open.
 
 The current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md) specializes count-only layout in the public
-engine; the redo core matches `0bdea4d`. Fair public-API pairs show ordinary repeats about 31–70% faster across all three
+engine; the redo core matches `0bdea4d`. Main took a simpler form of that counter (#338), and since 2026-09-23 `src/` is
+main `b17a7ac` (TAKEOVER.md). Fair public-API pairs show ordinary repeats about 31–70% faster across all three
 browsers. A bounded numeric ASCII experiment supports Canvas-free layout on observed inputs, but leaves Unicode,
 contextual shaping, broader main-pass coverage and a large preparation gap open. Preparation ownership and the next
 broader representation are the priority. [Exact identity source maps](experiments/plaintext-round/preparation-cost-account.md)

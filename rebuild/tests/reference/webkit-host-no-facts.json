@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "webkit-host",
   "config": "no-facts",
-  "inputsSha256": "4619a3765a7397afdb134a9d4d5974497deafb400101e6a6400a84cb8ae4f246",
-  "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
+  "inputsSha256": "3c02182e592f8b1e7f15f2f6156b1f55fd1762a954a0dc7c75a633a665a713a4",
+  "commit": "4f417c914bede548850508a357e9e741e68e3e7f",
   "dirty": [],
-  "createdAt": "2026-09-19T18:20:43.597Z",
-  "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
+  "createdAt": "2026-09-23T19:36:41.695Z",
+  "reason": "the requirements audit's WebKit drop, narrowed after its reviews (4f417c9): the probe for a font list that resolves nothing isn't asked of a list naming serif, sans-serif, monospace or system-ui, where an inspected paragraph asks it and reports canvas-language; the context pool of such a box under a Han, kana or Hangul locale changes on the plain path and the inspected one's questions move; recorded again at 4f417c9, both orders",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -31,6 +31,12 @@
       "commit": "0163d4cda8bdd2a865381742919d6e534f96bbe3",
       "createdAt": "2026-09-19T09:23:47.754Z",
       "reason": "X2, the memo goes (research/ARCHITECTURE-PLAN-2.md): no port keeps measured strings any more, so a question asked again is a real ask. Every prediction equals the previous reference's (tier 1: repeats only in every changed case, 0 dropped, 0 other, 0 new questions). Recorded again at the merge commit 0163d4c in both orders: 0 status transitions and 0 exact-value changes against the previous ledgers in both configurations, gates lost 0; the plain predictor's run differs from the usual one only in cases the ledger marks history-dependent.",
+      "cases": 63987
+    },
+    {
+      "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
+      "createdAt": "2026-09-19T18:20:43.597Z",
+      "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
       "cases": 63987
     }
   ],
@@ -619,16 +625,7 @@
   },
   "cases": 63987,
   "ledger": {
-    "headerSha256": "a3d2e2e3bf853f8c785c8f322ef49cd0b14ba94e8cf6bb238b64df321056b187",
-    "entriesSha256": "3ac6f30f7a3127d5e41656940d19593542631dbb561e0f18894645ec26f5c053"
-  },
-  "ledgerReclassified": {
-    "scorer": 8,
-    "format": "pretext-ledger/3",
-    "evidence": ".artifacts/tests/migrations/takeover-20260920/webkit-host-no-facts/migration.json",
-    "predictionsUnchanged": true,
-    "canvasRecordsUnchanged": true,
-    "nativeHistoryAdded": 0,
-    "predictionOrderDependent": 4
+    "headerSha256": "3d18b20f825331d0868225ad1721fcf6397fad37e69a700d8762b822229750bf",
+    "entriesSha256": "a877b5d33ab998294e5f306a5f0b02e8e3f19a7d4d5140840d54b85ca459e79b"
   }
 }

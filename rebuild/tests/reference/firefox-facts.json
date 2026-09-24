@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "firefox",
   "config": "facts",
-  "inputsSha256": "503255d22de7299b9eff2e8ffde9d4c96e9105d60687bb7d031e62cedbba352c",
-  "commit": "6d71b371b3f453f520e4606c101a8be2c21c0cb7",
+  "inputsSha256": "f9d24d24f81192427dc1753d43fd5f83deb0c6f2bf007d66cbc4ce64616cc734",
+  "commit": "4f417c914bede548850508a357e9e741e68e3e7f",
   "dirty": [],
-  "createdAt": "2026-09-20T16:00:08.638Z",
-  "reason": "the profiling phase's first merges (6d71b37): prepare takes the caller's list of Canvas contexts, and Gecko's fill asks Canvas for windows of a run where a gap's text stands alone and scans a plain paragraph at once; the fill asks 1,872 questions the older record lacks and no status changed (0 transitions in both orders); recorded again at the merge",
+  "createdAt": "2026-09-23T19:39:05.155Z",
+  "reason": "the requirements audit's Gecko drops, narrowed after their reviews (4f417c9): a plain paragraph measures what crosses an in-word offset only where the pair placement can use it, and the ligature test and the group count aren't asked at a break opportunity a shaping unit holds of itself (between Han characters, after a hyphen, a dictionary break), where an inspected paragraph asks them and reports in-word-prefix; the plain path asks fewer questions and the inspected one's move; recorded again at 4f417c9, both orders",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -37,6 +37,12 @@
       "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
       "createdAt": "2026-09-19T18:20:26.665Z",
       "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
+      "cases": 63771
+    },
+    {
+      "commit": "6d71b371b3f453f520e4606c101a8be2c21c0cb7",
+      "createdAt": "2026-09-20T16:00:08.638Z",
+      "reason": "the profiling phase's first merges (6d71b37): prepare takes the caller's list of Canvas contexts, and Gecko's fill asks Canvas for windows of a run where a gap's text stands alone and scans a plain paragraph at once; the fill asks 1,872 questions the older record lacks and no status changed (0 transitions in both orders); recorded again at the merge",
       "cases": 63771
     }
   ],
@@ -402,13 +408,13 @@
       },
       {
         "file": "heldout-runs/part0-003.ndjson.zst",
-        "cases": 649,
-        "sha256": "7462682e4302a64b434d0fa6c80c3ea478ed181a692ae2dfa0b2d792d222ba81"
+        "cases": 650,
+        "sha256": "9cae36313affaea16b9b7b4a39bb1826fb7ba1262cc64e89d42d508898ab1628"
       },
       {
         "file": "heldout-runs/part0-004.ndjson.zst",
-        "cases": 460,
-        "sha256": "0b1993f1472cc1a1f3635ff64445738d949bb7f40f78f0a9e6633cee9e272ce7"
+        "cases": 459,
+        "sha256": "0561d8a3e64872c6f7dfa80bf8c161ad1cd319f0dd654e91cb2129ebb0dc54df"
       }
     ],
     "heldout-ws": [
@@ -520,16 +526,7 @@
   },
   "cases": 63771,
   "ledger": {
-    "headerSha256": "c67d4ec0b688f1af99b39fdfa427943943cf6b221dbac9ebdba70a8c511201ae",
-    "entriesSha256": "6369fef8c18931aeb6a9103e0fc4a8eccc3928eda6612ff835c33e085d2ca4e2"
-  },
-  "ledgerReclassified": {
-    "scorer": 8,
-    "format": "pretext-ledger/3",
-    "evidence": ".artifacts/tests/migrations/takeover-20260920/firefox-facts/migration.json",
-    "predictionsUnchanged": true,
-    "canvasRecordsUnchanged": true,
-    "nativeHistoryAdded": 0,
-    "predictionOrderDependent": 1
+    "headerSha256": "0445a6eae5fba7311a0194f8764ff802ce3978ce8f6c27fef83a4f769fa9ed89",
+    "entriesSha256": "ddf12ea7dd64cb14f1b502b268e75a179d9c28258f93a126183431f1c9ff1d1b"
   }
 }

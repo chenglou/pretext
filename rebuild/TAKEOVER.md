@@ -1,5 +1,108 @@
 # Takeover decisions and evidence
 
+2026-09-23, `rebuild-20260916` (`4512841`) merged into `blink-words-first`: the requirements audit's Gecko and WebKit
+drops, main `b17a7ac` and Chrome's references recorded again at `1e772c6`. No Blink file and no shared file that builds
+or measures Canvas strings changed since `90e0266`, so Chrome keeps words first's references, recorded at `2eb0edd`
+(`96da4af`), and Firefox and webkit-host take `4f417c9`'s; the registry takes both sides' rules, and the painter's frozen
+side is bundled again at the merge.
+
+2026-09-23, Chrome's references recorded again at `1e772c6`. Since `ff0f584`, where they were frozen, Chrome's tier 1 had
+shown 351 changed predictions without facts and 86 with them, 154 and 90 cases asking a Canvas question the record
+lacked, and 30,397 and 30,726 asking their questions in another order. One change made all of it: since `8075758` Blink's
+safe test asks the pair window before the wide window ([DESIGN.md](DESIGN.md), the cut of a group of 256 zoomed px or
+more), so that a nonzero pair rules an offset out before the wide window is shaped. The test gives the same answer
+either way, but a rejected offset now measures other strings, and an inspected paragraph raises the gaps of what it
+measures. Every changed prediction is in a gap list, in a case that passes all four metrics and is exact: 259 and 37
+hold the same `script-context` entries in another order, 92 and 49 hold them over other offsets (2 of them in a line's
+list too), and nothing else in a prediction moved; the new questions are pair windows the old order never reached.
+With the old order put back at `1e772c6`, tier 1 gives back every frozen prediction and question but repeats (25,865 and
+25,864 cases repeats only), so nothing else moved since `ff0f584`. `8075758`'s own notes ([GENERAL_COST.md](GENERAL_COST.md))
+call the gap changes intended; the references just weren't recorded again, and the painter differential couldn't paint
+those 505 and 176 cases. Recorded now from a clean checkout of `1e772c6`, both orders and both configurations: 0 status
+transitions and 0 exact-value changes against `ff0f584`'s ledgers (the ledgers' entries are byte for byte the same), the
+tier 2 gates lose 0 pairs and gain 0, so the adopted seeds stay, and every one of the 69,224 cases replays exactly. The
+plain predictor's line ranges equal the usual run's on every case without facts; it takes no facts, so beside the facts
+run it differs in 115 cases whose lines the lab's facts move, as in the words-first recordings. The lab README's rule for
+a change to the safe test hadn't been run for this one: the fonts probe, the old order against the new in pinned Chrome,
+finds 0 cuts, positions and layouts differing in 318 installed families, at ratio 2 (170,102 cuts, 644,318 layouts) and
+at ratio 1 (78,799 cuts, 507,040 layouts). What the order buys is small: over the tier's cases Chrome asks 50,859,752
+questions where the old order asks 50,915,739 without facts, and 53,308,502 where it asks 53,363,379 with them (0.1%).
+Chrome's tier 1 exits 0 again. The full gates (all engines, fresh) pass but for the citation ledger, and the painter
+differential paints all 69,224 Chrome cases in both configurations. The ledger's 17 lost citations are `1e772c6`'s own:
+the general-cost and plaintext rounds of 2026-09-21 and 09-22 dropped them from code comments (2 at `8075758`, 3 at `09dc717`, 8 at `0385720`, 4 at `a6ae4c6`), and
+putting them back edits files under the string storage rule, which sends Chrome's cases to tier 2, so that is a step of
+its own.
+
+2026-09-23, main merged at `b17a7ac`: #337 (the Safari 27 harness) and #338 (a count-only `layout()` walker). `src/`
+and every other file main owns take main's versions, so outside `rebuild/` the branch equals main but for two things:
+`knip.config.ts` keeps its `project` line, without which `bun run check` reports 338 unused files under `rebuild/`, and
+`TODO.md` and `ENGINE_FOLLOWUPS.md` keep a line pointing here. #338 is the simpler form of the counter `62e7ec9` put in
+this branch's copy of `src/line-break.ts`; that copy, 62e7ec9's snapshot refreshes and its edits to main's harness and
+docs gave way to main's, which carry main's own Safari 27 decisions (its keep-all case requires nothing). Under
+`rebuild/` only these docs changed. `bun run check` and main's 273 tests pass. The quick gates (all engines, fresh) give
+82ddc78's results gate for gate: the six projects type-check, 1,235 unit tests pass, tier 1 is unchanged in Firefox and
+webkit-host and keeps Chrome's open 351 / 86 changed predictions (no facts / facts), and the plain and pure checks pass.
+`lab/baselines/main-predictor.ts` reads `walkLineRanges()`, which #338 left as it was, and nothing freezes its output:
+the lab's main baseline ([lab/BASELINE-main.md](lab/BASELINE-main.md)) is a dated record of 2e5e2bd, and the main
+obligations come from sealed main runs. Only the book survey's main role reads `layout()`'s count. Under the stand-in
+Canvas the counts and heights of 2e5e2bd, 62e7ec9 and #338 are the same on all 72 book cases at their two widths and 42
+more, in each engine's profile (3,096 layouts an engine, 68 of the 72 cases on the new walker), and each equals the
+lines its own `walkLineRanges()` walks. In #338's own validation the corpus sweeps, each book whole at every 10 px step,
+moved in none of the three browsers, so the book survey was not run again in a browser.
+
+2026-09-23, the Firefox and webkit-host references recorded again after the requirements audit's drops as narrowed, both
+orders and both configurations, from 4f417c9 (kept on branch `audit-drops-narrowed-rec`), whose library equals this
+branch's. Against 90e0266's references there is no status transition in either browser or configuration, widths
+included, the exact values are the same, and tier 2's gates lose nothing. Every recorded case replays exactly, and the
+plain predictor's line ranges equal the inspected ones in webkit-host on every case, and in Firefox on all but 21 cases
+whose own native lines moved between the two runs too (history-dependent), as at the word scan's merge.
+
+2026-09-23, WebKit doesn't ask whether a font list resolves where the list names `serif`, `sans-serif`, `monospace` or
+`system-ui` ([DESIGN.md §4.4](DESIGN.md), "Taken out for speed";
+`webkit/content/list-probe-skipped-for-a-resolving-generic`). Under a Han, kana or Hangul locale each box asked two
+questions to learn whether any listed family resolves and, where none did, named the locale's standard family for
+Canvas. The audit's W1a dropped the probe on the premise that every page's list ends in a generic family; lists written
+for Windows (`Meiryo`, `"Malgun Gothic"`, `"Microsoft YaHei"` alone) don't, and moved lines without it. A list that
+names one of those four always resolves on macOS 27 (probe land-w1a: 168 of 168 lists under 14 Han, kana and Hangul
+locales), so only such a list skips the probe; an inspected paragraph asks it all the same and reports `canvas-language`
+where it resolves nothing. In webkit-host a real paragraph asks 88.0 questions where it asked 88.7 (CJK 109.0 where
+111.0); chat messages, set in English, ask what they asked. No line moved in any set, the tier corpus (63,729 cases)
+included.
+
+2026-09-23, Gecko doesn't look for a group that required shaping forms at a break opportunity a unit holds of itself
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-group-at-ordinary-breaks`), on the premise of the
+ligature test's entry below: no such group spans one. The audit's G3 took the premise at every break opportunity inside
+a unit, and under `word-break: break-all` it breaks inside Geeza Pro's lam ligatures on real Arabic, Persian and Hindi
+text; under `break-all` and `line-break: anywhere` the groups are looked for as before. An inspected paragraph asks the
+count there and reports `in-word-prefix` where a group spans the offset. In pinned Firefox a chat message asks 36.3
+questions where it asked 37.3 (222 characters where 231), a real paragraph 99.6 where 112.8 (858 where 960; CJK 114.5
+where 144.5). No line moved in any set, the reviews' included, nor in the tier corpus, where the audit's form lost 3
+(Geeza Pro under `break-all`).
+
+2026-09-23, Gecko doesn't test for an optional ligature at a break opportunity a unit holds of itself ([DESIGN.md
+§4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/no-optional-ligature-at-ordinary-breaks`): between Han
+characters, after a hyphen, at a dictionary break, but not where a line breaks a word inside itself, which includes
+every boundary under `word-break: break-all` and `line-break: anywhere`. The audit's G2 dropped the ligature test
+everywhere; two reviews found real text that moves without it, all lines broken inside a word between a ligature's
+letters (Latin under `break-all`, a long German word at 100px, soft hyphens, URLs under `overflow-wrap`), so the test
+stays there, and goes where most of its questions were, on the premise that no optional ligature spans such a break
+opportunity. An inspected paragraph asks the test there and reports `in-word-prefix`, so its lines are the plain ones.
+In pinned Firefox a chat message asks 37.3 questions where it asked 47.3 (231 characters where 251), a real paragraph
+112.8 where 183.0 (960 where 1,118; CJK 144.5 where 285.1). No line moved in the chat messages, real paragraphs, width
+sweep and books, nor in the reviews' sets, the ones where the audit's form moved lines included, nor in the tier corpus
+(63,516 cases), where the audit's form lost 13.
+
+2026-09-23, a plain Gecko paragraph measures what crosses an in-word offset only where the pair placement can use it
+([DESIGN.md §4.4](DESIGN.md), "Taken out for speed"; `gecko/measure/crossing-measured-where-placed`), the first of the
+requirements audit's drops (research/REQUIREMENTS-AUDIT.md on branch `audit-requirements`). The audit's candidate G1b +
+G4 was to ask the crossing measure and the pair placement only for a word broken inside itself. After the word scan that
+is nearly what the plain path did already; what it still asked was mostly between Han characters and in Thai, Khmer and
+Burmese, where no placement can use the answer and the advance is the unit less its suffix. Those questions now go to
+inspection alone, and both paths give the same advance, so no line can move and inspected output is unchanged. In pinned
+Firefox 156 a chat message asks 47.3 questions where it asked 54.1 (251 characters where 265), a real paragraph 183.0
+where 252.4 (1,118 where 1,338; CJK 285.1 where 376.3). No line moved anywhere, the adversarial corpus and both reviews'
+sets included; the knockout's 39 losses, which dropped both everywhere, don't occur.
+
 2026-09-23, Blink's cut predictor (branch `blink-words-first`, on words first; [DESIGN.md §4.4, §4.6](DESIGN.md)): the
 shrink of the wide window no longer measures every window only to learn that it is still 256 zoomed px or more. A plain
 paragraph predicts the window it takes from the widest window's total, measures the window before it and that one, and

@@ -417,6 +417,8 @@ function inWordDetail(r: InWordReason): string {
     case 'group-mark-advances': return `offset ${r.at} inside a ligature group whose marks have advances of their own, which go to the part holding them (gfxTextRun.cpp:238-322)`
     case 'inside-ligature-row': return `offset ${r.at} inside one of several ligatures in a row, which Canvas tests pair by pair and the unit's shaping takes from its start (hb-ot-layout.cc:1917-1945)`
     case 'between-ligatures': return `offset ${r.at} between ligatures in a row, which Canvas tests pair by pair and the unit's shaping takes from its start (hb-ot-layout.cc:1917-1945)`
+    case 'group-at-break': return `offset ${r.at}: a break opportunity inside a shaping unit, which a ligature group that required shaping forms spans (Canvas counts fewer groups at 2px of letter spacing, CanvasRenderingContext2D.cpp:4759-4790), whose advance the DOM gives its clusters in shares (ComputeLigatureData, gfxTextRun.cpp:238-322); the port doesn't look for groups at such an offset and takes the value as if none spanned it`
+    case 'optional-ligature': return `offset ${r.at}: a break opportunity inside a shaping unit, where the clusters on its two sides measure otherwise in width or ink box with optional ligatures off (letterSpacing 0.001px), so a ligature may span it, whose advance the DOM gives its clusters in shares (ComputeLigatureData, gfxTextRun.cpp:238-322); the port doesn't test for optional ligatures at such an offset and takes the value as if none formed`
     case 'group-ends': return `offset ${r.at} inside a ligature group whose ends Canvas can't confirm: ${inWordDetail(r.end)}`
     case 'sides': {
       let sides: string
