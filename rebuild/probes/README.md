@@ -120,6 +120,10 @@ may read the DOM freely; this is research, not the library.
   `../tools/bwfa-realtext-cases.ts` writes the real-text attack's lab sets (pre-wrap chat, headings with letter spacing,
   word spacing, soft hyphens, script faces, Nastaliq and the calligraphic Arabic faces, body text); `lab/run.ts
   --chrome-scale=<ratio>` lays them out at another device pixel ratio.
+- `../tools/coverage-probe.ts` (coverage C1; no library in the page): which characters of a text a face draws itself,
+  by the two-fallback test of `src/measure/font-checks.ts` (a character that measures otherwise under `<face>,
+  monospace` than under `<face>, serif` is drawn by a generic), and each word with its space measured alone and after
+  the words before it that keep the string below 250px, where the two differ.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word

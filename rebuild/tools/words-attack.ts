@@ -4,7 +4,7 @@
 //
 //   bun rebuild/tools/words-attack.ts --a=<base checkout> --b=<checkout> --cases=<cases.ndjson>[,<more>]
 //     [--widths=60,150,400] [--boundary=yes] [--canvas=usual|fine|across|far|backwards|f32|script-space] [--dpr=2] [--limit=N] [--jobs=N]
-//     [--record=no-gap] [--out=<report.json>]
+//     [--record=no-gap|gap] [--out=<report.json>]
 //
 // tools/two-trees.ts with a plain predictor on both sides compares line ranges alone. This driver loads both checkouts'
 // function sets (src/index.ts) in one process and compares, per case and width, as JSON:
@@ -209,7 +209,7 @@ type FunctionSet = {
   paragraphGaps: (prepared: unknown) => unknown[]
 }
 type Walked = { lines: string[]; infos: string[]; widths: number[]; premiseGaps: Set<string>; error: string | null }
-type Difference = { id: string; family: string; width: number; check: 'trees' | 'candidate' | 'inspected'; first: string; gaps: string[] }
+type Difference = { id: string; family: string; width: number; check: 'trees' | 'candidate' | 'inspected' | 'gap'; first: string; gaps: string[] }
 type SliceResult = {
   layouts: number; lines: number
   differ: Record<string, number>; errors: Record<string, number>
@@ -317,6 +317,8 @@ async function work(): Promise<void> {
         ]
         for (const name of inspected.premiseGaps) result.premiseGaps[name] = (result.premiseGaps[name] ?? 0) + 1
         const gaps = [...inspected.premiseGaps]
+        // --record=gap also keeps the layouts whose inspected paragraph reports a premise's gap where nothing differs.
+        if (options.get('record') === 'gap' && gaps.length > 0 && result.differences.length < 40 && checks.every(check => check[1] === null)) result.differences.push({ id: c.id, family: c.family, width, check: 'gap', first: '', gaps })
         for (let k = 0; k < checks.length; k++) {
           const first = checks[k]![1]
           if (first === null) continue

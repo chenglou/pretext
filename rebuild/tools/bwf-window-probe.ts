@@ -1,8 +1,9 @@
 // Where trees of Blink's port part on one paragraph, read against Chrome's own positions: each tree's cuts, its position
 // at every offset of every group, the wide windows it measured on the way (a tree whose shape.ts pushes
-// [g, k, from, to, a, b, window, left, right, d] into globalThis.__bwfWin, as a diagnostic copy does), its lines at the
-// entry's width, and Chrome's position of every offset on one line (the width of a Range from the group's start) and
-// its own lines at the width.
+// [g, k, from, to, a, b, window, left, right, d] into globalThis.__bwfWin, as a diagnostic copy does), what a tree's
+// line breaker pushes into globalThis.__bwfLog (a diagnostic copy's ShapeLine steps), its lines at the entry's width, and
+// Chrome's position of every offset on one line (the width of a Range from the group's start) and its own lines at the
+// width.
 //
 //   BWF_TREES=<name>=<checkout>,... BWF_WIN=<entries.json> bun rebuild/probes/runner.ts --browser=chrome \
 //     --probes=rebuild/tools/bwf-window-probe.ts --out=<dir> [--chrome-args=--force-device-scale-factor=1]
@@ -36,6 +37,7 @@ function run(e) {
   const env = environment()
   const paragraph = paragraphOf(e)
   globalThis.__bwfWin = []
+  globalThis.__bwfLog = []
   const prepared = prepare(paragraph, env, false, createContextPool())
   const p = prepared.state
   const sh = { p, gaps: null }
@@ -53,8 +55,10 @@ function run(e) {
     if (filled.kind === 'line') lines.push([filled.start, filled.end, filled.line.info.width])
     start = filled.next
   }
+  const log = globalThis.__bwfLog
   delete globalThis.__bwfWin
-  return { zoom: p.layoutZoom, groups, windows, lines }
+  delete globalThis.__bwfLog
+  return { zoom: p.layoutZoom, groups, windows, lines, log }
 }
 
 globalThis.${name} = { run }
