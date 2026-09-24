@@ -111,6 +111,15 @@ describe('blink word pieces', () => {
     expect(prepared('Mono', `xxxx xx${SHY}xx xxxx`).groups[0]!.cuts).toEqual([0, 5, 11, 15])
   })
 
+  test('a position after a stretch without a script of its own at a cut is measured in front of the text after it', () => {
+    // The cut search cuts the stretch at the space before `—`, and ` —` alone is shaped as Common, 3px wider in `Neutral`:
+    // in front of ` z` it measures as the paragraph's run (shape.ts prefixAfterCut16).
+    const text = 'xxxxxxxxxxxxxxxxxx — zzzzzzzzzzzzzzzz'
+    const p = prepared('Neutral', text)
+    expect(p.groups[0]!.cuts).toEqual([0, 18, 37])
+    for (let k = 1; k < text.length; k++) expect(groupPrefix16({ p, gaps: null }, 0, k) / 65536).toBe(10 * k)
+  })
+
   test('a word without a character of a script of its own stays in the piece beside it, which Canvas shapes under the script of the paragraph', () => {
     // `— ` and `12 ` alone hold no letter, so their spaces measure 2px wider than in the paragraph's run. Their two words
     // measure together what they measure apart, so as pieces of their own the group would add up to 136px.

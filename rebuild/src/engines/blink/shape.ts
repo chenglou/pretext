@@ -762,6 +762,16 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     checkedTo = nearB
     nearB = clusterEndAfter(p, nearB, hi)
   }
+  // In a group cut into words, the side after k never shrinks to a stretch Canvas would shape as Common alone: it reaches
+  // to the first character with a script of its own (measuredAsCommon; the side before k stays, as in
+  // adjustBetweenCuts16). At 16px and DPR 3 under 8px of word spacing, Didot's window at the space before ` : ` between
+  // Devanagari words shrank to a side ` :` alone, 2.6 zoomed px off its run (the loss round's window probe, 2026-09-24);
+  // reaching back as well on the side before k moved 16 lines of Arabic in Chalkboard SE that Chrome sides with the
+  // words on (the round's lab sets).
+  if (p.groups[g]!.words) {
+    const after = firstOwnScript(p, k, to)
+    if (after >= 0 && measuredAsCommon(p, g, k, after)) nearB = Math.max(nearB, clusterEndAfter(p, after, hi))
+  }
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
   // The windows the shrink would try, widest first, and their totals once measured.
@@ -912,15 +922,19 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   // pieces are short, and ` 12 ` alone is no stand-in for the digits in their Devanagari run (American Typewriter kerns
   // them under Common and not there). Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one
   // shrinks back into the side, and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide
-  // space). The side before k stays: a position is the prefix measured from the cut before k plus this adjustment, and
-  // that side is the same string from the same cut, so what Canvas does to it cancels; taken further in, it didn't, and in
-  // 28px Gill Sans the prefix ` .` measured alone kept a pair adjustment that the window `ה . ` counted again (the fonts
-  // attack, 2026-09-23). A group the cut search cuts alone keeps the windows before words.
+  // space). Where the next piece doesn't fit, the side takes clusters in until it holds a character with a script of its
+  // own, which Canvas shapes as the paragraph's run: at 16px and DPR 3 ` , ` between Devanagari words measures 2.6 zoomed px
+  // narrower alone than in the run in Didot and 4.8 in italic Gill Sans, and ` , म` with its letter measures as the run
+  // does, in them and in the other faces probed (probe bwf-loss comma, 2026-09-24). The side before k stays: a position is the prefix measured from the cut before k plus
+  // this adjustment, and that side is the same string from the same cut, so what Canvas does to it cancels; taken further
+  // in, it didn't, and in 28px Gill Sans the prefix ` .` measured alone kept a pair adjustment that the window `ה . `
+  // counted again (the fonts attack, 2026-09-23). A group the cut search cuts alone keeps the windows before words.
   const first = cuts[i] === k ? i - 1 : i
   let last = i + 1
   while (group.words && last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
-  const to = cuts[last]!
+  let to = cuts[last]!
+  if (group.words) while (to < hi && measuredAsCommon(sh.p, g, k, to)) to = clusterEndAfter(sh.p, to, hi)
   return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
 }
 
@@ -1006,6 +1020,16 @@ function recomposesAcrossWords(p: BlinkPrepared, from: number, to: number): bool
   return false
 }
 
+// The offset of the first character with a script of its own in [k, limit), or -1.
+function firstOwnScript(p: BlinkPrepared, k: number, limit: number): number {
+  for (let i = k; i < limit;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp) && scriptExtensionsOf(cp).length <= 1) return i
+    i += cp > 0xffff ? 2 : 1
+  }
+  return -1
+}
+
 // Whether [from, to) holds a character with a script of its own, one ScriptRunIterator doesn't resolve from its neighbours
 // (gaps.ts hasScriptNeutral names the others). Canvas resolves the script of a character without one (white space,
 // punctuation, digits, emoji) over the string it measures (RunSegmenter over each PlainTextItem,
@@ -1013,12 +1037,7 @@ function recomposesAcrossWords(p: BlinkPrepared, from: number, to: number): bool
 // that holds no such character is shaped as Common, and HarfBuzz then takes the font's default lookups
 // (hb-ot-layout.cc:582-586).
 function holdsOwnScript(p: BlinkPrepared, from: number, to: number): boolean {
-  for (let i = from; i < to;) {
-    const cp = p.text.codePointAt(i)!
-    if (!isCommonOrInheritedScript(cp) && scriptExtensionsOf(cp).length <= 1) return true
-    i += cp > 0xffff ? 2 : 1
-  }
-  return false
+  return firstOwnScript(p, from, to) >= 0
 }
 
 // Whether Canvas shapes [from, to) of group g, measured alone, under Common where the paragraph shapes it under its run's
@@ -1261,10 +1280,27 @@ function positionAtOffset16(sh: Shaper, g: number, k: number): number {
   const pair = adjustBefore16(sh, g, d, atCut ? cut : k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
   const base = cut === k || atCut ? group.prefixAtCut[lo]! - d + pair + (atCut ? measure16(sh, g, cut, k, group.start, group.end) : 0) :
-    group.prefixAtCut[lo]! + measure16(sh, g, cut, k, group.start, group.end) + pair
+    group.prefixAtCut[lo]! + prefixAfterCut16(sh, g, cut, k, d) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
   if (kept !== null) kept[k - group.start] = base - group.startTrim16
   return base - group.startTrim16
+}
+
+// The advance of [cut, k) of group g's own call, without the adjustment across k (d, which the caller places). Measured
+// alone, a stretch that holds a character other than white space and none with a script of its own is shaped as Common,
+// where the paragraph shapes it under its run's script (measuredAsCommon): in 16px Didot at DPR 3 ` :` between Devanagari
+// words measured alone was 2.6 zoomed px off its advance in the run (the fonts attack's Didot losses under 8px of word
+// spacing, 2026-09-24). There it is measured in front of the text after k up to a character with a script of its own,
+// which Canvas shapes as the run, less that text alone, which gives its advance with the adjustment across k, d.
+// rule blink/measure/prefix-without-script-in-context
+function prefixAfterCut16(sh: Shaper, g: number, cut: number, k: number, d: number): number {
+  const p = sh.p
+  const group = p.groups[g]!
+  if (!measuredAsCommon(p, g, cut, k)) return measure16(sh, g, cut, k, group.start, group.end)
+  let e = clusterEndAfter(p, k, group.end)
+  while (e < group.end && !holdsOwnScript(p, k, e)) e = clusterEndAfter(p, e, group.end)
+  if (!holdsOwnScript(p, k, e)) return measure16(sh, g, cut, k, group.start, group.end)
+  return measure16(sh, g, cut, e, group.start, group.end) - measure16(sh, g, k, e, group.start, group.end) - d
 }
 
 // Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning
