@@ -111,6 +111,15 @@ may read the DOM freely; this is research, not the library.
   U+2028 for U+0020), counting steps where a string measures narrower than a window inside it; and whether the space's
   advance depends on the script Canvas resolves (U+0020 alone, U+2028 alone, U+2028 between two letters of six scripts).
   A context per family and size: one context over every family grew the renderer past 9 GB.
+- `../tools/bwf-window-probe.ts` (bwf-window W1; the words-first fix round, 2026-09-23): where trees of Blink's port part on
+  one paragraph, each tree's cuts, its position at every offset of every group and its lines, beside Chrome's own
+  position of every offset on one line (a Range's width from the group's start) and its lines at the width; a
+  diagnostic copy of a tree whose `windowAdjust16` pushes the windows it takes into `globalThis.__bwfWin` shows those too.
+  It found the Gill Sans double count behind the two-sided window rule, Euphemia UCAS's wide lone spaces, Zapfino's
+  start-of-string `the` and the letter spacing Canvas gives after Arabic-Indic digits (DESIGN.md §4.4, §4.6).
+  `../tools/bwfa-realtext-cases.ts` writes the real-text attack's lab sets (pre-wrap chat, headings with letter spacing,
+  word spacing, soft hyphens, script faces, Nastaliq and the calligraphic Arabic faces, body text); `lab/run.ts
+  --chrome-scale=<ratio>` lays them out at another device pixel ratio.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word

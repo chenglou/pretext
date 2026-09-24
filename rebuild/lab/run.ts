@@ -26,8 +26,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from']
-const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--measure-first] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
+const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from', 'chrome-scale']
+const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--measure-first] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>] [--chrome-scale=<device pixel ratio>]'
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
@@ -239,6 +239,12 @@ const chromeLanguages: ChromeLanguages = chromeAppleLanguages === undefined || c
   : { appleLanguages: chromeAppleLanguages.split(',').filter(tag => tag !== ''), acceptLanguages: chromeAcceptLanguages }
 if (chromeLanguages.appleLanguages.length === 0 || chromeLanguages.appleLanguages.some(tag => !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(tag))) fail('--chrome-apple-languages must list language tags')
 const languages: ProcessLanguages = derivedLanguages(browser, undefined, chromeLanguages)
+// Chrome may lay out at another device pixel ratio than this display's (--force-device-scale-factor), as phones do; the
+// page reports it as devicePixelRatio, which rows and predictors read.
+const chromeScaleArg = args.get('chrome-scale')
+if (chromeScaleArg !== undefined && browser !== 'chrome') fail('--chrome-scale applies only to --browser=chrome')
+const chromeScale = chromeScaleArg === undefined ? null : Number(chromeScaleArg)
+if (chromeScale !== null && !(chromeScale > 0 && chromeScale <= 4)) fail('--chrome-scale must be a device pixel ratio in (0, 4]')
 
 // ---- Browser sessions ----
 
@@ -342,7 +348,7 @@ async function launchChrome(url: string): Promise<Session> {
     `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
-    ...languages.launch!.arguments,
+    ...languages.launch!.arguments, ...(chromeScale === null ? [] : [`--force-device-scale-factor=${chromeScale}`]),
   ])
   // Known before the window opens, so the page's first step can read the renderers (chromeUiLanguage).
   chromePid = session.pid
