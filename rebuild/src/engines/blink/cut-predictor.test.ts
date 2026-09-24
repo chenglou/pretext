@@ -8,7 +8,7 @@ import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createContextPool } from '../../measure/canvas.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { fillLine, firstLine, paragraphGaps, prepare } from './index.js'
-import { EXACT16, predictedWindow } from './shape.js'
+import { EXACT16, predictedWindow, type Total16 } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 let asked: { text: string; width: number }[] = []
@@ -119,9 +119,9 @@ describe('blink cut predictor', () => {
     const px = [300, 250, 262, 240, 200]
     const as = [0, 1, 2, 3, 4]
     const bs = [20, 19, 18, 17, 16]
-    const measured = (): { asked: number[]; total: (i: number) => { total16: number; exact: boolean } } => {
+    const measured = (): { asked: number[]; total: (i: number) => Total16 } => {
       const asked: number[] = []
-      return { asked, total: (i: number) => { if (!asked.includes(i)) asked.push(i); return { total16: px[i]! * 65536, exact: px[i]! * 65536 < EXACT16 } } }
+      return { asked, total: (i: number) => { if (!asked.includes(i)) asked.push(i); const exact = px[i]! * 65536 < EXACT16; return { total16: px[i]! * 65536, exact, rounded: exact ? 0 : 1, near: exact } } }
     }
     const bounded = measured()
     expect(predictedWindow(as, bs, 360 * 65536, 16 * 65536, bounded.total)).toBe(1)

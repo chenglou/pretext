@@ -143,6 +143,9 @@ export type BlinkGroup = {
   // Whether the group is cut into words first (shape.ts measureGroups, takesWords); where it isn't, it is cut by the cut
   // search alone and its windows are the ones before words, without the rule for sides Canvas shapes as Common.
   words: boolean
+  // Whether a group of one piece has an exact total (shape.ts addPieces): a group whose Canvas answer is rounded by at most a
+  // unit is kept whole under NEAR_MODE, and its window then isn't the piece's.
+  wholeExact: boolean
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its

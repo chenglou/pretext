@@ -242,6 +242,11 @@ export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: numb
   addGap(sink, 'float32-precision', p.styles[p.groups[g]!.style]!.run, 'a grapheme cluster of 256 zoomed px or more', sourceRange(p, a, b))
 }
 
+export function roundedPiece(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void {
+  if (sink === null) return
+  addGap(sink, 'float32-precision', p.styles[p.groups[g]!.style]!.run, 'a piece whose Canvas answer was 256 zoomed px or more, rounded by at most a unit, and whose total the spacing brings below 256', sourceRange(p, a, b))
+}
+
 export function unsafeCut(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
   if (sink === null) return
   addGap(sink, 'unsafe-to-break', p.styles[p.groups[g]!.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there', sourceOffsetAt(p, k))
