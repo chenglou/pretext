@@ -9440,7 +9440,7 @@
     "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > context that reaches past a word: the words give the wrong total, and an inspected paragraph reports context-past-a-word",
     "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)",
     "src/engines/blink/words.test.ts :: in a segmented paragraph a window side that Canvas shapes as Common takes the next piece in",
-    "src/engines/blink/words.test.ts :: a window side before the offset is never taken further in: it cancels against the position's prefix from the same cut",
+    "src/engines/blink/words.test.ts :: a window side before the offset is never taken further in: it cancels against the prefix the position measures from the same cut",
     "src/engines/blink/words.test.ts :: a face whose space takes another advance under Common than under Latin is cut by the cut search alone",
     "src/engines/blink/words.test.ts :: at a zoomed font size of 60 px and more a group is cut by the cut search alone, as before words"
    ],
@@ -10217,7 +10217,7 @@
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848",
   "gecko/lines/word-scan": "f460aff8db4700ce",
   "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
-  "blink/measure/words-first": "1427f10939452d22",
+  "blink/measure/words-first": "8cff29afac0a7b87",
   "blink/gap/context-past-a-word": "2fd5da1225a4e282",
   "blink/lines/candidate-from-cuts": "94744e61077356d4",
   "blink/gap/positions-run-backwards": "96427266229206d5",

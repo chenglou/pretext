@@ -144,7 +144,7 @@ test('in a segmented paragraph a window side that Canvas shapes as Common takes 
   expect(asked).not.toContain(`,${LS}xxxx${LS}`)
 })
 
-test('a window side before the offset is never taken further in: it cancels against the position\'s prefix from the same cut', () => {
+test('a window side before the offset is never taken further in: it cancels against the prefix the position measures from the same cut', () => {
   // `Script` narrows every space of a string that holds a letter. With a cut the cut search could make at 5, the position
   // before the space at 6 is the prefix at 5, `—` measured from the cut, and the wide window's adjustment. `—` alone and
   // the window's left side from the same cut are the same string, so whatever Canvas does to it cancels: 48 + 10 + 0.
