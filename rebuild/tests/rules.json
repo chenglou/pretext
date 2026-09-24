@@ -9604,6 +9604,25 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/exact-canvas-answers",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "fact",
+   "statement": "a measured total is taken as exact, a piece's, a window's or two words' together, where it is below 256 zoomed px and every Canvas answer it holds was below 256 zoomed px either side of 0 before the port adds word spacing and the letter spacing Canvas gives other characters than the DOM does: Canvas answers the float32 of a string's 16.16 total, the letter spacing of its context included, and the port's spacing is added to the rounded answer",
+   "source": "specs/blink-canvas.md §1.5; shape_result.cc:2230; engines/blink/shape.ts measureTotal16, Total16, windowAdjust16, predictedWindow, addPieces, addWordPieces; DESIGN.md §4.4",
+   "probes": [
+    "the constructed attack on words first (2026-09-23): under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives 2, and 16px Kailasa 5 where Chrome gives 4"
+   ],
+   "tests": [
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > a total that word spacing brings below 256 zoomed px is exact only where Canvas answered it below 256",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > without spacing the same total is 256 zoomed px or more and is cut beside the space"
+   ],
+   "declaredBy": "words-first fix round (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -10200,6 +10219,7 @@
   "gecko/measure/crossing-measured-where-placed": "32457a138e2697dd",
   "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
   "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
-  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066"
+  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066",
+  "blink/measure/exact-canvas-answers": "47460338b50d3eca"
  }
 }

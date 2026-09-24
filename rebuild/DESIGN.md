@@ -1485,7 +1485,7 @@ Exact arithmetic, no epsilons. `W(s)` is `measureText(s).width` in the engine's 
 Blink (specs/blink-lines.md §1, §2; specs/blink-canvas.md §1.5):
 
 ```
-raw16(word)  = Math.round(W(word) × 65536)                    exact while W < 256 zoomed px
+raw16(word)  = Math.round(W(word) × 65536)                    exact while |W| < 256 zoomed px
 run width    = f32(Σ raw16 over the run's words / 65536)      shape_result.cc:1576
 item width   = f32 sum of run widths                          :1609
 inline size  = Math.ceil(f32(f32(item width) × 64))           LayoutUnit::FromFloatCeil, raw LU
@@ -1622,7 +1622,13 @@ Blink, the cut of a group of 256 zoomed px or more (`shape.ts` `addPieces`, `pas
 2026-09-23 of what words first, below, leaves of a group;
 `gaps.ts` `unsafeCut`; profiling item 6). A Canvas total is an exact 16.16 value only below 256 zoomed px, so a wider
 group is measured in pieces, and the pieces add up to the group only where the two sides of a cut change nothing in
-each other. So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
+each other. Exact is Canvas's own answer: the port adds word spacing, and the letter spacing Canvas gives other
+characters than the DOM does, after Canvas rounded, so a total counts as exact where it is below 256 zoomed px and every
+Canvas answer it holds was, either side of 0 (`measureTotal16`, since 2026-09-23). Before, a total that negative word
+spacing brought below 256 zoomed px was taken as exact, a piece's or a window's, and so was a pair of words whose sum
+failed because of that rounding: under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives
+2, and 16px Kailasa 5 where it gives 4 (the constructed attack on words first).
+So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
 both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
 cut, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
 out before the wide window, which can shrink several times, is shaped, and a zero pair still needs the wide window. The

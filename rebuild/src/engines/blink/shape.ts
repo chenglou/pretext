@@ -411,13 +411,14 @@ function spacesStay(p: BlinkPrepared, style: number, from: number, to: number, d
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,
 // callEnd), in its context, with JS word spacing and the letter spacing Canvas gives other characters than the DOM does.
-export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): number {
+// `into`, where given, learns whether every Canvas answer the total holds was exact (measureTotal16).
+export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false, into: Total16 | null = null): number {
   const p = sh.p
   if (from >= to) return 0
   // RunSegmenter splits a 16-bit paragraph at script runs, and HarfBuzzShaper shapes every segment in its own call
   // (harfbuzz_shaper.cc:1072-1101), so nothing kerns or ligates across a script edge. A range crossing one is measured per
   // segment (research/SUPERSET-blink.md §2.1 C).
-  if (p.segments === null) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, USCRIPT_LATIN)
+  if (p.segments === null) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, USCRIPT_LATIN)
   const firstOrdinal = p.segments.scriptOrdinal(from)
   let ordinal = firstOrdinal
   const domScript = p.segments.scriptForOrdinal(ordinal)
@@ -426,13 +427,36 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // Keep the actual script at the question's start, and walk past only those ignored boundaries.
   while (end < to && (p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = p.segments.scriptEndForOrdinal(++ordinal)
   const sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
-  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, ordinal, end, domScript, sourceOrdinal)
-  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, domScript, sourceOrdinal)
+  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, into, ordinal, end, domScript, sourceOrdinal)
+  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal)
+}
+
+// A measured total, and whether the port takes it as exact: below 256 zoomed px, and made of Canvas answers that were
+// exact. Canvas answers a string with the float32 of its 16.16 total, the letter spacing of its context included, which is
+// exact only below 256 zoomed px either side of 0 (blink-canvas §1.5); the port then adds word spacing and the letter
+// spacing Canvas gives other characters than the DOM does (measureSameScript16), in 16.16 integers, after Canvas rounded.
+// So a total that the spacing brings below 256 zoomed px is exact only where Canvas's own answers were: under word
+// spacing of -2px, 16px STIX Two Text at DPR 2 gave a pair of words measured together a Canvas total of 256 zoomed px or
+// more, rounded, which the spacing brought below 256, and the port took the rounded total as a piece's (the constructed
+// attack of 2026-09-23: 3 lines where Chrome gives 2). Under a style whose opsz axis the port measures at the CSS size,
+// the answers are scaled first (contexts.ts raw16Of), which errs toward calling an exact answer inexact.
+// rule blink/measure/exact-canvas-answers
+export type Total16 = { total16: number; exact: boolean }
+
+export function measureTotal16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): Total16 {
+  const t: Total16 = { total16: 0, exact: true }
+  t.total16 = measure16(sh, g, from, to, callStart, callEnd, false, t)
+  if (!(t.total16 < EXACT16)) t.exact = false
+  return t
+}
+
+function isExact(t: Total16 | null): boolean {
+  return t !== null && t.exact
 }
 
 // The Canvas question uses its starting script. If ignored low boundaries hide other source scripts in this question,
 // sourceOrdinal starts their correction cursor; otherwise -1 keeps the exact constant-source fast path.
-function measureSameScript16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, domScript: number, sourceOrdinal: number = -1): number {
+function measureSameScript16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, into: Total16 | null, domScript: number, sourceOrdinal: number = -1): number {
   const p = sh.p
   const group = p.groups[g]!
   const st = p.styles[group.style]!
@@ -441,6 +465,7 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
+  if (into !== null && !(Math.abs(w) < EXACT16)) into.exact = false
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
@@ -453,11 +478,11 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
 
 // A cross-script range reads segments in source order, as the former left-first recursive split did.
 // Fold their values backwards to preserve that split's exact right-associated arithmetic, without an input-sized stack.
-function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, ordinal: number, end: number, domScript: number, sourceOrdinal: number): number {
+function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, into: Total16 | null, ordinal: number, end: number, domScript: number, sourceOrdinal: number): number {
   const widths: number[] = []
   let start = from
   for (;;) {
-    widths.push(measureSameScript16(sh, g, start, end, callStart, callEnd, noLigatures, domScript, sourceOrdinal))
+    widths.push(measureSameScript16(sh, g, start, end, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal))
     if (end === to) break
     start = end
     const firstOrdinal = ++ordinal
@@ -633,25 +658,26 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 
 // The adjustment across offset k inside a shaping call over [lo, hi) of group g: what the text before k and the text after
 // it change in each other's advances, W(window) − W(window before k) − W(window after k), over the widest window around k
-// inside [from, to) whose Canvas total is exact (below 256 zoomed px). Lookups read contexts of any length
+// inside [from, to) whose total is exact (measureTotal16: below 256 zoomed px, from exact Canvas answers). Lookups read
+// contexts of any length
 // (ChainContextFormat, hb-ot-layout-gsubgpos.hh), which a window of one cluster on each side misses: Noto Nastaliq Urdu
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-// `whole` is the measured total of [from, to), which the caller has or measures, or NaN where the caller hands down
+// `whole` is the measured total of [from, to), which the caller has or measures, or null where the caller hands down
 // `estimate` instead, a total [from, to) is near (the pieces it spans), since that total would say no more than that the
 // window is 256 zoomed px or more.
 //
-// The windows the shrink tries are known before any is measured, and it takes the first below 256 zoomed px. A plain
+// The windows the shrink tries are known before any is measured, and it takes the first whose total is exact. A plain
 // paragraph doesn't measure each in turn only to learn that it is still 256 zoomed px or more: it predicts the window
 // taken (predictedWindow) and measures the one before it and that one. That takes the shrink's window on a premise about
 // fonts that no source gives, that a string is never narrower than a window inside it; an inspected paragraph shrinks as
 // before, walks the prediction beside it over the same totals, and reports nested-window-wider where the two take other
 // windows, taking the prediction's, which is the plain paragraph's (DESIGN.md §4.6, "Blink's cut predictor"). What it
 // hands back is what the prediction measured, as a plain paragraph's, so the two go on to ask the same questions.
-type CutTotals = { left: number; right: number; whole: number }
+type CutTotals = { left: Total16 | null; right: Total16 | null; whole: Total16 | null }
 
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number, cutTotals: CutTotals | null = null, estimate: number = whole): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: Total16 | null, cutTotals: CutTotals | null = null, estimate: number = whole === null ? NaN : whole.total16): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
@@ -685,12 +711,8 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     as.push(a)
     bs.push(b)
   }
-  const totals = [whole]
-  const totalBy = (by: Shaper) => (i: number): number => {
-    const known = totals[i]
-    if (known !== undefined && !Number.isNaN(known)) return known
-    return totals[i] = measure16(by, g, as[i]!, bs[i]!, lo, hi)
-  }
+  const totals: (Total16 | null)[] = [whole]
+  const totalBy = (by: Shaper) => (i: number): Total16 => totals[i] ??= measureTotal16(by, g, as[i]!, bs[i]!, lo, hi)
   const total = totalBy(sh)
   let n = 0
   // The totals a plain paragraph knows once it took its window: `whole` and the ones its prediction measured.
@@ -698,7 +720,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   if (sh.gaps === null) {
     n = predictedWindow(as, bs, estimate, total)
   } else {
-    while (n + 1 < as.length && total(n) >= EXACT16) n++
+    while (n + 1 < as.length && !total(n).exact) n++
     if (sh.aside !== 'search') {
       // A total only the prediction measures decides nothing where it takes the loop's window, so its gaps are set aside.
       const aside = totalBy({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'walk' })
@@ -707,36 +729,36 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
       if (predicted !== n) {
         nestedWindowWider(sh.gaps, p, g, k)
         n = predicted
-        totals[n] = NaN
+        totals[n] = null
       }
     }
   }
   const a = as[n]!
   const b = bs[n]!
-  const left = measure16(sh, g, a, k, lo, hi)
-  const right = measure16(sh, g, k, b, lo, hi)
+  const left = measureTotal16(sh, g, a, k, lo, hi)
+  const right = measureTotal16(sh, g, k, b, lo, hi)
   if (cutTotals !== null) {
-    cutTotals.left = a === from ? left : NaN
-    cutTotals.right = b === to ? right : NaN
-    cutTotals.whole = known[0]!
+    cutTotals.left = a === from ? left : null
+    cutTotals.right = b === to ? right : null
+    cutTotals.whole = known[0] ?? null
   }
-  return total(n) - left - right
+  return total(n).total16 - left.total16 - right.total16
 }
 
-// Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first below 256 zoomed px, or the last. Predicted as
+// Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first whose total is exact, or the last. Predicted as
 // the first whose length, scaled from the widest window's `estimate`, is below 256 zoomed px times a margin that errs
 // toward a wider window, since a window too wide costs one more total and one too narrow walks back against the order of
-// the shrink. Then the window before it must measure 256 zoomed px or more, where it walks back, and it must measure less,
-// where it walks on (`total` measures a window once).
+// the shrink. Then the window before it must not be exact, where it walks back, and it must be, where it walks on
+// (`total` measures a window once).
 const PREDICTION_MARGIN = 1.0
 
-function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, total: (i: number) => number): number {
+function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, total: (i: number) => Total16): number {
   const last = as.length - 1
   const length0 = bs[0]! - as[0]!
   let i = 0
   while (i < last && !(estimate * ((bs[i]! - as[i]!) / length0) < EXACT16 * PREDICTION_MARGIN)) i++
-  while (i > 0 && total(i - 1) < EXACT16) i--
-  while (i < last && total(i) >= EXACT16) i++
+  while (i > 0 && total(i - 1).exact) i--
+  while (i < last && !total(i).exact) i++
   return i
 }
 
@@ -766,19 +788,20 @@ export function lastCutAtOrBefore(cuts: readonly number[], k: number): number {
 function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  if (lo !== group.start || hi !== group.end) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measureTotal16(sh, g, lo, hi, lo, hi))
   return heldAgainstSearch(sh, g, k, s => adjustBetweenCuts16(s, g, k))
 }
 
 // The wide window's adjustment across k inside group g's own call, between the cuts around k.
-// A plain paragraph hands down what the group's cuts already say of the window: a group of one piece is measured, and
-// the pieces between two cuts add up to about their window (windowAdjust16).
+// A plain paragraph hands down what the group's cuts already say of the window: a group of one piece is measured, a
+// piece's total is exact (a piece whose total isn't is one grapheme cluster, and no offset inside one is asked), and the
+// pieces between two cuts add up to about their window (windowAdjust16).
 function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const group = sh.p.groups[g]!
   const lo = group.start
   const hi = group.end
   const plain = sh.gaps === null
-  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? group.prefixAtCut[1]! : measure16(sh, g, lo, hi, lo, hi))
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? { total16: group.prefixAtCut[1]!, exact: true } : measureTotal16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
@@ -791,7 +814,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   while (last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
   const to = cuts[last]!
-  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? NaN : measure16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
+  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -824,7 +847,7 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
   const whole = cutTotals.whole
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
-    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, Number.isNaN(whole) ? estimate : whole) === 0
+    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, whole === null ? estimate : whole.total16) === 0
 }
 
 function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
@@ -889,18 +912,18 @@ function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number)
 // where no window is measured before an unsafe cut, the total is. An inspected paragraph skips it too, so it searches
 // where a plain one does and asks what that one asks, where an estimate is off (a ZWJ sequence is many units and one
 // glyph); the cut search the words are held against measures every range, as before.
-function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: number = NaN, estimate: number = NaN): void {
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: Total16 | null = null, estimate: number = NaN): void {
   const p = sh.p
   const group = p.groups[g]!
   // An accepted window may already have measured a child's whole range in this same shaping call.
-  const cutTotals: CutTotals = { left: NaN, right: NaN, whole: knownWhole }
-  if (Number.isNaN(knownWhole) && !(sh.aside !== 'search' && estimate >= 2 * EXACT16)) cutTotals.whole = measure16(sh, g, a, b, group.start, group.end)
+  const cutTotals: CutTotals = { left: null, right: null, whole: knownWhole }
+  if (knownWhole === null && !(sh.aside !== 'search' && estimate >= 2 * EXACT16)) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
   const mid = a + ((b - a) >> 1)
   let k = -1
   let boundary = -1
-  for (let turn = 0; turn < 2 && k < 0 && !(cutTotals.whole < EXACT16); turn++) {
-    for (let d = 0; k < 0 && !(cutTotals.whole < EXACT16) && (mid - d > a || mid + d < b); d++) {
-      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0 && !(cutTotals.whole < EXACT16); side++) {
+  for (let turn = 0; turn < 2 && k < 0 && !isExact(cutTotals.whole); turn++) {
+    for (let d = 0; k < 0 && !isExact(cutTotals.whole) && (mid - d > a || mid + d < b); d++) {
+      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0 && !isExact(cutTotals.whole); side++) {
         const c = side === 0 ? mid - d : mid + d
         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
         if (boundary < 0) boundary = c
@@ -909,12 +932,12 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
       }
     }
   }
-  if (k < 0 && Number.isNaN(cutTotals.whole)) cutTotals.whole = measure16(sh, g, a, b, group.start, group.end)
+  if (k < 0 && cutTotals.whole === null) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
   const whole = cutTotals.whole
-  if (whole < EXACT16 || boundary < 0) {
-    if (!(whole < EXACT16)) uncutCluster(sh.gaps, p, g, a, b)
+  if (isExact(whole) || boundary < 0) {
+    if (!isExact(whole)) uncutCluster(sh.gaps, p, g, a, b)
     cuts.push(b)
-    totals.push(whole)
+    totals.push(whole!.total16)
     zero.push(false)
     return
   }
@@ -923,11 +946,11 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
     k = boundary
     unsafeCut(sh.gaps, p, g, k)
   }
-  const scale = Number.isNaN(whole) ? estimate : whole
+  const scale = whole === null ? estimate : whole.total16
   const first = cuts.length
-  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN, scale * ((k - a) / (b - a)))
+  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
-  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN, scale * ((b - k) / (b - a)))
+  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
   zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !measuredAsCommon(p, g, a, k) && !measuredAsCommon(p, g, k, b)))
 }
 
@@ -969,17 +992,18 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
     if (own) seen = true
   }
   starts.push(group.end)
-  const word16: number[] = []
-  for (let i = 0; i + 1 < starts.length; i++) word16.push(measure16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
+  const word16: Total16[] = []
+  for (let i = 0; i + 1 < starts.length; i++) word16.push(measureTotal16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
   // passes[i]: whether starts[i] is a cut; both[i]: the two words around it measured together, where asked. A sum of 256
-  // zoomed px or more can't equal an exact total, so the two words together aren't asked then.
+  // zoomed px or more can't equal an exact total, so the two words together aren't asked then, and a sum holds only
+  // where the three totals are exact.
   const passes = [true]
-  const both = [NaN]
+  const both: (Total16 | null)[] = [null]
   for (let i = 1; i + 1 < starts.length; i++) {
-    const sum = word16[i - 1]! + word16[i]!
-    const together = sum < EXACT16 ? measure16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end) : NaN
+    const sum = word16[i - 1]!.total16 + word16[i]!.total16
+    const together = sum < EXACT16 ? measureTotal16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end) : null
     both.push(together)
-    passes.push(together === sum && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
+    passes.push(isExact(together) && word16[i - 1]!.exact && word16[i]!.exact && together!.total16 === sum && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
   }
   passes.push(true)
   // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
@@ -990,12 +1014,12 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
   for (let i = 0; i + 1 < starts.length;) {
     let j = i + 1
     while (!passes[j]!) j++
-    if (j === i + 1 && word16[i]! < EXACT16) {
+    if (j === i + 1 && word16[i]!.exact) {
       cuts.push(starts[j]!)
-      totals.push(word16[i]!)
+      totals.push(word16[i]!.total16)
       zero.push(false)
     } else {
-      addPieces(sh, g, starts[i]!, starts[j]!, cuts, totals, zero, j === i + 1 ? word16[i]! : j === i + 2 ? both[i + 1]! : NaN)
+      addPieces(sh, g, starts[i]!, starts[j]!, cuts, totals, zero, j === i + 1 ? word16[i]! : j === i + 2 ? both[i + 1]! : null)
     }
     zero[cuts.length - 1] = true
     i = j
