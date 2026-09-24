@@ -25,9 +25,10 @@ import { clampLU } from './layout-unit.js'
 // joining-technology there.
 import { width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
-import { blinkGraphemeRules } from './data.js'
+import { blinkBidiData, blinkGraphemeRules } from './data.js'
 import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import { GapAccumulator } from './gap-accumulator.js'
 import { contextPastAWord, floatSum, nestedWindowWider, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
@@ -363,11 +364,44 @@ function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
 }
 
 // The script Canvas shapes every code unit of a 16-bit Canvas string under: RunSegmenter runs over each PlainTextItem alone
-// (HarfBuzzShaper(item.text_), plain_text_node.cc:400-425; harfbuzz_shaper.cc:1080-1101), and SegmentWord makes an item of
-// every word unless the font can't be shaped word by word (:372-398). So U+3000 between Arabic letters is Common in Canvas,
-// where the paragraph keeps it in the Arabic run (probe critic-r2 blink-u3000: 10px of letter spacing adds 10px per U+3000
-// in Canvas and nothing in the DOM).
-export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string): Uint8Array {
+// (HarfBuzzShaper(item.text_), plain_text_node.cc:400-425; harfbuzz_shaper.cc:1080-1101). A string that may hold
+// right-to-left text (Character::MaybeBidiRtl of any code point, character.h:307-321), or any string on a right-to-left
+// context, is cut into ICU's level runs first unless it resolves as one left-to-right direction (plain_text_node.cc:278-351),
+// and SegmentWord makes an item of every word of each run unless the font can't be shaped word by word (:372-398). So
+// U+3000 between Arabic letters is Common in Canvas, where the paragraph keeps it in the Arabic run (probe critic-r2
+// blink-u3000: 10px of letter spacing adds 10px per U+3000 in Canvas and nothing in the DOM), and after Arabic-Indic digits
+// the space and `[2]` are a run of their own, a level below the digits, which Canvas shapes as Common and letter-spaces
+// where the paragraph, whose items of one direction the DOM shapes together, keeps them in the digits' Arabic run (probe of
+// the words-first fix round, 2026-09-23: `١٢٣` U+2028 U+2060 `[2]` in 64.5px Helvetica Neue takes -3px letter spacing on
+// four characters, and the same text in the DOM on none).
+export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string, rtl: boolean): Uint8Array {
+  if (!rtl && !mayHoldRtl(s)) return itemScripts(p, style, s)
+  const bidi = resolveIcuBidi(s, rtl ? 'rtl' : 'ltr', blinkBidiData)
+  if (!rtl && bidi.direction === 'ltr') return itemScripts(p, style, s)
+  const scripts = new Uint8Array(s.length)
+  for (let start = 0; start < s.length;) {
+    let end = start + 1
+    while (end < s.length && bidi.levels[end] === bidi.levels[start]) end++
+    scripts.set(itemScripts(p, style, s.slice(start, end)), start)
+    start = end
+  }
+  return scripts
+}
+
+// Character::MaybeBidiRtl(UChar32) (character.h:307-321), for any code point of the string (plain_text_node.cc:61-63).
+function mayHoldRtl(s: string): boolean {
+  for (let i = 0; i < s.length;) {
+    const cp = s.codePointAt(i)!
+    i += cp > 0xffff ? 2 : 1
+    if (cp >= 0x590 && cp !== 0x200b && !(cp >= 0x2010 && cp <= 0x2029) && !(cp >= 0x206a && cp <= 0xd7ff) && !(cp >= 0xff00 && cp <= 0xffff) &&
+      !(cp >= 0x1aff0 && cp <= 0x1b16f) && !(cp >= 0x20000 && cp <= 0x323af)) return true
+  }
+  return false
+}
+
+// The scripts of one bidi run of a Canvas string: RunSegmenter over each of its words where Canvas cuts words, else over the
+// run whole.
+function itemScripts(p: BlinkPrepared, style: number, s: string): Uint8Array {
   let splitPoint = false
   for (let i = 0; i < s.length && !splitPoint;) {
     const cp = s.codePointAt(i)!
@@ -469,7 +503,7 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
-  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
+  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s, group.rtl) : null
   measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts, domScript, sourceOrdinal)
   if (ls16 === 0) return w + adjust
   // Non-zero effective spacing requested the map above.

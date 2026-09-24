@@ -679,14 +679,16 @@
    "engine": "blink",
    "area": "measure",
    "kind": "recipe",
-   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ: spaces inside cursive runs get it, FF does not",
-   "source": "shape_result_spacing.cc:118-130; character.h:163-189",
+   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ: spaces inside cursive runs get it, FF does not; Canvas's scripts are RunSegmenter's over each item of the measured string, and a string that may hold right-to-left text, or any string on a right-to-left context, is cut into ICU's level runs first unless it resolves as one left-to-right direction, so after Arabic-Indic digits a space and `[2]` are Common in Canvas where the paragraph keeps them in the digits' Arabic run",
+   "source": "shape_result_spacing.cc:118-130; character.h:163-189, :307-321; plain_text_node.cc:278-351, :372-425; engines/blink/shape.ts canvasScriptsPerUnit, itemScripts",
    "probes": [],
-   "tests": [],
+   "tests": [
+    "src/engines/blink/script-measure.test.ts :: Canvas resolves the scripts of each bidi level run of a string alone"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "catalogue 2026-09-16; restated for Canvas's bidi items (words-first fix round, 2026-09-23)"
   },
   {
    "id": "blink/measure/zwj-inside-group-edge",
@@ -9670,7 +9672,7 @@
   "blink/measure/v8-short-slice-storage": "34fdb58f2d0eea76",
   "blink/measure/force-16bit-string": "8cc0106eb59680b3",
   "blink/measure/word-spacing-in-js": "1a8c1e80301c2317",
-  "blink/measure/letter-spacing-cursive-adjust": "963c6f4ffb913063",
+  "blink/measure/letter-spacing-cursive-adjust": "44a195e9b59991ed",
   "blink/measure/zwj-inside-group-edge": "9b5c029fb144b2a0",
   "blink/measure/joining-context-opentype": "0449ced74a425e52",
   "blink/shape/joining-reads-5-code-points-context": "11c3bf3eeeca2769",

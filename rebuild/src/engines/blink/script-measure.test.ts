@@ -6,7 +6,7 @@ import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import { prepare } from './index.js'
 import { GapAccumulator } from './gap-accumulator.js'
 import { scriptsPerUnit } from './script.js'
-import { groupPrefix16, measure16 } from './shape.js'
+import { canvasScriptsPerUnit, groupPrefix16, measure16 } from './shape.js'
 
 let asked: string[] = [], largeAnswers = false
 class Context {
@@ -164,4 +164,16 @@ test('monotonic mapped source units cross each exact script run once', () => {
   for (let k = 0; k < text.length; k++) expect(source.at(k)).toBe(scripts[k]!)
   expect(asked).toEqual([])
   expect(reads()).toBeLessThanOrEqual(2 * text.length)
+})
+
+test('Canvas resolves the scripts of each bidi level run of a string alone', () => {
+  // `١٢٣` U+2028 U+2060 `[2]` resolves to two left-to-right level runs, the Arabic-Indic digits a level above the rest, and
+  // Canvas shapes them as two items: the digits Arabic, the space, U+2060 and `[2]` Common. Over the string whole they
+  // would all be Arabic, as the paragraph's own run, whose items of one direction the DOM shapes together, keeps them.
+  const s = '١٢٣ ⁠[2]'
+  const p = prepare(paragraph(s), env, false, createContextPool())
+  expect(Array.from(scriptsPerUnit(s))).toEqual([2, 2, 2, 2, 2, 2, 2, 2])
+  expect(Array.from(canvasScriptsPerUnit(p, 0, s, false))).toEqual([2, 2, 2, 0, 0, 0, 0, 0])
+  // A string that holds no right-to-left character on a left-to-right context is one item.
+  expect(Array.from(canvasScriptsPerUnit(p, 0, 'ab, cd', false))).toEqual(Array.from(scriptsPerUnit('ab, cd')))
 })

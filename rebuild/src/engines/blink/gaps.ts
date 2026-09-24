@@ -230,7 +230,7 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   if (sink === null) return
   callEdge(sink, p, g, from, callStart, callEnd)
   callEdge(sink, p, g, to, callStart, callEnd)
-  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s) : null)
+  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s, p.groups[g]!.rtl) : null)
   // A non-null sink requested the map in measure16.
   if (canvasScripts !== null) scriptContext(sink, p, cs.units!, canvasScripts, domScript, sourceOrdinal)
 }

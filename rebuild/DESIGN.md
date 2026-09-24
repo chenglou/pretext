@@ -1653,6 +1653,21 @@ ligature that the group never forms. The wide window's adjustment added there in
 search gets right, all Zapfino at 40px, whose forms reach past a window of 256 zoomed px. The test keeps a cut off such
 offsets, and no set of the tiers held one such text before the set `wide-group-cuts` (lab README, "Test tiers").
 
+Blink, the scripts Canvas letter-spaces a string under (`shape.ts` `canvasScriptsPerUnit`; since 2026-09-23). Blink
+skips letter spacing on the characters of a cursive run but for spaces (shape_result_spacing.cc:118-130), by the run's
+script, so where the paragraph and Canvas resolve a character's script apart the port corrects the difference in JS.
+Canvas cuts a measured string into items before RunSegmenter resolves their scripts: a string that may hold
+right-to-left text (Character::MaybeBidiRtl of any code point), or any string on a right-to-left context, into ICU's level
+runs unless it resolves as one left-to-right direction, then into words where it shapes word by word
+(plain_text_node.cc:278-425). The DOM shapes a paragraph's items of one direction together. So after Arabic-Indic digits,
+a level above the text beside them, a space and `[2]` are an item of their own in Canvas, Common and letter-spaced, where
+the paragraph keeps them in the digits' Arabic run. The port resolved the whole string as one item and took them for
+Arabic, and every tree was off by the spacing of those characters (in 32.25px Helvetica Neue at -1.5px letter spacing,
+6 px at the digits' end); the constructed attack's 20 losses there were the base's lines being right by accident. On the
+attacks' lab cases in pinned Chrome the correction gains 41 line counts and 75 breaks and loses none. Cost: ICU's levels of
+a measured string, under letter spacing only (and on an inspected paragraph's check for `script-context`), and only
+where it may hold right-to-left text.
+
 Blink, words first (`shape.ts` `addWordPieces`, `cutGroup`; `line-breaker.ts` `candidateAt`, `wordCandidate`; since
 2026-09-23; the study is research/SPEC-WORD-SUM.md, round 2's form "V3" on branch `x-words2-blink`). A group is cut into
 words before the cut above runs, but in a face whose space takes another advance under Common than under Latin, where the
