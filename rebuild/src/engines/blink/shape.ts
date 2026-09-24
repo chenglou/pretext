@@ -440,7 +440,11 @@ function spacesStay(p: BlinkPrepared, style: number, from: number, to: number, d
     else if (!isCommonOrInheritedScript(c)) return false
     else if (!isWhiteSpace(c)) other = true
   }
-  return space && other && !canvasSplitsWords(p, style)
+  if (!space) return false
+  // White space alone in a Latin run: in a face whose space takes another advance under Common than under Latin
+  // (spaceTakesScript), a lone U+2028 is Common and takes the other advance, where the 8-bit space is Latin, as the run is.
+  // Canvas cuts nothing out of it, whether it shapes words apart or not.
+  return other ? !canvasSplitsWords(p, style) : spaceTakesScript(p, style)
 }
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,

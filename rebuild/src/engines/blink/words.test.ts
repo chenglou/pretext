@@ -7,7 +7,8 @@
 // is 25px narrower than nothing, so positions inside a word run backwards. `Skip` kerns every two code units by -1px.
 // `Neutral` adds 3px to a string that holds no letter, as a string without a script of its own takes another script alone
 // than in its run. In `SpaceScript` a lone U+2028, shaped as Common, is 2px wider than the 8-bit space, as Euphemia UCAS's
-// space is. U+2060 has no advance. Measured strings carry U+2028 for U+0020 (shape.ts).
+// space is. In `Latin8` every space of a string Blink shapes as Latin is 2px narrower: U+0020, which only an 8-bit string
+// holds, and U+2028 in a string with a letter, but not a lone U+2028, which is Common, as Euphemia UCAS's space is. U+2060 has no advance. Measured strings carry U+2028 for U+0020 (shape.ts).
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createContextPool } from '../../measure/canvas.js'
@@ -47,6 +48,7 @@ class Context {
     if (this.font.includes('Skip')) width -= Math.max(0, text.length - 1)
     if (this.font.includes('Neutral') && !/[a-zA-Z]/.test(text) && /\S/.test(text)) width += 3
     if (this.font.includes('SpaceScript') && text === LS) width += 2
+    if (this.font.includes('Latin8')) width -= 2 * (count(text, ' ') + (/[a-zA-Z]/.test(text) ? count(text, LS) : 0))
     return { width: width * size / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -163,6 +165,16 @@ test('a face whose space takes another advance under Common than under Latin is 
   // measures beside every space is wider than in its run; words first would cut every word.
   expect(prepared('SpaceScript').groups[0]!.cuts).toEqual([0, 20, TEXT.length])
   expect(prepared('Mono').groups[0]!.cuts.length).toBe(9)
+})
+
+test('in a face whose space takes the script, white space alone in a Latin run is measured as the 8-bit space', () => {
+  // TEXT is 380px less 2px for each of its 7 spaces in its Latin run. The cut search cuts it, and a lone space measured as
+  // U+2028 would be Common and 2px wider: the pair window beside a space would show -2px where the run shows nothing.
+  const p = prepared('Latin8')
+  const group = p.groups[0]!
+  expect(group.words).toBe(false)
+  expect(group.prefixAtCut[group.prefixAtCut.length - 1]! / 65536).toBe(366)
+  for (let k = 1; k < TEXT.length; k++) if (TEXT[k - 1] === ' ') expect(groupPrefix16({ p, gaps: null }, 0, k) / 65536).toBe(10 * k - 2 * TEXT.slice(0, k).split(' ').length + 2)
 })
 
 test('at a zoomed font size of 60 px and more a group is cut by the cut search alone, as before words', () => {
