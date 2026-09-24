@@ -21,7 +21,11 @@ a change to the safe test hadn't been run for this one: the fonts probe, the old
 finds 0 cuts, positions and layouts differing in 318 installed families, at ratio 2 (170,102 cuts, 644,318 layouts) and
 at ratio 1 (78,799 cuts, 507,040 layouts). What the order buys is small: over the tier's cases Chrome asks 50,859,752
 questions where the old order asks 50,915,739 without facts, and 53,308,502 where it asks 53,363,379 with them (0.1%).
-Chrome's tier 1 exits 0 again.
+Chrome's tier 1 exits 0 again. The full gates (all engines, fresh) pass but for the citation ledger, and the painter
+differential paints all 69,224 Chrome cases in both configurations. The ledger's 17 lost citations are `1e772c6`'s own:
+the general-cost and plaintext rounds of 2026-09-21 and 09-22 dropped them from code comments (2 at `8075758`, 3 at `09dc717`, 8 at `0385720`, 4 at `a6ae4c6`), and
+putting them back edits files under the string storage rule, which sends Chrome's cases to tier 2, so that is a step of
+its own.
 
 2026-09-23, main merged at `b17a7ac`: #337 (the Safari 27 harness) and #338 (a count-only `layout()` walker). `src/`
 and every other file main owns take main's versions, so outside `rebuild/` the branch equals main but for two things:
