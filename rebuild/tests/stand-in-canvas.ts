@@ -11,6 +11,8 @@
 // - Letter spacing adds to every code point with an advance, and turns the ligatures `fi` and `fl` off, as it does in the
 //   three browsers' DOM. Gecko's Canvas rounds the spacing to app units (1/60 px) per character, which makes its 0.001px
 //   recipe add nothing (src/measure/canvas-checks.ts), so the stand-in does the same under a Firefox user agent.
+// - U+2028 takes the space's advance, as Blink maps it to the space glyph (harfbuzz_face.cc:110-113), which its port
+//   measures in place of U+0020 (engines/blink/shape.ts canvasString).
 // - Word spacing adds to U+0020 and U+00A0.
 // - The ink box starts a little after the origin and ends a little before the advance, by the first and last code point.
 // Every value is a multiple of 1/1024 px, so sums of them are exact in a double whatever their order.
@@ -63,7 +65,7 @@ const kinds = new Map<number, Kind>()
 function kindOf(cp: number, ch: string): Kind {
   let kind = kinds.get(cp)
   if (kind === undefined) {
-    kind = MARK.test(ch) || IGNORABLE.test(ch) ? 'none' : WIDE.test(ch) || cp > 0xffff ? 'wide' : cp === 0x20 || cp === 0xa0 ? 'space' : LETTER.test(ch) ? 'letter' : 'other'
+    kind = MARK.test(ch) || IGNORABLE.test(ch) ? 'none' : WIDE.test(ch) || cp > 0xffff ? 'wide' : cp === 0x20 || cp === 0xa0 || cp === 0x2028 ? 'space' : LETTER.test(ch) ? 'letter' : 'other'
     kinds.set(cp, kind)
   }
   return kind
