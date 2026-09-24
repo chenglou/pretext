@@ -14,7 +14,9 @@ class Context {
   fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
   measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
     asked.push(text)
-    return { width: largeAnswers ? (text === 'a' ? 2 ** 44 : 1 / 512) : text.length * .0001,
+    // U+202A..U+202E, which Canvas turns into U+200B (shape.ts inGroupDirection), measure nothing.
+    const units = text.replace(/[\u202a-\u202e]/g, '')
+    return { width: largeAnswers ? (units === 'a' ? 2 ** 44 : 1 / 512) : units.length * .0001,
       actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -114,15 +116,17 @@ test('lone low scripts stay distinct from ignored measurement boundaries under l
     const g = p.groupOfUnit[0]!, group = p.groups[g]!
     asked = []
     expect(measure16({ p, gaps: null }, g, 0, 1, group.start, group.end)).toBe(7)
-    expect(asked).toEqual(['ب'])
+    // An RTL group's strings go to Canvas inside U+202E and U+202C (shape.ts inGroupDirection).
+    const inRtl = (s: string): string => '\u202e' + s + '\u202c'
+    expect(asked).toEqual([inRtl('ب')])
     // The original splitter ignores the boundary before the low, but preserves the boundary after it.
     asked = []
     expect(measure16({ p, gaps: null }, g, 0, 3, 0, 3)).toBe(20)
-    expect(asked).toEqual(['ب\uDC00', 'ب'])
+    expect(asked).toEqual([inRtl('ب\uDC00'), inRtl('ب')])
     // Starting a question at that same low reads its actual Unknown script and reaches the next accepted boundary.
     asked = []
     expect(measure16({ p, gaps: null }, g, 1, 3, 0, 3)).toBe(14)
-    expect(asked).toEqual(['\uDC00', 'ب'])
+    expect(asked).toEqual([inRtl('\uDC00'), inRtl('ب')])
   }
 })
 
@@ -176,4 +180,35 @@ test('Canvas resolves the scripts of each bidi level run of a string alone', () 
   expect(Array.from(canvasScriptsPerUnit(p, 0, s, false))).toEqual([2, 2, 2, 0, 0, 0, 0, 0])
   // A string that holds no right-to-left character on a left-to-right context is one item.
   expect(Array.from(canvasScriptsPerUnit(p, 0, 'ab, cd', false))).toEqual(Array.from(scriptsPerUnit('ab, cd')))
+})
+
+test('a string that may hold a level of the other direction goes to Canvas inside an override of its group\'s direction', () => {
+  // Under U+202D the paragraph's Arabic is a left-to-right group, which the DOM shapes left to right; Canvas, handed the
+  // string alone with U+2060 for the U+202D, would resolve its letters right to left (shape.ts inGroupDirection).
+  const overridden = prepare(paragraph('‭بب'), env, false, createContextPool())
+  const g = overridden.groupOfUnit[1]!
+  expect(overridden.groups[g]!.rtl).toBe(false)
+  asked = []
+  measure16({ p: overridden, gaps: null }, g, 0, 3, 0, 3)
+  expect(asked).toEqual(['‭⁠بب‬'])
+  // Wrapped, the digits and `[2]` are one level run, which Canvas resolves as Arabic, as the paragraph does.
+  const s = '١٢٣ ⁠[2]'
+  const p = prepare(paragraph(s), env, false, createContextPool())
+  expect(Array.from(canvasScriptsPerUnit(p, 0, '‭' + s + '‬', false)).slice(1, -1)).toEqual(Array.from(scriptsPerUnit(s)))
+  // A left-to-right string without a character of class R, AL or AN, an emoji's included, goes as it is.
+  const plain = prepare(paragraph('ab 👍'), env, false, createContextPool())
+  asked = []
+  measure16({ p: plain, gaps: null }, 0, 0, 5, 0, 5)
+  expect(asked).toEqual(['ab 👍'])
+})
+
+test('letter spacing is corrected once a glyph cluster, by its first character', () => {
+  // The flag's two regional indicators are one cluster, which the DOM keeps in the Arabic run beside it and doesn't space,
+  // and which Canvas, measuring the flag alone, shapes as Common and spaces once (ApplySpacingOrExpansion).
+  const input = paragraph('ب🇸🇦ب')
+  input.letterSpacing = 1.5; input.direction = 'rtl'
+  const p = prepare(input, env, false, createContextPool())
+  const g = p.groupOfUnit[1]!
+  asked = []
+  expect(measure16({ p, gaps: null }, g, 1, 5, 1, 5)).toBe(Math.round(4 * .0001 * 65536) - 1.5 * 65536)
 })

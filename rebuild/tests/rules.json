@@ -681,16 +681,17 @@
    "engine": "blink",
    "area": "measure",
    "kind": "recipe",
-   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ: spaces inside cursive runs get it, FF does not; Canvas's scripts are RunSegmenter's over each item of the measured string, and a string that may hold right-to-left text, or any string on a right-to-left context, is cut into ICU's level runs first unless it resolves as one left-to-right direction, so after Arabic-Indic digits a space and `[2]` are Common in Canvas where the paragraph keeps them in the digits' Arabic run",
-   "source": "shape_result_spacing.cc:118-130; character.h:163-189, :307-321; plain_text_node.cc:278-351, :372-425; engines/blink/shape.ts canvasScriptsPerUnit, itemScripts",
+   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ, once a glyph cluster by its first character, as both add it: spaces inside cursive runs get it, FF does not; Canvas's scripts are RunSegmenter's over each item of the string it is sent, which holds one level run of the group's direction but for its isolates (blink/measure/canvas-string-in-group-direction), so after Arabic-Indic digits a space and `[2]` are Arabic in Canvas as in the paragraph's run, and a flag the DOM keeps in an Arabic run and Canvas measures alone as Common is corrected once",
+   "source": "shape_result_spacing.cc:118-130; shape_result.cc:993-1040; character.h:163-189, :307-321; plain_text_node.cc:278-351, :372-425; engines/blink/shape.ts letterSpacingDifference16, canvasScriptsPerUnit, itemScripts",
    "probes": [],
    "tests": [
-    "src/engines/blink/script-measure.test.ts :: Canvas resolves the scripts of each bidi level run of a string alone"
+    "src/engines/blink/script-measure.test.ts :: Canvas resolves the scripts of each bidi level run of a string alone",
+    "src/engines/blink/script-measure.test.ts :: letter spacing is corrected once a glyph cluster, by its first character"
    ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16; restated for Canvas's bidi items (words-first fix round, 2026-09-23)"
+   "declaredBy": "catalogue 2026-09-16; restated for Canvas's bidi items (words-first fix round, 2026-09-23); per glyph cluster, over strings in the group's direction (loss round, 2026-09-24)"
   },
   {
    "id": "blink/measure/zwj-inside-group-edge",
@@ -9654,6 +9655,25 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/canvas-string-in-group-direction",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "ported rule",
+   "statement": "a 16-bit Canvas string of a right-to-left group, or of a left-to-right group that holds a character of bidi class R, AL or AN or an isolate, is sent inside U+202E or U+202D and U+202C, which Canvas resolves as one level run of the group's direction and turns into U+200B, words of no advance that take no spacing: the DOM shapes a group, the items of one direction, in that direction whatever the levels inside it, and Canvas resolves the levels of the string alone, where the paragraph's embeddings and overrides are U+2060 and the neutrals beside digits lack the paragraph's context; an isolate keeps its own levels, as in the paragraph",
+   "source": "inline_node.cc:472-491, :1636-1717; plain_text_node.cc:47-62, :278-351; engines/blink/shape.ts inGroupDirection, holdsOtherDirection, canvasScriptsPerUnit",
+   "probes": [
+    "the verifier's bidi attack (2026-09-24): Baghdad, Al Nile, Farah and Noto Nastaliq Urdu under U+202D, U+202B and isolates at 0.3-2px of letter spacing lost 4-5 breaks and 1 line count a device pixel ratio; with the override the loss round's window probe gives Chrome's lines in all five at DPR 1, 2 and 3"
+   ],
+   "tests": [
+    "src/engines/blink/script-measure.test.ts :: a string that may hold a level of the other direction goes to Canvas inside an override of its group's direction",
+    "src/engines/blink/script-measure.test.ts :: lone low scripts stay distinct from ignored measurement boundaries under letter spacing"
+   ],
+   "declaredBy": "loss round of words first (2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9697,7 +9717,7 @@
   "blink/measure/v8-short-slice-storage": "34fdb58f2d0eea76",
   "blink/measure/force-16bit-string": "8cc0106eb59680b3",
   "blink/measure/word-spacing-in-js": "1a8c1e80301c2317",
-  "blink/measure/letter-spacing-cursive-adjust": "44a195e9b59991ed",
+  "blink/measure/letter-spacing-cursive-adjust": "c8ae100a1f023c7e",
   "blink/measure/zwj-inside-group-edge": "9b5c029fb144b2a0",
   "blink/measure/joining-context-opentype": "0449ced74a425e52",
   "blink/shape/joining-reads-5-code-points-context": "11c3bf3eeeca2769",
@@ -10252,6 +10272,7 @@
   "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
   "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066",
   "blink/measure/exact-canvas-answers": "47460338b50d3eca",
-  "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e"
+  "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
+  "blink/measure/canvas-string-in-group-direction": "550000a5755840b2"
  }
 }

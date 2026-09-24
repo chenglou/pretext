@@ -25,6 +25,7 @@ import { clampLU } from './layout-unit.js'
 // joining-technology there.
 import { width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { AL as BIDI_AL, AN as BIDI_AN, FSI as BIDI_FSI, LRI as BIDI_LRI, PDI as BIDI_PDI, R as BIDI_R, RLI as BIDI_RLI, bidiClassOf } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
@@ -364,11 +365,10 @@ function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
 // context, is cut into ICU's level runs first unless it resolves as one left-to-right direction (plain_text_node.cc:278-351),
 // and SegmentWord makes an item of every word of each run unless the font can't be shaped word by word (:372-398). So
 // U+3000 between Arabic letters is Common in Canvas, where the paragraph keeps it in the Arabic run (probe critic-r2
-// blink-u3000: 10px of letter spacing adds 10px per U+3000 in Canvas and nothing in the DOM), and after Arabic-Indic digits
-// the space and `[2]` are a run of their own, a level below the digits, which Canvas shapes as Common and letter-spaces
-// where the paragraph, whose items of one direction the DOM shapes together, keeps them in the digits' Arabic run (probe of
-// the words-first fix round, 2026-09-23: `١٢٣` U+2028 U+2060 `[2]` in 64.5px Helvetica Neue takes -3px letter spacing on
-// four characters, and the same text in the DOM on none).
+// blink-u3000: 10px of letter spacing adds 10px per U+3000 in Canvas and nothing in the DOM). The port sends a string that
+// may hold a level of the other direction inside a directional override (inGroupDirection), so its level runs are its
+// isolates' alone, as in the paragraph; before 2026-09-24 the space and `[2]` after Arabic-Indic digits were a run of their
+// own here, a level below the digits, Common and letter-spaced, where the paragraph keeps them in the digits' Arabic run.
 export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string, rtl: boolean): Uint8Array {
   if (!rtl && !mayHoldRtl(s)) return itemScripts(p, style, s)
   const bidi = resolveIcuBidi(s, rtl ? 'rtl' : 'ltr', blinkBidiData)
@@ -383,13 +383,18 @@ export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string,
   return scripts
 }
 
-// Character::MaybeBidiRtl(UChar32) (character.h:307-321), for any code point of the string (plain_text_node.cc:61-63).
+// Character::MaybeBidiRtl(UChar32) (character.h:307-321).
+function maybeBidiRtl(cp: number): boolean {
+  return cp >= 0x590 && cp !== 0x200b && !(cp >= 0x2010 && cp <= 0x2029) && !(cp >= 0x206a && cp <= 0xd7ff) && !(cp >= 0xff00 && cp <= 0xffff) &&
+    !(cp >= 0x1aff0 && cp <= 0x1b16f) && !(cp >= 0x20000 && cp <= 0x323af)
+}
+
+// Whether any code point of the string may be right to left (plain_text_node.cc:61-63).
 function mayHoldRtl(s: string): boolean {
   for (let i = 0; i < s.length;) {
     const cp = s.codePointAt(i)!
     i += cp > 0xffff ? 2 : 1
-    if (cp >= 0x590 && cp !== 0x200b && !(cp >= 0x2010 && cp <= 0x2029) && !(cp >= 0x206a && cp <= 0xd7ff) && !(cp >= 0xff00 && cp <= 0xffff) &&
-      !(cp >= 0x1aff0 && cp <= 0x1b16f) && !(cp >= 0x20000 && cp <= 0x323af)) return true
+    if (maybeBidiRtl(cp)) return true
   }
   return false
 }
@@ -490,7 +495,7 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
   const group = p.groups[g]!
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
-  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), domScript, spacesStay(p, group.style, from, to, domScript), sh.gaps !== null || ls16 !== 0)
+  const cs = inGroupDirection(canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), domScript, spacesStay(p, group.style, from, to, domScript), sh.gaps !== null || ls16 !== 0), group.rtl)
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
@@ -526,15 +531,50 @@ function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number
   return total
 }
 
-// The letter spacing the DOM gives the string's characters less what Canvas gave them.
+// A shaping group holds the items of one direction (ShouldBreakShapingBeforeText, inline_node.cc:472-491), and the DOM
+// shapes its text in that direction whatever the bidi levels inside it (HarfBuzzShaper over the group's items,
+// inline_node.cc:1636-1717). Canvas resolves the levels of the string it is handed and shapes each level run apart in its
+// own direction (plain_text_node.cc:278-351), over the string alone: the explicit embeddings and overrides of the paragraph
+// are U+2060 there (canvasString), and without the paragraph's context the neutrals beside digits resolve otherwise. So
+// Arabic under U+202D, which the DOM shapes left to right, Canvas shaped right to left, and `١٢٣` U+2028 `[2]`, one run of
+// the digits' level in the paragraph, was three runs in Canvas, the middle one right to left and Common. A 16-bit string
+// that may hold a level of the other direction is sent inside U+202D or U+202E and U+202C, which Canvas resolves as one run
+// of the group's direction (UBA X4-X6), and which it turns into U+200B (NormalizeSpacesAndMaybeBidi, plain_text_node.cc:
+// 47-62), words of no advance that take no spacing. An isolate the string holds keeps its own levels, as in the paragraph.
+// A 16-bit string that holds no character of class R, AL or AN and no isolate is all left to right in Canvas on a
+// left-to-right context already (W7, I1), and an 8-bit one is sent as it is.
+// rule blink/measure/canvas-string-in-group-direction
+function inGroupDirection(cs: CanvasString, rtl: boolean): CanvasString {
+  if (!cs.twoByte || cs.s.length === 0 || (!rtl && !holdsOtherDirection(cs.s))) return cs
+  return { s: (rtl ? '\u202e' : '\u202d') + cs.s + '\u202c', units: cs.units === null ? null : [-1, ...cs.units, -1], twoByte: true }
+}
+
+function holdsOtherDirection(s: string): boolean {
+  for (let i = 0; i < s.length;) {
+    const cp = s.codePointAt(i)!
+    i += cp > 0xffff ? 2 : 1
+    // A code point MaybeBidiRtl calls left to right is of none of these classes (character.h:307-321).
+    if (!maybeBidiRtl(cp)) continue
+    switch (bidiClassOf(blinkBidiData, cp)) {
+      case BIDI_R: case BIDI_AL: case BIDI_AN: case BIDI_LRI: case BIDI_RLI: case BIDI_FSI: case BIDI_PDI: return true
+    }
+  }
+  return false
+}
+
+// The letter spacing the DOM gives the string's glyph clusters less what Canvas gave them. Both add it once a cluster, by
+// the cluster's first character and its run's script (ApplySpacingOrExpansion skips every glyph but a cluster's last,
+// shape_result.cc:993-1040), so a flag of two regional indicators or `❤` with U+FE0F takes it once: counting code points,
+// a flag the DOM keeps in an Arabic run and Canvas shaped as Common was corrected twice where Canvas spaced it once.
 function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number, domScript: number, sourceOrdinal: number): number {
   const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments!, sourceOrdinal, domScript)
   let adjust = 0
+  let first = true
   for (let u = 0; u < units.length; u++) {
     const t = units[u]!
     if (t < 0) continue
-    const c = p.text.charCodeAt(t)
-    if ((c & 0xfc00) === 0xdc00) continue
+    if (!first && !isClusterBoundary(p, t)) continue
+    first = false
     const canvasScript = scripts === null ? USCRIPT_LATIN : scripts[u]!
     // ShapeResultSpacing::ComputeSpacing (shape_result_spacing.cc:103-139): letter spacing on a character that isn't a zero
     // width space, and in a cursive script run only on a space (IgnoreLetterSpacingInCursiveScripts, stable). The DOM reads
