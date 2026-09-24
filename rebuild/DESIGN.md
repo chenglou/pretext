@@ -2259,15 +2259,22 @@ fix round (2026-09-23) words first doesn't run at all in such a face: where a st
 Euphemia UCAS alone of 393 installed families), its groups are cut by the cut search alone. The windows beside word cuts
 are words, and a side of one that holds no letter, a lone space or ` — 4.5 `, measures every space wide; the constructed
 attack's Euphemia UCAS paragraphs lost 13 breaks and 10 line counts that way, none with a premise's gap, where the base's
-windows, up to 256 zoomed px, hold letters. What the fix round leaves in the face: judged on Canvas's own answers, a group under negative word
-spacing is cut finer than the base cut it, where the spacing JS adds made the base's totals look exact, and a cut the
-search falls back to beside a space takes the pair window's adjustment there, whose side of the space alone is Common and
-wide. At DPR 3, 25 of the fonts attack's layouts in 16px Euphemia UCAS with -2px word spacing lose a line the base kept
-(the window probe: from the cut at 6 of `T a T o …` every position is 9.9 zoomed px short of Chrome's), at DPR 1 and 2
-none. Both trees' pair windows beside a space are off by that much; taking the next cluster into such a side, or
-measuring a space alone as the 8-bit one, which Blink shapes as Latin, moved hundreds of other lines of the face either
-way, and a window side of white space alone taking the next piece in gained 22 layouts and lost 1 but not these
-(local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`, not adopted).
+windows, up to 256 zoomed px, hold letters. What the fix round leaves in the face: judged on Canvas's own answers, a
+group under negative word spacing is cut finer than the base cut it, where the spacing JS adds made the base's totals
+look exact, and a cut the search falls back to beside a space takes the pair window's adjustment there, whose side of
+the space alone is Common and wide. At DPR 3, 25 of the fonts attack's layouts in 16px Euphemia UCAS with -2px word
+spacing lose a line the base kept (the window probe: from the cut at 6 of `T a T o …` every position is 9.9 zoomed px
+short of Chrome's), at DPR 1 and 2 none. Both trees' pair windows beside a space are off by that much; taking the next
+cluster into such a side, or measuring a space alone as the 8-bit one, which Blink shapes as Latin, moved hundreds of
+other lines of the face either way, and a window side of white space alone taking the next piece in gained 22 layouts
+and lost 1 but not these (local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`, not adopted). What gives Chrome's
+lines in the two the window probe traced is to keep a range whole where no offset passes the safe test and Canvas
+rounded its total by at most a unit, below twice 256 zoomed px, rather than cut it where no test passed (local branch
+`bwf-fix-alt-vz5`, not adopted: it changes the cut search every tree shares, and its unit tests and the tiers aren't
+restated). In the spacing sweep's 14 families that lost lines, at DPR 2, it gains 1,271 breaks and 430 line counts on
+the base where the fix round gains 146 and 26, with about as many lost (145 and 43, where 136 and 37), and 1,126 and 409
+of the gains are Euphemia UCAS, whose every space fails the pair test and whose groups the base cuts where nothing
+passed; at DPR 3 2,266 and 945.
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a
