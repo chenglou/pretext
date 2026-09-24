@@ -883,7 +883,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   // attack, 2026-09-23). A group the cut search cuts alone keeps the windows before words.
   const first = cuts[i] === k ? i - 1 : i
   let last = i + 1
-  while (group.words && last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
+  while (last + 1 < cuts.length && sideTakesNextPiece(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
   const from = cuts[first]!
   const to = cuts[last]!
   return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
@@ -984,6 +984,24 @@ function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number)
   return canvasString(p, from, to, false, false, domScript, spacesStay(p, style, from, to, domScript), false).twoByte
 }
 
+// Whether the side [from, to) after an offset, of the window between the cuts around it, takes the next piece in
+// (adjustBetweenCuts16): in a group cut into words, a side Canvas shapes as Common (measuredAsCommon); in a face whose space
+// takes another advance under Common than under Latin (spaceTakesScript), in every group, a side of white space alone,
+// since measured alone the space is Common and takes the other advance, where the paragraph's space takes its run's
+// script. Since exactness is judged on Canvas's own answers the cut search cuts Euphemia UCAS's groups finer under negative
+// word spacing, and a piece's trailing space became such a side: the position before it took that space's difference, and
+// at DPR 3 25 of the fonts attack's layouts in 16px Euphemia UCAS broke a word early (2026-09-24).
+function sideTakesNextPiece(p: BlinkPrepared, g: number, from: number, to: number): boolean {
+  const group = p.groups[g]!
+  if (group.words && measuredAsCommon(p, g, from, to)) return true
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isWhiteSpace(cp)) return false
+    i += cp > 0xffff ? 2 : 1
+  }
+  return from < to && spaceTakesScript(p, group.style)
+}
+
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
 // syllable-based shapers build syllables only from their script's characters (hb-ot-shaper-myanmar-machine.rl,
 // hb-ot-shaper-use-machine.rl), so a cut beside a space keeps every lookup but pair kerning inside one piece, and the pair
@@ -1043,7 +1061,7 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !(group.words && measuredAsCommon(p, g, k, b))))
+  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !sideTakesNextPiece(p, g, k, b)))
 }
 
 // The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character

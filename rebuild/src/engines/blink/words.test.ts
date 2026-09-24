@@ -165,6 +165,20 @@ test('a face whose space takes another advance under Common than under Latin is 
   expect(prepared('Mono').groups[0]!.cuts.length).toBe(9)
 })
 
+test('in a face whose space takes the script, a window side of white space alone takes the next piece in, in every group', () => {
+  // `SpaceScript` measures a lone U+2028 12px and a space in a string with letters 8px (it is also `Script`). With cuts at
+  // 5 and 10, the position before the space at 4 takes the wide window between the cuts around it, whose side after 4 is
+  // the space alone: the window shows -4px and the position is 36. Taken with the next piece in, the side is ` xxxx `, the
+  // window shows nothing and the position is 40.
+  const text = 'xxxx xxxx xxxx'
+  const p = prepared('SpaceScript', text)
+  const group = p.groups[0]!
+  expect(group.words).toBe(false)
+  group.cuts = [0, 5, 10, 14]
+  group.prefixAtCut = [0, 50 * 65536, 100 * 65536, 140 * 65536]
+  expect(groupPrefix16({ p, gaps: null }, 0, 4) / 65536).toBe(40)
+})
+
 test('at a zoomed font size of 60 px and more a group is cut by the cut search alone, as before words', () => {
   // At 59px TEXT's words are cut first; at 60px, where two words of the widest installed face measure 256 zoomed px or
   // more and the word test can't be asked between them, the group is cut as a group without words is.
