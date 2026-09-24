@@ -123,7 +123,14 @@ may read the DOM freely; this is research, not the library.
 - `../tools/coverage-probe.ts` (coverage C1; no library in the page): which characters of a text a face draws itself,
   by the two-fallback test of `src/measure/font-checks.ts` (a character that measures otherwise under `<face>,
   monospace` than under `<face>, serif` is drawn by a generic), and each word with its space measured alone and after
-  the words before it that keep the string below 250px, where the two differ.
+  the words before it that keep the string below 250px, where the two differ. On the fonts attack's Athelas losses it
+  found every character drawn by the face and no word that measures otherwise (the test can't tell for Devanagari or
+  Hebrew, which the generics don't draw either).
+- `../tools/mark-kern-probe.ts` (mark-kern K1, K2; no library in the page): K1 measures samples of kerned pairs alone and
+  after `e` with U+0301 (the precomposed `é` as a control) in every family of a list in five variants; K2 measures
+  consonants before `ở` and its kin in Athelas after six mark prefixes. HarfBuzz recomposes a letter it decomposed only
+  in a call that holds a cluster of a base and a combining mark, so in Athelas, which lacks `ở` and has `ỏ`, a mark three
+  words back takes a kern away (DESIGN.md §4.6); of 399 families only italic Athelas showed it on K1's samples.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word

@@ -51,9 +51,9 @@ word scan assumes no tail of a shaped word has a negative advance and reports `n
 assumes no shaping context reaches more than one word past a space and that positions inside a word stay sorted, runs
 only below a zoomed font size of 60 px, where the word test can be asked between two words of every installed face
 (Zapfino breaks it from 64), and not in a face whose space takes the script (Euphemia UCAS), and reports
-`context-past-a-word` and `positions-run-backwards`; Zapfino's whole-word forms inside a word broken across lines, and
-faces that draw a script only in part (italic Athelas with Vietnamese, italic Gill Sans with Devanagari), still break the
-first premise where no bound was found (DESIGN.md §4.6); its cut predictor assumes a string is narrower than a window
+`context-past-a-word` and `positions-run-backwards`; Athelas still breaks the first premise, since HarfBuzz recomposes
+a letter it decomposed only in a call that holds a combining mark somewhere, and no bound found keeps more lines than
+it loses (DESIGN.md §4.6); its cut predictor assumes a string is narrower than a window
 inside it by less than the zoomed font size, and runs only without letter spacing or negative word spacing and where the
 space takes the same advance under Latin as under Common, since the calligraphic Arabic faces break the premise with no
 margin at display sizes; it reports `nested-window-wider` (DESIGN.md §4.6).
