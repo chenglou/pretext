@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Canvas and late font names</title>
+<style>
+  body { font: 14px/1.5 sans-serif; margin: 16px; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 2px 10px; text-align: right; border-bottom: 1px solid #ccc; }
+  th { font-weight: normal; color: #555; }
+  .gap { border-left: 1px solid #999; }
+  .off { background: #fdd; }
+  #verdict { font-weight: bold; }
+</style>
+<p>
+  In Firefox, a 2D canvas context that first measures text in the first few seconds after start-up, in a font
+  family given by its Japanese name, keeps using the fallback font. A new context and the page's own text switch to
+  the right font a moment later. To see it, quit Firefox, then start it with this page as the first page it loads.
+</p>
+<p id="info"></p>
+<div style="overflow-x: auto">
+<table>
+  <thead>
+    <tr><th></th><th id="late" colspan="4"></th><th id="control" class="gap" colspan="2"></th></tr>
+    <tr><th>s</th><th>kept &lt;canvas&gt;</th><th>kept OffscreenCanvas</th><th>new OffscreenCanvas</th><th>DOM span</th>
+      <th class="gap">kept OffscreenCanvas</th><th>DOM span</th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+</div>
+<p id="verdict">Measuring every second for 15 s...</p>
+<script>
+const params = new URLSearchParams(location.search)
+// One font, named two ways: Hiragino Kaku Gothic ProN by its Japanese name, which Firefox reads a little after
+// start-up, and by its English name, which it knows from the start.
+const LATE = params.get('family') || 'ヒラギノ角ゴ ProN'
+const CONTROL = params.get('control') || 'Hiragino Kaku Gothic ProN'
+const TEXT = 'Hamburgefonstiv 0123'
+const fontFor = family => `20px "${family}", monospace`
+
+function offscreen() {
+  return new OffscreenCanvas(1, 1).getContext('2d')
+}
+
+// Every reading assigns the font again first, as a page that switches between fonts would.
+function measure(ctx, family) {
+  ctx.font = fontFor(family)
+  return ctx.measureText(TEXT).width
+}
+
+function span(family) {
+  const s = document.createElement('span')
+  s.textContent = TEXT
+  s.style.cssText = `font: ${fontFor(family)}; white-space: pre; position: absolute; visibility: hidden`
+  document.body.append(s)
+  return s
+}
+
+// Made at load and kept for the whole run.
+const keptCanvas = document.createElement('canvas').getContext('2d')
+const keptOffscreen = offscreen()
+const keptControl = offscreen()
+const lateSpan = span(LATE)
+const controlSpan = span(CONTROL)
+
+document.getElementById('late').textContent = `"${LATE}"`
+document.getElementById('control').textContent = `"${CONTROL}"`
+const fallbackCtx = offscreen()
+fallbackCtx.font = '20px monospace'
+const fallback = fallbackCtx.measureText(TEXT).width
+document.getElementById('info').textContent =
+  `Width in px of "${TEXT}" at 20px, in each family with monospace after it. ` +
+  `monospace alone: ${fallback.toFixed(2)}. ${navigator.userAgent}`
+
+const start = performance.now()
+const rows = []
+const differs = (a, b) => Math.abs(a - b) > 0.5
+
+function read() {
+  const row = {
+    s: (performance.now() - start) / 1000,
+    keptCanvas: measure(keptCanvas, LATE),
+    keptOffscreen: measure(keptOffscreen, LATE),
+    fresh: measure(offscreen(), LATE),
+    dom: lateSpan.getBoundingClientRect().width,
+    controlKept: measure(keptControl, CONTROL),
+    controlDom: controlSpan.getBoundingClientRect().width,
+  }
+  rows.push(row)
+  const tr = document.createElement('tr')
+  const cells = [
+    [row.s.toFixed(1), false],
+    [row.keptCanvas.toFixed(2), differs(row.keptCanvas, row.dom)],
+    [row.keptOffscreen.toFixed(2), differs(row.keptOffscreen, row.dom)],
+    [row.fresh.toFixed(2), differs(row.fresh, row.dom)],
+    [row.dom.toFixed(2), false],
+    [row.controlKept.toFixed(2), differs(row.controlKept, row.controlDom)],
+    [row.controlDom.toFixed(2), false],
+  ]
+  for (let i = 0; i < cells.length; i++) {
+    const td = document.createElement('td')
+    td.textContent = cells[i][0]
+    if (cells[i][1]) td.className = 'off'
+    if (i === 5) td.classList.add('gap')
+    tr.append(td)
+  }
+  document.getElementById('rows').append(tr)
+}
+
+function verdict() {
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const secs = last.s.toFixed(0)
+  if (!differs(last.fresh, fallback)) {
+    return `A new context still measures monospace, so "${LATE}" isn't installed here. Try ?family=...&control=... with a localized family name and its English name.`
+  }
+  const stale = []
+  if (differs(last.keptCanvas, last.fresh)) stale.push(`the kept <canvas> context ${last.keptCanvas.toFixed(2)}`)
+  if (differs(last.keptOffscreen, last.fresh)) stale.push(`the kept OffscreenCanvas context ${last.keptOffscreen.toFixed(2)}`)
+  if (stale.length === 0 && differs(first.keptOffscreen, fallback)) {
+    return 'Not reproduced: every context found the font from the first reading. In Firefox that means it had already read its font names; quit it and start it with this page as the first page it loads.'
+  }
+  if (stale.length === 0) return `The kept contexts started on monospace and caught up with the DOM within ${secs} s.`
+  const control = rows.every(r => !differs(r.controlKept, r.controlDom)) ? ' The English name measured right at every reading.' : ''
+  return `Bug: ${secs} s after load a new context measures ${last.fresh.toFixed(2)} and the DOM ${last.dom.toFixed(2)}, ` +
+    `but ${stale.join(' and ')}, the monospace width (${fallback.toFixed(2)}).${control}`
+}
+
+read()
+const timer = setInterval(() => {
+  read()
+  if (rows.length < 16) return
+  clearInterval(timer)
+  const text = verdict()
+  document.getElementById('verdict').textContent = text
+  // Optional, for automated runs: ?report=<url> posts the results there as JSON.
+  const report = params.get('report')
+  if (report) fetch(report, { method: 'POST', body: JSON.stringify({ userAgent: navigator.userAgent, late: LATE, control: CONTROL, fallback, rows, verdict: text }) })
+}, 1000)
+</script>
