@@ -322,7 +322,7 @@ for (let f = 0; f < FONTS.length; f++) {
     // ---- long ----
     for (let t = 0; t < TEXTS.length && PARTS.includes('long'); t++) {
       const given = TEXTS[t];
-      const sizes = vi === 0 && ROTATE_FIRST_ALL ? SIZES : pick(SIZES, ROTATE, vIndex * 7 + t);
+      const sizes = vi === 0 && ROTATE_FIRST_ALL ? SIZES : pick(SIZES, ROTATE, vIndex * 7 + given.index);
       const styles = [PLAIN];
       if (STYLED && vi === 0 && (given.styled || STYLE_SET === 'spacing')) for (let s = 0; s < STYLE_LIST.length; s++) styles.push(STYLE_LIST[s]);
       for (let s = 0; s < styles.length; s++) for (let z = 0; z < sizes.length; z++) {
@@ -369,7 +369,7 @@ for (let f = 0; f < FONTS.length; f++) {
       const made = new Set();
       for (let t = 0; t < TEXTS.length; t++) {
         const given = TEXTS[t];
-        const sizes = vi === 0 && ROTATE_FIRST_ALL ? SHORT_SIZES : pick(SHORT_SIZES, SHORT_ROTATE, vIndex * 5 + t);
+        const sizes = vi === 0 && ROTATE_FIRST_ALL ? SHORT_SIZES : pick(SHORT_SIZES, SHORT_ROTATE, vIndex * 5 + given.index);
         const words = given.text.split(' ').filter(word => word.length > 0);
         for (let z = 0; z < sizes.length; z++) for (let c = 0; c < CHUNKS.length; c++) for (let from = 0; from + 2 <= words.length; from += CHUNKS[c]) {
           const size = sizes[z];
@@ -440,7 +440,9 @@ export default async function bwfFontsProbes(): Promise<Probe[]> {
   const parts = (process.env['BWF_PARTS'] ?? 'long,short,inspect').split(',')
   const variants = (process.env['BWF_VARIANTS'] ?? '400:normal').split(',').map(v => { const [w, s] = v.split(':'); return [Number(w), s ?? 'normal'] })
   const names = process.env['BWF_TEXTS']?.split(',') ?? null
-  const texts = names === null ? TEXTS : TEXTS.filter(given => names.includes(given.name))
+  // Each text keeps its index in the whole list, which turns the sizes a rotating run gives it, so a run of some texts
+  // lays out what the whole run lays out for them.
+  const texts = TEXTS.map((given, index) => ({ ...given, index })).filter(given => names === null || names.includes(given.name))
   const dir = mkdtempSync(join(tmpdir(), 'bwf-fonts-probe-'))
   const bundles: string[] = []
   const sides: Array<[string, string]> = [[resolve(treeA), 'bwfA'], [resolve(treeB), 'bwfB']]
