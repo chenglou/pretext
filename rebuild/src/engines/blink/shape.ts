@@ -475,12 +475,14 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
 // attack of 2026-09-23: 3 lines where Chrome gives 2). Under a style whose opsz axis the port measures at the CSS size,
 // the answers are scaled first (contexts.ts raw16Of), which errs toward calling an exact answer inexact.
 // rule blink/measure/exact-canvas-answers
-export type Total16 = { total16: number; exact: boolean }
+// `near`: every answer, and the total, within one unit: below twice 256 zoomed px, where float32 steps by two units.
+export type Total16 = { total16: number; exact: boolean; near: boolean }
 
 export function measureTotal16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): Total16 {
-  const t: Total16 = { total16: 0, exact: true }
+  const t: Total16 = { total16: 0, exact: true, near: true }
   t.total16 = measure16(sh, g, from, to, callStart, callEnd, false, t)
   if (!(t.total16 < EXACT16)) t.exact = false
+  if (!(t.total16 < 2 * EXACT16)) t.near = false
   return t
 }
 
@@ -500,6 +502,7 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
   if (into !== null && !(Math.abs(w) < EXACT16)) into.exact = false
+  if (into !== null && !(Math.abs(w) < 2 * EXACT16)) into.near = false
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
@@ -869,7 +872,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const lo = group.start
   const hi = group.end
   const plain = sh.gaps === null
-  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? { total16: group.prefixAtCut[1]!, exact: true } : measureTotal16(sh, g, lo, hi, lo, hi))
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? { total16: group.prefixAtCut[1]!, exact: group.wholeExact, near: true } : measureTotal16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
@@ -1026,8 +1029,11 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   }
   if (k < 0 && cutTotals.whole === null) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
   const whole = cutTotals.whole
-  if (isExact(whole) || boundary < 0) {
+  // Where no offset passes the safe test, a range whose total Canvas rounded by at most a unit stays whole: an offset no
+  // test passed takes an adjustment nothing bounds (unsafeCut), where the rounding is within a unit.
+  if (isExact(whole) || boundary < 0 || (k < 0 && whole !== null && whole.near)) {
     if (!isExact(whole)) uncutCluster(sh.gaps, p, g, a, b)
+    if (a === group.start && b === group.end) group.wholeExact = isExact(whole)
     cuts.push(b)
     totals.push(whole!.total16)
     zero.push(false)
@@ -1123,6 +1129,7 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
 function cutGroup(sh: Shaper, g: number, words: boolean): void {
   const p = sh.p
   const group = p.groups[g]!
+  group.wholeExact = true
   const cuts = [group.start]
   const totals: number[] = []
   const zero = [false]
