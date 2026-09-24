@@ -91,6 +91,26 @@ may read the DOM freely; this is research, not the library.
   none gained, again with no premise's gap. Repeated short words in 19 fonts with contextual forms, tabs,
   soft hyphens, default-ignorable characters, Korean and right-to-left prose differ nowhere, and no run reports
   `positions-run-backwards`.
+- `../tools/bwf-fonts-probe.ts` (bwf-fonts F1; the fonts attack on words first and the cut predictor, 2026-09-23; two
+  checkouts bundled into one page, as the cut probe does). The base and the head lay the same paragraphs out, and where
+  their lines differ the page lays the paragraph out natively beside them and reads each code point's line from its
+  Range rects (the last rect with an area: the character after a soft hyphen taken as a break also reports the hyphen's
+  rect on the line before), so a layout the head gets wrong where the base's is right is counted there. It takes font
+  weights and styles (`BWF_VARIANTS`; a variant whose widths equal an earlier one's over every text's opening, fallback
+  fonts included, is skipped), many sizes turning with the variant and text, the words2 probe's texts and styles or a
+  sweep of letter and word spacing (`BWF_STYLE_SET=spacing`), texts of its own (long runs without spaces in Chinese,
+  Japanese and Myanmar, ZWJ emoji among letters, Korean), the head's inspected paragraph with its reports of the three
+  premises' gaps, and a calibration sample of layouts the trees agree on. On the lab's 165 and 165 cases of its first
+  two runs the lab's own scorer agreed with every layout it called a loss. `../tools/bwf-fonts-cases.ts` writes its
+  losses and gains as lab cases; `../tools/bwf-detail-probe.ts` prints both trees' cuts, positions, pair and wide
+  windows around a layout's differing line ends with Chrome's lines; `../tools/bwf-minimize-probe.ts` looks for the
+  shortest run of words that still loses a line, at widths a LayoutUnit apart. The runs are under
+  `.artifacts/tests/runs/bwf-attack-fonts-20260923`.
+- `../tools/bwf-premise-probe.ts` (bwf-premises P1; no library in the page): the cut predictor's premise asked of
+  Canvas directly, each string grown and shrunk a grapheme at a time from word starts in every text (as sliced and with
+  U+2028 for U+0020), counting steps where a string measures narrower than a window inside it; and whether the space's
+  advance depends on the script Canvas resolves (U+0020 alone, U+2028 alone, U+2028 between two letters of six scripts).
+  A context per family and size: one context over every family grew the renderer past 9 GB.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word
