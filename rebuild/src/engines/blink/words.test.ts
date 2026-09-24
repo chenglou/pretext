@@ -179,6 +179,17 @@ test('at a zoomed font size of 60 px and more, with the spacing two words take, 
   expect(spaced(-6, -3).groups[0]!.words).toBe(true)
 })
 
+test('a group whose HarfBuzz call holds a mark and a letter that recomposes in such a call is cut by the cut search alone', () => {
+  // The paragraph's call runs the rounds that recompose once it holds a mark anywhere, and a word measured alone without
+  // one doesn't: U+1EDF (o, horn and hook above) after a `cafe` + U+0301 is written otherwise than alone.
+  expect(prepared('Mono', 'cafe\u0301 xxx ph\u1edf xxxx').groups[0]!.words).toBe(false)
+  // No mark in the call, or a letter of one mark, which the Latin shaper writes alike either way: words first.
+  expect(prepared('Mono', 'caf\u00e9 xxx ph\u1edf xxxx').groups[0]!.words).toBe(true)
+  expect(prepared('Mono', 'cafe\u0301 xxx caf\u00e9 xxxx').groups[0]!.words).toBe(true)
+  // The mark in another HarfBuzz call of the group (U+FE0F in an emoji segment): words first.
+  expect(prepared('Mono', 'ph\u1edf xxx \u2764\ufe0f xxxx').groups[0]!.words).toBe(true)
+})
+
 describe('blink candidate from the cuts', () => {
   test('an inspected paragraph, which searches and walks both, reports no gap of its words and gives the plain lines, at every width', () => {
     const families = ['Mono', 'Kern', 'Context']

@@ -36,7 +36,8 @@ import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, s
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
-  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptExtensionsOf, scriptOf,
+  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, recomposesInMarkedCall,
+  scriptExtensionsOf, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
@@ -949,6 +950,28 @@ function holdsSpace(p: BlinkPrepared, from: number, to: number): boolean {
   return false
 }
 
+// Whether a HarfBuzz call inside [from, to), a RunSegmenter segment of the group (harfbuzz_shaper.cc:1080-1101), holds a
+// mark and a letter that HarfBuzz writes otherwise in a call that holds one (recomposesInMarkedCall): the paragraph's call
+// then runs the rounds that reorder and recompose over every cluster, and a word measured alone without the mark doesn't,
+// so the word's advance isn't the paragraph's (italic Athelas lacks `ở` and has `ỏ`, and a `phở` after a `café` spelled
+// with U+0301 kerns otherwise; DESIGN.md §4.6).
+function recomposesAcrossWords(p: BlinkPrepared, from: number, to: number): boolean {
+  let mark = false
+  let letter = false
+  for (let i = from; i < to;) {
+    if (i > from && isSegmentEdge(p, i)) {
+      mark = false
+      letter = false
+    }
+    const cp = p.text.codePointAt(i)!
+    if (isMark(cp)) mark = true
+    else if (recomposesInMarkedCall(cp)) letter = true
+    if (mark && letter) return true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return false
+}
+
 function holdsSoftHyphen(p: BlinkPrepared, from: number, to: number): boolean {
   for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0xad) return true
   return false
@@ -1162,7 +1185,7 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
-    group.words = holdsSpace(p, group.start, group.end) && takesWords(p, group.style)
+    group.words = holdsSpace(p, group.start, group.end) && takesWords(p, group.style) && !recomposesAcrossWords(p, group.start, group.end)
     if (p.inspect !== null) {
       cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
       p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })

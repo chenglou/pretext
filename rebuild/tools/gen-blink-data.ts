@@ -176,6 +176,44 @@ for (let cp = 0; cp < cjkSymbol.length; cp++) {
   if (cjkSymbol[cp] === 1 && (cp + 1 === cjkSymbol.length || cjkSymbol[cp + 1] !== 1)) cjkSymbolRanges.push(cp)
 }
 
+// The letters HarfBuzz's normalization writes otherwise in a shaping call that holds a mark (hb-ot-shape-normalize.cc
+// at harfbuzz dfdc088c): the first round decomposes a letter the font lacks, and only a call that holds a character of
+// General_Category M (all_simple, :303-338) runs the round that recomposes a base with the marks after it where the font
+// has the result (:380-432). So the recomposed letter differs from the decomposed one where a letter's full canonical
+// decomposition (ppucd dm under dt=Can, applied again to its parts) holds two marks or more, one of which can compose with
+// the base while another stays (Athelas has `ỏ` and no `ở`, `ơ`), or, where the shaper decomposes every letter
+// (COMPOSED_DIACRITICS_NO_SHORT_CIRCUIT: the Indic, Khmer, Myanmar and USE shapers, which a script outside Latin, Greek,
+// Cyrillic, Arabic, Hebrew, the kana and Common and Inherited can get), one mark that composes back (no Comp_Ex). As
+// sorted inclusive [first, last] pairs.
+const canonical = new Map<number, number[]>()
+const markCp = new Uint8Array(0x110000)
+const compositionExcluded = new Uint8Array(0x110000)
+await forEachPpucdCodePointRange(range => {
+  markCp.fill((range.props.get('gc') ?? '')[0] === 'M' ? 1 : 0, range.first, range.last + 1)
+  compositionExcluded.fill(range.props.has('Comp_Ex') ? 1 : 0, range.first, range.last + 1)
+  const dm = range.props.get('dm')
+  if (range.props.get('dt') !== 'Can' || dm === undefined || dm === '<code point>') return
+  const parts = dm.split(' ').map(hex => parseInt(hex, 16))
+  for (let cp = range.first; cp <= range.last; cp++) canonical.set(cp, parts)
+})
+function fullDecomposition(cp: number): number[] {
+  const parts = canonical.get(cp)
+  return parts === undefined ? [cp] : parts.flatMap(fullDecomposition)
+}
+const shortCircuitScripts = ['Zyyy', 'Zinh', 'Latn', 'Grek', 'Cyrl', 'Arab', 'Hebr', 'Hira', 'Kana'].map(scriptCode)
+const recomposing = new Uint8Array(0x110000)
+for (const cp of canonical.keys()) {
+  if (markCp[cp] === 1) continue
+  const marks = fullDecomposition(cp).filter(c => markCp[c] === 1).length
+  const shortCircuits = shortCircuitScripts.includes(scriptProps[cp]! & 0xff)
+  if (marks >= 2 || (marks === 1 && compositionExcluded[cp] === 0 && !shortCircuits)) recomposing[cp] = 1
+}
+const recomposingRanges: number[] = []
+for (let cp = 0; cp < recomposing.length; cp++) {
+  if (recomposing[cp] === 1 && (cp === 0 || recomposing[cp - 1] !== 1)) recomposingRanges.push(cp)
+  if (recomposing[cp] === 1 && (cp + 1 === recomposing.length || recomposing[cp + 1] !== 1)) recomposingRanges.push(cp)
+}
+
 // HarfBuzz's OpenType language system tags per ISO 639 code (hb_ot_tags_from_language, hb-ot-tag.cc:322-420, over
 // ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at Chrome 153's HarfBuzz dfdc088c): which language system of a
 // font a locale's first subtag selects. Longer locales go through hb_ot_tags_from_complex_language first, which isn't
@@ -247,6 +285,11 @@ export const blinkCursiveScripts: readonly number[] = [${cursiveScripts.join(','
 // HarfBuzz's OpenType language system tags per ISO 639 code, as [code, tag, ...] records sorted by code (tags keep their
 // trailing spaces), from ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at harfbuzz dfdc088c (sha256 ${OT_TAG_SHA256}).
 export const blinkOtLanguageTags: readonly (readonly string[])[] = [${otLanguageRecords}]
+
+// Letters HarfBuzz writes otherwise in a shaping call that holds a mark, as sorted inclusive [first, last] pairs: two
+// marks or more in the full canonical decomposition, or one that composes back in a script whose shaper may decompose
+// every letter, from ICU 78.2 ppucd.txt (dm, dt, Comp_Ex, gc, sc).
+export const blinkRecomposingLetterRanges: readonly number[] = [${recomposingRanges.join(',')}]
 
 // Character::IsCjkIdeographOrSymbol as sorted inclusive [first, last] pairs: character_property_data.h (sha256 ${CPD_SHA256}),
 // Emoji_Presentation, and the Extended_Pictographic characters of RGI emoji ZWJ and modifier sequences (emoji-zwj-sequences.txt
