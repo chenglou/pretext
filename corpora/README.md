@@ -7,7 +7,7 @@ punctuation systems beyond the current 7680-case browser sweep. The main corpus
 set is wired into `/corpus` and the long-form rows on `/benchmark`; the checked-in
 `step=10` snapshots are the compact source of truth for current results. The
 Markdown chat demo also draws generated message text from the English, Chinese,
-Arabic and Hindi files.
+Arabic and Hindi files, so those four ship in the npm package with the demos.
 
 Machine-readable metadata lives in `sources.json`.
 

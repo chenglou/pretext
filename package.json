@@ -43,7 +43,11 @@
     "!src/layout.test.ts",
     "!src/test-data.ts",
     "pages/demos",
-    "pages/assets"
+    "pages/assets",
+    "corpora/ar-risalat-al-ghufran-part-1.txt",
+    "corpora/en-gatsby-opening.txt",
+    "corpora/hi-eidgah.txt",
+    "corpora/zh-guxiang.txt"
   ],
   "scripts": {
     "benchmark-check": "bun run scripts/benchmark-check.ts",
