@@ -1,5 +1,108 @@
 # Takeover decisions and evidence
 
+2026-09-24, Blink's words-first loss round (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)):
+every loss the verifier's fonts and bidi attacks found against the rebuild line (`61c376d`) in installed fonts, and the
+ones the round's own fonts runs found, traced against Chrome's own positions in the window probe and fixed at the cause
+where Canvas shows it. The library is `3189fe1`'s. The case set is every lost layout of the fonts runs with neighbours
+at nearby widths, sizes and spacing values, 3,727 lab cases, the fix round's 927 gains with their LayoutUnit neighbours,
+5,880 cases, and the bidi attack's 5 losses with neighbours, 90 cases
+(`.artifacts/tests/runs/bwf-loss-20260924/cases*`). What changed, a commit a cause:
+- SHY is U+2060 in every Canvas string, alone or beside a space (`e0d827f`, `blink/measure/ignorables-as-word-joiner`):
+  an 8-bit paragraph had left SHY out of a string without a space and written U+2060 in one with a space, so a window
+  and its sides were written two ways, and 16px Helvetica Neue at DPR 2 under -3px of word spacing took the line start
+  after `, cof`+SHY+`fee` as unsafe from a 6,291-unit adjustment only the writing made. Over 399 installed families, the
+  2,356 words whose width SHY changes measure the DOM's width with U+2060 and none with SHY left out. Such paragraphs'
+  groups are cut into words now.
+- Canvas shapes a group's string in the group's direction, and letter spacing is corrected once a glyph cluster
+  (`6705683`, `blink/measure/canvas-string-in-group-direction`, `blink/measure/letter-spacing-cursive-adjust`): Canvas
+  cuts a string into ICU's level runs and shapes each in its own direction, where the DOM shapes a group in the
+  group's; a 16-bit string that may hold a level of the other direction goes inside U+202D or U+202E and U+202C, which
+  Canvas turns into U+200B. The five bidi repros (Baghdad, Al Nile, Farah and Noto Nastaliq Urdu under letter spacing)
+  give Chrome's lines at DPR 1, 2 and 3.
+- A stretch without a script of its own is measured with the letter after it (`4f56618`,
+  `blink/measure/prefix-without-script-in-context`, the window rule of `blink/measure/words-first`): ` , ` and ` :`
+  between Devanagari words measure 2.6 zoomed px off their run alone in Didot and 4.8 in italic Gill Sans, and the
+  run's with a letter beside them.
+- Near totals (`a7a68dd`): a total below 256 zoomed px whose Canvas answers were each below twice that is a piece;
+  cutting every such range met the search's own stand-ins (163 of the verifier's lost breaks, at Euphemia UCAS's lone
+  space).
+- Canvas's rounding is bounded, and past it the range being cut holds context (`3fa1a19`, `6c167f6`, `3189fe1`,
+  `blink/measure/exact-canvas-answers`, `blink/shape/wide-group-halved`): an answer of 256 zoomed px or more is off by at
+  most half a float32 step for each run Canvas converts and each sum; an adjustment a window shows within that is none
+  (a window side `4f56618` carried over eight family emoji to the letter after them had rounded its way into 237 lost
+  layouts in 33 faces in the round's first fonts runs), and past it an adjustment is real however wide the window, so
+  the range being cut is held against its two sides where the exact window shows none. Zapfino's `the` after a space and
+  Helvetica Neue's `ffl` across a SHY reach past the exact windows; where the range shows context at every offset (a
+  ligature over a whole word) the first offset the exact windows passed is the cut, as before. Not in a face whose space
+  takes its script (Euphemia UCAS), where a side without a letter measures its spaces wide; and a position at a cut
+  takes what the exact windows show, which a plain paragraph keeps there, so the inspected paragraph reads the same.
+What is left against the base in the final fonts runs (32 breaks and 28 line counts of 10,532 and 2,780 gained), each
+traced in the window probe, and why Canvas can't show it (DESIGN.md §4.6):
+- Zapfino's `THE then` at 16px (classic DPR 2 and spacing DPR 2, 1 layout each; both trees lose it in turn at other
+  widths): words first gives Chrome's positions, and Chrome reshapes the line's end because HarfBuzz takes the offset
+  after `THE ` as unsafe to break from the state of Zapfino's `morx` machine, which changes no advance.
+- Hoefler Text's kern between a letter and the space after it (`chat` under -1px of word spacing at DPR 2,
+  `kern-across-space` under 1px of letter and -2px of word spacing at DPR 3): HarfBuzz's kern machine puts half of it on
+  each glyph (hb-kern.hh:102-106) and the port all of it on the first where the declaration gives no `pairKerning`
+  fact, so the position before the space is 77 LayoutUnits off in both trees, and the base's line matched at one width.
+- Euphemia UCAS, 18 breaks and 10 line counts at DPR 3 (and 78 and 63 gained): the lone space again, where an exact
+  window's side is white space alone; letting every side reach a letter moves the face's lines both ways (172 lost and
+  319 gained at DPR 3).
+- One width each where a LayoutUnit decides and both trees' positions agree with Chrome's within one: Arabic in
+  Hiragino Mincho ProN's fallback under four spacing styles at DPR 3 (the line end the port takes fits by one LayoutUnit
+  where Chrome's doesn't; the base retries the line with 63 LayoutUnits less), Apple SD Gothic Neo's `neutral-words`
+  under -0.5px of word spacing at DPR 3 (the base takes the line start as unsafe to break and fills one LayoutUnit
+  less), and Helvetica Neue's short `p. 12, baf`+SHY+`fled by` at DPR 3 (the line start after the hyphen is reshaped to
+  another offset).
+- Skia's `hindi-neutral` under 1px of letter and -2px of word spacing at 28px and DPR 3 (3 widths): the range's side
+  ` 2026` alone is Common where the paragraph shapes it as Devanagari, and its veto moves the cut into `श्री`; leaving the
+  range out where a side is Common gives Chrome's lines there and loses Skia's 2px of word spacing at DPR 2.
+The evidence, in pinned Chrome 153 unless named (runs under `.artifacts/tests/runs/bwf-loss-20260924`):
+- The fonts attack (`tools/bwf-fonts-probe.ts`) against the base, scored by Chrome where the two trees differ, on the
+  final tree:
+
+  | Run | Layouts | Differ | Breaks lost / gained | Counts lost / gained |
+  |---|---:|---:|---:|---:|
+  | classic, DPR 2 | 8,055,520 | 29,418 | 1 / 2,529 | 0 / 887 |
+  | classic, DPR 3 | 8,056,513 | 38,342 | 1 / 3,820 | 4 / 849 |
+  | spacing, DPR 2 | 3,520,508 | 14,867 | 2 / 1,696 | 3 / 333 |
+  | spacing, DPR 3 | 3,521,756 | 21,415 | 28 / 2,487 | 21 / 711 |
+
+  The verifier's runs of the fix round's tip had lost 399 breaks and 87 line counts in classic DPR 3 and spacing DPR 2
+  and 3 and gained 697 and 135. The inspected paragraph and the plain one give the same lines in every layout.
+- The round's lab sets against Chrome's own rows, the final tree against the base: the losses with their neighbours lose
+  1 line count and 22 breaks at DPR 1 and gain 21 (the `THE then` widths and 1 of Mishafi's), and gain 7 and 111 against
+  11 breaks lost at DPR 2 and 75 and 234 against 8 at DPR 3, where `a7a68dd` had lost 59 and 212 there; the fix round's
+  gains keep every gain (DPR 1 +34 and +267, DPR 2 +88 and +647, DPR 3 +92 and +614; the 2 and 1 breaks lost at DPR 1
+  and 2 are the fix round's); the bidi repros gain 16, 17 and 17 breaks at DPR 1, 2 and 3. The inspected predictor gives
+  the plain one's lines in every case.
+- The verifier's bidi attack (4,350 lab cases a ratio): no case lost; line counts +32, +28 and +29 and breaks +68, +70
+  and +72 at DPR 1, 2 and 3.
+- The cut probe over 318 families against the base: 7,846 of 785,626 layouts differ at DPR 1, 17,888 of 770,211 at DPR
+  2 and 24,844 of 728,356 at DPR 3, nearly all in `shy-nbsp` (SHY as U+2060), a few in `accents`, `ligatures`,
+  `unbroken` and `arabic`. Their lab cases (36,760, 87,120 and 59,598) gain 504, 1,122 and 1,315 line counts and 591,
+  4,225 and 5,694 breaks, and lose no line count and 1, 2 and 1 breaks: at a soft hyphen where the line and its hyphen
+  fit by one LayoutUnit, the port's positions are now Chrome's (the base's were 61 and 1,614 LayoutUnits short in the
+  two traced) and the hyphen's width decides, the `hyphen-glyph` gap.
+- The real-text attack's 58 sets against the verifier's fresh natives (746,527 layouts at DPR 1, 1.5, 2, 2.625 and 3):
+  none lost against the base, 5 line counts and 21 breaks gained (Noto Nastaliq Urdu at DPR 3, the script sets); the
+  inspected predictor gives the plain one's lines in every layout; the plain predictor asks Canvas 9.9% less than the
+  base's (from 21% less in `body` to 10% more in `nastaliq-dpr1.5`).
+- Offline, `tools/words-attack.ts` over the owner's 11,973 seeded paragraphs and the constructed cases (17,486 layouts a
+  Canvas): the inspected paragraph gives the plain one's lines on every stand-in Canvas, and the walk and the search
+  differ only where `positions-run-backwards` says so (145 on `backwards`, 6 on `script-space`); against the fix round's
+  tip the lines differ in 133 layouts on `usual` at DPR 1, 2 and 3, the bidi runs under letter spacing.
+- Tier 2, recorded at `3189fe1` in both orders in both configurations: 92 status transitions against the references of
+  `fcc04a8` in each, none from a pass or an exact case: soft-hyphen cases that failed pass, 2 failing ones take one more
+  gap, and the exact-value tallies fall (316 to 302 and 839 to 807 differing values); the gates' seeds lose 0. The
+  plain predictor's line ranges equal the usual run's in every case without facts, and differ in the same 115 cases as
+  before with them, where the lab's facts move them. Packed with all 69,224 cases replaying exactly (90,948,519 and
+  94,270,675 recorded calls) and frozen at `3189fe1` in the shared
+  `.artifacts/tests/reference/chrome-{no-facts,facts}.blink-words-first`; the references they replace are kept beside
+  them as `*.pre-loss-round`. The painter's frozen side is bundled at `3189fe1`.
+- The Blink gates (`tests/gates.ts --engine=blink --fresh`, 19 gates): every one exits 0 but the citation ledger, whose
+  16 lost citations are the ones it lost before this round.
+
 2026-09-24, Blink's words-first fix round (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)): the
 constructed attack's three must-changes, the fonts and real-text attacks finished and scored against pinned Chrome, and
 what they found fixed or traced. The library is `51df826`'s, recorded at `fcc04a8`. What changed:

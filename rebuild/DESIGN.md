@@ -1642,23 +1642,24 @@ adjustment, as the base's did, and a window side carried over the eight family e
 to the letter after them (the rule for sides Canvas shapes as Common, below) lost 237 layouts in 33 faces at DPR 2 and 3
 that way (the loss round's first fonts runs). Past its bounds a window's adjustment is real, however wide the window. So
 where the exact window a shrink takes shows no adjustment, the widest window is held against its two sides: at a cut the
-search tries it is the range being cut, whose two pieces then take those sides as their totals, and for a position inside
-a piece the window between the cuts around it; a position at a cut takes what the exact windows show, which a plain
-paragraph keeps there, so an inspected paragraph, which keeps nothing, reads the same (the far stand-in of the words
-attack had parted the two in 2 of 17,486 layouts). In 28px Zapfino at DPR 3 under -3px of word spacing a side that starts at `the` after
-a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact window's
-side, shrunk to `th`, doesn't; in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across the SHY where
-the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut. Not in a face whose
-space takes another advance under Common than under Latin (Euphemia UCAS, `spaceTakesScript`, §4.6): a side of the range
-without a letter measures its spaces wide there, and the side ` 🇺🇸 ` after `pride` vetoed the offset before the space
-and cut the word (28px at DPR 2, 15 layouts of the round's second fonts runs). The base's windows
-had held the first where the spacing made a rounded total look exact, and the fix round's, judged on Canvas's own
-answers, didn't (the verifier's fonts runs: 38 breaks lost at Zapfino's forms). Where the range shows an adjustment at
-every offset its exact windows pass, as in a ligature over a whole word (Zapfino's `Zapfino`), it can't tell them apart,
-and the first of those the search tried is the cut, with the zero its windows showed, reported as `unsafe-to-break`. On
-the loss round's lab sets in pinned Chrome (the losses of the fonts runs with their neighbours, and the fix round's
-gains) the losses against the base at DPR 3 fall from 212 breaks and 59 line counts to 8 and 0, every gain kept; the
-Canvas calls of those cases move by -4% to +5%.
+search tries it is the range being cut, whose two pieces then take those sides as their totals, and for a position
+inside a piece the window between the cuts around it; a position at a cut takes what the exact windows show, which a
+plain paragraph keeps there, so an inspected paragraph, which keeps nothing, reads the same (the far stand-in of the
+words attack had parted the two in 2 of 17,486 layouts). In 28px Zapfino at DPR 3 under -3px of word spacing a side that
+starts at `the` after a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where
+the exact window's side, shrunk to `th`, doesn't; in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms
+across the SHY where the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut.
+Not in a face whose space takes another advance under Common than under Latin (Euphemia UCAS, `spaceTakesScript`, §4.6):
+a side of the range without a letter measures its spaces wide there, and the side ` 🇺🇸 ` after `pride` vetoed the offset
+before the space and cut the word (28px at DPR 2, 15 layouts of the round's second fonts runs). The base's windows had
+held the first where the spacing made a rounded total look exact, and the fix round's, judged on Canvas's own answers,
+didn't (the verifier's fonts runs: 38 breaks lost at Zapfino's forms). Where the range shows an adjustment at every
+offset its exact windows pass, as in a ligature over a whole word (Zapfino's `Zapfino`), it can't tell them apart, and
+the first of those the search tried is the cut, with the zero its windows showed, reported as `unsafe-to-break`. On the
+loss round's lab sets in pinned Chrome (the losses of the fonts runs with their neighbours, and the fix round's gains)
+the losses against the base at DPR 3 fall from 212 breaks and 59 line counts to 8 and 0, every gain kept, and the Canvas
+calls of those cases move by -2.6% to +1.2% against the round's tree before the bounds (`a7a68dd`); the real-text sets
+ask 10% fewer than the base.
 So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
 both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
 cut, held against the range where it shrank, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
@@ -1721,7 +1722,8 @@ own glyph, which `morx` and `kerx` machines see (hb-aat-layout-common.hh:1226-12
 28px (probe bwf-loss S1), 2,356 words of 14 with SHY measure otherwise in the DOM than without it, in 168 families, and
 Canvas gives each of them the DOM's width with U+2060 and none with SHY left out. A 16-bit string that holds no Latin letter
 is Common in Canvas where the DOM's segment is Latin, and reports `script-context` (`gaps.ts` `measuredRange`). On the loss
-round's lab sets the shy-nbsp losses of the verifier's fonts runs, 91 at DPR 2 and 87 at DPR 3, go, and words first now cuts
+round's lab sets the `shy-nbsp` losses of the verifier's fonts runs, 91 layouts at DPR 2 and 87 at DPR 3, go, and in
+the round's final fonts runs `shy-nbsp` loses one short paragraph of Helvetica Neue at DPR 3 (§4.6); words first now cuts
 such a group too.
 
 Blink, a stretch without a script of its own after a cut (`shape.ts` `prefixAfterCut16`; since 2026-09-24). A
@@ -2347,10 +2349,32 @@ spacing lost a line the base kept (the window probe: from the cut at 6 of `T a T
 short of Chrome's), and the verifier's spacing run 130 breaks more. Both trees' pair windows beside a space are off by
 that much; taking the next cluster into such a side, or measuring a space alone as the 8-bit one, which Blink shapes as
 Latin, moved hundreds of other lines of the face either way (local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`).
-Since the loss round (2026-09-24) a range whose total is near, within the unit Canvas rounded, is a piece (§4.4), so the
-search doesn't cut where the base didn't, and Euphemia UCAS's losses under negative spacing are gone on the round's lab
-sets but for 3 of `other-spaces` at DPR 3; keeping a near range whole only where no offset passes the safe test (as
-`bwf-fix-alt-vz5` did, and the round's variant `Q2`) kept more of them lost.
+Since the loss round (2026-09-24) a range whose total is near, within the units Canvas rounded, is a piece (§4.4), so
+the search doesn't cut where the base didn't, and the range being cut decides nothing in the face (§4.4): a side of it
+without a letter measured its spaces wide and vetoed offsets the base cut at. On the round's fonts runs the face then
+loses 18 breaks and 10 line counts against the base at DPR 3 and gains 78 and 63, and at DPR 2 loses none, where the
+verifier's runs had lost 130 and 24 at DPR 3 and 8 breaks at DPR 2; keeping a near range whole only where no offset
+passes the safe test (as `bwf-fix-alt-vz5` did, and the round's variant `Q2`) kept more of them lost. What is left there
+is the lone space again: in `other-spaces` under 1px of letter and -2px of word spacing at 28px, the exact window at the
+space after `d` shrinks to a side of white space alone, and the position there takes two spaces' Common difference, 34
+zoomed px, where the base's window, which the spacing made look exact, held the letter after them. Letting every side of
+a window in the face reach a letter gives Chrome's lines in the four such layouts the window probe traced and moves the
+face's lines both ways again (the round's Euphemia UCAS runs: 172 breaks lost and 319 gained at DPR 3, 89 and 27 at DPR
+2; scratch branch `bwfl-eu`, not adopted).
+
+What else the loss round leaves against the base in its final fonts runs (32 breaks and 28 line counts lost of 10,532
+and 2,780 gained), none of it a premise's, each traced in the window probe: Zapfino's `THE then` (above); the kern
+Hoefler Text makes between a letter and the space after it, which HarfBuzz's kern machine puts half on each glyph
+(hb-kern.hh:102-106) and the port all on the first where the declaration gives no `pairKerning` fact, so the position
+before the space is 77 LayoutUnits off in both trees; the lone space of Euphemia UCAS (above); a line end or start that
+one LayoutUnit decides where both trees' positions are within one of Chrome's (Arabic in Hiragino Mincho ProN's fallback
+under four spacing styles at DPR 3, Apple SD Gothic Neo's `neutral-words` under -0.5px of word spacing, whose line start
+the base takes as unsafe and fills a LayoutUnit less, and a short paragraph of Helvetica Neue whose line after a hyphen
+at SHY starts reshaped to another offset); and Skia's `hindi-neutral` under 1px of letter and -2px of word spacing at
+DPR 3, where the range's side ` 2026` alone is Common where the paragraph shapes it as Devanagari and its veto moves the
+cut into `श्री` (leaving the range out where a side is Common gives Chrome's lines there and loses Skia's 2px of word
+spacing at DPR 2). In the cut probe's cases 4 breaks go the same way at a soft hyphen: the line and its hyphen fit by
+one LayoutUnit, the port's positions are Chrome's, and the hyphen's width decides (`hyphen-glyph`).
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a
