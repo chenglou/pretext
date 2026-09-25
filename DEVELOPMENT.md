@@ -110,7 +110,7 @@ teardown are expected; use `bun start` for a persistent dev server.
 
 ## Useful Pages
 
-- `/demos/index` — index of the public demos
+- `/demos` — index of the public demos
 - `/accuracy` — checked-in accuracy snapshots produced by the shared suite
 - `/benchmark` — performance comparisons
 - `/corpus` — long-form corpus diagnostics
