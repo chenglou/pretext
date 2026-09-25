@@ -2406,13 +2406,16 @@ a plain paragraph reports nothing and lays out the same lines:
 - Zapfino's morx state shows in no Canvas answer, so it is a font-level limitation (the known tail's
   `blink/zapfino-morx-unsafe-state`), not code keyed on the font; its layouts are covered by gaps that fire for other
   reasons there (`context-past-a-word`, `in-word-prefix`, `glyph-clusters`, `unsafe-to-break`).
-Of the 84 lost layouts the round's lab cases hold (every one of the verifier's fonts runs, its lab sets and the cut probe),
-in pinned Chrome 153 against fresh natives, the scorer calls all 84 covered, 66 by one of the four new conditions; the
-others are Zapfino's, the four wide soft hyphens under `float32-precision`, and four layouts of Hoefler Text and Euphemia UCAS
-whose widths differ before the decision, where `unsafe-to-break` (pair placement without a `pairKerning` fact) covers them. Where they fire: on the
-tier cases without facts in 3,396 of 69,224 cases (4.9%; `one-unit-fit` 2,407, `stand-in-start-reach` 869,
-`common-window-side` 208, `white-space-window-side` 0), most of them in the rule families, whose widths are derived from
-the native lines so that lines fit exactly, and with the lab's facts in 3,949; on the real-text sets, see TAKEOVER.md.
+Of the 84 lost layouts the round's lab cases hold (every one of the verifier's fonts runs, its lab sets and the cut
+probe), in pinned Chrome 153 against fresh natives, the scorer calls all 84 covered, 66 by one of the four new
+conditions; the others are Zapfino's, the four wide soft hyphens under `float32-precision`, and four layouts of Hoefler
+Text and Euphemia UCAS whose widths differ before the decision, where `unsafe-to-break` (pair placement without a
+`pairKerning` fact) covers them. Where they fire: on the tier cases without facts in 3,396 of 69,224 cases (4.9%;
+`one-unit-fit` 2,407, `stand-in-start-reach` 869, `common-window-side` 208, `white-space-window-side` 0), most of them
+in the rule families, whose widths are derived from the native lines so that lines fit exactly, and with the lab's facts
+in 3,949; on the real-text attack's 59 sets in 10,171 of 751,327 layouts (1.4%; 1,270, 5,750, 6,337 and 0), most of them
+in its hole and CJK suite sets (TAKEOVER.md). A plain paragraph's lines are `3189fe1`'s on every tier case and real-text
+layout.
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a

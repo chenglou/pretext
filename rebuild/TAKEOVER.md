@@ -34,7 +34,8 @@ width under 24 px; the lead's decision is that words first lands once every loss
   `blink/common-stretch-measured-alone`), each with its lost layouts.
 The evidence (runs under `.artifacts/tests/runs/bwf-gaps-20260925`; pinned Chrome 153 unless named):
 - Every lost layout of the verifier's runs (`bwf-final-20260925`: the 49 layouts of `fonts-losses.txt`, the 46 rows of
-  `lab-lost.ndjson` and the cut probe's 4), 84 lab cases at DPR 1, 2 and 3 (`cases/`), recorded against fresh natives
+  `lab-lost.ndjson` and the cut probe's 4; 44, 44 and 4 lab cases, of which 8 are in two lists), 84 lab cases at DPR 1,
+  2 and 3 (`cases/`), recorded against fresh natives
   with the no-facts predictor and replayed offline on this tree (`replay-case.ts`, the lab's scorer): all 84 are covered
   by a named gap, 66 by one of the four conditions above; of the 18 others 10 are Zapfino's (41 of the 84 are Zapfino's;
   3 of the 10 under 24px), 4 the wide soft hyphens under `float32-precision`, and 4 Hoefler Text's kern before a space
@@ -43,8 +44,33 @@ The evidence (runs under `.artifacts/tests/runs/bwf-gaps-20260925`; pinned Chrom
   had called 82 covered, mostly by gaps that don't name the traced cause, and 2 open: the verifier's Euphemia UCAS attack
   at 32px under -6px of word spacing and Helvetica Neue's short paragraph at DPR 3. The replays ask no question the
   recordings lack, and their lines equal the recorded ones.
-- Where the conditions fire, offline on the frozen tier references (`tierfire/`, both configurations): see the numbers
-  recorded at the freeze below.
+- Where the conditions fire, offline on the tier references frozen at `93c4a53` (`tierfire/final/`): without facts in
+  3,396 of 69,224 cases (4.9%): `one-unit-fit` in 2,407 cases and 2,690 of 247,575 lines, `stand-in-start-reach` in 869
+  and 1,075, `common-window-side` in 208 and 424, `white-space-window-side` in none, most of them in the rule families,
+  whose widths are derived from the native lines so that lines fit exactly; with the lab's facts in 3,949 cases (5.7%;
+  2,407, 663 and 923). On the real-text attack's 59 sets (751,327 layouts and 4,661,189 lines at DPR 1, 1.5, 2, 2.625
+  and 3, in pinned Chrome without facts): in 10,171 layouts (1.4%), `one-unit-fit` in 1,270 layouts and 2,014 lines,
+  `stand-in-start-reach` in 5,750 and 7,573, `common-window-side` in 6,337 and 14,227, `white-space-window-side` in none;
+  the attack's hole and CJK suite sets (`holes2`, `holes3`, `cjk-suite`) hold most of the last two (3,510 and 4,452
+  layouts).
+- Plain lines don't move: the plain predictor's line ranges at `93c4a53` equal `3189fe1`'s on all 69,224 tier cases in
+  both configurations in pinned Chrome (`gates/compare-plain-3189fe1-93c4a53-*`, natives the same too), and on every
+  real-text layout (the tree the runs used, the round's first form `2f69a4f`, differs from `93c4a53` only in where an
+  inspected gap reports); the inspected paragraph gives the plain one's lines in every real-text layout, and offline in
+  all 157,374 layouts of the words attack on its nine stand-in Canvases (`offline/`).
+- Tier 2, recorded at `93c4a53` in both orders in both configurations (`gates/rec-d`): 75 status transitions without
+  facts and 51 with them against the references of `3189fe1`, every one a failing case covered before that takes one
+  more gap (`in-word-prefix`, `glyph-clusters` or `script-context`); none blocking, and the exact-value and limited
+  tallies are unchanged (302 and 807 differing predicted values, 240,604 and 164,353 limited); the gates' seeds lose 0.
+  The plain predictor's line ranges equal the usual run's in every case without facts, and differ in the same 115 with
+  them as before. Packed with all 69,224 cases replaying exactly (91,406,583 and 95,474,575 recorded calls) and frozen at
+  `93c4a53` in the shared `.artifacts/tests/reference/chrome-{no-facts,facts}.blink-words-first`; the references they
+  replace are kept beside them as `*.pre-gaps`. The painter's frozen side is bundled at `93c4a53`. The first recording
+  (`2f69a4f`) was the one that showed the ranges over the line wrong; a run of the final form that a machine crash cut
+  off is not used.
+- The Blink gates (`tests/gates.ts --engine=blink --fresh`, 19 gates, on the frozen tree): every one exits 0 but the
+  citation ledger, whose 16 lost citations are the ones it lost before these rounds; tier 1 shows every case the same
+  with no question changed, 1,268 unit tests pass.
 
 2026-09-24, Blink's words-first loss round (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)):
 every loss the verifier's fonts and bidi attacks found against the rebuild line (`61c376d`) in installed fonts, and the
