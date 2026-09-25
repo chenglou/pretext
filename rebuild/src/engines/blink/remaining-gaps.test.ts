@@ -84,14 +84,15 @@ const WHITE_SPACE_SIDE = 'a window side of white space alone'
 const COMMON_SIDE = 'a window side that Canvas shapes as Common alone'
 
 describe('blink gaps of a fit within what positions can be off by', () => {
-  test('a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix over the line and the content its decision measured', () => {
+  test('a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix at the break its decision took', () => {
     // 10px a code point: at 90px `xxxx xxxx` and `Vxxx xxxx` fit with no LayoutUnit to spare. The first line's start is
     // the paragraph's, which no reshape corrects; the third starts after a space, which the pair window calls safe.
     const text = 'xxxx xxxx xxxx xxx Vxxx xxxx xxxx xxxx'
     const exact = lines(prepared('Mono', text), 90)
     expect(exact.map(line => line.end)).toEqual([10, 19, 29, 38])
     expect(withDetail(exact[0]!.gaps, ONE_UNIT)).toEqual([])
-    expect(withDetail(exact[2]!.gaps, ONE_UNIT).map(gap => [gap.gap, gap.at])).toEqual([['in-word-prefix', { start: 19, end: 34 }]])
+    // It reports at the break the decision took, before the next line's `xxxx`.
+    expect(withDetail(exact[2]!.gaps, ONE_UNIT).map(gap => [gap.gap, gap.at])).toEqual([['in-word-prefix', { start: 29, end: 29 }]])
     // 5px more leaves 320 LayoutUnits, and the next word would need more than the line has.
     for (const line of lines(prepared('Mono', text), 95)) expect(withDetail(line.gaps, ONE_UNIT)).toEqual([])
     // A plain paragraph lays the same lines out and reports nothing.
@@ -106,7 +107,7 @@ describe('blink gaps of a fit within what positions can be off by', () => {
     const text = 'xxxx xxxx xxxx xxx Vxxx xxxx xxxx xxxx'
     const within = lines(prepared('Kern', text), 181)
     expect(within.map(line => line.end)).toEqual([19, 34, 38])
-    expect(withDetail(within[1]!.gaps, START_REACH).map(gap => [gap.gap, gap.at])).toEqual([['glyph-clusters', { start: 19, end: 38 }]])
+    expect(withDetail(within[1]!.gaps, START_REACH).map(gap => [gap.gap, gap.at])).toEqual([['glyph-clusters', { start: 34, end: 34 }]])
     // At 185px the fit lies past what the start can be off by; and `Mono`'s start is known.
     for (const line of lines(prepared('Kern', text), 185)) expect(withDetail(line.gaps, START_REACH)).toEqual([])
     for (const line of lines(prepared('Mono', text), 181)) expect(withDetail(line.gaps, START_REACH)).toEqual([])

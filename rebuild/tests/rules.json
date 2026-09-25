@@ -9704,13 +9704,13 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "in-word-prefix over a wrapped line and the content its break decision measured, where the line starts beside a space at an offset the port's width tests call safe and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; inside a word the same condition reports at the start alone (blink/gap/in-word-prefix); a plain paragraph reports nothing",
+   "statement": "in-word-prefix at the break a wrapped line's decision took (a point: the start's correction moves no glyph), where the line starts beside a space at an offset the port's width tests call safe and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; inside a word the same condition reports at the start alone (blink/gap/in-word-prefix); a plain paragraph reports nothing",
    "source": "shaping_line_breaker.cc:309-324; line_breaker.cc CanFitOnLine; engines/blink/gaps.ts lineEdgeGaps; DESIGN.md §4.6, §5",
    "probes": [
     "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively"
    ],
    "tests": [
-    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix over the line and the content its decision measured"
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix at the break its decision took"
    ],
    "declaredBy": "the gap-naming round of words first (2026-09-25)",
    "audit": null,
@@ -9722,7 +9722,7 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters where no ligature fact settles the offset, else unsafe-to-break) over the line and the content its break decision measured, where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
+   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters where no ligature fact settles the offset, else unsafe-to-break) at the break the line's decision took (a point), where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
    "source": "shaping_line_breaker.cc:309-324; engines/blink/gaps.ts lineEdgeGaps, startSpread; engines/blink/limits.ts positionLimit; DESIGN.md §5",
    "probes": [],
    "tests": [
@@ -10369,8 +10369,8 @@
   "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
   "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
   "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e",
-  "blink/gap/one-unit-fit": "8bb62c90caa1f6ef",
-  "blink/gap/stand-in-start-reach": "575cfbba6856f395",
+  "blink/gap/one-unit-fit": "725c89ddce35b31a",
+  "blink/gap/stand-in-start-reach": "8010ae772d37258f",
   "blink/gap/white-space-window-side": "5a09a3ca764abccf",
   "blink/gap/common-window-side": "685612e3325f90c3"
  }

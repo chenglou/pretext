@@ -8,14 +8,18 @@ width under 24 px; the lead's decision is that words first lands once every loss
 (`gaps.ts` `windowSides`, `lineEdgeGaps`, `startSpread`; rules `blink/gap/one-unit-fit`, `stand-in-start-reach`,
 `white-space-window-side`, `common-window-side`; `remaining-gaps.test.ts`), each on the inspected path alone:
 - A wrapped line start beside a space that the port's width tests call safe, on a line whose fit test is decided by
-  under two LayoutUnits, reports `in-word-prefix` over the line and the content its decision measured: HarfBuzz can flag
-  such a start with no width signature, and Blink's reshape then corrects the space by 0 or −1 LayoutUnits
+  under two LayoutUnits, reports `in-word-prefix` at the break the decision took, a point: HarfBuzz can flag such a
+  start with no width signature, and Blink's reshape then corrects the space by 0 or −1 LayoutUnits
   (shaping_line_breaker.cc:309-324). The same condition inside a word already reported at the start alone. It names the
   fits a LayoutUnit decides after a space: Arabic in Hiragino Mincho ProN's fallback, Apple SD Gothic Neo's
   `neutral-words`, Mishafi at DPR 1.
 - A wrapped line start taken from a stand-in position reports its reach under the name its position rests on, over the
-  same range, where the line's fit lies within what the position can be off by plus one LayoutUnit: Helvetica Neue's
-  line after the hyphen at SHY.
+  same break, where the line's fit lies within what the position can be off by plus one LayoutUnit: Helvetica Neue's
+  line after the hyphen at SHY. Both reported over the whole line in the round's first form (`2f69a4f`), and its first
+  recording showed why that is wrong: the observation port limits every position a gap's range meets, and with the
+  lab's facts 39 wrong values left the exact-value count (807 to 768 differing) under a condition that moves no glyph;
+  over the text the decision settles (from the break before the line's end through the next one) it was still 16
+  (807 to 791). A point at the break limits no width and covers the same lost layouts.
 - A window whose side is white space alone in a face whose space takes the script, and a window whose side Canvas shapes
   as Common alone where the paragraph shapes it under its run's script and that shows an adjustment or vetoes the
   offset, report `script-context` over the clusters around the offset: Euphemia UCAS's lone space, Skia's ` 2026`,
@@ -32,8 +36,10 @@ The evidence (runs under `.artifacts/tests/runs/bwf-gaps-20260925`; pinned Chrom
 - Every lost layout of the verifier's runs (`bwf-final-20260925`: the 49 layouts of `fonts-losses.txt`, the 46 rows of
   `lab-lost.ndjson` and the cut probe's 4), 84 lab cases at DPR 1, 2 and 3 (`cases/`), recorded against fresh natives
   with the no-facts predictor and replayed offline on this tree (`replay-case.ts`, the lab's scorer): all 84 are covered
-  by a named gap, 70 by one of the four conditions above; the 14 others are Zapfino's (41 of the 84 are Zapfino's; 3 of
-  the 14 under 24px) and the four wide soft hyphens under `float32-precision`. On the tree before (`3189fe1`) the scorer
+  by a named gap, 66 by one of the four conditions above; of the 18 others 10 are Zapfino's (41 of the 84 are Zapfino's;
+  3 of the 10 under 24px), 4 the wide soft hyphens under `float32-precision`, and 4 Hoefler Text's kern before a space
+  and Euphemia UCAS's lone space at 222px, where widths differ before the decision and `unsafe-to-break` (pair
+  placement without a `pairKerning` fact) covers them. On the tree before (`3189fe1`) the scorer
   had called 82 covered, mostly by gaps that don't name the traced cause, and 2 open: the verifier's Euphemia UCAS attack
   at 32px under -6px of word spacing and Helvetica Neue's short paragraph at DPR 3. The replays ask no question the
   recordings lack, and their lines equal the recorded ones.

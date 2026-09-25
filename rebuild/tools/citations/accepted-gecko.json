@@ -1,3 +1,1 @@
-[
-{"kind":"gap-name","token":"in-word-prefix","where":"code","count":1,"reason":"X1: a stand-in tab's reason is a tagged union (gaps.ts TabReason); the two sites that named in-word-prefix for it, computeTabs and placedStandIn, became the one in tabGapOf"}
-]
+[]

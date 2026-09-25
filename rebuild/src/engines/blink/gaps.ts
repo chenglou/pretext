@@ -777,11 +777,12 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
     }
   }
   // A wrapped line start's correction moves the whole line against its space, so where the line's fit lies within what the
-  // correction can be off by, the start's condition reaches the line's end: its range is the line through the content the
-  // decision measured. Where the start's position is a stand-in, by what the adjustment it can't place spans; beside a
-  // space the port takes as safe, by a LayoutUnit (edgeGap).
+  // correction can be off by, the start's condition reaches the line's end: it reports at the break the decision took, a
+  // point, since the correction moves no glyph and the break is what it can get wrong (the observation port limits every
+  // position a range meets, lab/observe/blink.ts). Where the start's position is a stand-in, by what the adjustment it
+  // can't place spans; beside a space the port takes as safe, by a LayoutUnit (edgeGap).
   const wrapped = start.textOffset > 0 && !start.afterForcedBreak
-  const decided = wrapped ? sourceRange(p, start.textOffset, Math.max(contentEnd, info.decisionEnd)) : null
+  const decided = wrapped ? sourceOffsetAt(p, contentEnd) : null
   if (wrapped) {
     const spread = startSpread(sh, start.textOffset)
     if (spread !== null && margin < 2 + spread.units) addGap(gaps, spread.limit, runAt(p, start.textOffset), START_REACH_DETAIL, decided!)
