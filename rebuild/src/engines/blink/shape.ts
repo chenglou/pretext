@@ -775,7 +775,7 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 // hands back is what the prediction measured, as a plain paragraph's, so the two go on to ask the same questions.
 type CutTotals = { left: Total16 | null; right: Total16 | null; whole: Total16 | null; vetoed: boolean }
 
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: Total16 | null, cutTotals: CutTotals | null = null, estimate: number = whole === null ? NaN : whole.total16): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: Total16 | null, cutTotals: CutTotals | null = null, estimate: number = whole === null ? NaN : whole.total16, asksRange: boolean = true): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
@@ -856,11 +856,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   const taken = total(n)
   let d = taken.total16 - left.total16 - right.total16
   if (Math.abs(d) <= taken.err + left.err + right.err) d = 0
-  if (d !== 0 || n === 0) return d
+  if (d !== 0 || n === 0 || !asksRange) return d
   // The widest window is held against its two sides where the exact window inside it shows none: an adjustment past what
   // Canvas rounded there is context the exact window misses. At a cut the search tries, that window is the range being
-  // cut, whose two pieces then take those sides whole (cutTotals), and the offset is no cut; for a position it is the
-  // window between the cuts around it. In 28px Zapfino at DPR 3 under -3px of word spacing a window side that starts at
+  // cut, whose two pieces then take those sides whole (cutTotals), and the offset is no cut; for a position inside a piece
+  // it is the window between the cuts around it. At a cut a position takes what the exact windows show, which is what a
+  // plain paragraph keeps there (adjustBetweenCuts16, addWordPieces): the search held its range against the cut's sides
+  // already. In 28px Zapfino at DPR 3 under -3px of word spacing a window side that starts at
   // `the` after a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact
   // window's side, shrunk to `th`, doesn't, and in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across
   // the SHY where the exact window's side holds the second `f` alone (the loss round's window probe, 2026-09-24; the base's
@@ -992,7 +994,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const from = cuts[first]!
   let to = cuts[last]!
   if (group.words) while (to < hi && measuredAsCommon(sh.p, g, k, to)) to = clusterEndAfter(sh.p, to, hi)
-  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!)
+  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!, cuts[i] !== k)
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the

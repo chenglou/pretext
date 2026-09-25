@@ -1642,8 +1642,10 @@ adjustment, as the base's did, and a window side carried over the eight family e
 to the letter after them (the rule for sides Canvas shapes as Common, below) lost 237 layouts in 33 faces at DPR 2 and 3
 that way (the loss round's first fonts runs). Past its bounds a window's adjustment is real, however wide the window. So
 where the exact window a shrink takes shows no adjustment, the widest window is held against its two sides: at a cut the
-search tries it is the range being cut, whose two pieces then take those sides as their totals, and for a position the
-window between the cuts around it. In 28px Zapfino at DPR 3 under -3px of word spacing a side that starts at `the` after
+search tries it is the range being cut, whose two pieces then take those sides as their totals, and for a position inside
+a piece the window between the cuts around it; a position at a cut takes what the exact windows show, which a plain
+paragraph keeps there, so an inspected paragraph, which keeps nothing, reads the same (the far stand-in of the words
+attack had parted the two in 2 of 17,486 layouts). In 28px Zapfino at DPR 3 under -3px of word spacing a side that starts at `the` after
 a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact window's
 side, shrunk to `th`, doesn't; in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across the SHY where
 the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut. Not in a face whose
@@ -2266,18 +2268,18 @@ gaps and bounded where installed faces break them in pinned Chrome (rebuild/READ
   all 18 breaks that italic Athelas with Vietnamese lost against the base and gives up 9 that words first had right
   where the cut search reports `float32-precision` or `unsafe-to-break` (6 in Athelas, 3 in Galvji). Of the fonts
   attack's texts it engages in `accents` alone, and in the real-text sets in Myanmar paragraphs that hold `ဦ` beside
-  marks, Vietnamese that mixes a combining mark with precomposed letters, and a few book paragraphs. Three faces lose
-  lines to what no tree measures: in italic Gill Sans and Athelas, Chrome's ` , ` between Devanagari words is 5.6 zoomed
-  px wider at 28px than either tree measures it, and the words put the difference before it where the cut search puts it
-  after (7 breaks lost and 3 gained in Gill Sans, 1 lost in Athelas); in 800 Chalkboard SE, at the start of a line of
-  pointed Hebrew 61.7px wide, the window between the words' cuts runs to the next word's space and shows an adjustment
-  that the base's window, which ends before that space, doesn't, so the start is taken as unsafe to break and a line of
-  `. ` alone is set (1 line count; `unsafe-to-break` and `context-past-a-word` fire there). Zapfino's `THE then` at
-  16px, 26px wide, isn't the premise either: words first gives Chrome's positions inside `then`, where the base's are 11
-  zoomed px off, and the line differs because the port takes the offset after `the` as safe to break where Chrome, with
-  the same positions and the same space, must reshape the line's end (`in-word-prefix` and `unsafe-to-break`, which the
-  inspected paragraph reports). Measuring a position inside a word from further back (one piece back, the space before
-  its cut, or the group's start) gave the base's positions and lost other lines in the sweep.
+  marks, Vietnamese that mixes a combining mark with precomposed letters, and a few book paragraphs. What the fix round's
+  attacks lost against the base is none of the premises either, and the loss round (2026-09-24) traced each against
+  Chrome's own positions in its window probe: ` , ` and ` :` between Devanagari words measured alone are off their run
+  in Didot and italic Gill Sans, which the rule for stretches without a script of their own now measures with the letter
+  after them (§4.4), and the same rule's window side takes the 800 Chalkboard SE line start. Zapfino's `THE then` at
+  16px, 26px wide, remains: words first gives Chrome's positions inside `then`, where the base's are 11 zoomed px off,
+  and the line differs because Chrome takes the offset after `THE ` as unsafe to break and reshapes the line's end, which
+  forcing that offset unsafe in the port reproduces. HarfBuzz marks it unsafe by the state Zapfino's `morx` machine is
+  in (hb-aat-layout-common.hh:1341-1370), which changes no advance, so no window of Canvas's shows it; the base took the
+  offset as unsafe from the 11 zoomed px its positions were off. Measuring a position inside a word from further back
+  (one piece back, the space before its cut, or the group's start) gave the base's positions and lost other lines in the
+  sweep.
 - *Positions inside a word stay sorted.* The walk over the cuts stands in for the search over every offset, which is
   Blink's own binary search over sorted positions (shape_result.cc:2300-2318); both give one candidate only where the
   positions they read are sorted. A glyph or a pair adjustment wider than nothing backwards breaks it. No attack found a
