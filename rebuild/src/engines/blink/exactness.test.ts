@@ -29,7 +29,8 @@ class Context {
   measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
     // `Far`: 12px and a unit a code point, and a string that holds both `Q` and `Z` 2px narrower, a context no window of
     // 256 px that splits them shows.
-    if (this.font.includes('Far')) return { width: Math.fround(text.length * (12 + UNIT) - (text.includes('Q') && text.includes('Z') ? 2 : 0)), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+    // `FarScript` is `Far` whose lone U+2028, shaped as Common, is 2px wider than the 8-bit space, as Euphemia UCAS's is.
+    if (this.font.includes('Far')) return { width: Math.fround(text.length * (12 + UNIT) - (text.includes('Q') && text.includes('Z') ? 2 : 0) + (this.font.includes('FarScript') && text === '\u2028' ? 2 : 0)), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
     // `Huge`: 300px and a unit an `a` and 300px and two units any other code point, so that no window of two clusters is
     // exact.
     if (this.font.includes('Huge')) return { width: Math.fround(text.length * 300 + (text.length + count(text, 'b')) * UNIT), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
@@ -86,6 +87,13 @@ describe('blink exactness of a total', () => {
       expect(p.groups[0]!.cuts).toEqual([0, 11, 23, 35])
       if (inspect) expect(paragraphGaps(p).map(gap => gap.gap)).toContain('unsafe-to-break')
     }
+  })
+
+  test('in a face whose space takes another advance under Common than under Latin the range decides nothing', () => {
+    // Every space fails its pair window here, as in Euphemia UCAS, so the search cuts at the middle, 17, between Q and Z:
+    // the range shows the 2px there, and in `Far` the offset would be no cut; here the exact windows decide.
+    const p = prepare(paragraph(-30, 'FarScript', 'Qxxxxxxxxxx xxxxxxxxxxZ yyyyyyyyyyy'), env, false, createContextPool())
+    expect(p.groups[0]!.cuts).toEqual([0, 17, 35])
   })
 
   test('an adjustment a window shows within what Canvas rounded is none', () => {

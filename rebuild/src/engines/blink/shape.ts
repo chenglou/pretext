@@ -865,6 +865,10 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   // window's side, shrunk to `th`, doesn't, and in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across
   // the SHY where the exact window's side holds the second `f` alone (the loss round's window probe, 2026-09-24; the base's
   // windows had held the first where the spacing made a rounded total look exact).
+  // Not in a face whose space takes another advance under Common than under Latin (spaceTakesScript): a side of the range
+  // without a letter measures its spaces wide there, and in Euphemia UCAS the side ` 🇺🇸 ` after `pride` vetoed the offset
+  // before the space and cut the word (the loss round's fonts runs, 28px at DPR 2).
+  if (spaceTakesScript(p, p.groups[g]!.style)) return 0
   const range = total(0)
   const rangeLeft = measureTotal16(sh, g, from, k, lo, hi)
   const rangeRight = measureTotal16(sh, g, k, to, lo, hi)

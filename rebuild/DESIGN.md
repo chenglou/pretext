@@ -1646,7 +1646,10 @@ search tries it is the range being cut, whose two pieces then take those sides a
 window between the cuts around it. In 28px Zapfino at DPR 3 under -3px of word spacing a side that starts at `the` after
 a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact window's
 side, shrunk to `th`, doesn't; in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across the SHY where
-the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut. The base's windows
+the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut. Not in a face whose
+space takes another advance under Common than under Latin (Euphemia UCAS, `spaceTakesScript`, §4.6): a side of the range
+without a letter measures its spaces wide there, and the side ` 🇺🇸 ` after `pride` vetoed the offset before the space
+and cut the word (28px at DPR 2, 15 layouts of the round's second fonts runs). The base's windows
 had held the first where the spacing made a rounded total look exact, and the fix round's, judged on Canvas's own
 answers, didn't (the verifier's fonts runs: 38 breaks lost at Zapfino's forms). Where the range shows an adjustment at
 every offset its exact windows pass, as in a ligature over a whole word (Zapfino's `Zapfino`), it can't tell them apart,
