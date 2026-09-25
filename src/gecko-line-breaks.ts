@@ -32,7 +32,7 @@ import {
   geckoLineTrieIndexPacked,
 } from './generated/engine-break-data.js'
 import { getParagraphLevels } from './gecko-bidi-levels.js'
-import { getBreakLanguage, getSmallTrieValue, unpackTable, unpackUint32Table } from './line-breaks.js'
+import { getBreakLanguage, getSmallTrieValue, unpackTable, unpackUint32Table, type WordBoundaries } from './line-breaks.js'
 
 const CH_SHY = 0x00ad
 
@@ -472,7 +472,7 @@ function getComplexLanguage(u: number): number {
 // complex_language_segment_utf16 (complex/mod.rs:135-156): splits a run of SA code units by
 // language, and Intl.Segmenter words supply boundaries inside each Thai, Lao, Burmese and Khmer
 // slice. Every slice reports its end; other languages report nothing else (:149-151).
-function segmentComplex(units: number[], wordSegmenter: Intl.Segmenter): number[] {
+function segmentComplex(units: number[], wordBoundaries: WordBoundaries): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
     const language = getComplexLanguage(units[i]!)
@@ -481,7 +481,8 @@ function segmentComplex(units: number[], wordSegmenter: Intl.Segmenter): number[
     if (language !== 0) {
       let slice = ''
       for (let k = i; k < j; k += 4096) slice += String.fromCharCode(...units.slice(k, Math.min(j, k + 4096)))
-      for (const part of wordSegmenter.segment(slice)) if (part.index > 0) result.push(i + part.index)
+      const boundaries = wordBoundaries(slice)
+      for (let k = 0; k < boundaries.length; k++) result.push(i + boundaries[k]!)
     }
     result.push(j)
     i = j
@@ -502,7 +503,7 @@ type LineBreakIterator = {
   readonly base: number
   len: number
   readonly keepAll: boolean
-  readonly wordSegmenter: Intl.Segmenter
+  readonly wordBoundaries: WordBoundaries
   // Utf16Indices front_offset and current_pos_data (line.rs:821-823).
   front: number
   curPos: number
@@ -510,8 +511,8 @@ type LineBreakIterator = {
   cache: number[]
 }
 
-function createLineBreakIterator(text: string, start: number, end: number, keepAll: boolean, wordSegmenter: Intl.Segmenter): LineBreakIterator {
-  return { text, base: start, len: end - start, keepAll, wordSegmenter, front: 0, curPos: -1, curCp: 0, cache: [] }
+function createLineBreakIterator(text: string, start: number, end: number, keepAll: boolean, wordBoundaries: WordBoundaries): LineBreakIterator {
+  return { text, base: start, len: end - start, keepAll, wordBoundaries, front: 0, curPos: -1, curCp: 0, cache: [] }
 }
 
 // advance_iter (line.rs:1077-1079), Utf16Indices::next (indices.rs:58-83).
@@ -667,7 +668,7 @@ function handleComplexLanguage(it: LineBreakIterator, leftCodepoint: number): nu
     if (it.curPos < 0 || getLineBreakClass(it.curCp) !== SA) break
   }
   it.front = startFront; it.curPos = startPos; it.curCp = startCp
-  it.cache = segmentComplex(units, it.wordSegmenter)
+  it.cache = segmentComplex(units, it.wordBoundaries)
   if (it.cache.length === 0) return -1
   const firstPos = it.cache[0]!
   let i = 1
@@ -702,7 +703,7 @@ const NON_BREAKABLE_ASCII = new Uint8Array([
 // word's FlushCurrentWord from Reset (nsLineBreaker.cpp:134-226, 710-720). Each word of more than
 // ASCII letters goes to LineBreaker::ComputeBreakPositions (intl/lwbrk/LineBreaker.cpp:112-194),
 // which keeps the state before its first unit (AutoRestore, :342, :604; skipSet = 1, :200-206).
-function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, afterLeadingWhitespace: boolean, keepAll: boolean, wordSegmenter: Intl.Segmenter): Uint8Array {
+function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, afterLeadingWhitespace: boolean, keepAll: boolean, wordBoundaries: WordBoundaries): Uint8Array {
   const len = units.length
   const state = new Uint8Array(len)
   let afterBreakableSpace = afterLeadingWhitespace
@@ -721,7 +722,7 @@ function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, after
     }
     if (offset > wordStart && wordMightBeBreakable) {
       const saved = state[wordStart]!
-      const iterator = createLineBreakIterator(text, wordStart, offset, keepAll, wordSegmenter)
+      const iterator = createLineBreakIterator(text, wordStart, offset, keepAll, wordBoundaries)
       for (let pos = nextLineBreak(iterator); pos >= 0 && pos < offset - wordStart; pos = nextLineBreak(iterator)) state[wordStart + pos] = 1
       state[wordStart] = saved
     }
@@ -743,7 +744,7 @@ export function getGeckoLineBreaks(
   preserveWhiteSpace: boolean,
   keepAll: boolean,
   graphemeSegmenter: Intl.Segmenter,
-  wordSegmenter: Intl.Segmenter,
+  wordBoundaries: WordBoundaries,
 ): Uint8Array {
   const len = source.length
   const flags = new Uint8Array(len + 1)
@@ -779,7 +780,7 @@ export function getGeckoLineBreaks(
   for (let k = 0; k < words.length; k += 2) setupClusterBoundaries(g, tr.units, words[k]!, words[k + 1]!)
   for (let k = 0; k < runStarts.length; k++) g.clusterStart[runStarts[k]!] = 1 // gfxTextRun.cpp:2828-2835
 
-  const state = getBreakStates(tr.text, tr.units, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll, wordSegmenter)
+  const state = getBreakStates(tr.text, tr.units, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll, wordBoundaries)
   for (let t = 1; t < n; t++) {
     const rawPos = tr.orig[t]!
     const normal = state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)

@@ -131,19 +131,31 @@ export function getSharedGraphemeSegmenter(): Intl.Segmenter {
 }
 
 // The scans read word boundaries only inside runs of Thai, Lao, Khmer and Myanmar
-// letters, where no locale changes them.
+// letters, where no locale changes them: the boundaries strictly inside the run, as the
+// segmenter gives them for the run alone. Firefox's segmenter runs ICU4X's LSTM models over
+// every code unit there, so the boundaries of up to 4,096 runs are kept, as many as Firefox
+// keeps of its own line breaks per word (intl/lwbrk/LineBreakCache.h), starting over when
+// full (RESEARCH.md, Keeping Work Bounded).
+const WORD_BOUNDARY_RUNS = 4096
 let sharedWordSegmenter: Intl.Segmenter | null = null
+const wordBoundaries = new Map<string, number[]>()
 
-export function getSharedWordSegmenter(): Intl.Segmenter {
-  if (sharedWordSegmenter === null) {
-    sharedWordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+export function getWordBoundaries(run: string): readonly number[] {
+  let boundaries = wordBoundaries.get(run)
+  if (boundaries === undefined) {
+    sharedWordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+    boundaries = []
+    for (const part of sharedWordSegmenter.segment(run)) if (part.index > 0) boundaries.push(part.index)
+    if (wordBoundaries.size === WORD_BOUNDARY_RUNS) wordBoundaries.clear()
+    wordBoundaries.set(run, boundaries)
   }
-  return sharedWordSegmenter
+  return boundaries
 }
 
 export function clearAnalysisCaches(): void {
   sharedGraphemeSegmenter = null
   sharedWordSegmenter = null
+  wordBoundaries.clear()
 }
 
 const combiningMarkRe = /\p{M}/u
@@ -325,12 +337,12 @@ export function analyzeText(
   let breaks: Uint8Array
   let spaceSources: Uint16Array | null = null
   if (profile.lineBreakScan === 'blink') {
-    breaks = getBlinkLineBreaks(normalized, keepAll, language, getSharedWordSegmenter())
+    breaks = getBlinkLineBreaks(normalized, keepAll, language, getWordBoundaries)
   } else {
     // WebKit and Gecko scan the source. Gecko's scan collapses its white space as Firefox does.
     const sourceBreaks = profile.lineBreakScan === 'webkit'
-      ? getWebKitLineBreaks(source, preserve, keepAll, language, getSharedWordSegmenter())
-      : getGeckoLineBreaks(source, preserve, keepAll, getSharedGraphemeSegmenter(), getSharedWordSegmenter())
+      ? getWebKitLineBreaks(source, preserve, keepAll, language, getWordBoundaries)
+      : getGeckoLineBreaks(source, preserve, keepAll, getSharedGraphemeSegmenter(), getWordBoundaries)
     if (profile.lineBreakScan === 'webkit' && !preserve && source !== normalized) spaceSources = new Uint16Array(normalized.length)
     breaks = source === normalized ? sourceBreaks : mapSourceLineBreaks(source, normalized.length, sourceBreaks, whiteSpace, spaceSources)
   }

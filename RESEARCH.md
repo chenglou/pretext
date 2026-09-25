@@ -1289,6 +1289,30 @@ function on its first call. V8 and JavaScriptCore compiled all of these in the
 same time. The same change made seen Arabic, Latin and mixed chat messages
 prepare 6 to 8% faster in Firefox.
 
+Word boundaries inside Thai, Lao, Khmer and Myanmar runs cost Firefox far more
+than the other browsers. Its word `Intl.Segmenter` is ICU4X's auto segmenter
+(js/src/builtin/intl/Segmenter.cpp:443-444), which runs a bidirectional LSTM model
+over every code point of those scripts (icu_segmenter src/complex/mod.rs:161-189,
+40-wide embeddings and 27 hidden units), where Chrome and Safari look words up in
+ICU's dictionaries. Same-document and interleaved, Firefox 156 took about 2.0µs a
+Thai code unit at every run length from 2 to 4,096 units, against 12ns for Latin
+and about 0.04µs in Chrome 154 and Safari 27, and asking for only the first
+boundary cost as much as iterating them all. The scans ask once per run with one
+shared segmenter and read each run once. Asking once per paragraph, joining a
+paragraph's or a whole batch's runs with LF, walking with `containing()`, or a
+`th` segmenter all cost within 2% of that in Firefox. So new Thai text took 51ms
+per 24,000 units there, 89% of it words, against 5.6ms in Chrome and 5.9ms in
+Safari. Firefox's own layout keeps the line breaks of up to 4,096 such words for
+the same reason (intl/lwbrk/LineBreakCache.h), and the scans keep the boundaries
+of up to 4,096 runs, starting over when full: Thai text prepared before took 3.3ms
+in Firefox, 15 times faster, and 2.3 and 2.5 times faster in Chrome and Safari.
+New text costs the same within 5%, except Khmer, whose zero-width-space-separated
+words repeat: 3.2 times faster in Firefox, 1.4 in Chrome and 1.9 in Safari. Chrome
+and Safari pay about 0.7 to 0.9µs a call, so there joining a paragraph's runs with
+LF, which gave each run the boundaries it gets alone in all three browsers, took
+0.6 of the word time on new Thai text and 0.2 on Khmer; `containing()` walks took
+0.6 to 0.8.
+
 Count total submitted Canvas text, not just calls. Measuring every prefix or
 suffix is quadratic even if each position triggers only one query. Safari's
 production prefix policy caps each segment at 96 graphemes, using pair context

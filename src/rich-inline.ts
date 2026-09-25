@@ -6,7 +6,7 @@ import {
 import {
   analyzeText,
   getSharedGraphemeSegmenter,
-  getSharedWordSegmenter,
+  getWordBoundaries,
   isCollapsibleSpaceCode,
   removeSkippableSegmentBreaks,
   type AnalysisProfile,
@@ -231,7 +231,7 @@ function getItemBreakOffsets(portions: readonly JoinedPortion[], text: string, b
   for (let p = 0; p < portions.length; p++) {
     const portion = portions[p]!
     const end = p + 1 < portions.length ? portions[p + 1]!.start : text.length
-    if (p > 0 && getWebKitBreakBetweenItems(boundaryContexts[portions[p - 1]!.itemIndex]!, text.slice(portion.start, end), language, getSharedWordSegmenter())) {
+    if (p > 0 && getWebKitBreakBetweenItems(boundaryContexts[portions[p - 1]!.itemIndex]!, text.slice(portion.start, end), language, getWordBoundaries)) {
       offsets.push(portion.start)
     }
     const { segmentFlags, segments } = portion.item.prepared

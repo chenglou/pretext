@@ -38,6 +38,7 @@ let SPACED: LineBreakModule['SPACED']
 let getSegmentBreakableFitAdvances: MeasurementModule['getSegmentBreakableFitAdvances']
 let getEngineProfile: MeasurementModule['getEngineProfile']
 let analyzeText: AnalysisModule['analyzeText']
+let getWordBoundaries: AnalysisModule['getWordBoundaries']
 let getBlinkLineBreaks: LineBreaksModule['getBlinkLineBreaks']
 let prepareRichInline: RichInlineModule['prepareRichInline']
 let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRange']
@@ -305,7 +306,7 @@ beforeAll(async () => {
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw, SPACED } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances, getEngineProfile } = measurementMod)
-  ;({ analyzeText } = analysisMod)
+  ;({ analyzeText, getWordBoundaries } = analysisMod)
   ;({ getBlinkLineBreaks } = lineBreaksMod)
   ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
   variant = createVariant('unit', mod, richInlineMod)
@@ -1401,7 +1402,7 @@ describe('boundary-policy regressions', () => {
 })
 
 describe('engine break scans', () => {
-  const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+  const wordBoundaries = (run: string) => getWordBoundaries(run)
   const positions = (breaks: Uint8Array, length: number) => {
     const out: number[] = []
     for (let i = 1; i < length; i++) if (breaks[i] === 1) out.push(i)
@@ -1436,24 +1437,24 @@ describe('engine break scans', () => {
       ['p\uFF08\u30AF\u30A4\u30C3\u30AF\u30FB\u30D6', [1, 3, 4, 5, 7]],
       ['\u2757\u3041', [1]],
     ] as const) {
-      expect({ text, breaks: positions(getBlinkLineBreaks(text, false, null, wordSegmenter), text.length) }).toEqual({ text, breaks: [...expected] })
+      expect({ text, breaks: positions(getBlinkLineBreaks(text, false, null, wordBoundaries), text.length) }).toEqual({ text, breaks: [...expected] })
     }
   })
 
   test("Blink's scan opens Chrome's zh table for a zh page", () => {
-    const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+    const wordBoundaries = (run: string) => getWordBoundaries(run)
     const positions = (breaks: Uint8Array) => Array.from(breaks.keys()).filter(i => breaks[i] === 1)
     // line_normal_cj.brk treats curly quotes as brackets and lets 〜 start a line.
     for (const [text, root, zh] of [
       ['中文“abc”中文', [1, 8], [1, 2, 7, 8]],
       ['x〜y', [2], [1, 2]],
     ] as const) {
-      expect(positions(getBlinkLineBreaks(text, false, null, wordSegmenter))).toEqual([...root])
-      expect(positions(getBlinkLineBreaks(text, false, 'ja', wordSegmenter))).toEqual([...root])
-      expect(positions(getBlinkLineBreaks(text, false, 'zh-Hant', wordSegmenter))).toEqual([...zh])
+      expect(positions(getBlinkLineBreaks(text, false, null, wordBoundaries))).toEqual([...root])
+      expect(positions(getBlinkLineBreaks(text, false, 'ja', wordBoundaries))).toEqual([...root])
+      expect(positions(getBlinkLineBreaks(text, false, 'zh-Hant', wordBoundaries))).toEqual([...zh])
       // A page without a language follows Chrome's UI language, which Intl shows as its default.
       const uiIsChinese = new Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase().startsWith('zh')
-      expect(positions(getBlinkLineBreaks(text, false, '', wordSegmenter))).toEqual([...(uiIsChinese ? zh : root)])
+      expect(positions(getBlinkLineBreaks(text, false, '', wordBoundaries))).toEqual([...(uiIsChinese ? zh : root)])
     }
   })
 
@@ -1492,7 +1493,7 @@ describe('engine break scans', () => {
       ['한국어테스트 테스트입니다', true, [7]],
       ['\u{1F600}\u{1F600}', false, [2]],
     ] as const) {
-      expect({ text, keepAll, breaks: positions(getBlinkLineBreaks(text, keepAll, null, wordSegmenter), text.length) })
+      expect({ text, keepAll, breaks: positions(getBlinkLineBreaks(text, keepAll, null, wordBoundaries), text.length) })
         .toEqual({ text, keepAll, breaks: [...expected] })
     }
   })
@@ -1547,17 +1548,17 @@ describe('engine break scans', () => {
       ['foo。bar日本語', 'ja', true, false, [4]],
       ['a,b', 'ja', true, false, []],
     ] as const) {
-      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language, wordSegmenter), text.length) })
+      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language, wordBoundaries), text.length) })
         .toEqual({ text, language, keepAll, breaks: [...expected] })
     }
     // Between inline boxes, the previous box's last two characters are prior context.
-    expect(getWebKitBreakBetweenItems('丙!', 'a', 'en', wordSegmenter)).toBe(false)
-    expect(getWebKitBreakBetweenItems('ex-', 'ample', 'en', wordSegmenter)).toBe(true)
-    expect(getWebKitBreakBetweenItems('a', '-1', 'en', wordSegmenter)).toBe(false)
+    expect(getWebKitBreakBetweenItems('丙!', 'a', 'en', wordBoundaries)).toBe(false)
+    expect(getWebKitBreakBetweenItems('ex-', 'ample', 'en', wordBoundaries)).toBe(true)
+    expect(getWebKitBreakBetweenItems('a', '-1', 'en', wordBoundaries)).toBe(false)
     // A separator that starts an item forces a break after it, marked 2; one inside a
     // text item doesn't.
-    expect(Array.from(getWebKitLineBreaks('ab\u2028cd', false, false, 'en', wordSegmenter))).toEqual([0, 0, 0, 2, 0, 0])
-    expect(Array.from(getWebKitLineBreaks('か中？\u2028b', false, false, 'en', wordSegmenter))).toEqual([0, 1, 0, 0, 1, 0])
+    expect(Array.from(getWebKitLineBreaks('ab\u2028cd', false, false, 'en', wordBoundaries))).toEqual([0, 0, 0, 2, 0, 0])
+    expect(Array.from(getWebKitLineBreaks('か中？\u2028b', false, false, 'en', wordBoundaries))).toEqual([0, 1, 0, 0, 1, 0])
   })
 
   test("Gecko's scan follows its white-space transform, text runs, nsLineBreaker and ICU4X's rules", async () => {
@@ -1609,7 +1610,7 @@ describe('engine break scans', () => {
     ] as const) {
       // The transformation leaves these rows as they are.
       expect(preserve ? text : removeSkippableSegmentBreaks(text, { lineBreakScan: 'gecko' }, language)).toBe(text)
-      expect({ text, language, keepAll, breaks: positions(getGeckoLineBreaks(text, preserve, keepAll, graphemeSegmenter, wordSegmenter), text.length) })
+      expect({ text, language, keepAll, breaks: positions(getGeckoLineBreaks(text, preserve, keepAll, graphemeSegmenter, wordBoundaries), text.length) })
         .toEqual({ text, language, keepAll, breaks: [...expected] })
     }
   })
