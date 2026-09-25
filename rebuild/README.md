@@ -4,6 +4,13 @@ The goal is a cheap stateless core with simple data flow and predictable cost, a
 behavior. Optimize until the remaining gains are small relative to the code, assumptions and state they add. The
 engineering approach follows `~/github/vibescript/docs/engineering.md`.
 
+The redo stops (the maintainer's rule, 2026-09-25) when: every remaining difference from the browsers on every set is a
+named gap, a made-up or variation-extreme font, or a width under 24 px, and none is unexplained; it is a superset of main
+in all three engines, rich inline included; and the speed recipes end with Blink's words first and the cut predictor.
+After that the work is upkeep: pinning newer browsers, syncing main and adopting new browser APIs. A premise about fonts
+that nobody has falsified may be taken for speed, as a documented default with a named gap, and where requirements have
+to give, ad hoc ones go first, then petty ones.
+
 Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated
 research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
