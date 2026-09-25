@@ -39,7 +39,7 @@ judged, the case sets and the pinned browsers.
 ### Packaging And Release
 
 - `bun run build:package` — emit `dist/` for the published ESM package
-- `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
+- `bun run package-smoke-test` — pack the tarball, verify temporary JS + TS consumers and build the shipped demos from the install
 - `bun run site:build` — build the static demo site into `site/`
 - `bun run generate:engine-break-data` — refresh Chrome's, Safari's and Firefox's checked-in break tables from the engine files in `scripts/engine-data/`, checking each table against its source; `--check` compares the generated file instead of writing it
 - `bun run generate:webkit-generic-families` — refresh the families Safari draws `serif`, `sans-serif`, `cursive`, `fantasy` and `monospace` in under each page language, from WebKit's language-to-script map and Core Text's answers on macOS and iOS in `scripts/engine-data/safari-27.0/`; `--check` compares instead of writing

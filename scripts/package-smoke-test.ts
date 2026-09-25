@@ -10,6 +10,7 @@ let succeeded = false
 try {
   const tarballPath = await packPackage()
   await smokeJavaScriptEsm(tarballPath)
+  await smokeDemos(path.join(tempRoot, 'js-esm'))
   await smokeTypeScript(tarballPath)
   succeeded = true
   console.log(`Package smoke test passed: ${tarballPath}`)
@@ -65,6 +66,19 @@ async function smokeJavaScriptEsm(tarballPath: string): Promise<void> {
     stdout: 'inherit',
     stderr: 'inherit',
   })
+}
+
+// The demos ship too, so every page must build from the install alone. `marked` is the
+// Markdown chat's own dependency, which an app installs next to Pretext.
+async function smokeDemos(projectDir: string): Promise<void> {
+  const demos = path.join(projectDir, 'node_modules', '@chenglou', 'pretext', 'pages', 'demos')
+  const pages = Array.from(new Bun.Glob('**/*.html').scanSync(demos), page => path.join(demos, page))
+  run(['bun', 'build', ...pages, '--outdir', path.join(projectDir, 'demos'), '--external', 'marked'], {
+    cwd: projectDir,
+    stdout: 'pipe',
+    stderr: 'inherit',
+  })
+  console.log(`demos ok (${pages.length} pages)`)
 }
 
 async function smokeTypeScript(tarballPath: string): Promise<void> {
