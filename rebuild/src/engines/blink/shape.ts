@@ -800,6 +800,13 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   if (p.groups[g]!.words) {
     const after = firstOwnScript(p, k, to)
     if (after >= 0 && measuredAsCommon(p, g, k, after)) nearB = Math.max(nearB, clusterEndAfter(p, after, hi))
+  } else if (spaceTakesScript(p, p.groups[g]!.style)) {
+    // EXPERIMENT: in a face whose space takes its script, a side without a letter is Common alone: both sides reach a letter.
+    const after = firstOwnScript(p, k, to)
+    if (after >= 0) nearB = Math.max(nearB, clusterEndAfter(p, after, hi))
+    let before = -1
+    for (let i = k - 1; i >= from; i--) { const cp = p.text.charCodeAt(i); if ((cp & 0xfc00) === 0xdc00) continue; if (firstOwnScript(p, i, k) >= 0) { before = i; break } }
+    if (before >= 0) nearA = Math.min(nearA, clusterStartAtOrBefore(p, before, lo))
   }
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
