@@ -4,6 +4,7 @@
 
 ### Added
 
+- `getEmojiCorrection()` and `setEmojiCorrection()` hand a font's emoji correction to a Web Worker. A worker has no document to probe, so emoji text prepared in one measured wider than the page paints it and could count extra lines; read the number on the page, `postMessage` it, and set it in the worker before `prepare()` (#292).
 - Rich-inline fragments now have `gapItemIndex`, the index of the item whose collapsed space `gapBefore` measures, or -1 when no space precedes the fragment on its line. A painter can draw that space inside the element of the item whose font measured it, and can tell a zero-width space apart from no space (#310).
 
 ### Changed

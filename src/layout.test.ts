@@ -30,6 +30,8 @@ let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let setLocale: LayoutModule['setLocale']
 let clearCache: LayoutModule['clearCache']
+let getEmojiCorrection: LayoutModule['getEmojiCorrection']
+let setEmojiCorrection: LayoutModule['setEmojiCorrection']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
@@ -302,6 +304,8 @@ beforeAll(async () => {
     walkLineRanges,
     setLocale,
     clearCache,
+    getEmojiCorrection,
+    setEmojiCorrection,
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw, SPACED } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances, getEngineProfile } = measurementMod)
@@ -1699,6 +1703,45 @@ describe('measurement invariants', () => {
     } finally {
       Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
       Reflect.deleteProperty(globalThis, 'document')
+    }
+  })
+
+  test('a page can hand its emoji correction to a document-less worker', () => {
+    // Like the test above, Canvas measures the emoji 4px wider than DOM text.
+    const font = '16px Emoji Worker Test'
+    const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
+    Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', {
+      ...measureText,
+      value(this: TestCanvasRenderingContext2D, text: string) {
+        return { width: text === '\u{1F600}' ? 20 : measureWidth(text, this.font) }
+      },
+    })
+    try {
+      Reflect.set(globalThis, 'document', {
+        body: { appendChild: () => undefined, removeChild: () => undefined },
+        createElement: () => ({ style: {}, getBoundingClientRect: () => ({ width: 16 }) }),
+      })
+      clearCache()
+      expect(getEmojiCorrection(font)).toBe(4)
+      const pageWidth = measureNaturalWidth(prepareWithSegments('\u{1F44B}', font))
+
+      // A worker has no document to probe, so the same font reads 0 there and
+      // emoji measure wider than the page will paint them.
+      Reflect.deleteProperty(globalThis, 'document')
+      clearCache()
+      expect(getEmojiCorrection(font)).toBe(0)
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F44B}', font))).toBe(pageWidth + 4)
+
+      // The page's number, handed over, restores the page's widths.
+      setEmojiCorrection(font, 4)
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F44B}', font))).toBe(pageWidth)
+
+      expect(() => setEmojiCorrection(font, -1)).toThrow(RangeError)
+      expect(() => setEmojiCorrection(font, Number.NaN)).toThrow(RangeError)
+    } finally {
+      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
+      Reflect.deleteProperty(globalThis, 'document')
+      clearCache()
     }
   })
 })
