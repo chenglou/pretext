@@ -4979,6 +4979,508 @@
       "cases": [],
       "source": "research/ROUND4-CRITIC.md §4, §5 and \"Known tail\" 8; rebuild/lab/run.ts (no option for another ratio); src/env.ts detectEngine()",
       "note": "`detectEngine()` answers supported for Chrome or Firefox on any OS, while every pinned rule and table is macOS's (Core Text's family table, the libicucore break tables, the font facts). At a ratio of 1 Blink's font check 4 and its size ratio never run, and Gecko's app units per device pixel differ; the probes ran some ratios (Chrome 1, 2 and 3.5; Firefox 30, 60, 40, 23 and 27 app units per px) and no lab set does. Giants are in no tier. A reference for another ratio or OS is a new recording under a new environment key, never a comparison with this one."
+    },
+    {
+      "id": "blink/zapfino-morx-unsafe-state",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Zapfino: HarfBuzz marks an offset unsafe to break from the state of the font's morx machine, which changes no advance, and Chrome reshapes the line's end there; and Zapfino line counts the base also breaks wrong",
+      "conditions": [
+        "context-past-a-word",
+        "in-word-prefix",
+        "unsafe-to-break",
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-9f58777b877c7475",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-81519c1b43f95dba",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-1327eb50dd979deb",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-439cae1903cd35a7",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-eaacf493eac6b2a5",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-9de681001329209d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-9ce6fb7eacc0813a",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-656157cfb95d378c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-3b377574adc30502",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-8b905d67047934c3",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-182a31994725b927",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-d66aef9bf3eb1e11",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-f8ea050b0da1613e",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-058780424ed79319",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-fcf8b28aaa774130",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-232af3550983f3e3",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-13dba9f60cc519f4",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-5e31b41b79e48ae8",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-706e1498d13f1a2e",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-fb0a0c0d792c500b",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-b93cf407aa416141",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-b047f6efcdc7df89",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-d4ce3f17a06106fd",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-4b0e0b63dffafb36",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-b2460d748796c5fe",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-a6300052bc5477a8",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-27ebb4e650fa92e2",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-62915975b81de9f4",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-eec038f09715de2f",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-de9624cc34ba5eaf",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-e2b9fa8abca9a3fc",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-a10ed31098a98992",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-b36717817d558054",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-93dc7b2d893b419c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-84e8557a0970d96d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-f3d2b166b796100d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-a79e023fc6d9d759",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-8a02536d9b14e76d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-a10ed31098a98992",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-68a2bdadb06c097b",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-349586e7fdd6d10c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        }
+      ],
+      "source": "the words-first loss round's window probe (2026-09-24, .artifacts/tests/runs/bwf-loss-20260924/win-zap*): forcing the offset after `THE ` unsafe in the port gives Chrome's lines; hb-aat-layout-common.hh:1341-1370; DESIGN.md §4.6, \"Blink's words first\"; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
+      "note": "A font-level limitation, not code keyed on the font. In `the THE then` at 16px (25.98 to 51.98px wide at DPR 1 and 2, every weight, 31 and 32px too) words first gives Chrome's positions inside `then`, where the base's are 11 zoomed px off, and Chrome reshapes the line's end at the offset after `THE ` because HarfBuzz takes it as unsafe from the machine's state; no window of Canvas's shows it, since no advance changes. The base took the offset as unsafe from its own wrong positions. The chat paragraph at 32px and DPR 1 is the same. The line count losses (digits-url under 1px of letter spacing at 16px and 61.7px, and under 8px of word spacing at 28px, about 103px, at DPR 2 and 3; shy-nbsp at 11px, 17.24px, under 24px) are layouts whose breaks the base also has wrong, not traced to the morx state: each first differs at an `e`, where glyph-clusters and unsafe-to-break report on the line. Every one is covered by a gap that fires for another reason: context-past-a-word, where the cut search's positions and the words' differ, in-word-prefix at the exact widths the attacks pick, where the line starts after a space (blink/gap/one-unit-fit), glyph-clusters and unsafe-to-break at Zapfino's kerned and ligated clusters, so the covering names don't name this cause. What would convert it: a Canvas answer that shows HarfBuzz's cluster flags (getTextClusters, TextMetrics.advances) or a font fact naming a face whose morx states mark offsets unsafe."
+    },
+    {
+      "id": "blink/lone-space-in-a-space-script-face",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Euphemia UCAS, whose space takes the script: a window side of white space alone measures the face's wide Common space where the paragraph's is Latin",
+      "conditions": [
+        "script-context",
+        "unsafe-to-break",
+        "glyph-clusters",
+        "in-word-prefix",
+        "float32-precision"
+      ],
+      "cases": [
+        {
+          "id": "c-82e9c05c47d4daa6",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-6e84149a6b54caa6",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-391731fe97f5fa70",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-98062e0741621f7b",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-40e19a037f6a3dda",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-f6b45ca4bec6ed1f",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-c99f5badad7c50d1",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-6807aea0293b0cfa",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-a808b3947c5893e1",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-816fa7f13addf378",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-dce3f14f2f7d106a",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-42d4926cf23c1c00",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-efddd68aca6b48ce",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-aed2e6079a160092",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-c2c4cc98ca3a24ca",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-f516df537599ee09",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-5ddf7713485bae7c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-e533783a9a17d01c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-f27422bc80f2f458",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-a18cf78891fdb221",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-b8d8f2438d08012d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-a5648c1fd8448235",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-2d1cae898c56d438",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-55513cfdc7e77d9a",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-544b9b4a9161293c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-5522c0ba7e35d80b",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        }
+      ],
+      "source": "DESIGN.md §4.6 (the Euphemia UCAS paragraph), the loss round's window probe (bwf-loss-20260924/win-eu3*); scratch branch bwfl-eu; blink/gap/white-space-window-side; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
+      "note": "18 breaks and 10 line counts at DPR 3 in the loss round's fonts runs (and 78 and 63 gained), plus the verifier's attack b1 at 32px under -6px of word spacing. The exact window at a space shrinks to a side of white space alone, Canvas shapes that side as Common, and Euphemia UCAS's GPOS moves the space by -422 font units under latn alone, so the position takes the difference (34 zoomed px at 28px). Since 2026-09-25 an inspected paragraph reports script-context there (blink/gap/white-space-window-side), and every lost layout is covered. Letting every side of a window in the face reach a letter gives Chrome's lines in the four layouts the window probe traced and moved 172 breaks lost and 319 gained at DPR 3 (branch bwfl-eu), so it isn't taken. What would convert it: the face's DFLT against latn lookups as a font fact, or a Canvas answer per glyph."
+    },
+    {
+      "id": "blink/fit-within-a-layout-unit",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "A line whose fit a LayoutUnit decides, where both trees' positions are within one of Chrome's",
+      "conditions": [
+        "in-word-prefix",
+        "glyph-clusters",
+        "float32-precision",
+        "unsafe-to-break",
+        "context-past-a-word",
+        "script-context"
+      ],
+      "cases": [
+        {
+          "id": "c-b025bfa56536cb37",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-d5909e0f6a78baf7",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 1"
+        },
+        {
+          "id": "c-1802d248ba612ecc",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-04888f8a13962d21",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-c4419dfb92e5f55d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-95a8f669d1900667",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-53ca9df1ede5e85d",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-1c3dca696e74c838",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-7867eac58bd78c03",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-9d918f1a6adaa756",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-1734af388ee9b65c",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        }
+      ],
+      "source": "the loss round's window probe (bwf-loss-20260924/win-hira, win-asd, win-hel); blink/gap/one-unit-fit, blink/gap/float32-precision; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
+      "note": "Arabic in Hiragino Mincho ProN's fallback under four spacing styles at DPR 3 (the line end the port takes fits by one LayoutUnit where Chrome's doesn't; the base retries the line with 63 LayoutUnits less), Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at DPR 3 (Chrome takes the line start as unsafe with every position Chrome's, and fills a LayoutUnit less), Helvetica Neue's short `p. 12, baf`+SHY+`fled by` at DPR 3 (the line after the hyphen starts reshaped to another offset), Mishafi under -2px of word spacing at DPR 1, and soft hyphens at 809 to 1,422px in Kailasa, Baghdad, Noto Sans Siddham and DecoType Naskh, where the line and its hyphen fit by one LayoutUnit. Since 2026-09-25 a wrapped line starting beside a space the port calls safe, whose fit is decided by under two LayoutUnits, reports in-word-prefix over the line and what its decision measured (blink/gap/one-unit-fit: Hiragino Mincho ProN, Apple SD Gothic Neo, Mishafi); Helvetica Neue's line after the hyphen starts at a stand-in position, and reports its reach (blink/gap/stand-in-start-reach); the wide soft-hyphen lines, first lines of 256 zoomed px or more whose runs a font the facts don't name draws, report float32-precision over the line. Every lost layout is covered. What would convert it: HarfBuzz's unsafe-to-break flags from Canvas (getTextClusters)."
+    },
+    {
+      "id": "blink/kern-before-a-space-without-pair-kerning",
+      "engine": "blink",
+      "kind": "convertible class",
+      "title": "Hoefler Text's kern between a letter and the space after it: HarfBuzz's kern machine gives each glyph half, the port all of it to the first without a pairKerning fact",
+      "conditions": [
+        "unsafe-to-break",
+        "in-word-prefix",
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-1a2363c15dea2478",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-497d1cdf69e8450f",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        }
+      ],
+      "source": "hb-kern.hh:102-106; the loss round's window probe (bwf-loss-20260924/win-resid*); blink/kerned-positions-without-pair-kerning-fact; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
+      "note": "`chat` under -1px of word spacing at DPR 2 and `kern-across-space` under 1px of letter and -2px of word spacing at DPR 3: the position before the space is 77 LayoutUnits off in both trees, and the base's line matched at one width by its own rounding. The line end before the space reports unsafe-to-break (a line edge taken from a position whose adjustment no fact places, and the candidate from a position the port can't place), which covers both. A supplied pairKerning fact converts it, as it does blink/kerned-positions-without-pair-kerning-fact."
+    },
+    {
+      "id": "blink/common-stretch-measured-alone",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Digits or punctuation between letters of one script, measured alone as Common, decide a window: Skia's ` 2026` and italic Athelas's ` , ` between Devanagari words",
+      "conditions": [
+        "script-context",
+        "float32-precision",
+        "unsafe-to-break",
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-b8edcc8db699e477",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 2"
+        },
+        {
+          "id": "c-74010ef819817020",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-fce19241b5dbd329",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        },
+        {
+          "id": "c-c3bcee94314d2126",
+          "browser": "chrome",
+          "where": "words-first attacks, lost layouts at DPR 3"
+        }
+      ],
+      "source": "the loss round's window probe (bwf-loss-20260924/win-resid*, the comma probe); blink/gap/common-window-side, blink/measure/prefix-without-script-in-context; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
+      "note": "Skia's hindi-neutral under 1px of letter and -2px of word spacing at 28px and DPR 3 (3 widths): the range's side ` 2026` alone is Common where the paragraph shapes it as Devanagari, and its veto moves the cut into `श्री`; leaving the range out where a side is Common gives Chrome's lines there and loses Skia's 2px of word spacing at DPR 2, so it isn't taken. Italic Athelas's hindi-neutral at 20px and DPR 2: Chrome's ` , ` is wider than either tree measures it. Since 2026-09-25 a window whose side Canvas shapes as Common alone reports script-context at its offset where it shows an adjustment or vetoes the offset (blink/gap/common-window-side), and both are covered."
     }
   ]
 }

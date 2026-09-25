@@ -32,7 +32,7 @@ import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
 import { blinkBidiData, blinkGraphemeRules } from './data.js'
 import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
 import { GapAccumulator } from './gap-accumulator.js'
-import { contextPastAWord, floatSum, roundedPiece, nestedWindowWider, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
+import { contextPastAWord, floatSum, roundedPiece, nestedWindowWider, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, windowSides, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
@@ -856,6 +856,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   const taken = total(n)
   let d = taken.total16 - left.total16 - right.total16
   if (Math.abs(d) <= taken.err + left.err + right.err) d = 0
+  windowSides(sh.gaps, p, g, k, a, b, lo, hi, d)
   if (d !== 0 || n === 0 || !asksRange) return d
   // The widest window is held against its two sides where the exact window inside it shows none: an adjustment past what
   // Canvas rounded there is context the exact window misses. At a cut the search tries, that window is the range being
@@ -880,6 +881,7 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   }
   const dRange = range.total16 - rangeLeft.total16 - rangeRight.total16
   if (!(Math.abs(dRange) > range.err + rangeLeft.err + rangeRight.err)) return 0
+  windowSides(sh.gaps, p, g, k, from, to, lo, hi, dRange)
   if (cutTotals !== null) cutTotals.vetoed = true
   return dRange
 }
@@ -929,7 +931,7 @@ function predictionMargin16(p: BlinkPrepared, style: number): number | null {
 // 8-bit ` ` is one Latin segment, a lone U+2028, the space glyph, is Common (RunSegmenter over the string alone). Euphemia
 // UCAS's GPOS moves its space by -422 font units under latn only, and no other of 393 installed families differs (the fonts
 // attack, 2026-09-23). Asked once a style, on the contexts without spacing of each storage (contextsOf).
-function spaceTakesScript(p: BlinkPrepared, style: number): boolean {
+export function spaceTakesScript(p: BlinkPrepared, style: number): boolean {
   const st = p.styles[style]!
   return st.spaceTakesScript ??= canvasWidth(contextsOf(p, style, false).hyphen, ' ') !== canvasWidth(st.contexts.hyphen, '\u2028')
 }
@@ -1105,7 +1107,7 @@ function holdsOwnScript(p: BlinkPrepared, from: number, to: number): boolean {
 // itself (script-context), where an 8-bit one is shaped as one Latin segment, which is the paragraph's own shaping of a
 // Latin range (spacesStay). An unsegmented paragraph's windows stay as they were: what they measure was held against the
 // browser with them.
-function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number): boolean {
+export function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number): boolean {
   if (p.segments === null) return false
   let other = false
   for (let i = from; i < to;) {

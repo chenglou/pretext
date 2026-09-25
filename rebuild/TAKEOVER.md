@@ -1,5 +1,45 @@
 # Takeover decisions and evidence
 
+2026-09-25, Blink's words-first gap-naming round (branch `blink-words-first`, unmerged; [DESIGN.md §4.6, §5](DESIGN.md)):
+the losses the loss round left against the rebuild line (`61c376d`), each now a named gap an inspected paragraph raises
+where the port's measurements show its condition, or a named font-level limitation in the known tail. The maintainer's
+stopping rule for the redo asks that every remaining difference be a named gap, a made-up or variation-extreme font or a
+width under 24 px; the lead's decision is that words first lands once every loss class is named so. What changed
+(`gaps.ts` `windowSides`, `lineEdgeGaps`, `startSpread`; rules `blink/gap/one-unit-fit`, `stand-in-start-reach`,
+`white-space-window-side`, `common-window-side`; `remaining-gaps.test.ts`), each on the inspected path alone:
+- A wrapped line start beside a space that the port's width tests call safe, on a line whose fit test is decided by
+  under two LayoutUnits, reports `in-word-prefix` over the line and the content its decision measured: HarfBuzz can flag
+  such a start with no width signature, and Blink's reshape then corrects the space by 0 or −1 LayoutUnits
+  (shaping_line_breaker.cc:309-324). The same condition inside a word already reported at the start alone. It names the
+  fits a LayoutUnit decides after a space: Arabic in Hiragino Mincho ProN's fallback, Apple SD Gothic Neo's
+  `neutral-words`, Mishafi at DPR 1.
+- A wrapped line start taken from a stand-in position reports its reach under the name its position rests on, over the
+  same range, where the line's fit lies within what the position can be off by plus one LayoutUnit: Helvetica Neue's
+  line after the hyphen at SHY.
+- A window whose side is white space alone in a face whose space takes the script, and a window whose side Canvas shapes
+  as Common alone where the paragraph shapes it under its run's script and that shows an adjustment or vetoes the
+  offset, report `script-context` over the clusters around the offset: Euphemia UCAS's lone space, Skia's ` 2026`,
+  italic Athelas's ` , `. The first can ask the style's two space questions (`spaceTakesScript`) of Canvas where nothing
+  asked them yet, on an inspected paragraph alone.
+- Named already, by the existing conditions: Hoefler Text's kern before a space (`unsafe-to-break` at the line end, no
+  `pairKerning` fact), the soft hyphens at 809 to 1,422px in Kailasa, Baghdad, Noto Sans Siddham and DecoType Naskh
+  (`float32-precision` over first lines of 256 zoomed px or more whose runs a font the facts don't name draws).
+- Zapfino's morx state shows in no Canvas answer: the known tail's `blink/zapfino-morx-unsafe-state`, with its evidence,
+  and no code keyed on the font. The known tail also holds the classes above (`blink/lone-space-in-a-space-script-face`,
+  `blink/fit-within-a-layout-unit`, `blink/kern-before-a-space-without-pair-kerning`,
+  `blink/common-stretch-measured-alone`), each with its lost layouts.
+The evidence (runs under `.artifacts/tests/runs/bwf-gaps-20260925`; pinned Chrome 153 unless named):
+- Every lost layout of the verifier's runs (`bwf-final-20260925`: the 49 layouts of `fonts-losses.txt`, the 46 rows of
+  `lab-lost.ndjson` and the cut probe's 4), 84 lab cases at DPR 1, 2 and 3 (`cases/`), recorded against fresh natives
+  with the no-facts predictor and replayed offline on this tree (`replay-case.ts`, the lab's scorer): all 84 are covered
+  by a named gap, 70 by one of the four conditions above; the 14 others are Zapfino's (41 of the 84 are Zapfino's; 3 of
+  the 14 under 24px) and the four wide soft hyphens under `float32-precision`. On the tree before (`3189fe1`) the scorer
+  had called 82 covered, mostly by gaps that don't name the traced cause, and 2 open: the verifier's Euphemia UCAS attack
+  at 32px under -6px of word spacing and Helvetica Neue's short paragraph at DPR 3. The replays ask no question the
+  recordings lack, and their lines equal the recorded ones.
+- Where the conditions fire, offline on the frozen tier references (`tierfire/`, both configurations): see the numbers
+  recorded at the freeze below.
+
 2026-09-24, Blink's words-first loss round (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)):
 every loss the verifier's fonts and bidi attacks found against the rebuild line (`61c376d`) in installed fonts, and the
 ones the round's own fonts runs found, traced against Chrome's own positions in the window probe and fixed at the cause

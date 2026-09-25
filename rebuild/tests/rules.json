@@ -9698,6 +9698,76 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/gap/one-unit-fit",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "in-word-prefix over a wrapped line and the content its break decision measured, where the line starts beside a space at an offset the port's width tests call safe and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; inside a word the same condition reports at the start alone (blink/gap/in-word-prefix); a plain paragraph reports nothing",
+   "source": "shaping_line_breaker.cc:309-324; line_breaker.cc CanFitOnLine; engines/blink/gaps.ts lineEdgeGaps; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix over the line and the content its decision measured"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/stand-in-start-reach",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters where no ligature fact settles the offset, else unsafe-to-break) over the line and the content its break decision measured, where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
+   "source": "shaping_line_breaker.cc:309-324; engines/blink/gaps.ts lineEdgeGaps, startSpread; engines/blink/limits.ts positionLimit; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start taken from a stand-in position reports its reach where the fit lies within the adjustment"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/white-space-window-side",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "script-context over the clusters around an offset whose window (the exact window the shrink takes, or the range being cut held against its sides) has a side of white space and default-ignorable characters alone, a space or a no-break space among them, whose Canvas string is 16-bit and so shaped as Common where the paragraph shapes it under its run's script, in a face whose space takes another advance under Common than under Latin (blink/measure/words-first's spaceTakesScript, asked of Canvas on an inspected paragraph where nothing asked it yet); a plain paragraph reports nothing",
+   "source": "plain_text_node.cc:400-425; harfbuzz_shaper.cc:1072-1101; engines/blink/gaps.ts windowSides; engines/blink/shape.ts windowAdjust16, spaceTakesScript; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): in Euphemia UCAS's other-spaces under 1px of letter and -2px of word spacing at 28px and DPR 3 the exact window at the space after `d` shrinks to a side of white space alone, and the position there takes two spaces' Common difference, 34 zoomed px"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a window side Canvas shapes otherwise than the paragraph > a window side of white space alone in a face whose space takes the script reports script-context"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/common-window-side",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "script-context over the clusters around an offset whose window (the exact window the shrink takes, or the range being cut held against its sides) has a side of characters without a script of their own that Canvas shapes as Common alone where the paragraph shapes it under its run's script (shape.ts measuredAsCommon), and shows an adjustment across the offset or vetoes it: the adjustment can be the side's script and not context; a plain paragraph reports nothing",
+   "source": "plain_text_node.cc:400-425; script_run_iterator.cc; engines/blink/gaps.ts windowSides; engines/blink/shape.ts windowAdjust16, measuredAsCommon; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): Skia's hindi-neutral under 1px of letter and -2px of word spacing at 28px and DPR 3, where the range's side ` 2026` alone is Common where the paragraph shapes it as Devanagari and its veto moves the cut into `श्री`"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a window side Canvas shapes otherwise than the paragraph > a window side Canvas shapes as Common alone between letters of one script reports script-context where it decides"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -10298,6 +10368,10 @@
   "blink/measure/exact-canvas-answers": "8afb0c72a1939d15",
   "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
   "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
-  "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e"
+  "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e",
+  "blink/gap/one-unit-fit": "8bb62c90caa1f6ef",
+  "blink/gap/stand-in-start-reach": "575cfbba6856f395",
+  "blink/gap/white-space-window-side": "5a09a3ca764abccf",
+  "blink/gap/common-window-side": "685612e3325f90c3"
  }
 }

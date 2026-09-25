@@ -32,7 +32,10 @@ and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK
 Since 2026-09-23 on branch `blink-words-first` Blink cuts a shaping group into words first, measuring each word once with
 its trailing space, and finds the break of a line that ends between two words from the positions at the cuts (words
 first, DESIGN.md §4.4), and predicts the window a shrink of the wide window takes instead of measuring every window
-before it (the cut predictor), on three premises about fonts documented as defaults with named gaps (§4.6).
+before it (the cut predictor), on three premises about fonts documented as defaults with named gaps (§4.6). What it
+leaves against the rebuild line in installed faces is named since 2026-09-25: gaps an inspected paragraph raises where
+the port's measurements show the condition, and Zapfino's morx state as a font-level limitation in the known tail
+(TAKEOVER.md).
 
 ## Core
 
