@@ -3,7 +3,7 @@ import {
   layoutNextLine,
   type LayoutCursor,
   type PreparedTextWithSegments,
-} from '../../src/layout.ts'
+} from '@chenglou/pretext'
 import {
   FONT,
   HYPHEN_EXCEPTIONS,

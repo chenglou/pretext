@@ -1,4 +1,4 @@
-import { prepareWithSegments } from '../../src/layout.ts'
+import { prepareWithSegments } from '@chenglou/pretext'
 
 const COLS = 50
 const ROWS = 28

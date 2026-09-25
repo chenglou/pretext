@@ -4,7 +4,7 @@ import {
   walkRichInlineLineRanges,
   type PreparedRichInline,
   type RichInlineItem,
-} from '../../src/rich-inline.ts'
+} from '@chenglou/pretext/rich-inline'
 
 // Local layout model for this demo. It keeps the page readable and shows how
 // the rich-text inline flow helper composes with caller-owned classes, fonts, and

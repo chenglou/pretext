@@ -5,7 +5,7 @@ import {
   walkLineRanges,
   type LayoutCursor,
   type PreparedTextWithSegments,
-} from '../../src/layout.ts'
+} from '@chenglou/pretext'
 
 const BODY_FONT = '18px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const BODY_LINE_HEIGHT = 30

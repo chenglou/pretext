@@ -8,6 +8,10 @@
     "types": ["bun", "node"],
 
     "moduleResolution": "bundler",
+    "paths": {
+      "@chenglou/pretext": ["./src/layout.ts"],
+      "@chenglou/pretext/rich-inline": ["./src/rich-inline.ts"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,

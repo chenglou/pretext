@@ -1,4 +1,4 @@
-import { layout, prepare } from '../../src/layout.ts'
+import { layout, prepare } from '@chenglou/pretext'
 
 type AccordionItem = {
   id: string

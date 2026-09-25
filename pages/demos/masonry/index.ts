@@ -1,4 +1,4 @@
-import { prepare, layout, type PreparedText } from '../../../src/layout.ts'
+import { prepare, layout, type PreparedText } from '@chenglou/pretext'
 import rawThoughts from './shower-thoughts.json'
 
 // --- config ---

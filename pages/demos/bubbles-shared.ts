@@ -1,4 +1,4 @@
-import { layout, prepareWithSegments, walkLineRanges, type PreparedTextWithSegments } from '../../src/layout.ts'
+import { layout, prepareWithSegments, walkLineRanges, type PreparedTextWithSegments } from '@chenglou/pretext'
 
 export type WrapMetrics = {
   lineCount: number

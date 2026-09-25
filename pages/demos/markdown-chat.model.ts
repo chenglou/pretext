@@ -7,7 +7,7 @@ import {
   prepareWithSegments,
   type LayoutLine,
   type PreparedTextWithSegments,
-} from '../../src/layout.ts'
+} from '@chenglou/pretext'
 import {
   materializeRichInlineLineRange,
   measureRichInlineStats,
@@ -15,7 +15,7 @@ import {
   walkRichInlineLineRanges,
   type PreparedRichInline,
   type RichInlineLine,
-} from '../../src/rich-inline.ts'
+} from '@chenglou/pretext/rich-inline'
 import { createMarkdownChatSpecs } from './markdown-chat.data.ts'
 
 export const MAX_CHAT_WIDTH = 860

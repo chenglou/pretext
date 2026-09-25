@@ -21,7 +21,7 @@ This page's made to show off our layout APIs:
 - The first visible render now waits for both fonts and hull preload, so it uses the real geometry from the start.
 - There is no DOM text measurement loop feeding layout.
 */
-import { layoutNextLine, prepareWithSegments, walkLineRanges, type LayoutCursor, type PreparedTextWithSegments } from '../../src/layout.ts'
+import { layoutNextLine, prepareWithSegments, walkLineRanges, type LayoutCursor, type PreparedTextWithSegments } from '@chenglou/pretext'
 import { BODY_COPY } from './dynamic-layout-text.ts'
 import openaiLogoUrl from '../assets/openai-symbol.svg'
 import claudeLogoUrl from '../assets/claude-symbol.svg'
