@@ -4,7 +4,7 @@
 
 ### Added
 
-- The demos in the package now run from an install: `bun node_modules/@chenglou/pretext/pages/demos/serve.ts` serves them, and the Markdown chat also needs `marked`. They import Pretext as `@chenglou/pretext`, as an app would.
+- The demos in the package now run from an install: `bun node_modules/@chenglou/pretext/pages/demos/serve.ts` serves them, and the Markdown chat also needs `marked`. They import Pretext as `@chenglou/pretext`, as an app would (#343).
 - Rich-inline fragments now have `gapItemIndex`, the index of the item whose collapsed space `gapBefore` measures, or -1 when no space precedes the fragment on its line. A painter can draw that space inside the element of the item whose font measured it, and can tell a zero-width space apart from no space (#310).
 
 ### Changed

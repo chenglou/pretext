@@ -15,7 +15,7 @@ npm install @chenglou/pretext
 Clone the repo, run `bun install`, then `bun start`, and open `/demos` in your browser. On Windows, use `bun run start:windows`.
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
 Their sources also ship in the package, in `node_modules/@chenglou/pretext/pages/demos/`, and `bun node_modules/@chenglou/pretext/pages/demos/serve.ts` serves them from there. The Markdown chat also needs `npm install marked`.
-Building a chat or another long list? [pages/demos/markdown-chat.md](pages/demos/markdown-chat.md) walks through the Markdown chat demo's patterns and when you can skip each.
+Building a chat or another long list? [pages/demos/markdown-chat.md](https://github.com/chenglou/pretext/blob/main/pages/demos/markdown-chat.md) walks through the Markdown chat demo's patterns and when you can skip each.
 
 ## API
 
