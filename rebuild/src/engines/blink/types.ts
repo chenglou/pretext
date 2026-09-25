@@ -7,6 +7,7 @@ import type { BlinkEnvironment } from '../../env.js'
 import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { FontDecl, Gap, LineBreak, OverflowWrap, Paragraph, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
+import type { Total16 } from './shape.js'
 
 // End collapse types (inline_item.h:307).
 export type EndCollapseType = 'not-collapsible' | 'collapsible' | 'collapsed' | 'opaque-to-collapsing'
@@ -143,9 +144,8 @@ export type BlinkGroup = {
   // Whether the group is cut into words first (shape.ts measureGroups, takesWords); where it isn't, it is cut by the cut
   // search alone and its windows are the ones before words, without the rule for sides Canvas shapes as Common.
   words: boolean
-  // Whether a group of one piece has an exact total (shape.ts addPieces): a group whose Canvas answer is rounded by at most a
-  // unit is kept whole under NEAR_MODE, and its window then isn't the piece's.
-  wholeExact: boolean
+  // The total of a group of one piece (shape.ts addPieces), which a plain paragraph hands its windows.
+  whole: Total16 | null
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its

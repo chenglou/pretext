@@ -121,7 +121,7 @@ describe('blink cut predictor', () => {
     const bs = [20, 19, 18, 17, 16]
     const measured = (): { asked: number[]; total: (i: number) => Total16 } => {
       const asked: number[] = []
-      return { asked, total: (i: number) => { if (!asked.includes(i)) asked.push(i); const exact = px[i]! * 65536 < EXACT16; return { total16: px[i]! * 65536, exact, rounded: exact ? 0 : 1, near: exact } } }
+      return { asked, total: (i: number) => { if (!asked.includes(i)) asked.push(i); const exact = px[i]! * 65536 < EXACT16; return { total16: px[i]! * 65536, exact, near: exact, err: exact ? 0 : 1 } } }
     }
     const bounded = measured()
     expect(predictedWindow(as, bs, 360 * 65536, 16 * 65536, bounded.total)).toBe(1)

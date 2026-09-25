@@ -9,9 +9,14 @@ import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createContextPool } from '../../measure/canvas.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { paragraphGaps, prepare } from './index.js'
+import { groupPrefix16 } from './shape.js'
 
 const TEXT = `${'x'.repeat(13)} ${'x'.repeat(13)}`
 const UNIT = 1 / 65536
+
+function count(text: string, part: string): number {
+  return text.split(part).length - 1
+}
 
 class Context {
   font = '16px x'
@@ -25,6 +30,9 @@ class Context {
     // `Far`: 12px and a unit a code point, and a string that holds both `Q` and `Z` 2px narrower, a context no window of
     // 256 px that splits them shows.
     if (this.font.includes('Far')) return { width: Math.fround(text.length * (12 + UNIT) - (text.includes('Q') && text.includes('Z') ? 2 : 0)), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+    // `Huge`: 300px and a unit an `a` and 300px and two units any other code point, so that no window of two clusters is
+    // exact.
+    if (this.font.includes('Huge')) return { width: Math.fround(text.length * 300 + (text.length + count(text, 'b')) * UNIT), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
     return { width: Math.fround(text.length * (10 + UNIT)), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -59,17 +67,45 @@ describe('blink exactness of a total', () => {
     }
   })
 
-  test('a near window vetoes the zero of the exact window inside it where its adjustment is past its rounding', () => {
+  test('the range being cut, held against its two sides, vetoes the zero of the exact window inside it', () => {
     // At 80px words first is off. The group, 420px less 2 for Q and Z and 60 of word spacing, is 358px, no near total. At
-    // the first space the exact windows split Q from Z and show nothing, and the near window [0, 23), 276px less 30 of word
-    // spacing and rounded by a unit, shows the 2px: the offset isn't a cut, and the near piece [0, 23) holds the context.
+    // the first space the exact windows split Q from Z and show nothing, and the range [0, 35) against its two sides shows
+    // the 2px, past the units Canvas rounded: the offset isn't a cut, the second space is, and the near piece [0, 23)
+    // holds the context.
     const text = 'Qxxxxxxxxxx xxxxxxxxxxZ yyyyyyyyyyy'
-    const p = prepare(paragraph(-30, 'Far', text), env, false, createContextPool())
-    const group = p.groups[0]!
-    expect(group.cuts).toEqual([0, 23, 35])
-    expect(Math.abs(group.prefixAtCut[1]! - (23 * (12 * 65536 + 1) - 2 * 65536 - 30 * 65536))).toBeLessThanOrEqual(1)
-    // Without word spacing no window is near, and the cut search splits Q from Z as before: a context past 256 px.
-    expect(prepare(paragraph(0, 'Far', text), env, false, createContextPool()).groups[0]!.cuts).toEqual([0, 12, 23, 35])
+    for (const inspect of [false, true]) {
+      const p = prepare(paragraph(-30, 'Far', text), env, inspect, createContextPool())
+      const group = p.groups[0]!
+      expect(group.cuts).toEqual([0, 23, 35])
+      expect(Math.abs(group.prefixAtCut[1]! - (23 * (12 * 65536 + 1) - 2 * 65536 - 30 * 65536))).toBeLessThanOrEqual(2)
+    }
+    // Without spacing [0, 23) is 276px and is cut too. Every offset splits Q from Z, which [0, 23) shows at each: the range
+    // can't tell them apart, and the first the search tries, the space nearest its middle, is the cut, unsafe to break.
+    for (const inspect of [false, true]) {
+      const p = prepare(paragraph(0, 'Far', text), env, inspect, createContextPool())
+      expect(p.groups[0]!.cuts).toEqual([0, 11, 23, 35])
+      if (inspect) expect(paragraphGaps(p).map(gap => gap.gap)).toContain('unsafe-to-break')
+    }
+  })
+
+  test('an adjustment a window shows within what Canvas rounded is none', () => {
+    // No two clusters of `Huge` measure below 256px: Canvas answers `a`, 300px and a unit, with 300px, `b` with its 300px
+    // and two units, and `ab`, 600px and three units, with 600px and four, so the pair window's 2 units are rounding, and
+    // every offset is a cut.
+    for (const inspect of [false, true]) {
+      const p = prepare(paragraph(0, 'Huge', 'abab'), env, inspect, createContextPool())
+      expect(p.groups[0]!.cuts).toEqual([0, 1, 2, 3, 4])
+      if (inspect) expect(paragraphGaps(p).map(gap => gap.gap)).not.toContain('unsafe-to-break')
+    }
+  })
+
+  test('a stretch without a script of its own after a cut is measured alone where its context agrees within rounding', () => {
+    // `—` has no script of its own, so a position after a cut inside the dashes is measured in front of the text up to
+    // `z` (shape.ts prefixAfterCut16), 256px or more from the cuts nearest the start; this Canvas shapes `—` alike under
+    // every script, the two agree within the units Canvas rounded, and the stretch alone, exact, is taken.
+    const text = `${'x'.repeat(18)}${' —'.repeat(20)} zzzz`
+    const p = prepare(paragraph(0, 'Mono', text), env, false, createContextPool())
+    for (let k = 1; k < text.length; k++) expect(groupPrefix16({ p, gaps: null }, 0, k)).toBe(k * (10 * 65536 + 1))
   })
 
   test('without spacing the same total is 256 zoomed px or more and is cut beside the space', () => {

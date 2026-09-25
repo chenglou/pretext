@@ -798,7 +798,7 @@
    "engine": "blink",
    "area": "shape",
    "kind": "heuristic",
-   "statement": "a stretch of a group of 256 zoomed px or more that words first leaves (blink/measure/words-first: words whose space didn't pass, a long word, text without spaces) is cut near its middle at an offset that passes the safe test (glyph clusters part there, no letters join across it, and the wide window and the pair window both show no adjustment): the nearest one beside a space, else the nearest other one, else the nearest grapheme boundary, reported as unsafe-to-break; the search tries the offsets beside a space first and the others only once all of those failed, which finds the cut that trying every offset in one turn from the middle outward finds and asks about no offset that can't win; the adjustment a position takes at a cut that passed is the 0 the search measured where it measured it (the pair window's, and before white space the wide window's between two pieces), and is asked elsewhere",
+   "statement": "a stretch of a group of 256 zoomed px or more that words first leaves (blink/measure/words-first: words whose space didn't pass, a long word, text without spaces) is cut near its middle at an offset that passes the safe test (glyph clusters part there, no letters join across it, and the wide window and the pair window both show no adjustment): the nearest one beside a space, else the nearest other one, else the first offset the search tried whose exact windows showed no adjustment and whose range did (blink/measure/exact-canvas-answers), else the nearest grapheme boundary, both reported as unsafe-to-break; the search tries the offsets beside a space first and the others only once all of those failed, which finds the cut that trying every offset in one turn from the middle outward finds and asks about no offset that can't win; the adjustment a position takes at a cut that passed is the 0 the search measured where it measured it (the pair window's, and before white space the wide window's between two pieces), and is asked elsewhere",
    "source": "trigger: 16.16 exactness in float32 (specs/blink-canvas.md §1.5); cut location invented; engines/blink/shape.ts addPieces, passesSafeTest, measureGroups; engines/blink/gaps.ts unsafeCut; research/PROFILING-START.md item 6",
    "probes": [],
    "tests": [
@@ -813,7 +813,7 @@
    "audit": "blink E4, B8",
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16; restated for profiling item 6 (2026-09-20); restated for words first (2026-09-23)"
+   "declaredBy": "catalogue 2026-09-16; restated for profiling item 6 (2026-09-20); restated for words first (2026-09-23); restated for the range's veto (loss round, 2026-09-24)"
   },
   {
    "id": "blink/shape/position-from-prefix-and-pair",
@@ -9623,18 +9623,20 @@
    "engine": "blink",
    "area": "measure",
    "kind": "fact",
-   "statement": "a measured total is exact where it is below 256 zoomed px and every Canvas answer it holds was below 256 zoomed px either side of 0 before the port adds word spacing and the letter spacing Canvas gives other characters than the DOM does, and near where it is below 256 zoomed px and every answer was below twice that, which Canvas rounds by at most a unit each (only negative spacing makes a total near without being exact); a near range is a piece, reported as float32-precision; the words' test and the windows' zero tests take exact totals, and the widest near window wider than the exact one the shrink takes vetoes that window's zero where its adjustment is past the units Canvas rounded",
-   "source": "specs/blink-canvas.md §1.5; shape_result.cc:2230; engines/blink/shape.ts measureTotal16, Total16, isPiece, windowAdjust16, predictedWindow, addPieces, addWordPieces; engines/blink/gaps.ts roundedPiece; DESIGN.md §4.4",
+   "statement": "a measured total is exact where it is below 256 zoomed px and every Canvas answer it holds was below 256 zoomed px either side of 0 before the port adds word spacing and the letter spacing Canvas gives other characters than the DOM does, and near where it is below 256 zoomed px and every answer was below twice that (only negative spacing makes a total near without being exact); an answer of 256 zoomed px or more is off by at most half a float32 step at its magnitude for each run Canvas converts and each sum, and a string has no more runs than code units, which bounds how far a total can be off; a near range is a piece, reported as float32-precision; the words' test and the windows' zero tests take exact totals; an adjustment a pair or wide window shows within the bounds of its three totals is none; and where the exact window a shrink takes shows none, the widest window, the range being cut at a cut the search tries and the window between the cuts around an offset for a position, is held against its two sides, and an adjustment past their bounds there is the window's, so the offset is no cut; where the range shows such an adjustment at every offset its exact windows pass, the first of those is the cut, with their zero, reported as unsafe-to-break",
+   "source": "specs/blink-canvas.md §1.5; shape_result.cc:2230; engines/blink/shape.ts measureTotal16, Total16, isPiece, pairAdjust16, windowAdjust16, predictedWindow, addPieces, addWordPieces; engines/blink/gaps.ts roundedPiece, unsafeCut; DESIGN.md §4.4",
    "probes": [
     "the constructed attack on words first (2026-09-23): under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives 2, and 16px Kailasa 5 where Chrome gives 4",
-    "the verifier's fonts runs (2026-09-24): cutting every near range lost 163 breaks in Euphemia UCAS and 38 in Zapfino under negative word spacing at DPR 3; on the loss round's lab sets in pinned Chrome (the losses with their neighbours, and the fix round's gains) taking a near window as a window, as the base did, keeps the base's lines there and loses 97 of the gains at DPR 3, and the veto past the rounding keeps every gain"
+    "the verifier's fonts runs (2026-09-24): cutting every near range lost 163 breaks in Euphemia UCAS and 38 in Zapfino under negative word spacing at DPR 3",
+    "the loss round's fonts runs and window probes (2026-09-24): a window side carried over the eight family emoji of `emoji-run` to the letter after them rounded its way into 237 lost layouts in 33 faces at DPR 2 and 3; the forms of Zapfino's `the` and the `ffl` of Helvetica Neue across a SHY reach past the exact windows, which the range shows; on the round's lab sets in pinned Chrome the losses against the base at DPR 3 fall from 212 breaks and 59 line counts to 8 and 0, every gain kept"
    ],
    "tests": [
     "src/engines/blink/exactness.test.ts :: blink exactness of a total > a total that word spacing brings below 256 zoomed px is near where Canvas rounded it: no word cut, one piece",
     "src/engines/blink/exactness.test.ts :: blink exactness of a total > without spacing the same total is 256 zoomed px or more and is cut beside the space",
-    "src/engines/blink/exactness.test.ts :: blink exactness of a total > a near window vetoes the zero of the exact window inside it where its adjustment is past its rounding"
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > the range being cut, held against its two sides, vetoes the zero of the exact window inside it",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > an adjustment a window shows within what Canvas rounded is none"
    ],
-   "declaredBy": "words-first fix round (2026-09-23); near totals (loss round, 2026-09-24)",
+   "declaredBy": "words-first fix round (2026-09-23); near totals, rounding bounds and the range (loss round, 2026-09-24)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9682,13 +9684,14 @@
    "engine": "blink",
    "area": "measure",
    "kind": "heuristic",
-   "statement": "a position's prefix from the cut before it that holds a character other than white space and none with a script of its own (a 16-bit string RunSegmenter resolves as Common where the paragraph shapes it under its run's script) is measured in front of the text after the offset up to a character with a script of its own, less that text alone, less the adjustment across the offset, which the position then places as before",
+   "statement": "a position's prefix from the cut before it that holds a character other than white space and none with a script of its own (a 16-bit string RunSegmenter resolves as Common where the paragraph shapes it under its run's script) is measured in front of the text after the offset up to a character with a script of its own, less that text alone, less the adjustment across the offset, which the position then places as before; where that and the prefix alone agree within the bounds of their totals (blink/measure/exact-canvas-answers), the prefix alone is taken",
    "source": "plain_text_node.cc:400-425; script_run_iterator.cc:301, :641; hb-ot-layout.cc:582-586; engines/blink/shape.ts prefixAfterCut16, positionAtOffset16, measuredAsCommon",
    "probes": [
     "probe bwf-loss comma (2026-09-24): at 16px and DPR 3 ` , ` between Devanagari words measured alone is 2.6 zoomed px off its run in Didot and 4.8 in italic Gill Sans, and with a letter beside it the run's, in every face probed"
    ],
    "tests": [
-    "src/engines/blink/words.test.ts :: blink word pieces > a position after a stretch without a script of its own at a cut is measured in front of the text after it"
+    "src/engines/blink/words.test.ts :: blink word pieces > a position after a stretch without a script of its own at a cut is measured in front of the text after it",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > a stretch without a script of its own after a cut is measured alone where its context agrees within rounding"
    ],
    "declaredBy": "loss round of words first (2026-09-24)",
    "audit": null,
@@ -9744,7 +9747,7 @@
   "blink/shape/pair-adjustment-on-glyph-before": "3b213a5b57f6f38c",
   "blink/shape/default-ignorables-skipped-in-pair": "938fd38c3dd742a0",
   "blink/shape/unsafe-to-break-offsets": "fb4eda318eb1bc5f",
-  "blink/shape/wide-group-halved": "d69a87d207fa179f",
+  "blink/shape/wide-group-halved": "d8e4f9465aa4f9b7",
   "blink/shape/position-from-prefix-and-pair": "605aaf4ca7fe3fd3",
   "blink/units/lu-ceil": "2d78919fc6f234fc",
   "blink/units/available-width-trunc": "38df67f9347d8fc0",
@@ -10291,9 +10294,9 @@
   "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
   "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
   "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066",
-  "blink/measure/exact-canvas-answers": "b3021fc7947166ea",
+  "blink/measure/exact-canvas-answers": "2237f415d7e229ef",
   "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
   "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
-  "blink/measure/prefix-without-script-in-context": "149d25cefd5d6792"
+  "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e"
  }
 }

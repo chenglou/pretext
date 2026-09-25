@@ -182,7 +182,7 @@ test('Canvas resolves the scripts of each bidi level run of a string alone', () 
   expect(Array.from(canvasScriptsPerUnit(p, 0, 'ab, cd', false))).toEqual(Array.from(scriptsPerUnit('ab, cd')))
 })
 
-test('a string that may hold a level of the other direction goes to Canvas inside an override of its group\'s direction', () => {
+test("a string that may hold a level of the other direction goes to Canvas inside an override of its group's direction", () => {
   // Under U+202D the paragraph's Arabic is a left-to-right group, which the DOM shapes left to right; Canvas, handed the
   // string alone with U+2060 for the U+202D, would resolve its letters right to left (shape.ts inGroupDirection).
   const overridden = prepare(paragraph('‭بب'), env, false, createContextPool())

@@ -465,33 +465,36 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal)
 }
 
-// A measured total, and how far it can be from the DOM's. Canvas answers a string with the float32 of its 16.16 total, the
-// letter spacing of its context included, which is exact only below 256 zoomed px either side of 0 (blink-canvas §1.5),
-// and between 256 and twice that rounds to an even number of units, so it is within one unit; the port then adds word
-// spacing and the letter spacing Canvas gives other characters than the DOM does (measureSameScript16), in 16.16 integers,
-// after Canvas rounded. `exact`: below 256 zoomed px, and every Canvas answer it holds was. `rounded`: how many of its
-// answers Canvas rounded; a total below 256 zoomed px whose answers were all below twice that (`near`) is within that many
-// units of the DOM's. Only negative spacing makes a total near without being exact. Under a style whose opsz axis the
-// port measures at the CSS size, the answers are scaled first (contexts.ts raw16Of), which errs toward calling an answer
-// rounded.
-// - A near total is a piece (addPieces): the cut search would otherwise cut a range whose total it knows to a unit, and
-//   the cuts meet its own stand-ins. Taking a rounded answer for exact, as the port did before the words-first fix round,
-//   made a pair of words that failed their sum under -2px of word spacing pass it (16px STIX Two Text at DPR 2 gave 3
-//   lines where Chrome gives 2, the constructed attack of 2026-09-23), so the words' test and the windows' zero tests take
-//   exact totals alone; but cutting every near range made new cuts where the spacing had made the range look exact to the
-//   port before, and they met the search's stand-ins: in Euphemia UCAS a cut the search falls back to beside a space took
-//   the lone space's Common advance, 9.9 zoomed px off (the verifier's fonts runs, 2026-09-24: 163 breaks lost under
-//   negative word spacing at DPR 3). Kept whole, the piece is a unit off at most, and an inspected paragraph reports
-//   float32-precision over it.
-// - The shrink of the wide window takes the first exact window (windowAdjust16), and a near window wider than it that
-//   shows an adjustment past its rounding says the exact one misses context: in 28px Zapfino at DPR 3 under -3px of word
-//   spacing the forms of `the` reach past the exact windows, and the near window's adjustment is thousands of units.
+// A measured total, and how far it can be from the DOM's. Canvas converts each shaped run's 16.16 sum to float32 and sums
+// the runs and items of a string in float32 (blink-canvas §1.5), so an answer is exact only below 256 zoomed px either side
+// of 0; above, each of those steps rounds by at most half a float32 step at the answer's magnitude, one unit between 256
+// and twice that, and a string has no more runs than code units. The port then adds word spacing and the letter spacing
+// Canvas gives other characters than the DOM does (measureSameScript16), in 16.16 integers, after Canvas rounded.
+// `exact`: below 256 zoomed px, and every Canvas answer it holds was. `err`: the most its answers can be off by in all,
+// 0 where they are exact. `near`: below 256 zoomed px, with every answer below twice that, which only negative spacing
+// makes without being exact. Under a style whose opsz axis the port measures at the CSS size, the answers are scaled first
+// (contexts.ts raw16Of), which errs toward calling an answer rounded and toward a wider bound.
+// - A near total is a piece (addPieces): the cut search would otherwise cut a range whose total it knows to a few units,
+//   and the cuts meet its own stand-ins. Taking a rounded answer for exact, as the port did before the words-first fix
+//   round, made a pair of words that failed their sum under -2px of word spacing pass it (16px STIX Two Text at DPR 2 gave
+//   3 lines where Chrome gives 2, the constructed attack of 2026-09-23), so the words' test and the windows' zero tests
+//   take exact totals alone; but cutting every near range made new cuts where the spacing had made the range look exact
+//   to the port before, and they met the search's stand-ins: in Euphemia UCAS a cut the search falls back to beside a
+//   space took the lone space's Common advance, 9.9 zoomed px off (the verifier's fonts runs, 2026-09-24: 163 breaks lost
+//   under negative word spacing at DPR 3). Kept whole, an inspected paragraph reports float32-precision over it.
+// - An adjustment a window shows within `err` of its three totals is none (pairAdjust16, windowAdjust16): a window with
+//   no exact one inside it showed what Canvas rounded as an adjustment, and at 16px and DPR 2 a window side that runs over
+//   the eight family emoji of the fonts attack's `emoji-run` to the letter after them measured 330 zoomed px, whose
+//   rounding lost 237 layouts in 33 faces at DPR 2 and 3 (the loss round's first fonts runs, 2026-09-24).
+// - Past it the adjustment is real, however wide the window: the widest window is held against its two sides where the
+//   exact one inside it shows none (windowAdjust16), since ligatures and the forms of Zapfino reach past the exact
+//   windows.
 // rule blink/measure/exact-canvas-answers
-export type Total16 = { total16: number; exact: boolean; rounded: number; near: boolean }
+export type Total16 = { total16: number; exact: boolean; near: boolean; err: number }
 
-export function measureTotal16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): Total16 {
-  const t: Total16 = { total16: 0, exact: true, rounded: 0, near: true }
-  t.total16 = measure16(sh, g, from, to, callStart, callEnd, false, t)
+export function measureTotal16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): Total16 {
+  const t: Total16 = { total16: 0, exact: true, near: true, err: 0 }
+  t.total16 = measure16(sh, g, from, to, callStart, callEnd, noLigatures, t)
   if (!(t.total16 < EXACT16)) { t.exact = false; t.near = false }
   return t
 }
@@ -500,7 +503,7 @@ function isExact(t: Total16 | null): boolean {
   return t !== null && t.exact
 }
 
-// What a range can be taken whole as: exact, or within a unit of the DOM's for each answer Canvas rounded.
+// What a range can be taken whole as: exact, or near.
 function isPiece(t: Total16 | null): boolean {
   return t !== null && (t.exact || t.near)
 }
@@ -518,7 +521,8 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
   if (into !== null && !(Math.abs(w) < EXACT16)) {
     into.exact = false
-    into.rounded++
+    // A conversion and a sum a run, each half a float32 step at the answer's magnitude (Total16).
+    into.err += 2 * cs.s.length * contexts.scale * 2 ** (Math.floor(Math.log2(Math.abs(w))) - 24)
     if (!(Math.abs(w) < 2 * EXACT16)) into.near = false
   }
   const adjust = wordSpacing16(p, group.style, from, to)
@@ -729,7 +733,11 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
     checkedTo = b
     b = clusterEndAfter(p, b, hi)
   }
-  const d = measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+  const window = measureTotal16(sh, g, a, b, lo, hi, noLigatures)
+  const left = measureTotal16(sh, g, a, k, lo, hi, noLigatures)
+  const right = measureTotal16(sh, g, k, b, lo, hi, noLigatures)
+  let d = window.total16 - left.total16 - right.total16
+  if (Math.abs(d) <= window.err + left.err + right.err) d = 0
   if (kept !== null) kept[k - lo] = d
   return d
 }
@@ -765,7 +773,7 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 // before, walks the prediction beside it over the same totals, and reports nested-window-wider where the two take other
 // windows, taking the prediction's, which is the plain paragraph's (DESIGN.md §4.6, "Blink's cut predictor"). What it
 // hands back is what the prediction measured, as a plain paragraph's, so the two go on to ask the same questions.
-type CutTotals = { left: Total16 | null; right: Total16 | null; whole: Total16 | null }
+type CutTotals = { left: Total16 | null; right: Total16 | null; whole: Total16 | null; vetoed: boolean }
 
 function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: Total16 | null, cutTotals: CutTotals | null = null, estimate: number = whole === null ? NaN : whole.total16): number {
   const p = sh.p
@@ -815,8 +823,6 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
   const totalBy = (by: Shaper) => (i: number): Total16 => totals[i] ??= measureTotal16(by, g, as[i]!, bs[i]!, lo, hi)
   const total = totalBy(sh)
   let n = 0
-  // The widest window before the one taken whose total is within a unit of the DOM's (near, only under negative spacing).
-  let nearAt = -1
   // The totals a plain paragraph knows once it took its window: `whole` and the ones its prediction measured.
   let known = totals
   const margin = predictionMargin16(p, p.groups[g]!.style)
@@ -824,7 +830,6 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     n = predictedWindow(as, bs, estimate, margin, total)
   } else {
     while (n + 1 < as.length && !total(n).exact) {
-      if (nearAt < 0 && total(n).near) nearAt = n
       n++
     }
     if (sh.gaps !== null && margin !== null && sh.aside !== 'search') {
@@ -848,16 +853,29 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     cutTotals.right = b === to ? right : null
     cutTotals.whole = known[0] ?? null
   }
-  const d = total(n).total16 - left.total16 - right.total16
-  if (nearAt < 0 || d !== 0) return d
-  // The widest near window's adjustment is within the units Canvas rounded of the true one across it (Total16): past that,
-  // the context it holds is real, and the exact window inside it, which shows none, misses it; within it, the exact
-  // window decides.
-  const wide = total(nearAt)
-  const wideLeft = measureTotal16(sh, g, as[nearAt]!, k, lo, hi)
-  const wideRight = measureTotal16(sh, g, k, bs[nearAt]!, lo, hi)
-  const dWide = wide.total16 - wideLeft.total16 - wideRight.total16
-  return wideLeft.near && wideRight.near && Math.abs(dWide) > wide.rounded + wideLeft.rounded + wideRight.rounded ? dWide : 0
+  const taken = total(n)
+  let d = taken.total16 - left.total16 - right.total16
+  if (Math.abs(d) <= taken.err + left.err + right.err) d = 0
+  if (d !== 0 || n === 0) return d
+  // The widest window is held against its two sides where the exact window inside it shows none: an adjustment past what
+  // Canvas rounded there is context the exact window misses. At a cut the search tries, that window is the range being
+  // cut, whose two pieces then take those sides whole (cutTotals), and the offset is no cut; for a position it is the
+  // window between the cuts around it. In 28px Zapfino at DPR 3 under -3px of word spacing a window side that starts at
+  // `the` after a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact
+  // window's side, shrunk to `th`, doesn't, and in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across
+  // the SHY where the exact window's side holds the second `f` alone (the loss round's window probe, 2026-09-24; the base's
+  // windows had held the first where the spacing made a rounded total look exact).
+  const range = total(0)
+  const rangeLeft = measureTotal16(sh, g, from, k, lo, hi)
+  const rangeRight = measureTotal16(sh, g, k, to, lo, hi)
+  if (cutTotals !== null) {
+    cutTotals.left = rangeLeft
+    cutTotals.right = rangeRight
+  }
+  const dRange = range.total16 - rangeLeft.total16 - rangeRight.total16
+  if (!(Math.abs(dRange) > range.err + rangeLeft.err + rangeRight.err)) return 0
+  if (cutTotals !== null) cutTotals.vetoed = true
+  return dRange
 }
 
 // Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first whose total is exact, or the last. Predicted as
@@ -949,7 +967,7 @@ function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
   const lo = group.start
   const hi = group.end
   const plain = sh.gaps === null
-  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? { total16: group.prefixAtCut[1]!, exact: group.wholeExact, rounded: group.wholeExact ? 0 : 1, near: true } : measureTotal16(sh, g, lo, hi, lo, hi))
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? group.whole! : measureTotal16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
   const prefix = group.prefixAtCut
   const i = lastCutAtOrBefore(cuts, k)
@@ -1121,11 +1139,13 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
   const p = sh.p
   const group = p.groups[g]!
   // An accepted window may already have measured a child's whole range in this same shaping call.
-  const cutTotals: CutTotals = { left: null, right: null, whole: knownWhole }
+  const cutTotals: CutTotals = { left: null, right: null, whole: knownWhole, vetoed: false }
   if (knownWhole === null && !(sh.aside !== 'search' && estimate >= 2 * EXACT16)) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
   const mid = a + ((b - a) >> 1)
   let k = -1
   let boundary = -1
+  // The first offset whose exact windows showed no adjustment and whose range did (windowAdjust16).
+  let vetoedAt = -1
   for (let turn = 0; turn < 2 && k < 0 && !isPiece(cutTotals.whole); turn++) {
     for (let d = 0; k < 0 && !isPiece(cutTotals.whole) && (mid - d > a || mid + d < b); d++) {
       for (let side = d === 0 ? 1 : 0; side < 2 && k < 0 && !isPiece(cutTotals.whole); side++) {
@@ -1133,7 +1153,10 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
         if (boundary < 0) boundary = c
         const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
-        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, cutTotals, estimate)) k = c
+        if (besideSpace !== (turn === 0)) continue
+        cutTotals.vetoed = false
+        if (passesSafeTest(sh, g, c, a, b, cutTotals, estimate)) k = c
+        else if (vetoedAt < 0 && cutTotals.vetoed) vetoedAt = c
       }
     }
   }
@@ -1144,23 +1167,26 @@ function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], 
       if (whole !== null && whole.near) roundedPiece(sh.gaps, p, g, a, b)
       else uncutCluster(sh.gaps, p, g, a, b)
     }
-    if (a === group.start && b === group.end) group.wholeExact = isExact(whole)
+    if (a === group.start && b === group.end) group.whole = whole
     cuts.push(b)
     totals.push(whole!.total16)
     zero.push(false)
     return
   }
   const passed = k >= 0
+  // Where the range shows context across every offset its exact windows pass (a ligature over a whole word), it can't tell
+  // them apart, and the first of those is the cut, with the zero its windows showed, as before the range was asked.
   if (!passed) {
-    k = boundary
+    k = vetoedAt >= 0 ? vetoedAt : boundary
     unsafeCut(sh.gaps, p, g, k)
   }
+  const measuredZero = passed || k === vetoedAt
   const scale = whole === null ? estimate : whole.total16
   const first = cuts.length
   addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
   addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !(group.words && measuredAsCommon(p, g, k, b))))
+  zero[at] = measuredZero && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !(group.words && measuredAsCommon(p, g, k, b))))
 }
 
 // The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character
@@ -1219,6 +1245,7 @@ function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], 
     let j = i + 1
     while (!passes[j]!) j++
     if (j === i + 1 && word16[i]!.exact) {
+      if (starts[i] === group.start && starts[j] === group.end) group.whole = word16[i]!
       cuts.push(starts[j]!)
       totals.push(word16[i]!.total16)
       zero.push(false)
@@ -1339,7 +1366,14 @@ function prefixAfterCut16(sh: Shaper, g: number, cut: number, k: number, d: numb
   let e = clusterEndAfter(p, k, group.end)
   while (e < group.end && !holdsOwnScript(p, k, e)) e = clusterEndAfter(p, e, group.end)
   if (!holdsOwnScript(p, k, e)) return measure16(sh, g, cut, k, group.start, group.end)
-  return measure16(sh, g, cut, e, group.start, group.end) - measure16(sh, g, k, e, group.start, group.end) - d
+  const withAfter = measureTotal16(sh, g, cut, e, group.start, group.end)
+  const after = measureTotal16(sh, g, k, e, group.start, group.end)
+  const alone = measureTotal16(sh, g, cut, k, group.start, group.end)
+  const inContext = withAfter.total16 - after.total16 - d
+  // Where the two agree within what Canvas rounded (Total16), the stretch alone is the closer: in `emoji-run` the text
+  // after a family emoji runs over seven more to the letter after them, and two rounded totals less each other were off
+  // where the stretch alone was exact.
+  return Math.abs(inContext - alone.total16) <= withAfter.err + after.err + alone.err ? alone.total16 : inContext
 }
 
 // Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning

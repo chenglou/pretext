@@ -539,7 +539,7 @@ says when.
 | webkit/gap/canvas-language | by score | generic families are measured, not reported: WebKit asks Core Text for a per-language family (`CTFontDescriptorCreateForCSSFamily`, `SystemFontDatabaseCoreText.cpp:320-365`) and looks it up by name, so the port names that family in the Canvas list, from macOS 27.0's answers dumped per language (`data/webkit/coretext-macos27/css-families.tsv`, `engines/webkit/fonts.ts`; engine data, CHARTER.md decision 4), and `-webkit-standard` from the settings' standard family per script (`SettingsBaseCocoa.mm:44-50`); `FontFacts` is unchanged. A named family settles its own characters under every locale (probes webkit-round4 R7, R12). Still reported: system design families, an emoji-presentation character only a generic could draw, and system fallback by language, whose character table is a registered heuristic (`FontCacheCoreText.cpp:775-790` is closed in Core Text) |
 | webkit/gap/simplified-measuring | by score | reported for every simplified-path box outside the width shortcut until a probe settles the float32 summing order (probes-safari correction 5) |
 | shared/env/engine-from-user-agent | heuristic | the user agent gives the engine only; the build and the browser process's languages are given facts, and what the engine's recipes assume of Canvas is asked of the running browser (§1.4) |
-| blink/measure/ignorables-left-out-if-8bit | heuristic | a probe of the unexplained RLM case before keeping a storage-based rule (blink audit D2); `soft-hyphen-shaping` meanwhile |
+| blink/measure/ignorables-left-out-if-8bit | heuristic | removed 2026-09-24 for blink/measure/ignorables-as-word-joiner: SHY is U+2060 in every string, alone or beside a space (probe bwf-loss S1) |
 | blink/measure/v8-short-slice-storage, force-16bit-string | heuristic | V8's substring and concat rules cited at Chrome 153's V8 pin, or probed per length (blink audit E3) |
 | blink/shape/wide-group-halved | heuristic | the cut keeps its source trigger, 256 zoomed px; the cut location reports `unsafe-to-break` where the safe test can't vouch for it (blink audit E4) |
 | blink/lines/reshaped-part-measured-alone-when-cut | heuristic | keep a reshape's pieces and slice them, as `ShapeResultView::Create` does (blink audit F6) |
@@ -1627,21 +1627,41 @@ characters than the DOM does, after Canvas rounded, so a total counts as exact w
 Canvas answer it holds was, either side of 0 (`measureTotal16`, since 2026-09-23). Before, a total that negative word
 spacing brought below 256 zoomed px was taken as exact, a piece's or a window's, and so was a pair of words whose sum
 failed because of that rounding: under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives
-2, and 16px Kailasa 5 where it gives 4 (the constructed attack on words first).
-Judged so, a group under negative word spacing is cut finer than before, and the new cuts meet the search's own
-stand-ins more often: the fonts attack's spacing sweep over 64 families (2026-09-24) finds the fix round losing 101
-breaks and 7 line counts against the base at DPR 2 and gaining 290 and 41, and at DPR 3 losing 270 and 71 and gaining
-245 and 72, the losses nearly all under negative word spacing: Euphemia UCAS's lone space (§4.6), Zapfino's forms, which
-reach past the search's windows (below), and soft hyphens in a paragraph without segments, which a window side without a
-space leaves out where its window carries U+2060 (`soft-hyphen-shaping`). The base's coarser cuts there were right by
-the rounding that made it wrong elsewhere.
+2, and 16px Kailasa 5 where it gives 4 (the constructed attack on words first). Canvas converts each shaped run's 16.16
+sum to float32 and sums runs and items in float32 (blink-canvas §1.5), so an answer of 256 zoomed px or more is off by
+at most half a float32 step at its magnitude for each conversion and each sum, and a string has no more runs than code
+units: that bounds how far a total can be off (`Total16.err`, since 2026-09-24). A total below 256 zoomed px whose
+answers were each below twice that is near, which only negative spacing makes without being exact. A near range is a
+piece, known to the units of its rounded answers, which an inspected paragraph reports under `float32-precision`
+(`gaps.ts` `roundedPiece`): cutting every such range made cuts where the base had kept the range whole, and the cuts met
+the search's own stand-ins (the verifier's fonts runs of 2026-09-24 lost 387 breaks against the base under negative word
+spacing, 163 of them at Euphemia UCAS's lone space, §4.6). The words' test and the windows' zero tests take exact
+totals, and an adjustment a pair or wide window shows within the bounds of its three totals is none (`pairAdjust16`,
+`windowAdjust16`): a window with no exact one inside it, the last the shrink tries, had shown what Canvas rounded as an
+adjustment, as the base's did, and a window side carried over the eight family emoji of the fonts attack's `emoji-run`
+to the letter after them (the rule for sides Canvas shapes as Common, below) lost 237 layouts in 33 faces at DPR 2 and 3
+that way (the loss round's first fonts runs). Past its bounds a window's adjustment is real, however wide the window. So
+where the exact window a shrink takes shows no adjustment, the widest window is held against its two sides: at a cut the
+search tries it is the range being cut, whose two pieces then take those sides as their totals, and for a position the
+window between the cuts around it. In 28px Zapfino at DPR 3 under -3px of word spacing a side that starts at `the` after
+a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact window's
+side, shrunk to `th`, doesn't; in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across the SHY where
+the exact window's side holds the second `f` alone. The range shows both, and the offset is no cut. The base's windows
+had held the first where the spacing made a rounded total look exact, and the fix round's, judged on Canvas's own
+answers, didn't (the verifier's fonts runs: 38 breaks lost at Zapfino's forms). Where the range shows an adjustment at
+every offset its exact windows pass, as in a ligature over a whole word (Zapfino's `Zapfino`), it can't tell them apart,
+and the first of those the search tried is the cut, with the zero its windows showed, reported as `unsafe-to-break`. On
+the loss round's lab sets in pinned Chrome (the losses of the fonts runs with their neighbours, and the fix round's
+gains) the losses against the base at DPR 3 fall from 212 breaks and 59 line counts to 8 and 0, every gain kept; the
+Canvas calls of those cases move by -4% to +5%.
 So a cut is an offset that passes the safe test: glyph clusters part there, no letters join across it, and
 both windows show no adjustment, the wide one over the widest exact window around the offset inside the range being
-cut, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
+cut, held against the range where it shrank, and the pair window over one cluster on each side. The pair window is asked first: a nonzero pair rules the offset
 out before the wide window, which can shrink several times, is shaped, and a zero pair still needs the wide window. The
 test's answer doesn't depend on the order, but an inspected paragraph raises the gaps of the strings it measures, so a
 rejected offset's `script-context` entries are those of the window that ruled it out. The cut is the offset nearest the middle beside a space that
-passes, else the nearest other offset that passes, else the nearest grapheme boundary, reported as `unsafe-to-break`
+passes, else the nearest other offset that passes, else the first the search tried whose exact windows passed and whose
+range didn't, else the nearest grapheme boundary, both reported as `unsafe-to-break`
 (§5). The search tries the offsets beside a space first, from the middle outward, and the others only once all of those
 failed. An offset beside a space that passes wins over every other offset, so this finds the cut that trying every
 offset in one turn finds, as the search did until 2026-09-20, and it asks about no offset that can't win: in ordinary
@@ -1660,20 +1680,56 @@ ligature that the group never forms. The wide window's adjustment added there in
 search gets right, all Zapfino at 40px, whose forms reach past a window of 256 zoomed px. The test keeps a cut off such
 offsets, and no set of the tiers held one such text before the set `wide-group-cuts` (lab README, "Test tiers").
 
-Blink, the scripts Canvas letter-spaces a string under (`shape.ts` `canvasScriptsPerUnit`; since 2026-09-23). Blink
-skips letter spacing on the characters of a cursive run but for spaces (shape_result_spacing.cc:118-130), by the run's
-script, so where the paragraph and Canvas resolve a character's script apart the port corrects the difference in JS.
-Canvas cuts a measured string into items before RunSegmenter resolves their scripts: a string that may hold
-right-to-left text (Character::MaybeBidiRtl of any code point), or any string on a right-to-left context, into ICU's level
-runs unless it resolves as one left-to-right direction, then into words where it shapes word by word
-(plain_text_node.cc:278-425). The DOM shapes a paragraph's items of one direction together. So after Arabic-Indic digits,
-a level above the text beside them, a space and `[2]` are an item of their own in Canvas, Common and letter-spaced, where
-the paragraph keeps them in the digits' Arabic run. The port resolved the whole string as one item and took them for
-Arabic, and every tree was off by the spacing of those characters (in 32.25px Helvetica Neue at -1.5px letter spacing,
-6 px at the digits' end); the constructed attack's 20 losses there were the base's lines being right by accident. On the
-attacks' lab cases in pinned Chrome the correction gains 41 line counts and 75 breaks and loses none. Cost: ICU's levels of
-a measured string, under letter spacing only (and on an inspected paragraph's check for `script-context`), and only
-where it may hold right-to-left text.
+Blink, the direction Canvas shapes a string in, and the letter spacing it gives (`shape.ts` `inGroupDirection`,
+`canvasScriptsPerUnit`, `letterSpacingDifference16`; since 2026-09-23, the direction since 2026-09-24). A shaping group
+holds the items of one direction, and the DOM shapes its text in that direction whatever the bidi levels inside it
+(ShouldBreakShapingBeforeText, inline_node.cc:472-491; :1636-1717). Canvas cuts the string it is handed into ICU's level
+runs, then into words where it shapes word by word, and shapes each apart in its own direction (plain_text_node.cc:278-425);
+the paragraph's explicit embeddings and overrides are U+2060 in the port's string (canvasString), and the string has none
+of the paragraph's context. So Arabic under U+202D, which the DOM shapes left to right, Canvas shaped right to left, and
+after Arabic-Indic digits, a level above the text beside them, a space and `[2]` were an item of their own in Canvas,
+Common and letter-spaced, where the paragraph keeps them in the digits' Arabic run. A 16-bit string of a right-to-left
+group, or of a left-to-right one that holds a character of class R, AL or AN or an isolate, is sent inside U+202E or
+U+202D and U+202C, which Canvas resolves as one level run of the group's direction (UBA X4-X6) and turns into U+200B, words
+of no advance that take no spacing (NormalizeSpacesAndMaybeBidi, plain_text_node.cc:47-62); an isolate keeps its own
+levels, as in the paragraph. Blink skips letter spacing on the characters of a cursive run but for spaces
+(shape_result_spacing.cc:118-130), once a glyph cluster by its first character (ApplySpacingOrExpansion,
+shape_result.cc:993-1040), so where the paragraph and Canvas resolve a cluster's script apart the port corrects the
+difference in JS, once a cluster: counted a code point at a time, a flag the DOM keeps in an Arabic run and Canvas measures
+alone as Common was corrected twice where Canvas spaced it once. Resolving each level run apart without the override
+(2026-09-23) had fixed the digits' spacing and moved the lines of text under explicit bidi controls, which the verifier's
+bidi attack found (Baghdad, Al Nile, Farah and Noto Nastaliq Urdu at 0.3-2px of letter spacing, 4-5 breaks and a line count
+a device pixel ratio); with the override, the loss round's window probe gives Chrome's lines in all five at DPR 1, 2 and 3.
+Cost: two code units a 16-bit string of a right-to-left group, or of a left-to-right one that holds such a character, and
+ICU's levels of a measured string, under letter spacing only (and on an inspected paragraph's check for
+`script-context`), where it may hold right-to-left text.
+
+Blink, SHY in a Canvas string (`shape.ts` `canvasString`; since 2026-09-24). Canvas turns SHY, ZWSP, LRM, RLM,
+U+202A..U+202E and U+FEFF into U+200B, which ends a Canvas word (plain_text_node.cc:47-62, 85-91), and the DOM keeps each in
+its shaping call, so the port writes U+2060 in their place, which has their HarfBuzz properties and splits nothing. Until
+2026-09-24 an 8-bit paragraph, whose only such character is SHY, left it out of a string without a space, so that the
+string stayed 8-bit as the DOM's one Latin segment is, while a string with a space, 16-bit for its U+2028, carried U+2060:
+a window and its sides were written two ways, and a window across a space showed an adjustment that only its sides'
+writing made (16px Helvetica Neue at DPR 2 under -3px of word spacing: `, cof`+SHY+`fee` 6,291 units off its sides at the
+line start after `, `, taken as unsafe to break). Now SHY is U+2060 alone and beside a space alike. The DOM shapes SHY's
+own glyph, which `morx` and `kerx` machines see (hb-aat-layout-common.hh:1226-1241): over 399 installed families at 16 and
+28px (probe bwf-loss S1), 2,356 words of 14 with SHY measure otherwise in the DOM than without it, in 168 families, and
+Canvas gives each of them the DOM's width with U+2060 and none with SHY left out. A 16-bit string that holds no Latin letter
+is Common in Canvas where the DOM's segment is Latin, and reports `script-context` (`gaps.ts` `measuredRange`). On the loss
+round's lab sets the shy-nbsp losses of the verifier's fonts runs, 91 at DPR 2 and 87 at DPR 3, go, and words first now cuts
+such a group too.
+
+Blink, a stretch without a script of its own after a cut (`shape.ts` `prefixAfterCut16`; since 2026-09-24). A
+position is the prefix measured from the cut before it plus the adjustment across it (`positionAtOffset16`). Measured
+alone, a prefix that holds a character other than white space and none with a script of its own is a 16-bit string
+RunSegmenter resolves as Common, where the paragraph shapes it under its run's script (`measuredAsCommon`): in 16px Didot at
+DPR 3, ` :` between Devanagari words measured alone was 2.6 zoomed px off its advance in the run, which moved a line under
+8px of word spacing (the fonts attack's Didot losses of 2026-09-24). Such a prefix is measured in front of the text after
+the offset up to a character with a script of its own, less that text alone, which gives its advance with the adjustment
+across the offset, and the adjustment the position takes is placed as before. Where that and the stretch measured alone
+agree within the bounds of their totals (§4.4, above), the stretch alone is taken: in `emoji-run` the text after a family
+emoji runs over seven more to the letter after them, and two rounded totals less each other were off where the stretch
+alone was exact. Cost: three totals a position after such a stretch.
 
 Blink, words first (`shape.ts` `addWordPieces`, `cutGroup`; `line-breaker.ts` `candidateAt`, `wordCandidate`; since
 2026-09-23; the study is research/SPEC-WORD-SUM.md, round 2's form "V3" on branch `x-words2-blink`). A group is cut into
@@ -1691,13 +1747,17 @@ together equal their sum below 256 zoomed px and the pair window shows 0; the po
 paragraph keeps that 0 as the wide window's between the cuts around the offset (`BlinkGroup.wide16`), which is the window
 the test measured. A space that doesn't pass is no cut. What is left between two cuts and isn't one word below 256
 zoomed px goes to the cut above, handed the total measured here where it is the same string: words whose space didn't
-pass, a long word, text without spaces, and every group of an unsegmented paragraph that holds SHY (there a word alone
-leaves SHY out and the word with its space carries U+2060, so their sums would hold the difference). So no range of 256
+pass, a long word, text without spaces. (Until 2026-09-24 every group of an unsegmented paragraph that holds SHY went there
+too, since a word alone left SHY out and the word with its space carried U+2060; SHY is U+2060 in both now, below.) So no range of 256
 zoomed px or more is measured whole where words are shorter than that, and what a paragraph asks doesn't grow with the
 device pixel ratio. The windows `adjust16` takes follow the cuts, so beside a word cut they are the two words. In a
 segmented paragraph a side that Canvas shapes as Common, a 16-bit string with a character other than white space and
 none with a script of its own (`measuredAsCommon`), takes the next piece in while the window stays below 256 zoomed px
-by the pieces' prefixes, since `, ` alone is no stand-in for the comma in its run: without it the Hebrew line `, זהו `
+by the pieces' prefixes, and where the next piece doesn't fit, clusters until it holds a character with a script of its
+own, and the shrink doesn't take the side below that (since 2026-09-24: at 16px and DPR 3 ` , ` between Devanagari words
+measured alone is 2.6 zoomed px off its run in Didot and 4.8 in italic Gill Sans, and with the letter after it it is the
+run's, probe bwf-loss comma; reaching back on the side before the offset too moved 16 lines of Arabic in Chalkboard SE that
+Chrome sides with the words on), since `, ` alone is no stand-in for the comma in its run: without it the Hebrew line `, זהו `
 of the cut probe's texts took another width in six families that draw no Hebrew (in pinned Chrome 214 of 1,616 layouts
 at its break widths lost their widths, 2 their breaks). A window the extension takes past 256 zoomed px shrinks back
 into the side, and the sides it shrinks to are no better: in Euphemia UCAS ` 🙏🙏` alone takes the space wide, which
@@ -2274,22 +2334,18 @@ fix round (2026-09-23) words first doesn't run at all in such a face: where a st
 Euphemia UCAS alone of 393 installed families), its groups are cut by the cut search alone. The windows beside word cuts
 are words, and a side of one that holds no letter, a lone space or ` — 4.5 `, measures every space wide; the constructed
 attack's Euphemia UCAS paragraphs lost 13 breaks and 10 line counts that way, none with a premise's gap, where the base's
-windows, up to 256 zoomed px, hold letters. What the fix round leaves in the face: judged on Canvas's own answers, a
-group under negative word spacing is cut finer than the base cut it, where the spacing JS adds made the base's totals
+windows, up to 256 zoomed px, hold letters. What the fix round left in the face: judged on Canvas's own answers, a
+group under negative word spacing was cut finer than the base cut it, where the spacing JS adds made the base's totals
 look exact, and a cut the search falls back to beside a space takes the pair window's adjustment there, whose side of
 the space alone is Common and wide. At DPR 3, 25 of the fonts attack's layouts in 16px Euphemia UCAS with -2px word
-spacing lose a line the base kept (the window probe: from the cut at 6 of `T a T o …` every position is 9.9 zoomed px
-short of Chrome's), at DPR 1 and 2 none. Both trees' pair windows beside a space are off by that much; taking the next
-cluster into such a side, or measuring a space alone as the 8-bit one, which Blink shapes as Latin, moved hundreds of
-other lines of the face either way, and a window side of white space alone taking the next piece in gained 22 layouts
-and lost 1 but not these (local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`, not adopted). What gives Chrome's
-lines in the two the window probe traced is to keep a range whole where no offset passes the safe test and Canvas
-rounded its total by at most a unit, below twice 256 zoomed px, rather than cut it where no test passed (local branch
-`bwf-fix-alt-vz5`, not adopted: it changes the cut search every tree shares, and its unit tests and the tiers aren't
-restated). In the spacing sweep's 14 families that lost lines, at DPR 2, it gains 1,271 breaks and 430 line counts on
-the base where the fix round gains 146 and 26, with about as many lost (145 and 43, where 136 and 37), and 1,126 and 409
-of the gains are Euphemia UCAS, whose every space fails the pair test and whose groups the base cuts where nothing
-passed; at DPR 3 2,266 and 945.
+spacing lost a line the base kept (the window probe: from the cut at 6 of `T a T o …` every position is 9.9 zoomed px
+short of Chrome's), and the verifier's spacing run 130 breaks more. Both trees' pair windows beside a space are off by
+that much; taking the next cluster into such a side, or measuring a space alone as the 8-bit one, which Blink shapes as
+Latin, moved hundreds of other lines of the face either way (local branches `bwf-fix-alt-vz2` and `bwf-fix-alt-vz3`).
+Since the loss round (2026-09-24) a range whose total is near, within the unit Canvas rounded, is a piece (§4.4), so the
+search doesn't cut where the base didn't, and Euphemia UCAS's losses under negative spacing are gone on the round's lab
+sets but for 3 of `other-spaces` at DPR 3; keeping a near range whole only where no offset passes the safe test (as
+`bwf-fix-alt-vz5` did, and the round's variant `Q2`) kept more of them lost.
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a
@@ -2762,7 +2818,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Gap | Engines | What differs | Handling | Predictions can be wrong when |
 |---|---|---|---|---|
 | CR, FF, VT and other controls (`control-character-width`) | all | Every Canvas turns U+0009-U+000D into spaces; Gecko's also turns U+001C-U+001F, U+0085 and U+2029 into spaces (CRITIC.md C12). DOM: Blink collapses CR as a space in collapse modes and keeps FF and VT as characters of unknown width; in preserve modes CR and FF are zero-width control items that end a shaping group (blink-text §2.C.9, H5, H6). WebKit keeps U+000D's glyph advance on the simple path and 0 on the complex path; FF, VT and other Cc take the `.notdef` advance (webkit-text §5.3). Gecko: CR, FF, VT and hidden C0/C1 controls are zero width. | Never pass them to Canvas. Blink: CR in collapse modes is a space in text_content; CR and FF in preserve modes measure 0 and split the group. WebKit: measure FF, VT and other Cc as U+0001 in the same string, which also takes `.notdef` (webkit-canvas H10). Gecko: strip them. | Blink: VT in any mode, or FF in `normal`, `nowrap` or `pre-line`, which Canvas turns into a space where the port measures U+0001; other controls reach Canvas and the DOM as they are (plain_text_node.cc:47-58). WebKit, by the measured string's font code path, not the box's (§4.4; FontCascade.cpp:304-309, :708-730): on the simple path VT, FF or CR where Canvas shows a pair adjustment around the control, and a CR that more of the measured string follows; on the complex path VT and FF, whose kerning there wasn't probed, and never CR, which has no advance there; a control whose `.notdef` comes from another font. A string without a complex-path character is WidthIterator's in a complex-path box too, so since correctness round 5 it reports as on the simple path. |
-| Soft hyphen shaping (`soft-hyphen-shaping`) | Blink | Blink's Canvas turns SHY into ZWSP, which splits a 16-bit Canvas word; the DOM shapes SHY inside the item as a hidden glyph. WebKit's Canvas and DOM both keep SHY during shaping. Gecko's DOM discards SHY before shaping. | Blink: measure the word without the SHY. WebKit: keep it. Gecko: strip it. | Blink: a kerning or ligature pair across a soft hyphen. |
+| Soft hyphen shaping (`soft-hyphen-shaping`) | Blink | Blink's Canvas turns SHY into ZWSP, which splits a 16-bit Canvas word; the DOM shapes SHY inside the item as a hidden glyph. WebKit's Canvas and DOM both keep SHY during shaping. Gecko's DOM discards SHY before shaping. | Blink: U+2060 in its place, alone or beside a space (a word's width is the DOM's in every family probed). WebKit: keep it. Gecko: strip it. | Blink: a kerning or ligature pair across a soft hyphen. |
 | Hyphen glyph (`hyphen-glyph`) | Blink, WebKit | The hyphen is U+2010 if the primary font maps it, else `-`. Canvas can't show whether the primary font maps U+2010, because fallback supplies it. | Fact `mapsHyphen` (§1.2). Gecko's Canvas substitutes as its DOM does. | `mapsHyphen` null and `W('‐') ≠ W('-')` in the run's context at a chosen soft hyphen. |
 | Letter spacing and ligatures (`letter-spacing-ligatures`) | WebKit | The DOM turns off liga, clig, dlig and hlig when letter spacing isn't 0; OffscreenCanvas keeps them (webkit-canvas §1.3, H3). Blink's Canvas and DOM agree (H27). Gecko's DOM decides on the rounded au value, Canvas on the float. | Blink: `ctx.letterSpacing`. Gecko: `'0.001px'` plus JS spacing. WebKit: `ctx.letterSpacing` gives the spacing and keeps the ligatures, so a glyph count (the total at 64px of spacing less the total at none) finds the adjacent clusters Canvas merges. Where the measured string takes the simple path they are measured with U+200C between them (`engines/webkit/measure.ts` `mergedGlyphs`). The path is the measured string's, as FontCascade::width chooses it (FontCascade.cpp:304-309, :708-730), not the box's (§4.4). | WebKit: a line measuring a string of a letter-spaced box in which Canvas shows merged glyphs. It reports on each separated pair, because the pair adjustment between the two letters with the features off isn't measured. It reports on the whole string where nothing is separated: the complex path, a string too long to count, or glyphs still merged after separating. The listed families' `spacingInputs`, where given for every character, say where nothing can change. |
 | Canvas language (`canvas-language`) | WebKit | Blink's OffscreenCanvas resolves `<html lang>` when the font string is set and keeps it until the string changes (blink-canvas H13); Gecko's resolves per call; WebKit's has no locale. The DOM uses the element's language for generic families, CJK fallback and `locl`. | Blink and Gecko: an explicit `ctx.lang` per context. WebKit: a generic keyword is measured as the family the locale resolves it to, named in the Canvas list (§1.3); a named family settles its own characters under every locale. | WebKit: a line measuring text under the system design families (`system-ui`, `ui-*`); a character with default emoji presentation that only a named generic could draw; characters no list family draws whose system fallback a language moves (the registered table of §1.3: Han, kana, Hangul and their punctuation and symbol blocks under Han, kana and Hangul locales, Arabic under ur and ks). |
