@@ -2,8 +2,9 @@
 
 `rebuild/lab/baselines/main-predictor.ts` predicts with the current library in `src/` (main's public API, source
 unchanged) the way an app developer uses it, so the rebuild's engines have a number to beat on the same case sets. The
-runs below used main 2e5e2bd. Since 2026-09-23 `src/` is main `b17a7ac`, whose only runtime change, a count-only
-`layout()` walker, leaves the line ranges this predictor reads as they were (TAKEOVER.md). Runs of 2026-09-16: Chrome
+runs below used main 2e5e2bd. Since 2026-09-25 `src/` is main `48980bb`, which takes each engine's own line-break
+tables and scans (#340) and grapheme tables (#344), so the line ranges this predictor reads have moved and the runs
+below, not repeated, describe 2e5e2bd only (TAKEOVER.md). Runs of 2026-09-16: Chrome
 153, Firefox 156 and webkit-host on WebKit 22625.1.29.11.27 (Safari 27.0's build), all at DPR 2, on
 `.artifacts/lab/cases/{smoke,runs,ws,policy,suite-sample}.ndjson`. Rows, summaries and per-case files are in
 `.artifacts/lab/baseline-main/<browser>/<set>/`; the suite-sample rows ran in four parts (`suite-sample-1` to `-4`) and

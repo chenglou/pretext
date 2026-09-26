@@ -1,17 +1,23 @@
 {
-  "generatedAt": "2026-09-23T14:54:03.709Z",
-  "suiteHash": "2a39f76ab6e2d148ee3382446b9ba8fe8341b0eda322bded7db1a65cf008d875",
+  "generatedAt": "2026-09-25T02:40:47.417Z",
+  "suiteHash": "d695ce8dfddd51009612bde86108a44f6f4d4b7a01ea7b6246413d7c76211178",
   "source": {
-    "revision": "45c2739cff63bc76377c58a262eb62e27941177e",
+    "revision": "83621eaa9f018e2739f79578d0f14a973a02762d",
     "files": {
-      "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
-      "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
-      "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
-      "layout.ts": "9ffb7a9d59064fc5c2760ad5ffc918c30c49b312106f10063ed826f4bdea284a",
-      "line-break.ts": "6f16d9538f39d09398cc053c789c3d345c8715917c9cb9a6dd4cec06414aa601",
-      "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-      "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-      "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
+      "analysis.ts": "cdc9df3281587bdd09fce27ee3efb3abd52c19398f22b39de8897f1954490181",
+      "entry-geometry.ts": "b757cb59c7299153b56afe461ddc626e45c259e18407b5173b488f33a7c92a2c",
+      "gecko-bidi-levels.ts": "9fef10ae1e6c7d78badc31a9f496605d5f3484fb857d64d88d59cac8f06ee080",
+      "gecko-line-breaks.ts": "cc408abb9132513f39e59104b6883b5c6f5a73f6efb9896df89c91d87c8be2e6",
+      "generated/engine-break-data.ts": "9efffbde4f82cac64e0aef9032ee55577b83de77b8ea7eaa955eaa490cd5bd58",
+      "generated/webkit-generic-families.ts": "16ffba2832197e189a5ddf7e745304a3c5faacc82858a51808c3744991b11614",
+      "graphemes.ts": "64c8baf77283b7bdf4686471b69522efccfe109a88965eb1785b2cfccca9ec19",
+      "han-kerning.ts": "fbb13fb093fc35178974eea57346d95117eedc6f3f17c51315957b45e30af0f9",
+      "layout.ts": "50551eca726d2671d714dd5336927b56b40822fefee55f7fabe529ce06cf4a3d",
+      "line-break.ts": "e15c81a3efdcd4069f11e616d37c5098c502103f40d43f9bb17bac8d155139c0",
+      "line-breaks.ts": "9bd88b9904e5fa5c6a5298f1eb587383e04f2987914b51146d38d76786ec0820",
+      "line-text.ts": "6196618f29eb419cd23c7703f175276941d2c1d913106ca465ce5db193c64e66",
+      "measurement.ts": "2afca9c0d4cf8f4f71076fa49e2f5f6cdf170986ce3b7534bca7a895c12bda24",
+      "rich-inline.ts": "740bf39200e0cddbdb7bbcdd2c6174787272465124cd0814e12df4ff222588b6",
       "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
     }
   },
@@ -23,7 +29,7 @@
         "start": {
           "dpr": 2,
           "visualViewportScale": 1,
-          "innerWidth": 2504,
+          "innerWidth": 2320,
           "innerHeight": 1273,
           "outerWidth": 2560,
           "outerHeight": 1320,
@@ -41,7 +47,7 @@
         "end": {
           "dpr": 2,
           "visualViewportScale": 1,
-          "innerWidth": 2504,
+          "innerWidth": 2320,
           "innerHeight": 1273,
           "outerWidth": 2560,
           "outerHeight": 1320,

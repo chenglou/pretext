@@ -134,6 +134,9 @@ await mkdir(join(harness, 'scripts'), { recursive: true })
 for (const file of ['wrapping-check.ts', 'wrapping-transport.ts', 'browser-automation.ts', 'oracle-session.ts']) {
   await cp(join(root, 'scripts', file), join(harness, 'scripts', file))
 }
+// Firefox's East_Asian_Width values decide its segment break transformation.
+await mkdir(join(harness, 'scripts/engine-data/firefox-156'), { recursive: true })
+await cp(join(root, 'scripts/engine-data/firefox-156/properties.json'), join(harness, 'scripts/engine-data/firefox-156/properties.json'))
 await mkdir(join(harness, 'corpora'), { recursive: true })
 for (const file of await readdir(join(root, 'corpora'))) {
   if (file.endsWith('.txt') || file === 'sources.json') await cp(join(root, 'corpora', file), join(harness, 'corpora', file))

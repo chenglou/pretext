@@ -5,28 +5,29 @@ import {
 } from './layout.js'
 import {
   analyzeText,
-  getBreakablePreferredBreaks,
-  getBreakLanguage,
-  getCjkTextUnits,
-  getSharedGraphemeSegmenter,
-  isCJK,
-  removeSegmentBreaksNextToZeroWidthSpace,
+  getSharedWordSegmenter,
+  isCollapsibleSpaceCode,
+  removeSkippableSegmentBreaks,
   type AnalysisProfile,
-  type SegmentBreakKind,
 } from './analysis.js'
+import { findGraphemeEnds } from './graphemes.js'
+import { getWebKitBreakBetweenItems } from './line-breaks.js'
 import {
   buildLineTextFromRange,
   getLineTextCache,
 } from './line-text.js'
 import {
-  breaksAfter,
   canReturnFromUnfitHyphen,
+  endsLineBefore,
+  getKindCode,
   isDiscretionaryLineEnd,
+  KIND_BITS,
   type LineBreakCursor,
   type PreparedLineBreakData,
   stepPreparedLineGeometry,
+  UNBROKEN,
 } from './line-break.js'
-import { getDocumentLanguage, getEngineProfile, getFontMeasurementState, getSegmentMetrics } from './measurement.js'
+import { getDocumentLanguage, getEngineProfile, getFontMeasurement, getSegmentMetrics } from './measurement.js'
 
 // Helper for rich-text inline flow under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
@@ -158,13 +159,8 @@ function isBeforeCursor(cursor: LayoutCursor, target: LayoutCursor): boolean {
     (cursor.segmentIndex === target.segmentIndex && cursor.graphemeIndex < target.graphemeIndex)
 }
 
-function isCollapsibleBoundaryWhitespace(code: number): boolean {
-  return code === 0x20 || code === 0x09 || code === 0x0A || code === 0x0C || code === 0x0D
-}
-
 function getCollapsedSpaceWidth(font: string, letterSpacing: number, documentLanguage: string | null): number {
-  const { cache } = getFontMeasurementState(font, false, documentLanguage)
-  return getSegmentMetrics(' ', cache).width + letterSpacing
+  return getSegmentMetrics(' ', getFontMeasurement(font, documentLanguage).metrics).width + letterSpacing
 }
 
 function measureWholeItem(prepared: PreparedTextWithSegments): number | null {
@@ -189,11 +185,11 @@ function getItemCursor(prepared: PreparedTextWithSegments, startSegmentIndex: nu
     const end = start + segments[i]!.length
     if (offset < end) {
       if (data.breakableFitAdvances[i] === null || data.entryGeometry?.[i] != null) return null
-      let graphemeIndex = 0
-      for (const grapheme of getSharedGraphemeSegmenter().segment(segments[i]!)) {
-        if (start + grapheme.index === offset) return { segmentIndex: i, graphemeIndex }
-        graphemeIndex++
-      }
+      const segment = segments[i]!
+      const ends = new Int32Array(segment.length)
+      const count = findGraphemeEnds(getEngineProfile().graphemeTable, segment, 0, segment.length, ends)
+      // Grapheme k + 1 starts where grapheme k ends.
+      for (let k = 0; k < count - 1; k++) if (start + ends[k]! === offset) return { segmentIndex: i, graphemeIndex: k + 1 }
       return null
     }
     start = end
@@ -203,34 +199,20 @@ function getItemCursor(prepared: PreparedTextWithSegments, startSegmentIndex: nu
 
 // Browsers find ordinary break opportunities in the text their inline items
 // join; the item boundary itself is not one. This analyzes the joined text like
-// prepare(): analysis segments, with CJK text split into its measured units.
-// It returns the offsets of the units the line walker could end a line before.
-// A leading SPACE keeps the scan-start rules from treating text after a
-// collapsed space as the start of its node.
-function getJoinedBreakOffsets(text: string, afterWhitespace: boolean, profile: AnalysisProfile): number[] {
-  const analysis = analyzeText(afterWhitespace ? ` ${text}` : text, profile)
+// prepare() and returns the offsets of the segments the line walker could end a
+// line before.
+function getJoinedBreakOffsets(text: string, profile: AnalysisProfile, language: string | null): number[] {
+  const { kinds, breaksBefore, starts } = analyzeText(text, profile, 'normal', 'normal', language)
   const offsets: number[] = []
-  let previousKind: SegmentBreakKind | null = null
-  for (let i = 0; i < analysis.len; i++) {
-    const segText = analysis.texts[i]!
-    const kind = analysis.kinds[i]!
-    const start = analysis.starts[i]!
-    const units = kind === 'text' && isCJK(segText) ? getCjkTextUnits(segText, profile, 'normal') : null
-    const unitCount = units === null ? 1 : units.length
-    for (let unitIndex = 0; unitIndex < unitCount; unitIndex++) {
-      // No ordinary break precedes NEL (UAX #14 LB6).
-      if (previousKind !== null && kind !== 'control' && (breaksAfter(previousKind) || !breaksAfter(kind))) {
-        offsets.push(units === null ? start : start + units[unitIndex]!.start)
-      }
-      previousKind = kind
-    }
+  for (let i = 1; i < kinds.length; i++) {
+    if (endsLineBefore(getKindCode(kinds[i - 1]!), getKindCode(kinds[i]!), breaksBefore?.[i] === false)) offsets.push(starts[i]!)
   }
   return offsets
 }
 
-// The last joined break inside a portion that ends at a no-break boundary.
-// Offsets before `endIndex` precede the boundary. A break the walker cannot
-// end at falls back to an earlier one, then to the portion start.
+// The last break inside a portion that ends at a no-break boundary. Offsets
+// before `endIndex` precede the boundary. A break the walker cannot end at
+// falls back to an earlier one, then to the portion start.
 function getLastRunStart(portion: JoinedPortion, breakOffsets: readonly number[], endIndex: number): LayoutCursor {
   for (let i = endIndex - 1; i >= 0 && breakOffsets[i]! > portion.start; i--) {
     const cursor = getItemCursor(portion.item.prepared, portion.startSegmentIndex, breakOffsets[i]! - portion.start)
@@ -241,36 +223,25 @@ function getLastRunStart(portion: JoinedPortion, breakOffsets: readonly number[]
     : { segmentIndex: portion.startSegmentIndex, graphemeIndex: 0 }
 }
 
-// Whether the line walker can end a line before an item's own segment.
-function breaksBeforeItemSegment(kinds: readonly SegmentBreakKind[], segmentIndex: number): boolean {
-  return kinds[segmentIndex] !== 'control' && (breaksAfter(kinds[segmentIndex - 1]!) || !breaksAfter(kinds[segmentIndex]!))
-}
-
-// The item's own last ordinary break inside a portion that ends the item; the
-// portion start when there is none.
-function getLastItemRunStart(portion: JoinedPortion): LayoutCursor {
-  const { kinds } = portion.item.prepared
-  for (let i = kinds.length - 1; i > portion.startSegmentIndex; i--) {
-    if (breaksBeforeItemSegment(kinds, i)) return { segmentIndex: i, graphemeIndex: 0 }
+// Offsets in the window text of the breaks WebKit finds: inside each item from
+// the item's own text, which made its segments, and at a boundary from the
+// previous item's last two characters as prior context (TextUtil.cpp:374-396).
+function getItemBreakOffsets(portions: readonly JoinedPortion[], text: string, boundaryContexts: readonly string[], language: string | null): number[] {
+  const offsets: number[] = []
+  for (let p = 0; p < portions.length; p++) {
+    const portion = portions[p]!
+    const end = p + 1 < portions.length ? portions[p + 1]!.start : text.length
+    if (p > 0 && getWebKitBreakBetweenItems(boundaryContexts[portions[p - 1]!.itemIndex]!, text.slice(portion.start, end), language, getSharedWordSegmenter)) {
+      offsets.push(portion.start)
+    }
+    const { segmentFlags, segments } = portion.item.prepared
+    for (let i = portion.startSegmentIndex, offset = portion.start; offset < end; offset += segments[i++]!.length) {
+      if (i > portion.startSegmentIndex && endsLineBefore(segmentFlags[i - 1]! & KIND_BITS, segmentFlags[i]! & KIND_BITS, (segmentFlags[i]! & UNBROKEN) !== 0)) {
+        offsets.push(offset)
+      }
+    }
   }
-  return portion.startSegmentIndex === 0
-    ? EMPTY_LAYOUT_CURSOR
-    : { segmentIndex: portion.startSegmentIndex, graphemeIndex: 0 }
-}
-
-// Records breaks that fall inside the first segment of a portion that starts
-// the item, as grapheme cursors, so an emergency split of that segment ends at
-// one. Offsets are in window coordinates.
-function recordFirstSegmentBreaks(portion: JoinedPortion, breakOffsets: readonly number[]): void {
-  const { item } = portion
-  const segmentEnd = portion.start + item.prepared.segments[0]!.length
-  for (let k = 0; k < breakOffsets.length && breakOffsets[k]! < segmentEnd; k++) {
-    if (breakOffsets[k]! <= portion.start) continue
-    const cursor = getItemCursor(item.prepared, 0, breakOffsets[k]! - portion.start)
-    if (cursor === null) continue
-    if (item.joinedBreaks === null) item.joinedBreaks = []
-    item.joinedBreaks.push(cursor)
-  }
+  return offsets
 }
 
 // Records where the joined text breaks inside a portion, as item cursors, and
@@ -340,38 +311,10 @@ function stepItemToBreak(
   return width
 }
 
-// The latest end of a preferred break grapheme, such as a hyphen, in
-// (start, end]. An emergency split of a word ends there. The walker can end
-// a line inside a segment only where that segment has fit advances.
-function getLastPreferredBreak(prepared: PreparedTextWithSegments, start: LayoutCursor, end: LayoutCursor): LayoutCursor | null {
-  const data: PreparedLineBreakData = prepared
-  const { segments } = prepared
-  let text = ''
-  for (let i = start.segmentIndex; i <= end.segmentIndex; i++) text += segments[i]!
-  const preferredBreaks = getBreakablePreferredBreaks(text, getEngineProfile())
-  let preferredBreak: LayoutCursor | null = null
-  if (preferredBreaks === null) return preferredBreak
-  let graphemeEnd = 0
-  let breakIndex = 0
-  for (let i = start.segmentIndex; i <= end.segmentIndex; i++) {
-    const graphemes = Array.from(getSharedGraphemeSegmenter().segment(segments[i]!))
-    const walkable = data.breakableFitAdvances[i] !== null && data.entryGeometry?.[i] == null
-    for (let g = 1; g <= graphemes.length; g++) {
-      graphemeEnd++
-      if (preferredBreaks[breakIndex] !== graphemeEnd) continue
-      breakIndex++
-      const cursor = g === graphemes.length ? { segmentIndex: i + 1, graphemeIndex: 0 } : { segmentIndex: i, graphemeIndex: g }
-      if (cursor.graphemeIndex > 0 && !walkable) continue
-      if (isBeforeCursor(start, cursor) && !isBeforeCursor(end, cursor)) preferredBreak = cursor
-    }
-  }
-  return preferredBreak
-}
-
 // Fills the graphemes of a segment that does not fit, as the line walker does
-// for a word that began the line: up to the last grapheme that fits, or back
-// to the word's last preferred break. Null when the item's own break before
-// the segment is that end, or the segment has no fit advances.
+// for a word that began the line: up to the last grapheme that fits. Null when
+// the item's own break before the segment is that end, or the segment has no
+// fit advances.
 function fillItemSegment(
   prepared: PreparedTextWithSegments,
   start: LayoutCursor,
@@ -391,15 +334,14 @@ function fillItemSegment(
     if (cursor.segmentIndex !== segmentIndex || cursor.graphemeIndex !== g) break
     overflow.graphemeIndex = g
   }
-  const end = getLastPreferredBreak(prepared, start, overflow) ?? overflow
-  if (end.segmentIndex === segmentIndex && end.graphemeIndex === 0) return null
-  return stepItemToBreak(prepared, start, availableWidth, end, lineEnd)
+  if (overflow.graphemeIndex === 0) return null
+  return stepItemToBreak(prepared, start, availableWidth, overflow, lineEnd)
 }
 
-// The joined text's first ordinary break inside a portion that starts at a
-// no-break boundary, as an item cursor. Offsets from `startIndex` follow the
-// boundary. A break the walker cannot end at falls back to a later one.
-function getFirstJoinedRunEnd(
+// The first ordinary break inside a portion that starts at a no-break
+// boundary, as an item cursor. Offsets from `startIndex` follow the boundary.
+// A break the walker cannot end at falls back to a later one.
+function getFirstRunEnd(
   portion: JoinedPortion,
   breakOffsets: readonly number[],
   startIndex: number,
@@ -454,8 +396,14 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // Each item reads the page language as it prepares; the joined analysis and
   // boundary spaces share one more read.
   const documentLanguage = getDocumentLanguage()
-  const profile = getEngineProfile(getBreakLanguage(documentLanguage))
-  const { inlineItemBreaks } = profile
+  const profile = getEngineProfile()
+  // Blink runs one line-break iterator over the text of the whole inline formatting
+  // context, and Gecko collects a word across text frames until a space and breaks it
+  // in one pass, so every break fact near a boundary comes from the joined text, as
+  // for engines Pretext doesn't recognize, which take Blink's scan. WebKit finds breaks
+  // inside each inline box from that box's own text, and decides a boundary between
+  // boxes from the previous box's last two characters.
+  const breaksFromItemText = profile.lineBreakScan === 'webkit'
   // A collapsed SPACE can have zero or negative advance. Its existence and
   // ordinary break opportunity must survive independently of that number.
   let pendingGapWidth: number | null = null
@@ -463,7 +411,6 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   let previousItem: PreparedRichInlineItem | null = null
   // Collapsible spaces always break and atomic items always allow a break on
   // both sides. Only the text between them joins across item boundaries.
-  let joinedAfterWhitespace = false
   const joinedPortions: JoinedPortion[] = []
   // Width of an item's leading run when no break precedes the item; null when
   // that run continues past the item.
@@ -472,7 +419,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // boundary where breaks come from each item's own text.
   const boundaryContexts: string[] = []
 
-  function finishJoinedText(afterWhitespace: boolean): void {
+  function finishJoinedText(): void {
     if (joinedPortions.length > 1) {
       // Only a window with an item boundary needs its text.
       let joinedText = ''
@@ -483,49 +430,24 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         portion.start = joinedText.length
         for (let s = portion.startSegmentIndex; s < endSegmentIndex; s++) joinedText += segments[s]!
       }
-      if (inlineItemBreaks === 'joined-text') {
-        const breakOffsets = getJoinedBreakOffsets(joinedText, joinedAfterWhitespace, profile)
-        let breakIndex = 0
-        for (let i = 0; i < joinedPortions.length; i++) {
-          const portion = joinedPortions[i]!
-          const portionEnd = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length
-          while (breakIndex < breakOffsets.length && breakOffsets[breakIndex]! < portion.start) breakIndex++
-          recordJoinedBreaks(portion, breakOffsets, breakIndex, portionEnd)
-          if (i === 0) continue
-          portion.item.breakBefore = breakOffsets[breakIndex] === portion.start
-          if (portion.item.breakBefore) continue
-          joinedPortions[i - 1]!.item.lastRunStart = getLastRunStart(joinedPortions[i - 1]!, breakOffsets, breakIndex)
-          leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstJoinedRunEnd(portion, breakOffsets, breakIndex, portionEnd))
-        }
-      } else {
-        // Breaks inside each item come from its own text. As in WebKit, the
-        // boundary reads the previous item's last two characters as prior
-        // context. The next item's first run, and breaks inside its first
-        // segment, come from that same analysis. That is a proxy: WebKit takes
-        // them from an iterator over the next box alone, while analysis of the
-        // item alone joins a leading mark, such as a Myanmar vowel sign, to the
-        // word after it, where Safari's spans break after the mark.
-        for (let i = 1; i < joinedPortions.length; i++) {
-          const portion = joinedPortions[i]!
-          const portionEnd = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length
-          const context = boundaryContexts[joinedPortions[i - 1]!.itemIndex]!
-          const leadingSpace = isCollapsibleBoundaryWhitespace(context.charCodeAt(0))
-          const priorText = leadingSpace ? context.slice(1) : context
-          const contextOffsets = getJoinedBreakOffsets(priorText + joinedText.slice(portion.start, portionEnd), leadingSpace, profile)
-          const breakOffsets: number[] = []
-          for (let k = 0; k < contextOffsets.length; k++) {
-            if (contextOffsets[k]! >= priorText.length) breakOffsets.push(portion.start + contextOffsets[k]! - priorText.length)
-          }
-          portion.item.breakBefore = breakOffsets[0] === portion.start
-          recordFirstSegmentBreaks(portion, breakOffsets)
-          if (portion.item.breakBefore) continue
-          joinedPortions[i - 1]!.item.lastRunStart = getLastItemRunStart(joinedPortions[i - 1]!)
-          leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstJoinedRunEnd(portion, breakOffsets, 0, portionEnd))
-        }
+      const breakOffsets = breaksFromItemText
+        ? getItemBreakOffsets(joinedPortions, joinedText, boundaryContexts, documentLanguage)
+        : getJoinedBreakOffsets(joinedText, profile, documentLanguage)
+      let breakIndex = 0
+      for (let i = 0; i < joinedPortions.length; i++) {
+        const portion = joinedPortions[i]!
+        const portionEnd = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length
+        while (breakIndex < breakOffsets.length && breakOffsets[breakIndex]! < portion.start) breakIndex++
+        // Item segments agree with breaks from the item's own text.
+        if (!breaksFromItemText) recordJoinedBreaks(portion, breakOffsets, breakIndex, portionEnd)
+        if (i === 0) continue
+        portion.item.breakBefore = breakOffsets[breakIndex] === portion.start
+        if (portion.item.breakBefore) continue
+        joinedPortions[i - 1]!.item.lastRunStart = getLastRunStart(joinedPortions[i - 1]!, breakOffsets, breakIndex)
+        leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstRunEnd(portion, breakOffsets, breakIndex, portionEnd))
       }
     }
     joinedPortions.length = 0
-    joinedAfterWhitespace = afterWhitespace
   }
 
   for (let index = 0; index < items.length; index++) {
@@ -533,9 +455,9 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     const letterSpacing = item.letterSpacing ?? 0
     // The item's own segment break transformation can remove a boundary run.
     // Context from a neighboring item is not modeled.
-    const text = removeSegmentBreaksNextToZeroWidthSpace(item.text, profile)
+    const text = removeSkippableSegmentBreaks(item.text, profile, documentLanguage)
     let start = 0
-    while (start < text.length && isCollapsibleBoundaryWhitespace(text.charCodeAt(start))) start++
+    while (start < text.length && isCollapsibleSpaceCode(text.charCodeAt(start))) start++
 
     if (start === text.length) {
       if (start > 0 && pendingGapWidth === null) {
@@ -548,11 +470,11 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     // Scan from the ends once. A trailing-whitespace regex retries every
     // position in a long internal space run when later content prevents a match.
     let end = text.length
-    while (end > start && isCollapsibleBoundaryWhitespace(text.charCodeAt(end - 1))) end--
+    while (end > start && isCollapsibleSpaceCode(text.charCodeAt(end - 1))) end--
     const hasLeadingWhitespace = start > 0
     const hasTrailingWhitespace = end < text.length
     const whitespaceBefore = pendingGapWidth !== null || hasLeadingWhitespace
-    if (inlineItemBreaks === 'item-text') boundaryContexts[index] = text.slice(Math.max(0, end - 2), end)
+    if (breaksFromItemText) boundaryContexts[index] = text.slice(Math.max(0, end - 2), end)
 
     const gapBefore = pendingGapWidth ?? (
       hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, documentLanguage) : 0
@@ -589,11 +511,11 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     preparedItems[index] = preparedItem
 
     if (previousItem === null || whitespaceBefore || preparedItem.break === 'never' || previousItem.break === 'never') {
-      finishJoinedText(whitespaceBefore)
+      finishJoinedText()
       preparedItem.breakBefore = whitespaceBefore || previousItem !== null
     }
     if (preparedItem.break === 'never') {
-      finishJoinedText(false)
+      finishJoinedText()
     } else {
       // Normal-mode segments hold single collapsed spaces. Text beyond the
       // first and last of them cannot reach a neighboring item's boundary.
@@ -607,7 +529,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         spaceEndSegmentIndex: firstSpace < 0 ? -1 : firstSpace + 1,
       })
       if (firstSpace >= 0) {
-        finishJoinedText(true)
+        finishJoinedText()
         joinedPortions.push({
           item: preparedItem,
           itemIndex: index,
@@ -625,7 +547,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     pendingGapItemIndex = hasTrailingWhitespace ? index : -1
   }
 
-  finishJoinedText(false)
+  finishJoinedText()
 
   // Without a break at the next boundary, the next item's leading run stays
   // with this item's last run. A run that spans a whole item continues further.
@@ -769,10 +691,11 @@ function stepRichInlineLine(
     // only fits on a fresh line, wrap before this rich item instead. A line that
     // ends at a soft hyphen can overflow by the hyphen alone, which the walker
     // keeps when the item has no earlier break to return to. Plain text keeps it
-    // too, unless the Chromium profile returns to the break before the item.
+    // too, unless the Chromium or Gecko profile returns to the break before the
+    // item: Chromium where that line leaves room for the hyphen, Gecko where it fits.
     if (hasContent && atItemStart && lineWidthContribution > remainingWidth + lineFitEpsilon) {
       const { prepared } = item
-      if (!isDiscretionaryLineEnd(prepared.kinds, lineEnd.segmentIndex, lineEnd.graphemeIndex)) break lineLoop
+      if (!isDiscretionaryLineEnd(prepared.segmentFlags, lineEnd.segmentIndex, lineEnd.graphemeIndex)) break lineLoop
       const softHyphenIndex = lineEnd.segmentIndex - 1
       const beforeHyphen: LineBreakCursor = { segmentIndex: cursor.segmentIndex, graphemeIndex: cursor.graphemeIndex }
       const textWidth = stepPreparedLineGeometry(prepared, beforeHyphen, availableWidth, softHyphenIndex, 0)
@@ -781,8 +704,8 @@ function stepRichInlineLine(
         gapBefore + textWidth + item.extraWidth > remainingWidth + lineFitEpsilon ||
         (
           item.breakBefore &&
-          lineWidth + prepared.discretionaryHyphenWidth <= safeWidth + lineFitEpsilon &&
-          canReturnFromUnfitHyphen(prepared, 0, 0, softHyphenIndex)
+          lineWidth + (getEngineProfile().unfitHyphenRetreat === 'reduced-width' ? prepared.discretionaryHyphenWidth : 0) <= safeWidth + lineFitEpsilon &&
+          canReturnFromUnfitHyphen(prepared, 0, 0, softHyphenIndex, lineWidthContribution - remainingWidth - lineFitEpsilon)
         )
       ) {
         break lineLoop

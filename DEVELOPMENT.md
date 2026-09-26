@@ -10,7 +10,7 @@ bun install
 
 - `bun start` — stable local page server at <http://localhost:3000>
 - `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
-- `bun run check` — typecheck, lint, and dead-code scan (`knip`)
+- `bun run check` — typecheck, lint, dead-code scan (`knip`) and a check that the generated engine break data is current
 - `bun test` — durable invariant suite
 - `bun run test:wrapping --browser=all` — complete maintained checks and selected regressions against a fresh pinned-main comparison
 - `bun run test:wrapping --suite=full --browser=all` — also run the broad exploratory wrapping matrices
@@ -21,12 +21,28 @@ listener access. They do not launch browsers.
 See [the wrapping suite](tests/wrapping/README.md) for worktree comparisons,
 known-failure reporting, native observation limits and reproducible case IDs.
 
+### Harness
+
+The new harness in `harness/` keeps each browser's layout of every case in git, recorded once per browser build, and
+predicts every case in the browser the way an app does. See [harness/README.md](harness/README.md) for how a case is
+judged, the case sets and the pinned browsers.
+
+- `bun test harness` — the harness's offline tests, each planting a fault it exists to catch
+- `bun harness check` — predict every pinned case in Chrome, Firefox and webkit-host and score it; a failure that
+  `harness/accepted/<browser>.txt` doesn't list under a written reason blocks, and `--accept="<reason>"` lists the new ones
+- `bun harness gate` — `check`, plus predictions in reverse order, a fresh recording of 1,000 cases and the attribution
+  of new failures
+- `bun harness record --only-new` — record new cases; after a browser or OS update, `bun harness record` records every
+  case again
+- `bun harness explain <id>` — one case's recorded lines against the predicted ones
+
 ### Packaging And Release
 
 - `bun run build:package` — emit `dist/` for the published ESM package
 - `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
 - `bun run site:build` — build the static demo site into `site/`
-- `bun run generate:line-break-data` — refresh the checked-in projected Unicode line-break class table; `--check` compares it with `scripts/unicode/LineBreak-17.0.0.txt`
+- `bun run generate:engine-break-data` — refresh Chrome's, Safari's and Firefox's checked-in break and grapheme tables from the engine files in `scripts/engine-data/`, checking each table against its source; `--check` compares the generated file instead of writing it. After refreshing a grapheme table, run the grapheme check in each browser (below).
+- `bun run generate:webkit-generic-families` — refresh the families Safari draws `serif`, `sans-serif`, `cursive`, `fantasy` and `monospace` in under each page language, from WebKit's language-to-script map and Core Text's answers on macOS and iOS in `scripts/engine-data/safari-27.0/`; `--check` compares instead of writing
 
 ### Browser Accuracy And Benchmarking
 
@@ -38,6 +54,7 @@ known-failure reporting, native observation limits and reproducible case IDs.
 - `bun run probe-check --text='...' --width=320 --font='18px serif'` — one-paragraph browser diagnostic; also `--browser=safari`, `--method=span|range`, `--whiteSpace=pre-wrap`, `--wordBreak=keep-all`, `--lang`, `--dir=rtl`
 - `bun run font-probe --browser=chrome --output=/tmp/font-probe.json` — optional Shantell Sans and font-language diagnostic; also accepts `safari` and `firefox`. See [FONT_DIAGNOSTICS.md](FONT_DIAGNOSTICS.md).
 - `bun run probe:arabic-joining --output=/tmp/pretext-ff-arabic --font=arial-16 --limit=20` — Firefox-only joined-Arabic study; see [FONT_DIAGNOSTICS.md](FONT_DIAGNOSTICS.md).
+- `bun scripts/grapheme-check/build.ts`, then `bun scripts/grapheme-check/run.ts --browser=chrome` — compare `src/graphemes.ts` with the browser's own `Intl.Segmenter` on every code point in contexts that tell the grapheme classes apart, the corpora and suite texts with their prepared segments, and random strings, under the table the engine profile takes and the other one; also `safari` and `firefox`, in the background. `ENGINE=webkit bun scripts/grapheme-check/offline.ts` runs it under Bun. Node can't load `src/` directly, so bundle it with `bun build --target=node scripts/grapheme-check/offline.ts --outfile=.artifacts/grapheme-check/offline.mjs` and run `ENGINE=blink node .artifacts/grapheme-check/offline.mjs`.
 
 Failed benchmark reports retain their evidence in `<output>.failed.json`, or under
 `.artifacts/benchmarks/` when no output path was requested.
@@ -116,7 +133,7 @@ For one-off performance and memory work, start with `bun start` and an isolated,
 Bun/Node microbenchmarks are useful for quick experiments, but browser behavior needs browser measurements.
 
 For algorithmic changes, scale both source length and the number of segments,
-preferred breaks, forced lines and rich items. Include repeated punctuation,
+forced lines and rich items. Include repeated punctuation,
 Arabic joins, CJK keep-all, long hyphenated URLs and internal whitespace runs.
 Count visited boundaries and submitted Canvas text, with cold caches, before
 relying on timings; doubling an input should not quadruple repeated work.

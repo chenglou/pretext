@@ -416,7 +416,7 @@ function profilePrepareForBenchmark(text: string, font: string): PrepareProfile 
     analysisMs,
     measureMs: Math.max(0, totalMs - analysisMs),
     totalMs,
-    analysisSegments: analysis.len,
+    analysisSegments: analysis.kinds.length,
   }
 }
 

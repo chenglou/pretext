@@ -1,4 +1,4 @@
-import { normalizeSource, segmentBreakRemovals, type Prediction, type PredictionLine } from './contracts.ts'
+import { contentLanguage, normalizeSource, segmentBreakRemovals, type Prediction, type PredictionLine } from './contracts.ts'
 import type {
   Assessment, BrowserKind, MetricResult, NativeExtraction, NativeObservation, NativePoint, NativeRect, WrappingCase,
 } from './types.ts'
@@ -16,7 +16,7 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme
 // unmodified paragraph's height and scalar rectangles. Units come from source
 // graphemes, never a candidate's private prepared representation.
 function observeLineExtraction(element: HTMLElement, input: WrappingCase, browser: BrowserKind): Omit<NativeExtraction, 'usedLineHeight'> {
-  const text = normalizeSource(input.text, input.whiteSpace, browser)
+  const text = normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input))
   const sourceUnits = Array.from(graphemeSegmenter.segment(text))
   element.textContent = text
   const method = input.lineMethod
@@ -74,7 +74,7 @@ function observeLineExtraction(element: HTMLElement, input: WrappingCase, browse
 // One unmodified text node is the oracle. Wrapping every letter in a span
 // changes contextual shaping and dictionary breaks in the text under test.
 export function observeNative(input: WrappingCase, browser: BrowserKind): NativeObservation {
-  const text = input.nativeSource === 'normalized' ? normalizeSource(input.text, input.whiteSpace, browser) : input.text
+  const text = input.nativeSource === 'normalized' ? normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input)) : input.text
   const element = document.createElement('div')
   Object.assign(element.style, {
     position: 'absolute', left: '0', top: '0', margin: '0', padding: '0', border: '0',
@@ -147,7 +147,7 @@ type SourceSpan = { rawStart: number; rawEnd: number; start: number; end: number
 // segmentation. Every observed raw scalar retains its normalized source view.
 function sourceSpans(input: WrappingCase, browser: BrowserKind): SourceSpan[] {
   const spans: SourceSpan[] = []
-  const removed = input.whiteSpace === 'normal' ? segmentBreakRemovals(input.text, browser) : null
+  const removed = input.whiteSpace === 'normal' ? segmentBreakRemovals(input.text, browser, contentLanguage(input)) : null
   let normalizedOffset = 0
   for (let rawStart = 0; rawStart < input.text.length;) {
     const char = input.text[rawStart]!
@@ -475,7 +475,7 @@ export function assess(
     const extraction = native.extraction
     if (extraction === undefined) {
       lineCount = breaks = { status: 'unobserved', reason: `The selected ${input.lineMethod} extraction has no stage geometry. Legacy source groups cannot establish its height or source ownership.` }
-    } else if (extraction.method !== input.lineMethod || extraction.source !== normalizeSource(input.text, input.whiteSpace, browser)) {
+    } else if (extraction.method !== input.lineMethod || extraction.source !== normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input))) {
       lineCount = breaks = { status: 'unobserved', reason: 'The recorded extraction method or source differs from the selected observation protocol.' }
     } else {
       const count = extractionLineCount(extraction, input.lineHeight)
@@ -501,9 +501,9 @@ export function assess(
     const unobserved: MetricResult = { status: 'unobserved', reason: 'This maintained case is scheduled for height observation only.' }
     return { height, lineCount, breaks, source: unobserved, whitespace: unobserved, widths: unobserved, hyphen: input.text.includes('\u00ad') ? unobserved : { status: 'not-applicable', reason: 'No soft hyphen.' }, api: unobserved, richHeight }
   }
-  const observedInput = input.nativeSource === 'normalized' ? { ...input, text: normalizeSource(input.text, input.whiteSpace, browser) } : input
+  const observedInput = input.nativeSource === 'normalized' ? { ...input, text: normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input)) } : input
   const spans = sourceSpans(observedInput, browser)
-  const normalizationCorrect = normalizeSource(input.text, input.whiteSpace, browser) === prediction.normalized
+  const normalizationCorrect = normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input)) === prediction.normalized
   const source = normalizationCorrect
     ? compareSource(observedInput, native, prediction.lines, spans, false)
     : { status: 'fail' as const, detail: 'Prepared segments do not preserve the documented normalized source.' }

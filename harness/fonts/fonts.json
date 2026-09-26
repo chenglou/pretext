@@ -1,0 +1,74 @@
+[
+  {
+    "family": "Amiri",
+    "weight": "400",
+    "file": "amiri.ttf",
+    "sha256": "7f19c4a5dc77b0ef435b430d750759170def15d6e3801006e0704dadc7f220e3",
+    "license": "amiri-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/arabic-0.ttf"
+  },
+  {
+    "family": "Noto Naskh Arabic",
+    "weight": "400",
+    "file": "noto-naskh-arabic.ttf",
+    "sha256": "e62e84cf72fe9e8953a21c3337c68155a116d4bbdcd9522d860d46686b28c6e0",
+    "license": "notonaskharabic-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/notonaskharabic/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/arabic-1.ttf"
+  },
+  {
+    "family": "Noto Nastaliq Urdu",
+    "weight": "400",
+    "file": "noto-nastaliq-urdu.ttf",
+    "sha256": "b6f46e3874b4b72b46aaf6a7cbf57b38664755caafd0824f1172743df3b232cb",
+    "license": "notonastaliqurdu-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/notonastaliqurdu/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/arabic-2.ttf"
+  },
+  {
+    "family": "ProbeShantell",
+    "weight": "700",
+    "file": "shantell-sans-bold.ttf",
+    "sha256": "8582d69250e8a78463d49e5388fc28f20e0496abb65bc7cae848599128c74d57",
+    "license": "shantellsans-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/shantellsans/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/shantell-1.ttf"
+  },
+  {
+    "family": "Shantell Sans",
+    "weight": "400",
+    "file": "shantell-sans-regular.ttf",
+    "sha256": "335ce03b4f2e90df95a7e4a383979a817fc4843a33498e8cdb77e692cc740fc4",
+    "license": "shantellsans-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/shantellsans/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/shantell-0.ttf"
+  },
+  {
+    "family": "Shantell Sans",
+    "weight": "700",
+    "file": "shantell-sans-bold.ttf",
+    "sha256": "8582d69250e8a78463d49e5388fc28f20e0496abb65bc7cae848599128c74d57",
+    "license": "shantellsans-OFL.txt",
+    "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/shantellsans/OFL.txt",
+    "source": "source-context-next-20260904/chromium/whole-admission-literal-v4/fonts/shantell-1.ttf"
+  },
+  {
+    "family": "Inter",
+    "weight": "400",
+    "file": "inter-regular.ttf",
+    "sha256": "a414b48aa577ef2c62ebb135341ddeef33ee26a4f5dc9f787f93c1aab08ebb50",
+    "license": "inter-OFL.txt",
+    "licenseSource": "https://openfontlicense.org (the font's own name table)",
+    "source": "Inter 4.001 static Regular, github.com/rsms/inter (name table version 4.001;git-66647c0bb), the copy dnd-kit's docs site serves (apps/docs/public/fonts/inter-latin.ttf)"
+  },
+  {
+    "family": "Roboto",
+    "weight": "400",
+    "file": "roboto-regular.ttf",
+    "sha256": "79e851404657dac2106b3d22ad256d47824a9a5765458edb72c9102a45816d95",
+    "license": "roboto-LICENSE.txt",
+    "licenseSource": "http://www.apache.org/licenses/LICENSE-2.0 (the font's own name table)",
+    "source": "Roboto 2.137 Regular (name table), the copy in harfbuzz's test/subset/data/fonts"
+  }
+]

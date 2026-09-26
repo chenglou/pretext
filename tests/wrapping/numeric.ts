@@ -153,12 +153,13 @@ for (const recipe of recipes) for (const [size, letterSpacing] of preparations) 
     }
   }
   if (recipe.name === 'entry-controls' && size === 1 && letterSpacing === -1) {
-    // Replacing an observation must not alter a held handle or its JSON copy.
+    // Replacing an observation must not alter a held handle or its copy. A copy
+    // is a structured clone, since a handle's flags byte array doesn't survive JSON.
     // A changed synthetic context affects only fresh, tracked measurements.
     const context = measurement.getMeasureContext()
     const originalRendering = context.textRendering
     const saved = JSON.stringify(prepared)
-    const copied = JSON.parse(saved) as typeof prepared
+    const copied = structuredClone(prepared)
     const result = (value: typeof prepared) => {
       phase = 'numeric'
       return JSON.stringify([1, 8, 27].map(width => api.layoutWithLines(value, width, 20)))

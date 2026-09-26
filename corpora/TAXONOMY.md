@@ -53,38 +53,17 @@ Examples:
 
 ### `boundary-discovery`
 
-The candidate break opportunities are wrong or too coarse.
+The candidate break opportunities are wrong. They come from each engine's own
+line-break data and scans (`src/line-breaks.ts`, `src/gecko-line-breaks.ts`), so a
+wrong one is a gap in the port, not a missing glue rule.
 
 Typical signs:
-- `Intl.Segmenter` output is plausible, but our merged units are not
-- a script needs additional glue / splitting rules around punctuation or marks
-- a canary is fixed by changing segmentation/merge behavior rather than widths
+- punctuation, quotes or marks stay with different text than in the browser
+- a canary is fixed by moving a break rather than by changing widths
 
 Typical response:
-- adjust preprocessing boundaries
-- keep the rule semantic and narrow
-
-Examples:
-- Arabic punctuation-plus-mark clusters like `،ٍ`
-- Japanese iteration marks `ゝ / ゞ / ヽ / ヾ`
-- Thai ASCII quote glue
-
-### `glue-policy`
-
-The right raw boundaries exist, but we attach the wrong units together before layout.
-
-Typical signs:
-- punctuation should stay with the previous word
-- opening quote clusters should stay with the following text
-- non-breaking glue was modeled as ordinary breakable space
-
-Typical response:
-- change glue/attachment rules, not measurement
-
-Examples:
-- Arabic no-space punctuation clusters like `فيقول:وعليك`
-- Myanmar medial glue with `၏`
-- escaped quote clusters in mixed app text
+- compare the scan with the engine's own source for that text
+- fix the port rather than adding a rule of Pretext's own
 
 ### `edge-fit`
 
@@ -154,6 +133,6 @@ When a new mismatch shows up:
 
 1. Rule out `corpus-dirty` and `diagnostic-sensitivity`.
 2. If widths are obviously tiny-edge cases, classify as `edge-fit`.
-3. If a semantic merge/split fixes multiple widths cleanly, classify as `boundary-discovery` or `glue-policy`.
+3. If moving a break fixes multiple widths cleanly, classify as `boundary-discovery`.
 4. If repeated clean corpora still miss after good preprocessing, escalate to `shaping-context`.
 5. If only one font family or fallback stack misses, classify as `font-mismatch`.

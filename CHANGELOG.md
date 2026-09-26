@@ -8,15 +8,27 @@
 
 ### Changed
 
-- `layout()` is two to three times faster in Chrome and Safari on text without letter spacing, preserved spaces, tabs, hard breaks, soft hyphens, no-break spaces or invisible controls other than zero-width spaces, which covers most prose (#338).
+- `prepare()` is faster on text it hasn't seen, up to about twice as fast in Chrome and Safari and three to four times with letter spacing, and letter-spaced text it has seen is about eight times faster there, since Pretext now finds grapheme clusters with the character rules each browser ships instead of `Intl.Segmenter`. `Intl.Segmenter` is now needed only for text in Thai, Lao, Khmer, Myanmar and the other Southeast Asian scripts written without spaces. Bundles that import Pretext grow by about 4 KB gzipped (5.5 KB minified) (#344).
+- Chrome, Safari and Firefox now find where lines can break with ports of each browser's own line breaker and its data, in place of Pretext's own rules, so lines break where the browser breaks them in many more cases, such as around CJK punctuation and quotes, dashes, URLs and Thai. `prepare()` and `layout()` are also faster on most text, including letter-spaced, soft-hyphenated and `white-space: pre-wrap` text. Bundles that import Pretext grow by about 30 KB gzipped (28 KB minified), mostly for that data (#340).
+- Safari's line breaking follows Safari 27. Safari 26, on macOS 26 and iOS 26, breaks differently around curly quotes and guillemets, after punctuation with `word-break: keep-all`, at U+2028 and U+2029, and after a first character too wide for its line (#340).
+- In Chrome, text on a page without a `lang` now breaks and measures under Chrome's UI language, as Chrome lays it out: under a Chinese UI, curly double quotes wrap as brackets (#340).
+- `layout()` is two to three times faster in Chrome and Safari on text without letter spacing, preserved spaces, tabs, hard breaks, soft hyphens or invisible controls other than zero-width spaces, which covers most prose (#338).
 - Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, since Safari's check for keeping a word's kerning with a following space no longer uses a generated bidi class table (#311).
+- `setLocale()` now only clears the caches, as `clearCache()` does. Line breaking follows the page language, and no locale changes the word boundaries Pretext still reads, inside Thai, Lao, Khmer and Myanmar text (#340).
 
 ### Removed
 
 - `prepareWithSegments()` no longer returns `segLevels`. Those approximate bidi levels per segment couldn't produce visual order, and computing them slowed every `prepareWithSegments()` and rich-inline preparation, most for Arabic and Hebrew text. To draw mixed bidi text, render each paragraph as one DOM element with its direction set, and the browser orders every line. Lines drawn separately, such as with Canvas `fillText()`, are each ordered as their own paragraph, so numbers or punctuation next to a line break can come out in a different order (#258).
+- The npm package no longer includes the demos (`pages/demos` and `pages/assets`). They live in the repository (#342).
 
 ### Fixed
 
+- In Safari, on pages with a language, text in `serif`, `sans-serif`, `cursive`, `fantasy` or `monospace`, or falling back to one of them, now measures in the font Safari draws it with there, such as Apple SD Gothic Neo for `sans-serif` on a `ko` page and Menlo for `monospace` on an `en` page, instead of the font those names give a page without a language (#340).
+- In Chrome, CJK punctuation next to other punctuation or at a line end now takes the narrower width Chrome's `text-spacing-trim` gives it (#340).
+- In Chrome and Firefox, ideographic spaces (U+3000) at a line end now hang past it, as spaces do, instead of wrapping to the next line (#340).
+- A run of no-break spaces (U+00A0, U+202F or U+2007) between other break opportunities, such as between two spaces, now breaks where it overflows its line, as browsers do, instead of staying on one line (#340).
+- In Firefox, a newline between East Asian characters no longer adds a space, and on `ja` and `zh` pages neither does one next to East Asian punctuation (#340).
+- In Firefox, a soft hyphen where the line could break anyway, as after a space or between an ideograph and a Latin letter, no longer draws a hyphen or needs room for one (#340).
 - Narrow wrapping around invisible controls and combining marks now more closely matches desktop Chrome and Firefox.
 - Paragraphs made only of zero-width spaces now occupy one line instead of disappearing (#223).
 - A zero-width space at the start of a paragraph or after a hard line break no longer disappears when the following text wraps to the next line (#227).

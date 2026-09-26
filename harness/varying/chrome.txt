@@ -1,0 +1,10 @@
+## Arabic with vowel marks before brackets in 16 px Amiri: Chrome's per-canvas shape caches give a bracket another width after other text (Chromium #560614560, PLATFORM_BUGS.md), so these break differently in reverse order, before #340 as after it; in check's order they fail the same way every time (harness/accepted)
+old-gate-0f4ab6085302b5fe order
+old-gate-307fd76f099a43ea order
+old-gate-4dd4ada94b0cc2ce order
+old-gate-739b18e51c1d20d3 order
+old-gate-b91bd6ffeef40383 order
+old-gate-c81cecb0b25d0d2f order
+
+## system-ui, outside what Pretext claims (README): Chrome's Canvas resolves the font list otherwise after documents in other languages in the same process, and not in every run; "Demande de fonctionnalité" broke inside the word in 1 of 5 checks and in reverse order
+sample-1cb37f9a1e4caa0c runs

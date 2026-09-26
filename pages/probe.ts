@@ -4,7 +4,9 @@ import {
   prepareWithSegments,
   type PreparedTextWithSegments,
 } from '../src/layout.ts'
+import { SPACED } from '../src/line-break.ts'
 import {
+  classifyBreakMismatch,
   formatBreakContext,
   getDiagnosticUnits,
   getLineContent,
@@ -415,28 +417,6 @@ function computeOffsetFromCursor(prepared: PreparedTextWithSegments, cursor: { s
   return offset
 }
 
-function classifyBreakMismatch(contentWidth: number, ours: ProbeLine | undefined, browser: ProbeLine | undefined): string {
-  if (!ours || !browser) return 'line-count mismatch after an earlier break shift'
-
-  const longer = ours.contentEnd >= browser.contentEnd ? ours : browser
-  const longerLabel = longer === ours ? 'ours' : 'browser'
-  const overflow = longer.fullWidth - contentWidth
-  if (Math.abs(overflow) <= 0.05) {
-    return `${longerLabel} keeps text with only ${overflow.toFixed(3)}px overflow`
-  }
-
-  const oursDrift = (ours.sumWidth ?? ours.fullWidth) - ours.fullWidth
-  if (Math.abs(oursDrift) > 0.05) {
-    return `our segment sum drifts from full-string width by ${oursDrift.toFixed(3)}px`
-  }
-
-  if (browser.contentEnd > ours.contentEnd && browser.fullWidth <= contentWidth) {
-    return 'browser fits the longer line while our break logic cuts earlier'
-  }
-
-  return 'different break opportunity around punctuation or shaping context'
-}
-
 function getFirstBreakMismatch(
   normalizedText: string,
   contentWidth: number,
@@ -489,7 +469,7 @@ function getLineEndFitAdvance(prepared: PreparedTextWithSegments, segmentIndex: 
   if (kind === 'soft-hyphen') return prepared.discretionaryHyphenWidth
   if (kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break') return 0
   if (width === 0 && kind !== 'control') return 0
-  return prepared.letterSpacing !== 0 && prepared.spacingGraphemeCounts[segmentIndex]! > 0
+  return prepared.letterSpacing !== 0 && (prepared.segmentFlags[segmentIndex]! & SPACED) !== 0
     ? width + prepared.letterSpacing
     : width
 }

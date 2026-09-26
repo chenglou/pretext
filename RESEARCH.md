@@ -22,34 +22,333 @@ whole word also does not establish the widths of its possible line prefixes.
 Engine profiles describe the layout engine, not the browser brand;
 `getLayoutEngine()` in `src/measurement.ts` explains how the user agent names it.
 
+## Break Opportunities From Engine Data
+
+Chrome, Safari and Firefox take break opportunities from ports of their engines' own
+scans (`src/line-breaks.ts`, `src/gecko-line-breaks.ts`), and engines Pretext doesn't
+recognize take Blink's. Blink's
+scan answers from its space rule, its generated pair table for U+0021-U+00FF, its
+rule for `-` before a digit and keep-all by general category, and asks ICU
+otherwise. WebKit's answers from its own pair table and character classes, and asks
+ICU, skipping ahead over ASCII letters. The WebKit port follows Safari 27
+(`safari-7625.1.29.11`), whose classes make curly quotes and guillemets opening or
+closing quotation marks, so a quote next to a letter never breaks and one next to East
+Asian text breaks before it opens or after it closes, without asking ICU. Its keep-all
+also breaks after punctuation in text holding a code unit above U+00FF, and a U+2028 or
+U+2029 that starts an item forces a break, in every white-space mode. Safari 26.5.2 on
+macOS 26 and iOS 26 breaks these shapes as Safari 26's source does. Both run a port of ICU's rule-based iterator,
+Blink's over Chrome 153's compiled `line_normal.brk` and WebKit's over libicucore's
+`line.brk`, `line_normal.brk` and `line_cj.brk`, with Apple's per-locale quotation
+remap. Inside Thai, Lao, Khmer and Myanmar runs, `Intl.Segmenter` words
+stand in for the engines' dictionaries.
+
+Offline C++ ports of each engine's break code over its own ICU data found no native
+line start in the September 14 suite rows that skipped a usable opportunity (210 of
+391,755 Chrome starts stayed unexplained, probably widths of joined Arabic and trimmed
+brackets). TypeScript copies of the scans matched those ports outside Thai, Lao, Khmer
+and Myanmar runs, with 0 differences over 13,108 Blink and 19,393 WebKit requests,
+WebKit with the ports' bidi levels. Against the C++ ports themselves, this port differs
+outside those runs only where Chrome opens `line_normal_cj.brk` (44 of 13,108 Blink
+requests) and, since Pretext resolves no bidi levels, at 71 positions in 71 of 19,393
+WebKit requests, all right-to-left at a bidi level change, against the C++ port with
+Safari 27's changes. It matches that port on all of 20,000 random requests over quotes,
+punctuation, CJK text, separators and keep-all. With those changes the C++ port leaves
+no native line start of the September 16 Safari 27 rows unexplained, where Safari 26's
+port left 323 left-to-right and 247 right-to-left. Its ICU iterator gives ICU C's boundaries on all 19,338 cases of
+LineBreakTest.txt and on the corpora, over Chrome's `line_normal.brk` and through
+libicucore's `ubrk_open` for nine page languages.
+
+Every page parses every engine's tables. Unpacked, 480 KB of base64 made a fresh
+Firefox page spend 5.2ms evaluating the bundle against main's 1.2ms, so the generator
+packs them in a small LZ77 form. The five ICU line tables come from nearly the same
+rules, so each packs against the earlier table that packs it shortest, across engines:
+Chrome's `line_normal.brk` alone, its `line_normal_cj.brk` and libicucore's
+`line_normal.brk` against it, libicucore's `line.brk` against that, and its
+`line_cj.brk` against `line.brk`. The minified layout bundle is then 120 KB, 57 KB
+gzipped (main: 80 KB and 21 KB), and a fresh page evaluates it in 2.8ms in Firefox and
+1.4ms in Chrome and Safari. Packing each engine's tables only against its own first
+gave 133 KB and 64 KB, evaluated as fast. Keeping Chrome's root table whole, the other
+line tables as copies from an earlier one and every other table unpacked gave 238 KB
+and 57 KB, evaluated in 3.6, 1.5 and 1.6ms. Against packing per engine, Safari's first
+preparation unpacks three tables for `line.brk` instead of one, about 0.6ms once per page.
+The Gecko scan doesn't split text runs where the script changes, as Firefox's script
+itemizer does. Those splits only add cluster starts: without them no suite or corpus
+request analyzes differently, and against the Gecko oracle the scan's breaks differ in
+18 more of 11,875 left-to-right fuzz requests, its cluster starts in 108. A port of the
+itemizer first found each code point's script with a RegExp per script name, several
+milliseconds of set-up before the first preparation, then read Firefox's own Script
+data, 16 KB of tables.
+
+Remapping characters to the root table's categories, as WebKit does for quotes, can't
+stand in for Chrome's `line_normal_cj.brk`: its `〜` and `゠` belong to no class the
+rules name, a category the root table doesn't have.
+
+Firefox's scan ports how Gecko handles one text node: `TransformText` collapses its
+white space and drops soft hyphens and bidi controls, text runs split where bidi
+levels change, each shaped word gets its cluster starts,
+and `nsLineBreaker` sends each word holding a character outside
+`kNonBreakableASCII` to a port of ICU4X 2.1.2's line iterator over Firefox's baked
+`segmenter_break_line_v1` data under Strict rules. A break survives only at a
+cluster start or after a space (`gfxTextRun::SetPotentialLineBreaks`), which also
+drops the word boundaries `Intl.Segmenter` finds inside grapheme clusters in Thai,
+Lao, Khmer and Myanmar runs: installed Firefox 155's segmenter matched Gecko's
+models on all 54,588 breaks inside such runs that way. Levels come from a port of
+servo/unicode-bidi, which Firefox runs, over icu_properties' Bidi_Class data.
+Against the Gecko break oracle, the scan gives the oracle's breaks and soft-hyphen
+breaks on all 6,569 left-to-right suite and corpus requests and all 11,875
+left-to-right fuzz requests, with ICU4X's word segmenter standing in for Firefox's,
+and differs only inside Thai, Lao, Khmer and Myanmar runs with Bun's. Pretext takes
+no direction, so the scan resolves every paragraph as left-to-right: none of the
+4,346 right-to-left suite and corpus requests changes, and 192 of 8,125
+right-to-left fuzz requests do. Firefox 156.0's XUL holds the same line data and
+Bidi_Class trie byte for byte. The scan replaced the Gecko profile's merges of
+`Intl.Segmenter` words, its CJK units and its independent symbol runs, and with
+them answers the oracle contradicts, such as ending a keep-all run after `”` before
+an ideograph, keeping `−+x«value»!` whole, or keeping `|` with the letter after it
+in `a/|b`.
+
+Segments are the text between opportunities, split where the break kind changes, so
+a URL splits where the engine may break it and CJK text arrives in its final units,
+and a control character stays its own segment, measured alone. A U+2028 or U+2029
+the WebKit scan makes a forced break is a hard break. One that ICU's fast-forward
+passes stays inside a text item in WebKit's source, and stays a control segment. A
+ZWSP or soft hyphen with no break before the text after it,
+as at the start of a WebKit scan, before a combining mark or a closing bracket, or
+under keep-all, is zero-width glue: its own zero-width segment, which takes no letter
+spacing and doesn't end a line. Folding it into that text instead measured the text
+with it inside, charged it letter spacing native layout doesn't give it, and let an
+emergency break give it a line of its own; the September 15 installed gate lost 1,887
+Chrome and Safari rows that way, such as `a`, U+00AD, U+0301, U+00AD, U+0323, `b` at
+7px in 16px Arial with letter spacing −4, which both browsers paint as `a` / `b`.
+Where a line can still end after the ZWSP or soft hyphen, before a space, tab or hard
+break, it keeps its kind. Blink's break-anywhere retry and WebKit's grapheme search
+can still give glue a line of its own when the grapheme after it doesn't fit: Chrome
+paints `abc`, U+00AD, `)def` at 1px as `a` / `b` / `c` / U+00AD / `)` / `d` / `e` / `f`.
+Gecko can't. It drops soft hyphens from its text run, so a soft hyphen at the start
+offers no break and isn't a cluster, and it clusters a ZWSP with the marks after it, so
+in the Gecko profile glue at a line start isn't the line's content and the segment after
+it starts the line however wide it is. Letting the glue start the line gave `SHY a SHY b`
+at 0px an empty first line, which the Gecko scan's installed gate lost on 428 Firefox
+rows; applying the same rule to the Chrome and Safari profiles loses 101 Chrome and 866
+Safari rows in an offline replay. The walkers end a line only where the scan breaks: prepared
+text records the segments that follow no break, a line that overflows before one
+returns to its last break, and a line without one fills graphemes across the unbroken
+run, as Blink's break-anywhere retry and WebKit's `TextUtil::breakWord` do. Ending at
+any segment boundary instead gave `a`, U+00AD, WJ, `b` at 0px a line holding only the
+soft hyphen, and the second installed gate lost 9,068 line-count passes that way.
+Combining marks after zero-width glue or a control shape after the grapheme before
+them and what separates them, so they're measured as that source with the marks, minus
+the source, and take no letter spacing of their own. Measured alone, U+0301 took 2.97px
+in 16px Arial. Measured on the grapheme without the glue, Canvas composed the pair or drew
+it in another font: `a` with U+0323 in 16px Amiri took 2.22px more than `a`, where
+Chrome paints `a`, U+00AD, U+0301, U+00AD, U+0323, `b` as wide as `ab`. WebKit's
+Canvas measures text through the page's `FontCascade::width`, so in both installed
+Safari and its page such marks take their fallback font's advance (8px for U+0301 in
+Georgia). Blink's page shapes a soft hyphen inside its text item, and in about 20,000
+suite observations over 13 fonts a nonspacing mark after one never took width. Its
+Canvas turns the soft hyphen into a ZWSP and shapes each word alone
+(`PlainTextNode::SegmentWord`), so after a soft hyphen the mark can measure as a
+dotted circle (8px in Georgia); the Chrome profile gives such runs no advance. After
+a ZWSP, Chrome's page splits too and draws the circle, as its Canvas does. WebKit and
+Gecko scan a text node's source, where a collapsed TAB is still UAX #14 BA to WebKit,
+so their profiles map the source's opportunities onto the normalized text; Blink scans
+the collapsed text, as Pretext normalizes it. A break before a run's later unit follows white space,
+so it's a break after the space the run became: in `ab`, SPACE, CR, `cd` the only
+source opportunities after `b` are before the SPACE and before the CR, and Safari starts
+the next line at the CR. Every text segment takes emergency grapheme breaks: under
+`overflow-wrap: break-word` Blink retries an overflowing line with a break allowed
+between any two graphemes (line_breaker.cc), WebKit searches the word's grapheme
+prefixes (`TextUtil::breakWord`) and Gecko wraps before any cluster start
+(gfxTextRun.cpp:1069-1072), so the permission doesn't come from
+`Intl.Segmenter`'s word-likeness, which Safari's JavaScriptCore withholds from
+numbers (`11111111` at 1px laid out as one line, 230 September 15 gate rows) and every
+engine from emoji and symbol runs (`🇺🇸/👩‍💻` at 8px, where both browsers break
+before the `/` that no scan allows, 526 rows). No scan asks `Intl.Segmenter` for words
+outside Thai, Lao, Khmer and Myanmar runs. Gecko clusters its text run after dropping soft
+hyphens and bidi controls, per shaped word, so the Gecko scan's cluster starts decide
+which segments split: one that holds no cluster start after its first unit takes no
+emergency breaks. In `a`, `👩`, U+00AD, ZWJ, `🚀`, `b` at 0px the ZWJ continues the
+woman's cluster and joins the rocket to it, so Firefox paints `a` / `👩-` / ZWJ `🚀` /
+`b`, where Unicode graphemes split ZWJ from the rocket (68 installed rows). Between
+rich-inline items, the WebKit profile reads the previous item's last two characters as
+prior context, as `TextUtil::mayBreakInBetween` does.
+
+Where an emergency break falls inside a segment depends on the advances an engine adds
+up. Gecko adds the advances of the word shaped whole (`BreakAndMeasureText`), so a
+joined letter counts at its joined width: in 16px Arial `بِبِ((tail` at 27.86px Firefox
+fits `بِبِ((` (25.98px, the first ب at 3.9px) and starts the next line at `tail`. Summing
+standalone graphemes charged both ب their isolated 11.42px, so the Gecko profile ended
+the first line after `بِبِ` and gave `((tai` a line (460 installed rows, most of the
+Firefox emergency losses). The Gecko profile now fits from grapheme prefixes, as the
+WebKit profile does, which give each letter its left context. A prefix still ends in a
+final form and misses kerning with the grapheme after it, so after a split a word's last
+Arabic letter gets its medial advance and `V` in `AV AV` its kerned one. In an offline
+replay of the Firefox rows the Canvas stand-in can measure, prefixes gain 2,110
+left-to-right and 703 right-to-left line counts over sums and lose 643 and 349, and double
+the Canvas calls of a cold preparation of the corpora (53,017 to 106,768). Pairs, each
+grapheme measured after the one before it, gain 2,062 and 702, lose 753 and 352, and
+cost 21% more calls on the corpora but 91% more on the accuracy grid, where every
+preparation starts cold.
+
+Prefixes are now taken only in segments at least 80px wide; narrower ones sum
+standalone graphemes. A segment breaks inside itself only on a line narrower than
+itself, so a narrower one never does at 80px and over, and there prefixes cost a
+Canvas call per grapheme of every distinct word. With the floor, a cold Firefox
+preparation of the census's real text takes 88 calls a paragraph against 113 for
+prefixes everywhere and 86 for sums everywhere (main: 79), and the full maintained
+books 3,291 against 6,017 and 2,963. Every census, book, corpus-sweep and CJK
+paragraph row, and every suite row at 80px and over, keeps its prefix result; sums
+everywhere lose 58 of those suite rows in line count and 329 in line count or
+visible breaks (`foo@bar.com：b` at 105px, joined Arabic around brackets near
+100px). Below 80px the installed Firefox gate loses 1,870 left-to-right and 316
+right-to-left line counts against prefixes everywhere and gains 652 and 291;
+against main it loses fewer rows than prefixes everywhere did (477 left-to-right
+and 314 right-to-left where main placed every character or wasn't placed, against
+675 and 343).
+
+An overflowing segment used to end its emergency split after its last hyphen that
+fit. Those preferred breaks recovered ordinary breaks the merged segmentation hid
+inside a segment. A scan segment ends at every break, so a hyphen left inside one has
+no break after it, and Chrome, Safari and Firefox fill graphemes there under
+`overflow-wrap: break-word`. Over the corpora and test texts, 188 of 374,178 Blink
+and 178 of 374,218 WebKit scan segments still held a hyphen before other graphemes,
+such as `ה-16`, `-.` and `—”`, where the preferred break could still move a line end.
+
+On `zh` pages the Blink scan opens Chrome's `line_normal_cj.brk`, as Chrome does for
+`zh` content under line-break: auto: Chrome opens ICU's line iterator with the plain
+locale (text_break_iterator.h:274-288), and ICU's `brkitr/zh.txt` and `zh_Hant.txt`
+map `line` to that table, where `ja.txt`, `ko.txt` and `root.txt` map it to
+`line_normal.brk`. There the double curly quotes act as brackets, and `〜` and `゠` can
+start a line. Content without a language opens the table of Chrome's UI language.
+Probed with the UI and accept languages set apart (zh-CN and en-US each way), the line
+table followed the UI language, and so did
+`new Intl.DateTimeFormat().resolvedOptions().locale`, which Chrome sets from the same
+`--lang` switch; `navigator.language` followed the accept languages. So on a page
+without a language the scan takes Intl's default. The page also resolves fonts and
+types HanKerning's punctuation under that locale, where Canvas under an empty page
+language doesn't: under a zh-CN UI, `16px "PingFang TC"` halts the `。` of `。」` in the
+page and not in such a Canvas. So the Chromium profile gives its context that locale
+on a page without a language. ENGINE_FOLLOWUPS.md lists the deliberate differences.
+
+## Grapheme Clusters From Engine Data
+
+Emergency breaks, letter spacing, emoji correction, line text and Gecko's cluster starts
+take grapheme clusters from `src/graphemes.ts`, not `Intl.Segmenter`. It reads ICU's
+character rules, `char.brk`, as Chrome 153 (ICU 78.2) and libicucore 78.1 ship them, in one
+pass. Their forward table accepts in every state but the start state and a look-ahead state
+after a regional indicator pair, which is entered only one code point after the position it
+returns, so a cluster ends right before the code point whose transition stops or enters that
+state, and the next cluster starts there from the start state. The generator checks that
+shape. The two tables share their states; libicucore's trie adds Apple's transcoding hints
+U+F870-U+F87F, U+F884-U+F899 and U+F89F to Extend, and the WebKit profile takes it. Firefox
+156's ICU4X grapheme data puts every code point in the same 18 classes as Chrome's table, and
+ICU4X's iterator ends clusters where ICU's does on all 2 million strings of up to five code
+points taking one per class and on a million random longer ones, so the Gecko profile takes
+Chrome's table. Below U+0300 only CR and LF share a cluster, so the Gecko scan skips words of
+such units; its `Intl.Segmenter` probes had skipped every word without a unit that may join.
+
+In each installed browser the table its profile takes gives `Intl.Segmenter`'s clusters on
+every code point in 14 contexts that tell the classes apart (15.6 million strings), on the
+9,323 corpus paragraphs and suite texts and the 1.3 million segments `prepareWithSegments()`
+makes of them, and on 200,000 random strings over the classes (`scripts/grapheme-check/`).
+The other table differs only at Apple's 39 hints. A second fuzz of 20.6 million strings in
+each browser, with emoji sequences, Unicode 16 and 17's new scripts, lone surrogates,
+clusters up to 70,000 code units long, sub-ranges and counting only, found no difference.
+Node 23's ICU 77.1 (Unicode 16) differs on 1,417 code points and on 61 of those texts, so an
+engine on another Unicode version needs its own table. 689 of those code points, the largest
+group, are symbols Unicode 17 took out of Extended_Pictographic, such as U+2605, the chess
+symbols from U+2654, the dice and the mahjong, domino and playing cards, which no longer join
+a ZWJ sequence: U+2654 ZWJ U+2654 is one cluster in Unicode 16 and two in 17. 686 are
+consonants and linkers in 14 scripts whose conjuncts Unicode 17 joins, among them Myanmar,
+Khmer, Tai Tham, Balinese, Javanese and Sundanese, and 42 are characters new in Unicode 17.
+
+With graphemes from the tables, `Intl.Segmenter` is left only for words inside the runs the
+scans break by dictionary: Thai, Lao, Khmer and Myanmar, and in the Blink and WebKit scans
+also Tai Le, New Tai Lue, Tai Tham, Tai Viet and Ahom. The scans create the word segmenter
+the first time such a run shows up, so other text prepares without `Intl.Segmenter`.
+
+`Intl.Segmenter` graphemes had been the largest part of preparing new text in Chrome and
+Safari: 40 to 58% of a pass over batches of about 24,000 code units of Latin, chat, Arabic,
+mixed and pre-wrap text, 18 to 28% over CJK and Thai, and 64 to 76% with letter spacing,
+whose count ran on every segment of every `prepare()` and took 85 to 89% of preparing seen
+letter-spaced text. Against main before the change, in one document, interleaved over 31
+rounds in each browser in the foreground, `prepare()` of each batch takes main's time
+divided by this many:
+
+| Batch | Chrome 153, new text | fresh page | Safari 27, new text | fresh page | Firefox 156, new text | fresh page |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Latin | 1.63 | 1.34 | 1.75 | 1.30 | 1.12 | 1.11 |
+| Chat | 1.96 | 1.44 | 1.64 | 1.17 | 1.26 | 1.11 |
+| CJK | 1.17 | 1.05 | 1.23 | 1.06 | 1.02 | 1.07 |
+| Arabic | 1.65 | 1.30 | 1.80 | 1.31 | 1.13 | 1.06 |
+| Thai | 1.26 | 1.12 | 1.29 | 1.10 | 1.01 | 1.01 |
+| Mixed | 1.58 | 1.21 | 1.55 | 1.20 | 1.19 | 1.07 |
+| Pre-wrap | 1.74 | 1.23 | 1.58 | 1.22 | 1.11 | 1.04 |
+| Letter-spaced | 2.86 | 2.04 | 4.26 | 2.20 | 1.40 | 1.22 |
+
+New text is a pass after `clearCache()`, with the browser's shaping caches warm. A fresh
+page is the first pass in a new same-origin iframe, whose library, tables, caches and
+canvas all start empty, as for text Chrome's canvas hasn't shaped; it includes reading the
+tables, which in a later run made a page's very first `prepare()` 0.05ms slower than main's
+in Chrome 154 and 0.14ms in Firefox, and no slower in Safari. Seen text prepares 7.9 to 9.2
+times faster with letter spacing in Chrome and Safari and 1.8 times in Firefox, and
+otherwise within 3% of main, except Firefox, where Latin and pre-wrap are 6 to 10% faster
+and CJK 2 to 4% slower: the Gecko scan now runs the rules over every word with a unit at or
+above U+0300, where its probes had skipped Han words that never join. A table of those
+probes' answers built from the rules gave 1.01, within the noise. On short Japanese,
+Chinese and Korean interface strings, repeated runs read 0.90 to 1.08 of main's speed.
+`layout()` on the same batches stays within 4%. Safari's row comes from a run without that
+`layout()` control: after it, Safari's next passes over new text took about 65ms more in
+both libraries. Canvas calls are unchanged. The tables add 5.5 KB to the minified bundle,
+3.8 KB gzipped.
+
 ## Breaks And Source Positions
 
 Storage segments, measurement spans, ordinary break opportunities and emergency
-grapheme breaks are different things. `Intl.Segmenter`'s `isWordLike` is a useful
-hint, not permission to break: an overlong symbol run may need emergency breaks
-too. Emoji, control-bearing fragments and standalone marks cannot inherit that
-rule merely because they are not words. Attached marks stay with their base.
-
-Preserve neighboring source characters until break policy has used them. Merging
-punctuation, URLs or numeric expressions too early erases context that later
-passes cannot recover. In particular, an ASCII hyphen after CJK attaches left,
-while a numeric sign stays with its suffix. Keeping an ordinary unit together
+grapheme breaks are different things. Merging punctuation, URLs or numeric
+expressions into units before deciding breaks erased context that later passes
+could not recover; the scans read the whole text. Keeping an ordinary unit together
 does not forbid emergency grapheme progress when it is overlong. Kinsoku clusters
 such as `漢。` or `「漢`, and keep-all groups, are no exception: under
 `overflow-wrap: break-word`, Chromium retries an overflowing line with grapheme
-breaks, WebKit in Safari 26.5.2 breaks at an arbitrary position once the line has
+breaks, WebKit breaks at an arbitrary position once the line has
 no earlier wrap opportunity, and Firefox admits a word-wrap break at every cluster
-start, all ignoring line-break classes. WebKit keeps `漢。` together when not even
-`漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`); Safari 27 has this
-for text holding a character above U+00FF, and Safari 26.5.2 doesn't. Several
-narrow rows passed only while this
+start, all ignoring line-break classes. Safari 27 keeps `漢。` together when not
+even `漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`), in text holding
+a code unit above U+00FF, and so does the WebKit profile; Safari 26.5.2 doesn't. It
+keeps punctuation other than dashes, connectors and `\`, NBSP, U+2010 and U+2013 after
+the first character, measured by grapheme where WebKit steps by code point. Several narrow rows passed only while this
 missing break cancelled another error, such as a combining mark detached from its
-base by the forward carry, U+3000 not hanging, joined Arabic widths, raw controls
-or Chrome's text-spacing-trim. Firefox can
-segment Hangul plus Latin as one word where other runtimes separate it; policy
-must not depend on those incidental storage differences.
-Extending Firefox's ASCII opener/numeric rules to wider Unicode cases exposed
-trailing-space fit failures, so the accepted rules remain narrow.
+base, U+3000 not hanging, joined Arabic widths, raw controls or Chrome's
+text-spacing-trim.
+
+Chrome's default `text-spacing-trim: normal` halts CJK punctuation through Blink's
+HanKerning (han_kerning.cc): a fullwidth opening mark after an opening, middle,
+closing or narrow opening mark, a closing mark before a closing, middle or narrow
+closing mark, and a closing mark at a line end where the line doesn't fit otherwise
+(shaping_line_breaker.cc:344-363); a wrapped line start keeps its opening mark whole
+(text_spacing_trim.h:31-34). Canvas halts a pair only inside what it shapes as one
+word: Blink's Canvas cuts a string before and after CJK ideographs and symbols and
+shapes each word alone (plain_text_node.cc:93-155, 377-400), and curly quotes, ASCII
+brackets, U+00B7, U+2027 and U+FF1B aren't CJK symbols. So the Chromium profile adds
+the halts across segment boundaries and across those cuts: `「」「」「」` is three
+segments that Canvas measures at 96px in 16px Hiragino Sans and Chrome paints at
+80px, and Canvas measures the one segment `(「` at 21.70px where Chrome paints
+13.70px. Measuring under `textRendering = 'optimizeLegibility'` makes Canvas shape a
+string whole, but only where the primary font's GPOS or GSUB lookups cover its space
+glyph (font_fallback_list.cc:264-277): Georgia, Verdana, Helvetica Neue and Thonburi
+still cut, so the port follows the cuts instead. Every fact is the font's, from
+Canvas: a character's halt is 2 W(c) - W(cc), since HanKerning halts exactly one of
+the two in `cc`, `halt` exists where 「「 is narrower than two 「, and the types of
+`、。，．：；` and curly quotes follow their ink bounds. HanKerning::FontData shapes
+them under the locale's Han script (han_kerning.cc:462), where `locl` can move them:
+under zh-Hans PingFang TC draws `。` in the left half of its em, a closing mark, and
+alone it's centered, a middle one, so the page halts the `。` of `。”` on a zh page
+and not on a zh-Hant one. Canvas shapes a CJK symbol next to 中 as Han, so the port
+reads its right edge from `中。` and its left from `。中`; the curly quotes and
+U+FF1B are Canvas words of their own and are measured alone. That is 18 Canvas calls
+once per font and 2 per distinct trimmed character, on text holding a character in
+U+2018..U+301F or U+FF08..U+FF60.
 
 Question and exclamation marks are UAX #14 class EX. ICU and ICU4X break after
 EX unless the next character's class forbids a break before it (LB31), and
@@ -57,30 +356,21 @@ Firefox sends every word containing EX to ICU4X: its ASCII shortcut covers only
 AL, IS, NU and QU words. Chrome and Safari first consult a pair table for
 characters up to U+00FF. It follows ICU except for printable ASCII, where `?`
 breaks before everything except `! " ' ) , . / : ; ? ] }`, and `!` breaks only
-before `(`, `<`, `[` and `{`. Every merge that could join across that boundary
-asks the same rule: the punctuation, hyphen and numeric-affix appends, the
-forward carry, symbol chains, URL and numeric runs and keep-all run ends. So
-`x?|$b`, `x?|-|b` and `x!|©b` break as in Chrome and Safari, while Firefox keeps
-`x?-|b`. A URL query unit joins the text after `?` up to the next break this
-rule allows, such as a second `?` before a letter, so in `https://x.com/p?-a` it
-keeps `-a`, while browsers also break after that hyphen. Above U+00FF Pretext
-reads the LineBreak.txt class of a following letter, number or symbol, so an
-iteration mark such as `々` (NS) stays after `！`, while numeric affixes and
-opening punctuation break; other punctuation keeps its existing attachment.
+before `(`, `<`, `[` and `{`. So Chrome and Safari break `x?|$b`, `x?|-|b` and
+`x!|©b`, while Firefox keeps `x?-|b`. Above U+00FF the engines'
+line-break classes decide, so an iteration mark such as `々` (NS) stays after `！`.
 Small kana and `ー` (CJ) after EX follow the engine and page language; see
-Content Language. Safari 26's keep-all still breaks only at spaces; Safari 27's also
-breaks after punctuation in text holding a character above U+00FF. U+061B ARABIC
+Content Language. Safari's keep-all breaks at spaces, and in text holding a code unit
+above U+00FF after punctuation. U+061B ARABIC
 SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a following
 Arabic word (LB29). Firefox also breaks after BA such as `|` and CL such as `}`
-before a letter or digit, which symbol chains do not model: installed Firefox
+before a letter or digit, as Gecko's scan does: installed Firefox
 155 paints `xy abc} / 1234`, and ` 丙` after the word doesn't change it, since
 ICU4X decides each word alone.
 
 After CJK text, no engine breaks before punctuation that UAX #14 keeps with the
-text before it, such as `'`, `/` or `|` (LB13, LB19, LB21), so Pretext attaches
-punctuation to CJK text by its class. Opening curly quotes don't attach, since
-they can start a line next to East Asian text (LB19a), and neither do U+3000 and
-the other space separators, which hang or trim at a line end. The text after
+text before it, such as `'`, `/` or `|` (LB13, LB19, LB21), while an opening curly
+quote can start a line next to East Asian text (LB19a). The text after
 such a mark is decided differently by each engine (#274, #293). Blink reads its
 pair table for any two code units up to U+00FF, whatever comes before them, so
 `丙!a` keeps `!` with `a`, as `x!a` does. WebKit reaches ICU at the CJK
@@ -97,45 +387,29 @@ The September 15 installed probe (Chrome 153, Safari 26.5.2, Firefox 155; `甲�
 `αβγδεζη`) matched each rule: Chrome keeps `!`, `}`, `/`, `|` and `'` with an
 ASCII letter or digit and breaks after all but `'` before Greek, Safari breaks
 after `!`, `/` and `|` before a letter and after `}` only after kana, and
-Firefox follows UAX #14. The boundary rule that answers the exclamation and
-Gecko pairs answers these too, for Chrome and Safari only before an ASCII letter
-or digit: Pretext doesn't model their tables before ASCII symbols. Where UAX #14
-keeps the pair, as IS, CP, PO and straight quotes do before a letter or number,
-all three engines keep it, and Pretext joins that text to the CJK text's last
-unit, which still takes grapheme breaks when it doesn't fit. Only punctuation
-joins, never a letter inside a CJK unit such as the Arabic in `中（ابب）`, and a
-closing curly quote doesn't: LB19 no longer keeps the text after it, and Chrome
-breaks before `tail` in `中文中文””tail`.
+Firefox follows UAX #14. Each engine's scan answers these from its own rules.
+Where UAX #14 keeps the pair, as IS, CP, PO and straight quotes do before a letter
+or number, all three engines keep it. A closing curly quote keeps the text after it under
+`line_normal.brk` (LB19a), but Chrome's `line_normal_cj.brk` reads `”` as CL, so
+where Chrome opens that table it breaks before `tail` in `中文中文””tail`.
 
 No break precedes closing punctuation or a nonstarter, whatever comes before it
 (LB13, LB21). For these marks above U+00FF all three engines reach ICU or ICU4X, and
 installed Chrome, Safari and Firefox keep `，」：。）！？、` and `」。` after `xxxx` or
 `1234` whenever the text plus the mark fits an empty line, breaking before the mark
-only in an emergency. So Pretext joins a text segment whose first code point passes
-its kinsoku test to the text segment before it, whatever that text is. Small kana
-and `ー` follow the profile there as after CJK text: Chrome breaks before them after
-letters and digits on every page, Safari only on `ja` and `ko` pages, and Firefox
-never. The join runs after the URL, numeric and no-space merges, which skip text
-that contains CJK: joining in the first pass left `(10:|30)，`, `foo@|bar.com，`
-and `x“|value”，`. It runs before the forward carry, which then moves `「` from
-`739x「` onto `value」!`. The first pass keeps its own join after CJK text, since
-it also keeps ASCII punctuation there: without it, `丙|.first` and `中文|.b` break.
-A space, zero-width space or other segment kind still separates a mark from the
-text before it; no installed run has observed `a ，b`. Firefox breaks before the
+only in an emergency. Small kana and `ー` start a line there as after CJK text:
+Chrome after letters and digits on every page, Safari only on `ja` and `ko` pages,
+and Firefox never. The scans break between a space or zero-width space and such a
+mark; no installed run has observed `a ，b`. Firefox breaks before the
 mark after a run of complex-script code points: ICU4X hands a run of two or more
 SA code points to its dictionary or LSTM segmenter, which reports the end of the
 run as a break whatever follows, even for an SA script with no model, so Firefox
-paints `a ខ្មែរ / ，b`, and the Gecko profile keeps that break.
+paints `a ខ្មែរ / ，b`, as Gecko's scan does.
 
 No break follows ZWJ (LB8a), so a ZWJ at the start of the text or after a ZWSP,
 tab or hard break stays with the next word. A ZWJ right after a space belongs to
-that space's grapheme cluster. Browsers break between them, but a line that
-starts there splits the cluster, so Pretext keeps its earlier boundaries. CJK
-units still break after a ZWJ. A unit that joins graphemes still takes emergency
-grapheme breaks, as browsers split `日！々` at narrow widths, but after U+3000 the
-break following the ZWJ also stands in for the break after the ideographic space,
-and Pretext keeps an ordinary break before U+3000 that UAX #14 forbids (LB21), so
-both need a U+3000 model first.
+that space's grapheme cluster, and browsers break between them, as the scans do,
+so a line can start inside that cluster.
 
 A hyphen after a space, ZWSP, hard break or the text start keeps a following
 alphabetic (AL) or Hebrew (HL) letter (LB20a) in Chrome and Safari: always for
@@ -145,26 +419,22 @@ jamo, Yi or Balinese, still break. ICU 77 counts only U+2010 as HH and keeps
 only AL letters, so a headless Chromium build on ICU 77 breaks after the dash
 before a Hebrew letter. ICU 78 adds HL and the other HH dashes. Installed Chrome
 153 keeps each one observed, before Hebrew letters too, as Safari 26.5.2 does:
-U+2010, U+2012, U+2013, U+058A, U+05BE, U+1400 and U+2E17. Such a word no longer prefers
-the break after its hyphen when it overflows; browsers fill graphemes there.
+U+2010, U+2012, U+2013, U+058A, U+05BE, U+1400 and U+2E17.
 Their pair tables break `-` before an ASCII letter, and Safari's also before most
 Latin-1 letters, such as `é` but not `ª`. Chrome sends a non-ASCII follower of
-`-` to ICU instead, which keeps those letters; Pretext does not model that.
+`-` to ICU instead, which keeps those letters.
 Combining marks between `-` and a Latin-1 letter, as in `a -\u0301\u00E9b`,
-hide the letter from the pair tables, so ICU keeps it, while Pretext still
-breaks there. ICU 78's LB20a letters ($ALPlus) also include AL and AI symbols
+hide the letter from the pair tables, so ICU keeps it. ICU 78's LB20a letters
+($ALPlus) also include AL and AI symbols
 such as `#`, U+00A9 and U+221E, so Chrome and Safari keep `a \u2010\u00A9b`
-and `a -\u221Eb` together, while Pretext keeps only `\p{L}` letters. A TAB
+and `a -\u221Eb` together. A TAB
 before the hyphen is UAX #14 BA, not a space. Safari's scan reads it even when
 normal white space collapses it and breaks after the hyphen, while Chrome breaks
-the collapsed text and keeps the letter; Pretext follows each for `-`, U+2010,
-U+2012 and U+2013. Headless WebKit also breaks after a TAB before the other
-eight HH dashes, but Pretext joins each of them to the next text in every
-browser. Chrome also restarts its ICU context
-at each line start, so after a pre-wrap TAB the result
-can depend on where the line began. A rich-inline item is analyzed as
-its own text, so an item that starts with a hyphen keeps its letter as at a text
-start. That matches Safari's per-node scan, but Chrome's context crosses items.
+the collapsed text and keeps the letter, as the scans do. Chrome also restarts
+its ICU context at each line start, so after a pre-wrap TAB the result can depend
+on where the line began. Chrome's context also crosses rich-inline
+items, and the Chromium profile takes those breaks from the joined text: items
+`foo` and U+2010 `bar baz` break after the dash.
 Firefox's ICU4X 2.1 rules follow Unicode 15.0, before LB20a.
 
 ICU4X keeps a hyphen-minus (HY) with a following number (NU), ASCII or not
@@ -177,12 +447,9 @@ the position after a hyphen between alphanumerics as an emergency wrap
 line, while under `break-word` every cluster start is such a wrap and it fills
 graphemes (`log-2 | 026`). A probe that reads only `overflow-wrap: normal` lines
 sees a break there. Fullwidth digits are ID, and U+2010, U+2012 and U+2013 are
-BA in ICU4X's data, so Firefox still breaks after them before a digit. The Gecko
-profile answers the pair in the ASCII model's boundary rule, which every merge
-asks, keeps the pieces of a numeric run such as `8:30-4:30` together, and doesn't
-prefer that break in an overflowing word. Before Arabic-Indic, Devanagari or
-mathematical digits Chrome keeps the hyphen too, and so does Safari except before
-Arabic-Indic digits; Pretext breaks there in both profiles.
+BA in ICU4X's data, so Firefox still breaks after them before a digit. Gecko's scan
+takes these pairs from ICU4X. Before Arabic-Indic, Devanagari or mathematical digits
+Chrome keeps the hyphen too, and so does Safari except before Arabic-Indic digits.
 
 `/` isn't in Gecko's table of ASCII characters that never break
 (`kNonBreakableASCII` in `nsLineBreaker.cpp`), so Firefox sends every word
@@ -198,12 +465,8 @@ spacing, right-to-left paragraphs and rich-inline items split next to `/` give t
 same breaks, and a unit that doesn't fit fills graphemes but still ends its line
 at that break (`ryname/ | anotherl`). Chrome and Safari keep `/` with a following
 ASCII letter or symbol from their pair tables, and break before Latin-1, Cyrillic,
-Arabic, Thai and CJK letters as ICU does. The Gecko profile answers the pair in
-the same boundary rule as the hyphen pair, from the generated class table, so
-every merge breaks there. A URL run stops after `https://` or at the first `/`
-before a letter, and a URL query unit forms only when no such break comes before
-`?`; without one, `-` and `/` before a letter break inside the query too, as in
-Firefox.
+Arabic, Thai and CJK letters as ICU does. Gecko's scan takes the pair from ICU4X's
+table, so a URL breaks after its `/` as in Firefox.
 
 U+2007 FIGURE SPACE is UAX #14 class GL, like NBSP and NNBSP, even though it is
 a space separator. Chrome and Safari treat only SPACE, TAB and LF (Safari also
@@ -213,16 +476,24 @@ CR, so U+2007, like the rest of U+2000..U+200B, stays inside the word it sends
 to ICU4X, which applies the same GL rules. Treating it as plain text let
 `Intl.Segmenter`'s word boundaries around it become break opportunities.
 
+NBSP, U+2007, U+202F, WJ and U+FEFF are plain text to the walkers as well. The
+scans give no break next to them, so they join the text around them, and a run made
+only of them sits between two breaks, as NBSPs between spaces do. Such a run takes
+emergency breaks like other text, as all three browsers do: two NBSPs at 1px in
+16px Arial take 2 lines in Chrome 153, Firefox 156 and Safari 27. Main's `glue` kind
+kept a run made only of them whole and off the simple walkers, and kept a U+3000 run
+before it from hanging, where Chrome and Firefox hang it (`a`, U+3000, U+202F,
+space, `word` at 20px: `a`, U+3000 / U+202F, space / ...). Word joiners and U+FEFF
+paint with no advance, and Chrome and Safari give them no letter spacing, so a run
+of them never overflows there, while Pretext charges each a gap (ENGINE_FOLLOWUPS.md):
+with letter spacing 1 at 1px, WJ, WJ keeps one line in the browsers, and Pretext
+splits it.
+
 Chromium breaks between a fullwidth closing bracket such as `」` or `）` (UAX #14
-CL) and a following ideograph. The Chromium profile carries CJK text after
-closing quotes (QU) only. Outside
-keep-all it is still broader than UAX #14 LB19a, which allows a break after a quote between East Asian
+CL) and a following ideograph. Blink's scan takes the quote rules from ICU:
+UAX #14 LB19a allows a break after a quote between East Asian
 characters (`文”|文`), though not after `.”` before Hangul. Chromium's ICU rules for
 Chinese pages treat `”` as CL and break there too (`다.”|라|고`).
-
-`Intl.Segmenter` joins some nonstarters, such as `゛` or `ヽ`, with the kana after
-them, so a piece's first code point decides whether it attaches to the preceding
-text.
 
 Under `word-break: keep-all`, Blink keeps a pair only when both sides are letters
 or numbers by general category and neither is SA. It tests UTF-16 code units and
@@ -234,57 +505,34 @@ Gecko's ICU4X keeps pairs by line-break class instead (AI, AL, ID, NU, HY, the
 Hangul classes and CJ), where a mark takes its base's class. It keeps `ー`, symbols
 such as `★`, supplementary ideographs and, after an ideograph, `〵` or an
 ideographic variation selector, but breaks after NS letters such as `々` or `〼`,
-and after `〵` following a closing bracket. `keepAllPairModel` picks Blink's rule,
-ICU4X's, or Safari 26's, whose keep-all breaks only at spaces; Safari 27 also
-breaks after opening, closing and other punctuation that isn't the text's last
-character, in text holding a character above U+00FF, but not after letters.
+and after `〵` following a closing bracket. Safari 27's keep-all breaks at spaces
+and, in text holding a code unit above U+00FF, after opening, closing and other
+punctuation that isn't the text's last character, but not after letters or dashes;
+Safari 26.5.2's broke only at spaces. Chrome, Safari and Firefox take these rules
+from their scans.
 
-Where the engine does not keep a pair, Pretext ends a keep-all run where UAX #14
-allows a break between the two line-break classes. The classes come from a table
-generated from LineBreak.txt. A mark takes its base's class (LB9), and the check
-keeps every pair that some Unicode 17 rule keeps in some context, such as the
-numeric pairs of LB25. So a run ends before an opening bracket after an ideograph (`文|「文`,
-`文|¡文`), after a closing bracket before an ideograph (`❩|文`), between CJK text and
-Thai letters, emoji or symbols (`文|★|文`, `🎉|🎉`), after punctuation whose class
-breaks after it (`😊/|文`, `😊‼|文`, `★||文`), after a keycap, between two flags, and
-between a letter or number and an East Asian opener, which LB30 does not keep
-(`a|「`). It does not end before a closing bracket, after an opening bracket, after
-BB such as `´`, or between AL symbols such as `©` and `→`. Older rules keep more.
-ICU4X's Unicode 15.0 rules keep any character after a Hebrew letter and HY or BA
-(LB21a), so the Firefox profile keeps `א|文` in one run. ICU 78 keeps a
-following character other than CB or a Hebrew letter only after HY or HH, so the
-Chromium profile ends the run after `א|`.
-ICU4X still breaks between an ideograph and a Hebrew letter under keep-all, since
-it keeps only pairs of AI, AL, ID, NU, HY, Hangul and CJ classes. So `文א|文` ends
-a run before `א` in Firefox and after `|` in Chrome. Chromium and WebKit decide
-pairs of code units up to U+00FF from their own tables, and Gecko decides ASCII
-pairs from its own model, so Pretext's punctuation rules keep deciding those.
-U+3000 is BA, but engines hang or trim it at a line edge, so a run does not end next
-to it until U+3000 has a line-edge model: splitting there lost installed Chrome and
-Firefox rows where a line starts with U+3000, and headless Chromium widths where
-Chrome trims `「` after it. These run ends split a keep-all group, the text between
-spaces, glue, listed punctuation and dashes. Every run of a group with CJK text
-stays merged, as `❨😊❩` does between ideographs, and keeps its group's emergency
-grapheme breaks, which a group takes when any of its pieces is a word.
+Where the engine doesn't keep a pair under keep-all, its ordinary rules decide, and
+older rules keep more. ICU4X's Unicode 15.0 rules keep any character after a Hebrew
+letter and HY or BA (LB21a), so Firefox keeps `א|文` in one run, where ICU 78 keeps
+a following character other than CB or a Hebrew letter only after HY or HH, so
+Chrome ends the run after `א|`. ICU4X still breaks between an ideograph and a Hebrew
+letter, since it keeps only pairs of AI, AL, ID, NU, HY, Hangul and CJ classes. So
+`文א|文` ends a run before `א` in Firefox and after `|` in Chrome.
 
 ICU 77 and 78 break before an opening quotation mark and after a closing one between
-East Asian characters (LB19a). Gecko's ICU4X rules follow Unicode 15.0 and keep both;
-`breakAroundEastAsianQuotes` records the difference. Pretext's CJK ranges and
-emoji-presentation characters stand in for East Asian Width there. Under keep-all,
-the Chromium profile's CJK units no longer carry CJK text after a closing quote
-where LB19a breaks, so `文|“漢字”|文` ends both runs. Chrome restarts its ICU context
+East Asian characters (LB19a). Gecko's ICU4X rules follow Unicode 15.0 and keep both.
+Under keep-all,
+Blink's scan breaks there too, so `文|“漢字”|文` ends both runs. Chrome restarts its ICU context
 at each line start, so when an emergency break lands just before a closing quote,
 Chrome no longer sees the East Asian character before the quote and keeps the quote
 with the next ideograph, while Pretext breaks after it. That loses 16 installed
 Chrome 153 rows, 8 per direction: `signed-spacing/keep-all/curly-double-close` and
 `curly-single-close` at letter spacing 1.5, where Chrome gives `中文中文|”漢字kan|a`
 and Pretext `中文中文|”|漢字kan|a`.
-An emoji and a following opening quote form one piece, so the break between them
-stays hidden.
 
 Headless Chromium 147, which most headless keep-all evidence comes from, runs ICU
 77.1 with Unicode 16 data, while installed Chrome 153 runs ICU 78.2 with Unicode 17
-data, which the generated table follows. The headless build cannot check the HH,
+data, as the scans' tables do. The headless build cannot check the HH,
 LB21a and LB20a differences described above. The two versions' LB19a rules are
 identical, so the quotation mark evidence carries over.
 
@@ -299,9 +547,10 @@ still reaches analysis and fragment cursors index `prepareWithSegments(item.text
 Safari keeps the mark after a raw CR as well; the separate line that CR can take
 in pre-wrap is the raw CR limitation below. Firefox keeps ZWSP with any following
 cluster extender in every position, because shaped words end at ZWSP and a
-word-initial extender is not a cluster start. Pretext does not model that
-granularity. Gluing them everywhere lost native successes, because Firefox also
-applies letter spacing and emergency breaks per cluster.
+word-initial extender is not a cluster start, and Gecko's scan gives no break there,
+so the ZWSP becomes zero-width glue. Folding it into the word instead lost native
+successes, because Firefox also applies letter spacing and emergency breaks per
+cluster.
 
 The CSS segment break transformation differs per engine. In normal white space,
 Blink and Gecko remove a collapsible run containing a newline when a ZWSP
@@ -319,30 +568,29 @@ checks the previous character across element boundaries, while Gecko sees one
 text node at a time, so the rich-inline helper applies the rule only inside an
 item. Blink compiles out its East Asian width rule. Gecko also removes a newline
 between two full-, half- or wide-width non-Hangul characters, skipping default
-ignorables, and, for `ja` or `zh` content, next to such punctuation. Pretext does
-not model those Gecko rules: the ja/zh corpora contain such newlines, and their
-native paragraphs are observed from space-normalized text.
+ignorables, and, for `ja` or `zh` content, next to such punctuation
+(nsTextFrameUtils.cpp:84-209, nsUnicharUtils.cpp:500-527). The Gecko profile
+removes those runs too, before its scan, reading the page language for the `ja`
+or `zh` test; Firefox reads the element's own language, and on a page without one
+the OS's regional locale, which Pretext can't see. The ja/zh corpora contain such
+newlines: their raw paragraphs in the book survey lost 1 to 7 lines to spaces
+Firefox doesn't draw. The wrapping harness's documented form follows the same rule
+for Firefox, with the paragraph's own language; before it did, the Firefox ja/zh
+corpus rows were observed from text that kept a space there, and that text wrapped
+differently from the raw source at 106 of their 244 widths. The form now wraps
+like the raw source at all 244, down to the line of every visible character.
 
 NEL (U+0085) is UAX #14 class NL: a break follows it, and no ordinary break
 precedes it (LB5, LB6). Chrome and Safari break that way, and so do Firefox's
-ICU4X rules, but only the Safari profile models it. Each NEL is its own segment. When one overflows
-right after text or glue, the line ends before that content instead, so the
-content moves to the next line with the NEL; when the content started the line,
-overflow still breaks right before the NEL, as browsers do. Joining NEL to the
-content before it instead split overlong words at Canvas grapheme widths where
-browsers break before the NEL. A ZWSP or soft hyphen right before NEL still
-offers its break in Pretext, and so does any spurious boundary before the NEL,
-such as the ordinary break before U+3000 that LB21 forbids. Pretext keeps NEL
-inside CJK keep-all runs, as it kept NEL text,
-and elsewhere keeps NEL as its own segment with its break after it, the way it
-still breaks after a hyphen in Latin keep-all text. Merging NEL with the text on
-both sides lost emergency breaks in emoji runs, which the overflow rule above
-withholds from control-bearing fragments, and Canvas prefix widths across NEL
-gave a following combining mark a 12px advance in 16px Arial, so the mark took
-its own line. Starting a new keep-all run at NEL after glue also put a break
-before the NEL. In normal white space, `漢<NBSP><NEL>字 漢字` at -1px loses a few
-headless widths where Safari fills the overlong unit by graphemes: Pretext breaks
-between the ideograph and the NBSP, which LB12a forbids.
+ICU4X rules and the scans. Each NEL is its own segment. When one overflows,
+the line returns to its last break, as it does before any segment the scan gives
+no break before, so the content NEL follows moves to the next line with the NEL;
+when that content started the line, overflow still breaks right before the NEL,
+as browsers do. Joining NEL to the content before it instead split overlong words
+at Canvas grapheme widths where browsers break before the NEL. A ZWSP or soft
+hyphen right before NEL is zero-width glue, with no break of its own. Merging NEL
+with the text on both sides gave a following combining mark a 12px advance in
+16px Arial through Canvas prefix widths across NEL, so the mark took its own line.
 
 Safari's simple text path replaces a control character's advance after applying
 letter spacing, so NEL takes none, at either sign. In Safari 26.5.2 `a<NEL><NEL>b`
@@ -358,7 +606,6 @@ right-to-left page, Devanagari, Thai or a marked letter on a left-to-right one.
 Preparation cannot see the page direction, so a NEL next to text in WebKit's
 complex ranges keeps its spacing. Safari's unspaced NEL after Arabic on a
 left-to-right page, or after Devanagari on a right-to-left page, is not modeled.
-Inside a CJK keep-all run, NEL keeps per-grapheme spacing, as NEL text did.
 
 Safari moves a `pre-wrap` tab to the following stop when less than half a space
 would remain before the next one. Stops are eight spaces apart. The spaced NEL hid
@@ -387,6 +634,18 @@ installed Firefox rows where main matched, such as `abc\tdef` at 20px in 16px Ar
 with letter spacing −2, which Firefox paints as `abc` / `\t` / `def`. The Gecko
 profile keeps main's tab rule, so a tab counts in the fit and the width there.
 
+U+3000 hangs at a line end in Chrome and Firefox, as a space does, and not in
+Safari. Blink counts it as a breakable space (`IsBreakableSpace`), so a run of
+U+3000 and the spaces after it hang together; Gecko marks it as a space glyph and
+fits a line without its trailing space glyphs. The Chromium and Gecko profiles
+hang a U+3000 run that ends a text segment before a break, a hard break, the end
+of the text or a collapsible space. `中文`, U+3000, `中文` at 33px in 16px
+PingFang SC takes 2 lines in installed Chrome 153 and Firefox 156 and 3 in
+Safari 27's WebKit; `日本語`, U+3000, `日本語`, U+3000, `日本語` at 60px in 16px Hiragino Sans takes
+3 lines in Firefox, where the profile took 4 before it hung the run. Hanging it in
+the Gecko profile fixed 214 left-to-right and 198 right-to-left line counts in the
+installed Firefox gate and lost none.
+
 Chrome and Firefox keep NEL as ordinary text. In Chrome the same rule lost rows
 that main matched only because two errors cancelled: Chrome joins Arabic across
 a soft hyphen that Pretext measures as separate segments, hangs preserved spaces
@@ -394,7 +653,15 @@ at emergency widths, and gives a word joiner no letter spacing, while Pretext
 spaces it. That last gap also costs Safari `aa<NEL>\u2060bb` at 1px, where main
 kept the joiner on the NEL's line. Release Firefox also breaks after NEL, but
 draws control characters with no advance while its Canvas measures NEL as a
-space.
+space. In the September 16 installed rows, every C0 and C1 control, DEL, U+2028 and
+U+2029 that Firefox painted without letter spacing had a zero-width rect (15,428
+code points in the left-to-right rows), and with letter spacing about half took the gap, where its
+Canvas gives VT, FS-US, NEL and U+2029 a space and other controls a hexbox. The Gecko
+profile gives them no advance and one letter-spacing gap. Chrome's page gives most of
+them an advance (NEL 16px and other C1 controls 16px in 16px fonts, VT and FS-US about
+5.3px, U+2028 and U+2029 about 4.4-5.5px, some C0 controls 0), and so does Safari's
+(about 6-13px), except U+2028, U+2029 and some C0 controls, so those profiles keep
+their Canvas widths.
 
 The shared complex walker fixed batch/streaming disagreement after a soft hyphen
 ([#222](https://github.com/chenglou/pretext/pull/222)). A later usable break could
@@ -409,6 +676,8 @@ out a negative width as 0, where the two also disagreed. Routing simple handles
 through the complex walker still made `layout()` about twice as slow on
 simple-path documents in a Node microbenchmark. Reusing batch traversal for
 statistics preserved output but made long-form statistics materially slower.
+The simple batch walker was later folded into the simple streaming stepper: batch
+walks, statistics and `layout()` loop the stepper, which predicts the same lines.
 
 A selected discretionary hyphen must fit. Chromium retries a text item whose
 hyphen does not fit against the available width minus the hyphen, WebKit reverts
@@ -429,20 +698,38 @@ Returning needs an overflow that isolated widths can show, and a target that is
 really the latest opportunity. Blink shapes the text on both sides of a soft
 hyphen together, so Arabic letters joined across it, a mark after it and a kerning
 pair around it measure narrower in context. When Canvas measures the neighbors of
-any soft hyphen on the line narrower joined than apart, the overflowing hyphen
-stays; contextual widths during preparation would replace that check. Segment
-kinds do not mark every opportunity: text joined to text, such as after `-` in
-`ab-cd` or between ideographs, and a dash inside one segment, such as `10–20`, can
-hold one. The walker never returns past either. Returning past them lost 142
+the soft hyphens on the line narrower joined than apart by at least the overflow,
+the overflowing hyphen stays; a smaller narrowing can't make the line fit, as in
+`schiff­fahrts`, 0.29px narrower joined in 16px Arial, on a line 4.2px too wide.
+Contextual widths during preparation would replace that check. Segment
+kinds do not mark every opportunity: a break before text, such as after `-` in
+`ab-cd` or between ideographs, has none. The walker never returns past one.
+Returning past such breaks lost 142
 installed Chrome rows on compounds such as `x ab-cd\u00adefgh` and
 `a well-known\u00adness`.
 
-The return is enabled in Blink only. Isolated widths cannot show what WebKit and
-Gecko need: letter
-spacing on U+2060, which those engines do not apply, and combining marks after a
+The return is enabled in Blink and Gecko. Gecko returns at the full width, to any
+earlier break whose line fits, including one between two text segments: Firefox
+paints VT, `a`, U+00AD, `b` in pre-wrap 16px Arial at 13.28px as VT / `a-` / `b`.
+Where its line breaker also breaks after the soft hyphen, as between an ideograph
+and a Latin letter, `BreakAndMeasureText` takes the normal break: it fits no hyphen
+and paints none (gfxTextRun.cpp:1053-1063). Firefox ends `漢字\u00ADabc`,
+`ab字\u00ADabc`, `かな\u00ADabc` and `漢字\u00AD漢字` after the soft hyphen at the width
+of the text before it, in CJK and fallback fonts alike, but returns to the space in
+`ab cd\u00ADef`. The Gecko scan marks those breaks, and analysis makes the soft hyphen
+a zero-width break. That fixed 16 left-to-right and 15 right-to-left line counts in
+the installed Firefox gate and lost none. A soft hyphen right after a space or tab is
+such a break too: Firefox 156 paints `ab ` / `cd` for `ab \u00ADcd` at 30px in 16px
+Arial, with no hyphen. Only after a preserved newline does it stay a soft hyphen, as a
+zero-width break starting a chunk would hold a line of its own.
+Isolated widths cannot show what WebKit needs: letter
+spacing on U+2060, which WebKit and Gecko do not apply, and combining marks after a
 soft hyphen, where Safari breaks between the soft hyphen and the mark and Firefox
-paints the hyphen. WebKit and Gecko keep the overflowing hyphen until those are
-modeled. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
+paints the hyphen. WebKit keeps the overflowing hyphen until those are
+modeled. Firefox's losses have those partners: in an offline replay of the Firefox
+gate's rows the return fixed 60 line counts per direction and lost 5 left-to-right
+rows, `a` then sixteen U+00AD U+2060 pairs and a mark, and marks after soft hyphens,
+at letter spacing 1. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
 letter spacing, so `a\u2060b cd\u00adefgh` at letter spacing 1 and 2 still fits
 its hyphen line, and it kerns across the space in
 `LTA To AV\u00adWAVA`. Chromium breaks after a combining mark that
@@ -743,31 +1030,20 @@ item's own segmentation: Thai `ความสวยง` splits into `ควา�
 `ความ/สวยงาม` joined. Joined break positions therefore map into item cursors, down
 to a grapheme inside an item segment when needed. Where an item's segments hide a
 joined break, or offer one inside a joined word, the walker ends at the joined
-break or fills graphemes back to a preferred break, as the flat walker splits a
-word.
+break or fills graphemes, as the flat walker splits a word.
 
-WebKit breaks differently, and `inlineItemBreaks` records that. Its inline items
+WebKit breaks differently, and the WebKit profile follows it. Its inline items
 builder runs a break iterator over each inline box's own text, and a boundary
 between boxes is breakable when the next box's text can break at its start with
 the previous box's last two characters as prior context. Installed Safari 26.5.2
 and headless WebKit spans wrapped Thai, Lao, Khmer and Myanmar words split across
 items differently from one text node, and joined run extents lost the Thai and
 Lao rows where they differ while Chrome gained on the same rows. In the WebKit
-profile an item's last run comes from its own segments, and the boundary from
-analyzing the previous item's last two characters followed by the next item's
-text. The next item's first run and any break inside its first segment come from
-that same analysis, which is only a proxy for WebKit's iterator over the next box
-alone. It matters where Pretext's analysis of the item alone differs from that
-iterator. `Intl.Segmenter` keeps the Myanmar vowel sign at the start of `ာသည်`
-apart, but the forward-sticky pass joins it to the word after it, and the
-resulting carry moved `သ` to the next line where Safari's spans do not. Taking the
-first run from the item's own segments instead changed only such Myanmar rows and
-failed all 70 of them. Keeping a leading mark apart in the analysis itself would
-change `prepare()` for any text that starts with a mark, in every engine. Taking
-the previous item's last run from the same context analysis lost more fuzz rows
-than it fixed. The analysis still differs from WebKit's scan inside some boxes:
-WebKit breaks `-"rt` after the hyphen and `-1o(r)` before the parenthesis, and
-neither the item's segments nor the joined text do.
+profile each item's breaks come from the WebKit scan over its own text, and the
+boundary from that scan with the previous item's last two characters as prior
+context. An item's last run and the next item's first run come from the items' own
+segments. WebKit breaks `-1o(r)` before the parenthesis inside a box, where the
+scan over the item's text doesn't.
 
 Gecko's line breaker keeps extending a word across text frames until a SPACE, TAB
 or CR, computes that word's breaks once with ICU4X's line segmenter, and hands each
@@ -823,9 +1099,9 @@ unit the walker forced onto the line. Wrapping before the item anyway broke
 where the joined text has no break: items `T` and `po\u00add` gave `T` / `pod`
 where `Tpo\u00add` gives `Tpo-` / `d`, and line counts went up as the width grew
 (#323). Such a line now keeps its hyphen, as the flat walker does, unless the
-Chromium profile returns to the break before the item with the flat walker's
-checks: that break leaves room for the hyphen, no soft hyphen up to the hyphen
-measures narrower joined than apart, and nothing after the break can hold a
+Chromium or Gecko profile returns to the break before the item with the flat walker's
+checks: that break leaves room for the hyphen in Chromium and fits in Gecko, the soft hyphens up to the hyphen
+measure narrower joined than apart by less than the overflow, and nothing after the break can hold a
 later opportunity. Blink retries the text item against the width minus the
 hyphen, then rewinds earlier items at the full width, so any break before the
 item counts, including one between ideographs, where the flat walker records no
@@ -867,7 +1143,10 @@ and `zh-Hant` pages, plus 5 `en` controls, with named CJK fonts. On September 12
 
 These agree with the engine sources: Chromium's `line_normal_cj.txt` tailoring
 for `zh`, Apple ICU's `ja.txt` and `ko.txt` plus its curly-quote patch, and
-Gecko's newline transformation in `nsTextFrameUtils.cpp`.
+Gecko's newline transformation in `nsTextFrameUtils.cpp`. Safari 27 decides a curly
+quote next to East Asian text from its own quotation classes before ICU, so it breaks
+around the quotes in `中文“abc”中文` on every page, while `했다.”라고` still follows the
+page language.
 
 Under `ja`, `zh-Hans` and `ko`, Safari and Firefox also shape some of the named
 font's own punctuation differently. An element's `lang=""` marks its language as
@@ -880,17 +1159,17 @@ measured 16px, as with no language, against 27.53px under `en`. Safari's matched
 `en`. No recorded empty-language row contains a fallback glyph, so no recorded
 result separates from `en` yet.
 
-Every profile resolves small kana and `ー` (CJ in the
-generated class table) with one field: to ID, so they may start a line, or to NS,
-so they stay with CJK text before them. Only the WebKit profile varies so far: ID on `ja` and `ko` pages and NS
-elsewhere. The Blink profile resolves ID on every page. Chromium's ICU data maps
-`line` to `line_normal.brk` for root and `ja` and to `line_normal_cj.brk` for
-`zh` and `zh_Hant`, and both put CJ in ID. So `ー` starts a line after `？` and
-`！` exactly as small kana do, and between the marks in `日？ーー`, as installed
-Chrome shows. The Gecko profile resolves NS, since Gecko's auto is strict, and so
-do engines Pretext doesn't recognize, following ICU's root rules. Reading
-`<html lang>` costs about 3-16ns in headless WebKit and Chromium, with no style or
-layout work.
+Chrome's and Safari's scans take small kana and `ー` (CJ) from their engines'
+tables. libicucore opens its normal line rules, where CJ is ID and may start a line,
+on `ja` and `ko` pages, `line_cj.brk` on `zh` pages and strict rules, where CJ is NS
+and stays with the CJK text before it, elsewhere, and Safari's scan picks the table
+from `<html lang>`. Chromium's ICU data maps `line` to `line_normal.brk` for root and
+`ja` and to `line_normal_cj.brk` for `zh` and `zh_Hant`, and both put CJ in ID. So
+`ー` starts a line after `？` and `！` exactly as small kana do, and between the marks
+in `日？ーー`, as installed Chrome shows. Gecko's scan takes CJ as NS from ICU4X's
+strict rules, which Gecko's auto selects, and engines Pretext doesn't recognize
+take Blink's scan. Reading `<html lang>` costs about 3-16ns in headless WebKit and
+Chromium, with no style or layout work.
 
 ## Fonts And Other Measurement Engines
 
@@ -902,6 +1181,35 @@ one width can still fail nearby thresholds.
 Feature detection must precede assignment. In the tested Safari OffscreenCanvas,
 `fontKerning` and `textRendering` were absent; assigning and reading them back only
 created ordinary JavaScript properties, without enabling the browser feature.
+
+Safari's generic families under a page language come from the operating system,
+not from WebKit's own settings: under every language whose WebKit script isn't
+Common, which is nearly every language tag a page writes, `en` included, WebKit asks
+Core Text's `CTFontDescriptorCreateForCSSFamily` with the page language, and keeps
+its settings' families only for names Core Text reserves
+(`FontDescriptionCocoa.cpp:77-118`). Safari 27's Canvas can't carry a language, so
+the WebKit profile names Core Text's families in the Canvas font. The table is
+generated from WebKit's language-to-script map and Core Text's answers dumped on
+macOS 27 and in the iOS 26 simulator; it holds no font's metrics. Where the systems
+differ, iOS's Safari lacks macOS's family in all but two cases, so the new context
+asks itself, with one probe string, whether it has macOS's family, and takes iOS's
+if not. In the two cases both systems have both families and macOS's stands: Menlo
+against Courier New for `monospace` under `fa`, `ug` and Arabic with a region, and
+Papyrus against Arial Hebrew for `fantasy` under `he`. Safari can't use Kaiti SC or
+TC on macOS 27, which Core Text names for `cursive` and `fantasy` under `zh`, and
+draws the script's standard family, Songti. Rejected: listing macOS's family and
+then iOS's in the Canvas font, which on macOS sends the characters macOS's family
+lacks to iOS's family, where the page falls back by language: Latin under `hi`
+`serif` (ITF Devanagari, then Kohinoor Devanagari) and Hebrew under `he` `cursive`
+(Apple Chancery, then Arial Hebrew) measured 11.6 to 33.8px off at 40px; measuring
+through a `<canvas>` element, which follows the page exactly when connected but runs
+the document's pending style update in every `font` assignment and `measureText()`,
+connected or not (`CanvasRenderingContext2D.cpp:206, 304`; `PLATFORM_BUGS.md` has
+the cost); a detached `<canvas lang>`, which has no computed style and so no
+language (`Element.cpp:4873`); and reading
+`navigator.languages` for a plain Han page, whose family WebKit takes from the
+user's first Chinese language: Safari shows the page only the first preferred
+language, and PingFang SC and TC measured the same widths.
 
 Guessed `system-ui`
 substitutions, size tables and scaling were unreliable. Emoji bitmap widths also
@@ -955,15 +1263,17 @@ per-line whitespace reset and reordering (UAX #9 L1 and L2) so callers get runs
 in visual order. A known paragraph direction would also let the kerning guard
 keep the kerning where it now leaves the direction unknown.
 
+Gecko's scan resolves levels of its own with a port of servo/unicode-bidi, only to
+split text runs where Firefox splits them (Break Opportunities From Engine Data).
+It returns no levels and assumes a left-to-right paragraph.
+
 ## Corpus Lessons
 
 Short examples catch regressions; long text reveals accumulated differences.
 Current counts belong in the `corpora/*-step10.json` snapshots, not here.
 
 - **Application text:** books miss URLs, numeric expressions, emoji sequences,
-  non-breaking spaces and discretionary breaks. URL queries worked better as a unit through `?`
-  followed by a query unit; treating the entire URL as one unit or splitting every
-  query character both made results worse.
+  non-breaking spaces and discretionary breaks.
 - **Arabic:** punctuation-plus-mark clusters such as `،ٍ` need their preceding
   text, while a space followed by combining marks needs the marks with the next
   word. Pair corrections, larger shaped
@@ -1000,17 +1310,56 @@ The regex failures involved *internal* whitespace followed by content and long
 digit runs without `px`, not just long trailing whitespace or valid font strings.
 The preferred-break failure needed one long hyphenated run producing many lines.
 An arbitrary continuation must seek to its starting boundary; an already
-positioned scan can carry its index. The shared complex walker's preferred-break
-lookup work is O(lines × log(cuts)); the simple batch walker carries the next cut.
+positioned scan can carry its index.
 
 `layout()` needs only a count. On simple text, `countPreparedLines()` keeps just
 the line width and whether the line has content, with no line ends, pending
 breaks, paint widths or visitor calls. It keeps the simple walker's order: a
 whole segment is tried before its graphemes, each line takes at least one
-grapheme, and a line that overflows after a preferred cut resumes at that cut.
-It already holds the next cut after the one it resumes at, so it doesn't
-search. Other text still counts through the full walker. This removes work from
-the resize path without changing preparation or what it measures.
+grapheme, and a line holding only an overflowing grapheme keeps the graphemes
+after it that can't start a line. Every segment boundary of simple text is a
+scan break, so it never searches back for a cut. The fresh-line widths of a
+segment's tails (entry geometry, which only text holding a default-ignorable code
+point has) matter only on a line that starts inside that segment, so the counter
+and the simple stepper take them there, and such text keeps the simple walkers.
+Other text still counts through the full walker. This removes work from the resize
+path without changing preparation or what it measures.
+
+Every counted line starts at 0 and adds the widths on it. A counter that sets a
+new line's width straight from its first segment's width or grapheme advance
+counts the same lines, but in Firefox 156 it took 1.4 to 1.7 times as long as
+main's `layout()` on chat messages in every script tested, same-document
+interleaved, while main's loop on the same prepared text took 1.0. Changing
+main's loop one step at a time toward it slowed only that step. Starting each
+line at 0 gave 0.87 to 1.04 there.
+
+The full walker lays out text with letter spacing, soft hyphens, controls, tabs,
+hard breaks or preserved spaces in every API. Its line state lived in variables
+its nested helpers closed over, which V8 boxes: each write cost 12-14ns there
+against about 1ns for a local, several per segment. It now keeps that state in
+locals of one function, reads each segment's kind, whether it takes letter
+spacing and whether the scan gives a break before it from one byte, and ends a
+line's walk at the next hard break instead of looking up chunk records.
+JavaScriptCore types an infinite default loop bound as a double: Bun walked
+letter-spaced and pre-wrap text 30-65% slower with one. Together these halve
+`layout()` of letter-spaced CJK in all three browsers and take pre-wrap
+`layoutNextLine()` to 0.4 of main's time. The full walker still costs about three
+times the counter per segment in Chrome and Safari and five in Firefox: it tracks
+the line ends, pending breaks and paint widths the line APIs report, which a count
+doesn't need. One walker for every text would make chat `layout()` two to seven
+times main's time, and chat's line APIs 1.4 to 7.2 times as slow as on the simple
+stepper, several of them then slower than main, so the simple walkers stay.
+
+A fresh page pays to compile the whole library before its first `prepare()`. In
+Firefox 156, `new Function` over the fresh-page probe's minified bundle took 4.5 to
+4.8ms while the engine scans kept their iterator state in four classes, whose
+fields compile as class fields, and 1.9 to 2.2ms with that state in plain objects
+and functions; main's bundle took 1.6 to 1.7ms. Emptying the class bodies or
+moving each field into its constructor gave the same 2.0 to 2.2ms, so any class
+field seems to make Firefox compile the whole bundle up front rather than each
+function on its first call. V8 and JavaScriptCore compiled all of these in the
+same time. The same change made seen Arabic, Latin and mixed chat messages
+prepare 6 to 8% faster in Firefox.
 
 Count total submitted Canvas text, not just calls. Measuring every prefix or
 suffix is quadratic even if each position triggers only one query. Safari's
@@ -1035,4 +1384,81 @@ removed four prefix measurements, and the same prepare stayed at 120ms until the
 without library code showed the same split, and four extra Canvas calls per
 prepare restored the drop. Fresh text never reaches those hits. Compare submitted
 Canvas text and first cold prepares, and treat a warm-only change there as a
-cache phase until installed Safari shows it.
+cache phase until installed Safari shows it. Installed Safari 27 shows it on the
+benchmark page's Thai prose: main submitted 2,982 strings, 142 times 21, and the
+measurement part of its repeated cold prepares took 4ms in 5 of 12 page runs and
+about 15ms in the rest, while the WebKit scan's segments submit 2,978 and stayed
+near 18ms in 11 of 12. Timed around `measureText` in a foreground page, a first
+cold prepare of that text spends 20ms in Canvas with main and 15ms with the scan,
+and both fall under 1ms once the cache holds the strings.
+
+## Decisions Log
+
+Decisions the maintainer made whose reasons the code doesn't show. Code comments
+that point here mark where each applies. Before reversing one, check whether its
+reason still holds, and record the new decision here with its date.
+
+- **2026-09-16: the WebKit profile follows Safari 27 only.** Safari 26, on macOS 26
+  and iOS 26, breaks differently around curly quotes and guillemets, after
+  punctuation under keep-all, at U+2028 and U+2029, and after an overflowing first
+  character. Following 27 cost the Safari 26 rows about 2,900 left-to-right and 1,150
+  right-to-left line counts, mostly at widths narrower than one character. A profile
+  can't tell the two apart: only Safari's own user agent names a version, and the
+  other WebKit browsers on iPhone and iPad don't.
+- **2026-09-23: each engine's own tables and scans find break opportunities**, in
+  place of Pretext's rules and the UAX #14 table. The maintainer accepted the bundle
+  growth, about 30 KB gzipped, because the tables made analysis much faster. Whether
+  they can shrink, or give way to cheap computation, is checked at the end of the
+  project, not before.
+- **2026-09-23: premises nobody has falsified may be taken for speed.** The
+  maintainer relaxed the correctness-first stance: a premise no real font has
+  falsified can be a documented default, ad hoc heuristics go before principled
+  rules, and a requirement no real text exercises can be dropped with its cost
+  stated. CJK support stays. Examples: text with invisible characters stays on the
+  simple walkers, with widths within 10⁻⁹px of the full walker's, and Firefox's
+  script-run splits below.
+- **2026-09-24: the Gecko scan doesn't split text runs where the script changes**,
+  as Firefox's script itemizer does. It was rejected on 2026-09-16 for parity with
+  Firefox's break oracle and approved under the relaxed stance: no suite or corpus
+  text moves, only mixed-script strings with stray marks, and it removed 189 runtime
+  lines. Firefox 156 sides with the splits on those strings (VALIDATION.md).
+- **2026-09-24: there is no `glue` kind.** Runs of only no-break characters (NBSP,
+  U+2007, U+202F, word joiner, U+FEFF) are text, so they take emergency breaks where
+  browsers do; the scans already decide where they break, so the kind was only a
+  label. Two Chrome cases at 26px that main had right, NBSP, U+202F, NBSP in Courier
+  New at letter spacing 1, are accepted losses: the error is a letter-spacing gap
+  after U+202F that Chrome doesn't paint (ENGINE_FOLLOWUPS.md).
+- **2026-09-24: `setLocale()` stays and only clears the caches.** Line breaking
+  follows the page language, and no locale changes the word boundaries Pretext reads
+  in Thai, Lao, Khmer and Myanmar text, under 20 locales in V8 and JavaScriptCore.
+  Removing it, or making it a language input for Safari's families or an element's
+  own `lang`, waits for the end of the project.
+- **2026-09-24: Pretext finds grapheme clusters itself, fixed to Unicode 17.**
+  Emergency breaks, letter spacing, emoji correction, line text and the Gecko scan's
+  clusters come from Chrome 153's and libicucore 78.1's ICU character rules
+  (`src/graphemes.ts`), not from each browser's `Intl.Segmenter`, whose graphemes
+  were the largest part of preparing new text in Chrome and Safari. The rules give
+  each browser's clusters today, Firefox's included, but don't follow a browser to
+  another Unicode version: one a version behind would differ on about 1,417 code
+  points, about half of them symbols such as chess pieces and playing cards that
+  Unicode 17 took out of Extended_Pictographic and most of the rest conjuncts in
+  Myanmar, Khmer, Javanese and 11 other scripts. They are refreshed with the line
+  tables, which are fixed the same way, when browsers move to Unicode 18. The
+  tables add about 4 KB gzipped.
+- **2026-09-24: Safari's generic families come from a generated Core Text table**,
+  not from measuring through a `<canvas>` element. An element's context runs the
+  document's pending style update in every `font` assignment and `measureText()`,
+  attached or detached (PLATFORM_BUGS.md), and only an attached one follows the page
+  language, which the maintainer rejected as DOM access on 2026-09-12.
+- **2026-09-24: `countPreparedLines()` keeps its leading-space skip**, a loop that
+  never runs: without it Firefox 156 resized Latin chat messages to new widths in
+  1.10 to 1.15 of main's time instead of 0.98.
+- **2026-09-24: the full walker got engineering, not heuristics.** The maintainer
+  asked for data layout, fewer allocations, smaller representations and plain
+  indexed code rather than new shortcuts: its state moved into locals, each
+  segment's facts into one byte, and chunks into the hard breaks. It still costs
+  three to five times the counter per segment, so one walker for all text was
+  rejected (Keeping Work Bounded).
+- **2026-09-24: the engine tables land before the new test harness**, judged by
+  main's installed gate, the real-text sets and an attribution of every lost row.
+  The harness replaces `tests/wrapping` and its snapshots in its own change.

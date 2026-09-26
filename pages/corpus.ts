@@ -5,6 +5,7 @@ import {
   type PreparedTextWithSegments,
 } from '../src/layout.ts'
 import {
+  classifyBreakMismatch,
   formatBreakContext,
   getDiagnosticUnits,
   getLineContent,
@@ -473,32 +474,6 @@ function measurePairAdjustedWidth(
     total += measureDomTextWidth(document, prev.text + next.text, font, direction) - prev.domWidth - next.domWidth
   }
   return total
-}
-
-function classifyBreakMismatch(
-  contentWidth: number,
-  ours: DiagnosticLine | undefined,
-  browser: DiagnosticLine | undefined,
-): string {
-  if (!ours || !browser) return 'line-count mismatch after an earlier break shift'
-
-  const longer = ours.contentEnd >= browser.contentEnd ? ours : browser
-  const longerLabel = longer === ours ? 'ours' : 'browser'
-  const overflow = longer.fullWidth - contentWidth
-  if (Math.abs(overflow) <= 0.05) {
-    return `${longerLabel} keeps text with only ${overflow.toFixed(3)}px overflow`
-  }
-
-  const oursDrift = (ours.sumWidth ?? ours.fullWidth) - ours.fullWidth
-  if (Math.abs(oursDrift) > 0.05) {
-    return `our segment sum drifts from full-string width by ${oursDrift.toFixed(3)}px`
-  }
-
-  if (browser.contentEnd > ours.contentEnd && browser.fullWidth <= contentWidth) {
-    return 'browser fits the longer line while our break logic cuts earlier'
-  }
-
-  return 'different break opportunity around punctuation or shaping context'
 }
 
 function getFirstBreakMismatch(

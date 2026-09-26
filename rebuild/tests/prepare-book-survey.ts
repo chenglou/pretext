@@ -56,7 +56,7 @@ export async function prepareBookSurvey(options: { browser: TierBrowser; out: st
     for (const width of chosen) {
       const original = book.candidates.get(width)!, raw = makeCase({ ...original, family: `book/${m.id}/raw`, origin: `${original.origin}; own raw full-source survey` })
       const p = structuredClone(original.paragraph)
-      p.runs[0]!.text = normalizeSource(book.text, 'normal', options.browser === 'webkit-host' ? 'safari' : options.browser)
+      p.runs[0]!.text = normalizeSource(book.text, 'normal', options.browser === 'webkit-host' ? 'safari' : options.browser, m.language)
       const normalized = makeCase({ ...original, paragraph: p, family: `book/${m.id}/normalized`, origin: `${original.origin}; exact maintained normalized native source, own full-source survey` })
       if (cases.has(raw.id) || (cases.has(normalized.id) && normalized.id !== raw.id)) throw new Error(`${m.id}: duplicate survey paragraph identity`)
       if (raw.id === normalized.id) { raw.origin += '; raw and normalized source are identical'; cases.set(raw.id, raw) }

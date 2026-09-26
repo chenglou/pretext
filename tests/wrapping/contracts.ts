@@ -1,3 +1,4 @@
+import geckoProperties from '../../scripts/engine-data/firefox-156/properties.json' with { type: 'json' }
 import type { BrowserKind, WrappingCase } from './types.ts'
 
 type Cursor = { segmentIndex: number; graphemeIndex: number }
@@ -43,15 +44,21 @@ export type Prediction =
   | ({ detail: 'height' } & LayoutResult)
   | ({ detail: 'full'; countedHeight: number; normalized: string; lines: PredictionLine[]; contracts: ContractFailure[]; passedContracts: string[]; diagnostics: ContractFailure[]; richLineCount?: number } & LayoutResult)
 
+// The language an observed paragraph's content takes: its own, else the page's.
+// The harness page always names one, English for fixtures.
+export function contentLanguage(input: Pick<WrappingCase, 'lang' | 'context'>): string {
+  return input.lang ?? input.context?.lang ?? 'en'
+}
+
 // The source the observed engine lays out. In normal white space, Blink and
 // Gecko delete a collapsible run containing LF when a ZWSP immediately precedes
 // or follows the run (CSS segment break transformation); what the deletion
-// leaves still collapses to SPACE. WebKit, and a runtime with no observed
-// engine, delete nothing. Gecko's East Asian segment break rules are not part of
-// this form.
-export function normalizeSource(text: string, whiteSpace: WrappingCase['whiteSpace'], browser: BrowserKind | null): string {
+// leaves still collapses to SPACE. Gecko also deletes it between East Asian
+// characters, and for `ja` or `zh` content next to East Asian punctuation.
+// WebKit, and a runtime with no observed engine, delete nothing.
+export function normalizeSource(text: string, whiteSpace: WrappingCase['whiteSpace'], browser: BrowserKind | null, language: string): string {
   if (whiteSpace === 'pre-wrap') return text.replace(/\r\n/g, '\n').replace(/[\r\f]/g, '\n')
-  const removed = segmentBreakRemovals(text, browser)
+  const removed = segmentBreakRemovals(text, browser, language)
   let kept = text
   if (removed !== null) {
     kept = ''
@@ -60,14 +67,69 @@ export function normalizeSource(text: string, whiteSpace: WrappingCase['whiteSpa
   return kept.replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
 }
 
+// Firefox's East_Asian_Width values, as [first, last, value] ranges covering every
+// code point (ICU UEastAsianWidth: 2 halfwidth, 3 fullwidth, 5 wide).
+const eastAsianWidthRanges = geckoProperties.eastAsianWidth as Array<[number, number, number]>
+function eastAsianWidth(cp: number): number {
+  let lo = 0
+  let hi = eastAsianWidthRanges.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (cp > eastAsianWidthRanges[mid]![1]) lo = mid + 1
+    else hi = mid
+  }
+  return eastAsianWidthRanges[lo]![2]
+}
+const isFullHalfOrWide = (cp: number): boolean => { const width = eastAsianWidth(cp); return width === 2 || width === 3 || width === 5 }
+const codePointIs = (pattern: RegExp) => (cp: number): boolean => pattern.test(String.fromCodePoint(cp))
+const isDefaultIgnorable = codePointIs(/^\p{Default_Ignorable_Code_Point}$/u)
+const isEmoji = codePointIs(/^\p{Emoji}$/u)
+const isHangul = codePointIs(/^\p{sc=Hang}$/u)
+const isPunctuation = codePointIs(/^\p{P}$/u)
+
+// Gecko's East Asian test for a run [start, end) holding LF (TransformWhiteSpaces,
+// nsTextFrameUtils.cpp:84-150, with nsUnicharUtils.cpp:500-527): the code points
+// before and after the run, past default-ignorable ones, both full-, half- or
+// wide-width non-emoji non-Hangul characters other than U+20A9, or for `ja` or `zh`
+// content (nsTextFrameUtils.cpp:273-285) either one East Asian punctuation. A run at
+// either end of the text keeps its space.
+function isEastAsianSegmentBreak(text: string, start: number, end: number, language: string): boolean {
+  if (start === 0 || end >= text.length) return false
+  let before: number
+  let pos = start
+  do {
+    const low = text.charCodeAt(pos - 1)
+    const high = pos > 1 ? text.charCodeAt(pos - 2) : 0
+    if (high >= 0xD800 && high <= 0xDBFF && low >= 0xDC00 && low <= 0xDFFF) {
+      before = (high - 0xD800) * 0x400 + low - 0xDC00 + 0x10000
+      pos -= 2
+    } else {
+      before = low
+      pos--
+    }
+  } while (isDefaultIgnorable(before) && pos > 0)
+  let after: number
+  pos = end
+  do {
+    after = text.codePointAt(pos)!
+    pos += after > 0xFFFF ? 2 : 1
+  } while (isDefaultIgnorable(after) && pos < text.length)
+  const skips = (cp: number): boolean => isFullHalfOrWide(cp) && !(eastAsianWidth(cp) === 5 && isEmoji(cp)) && !isHangul(cp) && cp !== 0x20A9
+  const punctuation = (cp: number): boolean => isFullHalfOrWide(cp) && ((isPunctuation(cp) && cp !== 0x20A9) || cp === 0xFF5E || cp === 0x3000)
+  const japaneseOrChinese = /^(ja|zh)(-|$)/i.test(language)
+  return (skips(before) && skips(after)) || (japaneseOrChinese && (punctuation(before) || punctuation(after)))
+}
+
 // Raw offsets deleted by the segment break transformation, or null. Adjacency
 // is decided on each engine's own run. Blink: SPACE, TAB, LF and CR
 // (Character::IsCollapsibleSpace). Gecko: SPACE, TAB and LF, continuing through
 // SHY and bidi controls without ending on one, less a last SPACE before bidi
 // controls and a UTF-16 cluster extender other than ZWJ/ZWNJ
 // (nsTextFrameUtils.cpp TransformText).
-export function segmentBreakRemovals(text: string, browser: BrowserKind | null): boolean[] | null {
-  if ((browser !== 'chrome' && browser !== 'firefox') || !text.includes('\u200B')) return null
+export function segmentBreakRemovals(text: string, browser: BrowserKind | null, language: string): boolean[] | null {
+  if ((browser !== 'chrome' && browser !== 'firefox') || !text.includes('\n')) return null
+  // Gecko's East Asian test needs a character at or above U+1100.
+  if (!text.includes('\u200B') && (browser === 'chrome' || !/[\u1100-\uFFFF]/.test(text))) return null
   const space = browser === 'chrome' ? /[ \t\n\r]/ : /[ \t\n]/
   const bidiControl = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/
   let removed: boolean[] | null = null
@@ -88,7 +150,9 @@ export function segmentBreakRemovals(text: string, browser: BrowserKind | null):
       while (tail < text.length && bidiControl.test(text[tail]!)) tail++
       if (tail < text.length && /^[\p{M}\uFF9E\uFF9F]$/u.test(text[tail]!)) end--
     }
-    if (!text.slice(start, end).includes('\n') || (text[start - 1] !== '\u200B' && text[end] !== '\u200B')) continue
+    if (!text.slice(start, end).includes('\n')) continue
+    if (text[start - 1] !== '\u200B' && text[end] !== '\u200B' &&
+      !(browser === 'firefox' && isEastAsianSegmentBreak(text, start, end, language))) continue
     removed ??= Array.from({ length: text.length }, () => false)
     for (let member = start; member < end; member++) if (space.test(text[member]!)) removed[member] = true
   }
@@ -278,7 +342,7 @@ export function createVariant<Prepared, WithSegments extends Prepared & { segmen
         throw new Error('Streaming did not terminate')
       }
 
-      check(normalized === normalizeSource(input.text, input.whiteSpace, browser), 'source-normalization', 'Prepared segments lose or change normalized source text')
+      check(normalized === normalizeSource(input.text, input.whiteSpace, browser, contentLanguage(input)), 'source-normalization', 'Prepared segments lose or change normalized source text')
       check(batch.lineCount === batch.lines.length && batch.height === batch.lineCount * input.lineHeight, 'batch-result', 'Batch line count or height disagrees with its lines')
       check(counted.lineCount === batch.lineCount && counted.height === batch.height, 'opaque-rich-agreement', 'prepare/layout and prepareWithSegments/layoutWithLines disagree')
       run('source-coverage', check => checkSource(batch.lines, 'source-coverage', 'source-conservation', check))

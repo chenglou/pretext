@@ -57,12 +57,12 @@ test('segment breaks next to ZWSP follow the observed engine', () => {
   }
   expect(assess(input, oracle, collapsed, 'safari').source.status).toBe('pass')
   expect(assess(input, oracle, removed, 'safari').source.status).toBe('fail')
-  expect(normalizeSource('ab \n \u200Bcd', 'normal', 'chrome')).toBe('ab\u200Bcd')
-  expect(normalizeSource('\u200B\nab', 'normal', 'firefox')).toBe('\u200Bab')
-  expect(normalizeSource('ab\n\u2060\u200Bcd', 'normal', 'chrome')).toBe('ab \u2060\u200Bcd')
-  expect(normalizeSource('ab \u200Bcd', 'normal', 'chrome')).toBe('ab \u200Bcd')
-  expect(normalizeSource('ab\n\u200Bcd', 'normal', 'safari')).toBe('ab \u200Bcd')
-  expect(normalizeSource('ab\n\u200Bcd', 'pre-wrap', 'chrome')).toBe('ab\n\u200Bcd')
+  expect(normalizeSource('ab \n \u200Bcd', 'normal', 'chrome', 'en')).toBe('ab\u200Bcd')
+  expect(normalizeSource('\u200B\nab', 'normal', 'firefox', 'en')).toBe('\u200Bab')
+  expect(normalizeSource('ab\n\u2060\u200Bcd', 'normal', 'chrome', 'en')).toBe('ab \u2060\u200Bcd')
+  expect(normalizeSource('ab \u200Bcd', 'normal', 'chrome', 'en')).toBe('ab \u200Bcd')
+  expect(normalizeSource('ab\n\u200Bcd', 'normal', 'safari', 'en')).toBe('ab \u200Bcd')
+  expect(normalizeSource('ab\n\u200Bcd', 'pre-wrap', 'chrome', 'en')).toBe('ab\n\u200Bcd')
   // Each engine decides adjacency on its own run: CR joins Chrome's, SHY joins
   // Firefox's inside the run, FF joins neither, and Firefox leaves out a last
   // SPACE before a combining mark.
@@ -75,14 +75,48 @@ test('segment breaks next to ZWSP follow the observed engine', () => {
     ['ab\n\u00AD\u200Bcd', 'ab \u00AD\u200Bcd', 'ab \u00AD\u200Bcd'],
     ['ab\u200B\n \u0301cd', 'ab\u200B\u0301cd', 'ab\u200B \u0301cd'],
   ] as const) {
-    expect(normalizeSource(text, 'normal', 'chrome')).toBe(chrome)
-    expect(normalizeSource(text, 'normal', 'firefox')).toBe(firefox)
+    expect(normalizeSource(text, 'normal', 'chrome', 'en')).toBe(chrome)
+    expect(normalizeSource(text, 'normal', 'firefox', 'en')).toBe(firefox)
   }
   // White space the engine's run leaves still owns one normalized SPACE.
   const formFeed: WrappingCase = { ...base, text: 'a\u200B\n\fword' }
   const formFeedOracle = native([point('a', 0, 0), point('w', 4, 1), point('o', 5, 1), point('r', 6, 1), point('d', 7, 1)], 2)
   expect(assess(formFeed, formFeedOracle, collapsed, 'chrome').source.status).toBe('pass')
   expect(assess(formFeed, formFeedOracle, removed, 'chrome').source.status).toBe('fail')
+})
+
+test('Firefox removes segment breaks between East Asian characters, and next to their punctuation for ja and zh content', () => {
+  for (const [text, en, zh] of [
+    // Two full-, half- or wide-width characters, past default-ignorables.
+    ['中文\n中文', '中文中文', '中文中文'],
+    ['中文 \n \u00AD中文', '中文\u00AD中文', '中文\u00AD中文'],
+    ['中\u2060\n中', '中\u2060中', '中\u2060中'],
+    ['中\n\u{20000}', '中\u{20000}', '中\u{20000}'],
+    ['ｱ\nｲ', 'ｱｲ', 'ｱｲ'],
+    // Hangul, emoji and the won sign keep the space, as do Latin neighbours and a run at either end.
+    ['한\n한', '한 한', '한 한'],
+    ['😀\n中', '😀 中', '😀 中'],
+    ['₩\n中', '₩ 中', '₩ 中'],
+    ['中\nabc', '中 abc', '中 abc'],
+    ['\n中', '中', '中'],
+    // East Asian punctuation on one side only counts for ja and zh content.
+    ['abc\n「中文」', 'abc 「中文」', 'abc「中文」'],
+    ['中文　\nabc', '中文　 abc', '中文　abc'],
+    ['中文。\nabc', '中文。 abc', '中文。abc'],
+  ] as const) {
+    expect(normalizeSource(text, 'normal', 'firefox', 'en')).toBe(en)
+    expect(normalizeSource(text, 'normal', 'firefox', 'zh-Hant')).toBe(zh)
+    expect(normalizeSource(text, 'normal', 'firefox', 'ja')).toBe(zh)
+  }
+  expect(normalizeSource('abc\n「中文」', 'normal', 'firefox', 'jav')).toBe('abc 「中文」')
+  expect(normalizeSource('中文\n中文', 'normal', 'chrome', 'zh')).toBe('中文 中文')
+  expect(normalizeSource('中文\n中文', 'normal', 'safari', 'zh')).toBe('中文 中文')
+  // The removed run has no normalized offset, so each character keeps its own line.
+  const input: WrappingCase = { ...base, text: '中文\n中文', lang: 'zh' }
+  const oracle = native([point('中', 0, 0), point('文', 1, 0), point('中', 3, 1), point('文', 4, 1)], 2)
+  const removed = prediction('中文中文', [['中文', 0, 2], ['中文', 2, 4]])
+  expect(assess(input, oracle, removed, 'firefox').source.status).toBe('pass')
+  expect(assess(input, oracle, removed, 'chrome').source.status).toBe('fail')
 })
 
 test('fractional CSS line boxes use an independently observed native advance', () => {

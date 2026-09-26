@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { getSegmentEntryWidth, observeSegmentEntries } from '../../src/entry-geometry.ts'
 import { layout, layoutNextLine, layoutWithLines, materializeLineRange, walkLineRanges, type LayoutLineRange, type PreparedTextWithSegments } from '../../src/layout.ts'
+import { TEXT } from '../../src/line-break.ts'
 
 test('entry admission and fresh prefixes have distinct roles; the right anchor does not own a correction', () => {
   const text = 'a\u2060\u0301bXYZ'
@@ -38,11 +39,10 @@ test('fresh entry geometry survives copied public range cursors without layout m
   // A numeric fixture keeps this source/cursor invariant independent of a
   // Canvas backend. It is not a claim about native control or mark advances.
   const prepared = {
-    widths: [19], kinds: ['text'],
+    widths: [19], segmentFlags: new Uint8Array([TEXT]), kinds: ['text'],
     simpleLineWalkFastPath: false, breakableFitAdvances: [advances],
-    breakablePreferredBreaks: [null], entryGeometry: [entry], letterSpacing: 0,
-    spacingGraphemeCounts: [], discretionaryHyphenWidth: 4, tabStopAdvance: 32,
-    chunks: [{ startSegmentIndex: 0, endSegmentIndex: 1, consumedEndSegmentIndex: 1 }],
+    entryGeometry: [entry], lineStartProhibitions: null, lineStartExtras: null, lineEndTrims: null, letterSpacing: 0,
+    discretionaryHyphenWidth: 4, discretionaryHyphenContexts: null, tabStopAdvance: 32,
     segments: ['a\u2060\u0301b'],
   } as unknown as PreparedTextWithSegments
   const before = JSON.stringify(prepared)
@@ -53,7 +53,7 @@ test('fresh entry geometry survives copied public range cursors without layout m
   expect(walkLineRanges(prepared, 1, line => ranges.push(line))).toBe(3)
   expect(ranges.map(range => materializeLineRange(prepared, range))).toEqual(result.lines)
   for (const line of result.lines) {
-    expect(layoutNextLine(JSON.parse(before), { ...line.start }, 1)).toEqual(line)
+    expect(layoutNextLine(structuredClone(prepared), { ...line.start }, 1)).toEqual(line)
   }
   expect(JSON.stringify(prepared)).toBe(before)
 })

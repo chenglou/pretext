@@ -255,7 +255,7 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     for (const width of widths) {
       add({ ...defaults, family: kinsokuFamily, origins: [`${kinsokuFamily}/${label}`], scope: 'research',
         ...(page === 'installed' ? { context: { kind: 'installed' as const, lang } } : {}), ...options, lang, text, font, width,
-        note: 'Observation only: emergency breaks inside kinsoku units, opener runs and the forward carry.' }, false)
+        note: 'Observation only: emergency breaks inside kinsoku units, opener runs and marks before openers.' }, false)
     }
   }
   const hiragino = '16px "Hiragino Sans"'
@@ -374,7 +374,7 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
       browsers: input.browsers === undefined ? ['chrome', 'safari'] : [...input.browsers],
       lineMethod: input.method ?? (family === 'pre-wrap' || family === 'keep-all' ? 'span' : 'range'),
       heightMode: 'exact', heightSource: 'layout',
-      ...(input.required === false ? {} : { required: family === 'keep-all' || family === 'symbols' ? ['height', 'lineCount', 'breaks'] : ['height', 'lineCount'] }),
+      required: family === 'keep-all' || family === 'symbols' ? ['height', 'lineCount', 'breaks'] : ['height', 'lineCount'],
     })
   }
   for (const [family, inputs] of compactOracles) for (const input of inputs) addOracle(family, input)

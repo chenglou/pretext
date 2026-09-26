@@ -1,4 +1,5 @@
-import { getSharedGraphemeSegmenter } from './analysis.js'
+import { findGraphemeEnds } from './graphemes.js'
+import { getEngineProfile } from './measurement.js'
 
 const defaultIgnorable = /\p{Default_Ignorable_Code_Point}/u
 const MAX_GRAPHEMES = 96
@@ -35,10 +36,14 @@ function affectedIntervals(text: string, endpoints: readonly number[]): Part[] {
     return span.start + offset - projectedStart
   }
   const joined = new Uint8Array(endpoints.length)
+  const visible = projected.join('')
+  const ends = new Int32Array(visible.length)
+  const count = findGraphemeEnds(getEngineProfile().graphemeTable, visible, 0, visible.length, ends)
   let boundaryIndex = 1
-  for (const part of getSharedGraphemeSegmenter().segment(projected.join(''))) {
-    const start = sourceOffset(part.index)
-    const end = sourceOffset(part.index + part.segment.length - 1) + 1
+  for (let i = 0, projectedEnd = 0; i < count; i++) {
+    const start = sourceOffset(projectedEnd)
+    projectedEnd = ends[i]!
+    const end = sourceOffset(projectedEnd - 1) + 1
     while (boundaryIndex < endpoints.length && endpoints[boundaryIndex]! <= start) boundaryIndex++
     while (boundaryIndex < endpoints.length && endpoints[boundaryIndex]! < end) joined[boundaryIndex++] = 1
   }
@@ -72,13 +77,11 @@ export function observeSegmentEntries(
   measure: (text: string) => number | null,
 ): SegmentEntryGeometry | null {
   if (!defaultIgnorable.test(text) || advances.length > MAX_GRAPHEMES || !Number.isFinite(letterSpacing)) return null
+  const ends = new Int32Array(text.length)
+  const count = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
+  if (count > MAX_GRAPHEMES) return null
   const endpoints = [0]
-  for (const part of getSharedGraphemeSegmenter().segment(text)) {
-    endpoints.push(part.index + part.segment.length)
-    if (endpoints.length > MAX_GRAPHEMES + 1) {
-      return null
-    }
-  }
+  for (let i = 0; i < count; i++) endpoints.push(ends[i]!)
   if (endpoints.length !== advances.length + 1) throw new Error('Entry and release grapheme cursors differ')
   const parts = affectedIntervals(text, endpoints)
   const terminalPrefixes = [0]
@@ -122,6 +125,17 @@ export function observeSegmentEntries(
     hasEntries = true
   }
   return hasEntries ? { terminalPrefixes, entries } : null
+}
+
+// Where a fresh line that starts at grapheme `start` of a segment ends, by the entry observed
+// there: past the segment's end (end + 1) where the whole tail is admitted and the line goes on
+// with the text after it, else after the last fresh prefix that fits, keeping the first grapheme.
+// `end` then means the prefixes ran out, and the line ends with the segment.
+export function getFreshLineEnd(geometry: SegmentEntryGeometry, start: number, end: number, fitLimit: number): number {
+  if (geometry.entries[start]!.admissionFit <= fitLimit) return end + 1
+  let g = start + 1
+  while (g < end && getSegmentEntryWidth(geometry, start, g + 1)! <= fitLimit) g++
+  return g
 }
 
 // Fresh terminal-inclusive width. Null means unobserved, including entry zero;

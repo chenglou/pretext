@@ -98,9 +98,11 @@ The source contract, source placement and
 normalized native paragraphs all use that form. Normalized native text renders
 like its raw source when the run holds only SPACE, TAB and LF; the documented
 form still approximates CR and FF as SPACE, and does not model Firefox
-collapsing across SHY or bidi controls when no ZWSP removes the run. Firefox's
-East Asian segment break rules are not part of the documented form, so Firefox
-ja/zh corpus paragraphs are observed without them.
+collapsing across SHY or bidi controls when no ZWSP removes the run. For
+Firefox the form also removes a run between East Asian characters, and next to
+East Asian punctuation when the paragraph's language, or else the page's, is
+`ja` or `zh`, from Firefox's own East_Asian_Width data in
+`scripts/engine-data/firefox-156/`.
 
 Generic selected-hyphen observation is restricted
 to the verified normal-word-break `a\u00adb` protocol; eight maintained discretionary

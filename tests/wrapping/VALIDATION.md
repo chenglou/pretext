@@ -17,6 +17,491 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Grapheme clusters from the engines' character rules
+
+This runtime change starts from main `f26640e` (#340). Grapheme clusters come
+from Chrome 153's and libicucore 78.1's ICU character rules (`src/graphemes.ts`)
+instead of `Intl.Segmenter`; the Gecko scan sets up each shaped word's clusters
+with them; the word segmenter is created only when a dictionary run shows up;
+the full walker reads a pending soft hyphen from the segment before its break
+instead of keeping a flag; and a run of combining marks after zero-width glue or
+a control finds the grapheme it is measured with once for all the runs chained
+to that grapheme.
+
+Main and this branch were compared on prepared data and every line and
+rich-inline API: `layout()`, `layoutWithLines()`, `walkLineRanges()`,
+`materializeLineRange()`, `measureLineStats()`, `measureNaturalWidth()`,
+`layoutNextLine()` and `layoutNextLineRange()` with a width that changes per
+line, and rich inline's walk, materialized lines, stats and streamed ranges. The
+inputs are every browser's full-suite texts and items with their options and page
+languages, every corpus paragraph in both white-space modes with and without
+letter spacing, and 6,000 fuzz-built texts in five option sets, 215,585 inputs,
+929,997 widths and 17,827 rich-inline inputs per profile. Offline under Bun, in
+the Blink, WebKit, Gecko and unknown-engine profiles, nothing differs, and each
+profile makes the same `measureText()` calls in the same order (1,742,288,
+2,073,699, 1,801,823 and 1,661,215) and the same emoji-span reads. The comparison
+catches a subtle change: splitting a surrogate pair that ends a range changes
+3,609 of 21,559 inputs. With real Canvas, over each browser's suite and 2,000
+fuzz-built texts, nothing differs in Chrome 153 (195,884 inputs, 701,366
+`measureText()` calls each), Safari 27.0 (195,857, 908,545) or Firefox 156
+(195,810, 757,584).
+
+`scripts/grapheme-check/` finds the profile's table giving each browser's
+`Intl.Segmenter` clusters on all 15.6 million code point strings, 9,323 texts,
+about 1.3 million prepared segments and 200,000 random strings in Chrome, Safari
+and Firefox, the other table differing only at Apple's transcoding hints. A
+second fuzz of 20,613,875 strings per browser found no difference either. For the
+pending soft hyphen, an instrumented walker compared the flag it kept with the
+segment's kind at every line end with a pending break over the same inputs:
+about 12 million line ends per profile, a million after a soft hyphen, and no
+disagreement.
+
+The ordinary snapshots were regenerated in Chrome 153, Safari 27.0 and Firefox
+156, both directions, with no regressions, required failures or execution errors,
+and no fixed or lost row against main; only provenance and environments change.
+Accuracy stays 7,680 of 7,680 in each browser and letter spacing 28 of 28, and
+the corpus sweeps stay 1,093, 1,098 and 1,098 of 1,098.
+
+Chrome and Safari benchmark snapshots were refreshed: three foreground runs each at
+DPR 2, visible and focused, on the 2560x1440 screen. Every shape row makes the same
+Canvas calls as in main's snapshots. Chrome's ran from `83621ea` while other jobs
+used the machine. Its DOM rows read as main's (2.20ms and 27.65ms, against 2.20 and
+27.4), and there `prepare()` reads 2.80ms (3.00), the fresh-sentences row's first
+batch 9.10ms (15.5) and its cold batches 6.67ms (11.6), letter-spaced CJK seen
+before 2.01ms (14.75), the long-form corpus total 42.7ms (63.5) and hot `layout()`
+0.0215ms (0.022). Safari's first refresh met a busier machine: its DOM rows, which
+don't run Pretext, read 37 and 112ms against main's 23 and 72. So it ran again
+under the exclusive lock, started once the one-minute load average fell under 5,
+with main's benchmark between two of this branch's; the snapshot is the second. The
+numbers in parentheses are main's run. The DOM rows read 22 and 65ms (22 and 64.5),
+hot `layout()` 0.0225ms (0.025), `prepare()` 3ms (3) at Safari's 1ms timer, the
+fresh-sentences row's first batch 15.0ms (23.0) and its cold batches 8.33ms (24.0),
+letter-spaced CJK seen before 1.67ms (14.5) and the long-form corpus total 209ms
+(262).
+
+A run of combining marks after zero-width glue or a control is measured with the
+grapheme before it and everything between them. The rules found that grapheme's
+start by running over the whole segment before the run, once for every run
+chained to it, so `x` × 20,000 followed by 3,000 soft hyphen and U+0301 pairs
+took about twice main's time, and 8 times that word before the same pairs took
+main from 80 to 134ms offline and the branch from 154 to 858ms. Now a run whose
+walk back reaches the last run that asked takes that run's answer, so each
+segment is walked and each grapheme found once, which also ends main's walk over
+the whole chain for every run. `prepareWithSegments()` of that text at 1, 2, 4
+and 8 times its length, in ms, for main, the branch before this and the branch:
+
+| Size | Offline, main | before | now | Chrome 154, main | before | now |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ×1 | 65 | 132 | 2.6 | 92 | 196 | 1.9 |
+| ×2 | 248 | 501 | 4.0 | 343 | 723 | 4.4 |
+| ×4 | 1,017 | 2,010 | 5.7 | 1,322 | 3,004 | 7.7 |
+| ×8 | 3,957 | 8,045 | 9.2 | 5,274 | 12,904 | 15.2 |
+
+Offline is the Blink profile under Bun with the stand-in Canvas, median of 3,
+interleaved. Chrome ran headless, each library in a document of its own, median
+of 5. Main's page reached 5 GB after three prepares at ×4 and its renderer died
+on the fifth, so each of main's times is a fresh document's, median of 3. In the
+WebKit profile both stay quadratic, at about 0.45 of main's time, since each run is
+measured with the whole chain before it, as with U+0001 in place of the soft
+hyphen in every profile (ENGINE_FOLLOWUPS.md); the Gecko scan gives each soft
+hyphen a segment of its own, so no run is chained there.
+
+The comparison above, rerun against main on this change over 40,000 plain and
+8,000 rich-inline fuzz-built texts in each of six profiles (Blink, WebKit, Gecko,
+unknown, Android and iOS; 432,000 widths each), and over 20,000 plain and 4,000
+rich texts of mark runs chained through glue and controls (216,000 widths, where
+about 52,000 runs per Blink and WebKit profile take the last run's answer), finds
+nothing different, with the same `measureText()` calls in the same order. A copy
+whose answer outlives its `prepareWithSegments()` differs on 38 to 60 of 5,000
+texts and 29 to 46 of 1,000 rich ones. The snapshots above come from before this
+change: of the benchmark page's texts only the soft-hyphen row's 917 marks take
+the walk, and none reaches another run.
+
+RESEARCH.md has the same-document `prepare()` timing against main.
+
+## Each browser's own line breaker
+
+This runtime change starts from main `b17a7ac` (#338). Chrome, Safari and Firefox
+take their break opportunities from ports of Blink's, WebKit's and Gecko's line
+breakers over the tables those browsers ship (`src/line-breaks.ts`,
+`src/gecko-line-breaks.ts`, `src/generated/engine-break-data.ts`), in place of
+the merged segmentation, the UAX #14 class table and the hand-written rules
+those three engines used. On top of the scans: Safari 27's break rules; Chrome's
+`zh` line table, chosen from `<html lang>` or, on a page without one, from
+Chrome's UI language; Chrome's `text-spacing-trim`; U+3000 hanging at a Chrome
+or Firefox line end; Firefox's newline removal between East Asian characters;
+Gecko prefix fitting in segments at least 80px wide; and a Gecko soft hyphen at a
+normal break taken as a zero-width break. The count-only walker from #338 counts
+the scans' segments.
+
+The installed full gate ran in the background on September 23 from this
+branch's harness, against the pin `7c2ec51` and with main `b17a7ac` as a
+candidate: Chrome 153 through the Playwright transport, Safari 27.0 and Firefox
+156 natively, both directions, at DPR 2. Main and the pin give the same
+assessment on every row. Line-count passes:
+
+| Leg | Main | This branch | Fixed | Lost |
+| --- | ---: | ---: | ---: | ---: |
+| Chrome LTR | 111,364 / 147,709 | 115,861 | 5,318 | 161 |
+| Chrome RTL | 46,996 / 70,974 | 49,727 | 2,991 | 96 |
+| Firefox LTR | 117,973 / 147,669 | 128,615 | 11,930 | 768 |
+| Firefox RTL | 54,227 / 70,972 | 61,505 | 7,918 | 532 |
+| Safari LTR | 115,944 / 148,051 | 122,794 | 9,730 | 1,222 |
+| Safari RTL | 47,513 / 70,974 | 51,408 | 4,910 | 724 |
+
+No leg has required failures, execution errors, or new API or rich failures for
+this branch. Main fails six required Safari checks, height, line count and
+breaks on the keep-all case `foo。bar日本語` and on its new 16-bit control
+`aa.bbbbbā`, which this branch requires since the WebKit scan follows Safari
+27's keep-all; the Latin-1 control `aa.bbbbbb` passes in both. Firefox counts
+come from this branch's harness, whose normalized form follows Firefox's newline
+rule (next section); from main's harness Firefox's corpus rows add 106 losses
+that are the old form's error, not the prediction's.
+
+Every lost row was then observed again alone, in a fresh browser process and
+document, and attributed on every visible character through the harness's
+`sourceSpans`, with installed Safari repeating webkit-host's Safari
+observations. Of Chrome's 257 lost rows, 31 are true losses, 220 were main's
+accidents (107 of them only a soft hyphen's or a space's placement, which the
+harness ignores) and 6 depend on page history, where main is wrong alone in a
+fresh document. Of Firefox's 1,300, 755 are true losses and 545 accidents; of
+Safari's 1,946, 841 are true losses (839 confirmed in installed Safari) and
+1,105 accidents. Every true loss is at 55.7px or narrower, and none is text a
+page would show; each shape is recorded in
+[ENGINE_FOLLOWUPS.md](../../ENGINE_FOLLOWUPS.md):
+
+| Shape | Chrome | Firefox | Safari | Widths |
+| --- | ---: | ---: | ---: | --- |
+| An Arabic or Hebrew word glued to brackets or quotes and Latin, as `بِبِ((tail` | 2 | 247 | 506 | 1-55.7px |
+| A combining mark after a word joiner, ZWSP, ZWJ or soft hyphen | 17 | 48 | 215 | 1-40px |
+| C0 or C1 controls or DEL | 0 | 192 | 52 | 0-48px |
+| A ZWJ before a space, as `آگ`, ZWJ, space, `ب` | 0 | 186 | 0 | 8-12px |
+| U+0600 before U+3000, or U+1680 before `?` | 0 | 33 | 16 | 8-40px |
+| CJK punctuation in a line narrower than one character, as `1234。b` | 0 | 0 | 37 | 1-15px |
+| A currency sign before an opening curly quote, as `£€£€““tail` | 6 | 0 | 0 | 35.7-38.7px |
+| A soft hyphen before U+3000 | 6 | 0 | 0 | 1-8px |
+| Word joiners, ZWSP or soft hyphens among Latin letters, and others | 0 | 49 | 15 | 1-40px |
+
+On the lab's real-text sets, fresh natives against predict-only runs, this branch
+loses no row to main in any browser. Cells are rows whose line count fails ·
+rows with a wrong count or any visible character on the wrong line, for main /
+this branch:
+
+| Set | Rows | Chrome | Firefox | Safari (webkit-host) |
+| --- | ---: | --- | --- | --- |
+| Census paragraphs | 4,686 | 2·7 / 0·0 | 2·58 / 0·0 | 0·7 / 0·0 |
+| Books | 72 | 2·8 / 0·2 | 21·35 / 0·0 | 2·4 / 0·0 |
+| Step-10 giants | 1,118 | 27·246 / 10·90 | 223·614 / 0·1 | |
+| CJK corpus paragraphs | 4,566 | 43·169 / 0·0 | 8·40 / 0·0 | 6·25 / 0·0 |
+| CJK under Latin-first fonts | 5,736 | 110·423 / 0·0 | 15·53 / 0·0 | 11·44 / 0·0 |
+| CJK in PingFang on the other script's pages | 4,560 | 174·476 / 0·0 | 16·56 / 0·0 | 12·44 / 0·0 |
+| Chat messages at 200-380px | 9,536 | 24·124 / 0·29 | 2·13 / 0·0 | 7·19 / 0·1 |
+| Phone widths in seven scripts | 2,079 | 0·6 / 0·3 | 36·132 / 0·0 | 7·19 / 0·0 |
+| Suite rows at 80px and over | 27,155 | 719·1,489 / 559·1,132 | 806·1,647 / 575·827 | 357·1,002 / 300·692 |
+
+The Chrome chat failures are one URL at 320px, which main fails too. At 80px and
+over no browser loses a line count; Firefox's 13 lost rows there are main's
+accidents, and the 3 Firefox and 17 Safari rows lost on line placement alone are
+a TAB after `www.ex.com?` in pre-wrap, marks after a ZWSP at 100px and
+`😀((()))tail` at 80px. In `holes2`, under a Chinese UI, Chrome lays out
+`lang=""` paragraphs on an English page under the UI language, which Pretext
+can't see: main passes those 168 rows only under a Chinese UI and fails them all
+under an English one, where this branch passes.
+
+Beyond the combined parents, the last commits change these rows in the gate,
+and move nothing else:
+
+- The U+3000 run before a collapsible space hangs in Chrome: 24 line counts
+  fixed in each direction, none lost, and 48 more in the lab's CJK suite.
+  Installed Chrome 153 agrees on the normal white-space probes; pre-wrap before
+  a preserved space or tab is still open.
+- U+3000 hangs at a Firefox line end: 214 left-to-right and 198 right-to-left
+  line counts fixed and none lost, 4 of them former losses; 14 right-to-left
+  rows where a line holds only U+3000 lose their width check, since the hung
+  run reports no width. It also fixes 412 rows' line counts in the lab's CJK
+  suite.
+- A Gecko soft hyphen after a space or tab is a zero-width break: no metric
+  moves in the gate. Firefox 156 paints `ab ` / `cd` for `ab`, space, U+00AD,
+  `cd` at 30px, where the profile drew and fitted a hyphen. A first version
+  also made one at the start of the text such a break and lost 24 line counts
+  in each direction; one with only soft hyphens before it on its chunk stays a
+  soft hyphen.
+- The Safari keep-all case and its controls are required, as above.
+- The quotation remap follows ICU's locale case, the Gecko scan skips the
+  grapheme segmenter for words no unit of which can join a cluster, WebKit's
+  line-start prohibitions are cached with a segment's metrics, and a numeric
+  run is tested with one RegExp. These predict the same everywhere:
+  `prepareWithSegments()` returns the same data in all three profiles on the
+  suite's 15,881 texts and every corpus paragraph, and the three scans the same
+  breaks on 23,193 inputs.
+
+`bun test` and `bun run check` pass, and `bun run check` now also checks that
+the generated engine break data is current. A fuzz of `layout()` against
+`walkLineRanges()` over 60,000 text and width pairs per engine, with a fake
+Canvas that halts CJK punctuation pairs, finds no difference.
+
+The layout bundle grows from 80,306 to 119,936 bytes minified (21,172 to 55,946
+gzipped), and runtime source from 6,391 to 6,624 lines.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome 153 and Safari
+27.0 on the 2560x1440 screen. In the same session main `b17a7ac` and this branch
+each ran four sets of three runs per browser, alternating main, branch, branch,
+main twice; the numbers in parentheses are main's median set. Chrome's runs and
+the Safari snapshot waited for the one-minute load average to drop under 5;
+Safari's alternating sets ran at 5.5 to 6.6 while another job kept a core busy.
+Hot `layout()` reads 0.022 ms in Chrome (0.029) and 0.030 ms in Safari (0.035),
+and long-form corpus `layout()` totals 0.20 ms (0.35) and 0.21 ms (0.27).
+`prepare()` reads 3.2 ms in Chrome (9.5) and 5.0 ms in Safari (12.3). The shape
+rows' hot `layout()` is slower in Chrome for `soft-hyphens`, 1.55 µs per text
+(1.06), the letter-spaced `cjk-indent-spaced`, 0.85 (0.63), and `controls`, 0.34
+(0.08), and in Safari for `cjk-indent-spaced`, 0.84 (0.71); Safari's
+`soft-hyphens` and `controls` rows are bimodal on main and this branch alike.
+The pre-wrap line-range rows read 5 to 12% slower in Chrome.
+
+Five later commits change only what the engine costs: `layout()`'s counter starts
+every line at 0 and adds its widths, the scans keep their iterator state in plain
+objects instead of classes, the tables unpack with native copies, the Gecko
+range and bracket tables ship packed, and text whose segments have fresh-line
+tail widths keeps the simple walkers. Every wrapping-suite prediction under the
+Blink, WebKit and Gecko profiles is the same before and after them. So are
+`prepareWithSegments()`, `prepare()`, `layout()`, `walkLineRanges()`,
+`layoutNextLine()` and `measureLineStats()` at 22 widths on every corpus paragraph,
+the benchmark page's shape rows and pre-wrap texts and 3,000 generated texts with
+invisible joiners, marks and bidi controls, except that some line widths in texts
+the last commit moves to the simple walkers differ in the last bits (under
+10⁻⁹px), and the three scans give the same breaks on 23,193 inputs. The layout
+bundle comes out 1,386 bytes smaller minified and 1,164 bytes larger gzipped, and
+runtime source 44 lines longer.
+
+Same-document timing put main `b17a7ac`, the branch before these commits
+(`de4ad72`), the branch after them and main again as the control in each document,
+in Chrome 153, Firefox 156 and Safari 27.0, foreground. Ratios are to main:
+- `layout()` of chat messages: Firefox 0.82 to 0.98 (1.42 to 1.76 before),
+  except mixed-script messages at new widths, 1.14; Safari 0.83 to 0.98 (0.77 to
+  1.08); Chrome 0.77 to 1.03 as before.
+- A fresh page's evaluation and first batch: Firefox 1.02 to 1.34 (1.09 to
+  1.45), Chrome 0.99 to 1.09 (1.12 to 1.22), Safari 1.07 to 1.17 (1.32 to 1.49).
+  Firefox's bundle compile falls from 2.6ms to 1.1-1.2ms (main 1.0ms).
+- The benchmark page's hot `layout()`: the control row 2.05 in Chrome, 4.72 in
+  Firefox and 1.18 in Safari (3.53, 7.03 and 1.22), and the invisible-tails row
+  0.80, 1.07 and 1.01 (1.00, 1.72 and 1.09). Soft hyphens, 1.37 to 1.63,
+  letter-spaced CJK, 1.15 to 1.32, and the pre-wrap rows, 1.05 to 1.44, don't
+  move.
+- `prepare()` doesn't move, except Firefox's seen Arabic messages at 1.18 (1.20).
+
+The Chrome and Safari benchmark snapshots were refreshed again, from three
+foreground runs each at DPR 2, visible and focused, on the 2560x1440 screen at a
+load average near 6. Against the earlier snapshots, taken in another session, the
+shape rows' hot `layout()` reads the control row at 0.20µs per text in Chrome
+(0.34) and invisible tails at 0.24 (0.27). Rows the same-document timing shows
+unmoved, such as soft hyphens, letter-spaced CJK and the pre-wrap rows, read 5 to
+19% higher than in the earlier session. To tell the session from the commits, the
+page ran again with the branch before these commits and after them alternating,
+before, after, after, before. Over all rows the two read the same, a geometric
+mean of 1.00 in Chrome and 1.01 in Safari, while the same tree's two runs differed
+by up to 1.33 and 1.43 at the 90th percentile; only Chrome's control row, 0.57, and
+invisible tails, 0.81, moved. The branch before these commits read 21% above its
+own snapshot in Chrome and 4% in Safari, so the rise is the session's.
+
+The full walker now hangs U+3000 before an overflowing collapsible space as the
+simple walkers do: the content before the space fits and paints without the U+3000
+run it ends with. Letter-spaced CJK text always takes the full walker, so there
+`a`, U+3000, LF, `word` at 24px reported 24.9px where Firefox paints 8.9px, and a
+line that fit only because its U+3000 run hung ended before the space instead of
+after it. No line count moves. The installed gate changes 16 rows in each direction
+in Chrome and Firefox, all of them line widths, and none in Safari, which doesn't
+hang U+3000. Firefox's Range extents match all 16 now, where they matched none
+before; Chrome's include the hung run and the space after it, so neither width
+matches there. The lab's in-page pass with each browser's Canvas over 125k inputs per
+browser found 486 texts in Chrome and 429 in Firefox whose lines or widths change:
+16 suite texts and generated strings, no corpus paragraph. At the widths where they
+change, the natives move no line count. Against Firefox's extents 228 line widths
+are fixed and 8 lost: 4 lines that hold only the run, which the simple walkers
+already report at no width, and 4 where Firefox's 1/60px rounding fits the line with
+the run. Against Chrome's, leaving out the hung characters, 158 are fixed and 28
+lost, all lines that hold only the run. Rich-inline gains 7 line counts at 24px or
+wider in each of Chrome and Firefox and loses none. On 20,000 generated texts with
+U+3000, spaces and no-break spaces, the full walker and the simple walkers disagreed
+at 82,678 widths under the Blink profile and 51,015 under the Gecko profile before,
+and agree everywhere after. Runtime source grows by 2 lines.
+
+No-break glue is text now. NBSP, U+2007, U+202F, WJ and U+FEFF had a `glue` kind of
+their own. The scans already give no break next to them, so the kind only kept a
+segment made only of glue, such as NBSPs between spaces, from taking emergency
+breaks and the simple walkers, and kept a U+3000 run before it from hanging. The
+installed gate fixes 118 left-to-right line counts in Chrome, 124 in Firefox and 144
+in Safari (2, 2 and 4 of them at 24px or wider), loses 24, 18 and 18, all under
+24px, and moves no right-to-left row. Each loss is a row the base passed only while
+the run couldn't break: runs made only of word joiners or U+FEFF at letter spacing 1
+and 1px, 18 in each browser, which the browsers paint with no advance and in Chrome
+and Safari no gap, and in Chrome six runs of U+202F at letter spacing 1, which Chrome
+paints with no gap, where Pretext charges those gaps. The same trees with WJ and
+U+FEFF unspaced keep the 18 (ENGINE_FOLLOWUPS.md). In the lab, 1,323 texts in Chrome,
+1,320 in Firefox and 1,207 in Safari change, generated strings and 392-394 suite
+texts, no corpus paragraph. At the widths where they change, the natives fix 1,735,
+3,095 and 2,565 line counts (80, 144 and 15 of them at 24px or wider). Of the losses,
+590, 630 and 264 are widths 0.005-0.02px under a line's width that the browsers still
+fit; 572, 112 and 165 are rows whose base line starts already differed from the
+natives'; and 638, 439 and 655 are rows whose base line widths were more than 1px
+off, mostly the gaps on word joiners and U+FEFF, and in Chrome U+202F's gap and
+unspaced Arabic, which the runs' missing breaks and hangs had cancelled. The rest are
+rows the base had right: 2 in Chrome, NBSP, U+202F, NBSP in 16px Courier New at
+letter spacing 1 at 26px, U+202F's gap again; 25 in Firefox, all under 3px, which
+pass with WJ and U+FEFF unspaced; and 41 in Safari, all under 3px, where Safari keeps
+a word joiner with the NBSP after it. Chrome also doesn't hang a U+3000 run after a
+collapsible space, which the profile does before and after this commit, so `1`,
+space, U+3000, U+202F, space, `中` loses at 24-33px where the kind had blocked the
+hang. Rich-inline gains 64, 73 and 47 line counts (15, 14 and 6 at 24px or wider) and
+loses one exact fit in Chrome, three accidents and one exact fit in Firefox and three
+of Safari's word-joiner rows. Pinned Chrome 153 hung natively on a text holding
+U+3000 and NBSP again, so 813 of the 1,138 such cases went unobserved there; the 325
+it laid out fix 41 and lose 13 accidents. Runtime source shrinks by 9 lines, the
+layout bundle by 242 bytes minified and 64 gzipped. Glue-only segments now measure
+their graphemes, 634 more Canvas calls over 79,412 offline inputs under the Blink
+profile and none on corpus text. In interleaved offline timing under JavaScriptCore
+and V8, neither commit moves `prepare()` or `layout()` beyond the spread between
+runs, up to 14% on unchanged code, except that `layout()` of text with NBSP runs between spaces takes 0.16 to
+0.23 of the time, as it now takes the simple walkers.
+
+The Gecko scan no longer splits text runs where the script changes, as Firefox's
+script itemizer does, which removes 189 runtime lines, Firefox's Script data and two
+engine files. Under the Gecko profile no suite or corpus text changes: over 79,412
+inputs at many widths, `prepareWithSegments()` output and every line API differ only
+on 70 of the emulation study's generated inputs, and the harness's predictions on 499,422
+inputs, rich inline on 17,681 and the scans on 23,193 don't differ, with the same
+Canvas calls warm and cold. Of the study's 19,893 fuzz strings, 48 analyze
+differently, and installed Firefox 156 sides with the splits on them. At the 1,106
+widths where their lines differ, in 16px Arial, 20px Times New Roman and 15px
+Helvetica, every visible character is on Firefox's line only with the splits in 556
+cases and only without them in 12, with both in 35 and with neither in 503, and the
+line count is right only with them in 370 and only without them in 58. Of the 33
+strings whose lines move, 22 side with the splits, 6 mostly, and 5 with neither.
+
+The full walker, which text with letter spacing, soft hyphens, controls, tabs, hard
+breaks or preserved spaces takes in every API, keeps its line state in locals of
+one function. Its helpers used to close over that state, and V8 boxes a captured
+number, so each write cost 12-14ns. Each segment's kind, whether it takes letter
+spacing and whether the scan gives a break before it are one byte in
+`segmentFlags`, in place of kind strings, grapheme counts and an optional break
+array; a line's walk ends at the next hard break instead of looking up chunk
+records; the `prepare()` handle no longer carries kind strings; and walks count
+into one stats object instead of a closure. Nothing predicts differently. Under
+the Chrome, Safari, Firefox and no-browser profiles, `prepareWithSegments()` and
+`prepare()` output, mapped to one shape, and every line API agree with the tip
+before these commits over 79,412 inputs at many widths, 7.6 million walks per
+profile, with the same Canvas calls. So do the harness's predictions on 499,482,
+499,356 and 499,422 inputs, 46,803 inputs under a second fake Canvas, 32,907 warm
+and 27,112 cold preparations with their Canvas calls and DOM probes, rich inline on
+17,681 inputs at about 857,000 widths, `analyzeText()` and the scans on 23,193
+inputs, `layout()` against `walkLineRanges()` on 60,000 fuzz pairs per engine and
+seed, and the counter, the simple stepper and the full walker on 1.3 to 1.8
+million widths of simple text per engine. Runtime source shrinks by 71 lines, and the layout bundle
+by 1,315 bytes minified and 181 gzipped.
+
+Same-document timing in Chrome 153, Firefox 156 and Safari 27.0, foreground and
+interleaved over two sessions, put main `6d1d210`, the tip before these commits,
+the tip after them and main again as the control in each document. The control
+read 0.95 to 1.02 in the benchmark-row documents and 0.96 to 1.07 in the resize
+documents, except 1.20 once in Safari. Ratios are to main, with the tip before
+these commits in parentheses:
+- `layout()` of letter-spaced CJK: 0.50 in Chrome (1.24), 0.52 in Firefox (1.28)
+  and 0.47 in Safari (1.11), 4.0, 9.3 and 8.1ns a unit. It is still `layout()`'s
+  costliest text per character.
+- Soft hyphens 0.62, 0.61 and 0.46 (1.28, 1.41, 1.63); control characters 1.00,
+  2.23 and 0.51 (1.94, 5.08, 1.20); invisible tails 0.62, 0.75 and 0.75 (0.79,
+  1.06, 0.99).
+- The pre-wrap rows' five line APIs: 0.39 to 0.78 in Chrome (1.03 to 1.05), 0.42
+  to 0.64 in Firefox (1.09 to 1.24) and 0.38 to 0.66 in Safari (1.08 to 1.36).
+  `layoutNextLine()` reads 0.39, 0.42 and 0.38.
+- Chat resize: 0.75 to 1.01 in Chrome (0.77 to 1.04), 0.70 to 1.00 in Firefox
+  (0.86 to 1.13) and 0.73 to 0.91 in Safari (0.71 to 0.97).
+- `prepare()` of new and seen messages and fresh pages don't move beyond the
+  control.
+
+A copy of the new tip with every text on the full walker shows why the simple
+walkers stay (RESEARCH.md, Keeping Work Bounded).
+
+The baseline advances to `f4374a3`, and the ordinary snapshots were regenerated
+against it in Chrome 153, Safari 27.0 and Firefox 156, with no regressions,
+required failures or execution errors. Accuracy stays 7,680 of 7,680 in each
+browser and letter spacing 28 of 28, and the corpus sweeps rise from 1,076, 1,090
+and 984 to 1,093, 1,098 and 1,098 of 1,098 in Chrome, Safari and Firefox.
+
+The installed gate ran again on September 24 at `ba36327`, from main's harness and
+from this branch's, with main `6d1d210` as a candidate beside each harness's pin:
+Chrome 153 through the Playwright transport, Safari 27.0 and Firefox 156 natively,
+both directions, full and maintained suites. Every row's native line count and
+every prediction of main and of this branch equal those of the check of `f893622`
+earlier that day, so no lost row is new. Line-count passes from this branch's
+harness; fixed and lost count rows of both scopes:
+
+| Leg | Main | This branch | Fixed | Lost |
+| --- | ---: | ---: | ---: | ---: |
+| Chrome LTR | 111,364 / 147,709 | 115,955 | 5,436 | 185 |
+| Chrome RTL | 46,996 / 70,974 | 49,727 | 2,991 | 96 |
+| Firefox LTR | 117,973 / 147,669 | 128,721 | 12,054 | 786 |
+| Firefox RTL | 54,227 / 70,972 | 61,505 | 7,918 | 532 |
+| Safari LTR | 115,944 / 148,051 | 122,920 | 9,874 | 1,240 |
+| Safari RTL | 47,513 / 70,974 | 51,408 | 4,910 | 724 |
+
+No leg has required failures, execution errors, or new API or rich failures for
+this branch; main still fails its six required Safari checks. Against the pin
+`f4374a3` this branch loses only the no-break rows main was right on because two
+errors cancelled: 24 Chrome, 18 Firefox and 18 Safari left-to-right rows, each
+failing line count and height, and 6 Chrome whitespace checks on the U+202F ones.
+Of the rows lost to main, Chrome's 281 are 31 true losses, 220 of main's
+accidents, 6 that depend on page history and 24 cancellations; Firefox's 1,318 are
+755 true losses, 545 accidents and 18 cancellations; Safari's 1,964 are 841 true
+losses, 1,105 accidents and 18 cancellations. From main's harness Firefox adds the
+106 corpus rows its normalized form gets wrong. The maintained suite loses 29 and
+10 Chrome rows, 27 and 0 Firefox rows and 47 and 0 Safari rows to main, all among
+those, and none to the pin.
+
+Main's harness can't run the numeric checks on this branch: its cache-lifetime
+case lays out a JSON copy of a prepared handle, and the flags byte array doesn't
+survive JSON, so the walk over the copy never ends. Those legs ran with
+`--skip-numeric`. This branch's harness copies the handle with `structuredClone()`,
+and its numeric results equal `f893622`'s in all five profiles.
+
+The baseline advances to `ba36327`, and the ordinary snapshots were regenerated
+against it in Chrome 153, Safari 27.0 and Firefox 156, with no regressions,
+required failures or execution errors; only provenance and environments change.
+Accuracy stays 7,680 of 7,680 in each browser and letter spacing 28 of 28, and the
+corpus sweeps stay 1,093, 1,098 and 1,098 of 1,098.
+
+Chrome and Safari benchmark snapshots were refreshed from `ba36327`: three
+foreground runs each at DPR 2, visible and focused, on the 2560x1440 screen, while
+other jobs used the machine. Against main's snapshots, from another session,
+`prepare()` reads 3.00ms in Chrome (9.15) and 3.0ms in Safari (10.5), hot
+`layout()` 0.022ms (0.029) and 0.0225ms (0.030), and the long-form corpus totals
+63.5ms (118.2) and 246ms (310). Chrome's control row reads 1.54 of main's
+`layout()` there and Safari's soft hyphens 1.28, where the same-document timing
+above reads 1.00 and 0.46; compare the same-document numbers.
+
+## Firefox newlines between East Asian characters
+
+For Firefox, `normalizeSource()` now removes a collapsible run holding LF between
+two East Asian characters and, when the paragraph's language (else the page's) is
+`ja` or `zh`, next to East Asian punctuation, as Gecko's `TransformWhiteSpaces`
+does. It reads East_Asian_Width from Firefox's own ICU4X data and is coded apart
+from the library. 263 Firefox rows change form: 19 `maintained/content-language`
+rows, whose native paragraphs are raw, and the four ja/zh corpora at their 61
+widths each, which Firefox observes from the documented form.
+
+A Firefox 156 re-observation laid out each of those 244 corpus paragraphs from its
+raw source, the old form and the new one. The new form matched the raw source at
+all 244, in height and in the line of every visible character. The old form's
+height differed at 106, and those are the 106 corpus rows the Gecko profile's
+newline removal had lost: the oracle, not the prediction, was wrong. The 19
+content-language rows had failed `source-normalization` for the same reason.
+
+In the full Firefox gate the profile with the removal now gains those 125 rows over
+the one without it and loses none. Main loses them, since it keeps a space there.
+No checked-in snapshot was rewritten with this change: the gate observes main and
+every candidate afresh. The snapshots regenerated with the break scans (previous
+section) hold Firefox's corpus rows under the new form.
+
 ## `layout()` counts lines with a count-only walker
 
 This runtime change starts from main `c22181c` (#337). `layout()` counted lines

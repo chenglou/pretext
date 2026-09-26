@@ -78,7 +78,6 @@ export type ProbeOracleCase = {
   lang?: string
   method?: 'range' | 'span'
   browsers?: readonly ('chrome' | 'safari' | 'firefox')[]
-  required?: false
 }
 
 export type LetterSpacingOracleCase = ProbeOracleCase & {
@@ -386,8 +385,9 @@ export const KEEP_ALL_ORACLE_CASES: readonly ProbeOracleCase[] = [
   // Safari 27 breaks after 。 here: keep-all breaks after punctuation in text
   // holding a character above U+00FF (WebKit #312099). One-character spans never
   // reach that rule, so this reads the text node with Range rects; the span
-  // protocol was wrap-06c1e0111950efed. Nothing is required until the WebKit
-  // profile models Safari 27's keep-all fix.
+  // protocol was wrap-06c1e0111950efed. In the two controls after it, at 44px in
+  // 16px Arial, Latin-1-only aa.bbbbbb still breaks only at spaces (aa.bb / bbbb),
+  // and aa.bbbbbā, whose ā is above U+00FF, breaks after the . (aa. / bbbb / bā).
   {
     label: 'safari ideographic punctuation keep-all boundary',
     text: 'foo。bar日本語',
@@ -397,7 +397,24 @@ export const KEEP_ALL_ORACLE_CASES: readonly ProbeOracleCase[] = [
     lang: 'ja',
     method: 'range',
     browsers: ['safari'],
-    required: false,
+  },
+  {
+    label: 'safari latin-1 punctuation keep-all control',
+    text: 'aa.bbbbbb',
+    width: 124,
+    font: '16px Arial',
+    lineHeight: 24,
+    method: 'range',
+    browsers: ['safari'],
+  },
+  {
+    label: 'safari 16-bit punctuation keep-all control',
+    text: 'aa.bbbbbā',
+    width: 124,
+    font: '16px Arial',
+    lineHeight: 24,
+    method: 'range',
+    browsers: ['safari'],
   },
   {
     label: 'korean no-space word',

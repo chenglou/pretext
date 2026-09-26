@@ -1,0 +1,161 @@
+{
+  "about": "How often apps lay out each kind of paragraph, for the real-usage sample (harness/sets/sample.ts). A weighted list is [[value, share, source], ...]; shares are relative within their list. A source is a key of `sources` or starts with 'guess:', saying what the guess leans on. The sample draws `draws` paragraphs by these weights, then tops every group in sample.ts up to `minimumPerGroup` draws and weights each draw back to its real share. Only macOS rendering is measured: Android and Windows are 38.66% and 26.49% of page views (SC) and aren't covered.",
+  "seed": "harness-sample-20260924",
+  "draws": 10000,
+  "minimumPerGroup": 300,
+  "sources": {
+    "SC": "StatCounter Global Stats, August 2026: gs.statcounter.com/platform-market-share/desktop-mobile-tablet and /screen-resolution-stats/mobile/worldwide and /desktop/worldwide (read 2026-09-23)",
+    "HA25": "HTTP Archive Web Almanac 2025, Fonts, almanac.httparchive.org/en/2025/fonts (read 2026-09-23)",
+    "HA24": "HTTP Archive Web Almanac 2024, Markup, almanac.httparchive.org/en/2024/markup (read 2026-09-23)",
+    "CP": "Chrome CSS property counters, chromestatus.com/data/csspopularity, day 2026-09-22",
+    "E17": "Microsoft Edge Platform Data, a crawl of 2017-11-22, read from Wayback copies of developer.microsoft.com/en-us/microsoft-edge/platform/usage/css/",
+    "W3T": "W3Techs content languages of websites, w3techs.com/technologies/overview/content_language (read 2026-09-23)",
+    "DISCORD": "10,699 messages of the Discord Unveiled extract of public servers, read through the Hugging Face dataset viewer on 2026-09-23; only counts were kept, no text",
+    "WILDCHAT": "2,980 user and 3,001 assistant turns of WildChat-1M, read through the Hugging Face dataset viewer on 2026-09-23; only counts were kept, no text",
+    "APPS": "text widths from the apps' own rules: Telegram Web (bubble 85% of the chat, screen width - 89 px on phones), Signal Desktop (min(306px, 100% - 38px)), the Vercel chatbot template (min(80%, 56ch) at 13px), Open WebUI (90%, pre-wrap), and Pretext's bubbles (80% of the chat), markdown-chat (0.78 of a chat capped at 860 px) and masonry (columns up to 400 px) demos",
+    "ISSUES": "filed issues: #74 and #142 (Korean reviews and chat under keep-all), #210, #212, #225 and #334 (table cells 25-135 px wide)"
+  },
+  "pools": {
+    "corpora": {"text": "corpora/*.txt, literature from Wikisource and Project Gutenberg already in the repo; corpora/sources.json names each file's source page", "license": "each source page's; nothing new is checked in", "used for": "documents and editorial pages as they are; chat, cards and replies in scripts without real text for them, cut to length and marked as stand-ins"},
+    "ui": {"text": "harness/sets/data/ui-strings.json: 200 strings per locale from Chromium 152's chrome/app/resources/generated_resources_<locale>.xtb", "license": "BSD-3-Clause, Copyright 2015 The Chromium Authors", "used for": "UI labels and headings, and stand-ins where no corpus has the script"},
+    "shower": {"text": "pages/demos/masonry/shower-thoughts.json, in the repo since the masonry demo", "license": "not recorded in the repo; drawing from it checks in no text the repo doesn't already hold", "used for": "English cards, and English chat as a stand-in"},
+    "replies": {"text": "pages/demos/markdown-chat.data.ts, the markdown-chat demo's generated messages, split into the blocks the demo renders", "license": "the repo's own (MIT)", "used for": "AI replies in English and all code blocks, marked as stand-ins"},
+    "tableCells": {"text": "generated in harness/sets/sample.ts from the shapes filed reports use (#210, #212, #214, #225, #334)", "license": "the repo's own (MIT)", "used for": "table cells, marked as stand-ins"},
+    "notCheckedIn": "No chat that users wrote. WildChat-1M (huggingface.co/datasets/allenai/WildChat-1M, ODC-BY) and OpenAssistant oasst2 (huggingface.co/datasets/OpenAssistant/oasst2, Apache-2.0), licenses read 2026-09-24, both allow redistribution with attribution, but downloading them waits for the maintainer's OK. The Discord Unveiled extract's license wasn't checked, so its text stays out. Until one is added, every chat draw is a stand-in."
+  },
+  "surfaces": [
+    ["chat", 45, "guess: human chat, comments and reviews lead the README's uses (README.md:43-47, 100), the demos and the filed issues"],
+    ["ai", 20, "guess: AI replies in Markdown, as the markdown-chat demo lays out"],
+    ["cards", 15, "guess: cards and feeds cut to a few lines, as the masonry demo"],
+    ["documents", 10, "guess: documents, notes and table cells (#70, #210, #334)"],
+    ["ui", 7, "guess: UI labels and headings, checked for overflow at build time (README.md:45)"],
+    ["editorial", 3, "guess: canvas and editorial pages (#12, #99, #167)"]
+  ],
+  "scripts": {
+    "chat": [["en", 45, "guess: W3T and WILDCHAT blended"], ["latin", 23, "guess: W3T"], ["zh", 7, "guess: W3T and WILDCHAT"], ["ja", 4, "W3T"], ["ko", 3, "guess: W3T and WILDCHAT"], ["cyrillic", 7, "guess: W3T and WILDCHAT"], ["arabic", 5, "guess: Arabic and Persian, W3T and internet users"], ["indic", 2.5, "guess: much Indic chat is typed in Latin letters"], ["thai", 1, "guess"], ["sea", 1, "guess: Khmer, Myanmar, Lao"], ["hebrew", 0.5, "W3T"], ["other", 1, "guess: Greek, Armenian, Georgian, Ethiopic"]],
+    "ai": [["en", 52, "WILDCHAT: 52.3% of user turns in English"], ["latin", 18, "WILDCHAT: Latin-script turns less English"], ["zh", 13, "WILDCHAT"], ["ja", 2.5, "guess"], ["ko", 1.8, "WILDCHAT: 1.3% Korean"], ["cyrillic", 10.9, "WILDCHAT"], ["arabic", 1.4, "WILDCHAT"], ["other", 0.4, "guess"]],
+    "web": [["en", 49.5, "W3T"], ["latin", 29, "W3T: es 6.0, de 5.9, fr 4.5, pt 4.1, it 2.8, tr 1.6, vi 0.9 and the rest"], ["ja", 4.9, "W3T"], ["cyrillic", 3.9, "W3T: ru 3.4 and uk"], ["zh", 1.3, "W3T"], ["arabic", 1.6, "W3T: fa 1.0, ar 0.6"], ["ko", 0.9, "W3T"], ["hebrew", 0.4, "W3T"], ["thai", 0.3, "W3T"], ["indic", 0.3, "guess: W3T has Hindi under 0.1%"], ["sea", 0.2, "guess"], ["other", 1.5, "guess: el and others"]]
+  },
+  "surface": {
+    "chat": {
+      "scripts": "chat",
+      "mixedScripts": [9.83, "WILDCHAT: 9.83% of user turns mix scripts"],
+      "length": [["1-19", 50, "DISCORD: 51.5%"], ["20-100", 42, "DISCORD: 43.6%"], ["101-400", 6, "guess: DISCORD's 2.9% raised for SMS and DMs, which run longer"], ["401-1500", 1.5, "DISCORD"], ["1501-3000", 0.5, "DISCORD"]],
+      "emoji": [7.78, "DISCORD: 5.54% emoji and 2.24% custom emoji"],
+      "url": [2.29, "DISCORD"],
+      "longWord": [1.16, "DISCORD: 3.45% have a 30-unit run without a space, of which URLs are 2.29"],
+      "newline": [2.84, "DISCORD"],
+      "bold": [1.56, "DISCORD"],
+      "mention": [0.54, "DISCORD: perhaps low, since the extract may drop mention tokens"],
+      "inlineCode": [0.16, "DISCORD"],
+      "whiteSpace": [["normal", 50, "guess"], ["pre-wrap", 50, "guess: Signal (_modules.scss) and Open WebUI (UserMessage.svelte:373,387) lay user messages out in pre-wrap"]],
+      "sizes": [[13, 5, "APPS: Vercel"], [14, 25, "APPS: Signal"], [15, 20, "APPS: the bubbles demo"], [16, 35, "APPS: Telegram"], [17, 10, "guess: iOS Body"], [18, 3, "guess"], [20, 2, "guess"]],
+      "width": "bubble"
+    },
+    "ai": {
+      "scripts": "ai",
+      "mixedScripts": [11.63, "WILDCHAT: 11.63% of assistant turns mix scripts"],
+      "blocks": [["paragraph", 51, "guess"], ["list-item", 34.3, "WILDCHAT: lists in 34.32% of assistant turns"], ["heading", 3.9, "WILDCHAT: 3.87%"], ["code", 11.1, "WILDCHAT: fenced code in 11.1%"]],
+      "whiteSpace": [["normal", 100, "pages/demos/markdown-chat.model.ts: prose in white-space normal, code in pre-wrap"]],
+      "sizes": [[14, 50, "pages/demos/markdown-chat.model.ts: 14px body"], [15, 20, "guess"], [16, 30, "guess"]],
+      "width": "lane"
+    },
+    "cards": {
+      "scripts": "web",
+      "mixedScripts": [5, "guess"],
+      "whiteSpace": [["normal", 100, "pages/demos/masonry/index.ts"]],
+      "sizes": [[14, 30, "guess"], [15, 40, "pages/demos/masonry/index.ts: 15px"], [16, 30, "guess"]],
+      "width": "card"
+    },
+    "documents": {
+      "scripts": "web",
+      "mixedScripts": [3, "guess"],
+      "kinds": [["paragraph", 70, "guess"], ["table-cell", 25, "guess: ISSUES; #334's paginated editor sizes table cells"], ["soft-hyphens", 5, "guess: soft hyphens appear only where the app inserts them (README.md:98); 0.03% of WILDCHAT assistant turns have one"]],
+      "whiteSpace": [["normal", 80, "guess"], ["pre-wrap", 20, "guess: editors keep the author's spaces"]],
+      "sizes": [[12, 15, "ISSUES: 12px Calibri in #210"], [14, 25, "guess"], [16, 50, "ISSUES: 16px in #212, #225, #274, #334"], [18, 10, "guess"]],
+      "width": "document"
+    },
+    "ui": {
+      "scripts": "web",
+      "mixedScripts": [1, "guess"],
+      "kinds": [["label", 80, "guess"], ["heading", 20, "guess"]],
+      "whiteSpace": [["normal", 100, "guess"]],
+      "sizes": [[12, 20, "guess"], [13, 20, "guess"], [14, 30, "guess"], [16, 20, "guess"], [20, 4, "guess: headings 20-32"], [24, 3, "guess"], [32, 3, "guess"]],
+      "width": "ui"
+    },
+    "editorial": {
+      "scripts": "web",
+      "mixedScripts": [2, "guess"],
+      "whiteSpace": [["normal", 100, "guess"]],
+      "sizes": [[16, 30, "guess"], [18, 40, "guess"], [20, 30, "guess"]],
+      "width": "editorial"
+    }
+  },
+  "fonts": {
+    "kinds": {
+      "latin": [["web", 40, "guess: HA25, web fonts requested by 88% of mobile pages; Roboto on 10-10.7% of pages, Inter on 1.4-1.5%"], ["named", 40, "guess"], ["windows", 10, "guess: E17, Segoe UI named on 11.4% of pages; macOS falls back past it"], ["system-ui", 10, "HA25: system-ui on 9.3-9.7% of pages"]],
+      "cjk": [["named", 75, "guess: HA25, Han is in 0.4% of web fonts, so CJK text renders in system fonts"], ["windows", 15, "E17: Microsoft YaHei on 6.1% of pages, Meiryo on 5.0%"], ["system-ui", 10, "guess: HA25"]],
+      "arabic": [["named", 70, "guess"], ["web", 15, "guess: Noto Naskh Arabic and Amiri, served"], ["windows", 5, "guess"], ["system-ui", 10, "guess: HA25"]],
+      "other": [["named", 80, "guess"], ["windows", 10, "guess"], ["system-ui", 10, "guess: HA25"]]
+    },
+    "web": [["Roboto, Arial, sans-serif", 87, "HA25: Roboto 10-10.7% of pages"], ["Inter, \"Helvetica Neue\", sans-serif", 13, "HA25: Inter 1.4-1.5%"]],
+    "webArabic": [["\"Noto Naskh Arabic\", \"Geeza Pro\", serif", 70, "guess"], ["Amiri, \"Geeza Pro\", serif", 30, "guess"]],
+    "named": {
+      "en": [["\"Helvetica Neue\", Helvetica, Arial, sans-serif", 35, "guess"], ["Arial, sans-serif", 25, "guess"], ["Georgia, \"Times New Roman\", serif", 15, "guess"], ["Verdana, Geneva, sans-serif", 10, "guess"], ["\"Times New Roman\", Times, serif", 10, "guess"], ["\"Courier New\", Courier, monospace", 5, "guess"]],
+      "zh": [["\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif", 80, "guess"], ["\"Songti SC\", SimSun, serif", 20, "guess"]],
+      "ja": [["\"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, sans-serif", 80, "guess"], ["\"Hiragino Mincho ProN\", \"Yu Mincho\", serif", 20, "guess"]],
+      "ko": [["\"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif", 100, "guess"]],
+      "arabic": [["\"Geeza Pro\", Tahoma, sans-serif", 70, "guess"], ["Arial, sans-serif", 30, "guess"]],
+      "urdu": [["\"Noto Nastaliq Urdu\", \"Geeza Pro\", serif", 100, "guess: Nastaliq is how Urdu is read; served"]],
+      "hebrew": [["Arial, sans-serif", 60, "guess"], ["\"Times New Roman\", serif", 25, "guess"], ["\"Arial Hebrew\", sans-serif", 15, "guess"]],
+      "indic": [["\"Kohinoor Devanagari\", \"Kohinoor Bangla\", \"Tamil Sangam MN\", \"Kohinoor Telugu\", sans-serif", 100, "guess"]],
+      "thai": [["Thonburi, sans-serif", 90, "guess"], ["\"Noto Sans Thai\", Thonburi, sans-serif", 10, "guess"]],
+      "sea": [["\"Khmer Sangam MN\", \"Myanmar MN\", \"Lao Sangam MN\", sans-serif", 100, "guess"]],
+      "mixed": [["\"Helvetica Neue\", Arial, \"PingFang SC\", \"Apple SD Gothic Neo\", \"Geeza Pro\", \"Kohinoor Devanagari\", Thonburi, sans-serif", 100, "harness/cases/census.ndjson: the mixed-app-text paragraphs' stack"]]
+    },
+    "windows": {
+      "latin": [["\"Segoe UI\", sans-serif", 70, "E17: Segoe UI 11.4% of pages"], ["Calibri, sans-serif", 30, "ISSUES: #210's 12px Calibri"]],
+      "zh": [["\"Microsoft YaHei\", sans-serif", 60, "E17: 6.1%"], ["SimSun, serif", 40, "E17: 4.2%"]],
+      "ja": [["Meiryo, sans-serif", 60, "E17: 5.0%"], ["\"Yu Gothic UI\", sans-serif", 40, "guess"]],
+      "ko": [["\"Malgun Gothic\", sans-serif", 100, "guess"]],
+      "other": [["\"Segoe UI\", sans-serif", 100, "guess"]]
+    },
+    "systemUi": [["system-ui, sans-serif", 60, "HA25"], ["-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif", 40, "guess: the common system stack; BlinkMacSystemFont before system-ui is on 5.05% of Chrome page loads (chromestatus feature counters)"]]
+  },
+  "settings": {
+    "breakAll": [3, "guess: RT/reweight.py; E17 has word-break: break-all on 8.5% of pages in 2017, when word-break was on 13.7%"],
+    "keepAll": {"ko": [30, "guess: #74 and #142 are Korean apps under keep-all"], "zh": [2, "guess"], "ja": [2, "guess"]},
+    "letterSpacing": [10, "guess: CP has letter-spacing declared on 68.5% of page loads, sign and size unknown"],
+    "letterSpacingValues": [[-0.08, 30, "APPS: Signal's -0.08px"], [-0.2, 20, "guess"], [0.2, 20, "guess"], [0.5, 20, "guess"], [1, 10, "guess"]],
+    "pageLanguage": [["same", 85, "guess"], ["none", 12.6, "HA24: <html> has no lang on 12.6% of mobile pages"], ["english", 2.4, "guess: CP has lang differing from the UI language on 14.7% of page loads"]]
+  },
+  "widths": {
+    "device": [["mobile", 49.36, "SC"], ["desktop", 49.11, "SC"], ["tablet", 1.54, "SC"]],
+    "mobile": [[414, 13.63, "SC"], [360, 12.42, "SC"], [390, 6.81, "SC"], [393, 5.27, "SC"], [384, 4.35, "SC"], [375, 10, "guess: iPhone widths among the rest"], [430, 10, "guess"], [412, 10, "guess"], [320, 2, "guess"]],
+    "desktop": [[1920, 22.22, "SC"], [1536, 6.7, "SC"], [1440, 15, "guess"], [1366, 12, "guess"], [1280, 12, "guess"], [2560, 8, "guess"]],
+    "tablet": [[768, 50, "guess"], [820, 30, "guess"], [1024, 20, "guess"]],
+    "rules": {
+      "bubble": {
+        "phone": [0.72, 0.85], "phonePadding": 32, "source": "APPS: phone bubbles take 0.72-0.85 of the viewport (Telegram's screen width - 89, the demos' 80%)",
+        "desktop": [
+          [{"column": 696, "sidebar": 420, "share": 0.85, "max": 1000, "padding": 26}, 25, "APPS: Telegram Web, 85% of a chat capped at 696 px"],
+          [{"column": 1000, "sidebar": 380, "share": 1, "max": 306, "padding": 24}, 25, "APPS: Signal Desktop, min(306px, 100% - 38px)"],
+          [{"column": 896, "sidebar": 300, "share": 0.8, "max": 392, "padding": 32}, 25, "APPS: the Vercel chatbot template, min(80%, 56ch) at 13px"],
+          [{"column": 860, "sidebar": 56, "share": 0.78, "max": 1000, "padding": 32}, 25, "APPS: the markdown-chat demo's user bubble, 0.78 of a chat capped at 860 px"]
+        ]
+      },
+      "lane": {
+        "phone": [1, 1], "phonePadding": 48, "source": "APPS: an assistant lane spans the phone's width less its margins (guess: 48 px)",
+        "desktop": [
+          [{"column": 860, "sidebar": 56, "share": 0.95, "max": 816, "padding": 0}, 34, "APPS: the markdown-chat demo's assistant lane, 816 px"],
+          [{"column": 896, "sidebar": 300, "share": 1, "max": 896, "padding": 32}, 33, "APPS: the Vercel chatbot template's max-w-4xl column"],
+          [{"column": 768, "sidebar": 260, "share": 1, "max": 768, "padding": 32}, 33, "guess: a 48rem column"]
+        ]
+      },
+      "card": {"twoColumns": 30, "phonePadding": 32, "desktop": [178, 368], "source": "APPS: masonry columns up to 400 px with 16 px of padding; two columns on 30% of phones (guess)"},
+      "document": {"cell": [25, 150], "phonePadding": 32, "desktop": [560, 760], "source": "ISSUES: table cells 25-135 px; paragraphs guess"},
+      "ui": {"label": [60, 400], "phonePadding": 32, "desktopHeading": [400, 900], "source": "guess"},
+      "editorial": {"phonePadding": 40, "desktop": [560, 720], "source": "guess"}
+    }
+  }
+}

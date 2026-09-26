@@ -1,5 +1,58 @@
 # Takeover decisions and evidence
 
+2026-09-25, words first merged into `rebuild-20260916` (merge commit `f693c17`; `blink-words-first` at `cf1ac69`, whose
+tree the merge takes whole), then main merged at `48980bb`. The maintainer approved landing it with every remaining loss
+named as a gap. What words first changes ([DESIGN.md §4.4, §4.6](DESIGN.md), the dated entries below):
+- Blink cuts a shaping group into words first, measuring each word once with its trailing space, and a line that ends
+  between two words takes its break from the positions at the cuts; the cut predictor takes the window a shrink of the
+  wide window ends at from the widest window's total instead of measuring every window before it. Three premises about
+  fonts no source gives are documented defaults with named gaps (`context-past-a-word`, `positions-run-backwards`,
+  `nested-window-wider`), bounded where installed faces break them: words first runs below a zoomed font size of 60 px
+  counting what spacing adds to two words, not in a face whose space takes the script, nor in a group whose shaping call
+  holds a mark and a letter HarfBuzz recomposes only in such a call; the predictor runs without letter spacing or
+  negative word spacing.
+- Against the rebuild line (`61c376d`) the fonts attack's final runs gain 10,532 breaks and 2,780 line counts and lose 32
+  and 28, every loss traced; the real-text attack's 751,327 layouts lose none and gain 5 line counts and 21 breaks; the
+  review's 163,353 layouts gain 17 breaks and 3 counts and lose 2 breaks (Phosphate). Every loss class is a named gap an
+  inspected paragraph raises (`blink/gap/one-unit-fit`, `stand-in-start-reach`, `white-space-window-side`,
+  `common-window-side`) or an item of the known tail (`blink/zapfino-morx-unsafe-state`,
+  `lone-space-in-a-space-script-face`, `fit-within-a-layout-unit`, `kern-before-a-space-without-pair-kerning`,
+  `common-stretch-measured-alone`, `phosphate-first-line-exact-fit`). The conditions fire in 4.9% of the tier cases
+  without facts and 1.4% of the real-text layouts, and a plain paragraph lays out the lines it laid out before them.
+- Timing in pinned Chrome (the verifier's runs, `.artifacts/tests/runs/bwf-final-20260925/timing`, on `3189fe1`'s
+  library, which the gap naming changes on the inspected path alone): preparing and counting a new paragraph takes 0.58
+  of the rebuild line's time in Latin, 0.71 in Arabic and 0.85 in the mixed set, and 1.07 in CJK; a new width 0.46,
+  0.68, 0.71 and 0.99; a kept paragraph at a repeated width 1.03 to 1.10; streams of new text 0.72 to 0.76 per 1,000
+  units in Latin and 0.71 to 0.72 in Arabic. Main (`f26640e` there) is still 4 to 15 times faster to prepare and count,
+  and far faster at new widths.
+- Chrome's shared references in this worktree's `.artifacts/tests/reference/chrome-{no-facts,facts}` are words first's,
+  frozen at `93c4a53`; `1e772c6`'s are kept beside them as `*.pre-words-first`, and `chrome-*.blink-words-first` link to
+  the new ones for the worktrees that named them so. The painter's frozen side in `.artifacts/tests/painter-frozen` is
+  `93c4a53`'s bundle, the one `tools/painter-frozen.json` pins (the one it replaces kept as `*.pre-words-first.js`).
+- Gates: the full Blink gates at `84dba25`, the reviewed tree, which the merge differs from in docs alone, exit 0 but the
+  citation ledger's 16 old losses (the owner's run and the reviewer's on a fresh worktree). At the merge the quick Blink
+  gates exit 0, every gate fine: tier 1 changes no prediction and no question in either configuration, the plain and
+  pure checks pass all 69,224 cases, 965 unit tests pass.
+- Where the stopping rule (README) stands: with words first and the cut predictor the speed recipes end. Its first part
+  isn't met: the review found 12 layouts at DPR 1 that fail with no gap, which `61c376d` fails too (below and the known
+  tail's `blink/exact-fits-without-a-gap`). Its second, a superset of main, was measured against main's census of
+  2026-09-19; main has moved since (below), so it is to be measured again.
+Main merged at `48980bb`: #339 (Firefox's Canvas and late family names), #340 (each engine's own line-break tables and
+scans), #341 (the new harness), #342 (demos no longer shipped), #344 (grapheme tables), #345 (Chrome 154 pinned) and
+#347 (Firefox 156.0.1 pinned). Outside `rebuild/` the branch equals main but for the lines kept before: `knip.config.ts`'s
+`project` line, which now lists `harness/**/*.ts` as the root TypeScript project does, and the line pointing here in
+`TODO.md` and `ENGINE_FOLLOWUPS.md`. Under `rebuild/` the book survey's two scripts pass the content language to main's
+`normalizeSource`, which takes it since #340 (Gecko drops a segment break between East Asian characters, and for `ja` or
+`zh` content next to East Asian punctuation), and these docs changed. `bun install`, `bun run check` and main's 13 test
+files (308 tests) pass; the redo's quick gates, all engines and fresh, exit 0 on the merged tree. What the sync leaves:
+- Firefox's maintained-normalized source moves in four of the book survey's books (`ja-rashomon`, `ja-kumo-no-ito`,
+  `zh-zhufu`, `zh-guxiang`), so the survey's Firefox inputs are to be prepared again before it runs there next.
+- Main's library now takes each engine's own tables, so the lab's main baseline ([lab/BASELINE-main.md](lab/BASELINE-main.md),
+  of 2e5e2bd), the book survey's main role and the main obligations (sealed runs of the 2026-09-19 census) no longer
+  describe main as it is; none was run again.
+- Main pins Chrome 154 and Firefox 156.0.1 for its harness; the redo's ports and references stay on Chrome 153.0.8010.50
+  and Firefox 156.0 until they are pinned again (upkeep under the stopping rule).
+
 2026-09-25, Blink's words-first gap-naming round (branch `blink-words-first`, unmerged; [DESIGN.md §4.6, §5](DESIGN.md)):
 the losses the loss round left against the rebuild line (`61c376d`), each now a named gap an inspected paragraph raises
 where the port's measurements show its condition, or a named font-level limitation in the known tail. The maintainer's

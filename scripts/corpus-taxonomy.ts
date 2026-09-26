@@ -44,7 +44,6 @@ type CorpusSweepReport = {
 type TaxonomyCategory =
   | 'edge-fit'
   | 'shaping-context'
-  | 'glue-policy'
   | 'boundary-discovery'
   | 'diagnostic-sensitivity'
   | 'unknown'
@@ -123,8 +122,6 @@ function appendOverrideParams(url: string, font: string | null, lineHeight: numb
   return nextUrl
 }
 
-const quoteOrPunctuationRe = /["'“”‘’«»‹›「」『』（）()［］【】。，、！？!?,.;:—-]/
-
 function classifyTaxonomy(row: CorpusSweepRow): TaxonomyCategory {
   const mismatch = row.firstBreakMismatch
   const reason = mismatch?.reasonGuess ?? ''
@@ -137,9 +134,6 @@ function classifyTaxonomy(row: CorpusSweepRow): TaxonomyCategory {
   }
   if (row.browserLineMethod === 'span-probe' && (row.maxLineWidthDrift ?? 0) === 0 && mismatch === null) {
     return 'diagnostic-sensitivity'
-  }
-  if (mismatch != null && quoteOrPunctuationRe.test(mismatch.deltaText)) {
-    return 'glue-policy'
   }
   if (mismatch != null) {
     return 'boundary-discovery'

@@ -72,3 +72,34 @@ export function measureDomTextWidth(
   doc.body.removeChild(span)
   return width
 }
+
+// A line as the corpus and probe pages compare them: where its content ends, its
+// width measured whole and, when known, the sum of its segment widths.
+type MeasuredLine = {
+  contentEnd: number
+  fullWidth: number
+  sumWidth?: number
+}
+
+// A guess at why the first mismatched line differs, which corpus-taxonomy sorts.
+export function classifyBreakMismatch(contentWidth: number, ours: MeasuredLine | undefined, browser: MeasuredLine | undefined): string {
+  if (!ours || !browser) return 'line-count mismatch after an earlier break shift'
+
+  const longer = ours.contentEnd >= browser.contentEnd ? ours : browser
+  const longerLabel = longer === ours ? 'ours' : 'browser'
+  const overflow = longer.fullWidth - contentWidth
+  if (Math.abs(overflow) <= 0.05) {
+    return `${longerLabel} keeps text with only ${overflow.toFixed(3)}px overflow`
+  }
+
+  const oursDrift = (ours.sumWidth ?? ours.fullWidth) - ours.fullWidth
+  if (Math.abs(oursDrift) > 0.05) {
+    return `our segment sum drifts from full-string width by ${oursDrift.toFixed(3)}px`
+  }
+
+  if (browser.contentEnd > ours.contentEnd && browser.fullWidth <= contentWidth) {
+    return 'browser fits the longer line while our break logic cuts earlier'
+  }
+
+  return 'different break opportunity around punctuation or shaping context'
+}

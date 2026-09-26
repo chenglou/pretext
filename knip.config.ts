@@ -4,7 +4,7 @@ import type { KnipConfig } from 'knip'
 // Tradeoff: dead code & exports within test files won't be detected. See: https://github.com/webpro-nl/knip/issues/1374. This is acceptable
 const config: KnipConfig = {
   // Match the root TypeScript project; rebuild/ has its own checker configuration.
-  project: ['*.ts', 'pages/**/*.ts', 'scripts/**/*.ts', 'shared/**/*.ts', 'src/**/*.ts', 'tests/**/*.ts'],
+  project: ['*.ts', 'harness/**/*.ts', 'pages/**/*.ts', 'scripts/**/*.ts', 'shared/**/*.ts', 'src/**/*.ts', 'tests/**/*.ts'],
   entry: [
     // Library entry points — match the `exports` field in package.json
     'src/layout.ts',
@@ -13,6 +13,9 @@ const config: KnipConfig = {
     'scripts/**/*.ts',
     // Browser pages and demos — each `pages/**/*.ts` is the target of a `<script type="module" src="…">` in a sibling `.html`
     'pages/**/*.ts',
+    // The page the harness's runner bundles, and the case-set maker.
+    'harness/page.ts',
+    'harness/sets/make.ts',
     // Bundled through the comparison runner's generated candidate entry.
     'tests/wrapping/browser.ts',
     'tests/wrapping/contracts.ts',
