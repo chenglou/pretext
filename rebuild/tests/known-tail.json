@@ -5512,7 +5512,7 @@
       "id": "blink/exact-fits-without-a-gap",
       "engine": "blink",
       "kind": "open rows",
-      "title": "Exact fits at DPR 1 that fail with no gap, the base's too: one-LayoutUnit fits on first lines and at line starts not beside U+0020, and six not traced",
+      "title": "Exact fits at DPR 1 that fail with no gap, the base's too: one-LayoutUnit fits on first lines, at line starts not beside U+0020 and at one the gap names at a point the scorer doesn't reach, and break-all cuts inside joined words",
       "conditions": [],
       "cases": [
         {
@@ -5548,36 +5548,36 @@
         {
           "id": "c-ec7f82a3e7f88032",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (one LayoutUnit at a line start after a soft hyphen: Chrome fits at 10350, the port at 10351; Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
         },
         {
           "id": "c-4210c5feb1edf92a",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (one LayoutUnit at a line start after a soft hyphen: Chrome fits at 11615, the port at 11616; Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
         },
         {
           "id": "c-39e364af56c8b84d",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 40px under -2.5px of word spacing)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (a break-all cut inside a joined word, named by unsafe-to-break at the break alone; Al Bayan 40px under -2.5px of word spacing)"
         },
         {
           "id": "c-c5130cdd1e547a3a",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 40px under -2.5px of word spacing)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (a break-all cut inside a joined word, named by unsafe-to-break at the break alone; Al Bayan 40px under -2.5px of word spacing)"
         },
         {
           "id": "c-29698f6c7c2ff8db",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Beirut 30px)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (a break-all cut inside a joined word, named by unsafe-to-break at the break alone; Beirut 30px)"
         },
         {
           "id": "c-dcb752091f665695",
           "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Waseem 24px under -0.3px of letter and -1.25px of word spacing)"
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (one LayoutUnit beside U+0020: Chrome fits at 5152, the port at 5151, and its in-word-prefix point is outside the scorer's evidence; Waseem 24px under -0.3px of letter and -1.25px of word spacing)"
         }
       ],
-      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr1.ndjson, lab/r2-dpr1, tools/cover2.py --open, tools/native-vs-port.py); blink/gap/one-unit-fit; DESIGN.md §4.6, \"Blink's words first\"",
-      "note": "The review's exact-fit set r2 widens each layout of its fresh set r1 (15,936 cases in 83 faces outside the lab's lists) to its widest line's exact fit and a LayoutUnit either side. At DPR 1, 13 failures in 12 layouts are covered by no gap, and the base (61c376d) and 3189fe1 fail them alike, so they are no loss of words first; they are open correctness work, and rule (1) of the redo's stopping rule (rebuild/README.md) isn't met while they stand. Four are first lines the port fits by 0 LayoutUnits where Chrome breaks earlier: a first line has no start to correct (shaping_line_breaker.cc:309-324), so blink/gap/one-unit-fit doesn't fire there and something else decides them. Two are wrapped lines whose fit a LayoutUnit decides but whose start isn't beside U+0020 (inside a Tamil word under overflow-wrap, after U+2009), where the in-word condition reports in-word-prefix at the start alone and not at the break. The other six are not traced: Al Bayan at 30px (2 widths) and 40px (2 widths, a line end inside a word that Chrome fits by a LayoutUnit), Beirut at 30px, Waseem at 24px; at DPR 3 the same cases pass or are covered. What would convert them: a trace of each against Chrome's positions in the window probe, then a gap where the port's measurements show the condition, or a fix."
+      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr1.ndjson, lab/r2-dpr1, tools/cover2.py --open, tools/native-vs-port.py; the trace in .artifacts/tests/runs/rule2-20260925/fits); blink/gap/one-unit-fit; DESIGN.md §4.6, \"Blink's words first\"",
+      "note": "The review's exact-fit set r2 widens each layout of its fresh set r1 (15,936 cases in 83 faces outside the lab's lists) to its widest line's exact fit and a LayoutUnit either side. At DPR 1, 13 failures in 12 layouts are covered by no gap, and the base (61c376d) and 3189fe1 fail them alike, so they are no loss of words first; they are open correctness work, and rule (1) of the redo's stopping rule (rebuild/README.md) isn't met while they stand. Four are first lines the port fits by 0 LayoutUnits where Chrome breaks earlier: a first line has no start to correct (shaping_line_breaker.cc:309-324), so blink/gap/one-unit-fit doesn't fire there and something else decides them. Two are wrapped lines whose fit a LayoutUnit decides but whose start isn't beside U+0020 (inside a Tamil word under overflow-wrap, after U+2009), where the in-word condition reports in-word-prefix at the start alone and not at the break. The other six, traced on 2026-09-25 against Chrome's positions in the window probe (rebuild/TAKEOVER.md): Al Bayan at 30px (2 widths) are one-LayoutUnit fits at a line start after a soft hyphen, which the same condition at such a start would name; Waseem at 24px is a one-LayoutUnit fit beside U+0020, where in-word-prefix fires at the port's break and the scorer's evidence, the text before it, doesn't reach it; Al Bayan at 40px (2 widths) and Beirut at 30px end at a break-all cut inside a joined word, where whether Blink reshapes decides by far more than a LayoutUnit and unsafe-to-break names the break but not the line's earlier rect differences. At DPR 3 the same cases pass or are covered. What would convert them: that start condition, the point reported over the decision, and a name for the rect differences inside joined words, or fixes."
     }
   ]
 }

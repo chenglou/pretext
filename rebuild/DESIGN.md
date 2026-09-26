@@ -2430,7 +2430,10 @@ the `script-context` of `common-window-side` at `§4` cover it; which is the cau
 earlier (Al Tarikh 44px, Al Bayan 22px, Beirut 34px, Farah 15px), which have no start to correct, so something else
 decides them; two wrapped lines whose fit a LayoutUnit decides and whose start isn't beside U+0020 (inside a word of
 Tamil Sangam MN at 22px, after U+2009 in Waseem at 34px), where the in-word condition reports at the start and not at
-the break; and six not traced. They are open correctness work (TAKEOVER.md).
+the break; and six traced since (TAKEOVER.md, 2026-09-25): three more one-LayoutUnit fits, two at a start after a soft
+hyphen (Al Bayan at 30px) and one beside U+0020 whose `in-word-prefix` point the scorer's evidence doesn't reach (Waseem
+at 24px), and three break-all cuts inside joined Arabic words, which `unsafe-to-break` names at the break but not over
+the line's earlier rect differences (Al Bayan at 40px, Beirut at 30px). They are open correctness work (TAKEOVER.md).
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a

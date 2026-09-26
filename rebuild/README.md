@@ -12,8 +12,13 @@ that nobody has falsified may be taken for speed, as a documented default with a
 to give, ad hoc ones go first, then petty ones.
 Where it stands (2026-09-25): with words first and the cut predictor the speed recipes end, so that part is reached.
 The first part isn't met yet: the review of words first's gap naming found 12 layouts at DPR 1 that fail with no gap,
-one-LayoutUnit fits on first lines and at line starts not beside U+0020 and six not traced, which the line before words
-first fails too (TAKEOVER.md; the known tail's `blink/exact-fits-without-a-gap`). They are open correctness work.
+which the line before words first fails too: nine one-LayoutUnit fits (on first lines, at line starts not beside U+0020
+or after a soft hyphen, and one that `one-unit-fit` names at a point the scorer's evidence doesn't reach) and three
+break-all cuts inside joined Arabic words that `unsafe-to-break` names at the break alone (TAKEOVER.md; the known tail's
+`blink/exact-fits-without-a-gap`). They are open correctness work. The second part isn't met either: against main
+`48980bb` (lab/BASELINE-main.md), main is right where the redo isn't on 9 tier cases and 36 cases of main's harness,
+leaving out page history, luck and widths under 24 px, and main's rich-inline chips and cloned padding have no form in
+the redo.
 
 Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated

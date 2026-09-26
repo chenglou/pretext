@@ -1,5 +1,69 @@
 # Takeover decisions and evidence
 
+2026-09-25, rule (2) of the stopping rule measured against main `48980bb` ([lab/BASELINE-main.md](lab/BASELINE-main.md);
+runs, joins and scripts in `.artifacts/tests/runs/rule2-20260925`). The lab's main baseline now predicts through main's
+own harness adapter, `harness/predict.ts`, so rich inline is in (`1318d10`). A case is right when its line count is the
+browser's and every visible code point is on its line (`check-main-obligations.ts` `evaluateVisibleRanges`); main and the
+redo are judged on the same native observation. The redo isn't yet a superset of main:
+- Tier 2, every set in file order in pinned Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host, main's run with its
+  own natives against the redo's frozen predictions: main is right on 25,645, 30,590 and 27,420 cases (it can't express
+  34,881, 29,536 and 29,704), the redo without facts on 67,968, 62,738 and 63,063, and main alone on 16, 36 and 8. Read
+  line by line, those are true redo losses in 7, 1 and 1 (Chrome's six `rule/in-word-breaks` in Times New Roman and
+  Hoefler Text, under `unsafe-to-break`, which the lab's facts get right, and `suite/partial-source-context` in Amiri;
+  Firefox's `ws/text-nodes`; webkit-host's `suite/ligature-thresholds-v3`), main right by luck in 5, 4 and 1 (its width of
+  the line in dispute 0.9 to 9.6 px off), page history in 0, 14 and 5, and widths under 24 px in 4, 17 and 1. With the
+  lab's facts main alone is right on 6, 35 and 8, true losses 1, 0 and 1.
+- Main's harness case files (`harness/cases`, 67,946 cases), the redo predicting only, judged by main's own `score()`
+  against main's recordings, main's verdict from its accepted lists: of 41,615, 42,545 and 42,941 pinned cases main is
+  right on 37,402, 39,056 and 39,589, the redo on 41,210, 41,702 and 42,593, and main alone on 26, 43 and 8. Laid out
+  again in the lab with both predictors, those are true redo losses in 7, 28 and 1: in Chrome U+2E3B and Hangul jamo
+  between Hangul, Hebrew beside U+1F3FB, and one real-usage draw, Chinese at 864 px, where Chrome sets `。` half an em
+  narrower before an ASCII `}` and the redo's HanKerning doesn't, with no gap at the cause; in Firefox 19 emoji between
+  letters, whose Canvas width main corrects from a DOM span and the redo takes as Canvas gives it (21 px for 16, under
+  `optical-size` alone), 8 of `a`, U+3000, U+200D, `b`, and a Sinhala mark; in webkit-host an Arabic `rule/joining` case.
+  Main is right by luck in 11, 1 and 5, page history takes 0, 4 and 0 (the redo right when laid out again), and widths
+  under 24 px 8, 10 and 2. The census and the books, the redo's real-text census and book survey that main's harness took
+  whole, are right in the redo in every browser (main misses 2 books in Chrome).
+- Rich inline: main's chips (inline-block text, rich-inline's `break: 'never'`) and padding repeated on every line
+  (`extraWidth`, `box-decoration-break: clone`), 391 cases of main's rich and sample files, have no form in the redo's
+  model (atomic inlines of a declared size, box edges that slice); main is right on 232, 231 and 233 of those pinned.
+- Two lab changes served the harness run only and aren't committed (`harness-run-local.patch`): fonts from
+  `harness/fonts` (Inter, Roboto) and a page without a language. Not measured: the words-first real-text attack's 59
+  sets, whose case files and natives weren't kept. Nothing in the library changed.
+- The cost: main's tier runs took 21 to 43 s of browser time per browser, natives included; the redo's harness
+  predictions about 4 minutes in all; the recheck and the probes seconds; the whole measurement and the trace below about
+  50 minutes of wall-clock time.
+
+2026-09-25, the six untraced exact fits of the known tail's `blink/exact-fits-without-a-gap`, traced
+(`.artifacts/tests/runs/rule2-20260925/fits`): the review's rows, and the window probe (a copy, `window-probe-wb.ts`,
+that passes the case's word-break, overflow-wrap and page language on) in pinned Chrome 154 at DPR 1, which lays out all
+twelve as the review's Chrome 153 did and gives the port's lines the review's; per case, the disputed line's width from
+its start by Chrome's positions and by the port's, and 13 widths a LayoutUnit apart around the case's.
+- Al Bayan 30px under 2.5px of letter and 3px of word spacing, `overflow-wrap: anywhere` (`c-ec7f82a3e7f88032`,
+  `c-4210c5feb1edf92a`): the one-LayoutUnit class. The fourth line starts after a soft hyphen (`تحت` SHY `|التخطيط`);
+  Chrome fits its end at 10350 and 11615 LayoutUnits, the port at 10351 and 11616 (at 11615 its width through `الرحيم` is
+  11615.35). Like the traced Tamil line and the Waseem line after U+2009, the start isn't beside U+0020, so
+  `blink/gap/one-unit-fit` doesn't fire. A gap that could name them: that condition at a wrapped start after a soft hyphen,
+  which Blink reshapes too, reported at the break.
+- Waseem 24px under -0.3px of letter and -1.25px of word spacing (`c-dcb752091f665695`): the one-LayoutUnit class, at a
+  start the condition names: the sixth line starts beside U+0020 and fits through `الله` at 5152 in Chrome and 5151 in
+  the port (its width 5151.93). The port reports `in-word-prefix` at its break (62), but the scorer's evidence ends
+  before it (the decision ` الله` at 56-61; Chrome reports the `ي` before the hanging space on both lines), so it covers
+  nothing. The honest name is the existing one reported over the decision, the text between the two candidate breaks,
+  rather than at the port's break alone.
+- Al Bayan 40px under -2.5px of word spacing, `word-break: break-all` (`c-39e364af56c8b84d` at 16454 and
+  `c-c5130cdd1e547a3a` at 16455, one break), and Beirut 30px, break-all (`c-29698f6c7c2ff8db` at 17442): not the
+  one-LayoutUnit class. The line ends at a cut inside a joined word (`للاخت|بار`, `الجامع|ة`), and whether Blink reshapes
+  the end there decides it, by far more than a LayoutUnit: in Al Bayan Chrome fits the line though its unbroken prefix is
+  95 LayoutUnits over, where the port's stays 88 over; in Beirut Chrome fits it at 17442 and at least 6 below, where the
+  port's position at the cut is 318 above Chrome's unbroken prefix. HarfBuzz's unsafe-to-break flag at the cut decides
+  whether Blink reshapes, and Canvas doesn't show it: the port reports `unsafe-to-break` at the break (57-59, 103-105),
+  the honest name. It covers nothing because the scorer's evidence also takes the line's first differing rect, earlier
+  inside a joined word (`بسم`, `تخط`), where no gap is reported.
+- So the 12 layouts are nine one-LayoutUnit fits (four first lines; two starts not beside U+0020 and two after a soft
+  hyphen; one beside U+0020 that the gap names at a point the scorer's evidence doesn't reach) and three break-all cuts
+  inside joined Arabic words. No gap was widened.
+
 2026-09-25, the re-pin (`74678fe`): the lab runs Chrome 154.0.8037.57 and Firefox 156.0.1 (`lab/browser-build.ts`
 `LAB_APPS`), and the library accepts both as the builds its ports follow (`env.ts` `ACCEPTED_BUILDS`, before this
 `SOURCE_IDENTICAL_BUILDS`, with what changed between the tags). `PINNED_BUILDS` stays at 153.0.8010.48 and 156.0, whose

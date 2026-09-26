@@ -1,182 +1,190 @@
 # Baseline: main's library through the lab
 
-`rebuild/lab/baselines/main-predictor.ts` predicts with the current library in `src/` (main's public API, source
-unchanged) the way an app developer uses it, so the rebuild's engines have a number to beat on the same case sets. The
-runs below used main 2e5e2bd. Since 2026-09-25 `src/` is main `48980bb`, which takes each engine's own line-break
-tables and scans (#340) and grapheme tables (#344), so the line ranges this predictor reads have moved and the runs
-below, not repeated, describe 2e5e2bd only (TAKEOVER.md). Runs of 2026-09-16: Chrome
-153, Firefox 156 and webkit-host on WebKit 22625.1.29.11.27 (Safari 27.0's build), all at DPR 2, on
-`.artifacts/lab/cases/{smoke,runs,ws,policy,suite-sample}.ndjson`. Rows, summaries and per-case files are in
-`.artifacts/lab/baseline-main/<browser>/<set>/`; the suite-sample rows ran in four parts (`suite-sample-1` to `-4`) and
-were scored together.
+`rebuild/lab/baselines/main-predictor.ts` predicts with the library in `src/` (main `48980bb`, source unchanged) through
+main's own harness adapter, `harness/predict.ts`: the way an app developer uses main, and the way main's harness judges it.
+It is the number the redo's stopping rule (2) measures against: a superset of main in all three engines, rich inline
+included (rebuild/README.md). The runs below are of 2026-09-25: every tier 2 set (`rebuild/tests/sets.ts`) in pinned
+Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host on WebKit 22625.1.29.11.27, at DPR 2, in file order, with their own
+native observations (`rebuild/tests/browser-sets.ts --predictor=rebuild/lab/baselines/main-predictor.ts`), and main's
+harness case files against main's recordings. Rows, joins and scripts are in `.artifacts/tests/runs/rule2-20260925/`.
+The baseline of main `2e5e2bd` (2026-09-16, five sets) is in this file's history; its rows stay in
+`.artifacts/lab/baseline-main/`.
 
-## Results
+## How a case is judged
 
-Counts are cases. Each metric is pass / fail / unobserved; widths add not-applicable (breaks failed or were
-unobserved). `cases` is the set's cases for that browser after its `browsers` filter, `unsupported` the ones main can't
-express, and `scored` the rest, which the browser observed. No row has an adapter error or a native observation error.
-measureText is the mean number of calls per scored case with main's caches cleared before each case.
+A case is right when the prediction has the browser's line count and every visible code point (one whose positive-width
+rects all sit on one native line) lies in the predicted line of that index: `rebuild/tests/check-main-obligations.ts`
+`evaluateVisibleRanges`, which is main's harness rule read on the lab's rects. Main's rows carry line ranges alone, so the
+lab's `breaks` and `widths` metrics don't apply to them. The redo's side is its frozen tier 2 predictions
+(`.artifacts/tests/reference/<browser>-<config>/browser`, which tier 1 finds equal to this tree's, and which the re-pin
+found Chrome 154 and Firefox 156.0.1 record the same), judged on the same native observation as main's, from main's run.
+`tools/join-tier.ts` does it; without and with the lab's facts. No row shows a disagreement between main's line APIs.
 
-### chrome
+## Tier 2 sets
 
-| set | cases | unsupported | scored | lineCount | breaks | widths | measureText |
-|---|---:|---:|---:|---|---|---|---:|
-| smoke | 299 | 196 | 103 | 79 / 24 / 0 | 69 / 28 / 6 | 31 / 36 / 2 / 34 | 15.4 |
-| runs | 2,580 | 2,559 | 21 | 21 / 0 / 0 | 21 / 0 / 0 | 11 / 10 / 0 / 0 | 31.0 |
-| ws | 1,019 | 916 | 103 | 89 / 14 / 0 | 83 / 20 / 0 | 40 / 43 / 0 / 20 | 20.4 |
-| policy | 1,606 | 1,198 | 408 | 397 / 11 / 0 | 387 / 21 / 0 | 188 / 199 / 0 / 21 | 29.1 |
-| suite-sample | 19,994 | 0 | 19,994 | 15,400 / 4,593 / 1 | 14,682 / 5,088 / 224 | 7,566 / 6,844 / 272 / 5,312 | 20.5 |
+Cases per set, the redo without facts. "Main can't express" counts the cases whose prediction is `unsupported by main`.
 
-### firefox
+| set | chrome: cases / main can't express / main right / redo right / main only / redo only | firefox | webkit-host |
+|---|---|---|---|
+| smoke-hand | 25 / 25 / 0 / 25 / 0 / 25 | 25 / 25 / 0 / 25 / 0 / 25 | 25 / 25 / 0 / 25 / 0 / 25 |
+| smoke | 299 / 148 / 124 / 295 / 0 / 171 | 297 / 148 / 133 / 295 / 0 / 162 | 300 / 148 / 132 / 297 / 0 / 165 |
+| runs | 2,580 / 1,317 / 1,219 / 2,577 / 0 / 1,358 | 2,580 / 1,317 / 1,243 / 2,580 / 0 / 1,337 | 2,580 / 1,317 / 1,237 / 2,579 / 0 / 1,342 |
+| ws | 1,019 / 805 / 179 / 982 / 0 / 803 | 1,019 / 805 / 191 / 978 / 1 / 788 | 1,019 / 805 / 175 / 985 / 0 / 810 |
+| policy | 1,606 / 1,198 / 391 / 1,606 / 0 / 1,215 | 1,606 / 1,198 / 404 / 1,606 / 0 / 1,202 | 1,606 / 1,198 / 401 / 1,602 / 0 / 1,201 |
+| rich-prewrap | 1,334 / 1,334 / 0 / 1,334 / 0 / 1,334 | 1,334 / 1,334 / 0 / 1,334 / 0 / 1,334 | 1,334 / 1,334 / 0 / 1,326 / 0 / 1,326 |
+| twins | 380 / 380 / 0 / 380 / 0 / 380 | | |
+| wide-group-cuts | 2,159 / 2,159 / 0 / 2,118 / 0 / 2,118 | | |
+| suite-sample | 19,994 / 0 / 15,048 / 19,369 / 3 / 4,324 | 19,888 / 0 / 17,867 / 19,297 / 30 / 1,460 | 19,933 / 0 / 15,788 / 19,355 / 2 / 3,569 |
+| families | 11,154 / 10,706 / 270 / 10,894 / 6 / 10,630 | 9,776 / 9,328 / 429 / 9,524 / 4 / 9,099 | 9,726 / 9,278 / 426 / 9,674 / 0 / 9,248 |
+| features | 13,010 / 13,010 / 0 / 12,994 / 0 / 12,994 | 12,050 / 12,050 / 0 / 12,050 / 0 / 12,050 | 12,268 / 12,268 / 0 / 12,236 / 0 / 12,236 |
+| features-en-US | 468 / 468 / 0 / 468 / 0 / 468 | | |
+| heldout-runs | 2,579 / 1,340 / 1,179 / 2,577 / 0 / 1,398 | 2,579 / 1,340 / 1,194 / 2,576 / 0 / 1,382 | 2,579 / 1,340 / 1,224 / 2,577 / 0 / 1,353 |
+| heldout-ws | 1,022 / 789 / 202 / 993 / 0 / 791 | 1,022 / 789 / 213 / 991 / 0 / 778 | 1,022 / 789 / 201 / 996 / 0 / 795 |
+| heldout-policy | 1,604 / 1,202 / 393 / 1,604 / 0 / 1,211 | 1,604 / 1,202 / 399 / 1,604 / 0 / 1,205 | 1,604 / 1,202 / 395 / 1,604 / 0 / 1,209 |
+| heldout-suite-sample | 9,991 / 0 / 6,640 / 9,752 / 7 / 3,119 | 9,991 / 0 / 8,517 / 9,878 / 1 / 1,362 | 9,991 / 0 / 7,441 / 9,807 / 6 / 2,372 |
+| all | 69,224 / 34,881 / 25,645 / 67,968 / 16 / 42,339 | 63,771 / 29,536 / 30,590 / 62,738 / 36 / 32,184 | 63,987 / 29,704 / 27,420 / 63,063 / 8 / 35,651 |
 
-| set | cases | unsupported | scored | lineCount | breaks | widths | measureText |
-|---|---:|---:|---:|---|---|---|---:|
-| smoke | 297 | 196 | 101 | 85 / 16 / 0 | 73 / 23 / 5 | 52 / 15 / 6 / 28 | 15.0 |
-| runs | 2,580 | 2,559 | 21 | 21 / 0 / 0 | 21 / 0 / 0 | 19 / 2 / 0 / 0 | 31.1 |
-| ws | 1,019 | 916 | 103 | 95 / 8 / 0 | 88 / 15 / 0 | 70 / 17 / 1 / 15 | 20.3 |
-| policy | 1,606 | 1,198 | 408 | 396 / 12 / 0 | 387 / 21 / 0 | 373 / 14 / 0 / 21 | 28.4 |
-| suite-sample | 19,888 | 0 | 19,888 | 17,820 / 2,065 / 3 | 16,804 / 2,316 / 768 | 12,432 / 2,358 / 2,014 / 3,084 | 20.2 |
+With the lab's facts the redo is right on 68,081, 62,760 and 63,063 cases, and main only on 6, 35 and 8. In Chrome 2,809
+of the cases main predicts go through rich inline; the 2026-09-16 adapter had no rich inline and left out every case with
+runs of several styles.
 
-### webkit-host
+Each case main gets right and the redo doesn't was read line by line (`tools/explain-losses.ts`, `tools/classify.py`;
+`classify-no-facts.txt`, `classify-facts.txt`) and put in the first class that fits: page history (the reference calls it
+history-dependent, main's run laid it out otherwise than the redo's run did, or the redo reports `page-history`), narrower
+than 24 px, main right by luck (main's width of the line whose end is in dispute is more than 0.05 px off the browser's),
+and a true redo loss (main has that width to 0.05 px).
 
-| set | cases | unsupported | scored | lineCount | breaks | widths | measureText |
-|---|---:|---:|---:|---|---|---|---:|
-| smoke | 300 | 196 | 104 | 81 / 23 / 0 | 73 / 27 / 4 | 51 / 10 / 12 / 31 | 18.5 |
-| runs | 2,580 | 2,559 | 21 | 20 / 1 / 0 | 20 / 1 / 0 | 13 / 2 / 5 / 1 | 43.3 |
-| ws | 1,019 | 916 | 103 | 88 / 15 / 0 | 82 / 21 / 0 | 50 / 7 / 25 / 21 | 29.2 |
-| policy | 1,606 | 1,198 | 408 | 383 / 25 / 0 | 335 / 66 / 7 | 284 / 51 / 0 / 73 | 34.1 |
-| suite-sample | 19,933 | 0 | 19,933 | 15,684 / 4,246 / 3 | 14,912 / 4,848 / 173 | 11,018 / 2,099 / 1,795 / 5,021 | 28.7 |
+| browser | main only | page history | narrower than 24 px | main right by luck | true redo loss |
+|---|---:|---:|---:|---:|---:|
+| chrome | 16 | 0 | 4 | 5 | 7 |
+| firefox | 36 | 14 | 17 | 4 | 1 |
+| webkit-host | 8 | 5 | 1 | 1 | 1 |
+| chrome, with facts | 6 | 0 | 2 | 3 | 1 |
+| firefox, with facts | 35 | 14 | 17 | 4 | 0 |
+| webkit-host, with facts | 8 | 5 | 1 | 1 | 1 |
 
-### Subgroups of the scored cases
+- True redo losses. Chrome: `rule/in-word-breaks`, six cases, `x AVAV…AV y` in 16 and 24px Times New Roman and Hoefler
+  Text at 157-357 px, where main's widths are Chrome's to 1/128 px: in four the redo fits `x ` and the kerned word on one
+  line, at least 0.1-0.6 px narrower than Chrome's, and in two (1px of letter spacing) it breaks inside the word a letter
+  later than Chrome, past the available width by its own measure. The redo reports `unsafe-to-break` there, and with the
+  lab's facts it gets all six right. `suite/partial-source-context`, 24px Amiri, `‏((tail` right to left at 40 px: the
+  redo measures `((tai` more than 4 px wider than Chrome and breaks before `i` (`script-context`, `unsafe-to-break`; with
+  facts too). Firefox:
+  `ws/text-nodes`, 16px Times New Roman `past.”␍␍with` at 68 px, where the redo fits `past.` and Firefox breaks after
+  `past` (`in-word-prefix`). webkit-host: `suite/ligature-thresholds-v3`, 16px ProbeShantell with letter spacing at
+  25.68 px (`letter-spacing-ligatures`).
+- Main right by luck. Chrome: `suite/U+FFFC` (main's line 2.4-8.5 px narrower than Chrome's around U+FFFC) and
+  `suite/source-shaped-arabic` at 24 px (4.6 px). Firefox: `rule/in-word-breaks` in Hoefler Text, where main sums the
+  graphemes without the kerning Firefox applies and is 0.9-1.5 px off. webkit-host: `suite/source-views/long-tail-edge-falsifier`
+  (9.6 px).
+- Page history: Firefox's curly and straight quote, guillemet, signed-spacing and space-context-emoji cases beside emoji
+  (the reference calls all 14 history-dependent); webkit-host's five `suite/U+000D/middle` cases, where the redo reports
+  `page-history` beside `control-character-width`.
 
-| subgroup | browser | scored | lineCount | breaks | widths |
-|---|---|---:|---|---|---|
-| suite-sample, old suite requires height or lineCount | chrome | 7,771 | 7,771 / 0 / 0 | 7,763 / 5 / 3 | 3,620 / 4,142 / 1 / 8 |
-| | firefox | 7,727 | 7,726 / 1 / 0 | 7,717 / 8 / 2 | 7,571 / 145 / 1 / 10 |
-| | webkit-host | 7,774 | 7,770 / 4 / 0 | 7,770 / 2 / 2 | 6,336 / 1,409 / 25 / 4 |
-| suite-sample without the `suite/U+*` control-character families | chrome | 15,614 | 13,794 / 1,819 / 1 | 13,220 / 2,184 / 210 | 7,423 / 5,618 / 179 / 2,394 |
-| | firefox | 15,508 | 14,455 / 1,050 / 3 | 13,517 / 1,223 / 768 | 12,268 / 1,031 / 218 / 1,991 |
-| | webkit-host | 15,553 | 13,685 / 1,865 / 3 | 13,097 / 2,283 / 173 | 10,568 / 1,805 / 724 / 2,456 |
-| suite-sample, direction rtl | chrome | 4,690 | 2,592 / 2,097 / 1 | 2,417 / 2,251 / 22 | 1,199 / 1,099 / 119 / 2,273 |
-| | firefox | 4,656 | 3,761 / 895 / 0 | 3,448 / 918 / 290 | 1,445 / 1,046 / 957 / 1,208 |
-| | webkit-host | 4,658 | 2,723 / 1,935 / 0 | 2,452 / 2,188 / 18 | 1,395 / 256 / 801 / 2,206 |
-| policy, paragraph lang differs from `<html lang>` | chrome | 192 | 186 / 6 / 0 | 178 / 14 / 0 | 92 / 86 / 0 / 14 |
-| | firefox | 192 | 185 / 7 / 0 | 178 / 14 / 0 | 177 / 1 / 0 / 14 |
-| | webkit-host | 192 | 180 / 12 / 0 | 150 / 35 / 7 | 118 / 32 / 0 / 42 |
-| suite-sample, paragraph lang differs from `<html lang>` | chrome | 89 | 81 / 8 / 0 | 70 / 19 / 0 | 40 / 30 / 0 / 19 |
-| | firefox | 89 | 78 / 11 / 0 | 66 / 23 / 0 | 54 / 12 / 0 / 23 |
-| | webkit-host | 89 | 74 / 15 / 0 | 64 / 25 / 0 | 51 / 13 / 0 / 25 |
+## Main's harness case files
 
-The first subgroup is the old wrapping suite's own gate: rows whose `required` metrics (kept in the case's `origin`)
-include height or lineCount. Main passes nearly all of them, as its suite says it should, which also checks that the
-adapter reads main's lines faithfully. Most suite-sample failures come from research rows the old suite didn't require.
-The control-character families (`suite/U+0000/end` and so on, 4,380 cases for Chrome) give 2,774 of Chrome's 4,593 line
-count failures, 1,015 of Firefox's 2,065 and 2,381 of webkit-host's 4,246. Most of the rest come from emoji sequences
-with a soft hyphen or ZWSP at narrow widths (`woman-before-zwj/shy`, `skin-modifier/zwsp` and similar).
+The redo (`baselines/inspected-ranges-predictor.ts`, the facts-free inspected core as line ranges, `run.ts
+--predict-only`) on every case file of main's harness (`harness/cases/*.ndjson` at `48980bb`), judged by main's own
+`score()` against main's recordings (`harness/recordings/<browser>.txt`: the same builds, OS build, page languages, DPR 2
+and fonts as the lab's runs; Chrome given an en-US interface, as main's harness gives it). Main's verdict is main's
+lists: a pinned case is right unless `harness/accepted/<browser>.txt` lists it, and a varying `runs` case isn't judged.
+Two lab changes served this run and aren't committed (`harness-run-local.patch`): the fonts come from `harness/fonts`,
+which adds Inter and Roboto, and a page may have no language, as 1,498 of the sample's cases have. The rich and sample
+cases with a chip (an inline-block of text, rich-inline's `break: 'never'`) or with padding repeated on every line
+(`box-decoration-break: clone`, rich-inline's `extraWidth`), 391 cases, weren't run: the redo's atomic inlines are boxes
+of a declared size and its box edges slice (DESIGN.md §1.1), so it can't express them. `tools/harness-join.ts`,
+`harness/join-<browser>.json`.
 
-Scored-case failure reasons in suite-sample, as the scorer names them: line counts fail only as "line count differs".
-Breaks fail on line counts (Chrome 4,517, Firefox 1,833, webkit-host 4,176) or on the first visible code point with
-equal counts (571, 483, 672). Widths are unobserved mostly for a positive soft hyphen rect at a line end (189, 1,900,
-1,518).
+| file | chrome: pinned / main right / redo right / main only / redo only | firefox | webkit-host |
+|---|---|---|---|
+| smoke | 316 / 316 / 316 / 0 / 0 | 316 / 316 / 316 / 0 / 0 | 316 / 316 / 316 / 0 / 0 |
+| reports | 27 / 23 / 27 / 0 / 4 | 27 / 24 / 27 / 0 / 3 | 27 / 27 / 27 / 0 / 0 |
+| oracles | 55 / 52 / 55 / 0 / 3 | 55 / 53 / 55 / 0 / 2 | 55 / 55 / 55 / 0 / 0 |
+| followups | 2 / 1 / 2 / 0 / 1 | 1 / 0 / 1 / 0 / 1 | 2 / 2 / 2 / 0 / 0 |
+| old-gate | 322 / 50 / 318 / 4 / 272 | 322 / 21 / 322 / 0 / 301 | 259 / 150 / 249 / 0 / 99 |
+| census | 4,386 / 4,386 / 4,386 / 0 / 0 | 4,386 / 4,386 / 4,386 / 0 / 0 | 4,386 / 4,386 / 4,386 / 0 / 0 |
+| rich | 1,617 / 1,490 / 1,501 / 3 / 121 | 1,636 / 1,543 / 1,511 / 2 / 80 | 1,623 / 1,589 / 1,510 / 0 / 29 |
+| sample | 11,901 / 11,414 / 11,744 / 1 / 456 | 11,901 / 11,021 / 11,300 / 0 / 400 | 11,896 / 11,413 / 11,715 / 0 / 427 |
+| facts | 4,818 / 4,528 / 4,815 / 1 / 288 | 4,848 / 4,710 / 4,848 / 0 / 138 | 4,927 / 4,743 / 4,902 / 0 / 159 |
+| catalog | 18,099 / 15,072 / 17,974 / 17 / 2,919 | 18,981 / 16,910 / 18,864 / 41 / 1,995 | 19,378 / 16,836 / 19,359 / 8 / 2,531 |
+| books | 72 / 70 / 72 / 0 / 2 | 72 / 72 / 72 / 0 / 0 | 72 / 72 / 72 / 0 / 0 |
+| all | 41,615 / 37,402 / 41,210 / 26 / 4,066 | 42,545 / 39,056 / 41,702 / 43 / 2,920 | 42,941 / 39,589 / 42,593 / 8 / 3,245 |
+
+Of the pinned cases with a chip or cloned padding (261, 260 and 261), main gets 232, 231 and 233 right. The census and
+the books are the redo's own real-text census and book survey, which main's harness took whole: the redo is right on
+every one of them in all three browsers.
+
+The 77 main-only cases were laid out again in the lab with both predictors and their own natives (`harness/recheck`,
+`tools/recheck-eval.ts`, `classify-harness.py`), and classed as above, page history there meaning the redo is right when
+laid out again:
+
+| browser | main only | page history | narrower than 24 px | main right by luck | true redo loss |
+|---|---:|---:|---:|---:|---:|
+| chrome | 26 | 0 | 8 | 11 | 7 |
+| firefox | 43 | 4 | 10 | 1 | 28 |
+| webkit-host | 8 | 0 | 2 | 5 | 1 |
+
+- Chrome's true losses: `catalog/classes/B2` (U+2E3B between Hangul, 69 and 90 px, `script-context`), `classes/JV`
+  (Hangul jamo U+118F and U+D7C6 at 30-60 px, `glyph-clusters`, `unsafe-to-break`), `classes/EM` (Hebrew and U+1F3FB at
+  29.7 px), and one real-usage draw, `sample/ai/paragraph/zh` (15px PingFang SC at 864 px): Chrome sets `。` half an em
+  narrower before an ASCII `}`, 7.5 px, which the redo's HanKerning doesn't (Chrome's own positions against the port's,
+  `fits/probe-zh`), so its line is 15 px wider than Chrome's and ends a character early; the redo reports no gap at the
+  cause.
+- Firefox's true losses: `catalog/classes/EM` (17) and `EB` (2), an emoji modifier or U+261D between letters, where the
+  redo's U+1F3FB is 21.0 px and Firefox lays it out at 16.0 px at 16px: main corrects Canvas's emoji width by the
+  difference a hidden DOM span shows (`getEmojiCorrection`, one of its documented DOM reads), the redo takes Canvas's and
+  reports only `optical-size`; `ideographic-source-edge` (8), `a`
+  U+3000 U+200D `b` in Arial and Amiri, where the redo's U+3000 with the joiner is 0.5 px wider (`in-word-prefix`); and
+  `classes/CM` (U+0DD8 after two spaces, 24 px).
+- webkit-host's: `catalog/rule/joining` in Noto Naskh Arabic at 44.3 px (`rtl-shaping-across-inline-boxes`).
+- Main right by luck: Chrome's `ideographic-source-edge` with U+0600 (main 16 px off), `classes/CB`, a facts case,
+  `old-gate/space` and `old-gate/mixed`, and rich Myanmar; Firefox's `rule/joining` in Geeza Pro; webkit-host's
+  `rule/joining` at 42-54 px (0.4-4 px) and `source-views/long-tail-edge-falsifier`.
 
 ## Unsupported cases
 
-`predict` returns `{ error: 'unsupported by main: <reasons>' }`, every reason joined, for:
-
-- `white-space` other than `normal` or `pre-wrap`
-- `word-break` other than `normal` or `keep-all`
-- `overflow-wrap` other than `break-word`
-- `line-break` other than `auto`
-- any nonzero `word-spacing`
-- several runs with different styles (font, letter spacing or word spacing), empty runs included
-- a span `lang` different from the paragraph's
-- `tab-size` other than 8 in pre-wrap text holding a TAB
-
-Direction isn't a reason: main has no direction option, but its line breaks don't depend on direction (its README has
-the paragraph rendered as one element with its direction set), so RTL cases are predicted like LTR ones. Every
-suite-sample case is supported; its multi-run cases give every run the same style.
-
-Cases per reason. A case can have several reasons, so a column can add up to more than the unsupported count. The
-counts are the same in every browser.
-
-| reason | smoke | runs | ws | policy |
-|---|---:|---:|---:|---:|
-| several runs with different styles | 110 | 2,364 | 643 | 0 |
-| overflow-wrap normal | 60 | 369 | 150 | 555 |
-| overflow-wrap anywhere | 23 | 231 | 98 | 183 |
-| word-break break-all | 13 | 0 | 0 | 248 |
-| word-break break-word | 6 | 0 | 0 | 66 |
-| line-break loose / normal / strict / anywhere | 12 / 5 / 6 / 7 | 30 / 39 / 27 / 0 | 0 | 123 / 102 / 138 / 130 |
-| span lang differs from the paragraph | 14 | 360 | 0 | 23 |
-| word-spacing | 12 | 354 | 0 | 0 |
-| white-space pre-line / break-spaces / pre / nowrap | 7 / 10 / 2 / 4 | 87 / 60 / 0 / 0 | 195 / 210 / 102 / 102 | 0 |
-| tab-size 0 / 2 / 3 | 0 | 0 | 2 / 3 / 3 | 0 |
-| unsupported cases | 196 | 2,559 | 916 | 1,198 |
-
-The browsers observed only the supported cases. `.artifacts/lab/baseline-main/cases/` holds each set's supported
-cases, byte-identical to the set's lines, and `support.json` the counts above. The scorer ran with `--cases` on the
-original set files.
+`predict` returns `{ error: 'unsupported by main: <reasons>' }`, every reason joined, for a case main's adapter can't
+express (`harness/predict.ts` `unsupported`): white-space other than normal or pre-wrap; word-break other than normal or
+keep-all; overflow-wrap other than break-word; line-break other than auto; word spacing; a span lang other than the
+paragraph's; tab-size other than 8 in pre-wrap text with a TAB; and rich inline (spans among other runs, several styles)
+outside white-space normal and word-break normal. A case with inline structure (a tree, atomic inlines, `<br>`, `<wbr>`,
+text-indent, text-align or floats) has no place in main's case format and is unsupported too. Reasons over Chrome's tier
+cases: overflow-wrap normal 14,839, inline structure 13,606, overflow-wrap anywhere 2,799, rich inline outside normal
+2,491, break-all 2,089, word spacing 1,339, break-spaces 1,213, span lang 1,194, line-break loose / strict / normal /
+anywhere 1,139 / 760 / 499 / 406, pre-line 739, nowrap 233, pre 207, break-word 138, tab-size 375.
 
 ## How the adapter uses main
 
-- Font: one canvas font string from the style all runs share: `[italic ][weight ]<size>px <family>`, leaving out
-  weight 400 (`16px Arial`, `italic 700 18px "Helvetica Neue"`).
-- `prepareWithSegments(text, font, options)` with `whiteSpace: 'pre-wrap'` for pre-wrap, `wordBreak: 'keep-all'` for
-  keep-all and `letterSpacing` when it isn't 0, then `walkLineRanges(prepared, paragraph.width, ...)`. Line height
-  doesn't change main's lines.
-- Language: main takes break rules and Canvas font resolution from `<html lang>` only. Before each case the adapter
-  calls `setLocale(paragraph.lang)`, which only sets the word segmenter's locale (and clears main's caches). A paragraph
-  whose `lang` differs from the page's is predicted under the page's language; the subgroup table counts those cases.
-- Line ranges: `walkLineRanges` cursors index main's segment stream, the text after main's white-space normalization
-  (normal: runs of SPACE, TAB, LF, CR and FF become one SPACE, a leading and a trailing one are dropped, and the Blink
-  and Gecko profiles remove a run with LF next to a ZWSP; pre-wrap: CRLF, CR and FF become LF). The adapter turns a
-  cursor into a stream offset (the segment's start plus the grapheme's offset from `Intl.Segmenter`), aligns the joined
-  segments with the source text once, and maps each line's first and last stream unit to source offsets. A collapsed
-  run belongs to the line whose stream holds its SPACE. Source white space main removed, such as leading spaces,
-  belongs to no line. The adapter never searches line text. When the stream doesn't align with the source, the
-  prediction is an adapter error; no row has one. Before the browser runs, a check with a fake canvas under a Chrome,
-  Safari and Firefox user agent found forward, disjoint ranges covering every inked code point in every supported case.
-- Widths: `LayoutLineRange.width` as main reports it.
-- measureText: main doesn't report calls, so the adapter counts calls to `CanvasRenderingContext2D.prototype.measureText`
-  and `OffscreenCanvasRenderingContext2D.prototype.measureText` while `predict` runs. Because `setLocale` clears the
-  caches, each count is one cold prepare.
-- `paint` returns null, so the painter metric is not-applicable everywhere.
+- `harness/predict.ts`, called as main's harness calls it: a font string per run style (`[italic ][weight ]<size>px
+  <family>`, weight 400 left out); `prepareWithSegments(text, font, options)` with `whiteSpace: 'pre-wrap'`,
+  `wordBreak: 'keep-all'` and `letterSpacing` as the case asks, then `walkLineRanges`; or `prepareRichInline` with one
+  item per run (letter spacing per item) and `walkRichInlineLineRanges`. It also runs `layout()` on `prepare()`'s handle,
+  `measureLineStats`, `layoutNextLineRange`, `layoutNextLine`, `layoutWithLines` and `materializeLineRange` (the rich
+  ones for a rich case), and keeps the first way one disagrees with the walk on the prediction as `disagreement`.
+- The adapter aligns main's segment stream with the source once and returns UTF-16 source ranges, main's widths, and the
+  `measureText` calls while preparing as `measureLog`. Main's caches are cleared before every case, so each count is a
+  cold prepare. Since #340 main takes break rules and font resolution from `<html lang>` alone and `setLocale()` only
+  clears the caches.
+- `baselines/book-main-predictor.ts` adds what `layout()` on `prepare()`'s handle counts, the book survey's public height.
+- `paint` returns null.
 
 ## Caveats
 
-- Width semantics. Main's width is a float sum of Canvas advances. Blink's line extent is in LayoutUnits (1/128 CSS px
-  at DPR 2) and comes out one unit wider, so in Chrome main misses by exactly one grid unit on many lines: 4,844 of the
-  6,844 width-failing suite-sample cases miss by at most one unit on every mismatched line (9,981 of 12,773 mismatched
-  lines), and 170 of 199 in policy. In Firefox (1/60 px) that's 45 of 2,358. webkit-host is scored by float32 line edges;
-  1,581 of its 2,099 width-failing cases are within one 1/64 px unit. Compare Chrome widths with this in mind.
-- Pre-wrap trailing spaces. Main counts the part of the spaces before a newline or at the end of the text that fits in
-  the width. The lab treats them as hanging and leaves them out of the extent. Few lines have this: 55 of Chrome's
-  mismatched suite-sample lines, 66 of Firefox's and 18 of webkit-host's.
-- Control characters. Main takes the Canvas width of C0 and C1 controls (5 to 13 px in these rows, such as U+0001 at
-  5.33 px in Chrome and U+0000 at 13 px in Firefox), where the engines give them no width, so lines holding one fail
-  widths and often line counts.
-- Lone CR in pre-wrap. Main breaks the line there and browsers don't; README documents it. It affects 36 suite-sample
-  cases, 8 ws cases and 1 smoke case.
-- Missing fonts. Some rows name families the page couldn't resolve (Chrome 44 rows, Firefox 65, webkit-host 24: SimSun,
-  Noto Sans Myanmar in Firefox, Yu Mincho and others). Native layout and Canvas both fall back, not necessarily to the
-  same font.
-- History dependence. These rows observed only the supported cases, in each set's order, so a case's predecessors in
-  the document differ from other lab runs. No `--native-compare` was run, so the few WebKit cases that depend on
-  earlier cases aren't flagged.
-- Prediction time (`predictMs`, cold caches, adapter included): suite-sample totals 1.5 s in Chrome, 1.4 s in Firefox and
-  2.2 s in webkit-host for about 20,000 cases.
+- Width semantics. Main's width is a float sum of Canvas advances and isn't compared here; the 2026-09-16 baseline found
+  Chrome's line extents one LayoutUnit wider on many lines.
+- Main's recordings were made by main's harness in its own documents; the lab's recheck laid the 77 cases out again, and
+  in Firefox four of them are laid out as the redo predicts.
+- Not measured: the words-first real-text attack's 59 sets (751,327 Chrome layouts), whose case files and natives
+  weren't kept; the book survey's own workflow (the harness's `books.ndjson` holds its 72 paragraphs); Safari installed.
 
 ## Reproducing
 
 ```sh
-python3 .artifacts/session/with-browser-lock.py baseline-main-<browser>-<set> -- \
-  bun rebuild/lab/run.ts --browser=<browser> --cases=.artifacts/lab/baseline-main/cases/<set>.ndjson \
-  --out=.artifacts/lab/baseline-main/<browser>/<set> --predictor=rebuild/lab/baselines/main-predictor.ts
-bun rebuild/lab/score.ts --rows=.artifacts/lab/baseline-main/<browser>/<set>/<browser>-rows.ndjson \
-  --cases=.artifacts/lab/cases/<set>.ndjson --out=.artifacts/lab/baseline-main/<browser>/<set>/<browser>-summary.json \
-  --per-case=.artifacts/lab/baseline-main/<browser>/<set>/<browser>-per-case.ndjson --examples=10
+bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>/main-<browser> \
+  --predictor=rebuild/lab/baselines/main-predictor.ts
+bun .artifacts/tests/runs/rule2-20260925/tools/join-tier.ts <browser> no-facts <dir>/main-<browser> \
+  .artifacts/tests/reference/<browser>-no-facts [<the redo's run with its own natives>] > join.json
 ```
 
-The supported-case files select the lines of a set whose `unsupportedReasons(c)` (exported by the adapter) is empty.
-`run.ts` also takes a full set file; the unsupported cases then score as failures with the reason "prediction error",
-and the supported ones run after other predecessors.
+The harness runs: `.artifacts/tests/runs/rule2-20260925/harness/run-redo-harness.sh <browser>` in a checkout with
+`harness-run-local.patch` applied, then `tools/harness-join.ts <browser> harness/redo-<browser>`.
