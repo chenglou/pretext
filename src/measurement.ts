@@ -393,6 +393,22 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
   return correction
 }
 
+// The page-side read of the probe, and the worker-side write of its value: a
+// worker has no document to measure the hidden span against, so the page reads
+// the correction for a font and the app hands the number over (#292).
+export function readEmojiCorrection(font: string): number {
+  const measurement = getFontMeasurement(font, getPreparationLanguage(getEngineProfile()))
+  return getEmojiCorrection(font, measurement)
+}
+
+export function writeEmojiCorrection(font: string, correction: number): void {
+  if (!Number.isFinite(correction) || correction < 0) {
+    throw new RangeError('emoji correction must be a finite, non-negative number of pixels')
+  }
+  const measurement = getFontMeasurement(font, getPreparationLanguage(getEngineProfile()))
+  measurement.emojiCorrection = correction
+}
+
 function countEmojiGraphemes(text: string): number {
   const ends = new Int32Array(text.length)
   const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)

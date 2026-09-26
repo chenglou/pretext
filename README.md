@@ -211,6 +211,8 @@ Other helpers:
 ```ts
 clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
 setLocale(locale?: string): void // optional (by default we use the page language, from `<html lang>`). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them). A worker has no `<html lang>`, so call it there with the page's `document.documentElement.lang` to give the worker the page's language
+getEmojiCorrection(font: string): number // reads the per-font emoji correction prepare() probes for: the pixels to subtract from each emoji grapheme's canvas width, or 0 where there's no inflation. The probe needs a document, so this reads 0 inside a Web Worker
+setEmojiCorrection(font: string, correction: number): void // hands the page's correction to a document-less worker: read it with getEmojiCorrection(font) on the main thread, postMessage the number, and call this there with the same font string before preparing emoji text. Without it, a worker measures Apple Color Emoji wider than the page paints them
 ```
 
 Notes:
