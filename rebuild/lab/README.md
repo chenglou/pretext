@@ -599,7 +599,29 @@ positions and lines, and takes about an hour in a Chrome slot at device pixel ra
 resolve). A change that means to move nothing must show 0 cuts, positions and layouts differing. Where the two trees
 differ, the probe can't say which is right: `tools/cut-fonts-cases.ts` writes the differing families' paragraphs as lab
 cases, `lab/run.ts` and `lab/score.ts` hold both trees' lines against the browser's own, and no case may go from pass
-to a failure.
+to a failure. Since words first (2026-09-23) the two trees' cuts differ by design where one of them cuts words: the probe
+compares the positions at every inner cut of either tree and at the space before it, and the group totals, and those
+must not differ where the browser doesn't side with the change. The cut predictor (2026-09-23) is such a change that
+means to move nothing: its probe against words first must show 0 cuts, positions and layouts differing.
+
+**A change to Blink's words first also passes its attack** (since 2026-09-23): a change to `shape.ts` `addWordPieces`,
+to the walk (`line-breaker.ts` `wordCandidate`) or to what the inspected path holds them against (DESIGN.md §4.6).
+`tools/words-attack.ts` lays seeded paragraphs of words (`tools/words-attack-cases.ts`) out by the main line's tree and
+the change's in one process on the stand-in Canvases, plain and inspected, at fixed widths and at the decided lines' own
+widths: on `usual` and `fine`, which keep both premises, no layout may differ between the walk and the search or between
+plain and inspected, and against the tree before words first only where the rule for window sides Canvas shapes as
+Common moves a window (at 48de7f7, over the 11,973 paragraphs of the seed `blink-words-first-1`, one case at four widths
+on `usual` at DPR 3); on `across`, `far` and `backwards`, which break the premises, every layout that differs from the
+tree before words first and isn't moved by that rule must report its gap. 12,000 layouts take
+about a minute and a half on ten cores. Two more Canvases hold what `usual` and `fine` can't show: `f32` rounds every
+total to a float, as Canvas does, so a total of 256 zoomed px or more that a recipe takes as exact moves a line (the
+tree's lines on `f32` against its lines on `fine` say which tree does it), and `script-space` widens a space that a 16-bit
+string doesn't shape under Latin, as Euphemia UCAS does. `--record=no-gap` lists only the differences no premise's gap
+accounts for. The constructed cases of `tools/bwf-constructed-cases.ts` (2026-09-23) also differ from the tree before
+words first without a gap where round 1's rule for a position after characters every lookup skips at a cut applies
+(runs of default-ignorable characters and Myanmar spacing marks at unsafe cuts, at letter spacing of 1em or at 96px);
+as lab cases they moved no status in pinned Chrome. `tools/words2-sum-probe.ts` holds the words' sums against Canvas's own exact
+totals over the installed families in pinned Chrome, and the cut probe above holds the two trees' positions.
 
 **A change to Gecko's word scan also passes its attacks and the premise probe before it merges** (since 2026-09-23): a
 change to `engines/gecko/lines.ts` `wordScan`, to what it leaves to the engine's loop, or to the in-word recipes whose

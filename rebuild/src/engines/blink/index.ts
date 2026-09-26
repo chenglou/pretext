@@ -65,7 +65,7 @@ function shapingGroups(items: readonly InlineItem[], styles: readonly BlinkStyle
     const length = end - s.start
     const group: BlinkGroup = {
       start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0,
-      prefix16: new Float64Array(length).fill(NaN), pair16: new Float64Array(length).fill(NaN), wide16: new Float64Array(length).fill(NaN),
+      prefix16: new Float64Array(length).fill(NaN), pair16: new Float64Array(length).fill(NaN), wide16: new Float64Array(length).fill(NaN), words: false, whole: null,
     }
     groupOfUnit.fill(groups.length, group.start, group.end)
     groups.push(group)
@@ -148,7 +148,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   for (let s = 0; s < computed.styles.length; s++) {
     const style = computed.styles[s]!
     if (fragmentAncestors !== null && s > 0) fragmentAncestors[s] = style.shouldCreateBoxFragment ? s : fragmentAncestors[style.parent]!
-    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, hanKerning: null })
+    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, spaceTakesScript: null, hanKerning: null })
   }
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
@@ -169,7 +169,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit,
-    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors! },
+    canvases, inspect: gaps === null ? null : { gaps: [], paragraphIndex: null, graphemeRuns: null, collapsedSourceRuns: new OffsetRuns(contentOffsets.length, k => contentOffsets[k]! < 0), fragmentAncestors: fragmentAncestors!, searched: [] },
   }
   const sh: Shaper = { p, gaps }
   markContinuations(p)

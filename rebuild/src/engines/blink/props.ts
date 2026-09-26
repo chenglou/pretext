@@ -4,7 +4,8 @@
 // tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
 import {
-  blinkCharPropsBase64, blinkCjkIdeographOrSymbolRanges, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
+  blinkCharPropsBase64, blinkCjkIdeographOrSymbolRanges, blinkCursiveScripts, blinkHanKerningTypes, blinkRecomposingLetterRanges, blinkScriptExtensions,
+  blinkScriptPropsBase64,
 } from './generated/break-tables.js'
 
 // ULineBreak values used by name (unicode/uchar.h:2487-2565).
@@ -181,6 +182,22 @@ export function isCursiveScript(script: number): boolean {
 export function isCjkIdeographOrSymbol(cp: number): boolean {
   if (cp < 0x2c7) return false
   const ranges = blinkCjkIdeographOrSymbolRanges
+  let lo = 0
+  let hi = ranges.length / 2 - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (ranges[2 * mid]! <= cp) lo = mid
+    else hi = mid - 1
+  }
+  return ranges[2 * lo]! <= cp && cp <= ranges[2 * lo + 1]!
+}
+
+// A letter HarfBuzz writes otherwise in a shaping call that holds a mark than in one that holds none: two marks or more
+// in its canonical decomposition, or one that composes back where the shaper may decompose every letter
+// (hb-ot-shape-normalize.cc:303-432; the ranges tools/gen-blink-data.ts generates).
+export function recomposesInMarkedCall(cp: number): boolean {
+  if (cp < 0x1d5) return false
+  const ranges = blinkRecomposingLetterRanges
   let lo = 0
   let hi = ranges.length / 2 - 1
   while (lo < hi) {

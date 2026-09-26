@@ -26,7 +26,8 @@ class Context {
     asked.push({ context: this, text })
     const size = parseFloat(/([\d.]+)px/.exec(this.font)![1]!)
     let n = 0
-    for (const c of text) if (c !== '‍' && c !== '​') n++
+    // U+202A..U+202E, which Canvas turns into U+200B (shape.ts inGroupDirection), measure nothing either.
+    for (const c of text) if (c !== '‍' && c !== '​' && !(c >= '\u202a' && c <= '\u202e')) n++
     return { width: n * size * 10 / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
 }
@@ -350,7 +351,8 @@ describe('blink round 2', () => {
       font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
       measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
         let n = 0
-        for (const c of text) if (c !== '‍' && c !== '​') n++
+        // U+202A..U+202E, which Canvas turns into U+200B (shape.ts inGroupDirection), measure nothing either.
+    for (const c of text) if (c !== '‍' && c !== '​' && !(c >= '\u202a' && c <= '\u202e')) n++
         const ligatures = this.letterSpacing === '0px' ? text.split('fi').length - 1 : 0
         return { width: (n - ligatures) * 10, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
       }
@@ -385,7 +387,7 @@ describe('blink round 4', () => {
       font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
       measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
         let width = 0
-        for (const c of text) if (c !== '\u200d' && c !== '\u200b' && c !== '\u2060') width += 10
+        for (const c of text) if (c !== '\u200d' && c !== '\u200b' && c !== '\u2060' && !(c >= '\u202a' && c <= '\u202e')) width += 10
         for (const pair of Object.keys(pairs)) width -= (text.split(pair).length - 1) * pairs[pair]!
         return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
       }

@@ -4,6 +4,17 @@ The goal is a cheap stateless core with simple data flow and predictable cost, a
 behavior. Optimize until the remaining gains are small relative to the code, assumptions and state they add. The
 engineering approach follows `~/github/vibescript/docs/engineering.md`.
 
+The redo stops (the maintainer's rule, 2026-09-25) when: every remaining difference from the browsers on every set is a
+named gap, a made-up or variation-extreme font, or a width under 24 px, and none is unexplained; it is a superset of main
+in all three engines, rich inline included; and the speed recipes end with Blink's words first and the cut predictor.
+After that the work is upkeep: pinning newer browsers, syncing main and adopting new browser APIs. A premise about fonts
+that nobody has falsified may be taken for speed, as a documented default with a named gap, and where requirements have
+to give, ad hoc ones go first, then petty ones.
+Where it stands (2026-09-25): with words first and the cut predictor the speed recipes end, so that part is reached.
+The first part isn't met yet: the review of words first's gap naming found 12 layouts at DPR 1 that fail with no gap,
+one-LayoutUnit fits on first lines and at line starts not beside U+0020 and six not traced, which the line before words
+first fails too (TAKEOVER.md; the known tail's `blink/exact-fits-without-a-gap`). They are open correctness work.
+
 Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated
 research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
@@ -29,6 +40,14 @@ redo core still matches `0bdea4d`. In Firefox it prepares new Latin and Arabic c
 (1.5 to 1.6 times main keeping its caches, where it was 2.5 to 2.8), fills them at new widths about 3 and 9 times faster
 and lays kept Latin and Arabic paragraphs out again 1.7 to 1.8 times faster; CJK stays where it was.
 
+Since 2026-09-23 on branch `blink-words-first` Blink cuts a shaping group into words first, measuring each word once with
+its trailing space, and finds the break of a line that ends between two words from the positions at the cuts (words
+first, DESIGN.md §4.4), and predicts the window a shrink of the wide window takes instead of measuring every window
+before it (the cut predictor), on three premises about fonts documented as defaults with named gaps (§4.6). What it
+leaves against the rebuild line in installed faces is named since 2026-09-25: gaps an inspected paragraph raises where
+the port's measurements show the condition, and Zapfino's morx state as a font-level limitation in the known tail
+(TAKEOVER.md).
+
 ## Core
 
 `src/index.ts` dispatches to `src/engines/{blink,gecko,webkit}`. Canvas supplies measurements; DOM reads and font-file
@@ -39,8 +58,19 @@ Prefer fewer representations, local derived values and ordinary loops. Preserve 
 measurement boundaries. A smaller number of Canvas calls is neither a speed result nor a correctness argument.
 Sampled font behavior must not silently become a guarantee about arbitrary fonts. Keep engine-specific behavior explicit.
 A premise about fonts that no source gives is taken only as a documented default with a named gap that inspected
-paragraphs report, and only where the port's measurements find no face a page ordinarily asks for that breaks it: Gecko's
-word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail` (DESIGN.md §4.6).
+paragraphs report, and only where no installed face, at any setting CSS can ask for, breaks it in the pinned browser; where
+one does, the premise is bounded, by the zoomed font size, by a property of the font Canvas can check or by the text
+an engine source shows it failing on, so that the recipe it replaces runs there (the maintainer, 2026-09-23: "as long as correctness is still redo's goal"): Gecko's
+word scan assumes no tail of a shaped word has a negative advance and reports `negative-word-tail`; Blink's words first
+assumes no shaping context reaches more than one word past a space and that positions inside a word stay sorted, runs
+only below a zoomed font size of 60 px, counting what letter and word spacing add to two words, where the word test can
+be asked between two words of every installed face (Zapfino breaks it from 64), and not in a face whose space takes the
+script (Euphemia UCAS), nor in a group whose shaping call holds a mark and a letter HarfBuzz recomposes only in such a
+call (Athelas's `ở` after a `café` spelled with U+0301), and reports `context-past-a-word` and `positions-run-backwards`
+(DESIGN.md §4.6). Blink's cut predictor assumes a string is narrower than a window inside it by less than the
+zoomed font size, and runs only without letter spacing or negative word spacing and where the space takes the same
+advance under Latin as under Common, since the calligraphic Arabic faces break the premise with no margin at display
+sizes; it reports `nested-window-wider` (DESIGN.md §4.6).
 
 Measure fresh preparation plus all filling separately from repeated widths on retained prepared data. Record browser,
 DPR, font, input population, context ownership, power conditions and source hashes. Alternate pairs for small gains.

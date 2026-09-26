@@ -7,6 +7,7 @@ import type { BlinkEnvironment } from '../../env.js'
 import type { Context, ContextPool } from '../../measure/canvas.js'
 import type { FontDecl, Gap, LineBreak, OverflowWrap, Paragraph, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
+import type { Total16 } from './shape.js'
 
 // End collapse types (inline_item.h:307).
 export type EndCollapseType = 'not-collapsible' | 'collapsible' | 'collapsed' | 'opaque-to-collapsing'
@@ -78,6 +79,9 @@ export type BlinkStyle = ComputedStyle & {
   // Whether Canvas shapes the style's strings word by word (Font::CanShapeWordByWord), measured when a 16-bit string first
   // holds a word edge; null until then (shape.ts canvasSplitsWords).
   canvasSplitsWords: boolean | null
+  // Whether the style's space takes another advance under Common than under Latin, measured when words first or the cut
+  // predictor first asks; null until then (shape.ts spaceTakesScript).
+  spaceTakesScript: boolean | null
   // HanKerning::FontData, measured in prepare for a style with a shaping group HanKerning may apply to; null for the others.
   hanKerning: HanKerningFontData | null
 }
@@ -119,7 +123,8 @@ export type BlinkGroup = {
   end: number
   style: number
   rtl: boolean
-  // [start, piece ends..., end].
+  // [start, piece ends..., end]. A piece is a word with its trailing space where the offset after the space passed the
+  // safe test, else what the cut search made of the stretch (shape.ts addWordPieces).
   cuts: number[]
   // 16.16 advance sum before each cut, including the pair adjustment at that cut, without HanKerning edge trims.
   prefixAtCut: number[]
@@ -136,12 +141,21 @@ export type BlinkGroup = {
   prefix16: Float64Array
   pair16: Float64Array
   wide16: Float64Array
+  // Whether the group is cut into words first (shape.ts measureGroups, takesWords); where it isn't, it is cut by the cut
+  // search alone and its windows are the ones before words, without the rule for sides Canvas shapes as Common.
+  words: boolean
+  // The total of a group of one piece (shape.ts addPieces), which a plain paragraph hands its windows.
+  whole: Total16 | null
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
 // fonts' and the environment's, with the ones preparation's measuring raised first; canonical once prepare ends (gaps.ts
-// canonicalGaps).
-export type BlinkInspect = { gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; graphemeRuns: OffsetRuns | null; collapsedSourceRuns: OffsetRuns; fragmentAncestors: Int32Array }
+// canonicalGaps). `searched`: per group, the cuts the cut search alone made and the prefixes at them, which every read
+// that depends on the cuts is held against (shape.ts heldAgainstSearch).
+export type BlinkInspect = {
+  gaps: Gap[]; paragraphIndex: ParagraphGapIndex | null; graphemeRuns: OffsetRuns | null; collapsedSourceRuns: OffsetRuns; fragmentAncestors: Int32Array
+  searched: Array<{ cuts: number[]; prefixAtCut: number[] }>
+}
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they
 // are first needed (BlinkStyle) and what the groups keep by offset (BlinkGroup.prefix16, pair16, wide16).

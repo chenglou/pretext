@@ -84,19 +84,18 @@ function lineCount(family: string, text: string, width: number): number {
 }
 
 describe('blink cuts of a wide group: a cut before white space beside a side cut again', () => {
-  test('the pieces are the ones named, and the window between the cuts around the cut is asked after them', () => {
+  test('two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)', () => {
     for (let s = 0; s < SAMPLES.length; s++) {
       const sample = SAMPLES[s]!
-      asked = []
-      prepare(paragraphIn('Mono', sample.text), env, false, createContextPool())
-      // Every piece is asked first while the text is cut; the window's sides can be pieces asked again.
-      let lastPiece = -1
-      for (let i = 1; i < sample.pieces.length; i++) {
-        const at = asked.indexOf(sample.text.slice(sample.pieces[i - 1]!, sample.pieces[i]!).replaceAll(' ', LS))
-        expect(at).toBeGreaterThan(-1)
-        lastPiece = Math.max(lastPiece, at)
+      const far = sample.far.replaceAll(LS, ' ')
+      const at = sample.text.indexOf(far)
+      const mono = prepare(paragraphIn('Mono', sample.text), env, false, createContextPool()).groups[0]!.cuts
+      const own = prepare(paragraphIn(sample.family, sample.text), env, false, createContextPool()).groups[0]!.cuts
+      for (let k = at + 1; k < at + far.length; k++) {
+        if (sample.text[k - 1] !== ' ') continue
+        expect(mono.includes(k)).toBe(true)
+        expect(own.includes(k)).toBe(false)
       }
-      expect(asked.lastIndexOf(sample.text.slice(sample.window[0], sample.window[1]).replaceAll(' ', LS))).toBeGreaterThan(lastPiece)
     }
   })
 

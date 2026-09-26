@@ -25,16 +25,20 @@ import { clampLU } from './layout-unit.js'
 // joining-technology there.
 import { width as canvasWidth } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { AL as BIDI_AL, AN as BIDI_AN, FSI as BIDI_FSI, LRI as BIDI_LRI, PDI as BIDI_PDI, R as BIDI_R, RLI as BIDI_RLI, bidiClassOf } from '../../unicode/bidi.js'
+import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { collapsesWhiteSpace } from './content.js'
 import { NO_LIGATURES_SPACING_PX, raw16Of, styleContexts } from './contexts.js'
-import { blinkGraphemeRules } from './data.js'
+import { blinkBidiData, blinkGraphemeRules } from './data.js'
 import { SourceScriptCursor, isSegmentEdge } from './emoji.js'
-import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
+import { GapAccumulator } from './gap-accumulator.js'
+import { contextPastAWord, floatSum, roundedPiece, nestedWindowWider, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, windowSides, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
 import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
-  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, scriptOf,
+  isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMark, isMarkOrModifier, isWhiteSpace, joiningType, recomposesInMarkedCall,
+  scriptExtensionsOf, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
@@ -70,9 +74,37 @@ export function widthOf16(raw16: number): number {
 
 // What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
 // GapSink: the paragraph's in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
+// `aside`: reads an inspected paragraph makes beside the layout's own, whose gaps decide nothing, so they aren't held
+// against anything: `search`, the cut search the words are held against, which reads as the port did before words; `walk`,
+// the walk over the cuts held against the search, which reads what the layout would.
 export type Shaper = {
   p: BlinkPrepared
   gaps: GapSink
+  aside?: 'search' | 'walk'
+}
+
+// On an inspected paragraph a read of a group's own call that depends on its cuts (a position, the wide window) is made
+// with the cuts the cut search alone made first (BlinkInspect.searched), as the port read it before it cut words, so it
+// asks what it asked then and in that order, and then with the words' cuts. Where the two differ the words rest on
+// context that reaches past a word, and the read reports context-past-a-word; the layout takes the words' value.
+function heldAgainstSearch(sh: Shaper, g: number, k: number, read: (sh: Shaper) => number): number {
+  const searched = sh.gaps === null || sh.aside !== undefined ? undefined : sh.p.inspect?.searched[g]
+  if (searched === undefined) return read(sh)
+  const group = sh.p.groups[g]!
+  const cuts = group.cuts
+  const prefix = group.prefixAtCut
+  group.cuts = searched.cuts
+  group.prefixAtCut = searched.prefixAtCut
+  let before: number
+  try {
+    before = read({ p: sh.p, gaps: new GapAccumulator(sh.p.index.text.length), aside: 'search' })
+  } finally {
+    group.cuts = cuts
+    group.prefixAtCut = prefix
+  }
+  const value = read(sh)
+  if (value !== before) contextPastAWord(sh.gaps, sh.p, g, k)
+  return value
 }
 
 // The contexts a string of a style is measured on, by the string's storage. Chrome keeps the strings and the words a
@@ -182,8 +214,8 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 
 // The string Canvas measures for text_content[from, to), with each code unit's text_content offset (-1 for added context).
 // Canvas turns U+0009..U+000D into spaces (plain_text_node.cc:49-50) and SHY into ZWSP, which splits a word (:84-113): so
-// U+0020 becomes U+2028, VT and FF become U+0001, which takes the same fallback font (blink-gaps §2.8), and SHY is left out
-// (gap soft-hyphen-shaping). CR in collapse modes is already a space, and CR and FF in preserve modes are control items.
+// U+0020 becomes U+2028, VT and FF become U+0001, which takes the same fallback font (blink-gaps §2.8), and SHY becomes
+// U+2060 (below). CR in collapse modes is already a space, and CR and FF in preserve modes are control items.
 //
 // Canvas shapes an 8-bit string as one Latin segment and runs RunSegmenter over a 16-bit one (harfbuzz_shaper.cc:1072-1101),
 // and Blink keys storage on V8's representation (to_blink_string.cc:216-227). A paragraph that RunSegmenter segments asks
@@ -201,12 +233,20 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // (hb-ot-shape.cc:951-959). U+2060 WORD JOINER has the same HarfBuzz properties (gc Cf, neither joiner nor hidden:
 // hb-ot-layout.hh:212-244), script Common, emoji category kMaxCategory and bidi class BN, and Canvas doesn't normalize it,
 // so the string carries U+2060 instead (probe blink-ignorables: emoji sequences, Geeza Pro and Amiri joining, Thai marks,
-// kerning and letter spacing all equal the DOM). In an 8-bit paragraph the DOM shapes one Latin segment without RunSegmenter
-// (inline_node.cc:1256-1290), which U+2060 would turn into a 16-bit string that Canvas segments, so there the character is
-// left out and the string stays 8-bit; a `morx` substitution across it can still differ (gap soft-hyphen-shaping). In a
-// segmented paragraph the string carries U+2060 whatever its length: probe blink-followups-20260917 gives RLM `((` in
-// Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out. The 1567 an earlier probe saw came from
-// the brackets resolving to the following Latin run's script, which script-context names.
+// kerning and letter spacing all equal the DOM). The string carries U+2060 whatever its length and whatever the paragraph:
+// probe blink-followups-20260917 gives RLM `((` in Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM
+// left out. The 1567 an earlier probe saw came from the brackets resolving to the following Latin run's script, which
+// script-context names. In an 8-bit paragraph, whose only such character is SHY, the DOM shapes one Latin segment without
+// RunSegmenter (inline_node.cc:1256-1290), and U+2060 makes the string 16-bit, which Canvas segments; its letters are Latin
+// either way, and a string without one reports script-context (gaps.ts measuredRange). Until 2026-09-24 SHY was left out
+// of such a string without a space, so that it stayed 8-bit, while one with a space, 16-bit for its U+2028, carried U+2060:
+// a window and its sides were written two ways, and a window over a space showed an adjustment its sides' way of writing
+// made (16px Helvetica Neue at DPR 2 under -3px of word spacing: `, cof`+SHY+`fee` measured 6,291 units off its sides at
+// the line start after `, `, which was taken as unsafe to break). The DOM keeps SHY's glyph in the call, where `morx` and
+// `kerx` machines see it: over 399 installed families at 16 and 28px, 2,356 words of 14 with SHY measure otherwise in the
+// DOM than without it, in 168 families, and Canvas gives each of them the DOM's width with U+2060 and none of them with SHY
+// left out (probe bwf-loss S1, 2026-09-24).
+// rule blink/measure/ignorables-as-word-joiner
 //
 // `keepSpaces`: U+0020 stays U+0020, so a Latin-1-only string stays 8-bit (measure16 spacesStay).
 //
@@ -215,25 +255,25 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
 // characters as the paragraph does.
 // units is null when the measuring caller needs neither spacing corrections nor diagnostics.
-export type CanvasString = { s: string; units: number[] | null; twoByte: boolean; leftOut: boolean }
+export type CanvasString = { s: string; units: number[] | null; twoByte: boolean }
 
 export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number, keepSpaces: boolean = false, mapUnits: boolean = true): CanvasString {
   const text = p.canvasText
   if (!mapUnits && text !== null && !zwjBefore && !zwjAfter) {
     const narrow = text.narrow.slice(from, to)
     const wide = !keepSpaces && narrow.includes(' ')
-    return { s: wide ? text.spaced.slice(from, to) : narrow, units: null, twoByte: wide, leftOut: false }
+    return { s: wide ? text.spaced.slice(from, to) : narrow, units: null, twoByte: wide }
   }
-  let codes: number[] = []
-  let units: number[] | null = mapUnits ? [] : null
+  const codes: number[] = []
+  const units: number[] | null = mapUnits ? [] : null
   if (zwjBefore) { codes.push(0x200d); units?.push(-1) }
   let wide = zwjBefore || zwjAfter
-  const substituted: number[] = []
+  let substituted = false
   for (let i = from; i < to; i++) {
     const c = p.text.charCodeAt(i)
     switch (c) {
       case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff:
-        substituted.push(codes.length); codes.push(0x2060); break
+        substituted = true; codes.push(0x2060); break
       case 0x20: if (keepSpaces) codes.push(0x20); else { codes.push(0x2028); wide = true } break
       case 0x0b: case 0x0c: codes.push(0x0001); break
       default: codes.push(c); if (c > 0xff) wide = true
@@ -241,20 +281,6 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
     units?.push(i)
   }
   if (zwjAfter) { codes.push(0x200d); units?.push(-1) }
-  // Whether the string keeps its default-ignorable characters as U+2060, which makes it 16-bit: in a segmented paragraph.
-  const keeps = wide || p.segments !== null
-  const leftOut = !keeps && substituted.length > 0
-  if (leftOut) {
-    const keptCodes: number[] = []
-    const keptUnits: number[] | null = units === null ? null : []
-    for (let i = 0, next = 0; i < codes.length; i++) {
-      if (next < substituted.length && substituted[next] === i) { next++; continue }
-      keptCodes.push(codes[i]!)
-      if (keptUnits !== null) keptUnits.push(units![i]!)
-    }
-    codes = keptCodes
-    units = keptUnits
-  }
   // One String.fromCharCode call where the units fit its arguments, which is every string but a long text's: no copy.
   let s = ''
   if (codes.length <= 4096) s = String.fromCharCode(...codes)
@@ -263,12 +289,12 @@ export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefo
   // one Latin segment of an 8-bit string. A shorter range the paragraph shapes under another script gets U+2060 before it,
   // which makes the string 16-bit without a glyph or a script (the ignorables probe above: U+2060 alone measures 0, and
   // U+2060 `((` gives Amiri's DOM width where the 8-bit `((` shapes as Latin), so RunSegmenter resolves it as Common.
-  const nonLatin = keeps && !wide && substituted.length === 0 && domScript !== USCRIPT_LATIN
+  const nonLatin = p.segments !== null && !wide && !substituted && domScript !== USCRIPT_LATIN
   const forced = nonLatin && codes.length >= 13
   const prefixed = nonLatin && !forced && codes.length > 0
-  const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
-  if (prefixed) return { s: '\u2060' + s, units: units === null ? null : [-1, ...units], twoByte, leftOut }
-  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte, leftOut }
+  const twoByte = wide || substituted || forced || prefixed
+  if (prefixed) return { s: '\u2060' + s, units: units === null ? null : [-1, ...units], twoByte }
+  return { s: forced ? ('Ā' + s).slice(1) : s, units, twoByte }
 }
 
 // IsWordDelimiter<true> over the string as NormalizeSpacesAndMaybeBidi leaves it (plain_text_node.cc:26-91): U+0020, TAB and
@@ -334,11 +360,48 @@ function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
 }
 
 // The script Canvas shapes every code unit of a 16-bit Canvas string under: RunSegmenter runs over each PlainTextItem alone
-// (HarfBuzzShaper(item.text_), plain_text_node.cc:400-425; harfbuzz_shaper.cc:1080-1101), and SegmentWord makes an item of
-// every word unless the font can't be shaped word by word (:372-398). So U+3000 between Arabic letters is Common in Canvas,
-// where the paragraph keeps it in the Arabic run (probe critic-r2 blink-u3000: 10px of letter spacing adds 10px per U+3000
-// in Canvas and nothing in the DOM).
-export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string): Uint8Array {
+// (HarfBuzzShaper(item.text_), plain_text_node.cc:400-425; harfbuzz_shaper.cc:1080-1101). A string that may hold
+// right-to-left text (Character::MaybeBidiRtl of any code point, character.h:307-321), or any string on a right-to-left
+// context, is cut into ICU's level runs first unless it resolves as one left-to-right direction (plain_text_node.cc:278-351),
+// and SegmentWord makes an item of every word of each run unless the font can't be shaped word by word (:372-398). So
+// U+3000 between Arabic letters is Common in Canvas, where the paragraph keeps it in the Arabic run (probe critic-r2
+// blink-u3000: 10px of letter spacing adds 10px per U+3000 in Canvas and nothing in the DOM). The port sends a string that
+// may hold a level of the other direction inside a directional override (inGroupDirection), so its level runs are its
+// isolates' alone, as in the paragraph; before 2026-09-24 the space and `[2]` after Arabic-Indic digits were a run of their
+// own here, a level below the digits, Common and letter-spaced, where the paragraph keeps them in the digits' Arabic run.
+export function canvasScriptsPerUnit(p: BlinkPrepared, style: number, s: string, rtl: boolean): Uint8Array {
+  if (!rtl && !mayHoldRtl(s)) return itemScripts(p, style, s)
+  const bidi = resolveIcuBidi(s, rtl ? 'rtl' : 'ltr', blinkBidiData)
+  if (!rtl && bidi.direction === 'ltr') return itemScripts(p, style, s)
+  const scripts = new Uint8Array(s.length)
+  for (let start = 0; start < s.length;) {
+    let end = start + 1
+    while (end < s.length && bidi.levels[end] === bidi.levels[start]) end++
+    scripts.set(itemScripts(p, style, s.slice(start, end)), start)
+    start = end
+  }
+  return scripts
+}
+
+// Character::MaybeBidiRtl(UChar32) (character.h:307-321).
+function maybeBidiRtl(cp: number): boolean {
+  return cp >= 0x590 && cp !== 0x200b && !(cp >= 0x2010 && cp <= 0x2029) && !(cp >= 0x206a && cp <= 0xd7ff) && !(cp >= 0xff00 && cp <= 0xffff) &&
+    !(cp >= 0x1aff0 && cp <= 0x1b16f) && !(cp >= 0x20000 && cp <= 0x323af)
+}
+
+// Whether any code point of the string may be right to left (plain_text_node.cc:61-63).
+function mayHoldRtl(s: string): boolean {
+  for (let i = 0; i < s.length;) {
+    const cp = s.codePointAt(i)!
+    i += cp > 0xffff ? 2 : 1
+    if (maybeBidiRtl(cp)) return true
+  }
+  return false
+}
+
+// The scripts of one bidi run of a Canvas string: RunSegmenter over each of its words where Canvas cuts words, else over the
+// run whole.
+function itemScripts(p: BlinkPrepared, style: number, s: string): Uint8Array {
   let splitPoint = false
   for (let i = 0; i < s.length && !splitPoint;) {
     const cp = s.codePointAt(i)!
@@ -382,13 +445,14 @@ function spacesStay(p: BlinkPrepared, style: number, from: number, to: number, d
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,
 // callEnd), in its context, with JS word spacing and the letter spacing Canvas gives other characters than the DOM does.
-export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): number {
+// `into`, where given, learns whether every Canvas answer the total holds was exact (measureTotal16).
+export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false, into: Total16 | null = null): number {
   const p = sh.p
   if (from >= to) return 0
   // RunSegmenter splits a 16-bit paragraph at script runs, and HarfBuzzShaper shapes every segment in its own call
   // (harfbuzz_shaper.cc:1072-1101), so nothing kerns or ligates across a script edge. A range crossing one is measured per
   // segment (research/SUPERSET-blink.md §2.1 C).
-  if (p.segments === null) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, USCRIPT_LATIN)
+  if (p.segments === null) return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, USCRIPT_LATIN)
   const firstOrdinal = p.segments.scriptOrdinal(from)
   let ordinal = firstOrdinal
   const domScript = p.segments.scriptForOrdinal(ordinal)
@@ -397,25 +461,74 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // Keep the actual script at the question's start, and walk past only those ignored boundaries.
   while (end < to && (p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = p.segments.scriptEndForOrdinal(++ordinal)
   const sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
-  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, ordinal, end, domScript, sourceOrdinal)
-  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, domScript, sourceOrdinal)
+  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, into, ordinal, end, domScript, sourceOrdinal)
+  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal)
+}
+
+// A measured total, and how far it can be from the DOM's. Canvas converts each shaped run's 16.16 sum to float32 and sums
+// the runs and items of a string in float32 (blink-canvas §1.5), so an answer is exact only below 256 zoomed px either side
+// of 0; above, each of those steps rounds by at most half a float32 step at the answer's magnitude, one unit between 256
+// and twice that, and a string has no more runs than code units. The port then adds word spacing and the letter spacing
+// Canvas gives other characters than the DOM does (measureSameScript16), in 16.16 integers, after Canvas rounded.
+// `exact`: below 256 zoomed px, and every Canvas answer it holds was. `err`: the most its answers can be off by in all,
+// 0 where they are exact. `near`: below 256 zoomed px, with every answer below twice that, which only negative spacing
+// makes without being exact. Under a style whose opsz axis the port measures at the CSS size, the answers are scaled first
+// (contexts.ts raw16Of), which errs toward calling an answer rounded and toward a wider bound.
+// - A near total is a piece (addPieces): the cut search would otherwise cut a range whose total it knows to a few units,
+//   and the cuts meet its own stand-ins. Taking a rounded answer for exact, as the port did before the words-first fix
+//   round, made a pair of words that failed their sum under -2px of word spacing pass it (16px STIX Two Text at DPR 2 gave
+//   3 lines where Chrome gives 2, the constructed attack of 2026-09-23), so the words' test and the windows' zero tests
+//   take exact totals alone; but cutting every near range made new cuts where the spacing had made the range look exact
+//   to the port before, and they met the search's stand-ins: in Euphemia UCAS a cut the search falls back to beside a
+//   space took the lone space's Common advance, 9.9 zoomed px off (the verifier's fonts runs, 2026-09-24: 163 breaks lost
+//   under negative word spacing at DPR 3). Kept whole, an inspected paragraph reports float32-precision over it.
+// - An adjustment a window shows within `err` of its three totals is none (pairAdjust16, windowAdjust16): a window with
+//   no exact one inside it showed what Canvas rounded as an adjustment, and at 16px and DPR 2 a window side that runs over
+//   the eight family emoji of the fonts attack's `emoji-run` to the letter after them measured 330 zoomed px, whose
+//   rounding lost 237 layouts in 33 faces at DPR 2 and 3 (the loss round's first fonts runs, 2026-09-24).
+// - Past it the adjustment is real, however wide the window: the widest window is held against its two sides where the
+//   exact one inside it shows none (windowAdjust16), since ligatures and the forms of Zapfino reach past the exact
+//   windows.
+// rule blink/measure/exact-canvas-answers
+export type Total16 = { total16: number; exact: boolean; near: boolean; err: number }
+
+export function measureTotal16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): Total16 {
+  const t: Total16 = { total16: 0, exact: true, near: true, err: 0 }
+  t.total16 = measure16(sh, g, from, to, callStart, callEnd, noLigatures, t)
+  if (!(t.total16 < EXACT16)) { t.exact = false; t.near = false }
+  return t
+}
+
+function isExact(t: Total16 | null): boolean {
+  return t !== null && t.exact
+}
+
+// What a range can be taken whole as: exact, or near.
+function isPiece(t: Total16 | null): boolean {
+  return t !== null && (t.exact || t.near)
 }
 
 // The Canvas question uses its starting script. If ignored low boundaries hide other source scripts in this question,
 // sourceOrdinal starts their correction cursor; otherwise -1 keeps the exact constant-source fast path.
-function measureSameScript16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, domScript: number, sourceOrdinal: number = -1): number {
+function measureSameScript16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, into: Total16 | null, domScript: number, sourceOrdinal: number = -1): number {
   const p = sh.p
   const group = p.groups[g]!
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
-  const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), domScript, spacesStay(p, group.style, from, to, domScript), sh.gaps !== null || ls16 !== 0)
+  const cs = inGroupDirection(canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), domScript, spacesStay(p, group.style, from, to, domScript), sh.gaps !== null || ls16 !== 0), group.rtl)
   const contexts = contextsOf(p, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
+  if (into !== null && !(Math.abs(w) < EXACT16)) {
+    into.exact = false
+    // A conversion and a sum a run, each half a float32 step at the answer's magnitude (Total16).
+    into.err += 2 * cs.s.length * contexts.scale * 2 ** (Math.floor(Math.log2(Math.abs(w))) - 24)
+    if (!(Math.abs(w) < 2 * EXACT16)) into.near = false
+  }
   const adjust = wordSpacing16(p, group.style, from, to)
   // Under letter spacing the width reads the scripts Canvas shapes a 16-bit string under (letterSpacingDifference16); an
   // 8-bit string is a Latin range shaped as Latin on both sides.
-  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s) : null
+  const scripts = cs.twoByte && ls16 !== 0 ? canvasScriptsPerUnit(p, group.style, cs.s, group.rtl) : null
   measuredRange(sh.gaps, p, g, from, to, callStart, callEnd, cs, scripts, domScript, sourceOrdinal)
   if (ls16 === 0) return w + adjust
   // Non-zero effective spacing requested the map above.
@@ -424,11 +537,11 @@ function measureSameScript16(sh: Shaper, g: number, from: number, to: number, ca
 
 // A cross-script range reads segments in source order, as the former left-first recursive split did.
 // Fold their values backwards to preserve that split's exact right-associated arithmetic, without an input-sized stack.
-function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, ordinal: number, end: number, domScript: number, sourceOrdinal: number): number {
+function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean, into: Total16 | null, ordinal: number, end: number, domScript: number, sourceOrdinal: number): number {
   const widths: number[] = []
   let start = from
   for (;;) {
-    widths.push(measureSameScript16(sh, g, start, end, callStart, callEnd, noLigatures, domScript, sourceOrdinal))
+    widths.push(measureSameScript16(sh, g, start, end, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal))
     if (end === to) break
     start = end
     const firstOrdinal = ++ordinal
@@ -443,15 +556,50 @@ function measureScriptSegments16(sh: Shaper, g: number, from: number, to: number
   return total
 }
 
-// The letter spacing the DOM gives the string's characters less what Canvas gave them.
+// A shaping group holds the items of one direction (ShouldBreakShapingBeforeText, inline_node.cc:472-491), and the DOM
+// shapes its text in that direction whatever the bidi levels inside it (HarfBuzzShaper over the group's items,
+// inline_node.cc:1636-1717). Canvas resolves the levels of the string it is handed and shapes each level run apart in its
+// own direction (plain_text_node.cc:278-351), over the string alone: the explicit embeddings and overrides of the paragraph
+// are U+2060 there (canvasString), and without the paragraph's context the neutrals beside digits resolve otherwise. So
+// Arabic under U+202D, which the DOM shapes left to right, Canvas shaped right to left, and `١٢٣` U+2028 `[2]`, one run of
+// the digits' level in the paragraph, was three runs in Canvas, the middle one right to left and Common. A 16-bit string
+// that may hold a level of the other direction is sent inside U+202D or U+202E and U+202C, which Canvas resolves as one run
+// of the group's direction (UBA X4-X6), and which it turns into U+200B (NormalizeSpacesAndMaybeBidi, plain_text_node.cc:
+// 47-62), words of no advance that take no spacing. An isolate the string holds keeps its own levels, as in the paragraph.
+// A 16-bit string that holds no character of class R, AL or AN and no isolate is all left to right in Canvas on a
+// left-to-right context already (W7, I1), and an 8-bit one is sent as it is.
+// rule blink/measure/canvas-string-in-group-direction
+function inGroupDirection(cs: CanvasString, rtl: boolean): CanvasString {
+  if (!cs.twoByte || cs.s.length === 0 || (!rtl && !holdsOtherDirection(cs.s))) return cs
+  return { s: (rtl ? '\u202e' : '\u202d') + cs.s + '\u202c', units: cs.units === null ? null : [-1, ...cs.units, -1], twoByte: true }
+}
+
+function holdsOtherDirection(s: string): boolean {
+  for (let i = 0; i < s.length;) {
+    const cp = s.codePointAt(i)!
+    i += cp > 0xffff ? 2 : 1
+    // A code point MaybeBidiRtl calls left to right is of none of these classes (character.h:307-321).
+    if (!maybeBidiRtl(cp)) continue
+    switch (bidiClassOf(blinkBidiData, cp)) {
+      case BIDI_R: case BIDI_AL: case BIDI_AN: case BIDI_LRI: case BIDI_RLI: case BIDI_FSI: case BIDI_PDI: return true
+    }
+  }
+  return false
+}
+
+// The letter spacing the DOM gives the string's glyph clusters less what Canvas gave them. Both add it once a cluster, by
+// the cluster's first character and its run's script (ApplySpacingOrExpansion skips every glyph but a cluster's last,
+// shape_result.cc:993-1040), so a flag of two regional indicators or `❤` with U+FE0F takes it once: counting code points,
+// a flag the DOM keeps in an Arabic run and Canvas shaped as Common was corrected twice where Canvas spaced it once.
 function letterSpacingDifference16(p: BlinkPrepared, text: string, units: readonly number[], scripts: Uint8Array | null, ls16: number, domScript: number, sourceOrdinal: number): number {
   const source = sourceOrdinal < 0 ? null : new SourceScriptCursor(p.segments!, sourceOrdinal, domScript)
   let adjust = 0
+  let first = true
   for (let u = 0; u < units.length; u++) {
     const t = units[u]!
     if (t < 0) continue
-    const c = p.text.charCodeAt(t)
-    if ((c & 0xfc00) === 0xdc00) continue
+    if (!first && !isClusterBoundary(p, t)) continue
+    first = false
     const canvasScript = scripts === null ? USCRIPT_LATIN : scripts[u]!
     // ShapeResultSpacing::ComputeSpacing (shape_result_spacing.cc:103-139): letter spacing on a character that isn't a zero
     // width space, and in a cursive script run only on a space (IgnoreLetterSpacingInCursiveScripts, stable). The DOM reads
@@ -585,7 +733,11 @@ export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: n
     checkedTo = b
     b = clusterEndAfter(p, b, hi)
   }
-  const d = measure16(sh, g, a, b, lo, hi, noLigatures) - measure16(sh, g, a, k, lo, hi, noLigatures) - measure16(sh, g, k, b, lo, hi, noLigatures)
+  const window = measureTotal16(sh, g, a, b, lo, hi, noLigatures)
+  const left = measureTotal16(sh, g, a, k, lo, hi, noLigatures)
+  const right = measureTotal16(sh, g, k, b, lo, hi, noLigatures)
+  let d = window.total16 - left.total16 - right.total16
+  if (Math.abs(d) <= window.err + left.err + right.err) d = 0
   if (kept !== null) kept[k - lo] = d
   return d
 }
@@ -604,19 +756,28 @@ function keepsByOffset(sh: Shaper, g: number, lo: number, hi: number): boolean {
 
 // The adjustment across offset k inside a shaping call over [lo, hi) of group g: what the text before k and the text after
 // it change in each other's advances, W(window) − W(window before k) − W(window after k), over the widest window around k
-// inside [from, to) whose Canvas total is exact (below 256 zoomed px). Lookups read contexts of any length
+// inside [from, to) whose total is exact (measureTotal16: below 256 zoomed px, from exact Canvas answers). Lookups read
+// contexts of any length
 // (ChainContextFormat, hb-ot-layout-gsubgpos.hh), which a window of one cluster on each side misses: Noto Nastaliq Urdu
 // widens a word-final letter before a space after some letters (probe blink-round3 R1: `آگ` and a space measure 468 units
 // more together than apart, `گ` and a space measure the same; natively `گ` is 3436 units there and 2968 without the space).
 // A window that is too wide shrinks on its longer side, by half its distance to k, and never below the cluster next to k.
-// `whole` is the measured total of [from, to), which the caller has or measures.
-type CutTotals = { left: number; right: number }
+// `whole` is the measured total of [from, to), which the caller has or measures, or null where the caller hands down
+// `estimate` instead, a total [from, to) is near (the pieces it spans), since that total would say no more than that the
+// window is 256 zoomed px or more.
+//
+// The windows the shrink tries are known before any is measured, and it takes the first whose total is exact. A plain
+// paragraph doesn't measure each in turn only to learn that it is still 256 zoomed px or more: it predicts the window
+// taken (predictedWindow) and measures the one before it and that one. That takes the shrink's window on a premise about
+// fonts that no source gives, that a string is never narrower than a window inside it; an inspected paragraph shrinks as
+// before, walks the prediction beside it over the same totals, and reports nested-window-wider where the two take other
+// windows, taking the prediction's, which is the plain paragraph's (DESIGN.md §4.6, "Blink's cut predictor"). What it
+// hands back is what the prediction measured, as a plain paragraph's, so the two go on to ask the same questions.
+type CutTotals = { left: Total16 | null; right: Total16 | null; whole: Total16 | null; vetoed: boolean }
 
-function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: number, cutTotals: CutTotals | null = null): number {
+function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: number, lo: number, hi: number, whole: Total16 | null, cutTotals: CutTotals | null = null, estimate: number = whole === null ? NaN : whole.total16, asksRange: boolean = true): number {
   const p = sh.p
   if (k <= from || k >= to) return 0
-  let a = from
-  let b = to
   let nearA = clusterStartAtOrBefore(p, k - 1, lo)
   // Accepted spans stop at global cluster/code-point boundaries, so test only the newly included units.
   let checkedFrom = k
@@ -630,9 +791,22 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
     checkedTo = nearB
     nearB = clusterEndAfter(p, nearB, hi)
   }
+  // In a group cut into words, the side after k never shrinks to a stretch Canvas would shape as Common alone: it reaches
+  // to the first character with a script of its own (measuredAsCommon; the side before k stays, as in
+  // adjustBetweenCuts16). At 16px and DPR 3 under 8px of word spacing, Didot's window at the space before ` : ` between
+  // Devanagari words shrank to a side ` :` alone, 2.6 zoomed px off its run (the loss round's window probe, 2026-09-24);
+  // reaching back as well on the side before k moved 16 lines of Arabic in Chalkboard SE that Chrome sides with the
+  // words on (the round's lab sets).
+  if (p.groups[g]!.words) {
+    const after = firstOwnScript(p, k, to)
+    if (after >= 0 && measuredAsCommon(p, g, k, after)) nearB = Math.max(nearB, clusterEndAfter(p, after, hi))
+  }
   nearA = Math.max(nearA, from)
   nearB = Math.min(nearB, to)
-  while (whole >= EXACT16 && (a < nearA || b > nearB)) {
+  // The windows the shrink would try, widest first, and their totals once measured.
+  const as = [from]
+  const bs = [to]
+  for (let a = from, b = to; a < nearA || b > nearB;) {
     if (a < nearA && (k - a >= b - k || b <= nearB)) {
       let next = clusterStartAtOrBefore(p, a + ((k - a + 1) >> 1), lo)
       if (next <= a) next = clusterEndAfter(p, a, hi)
@@ -642,15 +816,124 @@ function windowAdjust16(sh: Shaper, g: number, k: number, from: number, to: numb
       if (next >= b) next = clusterStartAtOrBefore(p, b - 1, lo)
       b = Math.max(nearB, next)
     }
-    whole = measure16(sh, g, a, b, lo, hi)
+    as.push(a)
+    bs.push(b)
   }
-  const left = measure16(sh, g, a, k, lo, hi)
-  const right = measure16(sh, g, k, b, lo, hi)
+  const totals: (Total16 | null)[] = [whole]
+  const totalBy = (by: Shaper) => (i: number): Total16 => totals[i] ??= measureTotal16(by, g, as[i]!, bs[i]!, lo, hi)
+  const total = totalBy(sh)
+  let n = 0
+  // The totals a plain paragraph knows once it took its window: `whole` and the ones its prediction measured.
+  let known = totals
+  const margin = predictionMargin16(p, p.groups[g]!.style)
+  if (sh.gaps === null && margin !== null) {
+    n = predictedWindow(as, bs, estimate, margin, total)
+  } else {
+    while (n + 1 < as.length && !total(n).exact) {
+      n++
+    }
+    if (sh.gaps !== null && margin !== null && sh.aside !== 'search') {
+      // A total only the prediction measures decides nothing where it takes the loop's window, so its gaps are set aside.
+      const aside = totalBy({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'walk' })
+      known = [whole]
+      const predicted = predictedWindow(as, bs, estimate, margin, i => known[i] = aside(i))
+      if (predicted !== n) {
+        nestedWindowWider(sh.gaps, p, g, k)
+        n = predicted
+        totals[n] = null
+      }
+    }
+  }
+  const a = as[n]!
+  const b = bs[n]!
+  const left = measureTotal16(sh, g, a, k, lo, hi)
+  const right = measureTotal16(sh, g, k, b, lo, hi)
   if (cutTotals !== null) {
-    cutTotals.left = a === from ? left : NaN
-    cutTotals.right = b === to ? right : NaN
+    cutTotals.left = a === from ? left : null
+    cutTotals.right = b === to ? right : null
+    cutTotals.whole = known[0] ?? null
   }
-  return whole - left - right
+  const taken = total(n)
+  let d = taken.total16 - left.total16 - right.total16
+  if (Math.abs(d) <= taken.err + left.err + right.err) d = 0
+  windowSides(sh.gaps, p, g, k, a, b, lo, hi, d)
+  if (d !== 0 || n === 0 || !asksRange) return d
+  // The widest window is held against its two sides where the exact window inside it shows none: an adjustment past what
+  // Canvas rounded there is context the exact window misses. At a cut the search tries, that window is the range being
+  // cut, whose two pieces then take those sides whole (cutTotals), and the offset is no cut; for a position inside a piece
+  // it is the window between the cuts around it. At a cut a position takes what the exact windows show, which is what a
+  // plain paragraph keeps there (adjustBetweenCuts16, addWordPieces): the search held its range against the cut's sides
+  // already. In 28px Zapfino at DPR 3 under -3px of word spacing a window side that starts at
+  // `the` after a space takes the form Zapfino gives `the` at the start of a string, 29 zoomed px narrower, where the exact
+  // window's side, shrunk to `th`, doesn't, and in 28px Helvetica Neue at DPR 3 the `ffl` of `waf`+SHY+`fles` forms across
+  // the SHY where the exact window's side holds the second `f` alone (the loss round's window probe, 2026-09-24; the base's
+  // windows had held the first where the spacing made a rounded total look exact).
+  // Not in a face whose space takes another advance under Common than under Latin (spaceTakesScript): a side of the range
+  // without a letter measures its spaces wide there, and in Euphemia UCAS the side ` 🇺🇸 ` after `pride` vetoed the offset
+  // before the space and cut the word (the loss round's fonts runs, 28px at DPR 2).
+  if (spaceTakesScript(p, p.groups[g]!.style)) return 0
+  const range = total(0)
+  const rangeLeft = measureTotal16(sh, g, from, k, lo, hi)
+  const rangeRight = measureTotal16(sh, g, k, to, lo, hi)
+  if (cutTotals !== null) {
+    cutTotals.left = rangeLeft
+    cutTotals.right = rangeRight
+  }
+  const dRange = range.total16 - rangeLeft.total16 - rangeRight.total16
+  if (!(Math.abs(dRange) > range.err + rangeLeft.err + rangeRight.err)) return 0
+  windowSides(sh.gaps, p, g, k, from, to, lo, hi, dRange)
+  if (cutTotals !== null) cutTotals.vetoed = true
+  return dRange
+}
+
+// Of the windows [as[i], bs[i]) a shrink tries, the one it takes: the first whose total is exact, or the last. Predicted as
+// the first whose length, scaled from the widest window's `estimate`, is below 256 zoomed px times a margin that errs
+// toward a wider window, since a window too wide costs one more total and one too narrow walks back against the order of
+// the shrink. Then it walks back: a window before it that is exact is taken instead, and one that measures at least
+// `margin` more than 256 zoomed px vouches for every window before it, which holds it (predictionMargin16); then the
+// window taken must be exact, where it walks on (`total` measures a window once).
+const PREDICTION_SCALE = 1.0
+
+export function predictedWindow(as: readonly number[], bs: readonly number[], estimate: number, margin: number, total: (i: number) => Total16): number {
+  const last = as.length - 1
+  const length0 = bs[0]! - as[0]!
+  let i = 0
+  while (i < last && !(estimate * ((bs[i]! - as[i]!) / length0) < EXACT16 * PREDICTION_SCALE)) i++
+  for (let j = i - 1; j >= 0; j--) {
+    const t = total(j)
+    if (t.exact) i = j
+    else if (t.total16 >= EXACT16 + margin) break
+  }
+  while (i < last && !total(i).exact) i++
+  return i
+}
+
+// How much narrower a string can measure than a window inside it, which the prediction of the shrink's window rests on,
+// or null where no bound holds and the shrink measures every window in turn. A string is narrower than a window inside it
+// only by what the window's edges change in the forms beside them: joining, final and cascading forms, kerning. Over 393
+// installed families at 16, 48 and 96px (the fonts attack's direct probe, 2026-09-23) and the calligraphic Arabic faces
+// at up to 256 zoomed px (the constructed attack's), that is at most 0.71 of the zoomed font size (Noto Nastaliq Urdu); the
+// bound takes one. It holds only where what spacing adds grows with the text: letter spacing is out, because a character
+// Canvas resolves under a cursive script in a wider window loses the spacing it has in a narrower one, and so is negative
+// word spacing; and so is a face whose space takes another advance under Common than under Latin (spaceTakesScript),
+// where a window that loses its last letter measures every space it holds wider. At 256 zoomed px and more the margin is
+// the whole limit, and the prediction walks back through every window the shrink would try.
+// rule blink/measure/cut-predictor
+const NESTED_WINDOW_MARGIN_EM = 1
+
+function predictionMargin16(p: BlinkPrepared, style: number): number | null {
+  const st = p.styles[style]!
+  if (st.letterSpacing !== 0 || st.wordSpacing < 0 || spaceTakesScript(p, style)) return null
+  return NESTED_WINDOW_MARGIN_EM * f32(f32(st.font.size) * f32(p.layoutZoom)) * 65536
+}
+
+// Whether the style's space takes another advance where Canvas shapes it as Common than where it shapes it as Latin: an
+// 8-bit ` ` is one Latin segment, a lone U+2028, the space glyph, is Common (RunSegmenter over the string alone). Euphemia
+// UCAS's GPOS moves its space by -422 font units under latn only, and no other of 393 installed families differs (the fonts
+// attack, 2026-09-23). Asked once a style, on the contexts without spacing of each storage (contextsOf).
+export function spaceTakesScript(p: BlinkPrepared, style: number): boolean {
+  const st = p.styles[style]!
+  return st.spaceTakesScript ??= canvasWidth(contextsOf(p, style, false).hyphen, ' ') !== canvasWidth(st.contexts.hyphen, '\u2028')
 }
 
 // windowAdjust16 for an offset the layout asks about: within the piece of the paragraph's group that holds k, or the two
@@ -664,21 +947,56 @@ export function adjust16(sh: Shaper, g: number, k: number, lo: number, hi: numbe
   return kept[k - lo]!
 }
 
+// The index of the last of a group's cuts at or before offset k.
+export function lastCutAtOrBefore(cuts: readonly number[], k: number): number {
+  let lo = 0
+  let hi = cuts.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (cuts[mid]! <= k) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
 function measuredAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const group = sh.p.groups[g]!
   if (k <= lo || k >= hi) return 0
-  if (lo !== group.start || hi !== group.end || group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measure16(sh, g, lo, hi, lo, hi))
+  if (lo !== group.start || hi !== group.end) return windowAdjust16(sh, g, k, lo, hi, lo, hi, measureTotal16(sh, g, lo, hi, lo, hi))
+  return heldAgainstSearch(sh, g, k, s => adjustBetweenCuts16(s, g, k))
+}
+
+// The wide window's adjustment across k inside group g's own call, between the cuts around k.
+// A plain paragraph hands down what the group's cuts already say of the window: a group of one piece is measured, a
+// piece's total is exact (a piece whose total isn't is one grapheme cluster, and no offset inside one is asked), and the
+// pieces between two cuts add up to about their window (windowAdjust16).
+function adjustBetweenCuts16(sh: Shaper, g: number, k: number): number {
+  const group = sh.p.groups[g]!
+  const lo = group.start
+  const hi = group.end
+  const plain = sh.gaps === null
+  if (group.cuts.length <= 2) return windowAdjust16(sh, g, k, lo, hi, lo, hi, plain ? group.whole! : measureTotal16(sh, g, lo, hi, lo, hi))
   const cuts = group.cuts
-  let i = 0
-  let end = cuts.length - 1
-  while (i < end) {
-    const mid = (i + end + 1) >> 1
-    if (cuts[mid]! <= k) i = mid
-    else end = mid - 1
-  }
-  const from = cuts[i] === k ? cuts[i - 1]! : cuts[i]!
-  const to = cuts[i + 1] ?? group.end
-  return windowAdjust16(sh, g, k, from, to, lo, hi, measure16(sh, g, from, to, lo, hi))
+  const prefix = group.prefixAtCut
+  const i = lastCutAtOrBefore(cuts, k)
+  // In a group cut into words, the side after k, where Canvas shapes it as Common, takes the next piece in: a word's
+  // pieces are short, and ` 12 ` alone is no stand-in for the digits in their Devanagari run (American Typewriter kerns
+  // them under Common and not there). Only while the window stays below 256 zoomed px by the pieces' prefixes: a wider one
+  // shrinks back into the side, and the sides it shrinks to are no better (in Euphemia UCAS ` 🙏🙏` alone takes the wide
+  // space). Where the next piece doesn't fit, the side takes clusters in until it holds a character with a script of its
+  // own, which Canvas shapes as the paragraph's run: at 16px and DPR 3 ` , ` between Devanagari words measures 2.6 zoomed px
+  // narrower alone than in the run in Didot and 4.8 in italic Gill Sans, and ` , म` with its letter measures as the run
+  // does, in them and in the other faces probed (probe bwf-loss comma, 2026-09-24). The side before k stays: a position is the prefix measured from the cut before k plus
+  // this adjustment, and that side is the same string from the same cut, so what Canvas does to it cancels; taken further
+  // in, it didn't, and in 28px Gill Sans the prefix ` .` measured alone kept a pair adjustment that the window `ה . `
+  // counted again (the fonts attack, 2026-09-23). A group the cut search cuts alone keeps the windows before words.
+  const first = cuts[i] === k ? i - 1 : i
+  let last = i + 1
+  while (group.words && last + 1 < cuts.length && measuredAsCommon(sh.p, g, k, cuts[last]!) && prefix[last + 1]! - prefix[first]! < EXACT16) last++
+  const from = cuts[first]!
+  let to = cuts[last]!
+  if (group.words) while (to < hi && measuredAsCommon(sh.p, g, k, to)) to = clusterEndAfter(sh.p, to, hi)
+  return windowAdjust16(sh, g, k, from, to, lo, hi, plain ? null : measureTotal16(sh, g, from, to, lo, hi), null, prefix[last]! - prefix[first]!, cuts[i] !== k)
 }
 
 // The adjustment the position of offset k takes (groupPrefix16, callPrefix16): how much the advances before k differ in the
@@ -704,13 +1022,105 @@ function beforeWhiteSpace(p: BlinkPrepared, k: number, lo: number, hi: number): 
 }
 
 // Whether offset k inside group g passes the port's safe-to-break test, with the adjustment across k taken inside [from, to),
-// whose measured total is `whole`.
-function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, whole: number, cutTotals: CutTotals): boolean {
+// whose measured total is `cutTotals.whole`, or which is about `estimate` where the paragraph didn't measure it.
+function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: number, cutTotals: CutTotals, estimate: number): boolean {
   const p = sh.p
   const group = p.groups[g]!
+  const whole = cutTotals.whole
   // A nonzero pair rules the offset out before the wider window needs shaping; a zero pair still needs both tests.
   return isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end) && pairAdjust16(sh, g, k, group.start, group.end) === 0 &&
-    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals) === 0
+    windowAdjust16(sh, g, k, from, to, group.start, group.end, whole, cutTotals, whole === null ? estimate : whole.total16) === 0
+}
+
+// Whether a style's groups are cut into words first: below a zoomed font size of 60 px, and in a face whose space takes
+// the same advance under Common as under Latin (spaceTakesScript). The word test at a cut is asked only where the two
+// words around it measure below 256 zoomed px together, and where they don't, the words between tested cuts go to the cut
+// search as a stretch of a few words whose middle is a space no test saw. The search's windows there shrink below 256
+// zoomed px, narrower than a word, and a face whose forms span a whole word passes an offset that the search over the
+// whole group, as before words, never tries: Zapfino, whose short words with their spaces measure up to 4.07 em (`in the `),
+// lost lines from 64 zoomed px on at DPR 1, 2 and 3 and none at 60 (the fix round's sweep, 2026-09-23). So at 60 zoomed px
+// and more, where two words of the widest face no longer fit below 256, the group is cut by the cut search alone, and its
+// windows are the ones before words (adjustBetweenCuts16). Letter and word spacing widen the same two words: JS adds the
+// letter spacing to each of their 7 characters and the word spacing to their 2 spaces, so the bound takes the size those
+// add at 4.07 em, and 28px Zapfino at DPR 2 under 3px of letter spacing or 8px of word spacing is cut by the cut search
+// (the fix round's spacing sweep, 2026-09-24).
+const WORDS_FIRST_MAX_ZOOMED_PX = 60
+const WIDEST_PAIR_EM = 4.07
+
+function takesWords(p: BlinkPrepared, style: number): boolean {
+  const st = p.styles[style]!
+  const zoom = f32(p.layoutZoom)
+  const spacing = 7 * Math.max(0, f32(st.letterSpacing * zoom)) + 2 * Math.max(0, f32(st.wordSpacing * zoom))
+  return f32(f32(st.font.size) * zoom) + spacing / WIDEST_PAIR_EM < WORDS_FIRST_MAX_ZOOMED_PX && !spaceTakesScript(p, style)
+}
+
+function holdsSpace(p: BlinkPrepared, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) if (p.text.charCodeAt(i) === 0x20) return true
+  return false
+}
+
+// Whether a HarfBuzz call inside [from, to), a RunSegmenter segment of the group (harfbuzz_shaper.cc:1080-1101), holds a
+// mark and a letter that HarfBuzz writes otherwise in a call that holds one (recomposesInMarkedCall): the paragraph's call
+// then runs the rounds that reorder and recompose over every cluster, and a word measured alone without the mark doesn't,
+// so the word's advance isn't the paragraph's (italic Athelas lacks `ở` and has `ỏ`, and a `phở` after a `café` spelled
+// with U+0301 kerns otherwise; DESIGN.md §4.6).
+function recomposesAcrossWords(p: BlinkPrepared, from: number, to: number): boolean {
+  let mark = false
+  let letter = false
+  for (let i = from; i < to;) {
+    if (i > from && isSegmentEdge(p, i)) {
+      mark = false
+      letter = false
+    }
+    const cp = p.text.codePointAt(i)!
+    if (isMark(cp)) mark = true
+    else if (recomposesInMarkedCall(cp)) letter = true
+    if (mark && letter) return true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return false
+}
+
+// The offset of the first character with a script of its own in [k, limit), or -1.
+function firstOwnScript(p: BlinkPrepared, k: number, limit: number): number {
+  for (let i = k; i < limit;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp) && scriptExtensionsOf(cp).length <= 1) return i
+    i += cp > 0xffff ? 2 : 1
+  }
+  return -1
+}
+
+// Whether [from, to) holds a character with a script of its own, one ScriptRunIterator doesn't resolve from its neighbours
+// (gaps.ts hasScriptNeutral names the others). Canvas resolves the script of a character without one (white space,
+// punctuation, digits, emoji) over the string it measures (RunSegmenter over each PlainTextItem,
+// plain_text_node.cc:400-425; script_run_iterator.cc), where the paragraph resolves it over its run; a 16-bit string
+// that holds no such character is shaped as Common, and HarfBuzz then takes the font's default lookups
+// (hb-ot-layout.cc:582-586).
+function holdsOwnScript(p: BlinkPrepared, from: number, to: number): boolean {
+  return firstOwnScript(p, from, to) >= 0
+}
+
+// Whether Canvas shapes [from, to) of group g, measured alone, under Common where the paragraph shapes it under its run's
+// script: a range of a segmented paragraph that holds a character other than white space and none with a script of its
+// own, which the port measures as a 16-bit string (canvasString), since RunSegmenter resolves such a string as Common over
+// itself (script-context), where an 8-bit one is shaped as one Latin segment, which is the paragraph's own shaping of a
+// Latin range (spacesStay). An unsegmented paragraph's windows stay as they were: what they measure was held against the
+// browser with them.
+export function measuredAsCommon(p: BlinkPrepared, g: number, from: number, to: number): boolean {
+  if (p.segments === null) return false
+  let other = false
+  for (let i = from; i < to;) {
+    const cp = p.text.codePointAt(i)!
+    if (!isCommonOrInheritedScript(cp)) return false
+    if (!isWhiteSpace(cp)) other = true
+    i += cp > 0xffff ? 2 : 1
+  }
+  if (!other) return false
+  const domScript = p.segments.scriptForOrdinal(p.segments.scriptOrdinal(from))
+  if (domScript === USCRIPT_COMMON) return false
+  const style = p.groups[g]!.style
+  return canvasString(p, from, to, false, false, domScript, spacesStay(p, style, from, to, domScript), false).twoByte
 }
 
 // The offsets where [a, b) is cut into pieces below 256 zoomed px. A space is a cluster of its own, and HarfBuzz's
@@ -726,52 +1136,165 @@ function passesSafeTest(sh: Shaper, g: number, k: number, from: number, to: numb
 // the cut at its end is a 0 the search measured (positionAdjust16): the pair window's at a cut that passed the safe test,
 // and before white space the wide window's, which is the search's own window where both sides of the cut are one piece
 // (adjust16 takes it between the cuts around an offset).
-function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: number = NaN): void {
+//
+// A paragraph doesn't measure a range whose total, estimated from the range it was cut from, is twice 256 zoomed px or
+// more: that total would only say that the range is to be cut, which the first window its search measures says too
+// (windowAdjust16, on its premise). Where that window shows the range below 256 zoomed px after all, it is a piece, and
+// where no window is measured before an unsafe cut, the total is. An inspected paragraph skips it too, so it searches
+// where a plain one does and asks what that one asks, where an estimate is off (a ZWJ sequence is many units and one
+// glyph); the cut search the words are held against measures every range, as before.
+function addPieces(sh: Shaper, g: number, a: number, b: number, cuts: number[], totals: number[], zero: boolean[], knownWhole: Total16 | null = null, estimate: number = NaN): void {
   const p = sh.p
   const group = p.groups[g]!
-  const whole = Number.isNaN(knownWhole) ? measure16(sh, g, a, b, group.start, group.end) : knownWhole
-  if (whole < EXACT16) {
-    cuts.push(b)
-    totals.push(whole)
-    zero.push(false)
-    return
-  }
   // An accepted window may already have measured a child's whole range in this same shaping call.
-  const cutTotals: CutTotals = { left: NaN, right: NaN }
+  const cutTotals: CutTotals = { left: null, right: null, whole: knownWhole, vetoed: false }
+  if (knownWhole === null && !(sh.aside !== 'search' && estimate >= 2 * EXACT16)) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
   const mid = a + ((b - a) >> 1)
   let k = -1
   let boundary = -1
-  for (let turn = 0; turn < 2 && k < 0; turn++) {
-    for (let d = 0; k < 0 && (mid - d > a || mid + d < b); d++) {
-      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0; side++) {
+  // The first offset whose exact windows showed no adjustment and whose range did (windowAdjust16).
+  let vetoedAt = -1
+  for (let turn = 0; turn < 2 && k < 0 && !isPiece(cutTotals.whole); turn++) {
+    for (let d = 0; k < 0 && !isPiece(cutTotals.whole) && (mid - d > a || mid + d < b); d++) {
+      for (let side = d === 0 ? 1 : 0; side < 2 && k < 0 && !isPiece(cutTotals.whole); side++) {
         const c = side === 0 ? mid - d : mid + d
         if (c <= a || c >= b || p.graphemeStarts[c] !== 1) continue
         if (boundary < 0) boundary = c
         const besideSpace = (p.text.charCodeAt(c - 1) === 0x20) !== (p.text.charCodeAt(c) === 0x20)
-        if (besideSpace === (turn === 0) && passesSafeTest(sh, g, c, a, b, whole, cutTotals)) k = c
+        if (besideSpace !== (turn === 0)) continue
+        cutTotals.vetoed = false
+        if (passesSafeTest(sh, g, c, a, b, cutTotals, estimate)) k = c
+        else if (vetoedAt < 0 && cutTotals.vetoed) vetoedAt = c
       }
     }
   }
-  if (boundary < 0) {
-    uncutCluster(sh.gaps, p, g, a, b)
+  if (k < 0 && cutTotals.whole === null) cutTotals.whole = measureTotal16(sh, g, a, b, group.start, group.end)
+  const whole = cutTotals.whole
+  if (isPiece(whole) || boundary < 0) {
+    if (!isExact(whole)) {
+      if (whole !== null && whole.near) roundedPiece(sh.gaps, p, g, a, b)
+      else uncutCluster(sh.gaps, p, g, a, b)
+    }
+    if (a === group.start && b === group.end) group.whole = whole
     cuts.push(b)
-    totals.push(whole)
+    totals.push(whole!.total16)
     zero.push(false)
     return
   }
   const passed = k >= 0
+  // Where the range shows context across every offset its exact windows pass (a ligature over a whole word), it can't tell
+  // them apart, and the first of those is the cut, with the zero its windows showed, as before the range was asked.
   if (!passed) {
-    k = boundary
+    k = vetoedAt >= 0 ? vetoedAt : boundary
     unsafeCut(sh.gaps, p, g, k)
   }
+  const measuredZero = passed || k === vetoedAt
+  const scale = whole === null ? estimate : whole.total16
   const first = cuts.length
-  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : NaN)
+  addPieces(sh, g, a, k, cuts, totals, zero, passed ? cutTotals.left : null, scale * ((k - a) / (b - a)))
   const at = cuts.length - 1
-  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : NaN)
-  zero[at] = passed && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2))
+  addPieces(sh, g, k, b, cuts, totals, zero, passed ? cutTotals.right : null, scale * ((b - k) / (b - a)))
+  zero[at] = measuredZero && (!beforeWhiteSpace(p, k, group.start, group.end) || (at === first && cuts.length === at + 2 && !(group.words && measuredAsCommon(p, g, k, b))))
 }
 
-// Cuts, prefixes and HanKerning edge trims for every group (the widths Blink knows before filling lines).
+// The pieces of group g, words first. A word starts after a U+0020 where clusters part and nothing joins, with a character
+// that a lookup doesn't skip (a word of U+200B and a space would hide the letter before it from the window of the next
+// word's cut), and holds a character with a script of its own (holdsOwnScript): a word without one (digits, punctuation,
+// an emoji) stays in the piece before it, or at the group's start in the one after it, since Canvas shapes such a string
+// alone under Common where the paragraph shapes it under its run's script (16px Euphemia UCAS kerns its space 422 font
+// units narrower under Latin alone, so `👍 ` measured alone is 3.3px wider than in `fix 👍 `). Each word is measured once
+// with its trailing space, which is what a page's words repeat. The offset between two words is a cut where it passes
+// the safe test with the two words as the wide window: the two measured together are what they measure apart, and the
+// pair window shows 0. That the pieces then add up to the group rests on a premise about fonts, that no shaping context
+// reaches more than one word past a space; an inspected paragraph reports context-past-a-word where a read the cut
+// search's cuts give differs (heldAgainstSearch; DESIGN.md §4.6). Two words of 256 zoomed px or more have no exact total to hold their
+// sum against, and a window shrunk to fit can end at the space, where it can't see what the letter before the space does:
+// such an offset is no cut either. A space that doesn't pass is no cut. What is left between two cuts and isn't one word
+// below 256 zoomed px (words whose space didn't pass, a long word, text without spaces) is cut by the cut search
+// (addPieces), handed the total measured here where it is the same string. So no range of 256 zoomed px or more is
+// measured whole where words are shorter than that, and what is asked doesn't grow with the device pixel ratio.
+// rule blink/measure/words-first
+function addWordPieces(sh: Shaper, g: number, cuts: number[], totals: number[], zero: boolean[]): void {
+  const p = sh.p
+  const group = p.groups[g]!
+  const edges = [group.start]
+  for (let k = group.start + 1; k < group.end; k++) {
+    const cp = p.text.codePointAt(k)!
+    if (p.text.charCodeAt(k - 1) === 0x20 && !isWhiteSpace(cp) && !isDefaultIgnorableHarfBuzz(cp) && isClusterBoundary(p, k) && !joinsAcross(p, k, group.start, group.end)) edges.push(k)
+  }
+  edges.push(group.end)
+  const starts = [group.start]
+  for (let i = 0, seen = false; i + 1 < edges.length; i++) {
+    const own = holdsOwnScript(p, edges[i]!, edges[i + 1]!)
+    if (i > 0 && own && seen) starts.push(edges[i]!)
+    if (own) seen = true
+  }
+  starts.push(group.end)
+  const word16: Total16[] = []
+  for (let i = 0; i + 1 < starts.length; i++) word16.push(measureTotal16(sh, g, starts[i]!, starts[i + 1]!, group.start, group.end))
+  // passes[i]: whether starts[i] is a cut; both[i]: the two words around it measured together, where asked. A sum of 256
+  // zoomed px or more can't equal an exact total, so the two words together aren't asked then, and a sum holds only
+  // where the three totals are exact.
+  const passes = [true]
+  const both: (Total16 | null)[] = [null]
+  for (let i = 1; i + 1 < starts.length; i++) {
+    const sum = word16[i - 1]!.total16 + word16[i]!.total16
+    const together = sum < EXACT16 ? measureTotal16(sh, g, starts[i - 1]!, starts[i + 1]!, group.start, group.end) : null
+    both.push(together)
+    passes.push(isExact(together) && word16[i - 1]!.exact && word16[i]!.exact && together!.total16 === sum && pairAdjust16(sh, g, starts[i]!, group.start, group.end) === 0)
+  }
+  passes.push(true)
+  // Between two words that are pieces of their own, the window the fill's safe test takes at the cut (adjust16, between the
+  // cuts around it) is the one that just showed 0.
+  if (keepsByOffset(sh, g, group.start, group.end)) {
+    for (let i = 1; i + 1 < starts.length; i++) if (passes[i - 1]! && passes[i]! && passes[i + 1]!) group.wide16[starts[i]! - group.start] = 0
+  }
+  for (let i = 0; i + 1 < starts.length;) {
+    let j = i + 1
+    while (!passes[j]!) j++
+    if (j === i + 1 && word16[i]!.exact) {
+      if (starts[i] === group.start && starts[j] === group.end) group.whole = word16[i]!
+      cuts.push(starts[j]!)
+      totals.push(word16[i]!.total16)
+      zero.push(false)
+    } else {
+      addPieces(sh, g, starts[i]!, starts[j]!, cuts, totals, zero, j === i + 1 ? word16[i]! : j === i + 2 ? both[i + 1]! : null)
+    }
+    zero[cuts.length - 1] = true
+    i = j
+  }
+}
+
+// Cuts group g into pieces, words first or by the cut search alone, and sums its prefixes (the widths Blink knows before
+// filling lines).
+function cutGroup(sh: Shaper, g: number, words: boolean): void {
+  const p = sh.p
+  const group = p.groups[g]!
+  const cuts = [group.start]
+  const totals: number[] = []
+  const zero = [false]
+  if (words && group.words) addWordPieces(sh, g, cuts, totals, zero)
+  else addPieces(sh, g, group.start, group.end, cuts, totals, zero)
+  const prefix = [0]
+  group.cuts = cuts
+  group.prefixAtCut = prefix
+  // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
+  // Combine each piece's total and its right cut's correction before carrying that advance into the next prefix.
+  for (let i = 1; i < cuts.length - 1; i++) {
+    const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
+    // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
+    if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
+    prefix.push(prefix[i - 1]! + (totals[i - 1]! + d))
+  }
+  prefix.push(prefix[prefix.length - 1]! + totals[totals.length - 1]!)
+}
+
+// Cuts, prefixes and HanKerning edge trims for every group. An inspected paragraph first cuts each group by the cut search
+// alone, as the port did before it cut words, so it asks Canvas what it asked then and in that order, with the gaps that
+// search raises set aside, and keeps those cuts for the reads that are held against them (heldAgainstSearch); then it
+// cuts words. A group of a style whose space takes another advance under Common than under Latin (spaceTakesScript) is
+// cut by the cut search alone: words first measures words and the windows beside them alone, and a side of those that
+// holds no letter is shaped as Common, so every space in it would measure otherwise than in its run.
 export function measureGroups(sh: Shaper): void {
   const p = sh.p
   for (let g = 0; g < p.groups.length; g++) {
@@ -779,22 +1302,12 @@ export function measureGroups(sh: Shaper): void {
     // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
-    const cuts = [group.start]
-    const totals: number[] = []
-    const zero = [false]
-    addPieces(sh, g, group.start, group.end, cuts, totals, zero)
-    const prefix = [0]
-    group.cuts = cuts
-    group.prefixAtCut = prefix
-    // The adjustment at a cut needs the cuts on both sides of it (adjust16's window), where the search didn't measure it.
-    // Combine each piece's total and its right cut's correction before carrying that advance into the next prefix.
-    for (let i = 1; i < cuts.length - 1; i++) {
-      const d = zero[i]! ? 0 : positionAdjust16(sh, g, cuts[i]!, group.start, group.end)
-      // Before white space the 0 is the wide window's between the cuts around the cut, which is what adjust16 keeps by offset.
-      if (zero[i]! && keepsByOffset(sh, g, group.start, group.end) && beforeWhiteSpace(p, cuts[i]!, group.start, group.end)) group.wide16[cuts[i]! - group.start] = 0
-      prefix.push(prefix[i - 1]! + (totals[i - 1]! + d))
+    group.words = holdsSpace(p, group.start, group.end) && takesWords(p, group.style) && !recomposesAcrossWords(p, group.start, group.end)
+    if (p.inspect !== null) {
+      cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
+      p.inspect.searched.push({ cuts: group.cuts, prefixAtCut: group.prefixAtCut })
     }
-    prefix.push(prefix[prefix.length - 1]! + totals[totals.length - 1]!)
+    cutGroup(sh, g, true)
   }
 }
 
@@ -819,6 +1332,10 @@ function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
 
 // The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
 export function groupPrefix16(sh: Shaper, g: number, k: number): number {
+  return sh.gaps === null ? positionAtOffset16(sh, g, k) : heldAgainstSearch(sh, g, k, s => positionAtOffset16(s, g, k))
+}
+
+function positionAtOffset16(sh: Shaper, g: number, k: number): number {
   const p = sh.p
   const group = p.groups[g]!
   if (k >= group.end) return group.prefixAtCut[group.prefixAtCut.length - 1]! - group.startTrim16 - group.endTrim16
@@ -827,20 +1344,44 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   const kept = keepsByOffset(sh, g, group.start, group.end) ? group.prefix16 : null
   if (kept !== null && !Number.isNaN(kept[k - group.start]!)) return kept[k - group.start]!
   const cuts = group.cuts
-  let lo = 0
-  let hi = cuts.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (cuts[mid]! <= k) lo = mid
-    else hi = mid - 1
-  }
-  const d = positionAdjust16(sh, g, k, group.start, group.end)
-  const pair = adjustBefore16(sh, g, d, k, group.start, group.end)
+  const lo = lastCutAtOrBefore(cuts, k)
+  const cut = cuts[lo]!
+  // Where the clusters between a cut and k hold only characters every lookup skips (holdsNoBase), the pair window of k
+  // reaches back across the cut to the cluster before it and shows the cut's own adjustment again, which prefixAtCut holds
+  // already. None of it sits between the cut and k: HarfBuzz gives those characters no advance (hb-ot-shape.cc:779-799).
+  const atCut = lo > 0 && cut !== k && holdsNoBase(p, cut, k)
+  const d = positionAdjust16(sh, g, atCut ? cut : k, group.start, group.end)
+  const pair = adjustBefore16(sh, g, d, atCut ? cut : k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
-  const base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
+  const base = cut === k || atCut ? group.prefixAtCut[lo]! - d + pair + (atCut ? measure16(sh, g, cut, k, group.start, group.end) : 0) :
+    group.prefixAtCut[lo]! + prefixAfterCut16(sh, g, cut, k, d) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
   if (kept !== null) kept[k - group.start] = base - group.startTrim16
   return base - group.startTrim16
+}
+
+// The advance of [cut, k) of group g's own call, without the adjustment across k (d, which the caller places). Measured
+// alone, a stretch that holds a character other than white space and none with a script of its own is shaped as Common,
+// where the paragraph shapes it under its run's script (measuredAsCommon): in 16px Didot at DPR 3 ` :` between Devanagari
+// words measured alone was 2.6 zoomed px off its advance in the run (the fonts attack's Didot losses under 8px of word
+// spacing, 2026-09-24). There it is measured in front of the text after k up to a character with a script of its own,
+// which Canvas shapes as the run, less that text alone, which gives its advance with the adjustment across k, d.
+// rule blink/measure/prefix-without-script-in-context
+function prefixAfterCut16(sh: Shaper, g: number, cut: number, k: number, d: number): number {
+  const p = sh.p
+  const group = p.groups[g]!
+  if (!measuredAsCommon(p, g, cut, k)) return measure16(sh, g, cut, k, group.start, group.end)
+  let e = clusterEndAfter(p, k, group.end)
+  while (e < group.end && !holdsOwnScript(p, k, e)) e = clusterEndAfter(p, e, group.end)
+  if (!holdsOwnScript(p, k, e)) return measure16(sh, g, cut, k, group.start, group.end)
+  const withAfter = measureTotal16(sh, g, cut, e, group.start, group.end)
+  const after = measureTotal16(sh, g, k, e, group.start, group.end)
+  const alone = measureTotal16(sh, g, cut, k, group.start, group.end)
+  const inContext = withAfter.total16 - after.total16 - d
+  // Where the two agree within what Canvas rounded (Total16), the stretch alone is the closer: in `emoji-run` the text
+  // after a family emoji runs over seven more to the letter after them, and two rounded totals less each other were off
+  // where the stretch alone was exact.
+  return Math.abs(inContext - alone.total16) <= withAfter.err + after.err + alone.err ? alone.total16 : inContext
 }
 
 // Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning

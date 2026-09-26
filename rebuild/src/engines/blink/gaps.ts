@@ -22,8 +22,8 @@ import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js
 import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
-  EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
-  joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
+  EXACT16, adjust16, canvasScriptsPerUnit, canvasString, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
+  joinsAcross, measuredAsCommon, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt, spaceTakesScript,
   startsClusterInsideGrapheme, viewPartAt, viewPartCount, type CanvasString, type ViewParts, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'
@@ -230,7 +230,7 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   if (sink === null) return
   callEdge(sink, p, g, from, callStart, callEnd)
   callEdge(sink, p, g, to, callStart, callEnd)
-  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s) : null)
+  const canvasScripts = scripts ?? (cs.twoByte && hasScriptNeutral(p, from, to) ? canvasScriptsPerUnit(p, p.groups[g]!.style, cs.s, p.groups[g]!.rtl) : null)
   // A non-null sink requested the map in measure16.
   if (canvasScripts !== null) scriptContext(sink, p, cs.units!, canvasScripts, domScript, sourceOrdinal)
 }
@@ -242,9 +242,84 @@ export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: numb
   addGap(sink, 'float32-precision', p.styles[p.groups[g]!.style]!.run, 'a grapheme cluster of 256 zoomed px or more', sourceRange(p, a, b))
 }
 
+export function roundedPiece(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void {
+  if (sink === null) return
+  addGap(sink, 'float32-precision', p.styles[p.groups[g]!.style]!.run, 'a piece whose Canvas answer was 256 zoomed px or more, rounded by at most a unit, and whose total the spacing brings below 256', sourceRange(p, a, b))
+}
+
 export function unsafeCut(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
   if (sink === null) return
   addGap(sink, 'unsafe-to-break', p.styles[p.groups[g]!.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there', sourceOffsetAt(p, k))
+}
+
+// ---- Words first (shape.ts addWordPieces, line-breaker.ts candidateAt) ----
+
+const CONTEXT_PAST_A_WORD_DETAIL = 'the positions summed from words differ from the ones the cut search of a group of 256 zoomed px gives: the port cuts a group at a space where the two words around it measure together what they measure apart, on the premise that no shaping context reaches more than one word past a space, and here one does (DESIGN.md §4.6, "Blink\'s words first")'
+
+// A read of group g's own call at offset k that the cut search's cuts and the words' cuts give differently
+// (shape.ts heldAgainstSearch): a position or the wide window's adjustment there.
+export function contextPastAWord(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
+  if (sink === null) return
+  const group = p.groups[g]!
+  addGap(sink, 'context-past-a-word', p.styles[group.style]!.run, CONTEXT_PAST_A_WORD_DETAIL, clustersAround(p, Math.min(k, group.end), group.start, group.end))
+}
+
+// A line end at x whose candidate the walk over the group's cuts and the search over every offset settle differently
+// (line-breaker.ts candidateAt): a position inside a word lies past a later one, so the positions aren't sorted where
+// the two read them, which both rest on (DESIGN.md §4.6, "Blink's words first"). The line takes the walk's candidate, the plain
+// paragraph's.
+export function positionsRunBackwards(sink: GapSink, sh: Shaper, sr: ShapeResult, x: number, walked: number, searched: number, start: number): void {
+  if (sink === null || sr.kind !== 'group') return
+  const p = sh.p
+  const at = (k: number): number => sourceOffsetAt(p, k).start
+  addGap(sink, 'positions-run-backwards', p.styles[p.groups[sr.group]!.style]!.run, `from offset ${at(start)}, at ${x} LayoutUnits, the walk over the cuts settles on offset ${at(walked)} and the search over every offset on ${at(searched)}: a position inside a word lies past a later one, and the line takes the walk's candidate`, sourceRange(p, Math.min(walked, searched), Math.max(walked, searched) + 1))
+}
+
+// ---- The cut predictor (shape.ts windowAdjust16) ----
+
+const NESTED_WINDOW_WIDER_DETAIL = 'the window the shrink of the wide window takes here is not the one predicted from the total of the widest window: a string measures narrower than a window inside it by more than the zoomed font size, which the prediction rests on (DESIGN.md §4.6, "Blink\'s cut predictor"); the adjustment is the prediction\'s window\'s'
+
+// The shrink of the wide window across offset k of group g and the prediction of the window it takes, over the same
+// totals, take different windows (shape.ts windowAdjust16).
+export function nestedWindowWider(sink: GapSink, p: BlinkPrepared, g: number, k: number): void {
+  if (sink === null) return
+  const group = p.groups[g]!
+  addGap(sink, 'nested-window-wider', p.styles[group.style]!.run, NESTED_WINDOW_WIDER_DETAIL, clustersAround(p, Math.min(k, group.end), group.start, group.end))
+}
+
+// ---- The sides of a window (shape.ts windowAdjust16) ----
+
+const WHITE_SPACE_SIDE_DETAIL = 'a window side of white space alone, in a face whose space takes another advance under Common than under Latin (shape.ts spaceTakesScript): Canvas shapes the side alone as Common, where the paragraph shapes its spaces under the run\'s script (RunSegmenter over the measured string, plain_text_node.cc:400-425, harfbuzz_shaper.cc:1072-1101; Euphemia UCAS\'s GPOS moves its space and no-break space by -422 font units under latn alone), so the adjustment the window shows across the offset holds the difference of the side\'s spaces (DESIGN.md §4.6, "Blink\'s words first")'
+
+const COMMON_SIDE_DETAIL = 'a window side that Canvas shapes as Common alone, where the paragraph shapes it under its run\'s script (digits or punctuation between letters of one script, shape.ts measuredAsCommon), decided the adjustment across the offset or held the range being cut against it: RunSegmenter resolves such a string over itself (plain_text_node.cc:400-425, script_run_iterator.cc), so the adjustment can be the side\'s script and not context, and a cut the range vetoes moves (DESIGN.md §4.6, "Blink\'s words first")'
+
+// Whether side [from, to) of a window is white space and default-ignorable characters alone, a space or a no-break space
+// among them, which Canvas shapes as Common where the paragraph shapes it under its run's script: the side's Canvas string
+// is 16-bit (shape.ts canvasString: U+0020 is U+2028 in a segmented paragraph, and a short range under another script
+// than Latin takes U+2060 before it), where an 8-bit one is one Latin segment, as the paragraph's Latin range is.
+function whiteSpaceSide(p: BlinkPrepared, from: number, to: number): boolean {
+  if (p.segments === null || from >= to) return false
+  let space = false
+  for (let i = from; i < to; i++) {
+    const c = p.text.charCodeAt(i)
+    if (c === 0x20 || c === 0xa0) space = true
+    else if (!isWhiteSpace(c) && !isDefaultIgnorableHarfBuzz(c)) return false
+  }
+  const domScript = p.segments.scriptAt(from)
+  return space && domScript !== USCRIPT_COMMON && canvasString(p, from, to, false, false, domScript, false, false).twoByte
+}
+
+// The window [a, b) whose adjustment `d` across offset k inside a call over [lo, hi) of group g windowAdjust16 took: the
+// exact window, or the range being cut held against its two sides. Where a side of it is white space alone in a face whose
+// space takes the script, or Canvas shapes a side as Common where the paragraph doesn't and the window showed an
+// adjustment, what the window shows is the side's script as much as context, and the offset reports script-context: the
+// clusters around k, whose position or cut the window decides.
+export function windowSides(sink: GapSink, p: BlinkPrepared, g: number, k: number, a: number, b: number, lo: number, hi: number, d: number): void {
+  if (sink === null) return
+  const style = p.groups[g]!.style
+  const run = p.styles[style]!.run
+  if ((whiteSpaceSide(p, a, k) || whiteSpaceSide(p, k, b)) && spaceTakesScript(p, style)) addGap(sink, 'script-context', run, WHITE_SPACE_SIDE_DETAIL, clustersAround(p, k, lo, hi))
+  if (d !== 0 && (measuredAsCommon(p, g, a, k) || measuredAsCommon(p, g, k, b))) addGap(sink, 'script-context', run, COMMON_SIDE_DETAIL, clustersAround(p, k, lo, hi))
 }
 
 // ---- A HanKerning trim the port adds to a shaping call (shape.ts) ----
@@ -406,7 +481,7 @@ const SCALED_DETAIL = 'advances measured in a font made for the CSS size and sca
 
 const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis from the specified size (font_platform_data_mac.mm:170-178) and takes the platform font from a cache of the renderer process whose key holds the zoomed size alone (font_cache_key.h:53-68, font_description.cc:308-331), so text or a canvas that asked for this family at the same zoomed size under another specified size first decides the optical size of both (Chromium #489579956)'
 
-const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
+const SOFT_HYPHEN_DETAIL = 'SHY, which Canvas measures as U+2060 in a 16-bit string, where the DOM shapes SHY\'s own glyph in one Latin segment (hb-aat-layout-common.hh:1226-1241): a word\'s total is the DOM\'s in every installed family probed, and a position beside SHY rests on the pair window across it'
 
 // The source ranges of the text items under a style.
 function styleRanges(p: BlinkPrepared, items: readonly number[]): { start: number; end: number }[] {
@@ -435,8 +510,7 @@ function contentGaps(gaps: GapAccumulator, p: BlinkPrepared): number[][] {
       }
       // Canvas turns U+FFFC into U+200B (plain_text_node.cc:52-58, character.h:167-175); the DOM shapes it with a fallback glyph.
       if (c === 0xfffc) addGap(gaps, 'font-fallback', item.run, 'U+FFFC in text: Canvas measures it as U+200B', sourceRange(p, k, k + 1))
-      // canvasString leaves these out of an 8-bit string (a range of a paragraph RunSegmenter doesn't segment, without
-      // spaces or characters above U+00FF).
+      // canvasString writes these as U+2060, which makes the string 16-bit in a paragraph RunSegmenter doesn't segment.
       if (p.segments === null && (c === 0xad || c === 0x200b || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || c === 0xfeff)) {
         addGap(gaps, 'soft-hyphen-shaping', item.run, SOFT_HYPHEN_DETAIL, sourceRange(p, k, k + 1))
       }
@@ -570,7 +644,7 @@ function groupAround(p: BlinkPrepared, k: number): number {
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
 // a reshape at an unsafe offset (a wrapped line start's available-width correction, a line end before a space). `margin`:
 // how many LayoutUnits the line's decision is from going the other way.
-function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: boolean, margin: number): void {
+function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: boolean, margin: number, decided: { start: number; end: number } | null = null): void {
   const p = sh.p
   const g = groupAround(p, k)
   if (g < 0) return
@@ -618,7 +692,15 @@ function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: bool
     if (fromPosition && (style.font.facts.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
     return
   }
-  if (p.graphemeStarts[k] !== 1 || isSpaceLB(p.text.charCodeAt(k - 1)) || isSpaceLB(p.text.charCodeAt(k))) return
+  if (p.graphemeStarts[k] !== 1) return
+  if (isSpaceLB(p.text.charCodeAt(k - 1)) || isSpaceLB(p.text.charCodeAt(k))) {
+    // Beside a space Blink doesn't reshape a line end (dont_reshape_end_if_at_space, line_breaker.cc:255-268), but it
+    // reshapes a wrapped line start that HarfBuzz flags, which it can with nothing the pair window shows (AAT state,
+    // contextual lookups that change no width: Apple SD Gothic Neo's start after a space under -0.5px of word spacing,
+    // DESIGN.md §4.6), and corrects the space by 0 or −1 LayoutUnits, which turns a fit decided by under two.
+    if (decided !== null && margin < 2) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_DETAIL, decided)
+    return
+  }
   // The pair window shows nothing across k, but HarfBuzz can still mark k unsafe to break (contextual lookups, width-neutral
   // flags), where Blink reshapes and the port doesn't.
   // - Where nothing interacts across k, the reshape's glyphs are the paragraph's and only rounding differs. At a line end
@@ -630,6 +712,23 @@ function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: bool
   //   The adjustment is taken over the whole measured piece around k (adjust16), so nothing the port can measure interacts
   //   across k here, at any distance.
   if (margin < 2) addGap(gaps, 'in-word-prefix', run, IN_WORD_DETAIL, at)
+}
+
+const ONE_UNIT_FIT_DETAIL = 'a wrapped line start beside a space that the port\'s width tests call safe, on a line whose fit test is decided by under two LayoutUnits (the line\'s end, or the end of the content that didn\'t fit, against the space it has plus one, line_breaker.cc CanFitOnLine): HarfBuzz can flag the start unsafe to break with no width signature (AAT state, contextual lookups that change no width), where Blink reshapes it and corrects the space by old_width − SnappedWidth, 0 or −1 LayoutUnits (shaping_line_breaker.cc:309-324), which moves the line\'s end against the space'
+
+const START_REACH_DETAIL = 'a wrapped line start taken from a stand-in position, and the line\'s fit test decided within what that position can be off by: ShapeLine corrects the space a reshaped start leaves by the paragraph\'s width of the reshaped text, old_width − SnappedWidth (shaping_line_breaker.cc:309-324), which reads the start\'s position, so an adjustment there that no fact places (limits.ts positionLimit, positionBounds) moves the line\'s end against the space by as much'
+
+// A wrapped line start's stand-in position: the condition it rests on and how many LayoutUnits the adjustment the port
+// can't place spans (limits.ts positionBounds); null where the port knows the position or no adjustment shows.
+function startSpread(sh: Shaper, k: number): { limit: GapName; units: number } | null {
+  const p = sh.p
+  const g = groupAround(p, k)
+  if (g < 0) return null
+  const group = p.groups[g]!
+  const limit = positionLimit(sh, g, k, group.start, group.end)
+  if (limit === null) return null
+  const d = positionAdjust16(sh, g, clusterStartAtOrBefore(p, k, group.start), group.start, group.end)
+  return d === 0 ? null : { limit, units: Math.ceil(Math.abs(d) / 1024) }
 }
 
 const ITEM_EDGE_DETAIL = 'an item edge inside a shaping call (a span edge between characters Blink shapes together): a glyph cluster over the edge goes to the item holding its first character (CopyRanges and FindGlyphDataRange, inline_node.cc:1781, glyph_data_range.cc:56-90), and item sizes are ceiled one by one, so the items around the edge, the x of the items after them and the line\'s width rest on a position the port doesn\'t know'
@@ -676,6 +775,17 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
       const extra = ceilFrom16(groupPrefix16(sh, g, info.decisionEnd) - groupPrefix16(sh, g, contentEnd))
       margin = Math.min(margin, Math.abs(info.unclampedWidth + extra - bound))
     }
+  }
+  // A wrapped line start's correction moves the whole line against its space, so where the line's fit lies within what the
+  // correction can be off by, the start's condition reaches the line's end: it reports at the break the decision took, a
+  // point, since the correction moves no glyph and the break is what it can get wrong (the observation port limits every
+  // position a range meets, lab/observe/blink.ts). Where the start's position is a stand-in, by what the adjustment it
+  // can't place spans; beside a space the port takes as safe, by a LayoutUnit (edgeGap).
+  const wrapped = start.textOffset > 0 && !start.afterForcedBreak
+  const decided = wrapped ? sourceOffsetAt(p, contentEnd) : null
+  if (wrapped) {
+    const spread = startSpread(sh, start.textOffset)
+    if (spread !== null && margin < 2 + spread.units) addGap(gaps, spread.limit, runAt(p, start.textOffset), START_REACH_DETAIL, decided!)
   }
   // Positions inside a ligature over graphemes are what the decision reads at its candidate offset, where Blink gives every
   // character of a glyph the glyph's position (ComputePositionData, shape_result.cc:2113-2200) and the port Canvas prefixes:
@@ -764,7 +874,7 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
   }
   // A wrapped line start: ShapeLine reshapes [start, first safe) and corrects the available width by the paragraph's
   // positions (shaping_line_breaker.cc:309-324).
-  if (start.textOffset > 0 && !start.afterForcedBreak) edgeGap(gaps, sh, start.textOffset, true, margin)
+  if (wrapped) edgeGap(gaps, sh, start.textOffset, true, margin, decided)
   // The end, the paragraph's last line included: a line ending before hanging or trimmed spaces takes its width there.
   // Preserved trailing spaces the line's width holds end at the paragraph position after them, whose adjustment with what
   // follows sits on their last glyph (c-05bd16ecf8949f4c: `xx ` before `AAAA` in Times New Roman).

@@ -613,17 +613,19 @@
    "id": "blink/measure/ignorables-left-out-if-8bit",
    "engine": "blink",
    "area": "measure",
-   "kind": "ported rule",
-   "statement": "an unsegmented Latin-1 paragraph's Canvas string leaves default-ignorable characters out and stays 8-bit; every other string keeps them as U+2060 (inline_node.cc:1256-1290, harfbuzz_shaper.cc:1072-1101; V8 slices from string-slice.tq:8-33 and builtins-string-gen.cc:2154 at 6b96683d)",
+   "kind": "heuristic",
+   "statement": "where the string without the ignorable would be 8-bit, the ignorable is left out instead of substituted [removed: SHY is U+2060 in every Canvas string since the loss round (2026-09-24): left out of a string without a space and kept in one with a space, a window and its sides were written two ways]",
    "source": "fitted to the probed Latin-1 strings; the RLM before (( in Amiri is unexplained (shape.ts:200-202)",
    "probes": [
     "blink-ignorables: every probed Latin-1 string equal"
    ],
    "tests": [],
    "audit": "blink D2",
-   "status": "current",
-   "replacedBy": [],
-   "declaredBy": "blink owner (round 2, 2026-09-17)"
+   "status": "removed",
+   "replacedBy": [
+    "blink/measure/ignorables-as-word-joiner"
+   ],
+   "declaredBy": "catalogue 2026-09-16"
   },
   {
    "id": "blink/measure/v8-short-slice-storage",
@@ -679,14 +681,17 @@
    "engine": "blink",
    "area": "measure",
    "kind": "recipe",
-   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ: spaces inside cursive runs get it, FF does not",
-   "source": "shape_result_spacing.cc:118-130; character.h:163-189",
+   "statement": "letter spacing is corrected in JS where Canvas and the DOM differ, once a glyph cluster by its first character, as both add it: spaces inside cursive runs get it, FF does not; Canvas's scripts are RunSegmenter's over each item of the string it is sent, which holds one level run of the group's direction but for its isolates (blink/measure/canvas-string-in-group-direction), so after Arabic-Indic digits a space and `[2]` are Arabic in Canvas as in the paragraph's run, and a flag the DOM keeps in an Arabic run and Canvas measures alone as Common is corrected once",
+   "source": "shape_result_spacing.cc:118-130; shape_result.cc:993-1040; character.h:163-189, :307-321; plain_text_node.cc:278-351, :372-425; engines/blink/shape.ts letterSpacingDifference16, canvasScriptsPerUnit, itemScripts",
    "probes": [],
-   "tests": [],
+   "tests": [
+    "src/engines/blink/script-measure.test.ts :: Canvas resolves the scripts of each bidi level run of a string alone",
+    "src/engines/blink/script-measure.test.ts :: letter spacing is corrected once a glyph cluster, by its first character"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "catalogue 2026-09-16; restated for Canvas's bidi items (words-first fix round, 2026-09-23); per glyph cluster, over strings in the group's direction (loss round, 2026-09-24)"
   },
   {
    "id": "blink/measure/zwj-inside-group-edge",
@@ -759,19 +764,20 @@
    "engine": "blink",
    "area": "shape",
    "kind": "ported rule",
-   "statement": "a side of the pair window made only of default-ignorable characters, or of such characters and marks, reaches to the next cluster: HarfBuzz's lookups skip default-ignorable glyphs, and marks where the lookup says IgnoreMarks, which the kern and kerx machine always does",
-   "source": "hb-ot-layout-gsubgpos.hh:558-571; hb-kern.hh:58; hb-unicode.hh:167-197; hb-ot-shape.cc:578-586; engines/blink/shape.ts holdsNoBase, pairAdjust16, windowAdjust16",
+   "statement": "a side of the pair window made only of default-ignorable characters, or of such characters and marks, reaches to the next cluster: HarfBuzz's lookups skip default-ignorable glyphs, and marks where the lookup says IgnoreMarks, which the kern and kerx machine always does; where such characters lie between a cut and an offset, the pair window of the offset reaches back across the cut and shows the cut's own adjustment, which the prefix at the cut holds already, so the position there is the cut's plus their advance and takes that adjustment once (HarfBuzz gives them no advance, hb-ot-shape.cc:779-799)",
+   "source": "hb-ot-layout-gsubgpos.hh:558-571; hb-kern.hh:58; hb-unicode.hh:167-197; hb-ot-shape.cc:578-586; engines/blink/shape.ts holdsNoBase, pairAdjust16, windowAdjust16; groupPrefix16",
    "probes": [
     "blink-cr5 Z"
    ],
    "tests": [
     "src/engines/blink/pair-window.test.ts :: blink pair window > reaches past a cluster of a default-ignorable character and a mark",
-    "src/engines/blink/pair-window.test.ts :: blink pair window > as it does past a default-ignorable character alone, and with nothing between"
+    "src/engines/blink/pair-window.test.ts :: blink pair window > as it does past a default-ignorable character alone, and with nothing between",
+    "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > after a cut before characters every lookup skips, a position takes the adjustment of the cut once"
    ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16; restated by the blink owner (correctness round 5, 2026-09-19)"
+   "declaredBy": "catalogue 2026-09-16; restated by the blink owner (correctness round 5, 2026-09-19); the position after them at a cut restated for words first (2026-09-23), the fix round 1 of the word study named (research/SPEC-WORD-SUM.md)"
   },
   {
    "id": "blink/shape/unsafe-to-break-offsets",
@@ -792,21 +798,22 @@
    "engine": "blink",
    "area": "shape",
    "kind": "heuristic",
-   "statement": "a group of 256 zoomed px or more is cut near its middle at an offset that passes the safe test (glyph clusters part there, no letters join across it, and the wide window and the pair window both show no adjustment): the nearest one beside a space, else the nearest other one, else the nearest grapheme boundary, reported as unsafe-to-break; the search tries the offsets beside a space first and the others only once all of those failed, which finds the cut that trying every offset in one turn from the middle outward finds and asks about no offset that can't win; the adjustment a position takes at a cut that passed is the 0 the search measured where it measured it (the pair window's, and before white space the wide window's between two pieces), and is asked elsewhere",
+   "statement": "a stretch of a group of 256 zoomed px or more that words first leaves (blink/measure/words-first: words whose space didn't pass, a long word, text without spaces) is cut near its middle at an offset that passes the safe test (glyph clusters part there, no letters join across it, and the wide window and the pair window both show no adjustment): the nearest one beside a space, else the nearest other one, else the first offset the search tried whose exact windows showed no adjustment and whose range did (blink/measure/exact-canvas-answers), else the nearest grapheme boundary, both reported as unsafe-to-break; the search tries the offsets beside a space first and the others only once all of those failed, which finds the cut that trying every offset in one turn from the middle outward finds and asks about no offset that can't win; the adjustment a position takes at a cut that passed is the 0 the search measured where it measured it (the pair window's, and before white space the wide window's between two pieces), and is asked elsewhere",
    "source": "trigger: 16.16 exactness in float32 (specs/blink-canvas.md §1.5); cut location invented; engines/blink/shape.ts addPieces, passesSafeTest, measureGroups; engines/blink/gaps.ts unsafeCut; research/PROFILING-START.md item 6",
    "probes": [],
    "tests": [
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the pieces add up to the group: the cut moves off an offset where the two sides change each other",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > the search asks about no offset inside a word while an offset beside a space passes",
-    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured",
+    "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > a cut between two words that passed asks nothing after the tests: the adjustment a position takes there is the 0 they measured",
     "src/engines/blink/cuts.test.ts :: blink cuts of a wide group > an inspected paragraph reports the cut of a group where no offset passes",
-    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the pieces are the ones named, and the window between the cuts around the cut is asked after them",
-    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the adjustment at the cut is the one its own window shows, not the 0 of the search"
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)",
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > the adjustment at the cut is the one its own window shows, not the 0 of the search",
+    "src/engines/blink/cuts.test.ts :: a safe pair still reads the wider context and recovers at another safe edge"
    ],
    "audit": "blink E4, B8",
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16; restated for profiling item 6 (2026-09-20)"
+   "declaredBy": "catalogue 2026-09-16; restated for profiling item 6 (2026-09-20); restated for words first (2026-09-23); restated for the range's veto (loss round, 2026-09-24)"
   },
   {
    "id": "blink/shape/position-from-prefix-and-pair",
@@ -9419,6 +9426,123 @@
    "replacedBy": []
   },
   {
+   "id": "blink/measure/words-first",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "below a zoomed font size of 60 px, with the size that the letter spacing of 7 characters and the word spacing of 2 spaces add at 4.07 em, a group is cut into words before anything else (at 60 and more, where two words of Zapfino, `in the ` at 4.07 em, no longer measure below 256 zoomed px together and the word test can't be asked between them, it is cut by the cut search alone, with the windows before words): a word starts after a U+0020 where clusters part and nothing joins, with a character no lookup skips, and holds a character with a script of its own (a word without one, digits, punctuation or an emoji, stays in the piece before it, or at the group's start in the one after it, since Canvas shapes a string without one as Common where the paragraph shapes it under its run's script); each word is measured once with its trailing space; the offset between two words is a cut where the two words measured together equal their sum below 256 zoomed px and the pair window shows 0, and the position there takes nothing; what is left between two cuts and isn't one word below 256 zoomed px goes to the cut search (blink/shape/wide-group-halved); a group of a style whose space measures otherwise as an 8-bit U+0020 than as a lone U+2028 (Euphemia UCAS) has no words, nor has a group of which one HarfBuzz call (a RunSegmenter segment) holds a character of General_Category M and a letter HarfBuzz writes otherwise in such a call (two marks or more in its full canonical decomposition, or one that composes back in a script whose shaper may decompose every letter; Athelas lacks `ở` and has `ỏ`), both of which the cut search cuts alone; in a segmented paragraph, in a group cut into words, the side after an offset of the window between the cuts around it, where Canvas shapes it as Common (a 16-bit string with a character other than white space and none with a script of its own), takes the next piece in while the window stays below 256 zoomed px by the pieces' prefixes, and where the next piece doesn't fit, clusters until it holds a character with a script of its own, below which the shrink doesn't take it, and a cut the search made whose side after it is one keeps no 0 it measured; the side before the offset stays, since it cancels against the prefix the position measures from the same cut; that the pieces add up to the group rests on a premise about fonts that no engine source gives, that no shaping context reaches more than one word past a space; an inspected paragraph cuts every group by the cut search alone first, which asks what the port asked before words, and makes every read that depends on the cuts with both, reporting blink/gap/context-past-a-word where they differ; plain and inspected paragraphs take the words' values",
+   "source": "plain_text_node.cc:365-399 (Canvas words), :400-425; harfbuzz_shaper.cc:1072-1101; script_run_iterator.cc:301, :641; hb-ot-layout.cc:582-586; hb-ot-layout-gsubgpos.hh:558-571; hb-ot-shape-normalize.cc:303-432; engines/blink/shape.ts addWordPieces, holdsOwnScript, measuredAsCommon, adjustBetweenCuts16, cutGroup, measureGroups, heldAgainstSearch, recomposesAcrossWords; engines/blink/props.ts recomposesInMarkedCall; tools/gen-blink-data.ts; DESIGN.md §4.4, §4.6; research/SPEC-WORD-SUM.md",
+   "probes": [
+    "the second check of words first (tools/words2-sum-probe.ts, 2026-09-20): Euphemia UCAS's GPOS kern feature moves the space by -422 font units under latn alone, so a word without a script of its own measured alone is 432,128 units (3.3 CSS px at DPR 2) wider than in its run",
+    "the fix round's spacing sweep (tools/bwf-fonts-probe.ts, BWF_STYLE_SET=spacing, 2026-09-24): 28px Zapfino at DPR 2 lost lines under 3px of letter spacing and 8px of word spacing, where its two short words with the spacing no longer measure below 256 zoomed px together",
+    "the fix round's mark-kern probe (tools/mark-kern-probe.ts, 2026-09-24): of 399 installed families in five variants, a mark earlier in the call changed the width of the samples after it only in italic Athelas, whose `ở` HarfBuzz recomposes to `ỏ` in a call that holds a mark"
+   ],
+   "tests": [
+    "src/engines/blink/words.test.ts :: blink word pieces > a group is cut after every space that passes, and its positions are sums of words",
+    "src/engines/blink/words.test.ts :: blink word pieces > a space whose pair window shows an adjustment is no cut, and neither is one whose two words measure otherwise together",
+    "src/engines/blink/words.test.ts :: blink word pieces > a group of an unsegmented paragraph that holds SHY is cut into words: SHY is U+2060 alone and beside a space alike",
+    "src/engines/blink/words.test.ts :: blink word pieces > a word without a character of a script of its own stays in the piece beside it, which Canvas shapes under the script of the paragraph",
+    "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > context that reaches past a word: the words give the wrong total, and an inspected paragraph reports context-past-a-word",
+    "src/engines/blink/cuts-window.test.ts :: blink cuts of a wide group: a cut before white space beside a side cut again > two words that measure otherwise together than apart stay one piece (shape.ts addWordPieces)",
+    "src/engines/blink/words.test.ts :: in a segmented paragraph a window side that Canvas shapes as Common takes the next piece in",
+    "src/engines/blink/words.test.ts :: a window side before the offset is never taken further in: it cancels against the prefix the position measures from the same cut",
+    "src/engines/blink/words.test.ts :: a face whose space takes another advance under Common than under Latin is cut by the cut search alone",
+    "src/engines/blink/words.test.ts :: at a zoomed font size of 60 px and more, with the spacing two words take, a group is cut by the cut search alone, as before words",
+    "src/engines/blink/words.test.ts :: a group whose HarfBuzz call holds a mark and a letter that recomposes in such a call is cut by the cut search alone"
+   ],
+   "declaredBy": "words first (branch x-words2-blink, 2026-09-20, V3); landed on branch blink-words-first (2026-09-23) with the rule for words without a script of their own and the premise as a documented default with a named gap; SHY groups cut into words (loss round, 2026-09-24); Common sides taking clusters in (loss round, 2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/context-past-a-word",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "an inspected paragraph makes every read of a group's own call that depends on its cuts, a position or the wide window's adjustment, with the cuts the cut search alone made first and then with the words' cuts, and reports context-past-a-word at the offset where the two differ: the words rest on shaping context that reaches more than one word past a space there; the line takes the words' value in both modes, and a plain paragraph reports nothing",
+   "source": "engines/blink/shape.ts heldAgainstSearch; engines/blink/gaps.ts contextPastAWord; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > context that reaches past a word: the words give the wrong total, and an inspected paragraph reports context-past-a-word",
+    "src/engines/blink/words.test.ts :: blink candidate from the cuts > an inspected paragraph, which searches and walks both, reports no gap of its words and gives the plain lines, at every width"
+   ],
+   "declaredBy": "words first (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/lines/candidate-from-cuts",
+   "engine": "blink",
+   "area": "lines",
+   "kind": "heuristic",
+   "statement": "the candidate of a line that ends between two words in a left-to-right group item is found by walking the positions at the group's cuts from the line's start, which are sums the group holds: the word's end where it isn't past x, else the word's start, which stands for every offset of a word without white space, soft hyphen, HanKerning close mark or break opportunity after its start; the walk checks that the cut positions don't run backwards, that the word's end lies between its cuts and that no spacing is negative, and otherwise leaves the line to the search over every offset (CachedOffsetForPosition); that it finds the search's candidate rests on the premise both rest on, sorted positions inside a word; an inspected paragraph searches first, which asks what it asked before, then walks, and reports blink/gap/positions-run-backwards where the two settle differently, taking the walk's candidate, the plain paragraph's",
+   "source": "shape_result.cc:2261-2323; shaping_line_breaker.cc:345-347, :392-395, :405-407; engines/blink/line-breaker.ts candidateAt, wordCandidate; DESIGN.md §4.4",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/words.test.ts :: blink candidate from the cuts > an inspected paragraph, which searches and walks both, reports no gap of its words and gives the plain lines, at every width",
+    "src/engines/blink/words.test.ts :: blink candidate from the cuts > a line between two words asks where the two words around its end end, and a kept paragraph asks nothing at a width it has met",
+    "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > positions that run backwards inside a word: the walk and the search differ, and an inspected paragraph reports positions-run-backwards"
+   ],
+   "declaredBy": "words first (branch x-words2-blink, 2026-09-20, V3); the inspected path's check landed 2026-09-23 in place of the offline checked run",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/positions-run-backwards",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "an inspected paragraph walks the cuts beside the search for every line end the walk can settle, and reports positions-run-backwards where the two give different candidates: a position inside a word lies past a later one; the line takes the walk's candidate in both modes, and a plain paragraph reports nothing",
+   "source": "engines/blink/line-breaker.ts candidateAt; engines/blink/gaps.ts positionsRunBackwards; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/words.test.ts :: blink words first: what the premises cost where a font breaks them > positions that run backwards inside a word: the walk and the search differ, and an inspected paragraph reports positions-run-backwards"
+   ],
+   "declaredBy": "words first (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/cut-predictor",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "where the style has no letter spacing, no negative word spacing and a space that takes the same advance under Common as under Latin, a plain paragraph doesn't measure every window the wide window's shrink tries before the one it takes: it scales the widest window's total, or a total its caller hands down (a group of one piece, measured; the pieces' prefixes between two cuts; a half's share of the range the cut search cut by length), to each window's length, takes the first below 256 zoomed px, and walks back from it, taking any earlier window that is exact and stopping at one that measures 256 zoomed px plus the zoomed font size or more, then walks on to the first exact window; a half estimated at twice 256 zoomed px or more isn't measured, and is a piece where a window its search measures inside it shows it below 256 zoomed px; that this takes the loop's window rests on a premise about fonts that no source gives, that a string is narrower than a window inside it by less than the zoomed font size (0.71 of it at most in the installed faces the attacks measured); an inspected paragraph shrinks as before and walks the prediction beside it over the same totals, reporting blink/gap/nested-window-wider where the two take other windows, and takes the prediction's; it hands on what the prediction measured and leaves the same halves unmeasured, so it asks every question a plain paragraph asks",
+   "source": "engines/blink/shape.ts windowAdjust16, predictedWindow, addPieces, adjustBetweenCuts16; DESIGN.md §4.4, §4.6",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a plain paragraph takes the windows the shrink takes, asking fewer strings of 256 zoomed px or more",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a window wider than the string around it: the shrink and the prediction take other windows, and an inspected paragraph reports nested-window-wider",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > an inspected paragraph asks every string a plain one asks where a range measures far less than its estimate",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > the prediction walks back past a window below 256 zoomed px plus the margin, and takes an earlier one that is exact",
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > under letter spacing, negative word spacing or a face whose space takes the script, the shrink measures every window in turn"
+   ],
+   "declaredBy": "the cut predictor (branch blink-words-first, 2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/nested-window-wider",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "an inspected paragraph shrinks the wide window as before and walks the prediction of the window it takes beside it, over the same totals, and reports nested-window-wider where the two take other windows: a window measures wider than a string around it; the adjustment is the prediction's in both modes, and a plain paragraph reports nothing",
+   "source": "engines/blink/shape.ts windowAdjust16; engines/blink/gaps.ts nestedWindowWider; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/cut-predictor.test.ts :: blink cut predictor > a window wider than the string around it: the shrink and the prediction take other windows, and an inspected paragraph reports nested-window-wider"
+   ],
+   "declaredBy": "the cut predictor (2026-09-23)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
    "id": "gecko/measure/crossing-measured-where-placed",
    "engine": "gecko",
    "area": "measure",
@@ -9493,6 +9617,157 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/measure/exact-canvas-answers",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "fact",
+   "statement": "a measured total is exact where it is below 256 zoomed px and every Canvas answer it holds was below 256 zoomed px either side of 0 before the port adds word spacing and the letter spacing Canvas gives other characters than the DOM does, and near where it is below 256 zoomed px and every answer was below twice that (only negative spacing makes a total near without being exact); an answer of 256 zoomed px or more is off by at most half a float32 step at its magnitude for each run Canvas converts and each sum, and a string has no more runs than code units, which bounds how far a total can be off; a near range is a piece, reported as float32-precision; the words' test and the windows' zero tests take exact totals; an adjustment a pair or wide window shows within the bounds of its three totals is none; and where the exact window a shrink takes shows none, the widest window, the range being cut at a cut the search tries and the window between the cuts around an offset for a position inside a piece (a position at a cut takes what the exact windows show, which a plain paragraph keeps there), is held against its two sides (but in a face whose space takes another advance under Common than under Latin, where a side without a letter measures its spaces wide), and an adjustment past their bounds there is the window's, so the offset is no cut; where the range shows such an adjustment at every offset its exact windows pass, the first of those is the cut, with their zero, reported as unsafe-to-break",
+   "source": "specs/blink-canvas.md §1.5; shape_result.cc:2230; engines/blink/shape.ts measureTotal16, Total16, isPiece, pairAdjust16, windowAdjust16, predictedWindow, addPieces, addWordPieces; engines/blink/gaps.ts roundedPiece, unsafeCut; DESIGN.md §4.4",
+   "probes": [
+    "the constructed attack on words first (2026-09-23): under word spacing of -2px, 16px STIX Two Text at DPR 2 gave 3 lines where Chrome gives 2, and 16px Kailasa 5 where Chrome gives 4",
+    "the verifier's fonts runs (2026-09-24): cutting every near range lost 163 breaks in Euphemia UCAS and 38 in Zapfino under negative word spacing at DPR 3",
+    "the loss round's fonts runs and window probes (2026-09-24): a window side carried over the eight family emoji of `emoji-run` to the letter after them rounded its way into 237 lost layouts in 33 faces at DPR 2 and 3; the forms of Zapfino's `the` and the `ffl` of Helvetica Neue across a SHY reach past the exact windows, which the range shows; on the round's lab sets in pinned Chrome the losses against the base at DPR 3 fall from 212 breaks and 59 line counts to 8 and 0, every gain kept"
+   ],
+   "tests": [
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > a total that word spacing brings below 256 zoomed px is near where Canvas rounded it: no word cut, one piece",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > without spacing the same total is 256 zoomed px or more and is cut beside the space",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > the range being cut, held against its two sides, vetoes the zero of the exact window inside it",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > an adjustment a window shows within what Canvas rounded is none",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > in a face whose space takes another advance under Common than under Latin the range decides nothing"
+   ],
+   "declaredBy": "words-first fix round (2026-09-23); near totals, rounding bounds and the range (loss round, 2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/ignorables-as-word-joiner",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "fact",
+   "statement": "the default-ignorable characters Canvas turns into U+200B (SHY, ZWSP, LRM, RLM, U+202A..U+202E, U+FEFF) are U+2060 in every Canvas string, whatever the paragraph and whether the string holds a space, which makes the string 16-bit; in an 8-bit paragraph, whose only such character is SHY, the DOM shapes SHY's own glyph in one Latin segment, and a string without a Latin letter reports script-context",
+   "source": "character.h:167-175; plain_text_node.cc:47-62, 85-91; inline_node.cc:1256-1290; harfbuzz_shaper.cc:1072-1101; hb-aat-layout-common.hh:1226-1241; engines/blink/shape.ts canvasString",
+   "probes": [
+    "probe bwf-loss S1 (2026-09-24): over 399 installed families at 16 and 28px, 2,356 words of 14 with SHY measure otherwise in the DOM than without it, in 168 families, and Canvas gives each of them the DOM's width with U+2060 and none of them with SHY left out",
+    "probe blink-followups-20260917: RLM `((` in Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out"
+   ],
+   "tests": [
+    "src/engines/blink/canvas-text.test.ts :: blink compiled Canvas text > leaves SHY, segmented scripts and artificial ZWJ context on the general builder"
+   ],
+   "declaredBy": "loss round of words first (2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/canvas-string-in-group-direction",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "ported rule",
+   "statement": "a 16-bit Canvas string of a right-to-left group, or of a left-to-right group that holds a character of bidi class R, AL or AN or an isolate, is sent inside U+202E or U+202D and U+202C, which Canvas resolves as one level run of the group's direction and turns into U+200B, words of no advance that take no spacing: the DOM shapes a group, the items of one direction, in that direction whatever the levels inside it, and Canvas resolves the levels of the string alone, where the paragraph's embeddings and overrides are U+2060 and the neutrals beside digits lack the paragraph's context; an isolate keeps its own levels, as in the paragraph",
+   "source": "inline_node.cc:472-491, :1636-1717; plain_text_node.cc:47-62, :278-351; engines/blink/shape.ts inGroupDirection, holdsOtherDirection, canvasScriptsPerUnit",
+   "probes": [
+    "the verifier's bidi attack (2026-09-24): Baghdad, Al Nile, Farah and Noto Nastaliq Urdu under U+202D, U+202B and isolates at 0.3-2px of letter spacing lost 4-5 breaks and 1 line count a device pixel ratio; with the override the loss round's window probe gives Chrome's lines in all five at DPR 1, 2 and 3"
+   ],
+   "tests": [
+    "src/engines/blink/script-measure.test.ts :: a string that may hold a level of the other direction goes to Canvas inside an override of its group's direction",
+    "src/engines/blink/script-measure.test.ts :: lone low scripts stay distinct from ignored measurement boundaries under letter spacing"
+   ],
+   "declaredBy": "loss round of words first (2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/measure/prefix-without-script-in-context",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "heuristic",
+   "statement": "a position's prefix from the cut before it that holds a character other than white space and none with a script of its own (a 16-bit string RunSegmenter resolves as Common where the paragraph shapes it under its run's script) is measured in front of the text after the offset up to a character with a script of its own, less that text alone, less the adjustment across the offset, which the position then places as before; where that and the prefix alone agree within the bounds of their totals (blink/measure/exact-canvas-answers), the prefix alone is taken",
+   "source": "plain_text_node.cc:400-425; script_run_iterator.cc:301, :641; hb-ot-layout.cc:582-586; engines/blink/shape.ts prefixAfterCut16, positionAtOffset16, measuredAsCommon",
+   "probes": [
+    "probe bwf-loss comma (2026-09-24): at 16px and DPR 3 ` , ` between Devanagari words measured alone is 2.6 zoomed px off its run in Didot and 4.8 in italic Gill Sans, and with a letter beside it the run's, in every face probed"
+   ],
+   "tests": [
+    "src/engines/blink/words.test.ts :: blink word pieces > a position after a stretch without a script of its own at a cut is measured in front of the text after it",
+    "src/engines/blink/exactness.test.ts :: blink exactness of a total > a stretch without a script of its own after a cut is measured alone where its context agrees within rounding"
+   ],
+   "declaredBy": "loss round of words first (2026-09-24)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/one-unit-fit",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "in-word-prefix at the break a wrapped line's decision took (a point: the start's correction moves no glyph), where the line starts beside a space at an offset the port's width tests call safe and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; inside a word the same condition reports at the start alone (blink/gap/in-word-prefix); a plain paragraph reports nothing",
+   "source": "shaping_line_breaker.cc:309-324; line_breaker.cc CanFitOnLine; engines/blink/gaps.ts lineEdgeGaps; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix at the break its decision took"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/stand-in-start-reach",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters inside a grapheme or where no ligature fact settles the offset, font-fallback beside a U+3000 whose font the facts don't name, in-word-prefix where letters join across the offset, else unsafe-to-break) at the break the line's decision took (a point), where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
+   "source": "shaping_line_breaker.cc:309-324; engines/blink/gaps.ts lineEdgeGaps, startSpread; engines/blink/limits.ts positionLimit; DESIGN.md §5",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start taken from a stand-in position reports its reach where the fit lies within the adjustment"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/white-space-window-side",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "script-context over the clusters around an offset whose window (the exact window the shrink takes, or the range being cut held against its sides) has a side of white space and default-ignorable characters alone, a space or a no-break space among them, whose Canvas string is 16-bit and so shaped as Common where the paragraph shapes it under its run's script, in a face whose space takes another advance under Common than under Latin (blink/measure/words-first's spaceTakesScript, asked of Canvas on an inspected paragraph where nothing asked it yet); a plain paragraph reports nothing",
+   "source": "plain_text_node.cc:400-425; harfbuzz_shaper.cc:1072-1101; engines/blink/gaps.ts windowSides; engines/blink/shape.ts windowAdjust16, spaceTakesScript; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): in Euphemia UCAS's other-spaces under 1px of letter and -2px of word spacing at 28px and DPR 3 the exact window at the space after `d` shrinks to a side of white space alone, and the position there takes two spaces' Common difference, 34 zoomed px"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a window side Canvas shapes otherwise than the paragraph > a window side of white space alone in a face whose space takes the script reports script-context"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/common-window-side",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "script-context over the clusters around an offset whose window (the exact window the shrink takes, or the range being cut held against its sides) has a side of characters without a script of their own that Canvas shapes as Common alone where the paragraph shapes it under its run's script (shape.ts measuredAsCommon), and shows an adjustment across the offset or vetoes it: the adjustment can be the side's script and not context; a plain paragraph reports nothing",
+   "source": "plain_text_node.cc:400-425; script_run_iterator.cc; engines/blink/gaps.ts windowSides; engines/blink/shape.ts windowAdjust16, measuredAsCommon; DESIGN.md §4.6, §5",
+   "probes": [
+    "the words-first loss round's window probe (2026-09-24): Skia's hindi-neutral under 1px of letter and -2px of word spacing at 28px and DPR 3, where the range's side ` 2026` alone is Common where the paragraph shapes it as Devanagari and its veto moves the cut into `श्री`"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a window side Canvas shapes otherwise than the paragraph > a window side Canvas shapes as Common alone between letters of one script reports script-context where it decides"
+   ],
+   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9532,18 +9807,18 @@
   "blink/measure/space-as-u2028": "c4c92f95001ea91a",
   "blink/measure/vt-ff-as-u0001": "8841a9d24e6b5df7",
   "blink/measure/ignorables-as-u2060": "7f4d960fc4bbb156",
-  "blink/measure/ignorables-left-out-if-8bit": "afda213c2767af0c",
+  "blink/measure/ignorables-left-out-if-8bit": "1b317adb7295f694",
   "blink/measure/v8-short-slice-storage": "34fdb58f2d0eea76",
   "blink/measure/force-16bit-string": "8cc0106eb59680b3",
   "blink/measure/word-spacing-in-js": "1a8c1e80301c2317",
-  "blink/measure/letter-spacing-cursive-adjust": "963c6f4ffb913063",
+  "blink/measure/letter-spacing-cursive-adjust": "c8ae100a1f023c7e",
   "blink/measure/zwj-inside-group-edge": "9b5c029fb144b2a0",
   "blink/measure/joining-context-opentype": "0449ced74a425e52",
   "blink/shape/joining-reads-5-code-points-context": "11c3bf3eeeca2769",
   "blink/shape/pair-adjustment-on-glyph-before": "3b213a5b57f6f38c",
-  "blink/shape/default-ignorables-skipped-in-pair": "96d034c241466ec6",
+  "blink/shape/default-ignorables-skipped-in-pair": "938fd38c3dd742a0",
   "blink/shape/unsafe-to-break-offsets": "fb4eda318eb1bc5f",
-  "blink/shape/wide-group-halved": "8d73fd3ef1a1e93a",
+  "blink/shape/wide-group-halved": "d8e4f9465aa4f9b7",
   "blink/shape/position-from-prefix-and-pair": "605aaf4ca7fe3fd3",
   "blink/units/lu-ceil": "2d78919fc6f234fc",
   "blink/units/available-width-trunc": "38df67f9347d8fc0",
@@ -10080,9 +10355,23 @@
   "blink/content/box-fragment-of-an-inline-box-without-text": "ef34dc973d7c7848",
   "gecko/lines/word-scan": "f460aff8db4700ce",
   "gecko/gap/negative-word-tail": "cc7b42bf8bdb6768",
+  "blink/measure/words-first": "96e32344701841c4",
+  "blink/gap/context-past-a-word": "2fd5da1225a4e282",
+  "blink/lines/candidate-from-cuts": "94744e61077356d4",
+  "blink/gap/positions-run-backwards": "96427266229206d5",
+  "blink/measure/cut-predictor": "f032e0730afd722d",
+  "blink/gap/nested-window-wider": "0df78c57d58be074",
   "gecko/measure/crossing-measured-where-placed": "32457a138e2697dd",
   "gecko/measure/no-optional-ligature-at-ordinary-breaks": "d625ba614aecfeec",
   "gecko/measure/no-group-at-ordinary-breaks": "1404f015334257a8",
-  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066"
+  "webkit/content/list-probe-skipped-for-a-resolving-generic": "9d40e7a3eed52066",
+  "blink/measure/exact-canvas-answers": "8afb0c72a1939d15",
+  "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
+  "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
+  "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e",
+  "blink/gap/one-unit-fit": "725c89ddce35b31a",
+  "blink/gap/stand-in-start-reach": "8010ae772d37258f",
+  "blink/gap/white-space-window-side": "5a09a3ca764abccf",
+  "blink/gap/common-window-side": "685612e3325f90c3"
  }
 }

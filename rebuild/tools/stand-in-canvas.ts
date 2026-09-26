@@ -126,9 +126,12 @@ function glyphsOf(font: Font, lang: string, value: string): Glyph[] {
     i += cp > 0xffff ? 2 : 1
     // Canvas replaces the controls with spaces before shaping (HTML's text preparation algorithm).
     if (cp >= 0x09 && cp <= 0x0d) cp = 0x20
-    const is = classOf(cp)
-    const family = familyFor(font, cp, is, lang)
-    const advance = emAdvance(family, font.weight, font.style, cp, is)
+    // Blink maps U+2028 to the space glyph (harfbuzz_face.cc:110-113), which its port measures in place of U+0020
+    // (engines/blink/shape.ts canvasString): the space's family and advance, and no word spacing, which is U+0020's.
+    const glyph = cp === 0x2028 ? 0x20 : cp
+    const is = classOf(glyph)
+    const family = familyFor(font, glyph, is, lang)
+    const advance = emAdvance(family, font.weight, font.style, glyph, is)
     out.push({ cp, is, family, advance, spaced: advance !== 0, space: cp === 0x20 || cp === 0xa0 })
   }
   // Emoji sequences are one glyph: the parts after the first add nothing and take no spacing.

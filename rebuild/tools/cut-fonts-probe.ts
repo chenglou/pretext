@@ -11,7 +11,9 @@
 // families.json: an array of family names (one that starts with `!` is a generic keyword, written without quotes). Per
 // family that resolves (a string at 72 px measures otherwise than in both generic fallbacks), every text at every size is
 // prepared plain by each tree. A group is cut only where it is 256 zoomed px or wider, so the texts are long. Compared
-// per paragraph: every group's cuts and the positions at them (prefixAtCut). Then both trees fill the paragraph at a few
+// per paragraph: every group's cuts, its total, and the positions (groupPrefix16) at every inner cut of either tree and
+// at the space before it, since a tree that cuts words first has other cuts than one that doesn't (shape.ts
+// addWordPieces), and a position is what must not move. Then both trees fill the paragraph at a few
 // ordinary widths, at the decided lines' own widths and one LayoutUnit to either side, and at widths that put the first
 // line's end beside a cut of the head: for up to twelve cuts a paragraph, the smallest width where the first line ends at or
 // after the cut and the smallest where it ends after it, each with one LayoutUnit to either side. Those widths are found
@@ -100,7 +102,7 @@ const out = [];
 for (let f = 0; f < FONTS.length; f++) {
   const family = FONTS[f].startsWith('!') ? FONTS[f].slice(1) : '"' + FONTS[f] + '"';
   if (!resolves(family)) { out.push({ family: FONTS[f], resolves: false }); continue; }
-  const row = { family: FONTS[f], resolves: true, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
+  const row = { family: FONTS[f], resolves: true, paragraphs: 0, otherText: 0, groups: 0, cutGroups: 0, cuts: 0, wordCuts: 0, wordEdges: 0, wordEdgesDiffer: 0, cutsDiffer: 0, positionsDiffer: 0, layouts: 0, lines: 0, nearCut: 0, targeted: 0, targetedNearCut: 0, differ: 0, differNearCut: 0, searchFills: 0, errors: 0, examples: [], targets: [] };
   const shared = SHARED ? [A.createContextPool(), B.createContextPool(), B.createContextPool()] : null;
   for (let t = 0; t < TEXTS.length; t++) for (let z = 0; z < SIZES.length; z++) {
     const text = TEXTS[t].text, size = SIZES[z];
@@ -122,8 +124,21 @@ for (let f = 0; f < FONTS.length; f++) {
       const group = gb.groups[g];
       row.groups++;
       if (group.cuts.length > 2) row.cutGroups++;
-      if (JSON.stringify(ga.groups[g].cuts) !== JSON.stringify(group.cuts)) { row.cutsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseCuts: ga.groups[g].cuts, headCuts: group.cuts }); }
-      else if (JSON.stringify(ga.groups[g].prefix) !== JSON.stringify(group.prefix)) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, cuts: group.cuts, basePositions: ga.groups[g].prefix, headPositions: group.prefix }); }
+      // A tree that cuts words first (shape.ts addWordPieces) and one that doesn't have other cuts where words are shorter
+      // than 256 zoomed px. What must not differ is a position: at every inner cut of either tree, and at the space before
+      // it, the advance sum each tree gives (groupPrefix16), and the group's total.
+      const baseCuts = ga.groups[g].cuts;
+      if (JSON.stringify(baseCuts) !== JSON.stringify(group.cuts)) row.cutsDiffer++;
+      if (ga.groups[g].prefix[baseCuts.length - 1] !== group.prefix[group.cuts.length - 1]) { row.positionsDiffer++; if (row.examples.length < 4) row.examples.push({ text: TEXTS[t].name, size, group: g, baseTotal: ga.groups[g].prefix[baseCuts.length - 1], headTotal: group.prefix[group.cuts.length - 1] }); }
+      const edges = new Set();
+      for (let i = 1; i + 1 < baseCuts.length; i++) edges.add(baseCuts[i]);
+      for (let i = 1; i + 1 < group.cuts.length; i++) { edges.add(group.cuts[i]); if (!baseCuts.includes(group.cuts[i])) row.wordCuts++; }
+      for (const k of Array.from(edges)) if (text.charCodeAt(k - 1) === 0x20) edges.add(k - 1);
+      for (const k of edges) {
+        const pa = A.position16(a, g, k), pb = B.position16(b, g, k);
+        row.wordEdges++;
+        if (pa !== pb) { row.wordEdgesDiffer++; if (row.examples.length < 6) row.examples.push({ text: TEXTS[t].name, size, group: g, edge: k, around: text.slice(Math.max(0, k - 12), k + 12), base16: pa, head16: pb }); }
+      }
       for (let i = 1; i + 1 < group.cuts.length; i++) {
         const k = group.cuts[i];
         row.cuts++;
@@ -198,7 +213,7 @@ for (let f = 0; f < FONTS.length; f++) {
     }
     row.targets.push({ text: t, size, widths: used });
   }
-  if (!DETAIL.includes(FONTS[f]) && row.differ === 0 && row.cutsDiffer === 0 && row.positionsDiffer === 0) row.targets = [];
+  if (!DETAIL.includes(FONTS[f]) && row.differ === 0 && row.positionsDiffer === 0 && row.wordEdgesDiffer === 0) row.targets = [];
   out.push(row);
   if (f % 2 === 1) await new Promise(resolve => setTimeout(resolve, 0));
 }

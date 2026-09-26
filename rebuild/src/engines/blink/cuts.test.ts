@@ -102,16 +102,19 @@ describe('blink cuts of a wide group', () => {
     expect(asked.includes('xx')).toBe(true)
   })
 
-  test('a cut that passed asks nothing after its pieces: the adjustment a position takes there is the 0 the search measured', () => {
-    // After a space the pair window's; before one the wide window's, which between two pieces is the search's own window.
+  test('a cut between two words that passed asks nothing after the tests: the adjustment a position takes there is the 0 they measured', () => {
+    // Eight words, seven offsets between them: a word each, the two words around each offset, and the pair window's three;
+    // before them the style's space as an 8-bit string and as U+2028 (shape.ts spaceTakesScript).
     asked = []
     prepare(paragraphIn('Mono'), env, false, createContextPool())
-    expect(asked[asked.length - 1]).toBe(TEXT.slice(19).replaceAll(' ', LS))
+    expect(asked.length).toBe(2 + 8 + 7 + 7 * 3)
     asked = []
     prepare(paragraphIn('Mono', BEFORE_SPACE), env, false, createContextPool())
-    expect(asked[asked.length - 1]).toBe(BEFORE_SPACE.slice(19).replaceAll(' ', LS))
+    expect(asked.length).toBe(2 + 8 + 7 + 7 * 3)
+    // Where no offset between words passes, the group is cut as a group without words is.
     asked = []
     const unsafe = prepare(paragraphIn('Every'), env, false, createContextPool())
+    expect(asked[asked.length - 1]).toBe(TEXT.slice(19).replaceAll(' ', LS))
     expect(unsafe.groups[0]!.prefixAtCut).toEqual([0, 171 * 65536, 343 * 65536])
   })
 
@@ -140,12 +143,11 @@ test('a safe pair still reads the wider context and recovers at another safe edg
   asked = []
   const prepared = prepare(paragraphIn('LongContext'), env, false, createContextPool())
   const wide = asked.filter(s => s.includes(`x${LS}V`) && s.length > 2)
-  expect(prepared.groups[0]!.cuts).toEqual([0, 15, 38])
-  expect(asked).toContain(`${LS}V`)
+  // The two words around offset 19 measure otherwise together than apart, so it is no cut; every other space is.
+  expect(prepared.groups[0]!.cuts).toEqual([0, 5, 10, 15, 24, 29, 34, 38])
   expect(wide.length).toBeGreaterThan(0)
   expect(prepared.groups[0]!.cuts).not.toContain(19)
   expect(prepared.groups[0]!.cuts).not.toContain(18)
-  expect(prepared.groups[0]!.cuts.length).toBe(3)
   expect(cutGaps('LongContext')).toEqual([])
 })
 

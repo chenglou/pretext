@@ -41,8 +41,8 @@ test('priority and group cuts preserve script-only measurement ranges and the nu
   const groupOfUnit = new Int32Array(text.length).fill(1)
   groupOfUnit.fill(0, 0, 2)
   const shape = new ShapingSegments(text, scripts, priorities, [
-    { start: 0, end: 2, style: 0, rtl: false, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0) },
-    { start: 2, end: text.length, style: 0, rtl: false, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0) },
+    { start: 0, end: 2, style: 0, rtl: false, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0), words: false, whole: null },
+    { start: 2, end: text.length, style: 0, rtl: false, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0), words: false, whole: null },
   ], groupOfUnit)
   expect(shape.scriptEnd(0)).toBe(text.length)
   expect(shape.scriptEnd(2)).toBe(text.length)
@@ -82,7 +82,7 @@ test('lone lows retain exact source scripts and each native direction inside acc
     for (const clipped of [false, true]) {
       const starts = clipped ? Array.from({ length: text.length }, (_, k) => k) : [0]
       const groups = starts.map((start, k) => ({ start, end: starts[k + 1] ?? text.length, rtl, style: 0, cuts: [],
-        prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0) }))
+        prefixAtCut: [], startTrim16: 0, endTrim16: 0, prefix16: new Float64Array(0), pair16: new Float64Array(0), wide16: new Float64Array(0), words: false, whole: null }))
       const groupOfUnit = Int32Array.from({ length: text.length }, (_, k) => clipped ? k : 0)
       const shape = new ShapingSegments(text, scripts, emojiPriorities(text), groups, groupOfUnit)
       expect(Array.from({ length: text.length }, (_, k) => shape.scriptAt(k))).toEqual([...scripts])

@@ -43,6 +43,94 @@ may read the DOM freely; this is research, not the library.
   by `tools/windows-attack-diff.ts`; `tools/windows-attack-cases.ts` makes the same samples a lab set of 1,566 cases for
   `lab/run.ts` and `lab/compare-rows.ts --prediction=without-measure`. The runs are under
   `.artifacts/probes/perf-gecko-fill-20260919/attack` and `.artifacts/tests/runs/perf-gecko-fill-20260919/attack`.
+- `../tools/cut-fonts-probe.ts` (the cut of a wide group and, since 2026-09-23, words first; two checkouts bundled into
+  one page): every family of a list lays the same long paragraphs out by both trees, and their cuts, the positions at
+  every inner cut of either tree and at the space before it, the group totals and the lines at ordinary widths, at the
+  decided lines' own widths and beside cuts are compared (lab README, "Test tiers", has the rule it serves). For words
+  first (48de7f7) against 90e0266 in pinned Chrome over 318 families: at DPR 2, 61 of 769,917 layouts differ, all
+  Zapfino (67 of 483,099 positions, 1 group total), where the words' two-word test refuses a cut the cut search takes
+  inside a contextual form; at DPR 1, 0 of 784,173. The runs are under
+  `.artifacts/tests/runs/blink-words-first-20260923/c1/fonts-dpr{1,2}`.
+- `../tools/words2-sum-probe.ts` (words2-sum S1; the second check of words first, 2026-09-20): a sum of words against
+  Canvas's own exact totals, on short paragraphs (2 to 8 words, where a group below 256 zoomed px is Canvas's one total)
+  and on runs of consecutive pieces inside long groups, and the base against the head on its own texts, styles and
+  widths, in every installed family. For V3 at DPR 2 over 318 families it found the head off Canvas in 2 of 679,661 exact
+  short groups (Euphemia UCAS, 432,128 units) and 1,492 of 1,534,773 long layouts differing; for 48de7f7, 0 of 679,661
+  and 983, with 42,722 of its 42,842 differing positions under negative word spacing, where the base's windows hold
+  totals of 256 zoomed px or more once JS adds the spacing. `../tools/words2-sum-cases.ts` makes the differing layouts
+  lab cases, which say which tree the browser agrees with. The runs are under
+  `.artifacts/tests/runs/words2-blink-20260920/attack/sum-dpr2` and `.artifacts/tests/runs/blink-words-first-20260923/c1/sum-dpr2`.
+- `../tools/bwf-constructed-probe.ts` (bwf-constructed; the constructed attack on words first and the cut predictor,
+  2026-09-23; two checkouts bundled into one page, one probe per page language): lab cases from
+  `../tools/bwf-constructed-cases.ts` (long runs without a space that passes in many scripts, words near 256 zoomed px,
+  letter and word spacing of both signs far enough to make advances negative, tabs, soft hyphens, default-ignorable and
+  bidi controls at word edges, words without a script of their own, Korean, right-to-left text, lines that start inside
+  a word, inline boxes inside words, very large sizes, repeated short words in fonts with contextual forms) are laid out
+  plain by both trees at the case's width, ordinary widths and the head's lines' own widths with one LayoutUnit to either
+  side, and the head's inspected paragraph at three widths counts every gap of a premise. `../tools/bwf-sweep-probe.ts`
+  sweeps chosen cases' widths in steps of a fraction of a px, with the gaps' details. `../tools/bwf-constructed-verdict.ts`
+  makes lab cases of the differing layouts (from either probe or from a `words-attack.ts` report) and compares the two
+  trees' scores against the browser's own lines; `../tools/scale-cases.ts` turns a layout found at DPR 1 or 3 into its
+  DPR 2 equivalent, since the lab observes at the machine's ratio and Blink breaks in zoomed px.
+  `../tools/nested-window-probe.ts` (nested-window N1) tests the cut predictor's premise directly: around offsets of long
+  runs it builds the wide window's shrink as `windowAdjust16` does and measures every window on Canvas, counting windows
+  wider than the one around them and shrinks where a window below 256 px comes before one of 256 px or more. For
+  96da4af against 90e0266 in pinned Chrome 153 (runs under `.artifacts/tests/runs/bwf-attack-constructed-20260923`): the
+  premise fails in real fonts without any spacing, in Farisi, Diwan Thuluth, Mishafi, Mishafi Gold, Waseem and Noto
+  Nastaliq Urdu (a window up to 117 zoomed px wider than the one around it, and crossings of 256 at a 256 px font size),
+  and under negative letter spacing in every font; large Arabic in those fonts reports `nested-window-wider`, and at 384
+  zoomed px Diwan Thuluth's vocalized words lose 11 line counts the base passes (lab cases scaled from DPR 3). Under
+  negative word spacing both trees take a Canvas total of 256 zoomed px or more as exact once the spacing JS adds brings
+  it below 256, and words first adds a path to it: a pair of words whose test failed because their total was that float
+  becomes a piece with it (`addWordPieces` hands `both[i + 1]` to `addPieces`); in short paragraphs cut around such
+  pieces the head loses 26 breaks and 19 line counts the base passes and gains 5 and 2. Zapfino at 72 zoomed px (prose
+  of 16 words or more) loses 11 of 42 lab cases' breaks and 5 line counts the base passes, with `context-past-a-word`.
+  Arabic-Indic digits, a soft hyphen and a side Canvas shapes as Common under letter spacing (`١٢٣`, a space, U+00AD,
+  `[2]`, a space, U+200B and `テキスト` in Helvetica Neue) lose 20 statuses with no premise's gap, and Latin words beside
+  words without a script of their own in Euphemia UCAS at 16px lose 13 breaks and 10 line counts of 67 swept widths,
+  none gained, again with no premise's gap. Repeated short words in 19 fonts with contextual forms, tabs,
+  soft hyphens, default-ignorable characters, Korean and right-to-left prose differ nowhere, and no run reports
+  `positions-run-backwards`.
+- `../tools/bwf-fonts-probe.ts` (bwf-fonts F1; the fonts attack on words first and the cut predictor, 2026-09-23; two
+  checkouts bundled into one page, as the cut probe does). The base and the head lay the same paragraphs out, and where
+  their lines differ the page lays the paragraph out natively beside them and reads each code point's line from its
+  Range rects (the last rect with an area: the character after a soft hyphen taken as a break also reports the hyphen's
+  rect on the line before), so a layout the head gets wrong where the base's is right is counted there. It takes font
+  weights and styles (`BWF_VARIANTS`; a variant whose widths equal an earlier one's over every text's opening, fallback
+  fonts included, is skipped), many sizes turning with the variant and text, the words2 probe's texts and styles or a
+  sweep of letter and word spacing (`BWF_STYLE_SET=spacing`), texts of its own (long runs without spaces in Chinese,
+  Japanese and Myanmar, ZWJ emoji among letters, Korean), the head's inspected paragraph with its reports of the three
+  premises' gaps, and a calibration sample of layouts the trees agree on. On the lab's 165 and 165 cases of its first
+  two runs the lab's own scorer agreed with every layout it called a loss. `../tools/bwf-fonts-cases.ts` writes its
+  losses and gains as lab cases; `../tools/bwf-detail-probe.ts` prints both trees' cuts, positions, pair and wide
+  windows around a layout's differing line ends with Chrome's lines; `../tools/bwf-minimize-probe.ts` looks for the
+  shortest run of words that still loses a line, at widths a LayoutUnit apart. The runs are under
+  `.artifacts/tests/runs/bwf-attack-fonts-20260923`.
+- `../tools/bwf-premise-probe.ts` (bwf-premises P1; no library in the page): the cut predictor's premise asked of
+  Canvas directly, each string grown and shrunk a grapheme at a time from word starts in every text (as sliced and with
+  U+2028 for U+0020), counting steps where a string measures narrower than a window inside it; and whether the space's
+  advance depends on the script Canvas resolves (U+0020 alone, U+2028 alone, U+2028 between two letters of six scripts).
+  A context per family and size: one context over every family grew the renderer past 9 GB.
+- `../tools/bwf-window-probe.ts` (bwf-window W1; the words-first fix round, 2026-09-23): where trees of Blink's port part on
+  one paragraph, each tree's cuts, its position at every offset of every group and its lines, beside Chrome's own
+  position of every offset on one line (a Range's width from the group's start) and its lines at the width; a
+  diagnostic copy of a tree whose `windowAdjust16` pushes the windows it takes into `globalThis.__bwfWin` shows those too.
+  It found the Gill Sans double count behind the two-sided window rule, Euphemia UCAS's wide lone spaces, Zapfino's
+  start-of-string `the` and the letter spacing Canvas gives after Arabic-Indic digits (DESIGN.md §4.4, §4.6).
+  `../tools/bwfa-realtext-cases.ts` writes the real-text attack's lab sets (pre-wrap chat, headings with letter spacing,
+  word spacing, soft hyphens, script faces, Nastaliq and the calligraphic Arabic faces, body text); `lab/run.ts
+  --chrome-scale=<ratio>` lays them out at another device pixel ratio.
+- `../tools/coverage-probe.ts` (coverage C1; no library in the page): which characters of a text a face draws itself,
+  by the two-fallback test of `src/measure/font-checks.ts` (a character that measures otherwise under `<face>,
+  monospace` than under `<face>, serif` is drawn by a generic), and each word with its space measured alone and after
+  the words before it that keep the string below 250px, where the two differ. On the fonts attack's Athelas losses it
+  found every character drawn by the face and no word that measures otherwise (the test can't tell for Devanagari or
+  Hebrew, which the generics don't draw either).
+- `../tools/mark-kern-probe.ts` (mark-kern K1, K2; no library in the page): K1 measures samples of kerned pairs alone and
+  after `e` with U+0301 (the precomposed `é` as a control) in every family of a list in five variants; K2 measures
+  consonants before `ở` and its kin in Athelas after six mark prefixes. HarfBuzz recomposes a letter it decomposed only
+  in a call that holds a cluster of a base and a combining mark, so in Athelas, which lacks `ở` and has `ỏ`, a mark three
+  words back takes a kern away (DESIGN.md §4.6); of 399 families only italic Athelas showed it on K1's samples.
 - `../tools/word-scan-premise-probe.ts` (word-scan P1; Gecko's word scan, 2026-09-20, landed 2026-09-23; it runs the
   library, twice in one document: the tree's own and the `loop` copy from `tools/word-scan-variants.ts`, both bundled
   with `tools/word-scan-probe-entry.ts`). The word scan rests on a premise about fonts, that no tail of a shaped word
