@@ -4,24 +4,37 @@
 //   check [--accept=<why>]   predict every pinned case in the browser and score it against the recordings
 //   gate [--sample=N]        check, plus a prediction in reverse order, N cases recorded again, and attribution
 // record and gate draw with --seed=S (default 20260924).
-//   equal <ref>              whether this tree's src/ and <ref>'s predict the same lines for every case
+//   equal <ref>              whether this tree's build (src/ and the adapter) and <ref>'s predict the same lines, widths
+//                            and line text for every case, with the same line APIs' disagreements and Canvas calls after
+//                            preparing, and each set's measureText calls and submitted units here and there;
+//                            --offline: whether their src/ give the same results on a stand-in Canvas (offline-equal.ts)
+//   bench <base> [--sessions=3] [--rows=new,...] [--background]   <base>'s src/ timed against --lib's (bench/run.ts)
+//   repin <chrome|firefox|safari> [--write]   after a browser update: pin the installed Chrome or Firefox, record every
+//                            case into a scratch copy of the recordings, and print what changed and whether the browser's
+//                            break data is still scripts/engine-data's; --write replaces the recordings and the pin
 //   explain <id>             one case's recorded lines against the predicted ones, character by character
-// --lib=<dir> predicts with another build's src/ directory. Default browsers: chrome, firefox and webkit-host, side by side;
-// explain takes one, chrome by default.
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+//   explain --text=<text> [--width=320] [--font="16px Arial"] [--lang=en] [--white-space=pre-wrap] [--word-break=keep-all]
+//           [--letter-spacing=<px>]  the same for a paragraph with no recording, or for the one case of a --cases file:
+//                            recorded alone in a fresh document, never kept
+// --lib=<dir> predicts with another build: a src/ directory and the adapter beside it in ../harness, this tree's where it
+// has none. Default browsers: chrome, firefox and webkit-host, side by side; explain takes one, chrome by default.
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 import {
-  accept, attribute, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, observable, outsideClaims, pinning, predictionChange, reverseOrder, score, SEED,
-  shown, shrinkWrapShort, widthBand, type Outcome,
+  accept, attribute, buildChange, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, observable, outsideClaims, pinning, reverseOrder, SAMPLED, score,
+  SEED, shown, shrinkWrapShort, widthBand, type Outcome,
 } from './score.ts'
+import { bench, ROWS } from './bench/run.ts'
+import { srcOf } from './bench/lib.ts'
+import { breakDataReport } from './break-data.ts'
+import { appPath, pinInstalled, PINNED, pins, writePin } from './browsers.ts'
 import { LIB, runJob, type Job, type JobResult, type Mode } from './run.ts'
-import { createRng } from './sets/build.ts'
+import { createRng, makeCase, paragraph, parseFont } from './sets/build.ts'
 import {
   acceptedPath, assertSameEnvironment, caseText, historyPath, readAccepted, readCases, readHistory, readRecordings, readVarying, recordingText,
   recordingsPath, splitHistory, varyingPath, writeAccepted, writeHistory, writeRecordings, type Accepted, type Varying,
 } from './store.ts'
-import { BROWSERS, type BrowserKind, type Case, type Prediction, type Recording } from './types.ts'
+import { BROWSERS, type BrowserKind, type Case, type Paragraph, type Prediction, type Recording } from './types.ts'
 
 // A document holds this many cases while recording, so each case sees a short page history.
 const RECORD_DOCUMENT = 200
@@ -32,7 +45,7 @@ const ATTRIBUTE_AT_MOST = 200
 // What the flags ask for. `sample`: --sample's count, or null. `partial`: the run covers some case files only (--cases),
 // so it leaves the other cases' entries alone.
 export type Options = { lib: string; seed: number; sample: number | null; accept: string; partial: boolean; onlyNew: boolean }
-export type Args = { command: string | undefined; positional: string[]; browsers: BrowserKind[]; cases: string | null; options: Options }
+export type Args = { command: string | undefined; positional: string[]; browsers: BrowserKind[]; cases: string | null; options: Options; flags: Map<string, string> }
 
 export function parseArgs(args: readonly string[]): Args {
   const flags = new Map<string, string>()
@@ -50,25 +63,27 @@ export function parseArgs(args: readonly string[]): Args {
     lib: resolve(flags.get('lib') ?? LIB), seed: Number(flags.get('seed') ?? SEED), sample: flags.has('sample') ? Number(flags.get('sample')) : null,
     accept: flags.get('accept') ?? '', partial: flags.has('cases'), onlyNew: flags.has('only-new'),
   }
-  return { command, positional, browsers, cases: flags.get('cases') ?? null, options }
+  return { command, positional, browsers, cases: flags.get('cases') ?? null, options, flags }
 }
 
 // Where a command reads and writes the harness's files, how it runs a job in a browser, and where it prints. The tests
 // give it a folder of their own and a stand-in browser.
 export type Io = { root: string; run: <T extends Recording | Prediction>(job: Job) => Promise<JobResult<T>>; log: (text: string) => void }
 
-function loadCases(files: readonly string[]): Case[] {
+// The cases, and each case's set: the name of its case file.
+function loadCases(files: readonly string[]): { cases: Case[]; sets: Map<string, string> } {
   const cases: Case[] = []
-  const ids = new Set<string>()
+  const sets = new Map<string, string>()
   for (let f = 0; f < files.length; f++) {
     const list = readCases(files[f]!)
+    const set = basename(files[f]!, '.ndjson')
     for (let i = 0; i < list.length; i++) {
-      if (ids.has(list[i]!.id)) throw new Error(`${files[f]}: duplicate case ${list[i]!.id}`)
-      ids.add(list[i]!.id)
+      if (sets.has(list[i]!.id)) throw new Error(`${files[f]}: duplicate case ${list[i]!.id}`)
+      sets.set(list[i]!.id, set)
       cases.push(list[i]!)
     }
   }
-  return cases
+  return { cases, sets }
 }
 
 // webkit-host runs installed Safari's engine, so it takes Safari's cases.
@@ -113,7 +128,8 @@ export async function record(browser: BrowserKind, cases: Case[], o: Options, io
   const b = await io.run<Recording>({ browser, mode: 'record', cases: shuffled(sorted, o.seed + 1), documentSize: RECORD_DOCUMENT, lib: o.lib })
   if (a.env !== b.env) throw new Error(`The environment changed between the two recordings: ${a.env} | ${b.env}`)
   // Recording some cases (--only-new, --cases, --sample) keeps the other recordings, which must share the environment.
-  const merge = (o.onlyNew || o.partial || o.sample !== null) && old !== null
+  // Installed Safari's recordings are a sample themselves, which a new one replaces.
+  const merge = (o.onlyNew || o.partial || (o.sample !== null && !SAMPLED.includes(browser))) && old !== null
   if (merge && old.env !== a.env) throw new Error(`${browser}: the other recordings were made under ${old.env}; record every case`)
   const sameEnv = old !== null && old.env === a.env
   const prior = sameEnv ? { recordings: new Map(old.recordings), history: new Map(oldHistory?.cases ?? []) } : null
@@ -300,27 +316,34 @@ export async function gate(browser: BrowserKind, cases: Case[], o: Options, io: 
   out.push(`  ${sample.length} cases recorded again (seed ${o.seed}): ${differ.length} differ from the recordings, ${fresh.history.length} of them laid out as recorded when alone`)
   // Those depend on the cases before them: page history the recordings missed, which goes on the page-history list as
   // record would put it, so check stops pinning them. An accepted entry of one leaves the list in the same write, since
-  // the next check would block on an accepted case no longer pinned.
-  if (fresh.history.length > 0) {
-    splitHistory(fresh.history, first.results, first.results, scored.recordings, scored.history, { recordings: new Map(scored.recordings), history: new Map(scored.history) })
-    writeRecordings(recordingsPath(io.root, browser), { env: scored.env, recordings: scored.recordings })
-    writeHistory(historyPath(io.root, browser), { env: scored.env, cases: scored.history })
+  // the next check would block on an accepted case no longer pinned. The files get copies: attribution reads the
+  // recordings check scored.
+  const moved = new Set(fresh.history)
+  if (moved.size > 0) {
+    const recordings = new Map(scored.recordings)
+    const history = new Map(scored.history)
+    splitHistory(fresh.history, first.results, first.results, recordings, history, scored)
+    writeRecordings(recordingsPath(io.root, browser), { env: scored.env, recordings })
+    writeHistory(historyPath(io.root, browser), { env: scored.env, cases: history })
     const unaccepted = fresh.history.filter(id => scored.accepted.delete(id))
     if (unaccepted.length > 0) writeAccepted(acceptedPath(io.root, browser), scored.accepted)
-    out.push(`  ${fresh.history.length} moved to recordings/${browser}.history.txt as page history, ${unaccepted.length} of them off accepted/${browser}.txt (not blocking; commit it): ${shown(fresh.history)}`)
+    out.push(`  ${moved.size} moved to recordings/${browser}.history.txt as page history, ${unaccepted.length} of them off accepted/${browser}.txt (not blocking; commit it): ${shown(fresh.history)}`)
   }
   const blocks = gateBlocks(order, reverse, fresh)
   for (let i = 0; i < blocks.length; i++) out.push(`  ${blocks[i]}`)
-  // Each new failure recorded alone, and predicted alone twice, each in a fresh document of its own.
+  // Each new failure recorded alone, and predicted alone twice, each in a fresh document of its own; one the fresh
+  // recording just moved to page history is page history already.
   const failures = scored.newFailures.slice(0, ATTRIBUTE_AT_MOST)
+  const lone = failures.filter(c => !moved.has(c.id))
   if (scored.newFailures.length > ATTRIBUTE_AT_MOST) out.push(`  ${scored.newFailures.length} new failures; attributing the first ${ATTRIBUTE_AT_MOST} (more than that usually means the change is wrong)`)
   if (failures.length > 0) {
-    const alone = await job<Recording>('record', failures, ALONE)
-    const predicted = [await job<Prediction>('predict', failures, ALONE), await job<Prediction>('predict', failures, ALONE)] as const
+    // A job of no cases launches no browser.
+    const alone = await job<Recording>('record', lone, ALONE)
+    const predicted = [await job<Prediction>('predict', lone, ALONE), await job<Prediction>('predict', lone, ALONE)] as const
     out.push(`  attribution of ${failures.length} new failures (a prediction that moves may be the library's caches or the browser's Canvas state; the browser's go in harness/varying with a reason)`)
     for (let i = 0; i < failures.length; i++) {
       const c = failures[i]!
-      const verdict = attribute(scored.recordings.get(c.id)!, alone.get(c.id)!, scored.predictions.get(c.id)!, [predicted[0].get(c.id)!, predicted[1].get(c.id)!])
+      const verdict = moved.has(c.id) ? 'page history' : attribute(scored.recordings.get(c.id)!, alone.get(c.id)!, scored.predictions.get(c.id)!, [predicted[0].get(c.id)!, predicted[1].get(c.id)!])
       out.push(`    ${verdict}  ${describe(c, scored.outcomes.get(c.id)!)}`)
     }
   }
@@ -328,34 +351,145 @@ export async function gate(browser: BrowserKind, cases: Case[], o: Options, io: 
   return scored.blocked || blocks.length > 0
 }
 
+// ---- repin ----
+
+// Installed Safari's sample, as harness/README.md records it.
+const SAFARI_SAMPLE = 2000
+
+// Records every case into a scratch copy of the browser's recordings (`scratch`, a harness folder of its own), as record
+// does, and prints what changed against the recordings in `io.root`. A new environment starts the page-history list
+// empty and two orders find few of Firefox's (ENGINE_FOLLOWUPS.md), so a case that was page history stays so. `write`
+// replaces the recordings with the scratch copy and takes the cases now page history off the accepted list, as the gate
+// does.
+export async function drift(browser: BrowserKind, cases: Case[], o: Options, write: boolean, io: Io, scratch: string): Promise<void> {
+  const paths = [recordingsPath, historyPath]
+  mkdirSync(join(scratch, 'recordings'), { recursive: true })
+  for (let i = 0; i < paths.length; i++) {
+    rmSync(paths[i]!(scratch, browser), { force: true })
+    if (existsSync(paths[i]!(io.root, browser))) copyFileSync(paths[i]!(io.root, browser), paths[i]!(scratch, browser))
+  }
+  await record(browser, cases, { ...o, sample: SAMPLED.includes(browser) ? SAFARI_SAMPLE : null }, { ...io, root: scratch })
+  const before = readRecordings(recordingsPath(io.root, browser))
+  const old = before?.recordings ?? new Map<string, Recording>()
+  const oldHistory = readHistory(historyPath(io.root, browser))?.cases ?? new Map<string, [Recording, Recording]>()
+  const now = readRecordings(recordingsPath(scratch, browser))!
+  const history = readHistory(historyPath(scratch, browser))!
+  const kept: string[] = []
+  for (const [id, pair] of oldHistory) {
+    if (!now.recordings.delete(id)) continue
+    history.cases.set(id, pair)
+    kept.push(id)
+  }
+  writeRecordings(recordingsPath(scratch, browser), now)
+  writeHistory(historyPath(scratch, browser), history)
+  const changed: string[] = []
+  const added: string[] = []
+  const gone: string[] = []
+  const found: string[] = []
+  for (const [id, recording] of now.recordings) {
+    const was = old.get(id)
+    if (was === undefined) added.push(id)
+    else if (recordingText(was) !== recordingText(recording)) changed.push(id)
+  }
+  for (const id of history.cases.keys()) if (!oldHistory.has(id)) found.push(id)
+  for (const id of old.keys()) if (!now.recordings.has(id) && !history.cases.has(id)) gone.push(id)
+  const env = before === null ? 'none recorded' : before.env === now.env ? 'same environment' : `recorded under ${before.env}`
+  const out = [`${browser} drift against harness/recordings (${env}): ${changed.length} cases laid out otherwise, ${found.length} new page history, ${added.length} newly recorded, ${gone.length} no longer recorded`]
+  if (changed.length > 0) out.push(`  laid out otherwise: ${shown(changed)}`)
+  if (found.length > 0) out.push(`  new page history: ${shown(found)}`)
+  if (added.length > 0) out.push(`  newly recorded: ${shown(added)}`)
+  if (gone.length > 0) out.push(`  no longer recorded: ${shown(gone)}`)
+  if (kept.length > 0) out.push(`  ${kept.length} of the ${oldHistory.size} page-history cases were laid out one way in both orders; kept as page history`)
+  if (write) {
+    for (let i = 0; i < paths.length; i++) copyFileSync(paths[i]!(scratch, browser), paths[i]!(io.root, browser))
+    const accepted = readAccepted(acceptedPath(io.root, browser))
+    const unaccepted = found.filter(id => accepted.delete(id))
+    if (unaccepted.length > 0) writeAccepted(acceptedPath(io.root, browser), accepted)
+    out.push(`  wrote recordings/${browser}.txt and its history${unaccepted.length > 0 ? `, and took ${unaccepted.length} cases now page history off accepted/${browser}.txt` : ''}`)
+  }
+  io.log(out.join('\n'))
+}
+
 // ---- equal and explain ----
 
-async function equal(browser: BrowserKind, cases: Case[], ref: string, lib: string): Promise<boolean> {
-  const sha = execFileSync('git', ['rev-parse', ref], { encoding: 'utf8' }).trim()
-  const dir = resolve(import.meta.dir, `../.artifacts/harness-equal/${sha}`)
-  mkdirSync(dir, { recursive: true })
-  execFileSync('sh', ['-c', `git archive ${sha} src | tar -x -C "${dir}"`])
+// Whether <ref>'s build, its src/ with the adapter beside it (run.ts), predicts what this tree's does on every case: the
+// same lines and widths, line text, disagreement between the line APIs and Canvas calls after preparing (buildChange).
+// A case that varies between runs (harness/varying) is listed apart. Then each case file's measureText calls and the
+// units submitted to them, here against there.
+export async function equal(browser: BrowserKind, cases: Case[], setOf: Map<string, string>, ref: string, o: Options, io: Io): Promise<boolean> {
   const list = cases.filter(c => applies(c, browser))
-  const mine = await runJob<Prediction>({ browser, mode: 'predict', cases: list, documentSize: WHOLE, lib })
-  const theirs = await runJob<Prediction>({ browser, mode: 'predict', cases: list, documentSize: WHOLE, lib: join(dir, 'src') })
-  const differ = list.filter(c => predictionChange(mine.results.get(c.id)!, theirs.results.get(c.id)!) !== 'same')
-  let callsMine = 0
-  let callsTheirs = 0
+  const mine = await io.run<Prediction>({ browser, mode: 'predict', cases: list, documentSize: WHOLE, lib: o.lib })
+  const theirs = await io.run<Prediction>({ browser, mode: 'predict', cases: list, documentSize: WHOLE, lib: srcOf(ref) })
+  const varying = readVarying(varyingPath(io.root, browser))
+  const differ: string[] = []
+  const varies: string[] = []
+  let unhashed = false
+  const sets = new Map<string, number[]>()
   for (let i = 0; i < list.length; i++) {
-    const a = mine.results.get(list[i]!.id)!
-    const b = theirs.results.get(list[i]!.id)!
-    if ('lines' in a) callsMine += a.prepareCalls + a.lineCalls
-    if ('lines' in b) callsTheirs += b.prepareCalls + b.lineCalls
+    const c = list[i]!
+    const a = mine.results.get(c.id)!
+    const b = theirs.results.get(c.id)!
+    const change = buildChange(a, b)
+    if (change !== null) (varying.get(c.id)?.kind === 'runs' ? varies : differ).push(`${c.id}  ${c.family}  ${change}`)
+    const counts = sets.get(setOf.get(c.id)!) ?? [0, 0, 0, 0]
+    sets.set(setOf.get(c.id)!, counts)
+    if ('lines' in a) { counts[0]! += a.prepareCalls + a.lineCalls; counts[2]! += a.prepareUnits }
+    if ('lines' in b) { counts[1]! += b.prepareCalls + b.lineCalls; counts[3]! += b.prepareUnits; unhashed ||= b.textHash === undefined }
   }
-  console.log(`${browser}: ${differ.length} of ${list.length} predictions differ from ${ref} (${sha.slice(0, 10)}); measureText calls ${callsMine} here, ${callsTheirs} there`)
-  for (let i = 0; i < differ.length && i < 20; i++) console.log(`  ${differ[i]!.id}  ${differ[i]!.family}`)
+  const out = [`${browser}: ${differ.length} of ${list.length} predictions differ from ${ref}; measureText calls and units submitted to them, here against there:`]
+  for (const [set, [a, b, ua, ub]] of [...sets].sort((x, y) => (x[0] < y[0] ? -1 : 1))) out.push(`  ${set}: calls ${a} / ${b}, units ${ua} / ${ub}`)
+  if (unhashed) out.push(`  line text not compared: ${ref}'s adapter sends no hash of it`)
+  for (let i = 0; i < differ.length && i < 20; i++) out.push(`  ${differ[i]}`)
+  if (varies.length > 0) out.push(`  and ${varies.length} that vary between runs (harness/varying), not counted: ${varies.slice(0, 10).join('; ')}`)
+  io.log(out.join('\n'))
   return differ.length > 0
 }
 
-async function explain(browser: BrowserKind, cases: Case[], id: string, lib: string): Promise<void> {
-  const c = cases.find(x => x.id === id)
-  if (c === undefined) throw new Error(`No case ${id}`)
-  const recording = readRecordings(recordingsPath(import.meta.dir, browser))?.recordings.get(id) ?? readHistory(historyPath(import.meta.dir, browser))?.cases.get(id)?.[0]
+// equal --offline: harness/offline-equal.ts once for each of invariants.ts's engine profiles, side by side, each killed
+// after 60 s. It compares src/ only, as this tree's harness drives both builds.
+async function offlineEqual(ref: string, lib: string, io: Io): Promise<boolean> {
+  const theirs = srcOf(ref)
+  const results = await Promise.all(['blink', 'webkit', 'gecko', 'unknown'].map(async profile => {
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, 'offline-equal.ts'), `--profile=${profile}`, `--a=${lib}`, `--b=${theirs}`], { stdout: 'pipe', stderr: 'inherit', timeout: 60_000, killSignal: 'SIGKILL' })
+    const [out, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
+    if (code !== 0) throw new Error(`equal --offline in the ${profile} profile exited ${code}`)
+    return JSON.parse(out) as { profile: string; inputs: number; differ: number; parts: Record<string, number>; measuredOtherwise: number; calls: number[]; units: number[]; first: string[] }
+  }))
+  for (const r of results) {
+    const parts = Object.entries(r.parts).map(([part, n]) => `${part} ${n}`).join(', ')
+    io.log([`${r.profile}, offline: ${r.differ} of ${r.inputs} inputs differ from ${ref}${parts === '' ? '' : ` (${parts})`}, ${r.measuredOtherwise} measured otherwise; measureText calls ${r.calls[0]} / ${r.calls[1]}, units ${r.units[0]} / ${r.units[1]}, here against there`, ...r.first.map(line => `  ${line}`)].join('\n'))
+  }
+  return results.some(r => r.differ > 0)
+}
+
+// The case `explain` shows: a pinned one by id with its stored recording, or else a paragraph from the flags (or the one
+// case of a --cases file) recorded alone in a fresh document, and not kept.
+async function explainCase(browser: BrowserKind, cases: Case[], id: string | undefined, flags: Map<string, string>, lib: string): Promise<{ c: Case; recording: Recording | undefined }> {
+  if (id !== undefined) {
+    const c = cases.find(x => x.id === id)
+    if (c === undefined) throw new Error(`No case ${id}`)
+    return { c, recording: readRecordings(recordingsPath(import.meta.dir, browser))?.recordings.get(id) ?? readHistory(historyPath(import.meta.dir, browser))?.cases.get(id)?.[0] }
+  }
+  let c: Case
+  const text = flags.get('text')
+  if (text !== undefined) {
+    const lang = flags.get('lang') ?? 'en'
+    const p = paragraph({
+      font: parseFont(flags.get('font') ?? '16px Arial'), lang, width: Number(flags.get('width') ?? 320), letterSpacing: Number(flags.get('letter-spacing') ?? 0),
+      whiteSpace: (flags.get('white-space') ?? 'normal') as Paragraph['whiteSpace'], wordBreak: (flags.get('word-break') ?? 'normal') as Paragraph['wordBreak'],
+    }, [text])
+    c = makeCase('explain', { family: 'explain', origin: 'bun harness explain', pageLang: lang, paragraph: p })
+  } else if (cases.length === 1 && flags.has('cases')) {
+    c = cases[0]!
+  } else {
+    throw new Error('explain needs a case id, --text=, or a --cases file of one case')
+  }
+  const job = await runJob<Recording>({ browser, mode: 'record', cases: [c], documentSize: ALONE, lib })
+  return { c, recording: job.results.get(c.id) }
+}
+
+async function explain(browser: BrowserKind, c: Case, recording: Recording | undefined, lib: string): Promise<void> {
+  const id = c.id
   if (recording === undefined) throw new Error(`${browser} has no recording of ${id}`)
   if ('error' in recording) throw new Error(`${browser} couldn't record ${id}: ${recording.error}`)
   const job = await runJob<Prediction>({ browser, mode: 'predict', cases: [c], documentSize: ALONE, lib })
@@ -392,9 +526,9 @@ async function explain(browser: BrowserKind, cases: Case[], id: string, lib: str
 }
 
 async function main(): Promise<number> {
-  const { command, positional, browsers, cases: file, options: o } = parseArgs(process.argv.slice(2))
+  const { command, positional, browsers, cases: file, options: o, flags } = parseArgs(process.argv.slice(2))
   const dir = join(import.meta.dir, 'cases')
-  const cases = loadCases(file !== null ? [file] : readdirSync(dir).filter(name => name.endsWith('.ndjson')).sort().map(name => join(dir, name)))
+  const { cases, sets } = loadCases(file !== null ? [file] : readdirSync(dir).filter(name => name.endsWith('.ndjson')).sort().map(name => join(dir, name)))
   const io: Io = { root: import.meta.dir, run: runJob, log: text => console.log(text) }
   switch (command) {
     case 'record':
@@ -410,15 +544,39 @@ async function main(): Promise<number> {
     }
     case 'equal': {
       if (positional[1] === undefined) throw new Error('equal needs a git ref')
-      const differ = await Promise.all(browsers.map(b => equal(b, cases, positional[1]!, o.lib)))
+      if (flags.has('offline')) return await offlineEqual(positional[1], o.lib, io) ? 1 : 0
+      const differ = await Promise.all(browsers.map(b => equal(b, cases, sets, positional[1]!, o, io)))
       return differ.some(Boolean) ? 1 : 0
     }
-    case 'explain':
-      if (positional[1] === undefined) throw new Error('explain needs a case id')
-      await explain(browsers[0]!, cases, positional[1], o.lib)
+    case 'bench': {
+      if (positional[1] === undefined) throw new Error('bench needs a base: a git ref or a src/ directory')
+      const background = flags.has('background')
+      const chosen = flags.has('browser') ? browsers : background ? ['chrome', 'firefox', 'webkit-host'] as BrowserKind[] : ['chrome', 'firefox', 'safari'] as BrowserKind[]
+      await bench(positional[1], flags.get('lib') ?? LIB, chosen, Number(flags.get('sessions') ?? 3), flags.get('rows')?.split(',') ?? ROWS, background)
       return 0
+    }
+    case 'repin': {
+      // Chrome and Firefox get a pinned copy of the installed app; Safari can't be pinned, so its engine (webkit-host,
+      // and installed Safari's sample) is recorded as the system has it.
+      const target = positional[1]
+      if (target !== 'chrome' && target !== 'firefox' && target !== 'safari') throw new Error('repin takes chrome, firefox or safari')
+      if (target !== 'safari') pins[target] = pinInstalled(target)
+      const kinds: BrowserKind[] = target === 'safari' ? ['webkit-host', 'safari'] : [target]
+      for (let i = 0; i < kinds.length; i++) await drift(kinds[i]!, cases, o, flags.has('write'), io, join(import.meta.dir, '../.artifacts/harness-repin'))
+      console.log(breakDataReport(target, appPath(target)))
+      if (target === 'safari') return 0
+      const bumped = pins[target] !== PINNED[target]
+      if (bumped && flags.has('write')) writePin(target, pins[target])
+      console.log(`${target}: ${pins[target]}${!bumped ? ', already the pin' : flags.has('write') ? ', now the pin in harness/browsers.ts' : '; --write makes it the pin'}`)
+      return 0
+    }
+    case 'explain': {
+      const { c, recording } = await explainCase(browsers[0]!, cases, positional[1], flags, o.lib)
+      await explain(browsers[0]!, c, recording, o.lib)
+      return 0
+    }
     default:
-      console.error('Usage: bun harness record|check|gate|equal <ref>|explain <id> [--browser=...] [--cases=...] [--lib=...]')
+      console.error('Usage: bun harness record|check|gate|equal <ref>|bench <base>|repin <browser>|explain <id>|explain --text=... [--browser=...] [--cases=...] [--lib=...]')
       return 2
   }
 }

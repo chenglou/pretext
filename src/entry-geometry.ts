@@ -76,7 +76,7 @@ export function observeSegmentEntries(
   fitBasis: 'fresh' | 'original',
   measure: (text: string) => number | null,
 ): SegmentEntryGeometry | null {
-  if (!defaultIgnorable.test(text) || advances.length > MAX_GRAPHEMES || !Number.isFinite(letterSpacing)) return null
+  if (!defaultIgnorable.test(text) || advances.length > MAX_GRAPHEMES) return null
   const ends = new Int32Array(text.length)
   const count = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
   if (count > MAX_GRAPHEMES) return null

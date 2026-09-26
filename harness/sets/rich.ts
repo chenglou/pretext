@@ -1,12 +1,13 @@
 // Rich-inline templates: paragraphs of spans, which the adapter lays out with rich-inline (one item per run, a chip as
-// `break: 'never'`, padding as `extraWidth`), before widths.ts finds where each browser's lines change.
-// - main's same-font inline items (its rich-boundaries family and #210's rich witnesses), from catalog.ts;
+// `break: 'never'`, padding as `extraWidth`), before widths.ts finds where each browser's lines change. main's same-font
+// inline items (its rich-boundaries family and #210's rich witnesses) were taken once as `rich/main/*` cases, which
+// `make.ts cut` keeps. The templates:
 // - the shapes of main's engine facts about rich items (src/layout.test.ts:893, 966, 2604, 2642, 3649, and 3695, whose
 //   shapes are 2604's);
 // - filed reports: #177 (punctuation split across items), #120 (CJK in rich mode), #171 (a bold first letter), #323 (a
 //   soft hyphen in the item after a bold word);
-// - styles changing at run boundaries (weight, size, family, italic, letter spacing) over the accuracy texts, as the
-//   rebuild's runs families do, and spaces at span edges;
+// - styles changing at run boundaries (weight, size, family, italic, letter spacing) over src/test-data.ts's texts, as
+//   the rebuild's runs families do, and spaces at span edges;
 // - chips and code spans as the demos write them: an atomic mention chip with padding, and inline code with padding
 //   that can break (pages/demos/rich-note.model.ts, markdown-chat.model.ts).
 import { TEXTS } from '../../src/test-data.ts'
@@ -33,8 +34,8 @@ function template(family: string, origin: string, base: CssFont, parts: readonly
 // A span in the base font: an inline element whose style doesn't change, as main's same-font items are.
 const item = (text: string, f: CssFont = ARIAL): TextRun => span(text, f)
 
-export function richTemplates(fromMain: readonly Template[]): Template[] {
-  const out: Template[] = fromMain.map(t => ({ ...t, family: `rich/${t.family}` }))
+export function richTemplates(): Template[] {
+  const out: Template[] = []
   const facts: ReadonlyArray<readonly [string, readonly string[], string?]> = [
     ['893', [' \u{200B}\u{301}ab', 'c']], ['893', ['x', '\t\u{200B}\u{301}ab']],
     ['966', ['ab\u{85}', 'cd']], ['966', ['ab foo', '\u{85}b']],
@@ -61,7 +62,7 @@ export function richTemplates(fromMain: readonly Template[]): Template[] {
   for (const [a, b] of [['hello ', 'world'], ['hello', ' world'], ['hello ', ' world'], ['hello  ', 'world'], ['hello', '\u{A0}world'], ['hello\u{200B}', 'world']] as const) {
     out.push(template('span-edges', 'spaces and breaks at the edge of a bold span', ARIAL, [a, span(b, BOLD(ARIAL)), ' and more words']))
   }
-  // Styles that change at run boundaries, over the accuracy texts (src/test-data.ts).
+  // Styles that change at run boundaries, over src/test-data.ts's texts.
   const rng = createRng('harness-rich-runs')
   const bases = [ARIAL, HELVETICA, INTER, GEORGIA]
   for (let i = 0; i < TEXTS.length; i++) {

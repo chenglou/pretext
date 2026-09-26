@@ -1,14 +1,17 @@
 // Planted defects: each test plants one fault the harness exists to catch and checks that it is caught. The test name
 // says what an app developer would see if the fault went unseen.
+import './watchdog.ts'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { srcOf } from './bench/lib.ts'
 import { fontsKey, keyOf, type Environment } from './browsers.ts'
-import { check, gate, parseArgs, record, type Io, type Options } from './cli.ts'
+import { icuEntries, rustByteStrings } from './break-data.ts'
+import { check, drift, equal, gate, parseArgs, record, type Io, type Options } from './cli.ts'
 import { groupLines, recordedLines, scanLineEnds, searchLineEnds, type RectsAt } from './observe.ts'
-import { documents, type Job } from './run.ts'
+import { bundle, documents, LIB, type Job } from './run.ts'
 import {
-  accept, attribute, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, libraryFaults, pinning, predictionChange, reverseOrder, score, SEED,
+  accept, attribute, buildChange, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, libraryFaults, pinning, predictionChange, reverseOrder, score, SEED,
   type Outcome, type Verdict,
 } from './score.ts'
 import {
@@ -47,7 +50,7 @@ function layOut(text: string, starts: number[]): { recording: Recording; nodeRec
 function predicted(text: string, starts: number[]): Prediction {
   const lines = []
   for (let i = 0; i < starts.length; i++) lines.push({ start: starts[i]!, end: starts[i + 1] ?? text.length, width: 0 })
-  return { lines, prepareCalls: 0, lineCalls: 0, disagreement: null }
+  return { lines, textHash: 0, prepareCalls: 0, prepareUnits: 0, lineCalls: 0, disagreement: null }
 }
 
 const TEXT = 'The quick brown fox jumps over the lazy dog'
@@ -101,7 +104,7 @@ describe('the pass rule', () => {
     for (const browser of ['firefox', 'webkit-host', 'safari'] as const) {
       expect(recordedLines('a\u00ADb\u000b', nodeRects, 48, offset => points[offset]!, browser).map(line => [line.first, line.last])).toEqual([[0, 1], [3, 3]])
     }
-    const main: Prediction = { lines: [{ start: 0, end: 3, width: 17.796875 }, { start: 3, end: 4, width: 4.4453125 }], prepareCalls: 6, lineCalls: 0, disagreement: null }
+    const main: Prediction = { lines: [{ start: 0, end: 3, width: 17.796875 }, { start: 3, end: 4, width: 4.4453125 }], textHash: 0, prepareCalls: 6, prepareUnits: 12, lineCalls: 0, disagreement: null }
     expect(score({ lines, height: 96 }, main).status).toBe('breaks')
   })
 
@@ -551,6 +554,17 @@ describe('the commands, with a stand-in browser', () => {
     expect((await check('chrome', list, options, io)).blocked).toBe(false)
   })
 
+  test('a new failure the fresh recording finds to be page history is attributed as page history and moved: the gate crashed attributing it after a pin bump', async () => {
+    // "found" fails and isn't accepted; it is laid out otherwise among other cases and as recorded alone.
+    const root = folder('gate-found', { pass: laidOut, found: laidOut })
+    const io = browser(root, c => (c.id === 'found' ? wrong : right), (c, job) => (c.id === 'found' && job.documentSize > 1 ? other : laidOut))
+    const list = cases(['pass', 'found'])
+    expect(await gate('chrome', list, options, io)).toBe(true)
+    expect(io.printed()).toContain('    page history  found')
+    expect([...readHistory(historyPath(root, 'chrome'))!.cases.keys()]).toEqual(['found'])
+    expect((await check('chrome', list, options, io)).blocked).toBe(false)
+  })
+
   test('record makes page history of a case its two orders lay out differently, and of one laid out otherwise than its recording under the same environment: cases that lay out differently after other cases would block changes at random', async () => {
     const root = folder('record', { kept: laidOut, moved: laidOut })
     const jobs: Job[] = []
@@ -581,6 +595,76 @@ describe('the commands, with a stand-in browser', () => {
     expect(refused).toContain('the other recordings were made under test; record every case')
     expect([...readRecordings(recordingsPath(root, 'chrome'))!.recordings.keys()]).toEqual(['kept', 'new'])
   })
+
+  test('repin records every case into a scratch copy, reports what changed, keeps the page history a new build\'s two orders miss, and writes only when asked: a browser update would read as library regressions, or the next check pin page history', async () => {
+    // Under the new build "moves" lays out otherwise, "found" differs between its two orders, "history", page history
+    // before, lays out one way in both, and "new" has no recording yet.
+    const root = folder('repin', { same: laidOut, moves: laidOut, found: laidOut }, { history: ['history'], accepted: '## why\nfound breaks\n' })
+    const scratch = join(root, 'scratch')
+    const jobs: Job[] = []
+    const layout = (c: Case, job: Job): Recording => {
+      if (!jobs.includes(job)) jobs.push(job)
+      return c.id === 'moves' || (c.id === 'found' && jobs.indexOf(job) % 2 === 1) ? other : laidOut
+    }
+    const list = cases(['same', 'moves', 'found', 'history', 'new'])
+    const io = browser(root, () => right, layout, 'new build')
+    await drift('chrome', list, options, false, io, scratch)
+    expect(io.printed()).toContain('chrome drift against harness/recordings (recorded under test): 1 cases laid out otherwise, 1 new page history, 1 newly recorded, 0 no longer recorded')
+    expect(io.printed()).toContain('  1 of the 1 page-history cases were laid out one way in both orders; kept as page history')
+    expect([...readHistory(historyPath(scratch, 'chrome'))!.cases.keys()]).toEqual(['found', 'history'])
+    expect(readRecordings(recordingsPath(root, 'chrome'))!.env).toBe('test')
+    await drift('chrome', list, options, true, io, scratch)
+    expect(readRecordings(recordingsPath(root, 'chrome'))!.env).toBe('new build')
+    expect([...readRecordings(recordingsPath(root, 'chrome'))!.recordings.keys()]).toEqual(['moves', 'new', 'same'])
+    expect([...readHistory(historyPath(root, 'chrome'))!.cases.keys()]).toEqual(['found', 'history'])
+    expect(readAccepted(acceptedPath(root, 'chrome')).size).toBe(0)
+    const again = browser(root, () => right, layout, 'new build')
+    await drift('chrome', list, options, false, again, scratch)
+    expect(again.printed()).toContain('chrome drift against harness/recordings (same environment): 0 cases laid out otherwise, 0 new page history, 0 newly recorded, 0 no longer recorded')
+  })
+
+  test('equal counts a moved line, other line text, another disagreement and another Canvas call after preparing as a difference, and lists a case that varies between runs apart: a change to src/ or the adapter would show nothing, or main against itself differ', async () => {
+    const root = folder('equal', {}, { varying: '## system-ui\nlabel runs\n' })
+    // This tree's build is "here"; the ref, a src/ directory, predicts `right` for every case.
+    const here: Record<string, Prediction> = {
+      line: wrong, text: { ...right, textHash: 1 } as Prediction, disagrees: { ...right, disagreement: 'measureLineStats gives 3 lines' } as Prediction,
+      measures: { ...right, lineCalls: 2 } as Prediction, label: wrong,
+    }
+    const io = browser(root, (c, job) => (job.lib === 'here' ? here[c.id] ?? right : right))
+    const list = cases(['same', ...Object.keys(here)])
+    expect(await equal('chrome', list, new Map(list.map(c => [c.id, 'smoke'])), LIB, { ...options, lib: 'here' }, io)).toBe(true)
+    expect(io.printed()).toContain(`chrome: 4 of 6 predictions differ from ${LIB}`)
+    for (const line of ['line  test  lines', 'text  test  text', 'disagrees  test  disagreement', 'measures  test  Canvas calls after preparing']) expect(io.printed()).toContain(`\n  ${line}`)
+    expect(io.printed()).toContain('  and 1 that vary between runs (harness/varying), not counted: label  test  lines')
+    const same = browser(root, () => right)
+    expect(await equal('chrome', list, new Map(list.map(c => [c.id, 'smoke'])), LIB, { ...options, lib: 'here' }, same)).toBe(false)
+  })
+})
+
+describe('the browser\'s break data', () => {
+  test('an ICU data file\'s entries and a Rust source\'s byte strings read back as the bytes they hold: a browser whose break data changed would read as the same, and the tables go stale', () => {
+    // A 32-byte header, then the table of contents (a count and two name and data offsets from its start), the names and
+    // the data.
+    const bytes = new Uint8Array(96)
+    const view = new DataView(bytes.buffer)
+    view.setUint16(0, 32, true)
+    bytes.set([0xda, 0x27], 2)
+    bytes.set(new TextEncoder().encode('CmnD'), 12)
+    view.setUint32(32, 2, true)
+    const names = ['p/brkitr/b.brk', 'p/brkitr/a.brk']
+    let name = 20
+    for (let i = 0; i < 2; i++) {
+      view.setUint32(36 + 8 * i, name, true)
+      bytes.set(new TextEncoder().encode(names[i]!), 32 + name)
+      name += names[i]!.length + 1
+    }
+    view.setUint32(40, 58, true)
+    view.setUint32(48, 54, true)
+    bytes.set([1, 2, 3, 4, 5, 6, 7], 86)
+    const entries = icuEntries(bytes.subarray(0, 93))
+    expect([...entries].map(([key, data]) => [key, [...data]])).toEqual([['brkitr/a.brk', [1, 2, 3, 4]], ['brkitr/b.brk', [5, 6, 7]]])
+    expect(rustByteStrings('from_bytes_unchecked (b"\\0A\\x7F\\\\\\"") , x: b""').map(array => [...array])).toEqual([[0, 65, 127, 92, 34], []])
+  })
 })
 
 describe('the documents a job lays out', () => {
@@ -590,6 +674,19 @@ describe('the documents a job lays out', () => {
     const ids = (docs: Case[][]): string[][] => docs.map(doc => doc.map(c => c.id))
     expect(ids(documents('firefox', cases, 2))).toEqual([['a', 'b'], ['ko'], ['text']])
     expect(ids(documents('chrome', cases, 2))).toEqual([['a', 'text'], ['b'], ['ko']])
+  })
+
+  test('a ref\'s adapter is unpacked beside its src/, a build\'s own adapter is bundled with its src/, and this tree\'s with a src/ that has none beside it: equal would run this tree\'s adapter against itself and show no change to it', async () => {
+    expect(existsSync(join(srcOf('HEAD'), '../harness/page.ts'))).toBe(true)
+    const dir = join(import.meta.dir, '../.artifacts/harness-test-builds')
+    for (const build of ['own', 'bare']) cpSync(join(import.meta.dir, '../src'), join(dir, build, 'src'), { recursive: true, dereference: true })
+    mkdirSync(join(dir, 'own/harness'), { recursive: true })
+    writeFileSync(join(dir, 'own/src/build.ts'), 'export const build = \'the own build\'\n')
+    writeFileSync(join(dir, 'own/harness/page.ts'), 'import { build } from \'../src/build.ts\'\nconsole.log(`${build}\'s adapter`)\n')
+    expect(await bundle(join(dir, 'own/src'))).toContain('the own build')
+    writeFileSync(join(dir, 'bare/src/layout.ts'), `${readFileSync(join(dir, 'bare/src/layout.ts'), 'utf8')}\nconsole.log('the bare build')\n`)
+    const bare = await bundle(join(dir, 'bare/src'))
+    expect([bare.includes('the bare build'), bare.includes('harness done')]).toEqual([true, true])
   })
 })
 
@@ -693,6 +790,15 @@ describe('the library through the adapter', () => {
     const wrong = dropped.predict(c)
     if (!('lines' in wrong)) throw new Error('unreachable')
     expect(wrong.disagreement).toStartWith('layoutNextLine line 0')
+  })
+
+  test('line text the builder every text API shares gets wrong changes the prediction\'s text hash, which equal compares: a build that paints no hyphen where a line breaks at a soft hyphen would equal main', async () => {
+    const c = paragraph('Supercali\u00ADfragilistic', 100)
+    const right = adapter.predict(c)
+    const hyphenless = await planted('line-text-hyphen', 'line-text.ts', /\? text \+ '-' : text/, '? text : text')
+    const wrong = hyphenless.predict(c)
+    expect([disagreement(right), disagreement(wrong)]).toEqual([null, null])
+    expect([predictionChange(wrong, right), buildChange(wrong, right)]).toEqual(['same', 'text'])
   })
 
   test('a Canvas call per line in the walker blocks: every window resize would measure text again', async () => {

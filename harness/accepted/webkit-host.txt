@@ -68,7 +68,6 @@ catalog-f8c9cc5fb3c842f8 breaks
 facts-0813a82f5b36d627 count
 facts-0e696fc6988e8211 count
 facts-1d36ba094f4df296 breaks
-facts-2e1e865855282fc2 count
 facts-50fc5bdab261717b count
 facts-68abc663229eeb33 breaks
 facts-6ba8a9ac509d1b42 count
@@ -88,6 +87,14 @@ old-gate-a4b0c2cd8b374d30 breaks
 old-gate-c55afebd1de7d4ff breaks
 old-gate-c7fff6370e1470f6 breaks
 old-gate-dd9785b9f09ad6a5 breaks
+
+## Keycaps (U+20E3) after U+0001 in 24 px Georgia, at 24 px and wider: WebKit's page gives each 24.36 px and the chain's last 2.57 px, where its Canvas gives 24 px after the chain, so a line holds one keycap more or fewer (main too)
+catalog-286b0dc43de828bc count
+catalog-3fced650b6ca9448 breaks
+catalog-7cffe66fa7484a1b count
+catalog-9d5251eebb33ef36 count
+catalog-c87a1e216aa3a4ea count
+catalog-efc5ebc1693c3350 count
 
 ## Letter-spacing across scripts (Thai, Arabic, Khmer, CJK, digits and hyphens) and in rich runs, at 24 px and wider: WebKit spaces or breaks these where the library doesn't
 catalog-0cd616621690d7a0 count
@@ -372,6 +379,7 @@ catalog-16f4c64dee0faeec count
 catalog-178c2c7a9a049e25 count
 catalog-17b137fedc0794e5 count
 catalog-17c971075033414e count
+catalog-17d8b1b3e7455123 count
 catalog-18059a1cc4d3839d count
 catalog-18059dcf52a60847 breaks
 catalog-189f8e71a3a609cd count
@@ -445,6 +453,7 @@ catalog-2527014621408c29 count
 catalog-252954280525e75d count
 catalog-25c67362c0914152 breaks
 catalog-2600f6268b790af6 breaks
+catalog-26b1966ebf75f9cf count
 catalog-26bc8331dc555f51 breaks
 catalog-26d3dc4bae9da85f count
 catalog-26e40606a6998bce count
@@ -562,6 +571,7 @@ catalog-3c545359aabb0198 breaks
 catalog-3c57623643685c7c count
 catalog-3c91a76b7c0c9120 count
 catalog-3d0034a5703ed109 count
+catalog-3d13bc105b65f3c8 count
 catalog-3d44260bd5892ab1 count
 catalog-3d5f407700322653 count
 catalog-3d702596a52a350e count
@@ -722,6 +732,7 @@ catalog-5c84cb566dad99f8 count
 catalog-5c99e3db6c3ecd97 count
 catalog-5cbe021eaf8f766f count
 catalog-5ce57e2b7fa3b546 breaks
+catalog-5cecd1070682633e count
 catalog-5d2111ab0ea38670 count
 catalog-5d86430800d0d123 breaks
 catalog-5d941dff2bbfd79d count
@@ -822,6 +833,7 @@ catalog-6c9b1efa73f6f466 count
 catalog-6cee6b2ed8d978cf count
 catalog-6dfdb2099afb0c00 count
 catalog-6e0152ace658eca1 count
+catalog-6e07faa176dcb30f count
 catalog-6e24579b573efbf8 count
 catalog-6e2f168511329f2d count
 catalog-6ed13275ea655a11 count
@@ -834,6 +846,7 @@ catalog-702c8317831350e5 count
 catalog-703b175310032cc3 count
 catalog-703ec7bd07db044d count
 catalog-7048acdb28d8bb4b count
+catalog-7090b5c3182b70ce count
 catalog-71247b06edd27703 count
 catalog-7165dbe0b98c9087 breaks
 catalog-71a60695fdfeae53 breaks
@@ -1128,6 +1141,7 @@ catalog-a4b0d483b0f7bcb9 count
 catalog-a515a745d43c5a15 count
 catalog-a54dbc20c9c34bc8 count
 catalog-a592a40d7605b3fe count
+catalog-a5b06f52d17bb3e2 count
 catalog-a5c0f66596d3fa0e count
 catalog-a5e463976737b72f count
 catalog-a5e594cbe29e3c94 count
@@ -1624,7 +1638,6 @@ facts-0738dafcf84f4c96 breaks
 facts-0792a7b2d9e3f483 count
 facts-0f1ad885cb39a80a count
 facts-125df7c318a3efbc count
-facts-1d1d6f161082d047 count
 facts-23b29e20e2de5f70 count
 facts-2d485e09a3bf0d50 count
 facts-2eaa366f9927e571 count
@@ -1633,8 +1646,6 @@ facts-3012d56fcfd33206 count
 facts-3695100997a5e9ac count
 facts-3c395b16cd23de2c breaks
 facts-3c5e20b86ceba443 breaks
-facts-3d6cf9b0cffcf58f count
-facts-3da6a572290e75b1 count
 facts-3e65d2d1197e82de count
 facts-43948dd493a385b0 count
 facts-47a734ca3ff89d41 count
@@ -1651,9 +1662,7 @@ facts-81512288bcc6980d count
 facts-8630f6db7bf5cca4 breaks
 facts-8a7cf78ec728fb1f count
 facts-8dbcf532472d838d breaks
-facts-9153ec9c58dd780b count
 facts-942f5357f7343cad count
-facts-9490bfa470727321 count
 facts-963fd0ff47a467ae count
 facts-9daebdb1b4aed7be count
 facts-a6eeb97138dc0f9c count
@@ -1674,7 +1683,6 @@ facts-d7109d5ed2a697f8 count
 facts-d737224b7a7f110f count
 facts-d8ce1ab5cf43d8e6 count
 facts-dcc77f435b236ee7 count
-facts-e423101c558c21f2 count
 facts-f39c5cd8e6f772a2 breaks
 facts-f5481e33af0ddcdc count
 facts-f7c254312e6c517b count
@@ -1690,7 +1698,9 @@ catalog-01b1a03fcdb9a656 breaks
 catalog-01d85f97b5c21fae count
 catalog-0219dc7792760891 count
 catalog-02306d3b5591570b count
+catalog-028358d922f5bce5 count
 catalog-02c48c42dc2e8d73 count
+catalog-03033fa0d2ab5d97 count
 catalog-033350be4534eacd count
 catalog-033df069dae44721 count
 catalog-04114af8dac0e64f count
@@ -2185,6 +2195,7 @@ catalog-927d21895712fb6e count
 catalog-92a31c1c58786517 count
 catalog-92d4a4ad6e6c56fa count
 catalog-93086e7614e9bcba count
+catalog-931fa1928b14c969 count
 catalog-932607ff515cff24 breaks
 catalog-932d104056460eb4 count
 catalog-93710a9b6fa14c1a count
@@ -2230,6 +2241,7 @@ catalog-9e3c57841739a550 count
 catalog-9e936125cd1f244a count
 catalog-9f4f24bf709fd31e count
 catalog-9f55ec86200c612e breaks
+catalog-9f7c210b1c9385e0 count
 catalog-9fe873362a12f9c9 count
 catalog-a01f380602794131 count
 catalog-a0327b20571f3474 count
@@ -3322,6 +3334,13 @@ sample-da2e5a0e849969a1 breaks
 
 ## Real usage: table cells 25-125 px wide holding IDs, phone numbers and formulas; WebKit breaks at hyphens, brackets and between digits otherwise than the library (main before #340 too)
 sample-db62d90b64149427 breaks
+
+## Soft hyphens alone after the last line feed of a pre-wrap paragraph: WebKit gives them a line of their own, the library none (main before #340 too; ENGINE_FOLLOWUPS.md)
+catalog-1a998e612e9484af count
+catalog-2b41de9231a38d2c count
+catalog-72db93461df86981 count
+catalog-e12579ca01f5be5f count
+catalog-ff75b2be4ff8b7a5 count
 
 ## Spaces other than U+0020 (U+3000, U+2007, U+202F, NBSP) beside marks, brackets or other spaces, at 24 px and wider: WebKit breaks or hangs them where the library doesn't
 catalog-0cf7eff70525faff breaks

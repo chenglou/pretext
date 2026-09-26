@@ -22,4 +22,6 @@ PLIST
 xcrun swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos$sdk" "$here/main.swift" -o "$out/webkit-host" \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$out/Info.plist" \
   -Xlinker -platform_version -Xlinker macos -Xlinker "$sdk" -Xlinker "$safari_sdk"
+# The harness runs only a host built from main.swift as it is (harness/browsers.ts).
+shasum -a 256 "$here/main.swift" | cut -d' ' -f1 > "$out/webkit-host.source-sha256"
 echo "build.sh: $out/webkit-host (SDK $sdk, Safari's SDK $safari_sdk)"

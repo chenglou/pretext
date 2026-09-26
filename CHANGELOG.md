@@ -14,8 +14,10 @@
 - Safari's line breaking follows Safari 27. Safari 26, on macOS 26 and iOS 26, breaks differently around curly quotes and guillemets, after punctuation with `word-break: keep-all`, at U+2028 and U+2029, and after a first character too wide for its line (#340).
 - In Chrome, text on a page without a `lang` now breaks and measures under Chrome's UI language, as Chrome lays it out: under a Chinese UI, curly double quotes wrap as brackets (#340).
 - `layout()` is two to three times faster in Chrome and Safari on text without letter spacing, preserved spaces, tabs, hard breaks, soft hyphens or invisible controls other than zero-width spaces, which covers most prose (#338).
+- `layout()` counts the lines of text holding NEL or other invisible control characters, or in Firefox a space before a bidi control such as LRI, about twice as fast in Firefox and one and a half times as fast in Chrome (#350).
 - Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, since Safari's check for keeping a word's kerning with a following space no longer uses a generated bidi class table (#311).
-- `setLocale()` now only clears the caches, as `clearCache()` does. Line breaking follows the page language, and no locale changes the word boundaries Pretext still reads, inside Thai, Lao, Khmer and Myanmar text (#340).
+- `setLocale(locale)` now sets the language that later `prepare()`, `prepareWithSegments()` and `prepareRichInline()` calls break lines and measure under, in place of the page's `<html lang>`, which a worker doesn't have; `setLocale()` without a locale goes back to `<html lang>`. It no longer picks a locale for word boundaries: no locale changes the ones Pretext still reads, inside Thai, Lao, Khmer and Myanmar text (#340, #356).
+- `prepare()`, `prepareWithSegments()` and `prepareRichInline()` now throw a `RangeError` for a `letterSpacing` that isn't finite, such as `NaN` or `Infinity`, which gave lines of width `NaN`, or a line per grapheme (#356).
 
 ### Removed
 
@@ -24,6 +26,10 @@
 
 ### Fixed
 
+- Browsers whose layout engine Pretext doesn't recognize, such as Samsung TV web views, now follow Chrome's rules throughout. Before, a soft hyphen's hyphen also took letter spacing of its own there, a line whose hyphen didn't fit kept it overflowing instead of ending at an earlier break with room for it, and on desktop systems a line starting inside a word that holds an invisible character, such as a word joiner, didn't measure the rest of the word on its own as Chrome does (#356).
+- `materializeLineRange()` and `materializeRichInlineLineRange()`, given a range that ends past its text, such as one kept from a longer text that was since prepared again, now build the text up to its end. Before, each missing segment added `undefined` to the line's text, and a range ending at segment `Infinity` ran until memory ran out (#353).
+- `prepare()` no longer takes time that grows with the square of the length of a long chain of combining marks separated by invisible controls, or in Safari by soft hyphens. In Safari, a letter followed by 1,000 soft hyphens, each with a mark, took about 3.4 s to prepare and now takes about 2 ms; in Firefox, a letter followed by 4,000 control characters, each with a mark, took about 1.7 s and now takes about 3 ms (#351).
+- In `white-space: pre-wrap`, a line holding only soft hyphens before a newline, at the start of the text or after another newline, now counts as a line, as browsers draw it, instead of disappearing. In Safari, in normal white space too, so does a line holding only soft hyphens or spaces between two line or paragraph separators, U+2028 or U+2029 (#349).
 - In Safari, on pages with a language, text in `serif`, `sans-serif`, `cursive`, `fantasy` or `monospace`, or falling back to one of them, now measures in the font Safari draws it with there, such as Apple SD Gothic Neo for `sans-serif` on a `ko` page and Menlo for `monospace` on an `en` page, instead of the font those names give a page without a language (#340).
 - In Chrome, CJK punctuation next to other punctuation or at a line end now takes the narrower width Chrome's `text-spacing-trim` gives it (#340).
 - In Chrome and Firefox, ideographic spaces (U+3000) at a line end now hang past it, as spaces do, instead of wrapping to the next line (#340).

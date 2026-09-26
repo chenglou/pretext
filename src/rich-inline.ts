@@ -27,7 +27,7 @@ import {
   stepPreparedLineGeometry,
   UNBROKEN,
 } from './line-break.js'
-import { getDocumentLanguage, getEngineProfile, getFontMeasurement, getSegmentMetrics } from './measurement.js'
+import { getDocumentLanguage, getEngineProfile, getFontMeasurement, getSegmentMetrics, readLetterSpacing } from './measurement.js'
 
 // Helper for rich-text inline flow under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
@@ -452,7 +452,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
-    const letterSpacing = item.letterSpacing ?? 0
+    const letterSpacing = readLetterSpacing(item.letterSpacing)
     // The item's own segment break transformation can remove a boundary run.
     // Context from a neighboring item is not modeled.
     const text = removeSkippableSegmentBreaks(item.text, profile, documentLanguage)

@@ -1,26 +1,32 @@
 // Planted defects in the case sets: each test plants a fault the sets exist to avoid. The test name says what an app
 // developer would see if it went unseen.
+import '../watchdog.ts'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeRecordings } from '../store.ts'
 import type { Recording } from '../types.ts'
 import { font, paragraph, writeCases } from './build.ts'
-import { oracleCases, reportCases } from './exact.ts'
-import { checkedInSample, drawSample } from './sample.ts'
+import { reportCases } from './exact.ts'
+import { checkedInSample, type Sample } from './sample.ts'
 import { CUT_BROWSERS, cut, dirOf, probesFile, recordingsFile, select, sweepId, templateKey, type Template } from './widths.ts'
+
+// The checked-in sample's draw, made once for both tests.
+let drawn: Sample | undefined
+const sample = (): Sample => drawn ??= checkedInSample()
 
 describe('the real-usage sample', () => {
   test('every group weighs its real share: a rare group topped up to 300 draws would otherwise move the headline by far more than it moves real apps', () => {
-    const sample = drawSample({ draws: 3000, minimum: 150, pilot: 30_000 })
-    for (let g = 0; g < sample.groups.length; g++) {
-      const group = sample.groups[g]!
-      expect(group.first + group.extra).toBeGreaterThanOrEqual(150)
+    const { minimumPerGroup } = JSON.parse(readFileSync(join(import.meta.dir, 'weights.json'), 'utf8')) as { minimumPerGroup: number }
+    const { groups, cases } = sample()
+    for (let g = 0; g < groups.length; g++) {
+      const group = groups[g]!
+      expect(group.first + group.extra).toBeGreaterThanOrEqual(minimumPerGroup)
       // Drawn at random, so within a few standard errors of the pilot's share, never the extra draws' share.
       expect(Math.abs(group.weighted - group.share)).toBeLessThan(Math.max(0.3 * group.share, 0.004))
     }
     let total = 0
-    for (let i = 0; i < sample.cases.length; i++) total += sample.cases[i]!.sample!.weight
+    for (let i = 0; i < cases.length; i++) total += cases[i]!.sample!.weight
     expect(total).toBeCloseTo(1, 4)
   }, 60_000)
 
@@ -28,23 +34,20 @@ describe('the real-usage sample', () => {
     const dir = join(import.meta.dir, '../../.artifacts/harness-sets')
     mkdirSync(dir, { recursive: true })
     const path = join(dir, 'sample-check.ndjson')
-    writeCases(path, checkedInSample().cases)
+    writeCases(path, sample().cases)
     expect(readFileSync(path, 'utf8')).toBe(readFileSync(join(import.meta.dir, '../cases/sample.ndjson'), 'utf8'))
     rmSync(path)
   }, 60_000)
 })
 
 describe('the sets taken as they are', () => {
-  test('the checked-in reports and oracles are what their sources make: a report or an oracle added to src/test-data.ts would go unchecked', () => {
+  test('the checked-in reports are what exact.ts makes: a report added there would go unchecked', () => {
     const dir = join(import.meta.dir, '../../.artifacts/harness-sets')
     mkdirSync(dir, { recursive: true })
-    const sets: Array<[string, ReturnType<typeof reportCases>]> = [['reports', reportCases()], ['oracles', oracleCases()]]
-    for (let i = 0; i < sets.length; i++) {
-      const path = join(dir, `${sets[i]![0]}-check.ndjson`)
-      writeCases(path, sets[i]![1])
-      expect(readFileSync(path, 'utf8')).toBe(readFileSync(join(import.meta.dir, `../cases/${sets[i]![0]}.ndjson`), 'utf8'))
-      rmSync(path)
-    }
+    const path = join(dir, 'reports-check.ndjson')
+    writeCases(path, reportCases())
+    expect(readFileSync(path, 'utf8')).toBe(readFileSync(join(import.meta.dir, '../cases/reports.ndjson'), 'utf8'))
+    rmSync(path)
   })
 })
 

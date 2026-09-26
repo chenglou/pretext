@@ -44,26 +44,16 @@
     "!src/test-data.ts"
   ],
   "scripts": {
-    "benchmark-check": "bun run scripts/benchmark-check.ts",
     "build:package": "rm -rf dist && tsc -p tsconfig.build.json",
-    "check": "tsc && oxlint --type-aware src tests/wrapping scripts/wrapping-check.ts harness && knip && bun run scripts/generate-engine-break-data.ts --check && bun run scripts/generate-webkit-generic-families.ts --check",
-    "test:wrapping": "bun run scripts/wrapping-check.ts",
-    "corpus-check": "bun run scripts/corpus-check.ts",
-    "corpus-font-matrix": "bun run scripts/corpus-font-matrix.ts",
-    "corpus-taxonomy": "bun run scripts/corpus-taxonomy.ts",
+    "check": "tsc && oxlint --type-aware src harness && knip && bun run scripts/generate-engine-break-data.ts --check && bun run scripts/generate-webkit-generic-families.ts --check",
     "generate:engine-break-data": "bun run scripts/generate-engine-break-data.ts",
     "generate:webkit-generic-families": "bun run scripts/generate-webkit-generic-families.ts",
     "harness": "bun run harness/cli.ts",
     "package-smoke-test": "bun run scripts/package-smoke-test.ts",
     "prepack": "bun run build:package",
-    "probe-check": "bun run scripts/probe-check.ts",
     "site:build": "rm -rf site && bun run scripts/build-demo-site.ts",
     "start": "HOST=${HOST:-0.0.0.0}; PORT=3000; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=$HOST:$PORT",
-    "start:windows": "bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=0.0.0.0:3000",
-    "justification-check": "bun run scripts/justification-check.ts",
-    "font-probe": "bun run scripts/font-probe.ts",
-    "probe:arabic-joining": "bun run scripts/arabic-joining-probe.ts",
-    "test:wrapping:snapshot": "bun run scripts/wrapping-check.ts --browser=all --snapshot"
+    "start:windows": "bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=0.0.0.0:3000"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -71,7 +61,6 @@
     "marked": "^17.0.5",
     "oxlint": "^1.51.0",
     "oxlint-tsgolint": "^0.15.0",
-    "playwright-core": "^1.62.1",
     "tsgolint": "^0.0.1",
     "typescript": "6.0.2"
   }

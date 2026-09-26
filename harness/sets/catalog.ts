@@ -1,70 +1,20 @@
-// The behaviour catalog's templates, before widths.ts cuts them. Four sources:
-// - main's adversarial families, taken from its own generator (tests/wrapping/cases.ts) so nothing is retyped. main
-//   measures some widths with the browser's Canvas; run with two made-up measures, a width that stays put is main's own
-//   and one that moves was measured, and a template with measured widths is searched from the coarse grid instead.
-//   main's real text (the accuracy grid, the corpus sweeps, two Myanmar corpus paragraphs) and its mode oracles are left
-//   to the real-usage sample and oracles.ndjson; its same-font inline items go to the rich set;
+// The behaviour catalog's templates, before widths.ts cuts them. Five sources:
 // - the per-engine rebuild's rule families (data/rule-families.ndjson), the flat ones within what the library takes;
 // - filed reports whose reporter measured the width with their own Canvas;
 // - a matrix of every UAX #14 line-break class between the scripts apps mix, under the CSS settings the library takes,
-//   each pair of values of two axes in at least one template.
+//   each pair of values of two axes in at least one template;
+// - shapes ENGINE_FOLLOWUPS.md names, with their neighbours, each neighbour a family of its own, so the cover keeps a
+//   change of each;
+// - chains of combining-mark runs longer than the part of the chain a run's context keeps, each shape a family of its own,
+//   so the cover keeps a change of each.
+// main's adversarial families were taken once from the old harness's generator, which is gone: their cases,
+// `catalog/main/*` and `rich/main/*`, stay in the case files as they were cut, and `make.ts cut` keeps them.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { generateCases } from '../../tests/wrapping/cases.ts'
 import { SYSTEM_UI_FONT } from '../score.ts'
 import type { Paragraph } from '../types.ts'
-import { font, lineBreakTable, paragraph, parseFont, span } from './build.ts'
+import { font, lineBreakTable, paragraph, parseFont } from './build.ts'
 import { templateKey, type Template } from './widths.ts'
-
-type WrappingCase = ReturnType<typeof generateCases>[number]
-
-const REAL_TEXT = /^maintained\/(accuracy|corpus)$/
-// Two whole Myanmar corpus paragraphs (1,666 and 2,707 units) main keeps from a corpus analysis: real text, left to the
-// sample like the corpus sweeps. At every width where their lines change they would be most of WebKit's search.
-const CORPUS_ANALYSIS = /\/corpus-analysis\//
-const ORACLE = /^maintained\/(pre-wrap|keep-all|symbols|letter-spacing|discretionary)\//
-
-function fromMain(c: WrappingCase): { template: Omit<Template, 'widths' | 'grid'>; rich: boolean } {
-  const f = parseFont(c.font)
-  const pageLang = c.context?.lang ?? 'en'
-  const rich = c.nativeItems === true && c.parts !== undefined
-  const parts = rich ? c.parts!.map(part => span(part, f, { letterSpacing: c.letterSpacing })) : [c.text]
-  const p = paragraph({ font: f, lang: c.lang ?? pageLang, lineHeight: c.lineHeight, whiteSpace: c.whiteSpace, wordBreak: c.wordBreak, letterSpacing: c.letterSpacing, direction: c.direction }, parts)
-  return { template: { family: `main/${c.family.replace(/U\+[0-9A-F]{4,6}/g, 'U+control')}`, origin: `tests/wrapping/cases.ts ${c.family} (${c.origins[0] ?? ''})`, pageLang, paragraph: p }, rich }
-}
-
-export function mainTemplates(): { catalog: Template[]; rich: Template[] } {
-  const measures = [
-    (text: string, _font: string, letterSpacing: number): number => text.length * (7.31 + letterSpacing) + 0.37,
-    (text: string, _font: string, letterSpacing: number): number => text.length * (9.13 + letterSpacing) + 0.53,
-  ]
-  const byKey = new Map<string, { template: Omit<Template, 'widths' | 'grid'>; rich: boolean; widths: [Set<number>, Set<number>] }>()
-  for (let m = 0; m < measures.length; m++) {
-    for (const browser of ['chrome', 'safari', 'firefox'] as const) {
-      const cases = generateCases(measures[m]!, { schedule: 'full', browser })
-      for (let i = 0; i < cases.length; i++) {
-        const c = cases[i]!
-        if (REAL_TEXT.test(c.family) || c.origins.some(origin => ORACLE.test(origin) || CORPUS_ANALYSIS.test(origin))) continue
-        const converted = fromMain(c)
-        const key = templateKey({ ...converted.template, widths: [], grid: false })
-        let entry = byKey.get(key)
-        if (entry === undefined) byKey.set(key, entry = { ...converted, widths: [new Set(), new Set()] })
-        entry.widths[m]!.add(c.width)
-      }
-    }
-  }
-  const catalog: Template[] = []
-  const rich: Template[] = []
-  for (const entry of byKey.values()) {
-    const [a, b] = entry.widths
-    const own: number[] = []
-    for (const width of a) if (b.has(width)) own.push(width)
-    // A width main measured moved between the two runs: the template is searched from the coarse grid too.
-    const template = { ...entry.template, widths: own, grid: own.length < a.size || own.length < b.size }
-    ;(entry.rich ? rich : catalog).push(template)
-  }
-  return { catalog, rich }
-}
 
 export function ruleFamilyTemplates(): Template[] {
   const out: Template[] = []
@@ -202,13 +152,74 @@ export function classMatrixTemplates(): Template[] {
   return out
 }
 
-export function catalogTemplates(): { catalog: Template[]; rich: Template[] } {
-  const main = mainTemplates()
+// A line holding only soft hyphens, which a hard break ends (RESEARCH.md, Widths After A Line Break): between lines of
+// text, at the paragraph start and end, as a run, twice over, beside a combining mark or a preserved space, between
+// CRLFs, and before text; and between two U+2028, which WebKit takes as hard breaks in normal white space too, where a
+// line holding only a collapsible space is one as well. Two words on each side give the search widths where the lines
+// around it change.
+export function followupTemplates(): Template[] {
+  const shapes: ReadonlyArray<readonly [string, string, 'normal' | 'pre-wrap', string?]> = [
+    ['between', 'ab cd\n\u00AD\nef gh', 'pre-wrap'],
+    ['start', '\u00AD\nab cd', 'pre-wrap'],
+    ['end', 'ab cd\n\u00AD', 'pre-wrap'],
+    ['run', 'ab cd\n\u00AD\u00AD\nef gh', 'pre-wrap'],
+    ['twice', 'ab cd\n\u00AD\n\u00AD\nef gh', 'pre-wrap'],
+    ['mark-after', 'ab cd\n\u00AD\u0301\nef gh', 'pre-wrap'],
+    ['mark-before', 'ab cd\n\u0301\u00AD\nef gh', 'pre-wrap'],
+    ['space-before', 'ab cd\n \u00AD\nef gh', 'pre-wrap'],
+    ['space-after', 'ab cd\n\u00AD \nef gh', 'pre-wrap'],
+    ['crlf', 'ab cd\r\n\u00AD\r\nef gh', 'pre-wrap'],
+    ['text-after', 'ab cd\n\u00ADef gh', 'pre-wrap'],
+    ['line-separators', 'ab cd\u2028\u00AD\u2028ef gh', 'pre-wrap'],
+    ['line-separators-normal', 'ab cd\u2028\u00AD\u2028ef gh', 'normal'],
+    ['line-separators-space', 'ab cd\u2028 \u2028ef gh', 'normal', 'a collapsible space'],
+  ]
+  const out: Template[] = []
+  for (let i = 0; i < shapes.length; i++) {
+    const [name, text, whiteSpace, holds = 'a soft hyphen'] = shapes[i]!
+    out.push({
+      family: `followups/soft-hyphen-line/${name}`, origin: `RESEARCH.md, Widths After A Line Break: a line holding only ${holds}, ${name}`,
+      pageLang: 'en', paragraph: paragraph({ font: font('Arial', 16), lang: 'en', whiteSpace }, [text]), widths: [], grid: true,
+    })
+  }
+  return out
+}
+
+// Runs of combining marks chained to one grapheme through soft hyphens or U+0001, past the 96 UTF-16 units after which a
+// run's context leaves out the chain's first runs (MARK_CHAIN_CONTEXT_UNITS in src/layout.ts): runs of 100 and 200 marks,
+// whose widths Safari gives by their place after the grapheme, a separator and one mark repeated, two chains in one
+// paragraph, a long run before such pairs, and Arabic vowel marks and keycaps after U+0001, which take no advance when
+// measured without the grapheme.
+export function markChainTemplates(): Template[] {
+  const pairs = (separator: string, marks: string, count: number): string => (separator + marks).repeat(count)
+  const shapes: ReadonlyArray<readonly [string, string, string, number]> = [
+    ['long-runs', `ab \u0915${pairs('\u00AD', '\u0323'.repeat(100), 4)} cd ef`, 'Arial', 16],
+    ['long-runs-times', `ab \u0915${pairs('\u00AD', '\u0301'.repeat(200), 3)} cd ef`, 'Times New Roman', 16],
+    ['pairs', `ab \u0915${pairs('\u00AD', '\u0323', 80)} cd ef`, 'Arial', 16],
+    ['control-pairs', `ab x${pairs('\u0001', '\u0301', 80)} cd ef`, 'Arial', 16],
+    ['two-chains', `ab \u0915${pairs('\u00AD', '\u0323', 60)} cd \u0915${pairs('\u00AD', '\u0323', 60)} ef`, 'Arial', 16],
+    ['long-run-then-pairs', `ab \u0915\u00AD${'\u0323'.repeat(150)}${pairs('\u00AD', '\u0323', 50)} cd ef`, 'Times New Roman', 16],
+    ['arabic-control', `ab \u0627${pairs('\u0001', '\u064E'.repeat(100), 3)} cd ef`, 'Arial', 16],
+    ['keycap-control', `ab 1${pairs('\u0001', '\u20E3', 60)} cd ef`, 'Georgia', 24],
+  ]
+  const out: Template[] = []
+  for (let i = 0; i < shapes.length; i++) {
+    const [name, text, family, size] = shapes[i]!
+    out.push({
+      family: `mark-chains/${name}`, origin: `a chain of mark runs past MARK_CHAIN_CONTEXT_UNITS (src/layout.ts): ${name}`,
+      pageLang: 'en', paragraph: paragraph({ font: font(family, size), lang: 'en' }, [text]), widths: [], grid: true,
+    })
+  }
+  return out
+}
+
+export function catalogTemplates(): Template[] {
   const catalog: Template[] = []
   const seen = new Set<string>()
   // The order decides which template shows a line break first, which the cover keeps (widths.ts): filed reports, the
-  // rebuild's rule families, main's families, then the class matrix.
-  const lists = [reportedTemplates(), ruleFamilyTemplates(), main.catalog, classMatrixTemplates()]
+  // rebuild's rule families, the class matrix, the follow-ups' shapes, then the mark chains. main's families came before
+  // the class matrix when they were cut.
+  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates()]
   for (let l = 0; l < lists.length; l++) {
     for (let i = 0; i < lists[l]!.length; i++) {
       const t = lists[l]![i]!
@@ -218,5 +229,5 @@ export function catalogTemplates(): { catalog: Template[]; rich: Template[] } {
       catalog.push({ ...t, family: `catalog/${t.family}` })
     }
   }
-  return { catalog, rich: main.rich }
+  return catalog
 }

@@ -110,9 +110,10 @@ export type EngineProfile = {
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
 
 let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
-// Canvas resolves fonts under the document language. Chrome keeps a resolved
-// font while its font string is unchanged, so the context, and every width
-// measured through it, belong to the language it was created under.
+// Canvas resolves fonts under the context's language, the page's unless the
+// context has a `lang` to give it preparation's. Chrome keeps a resolved font
+// while its font string is unchanged, so the context, and every width measured
+// through it, belong to the language it was created under.
 let measureContextLanguage: string | null = null
 // The families the context's language gives the generic keywords, or null.
 let measureContextGenericFamilies: string[] | null = null
@@ -219,9 +220,18 @@ function getCanvasFont(font: string, families: readonly string[]): string {
   })
 }
 
+// The language setLocale() gave, which preparation reads in place of the page's,
+// or undefined.
+let localeLanguage: string | undefined
+
+export function setLocaleLanguage(locale: string | undefined): void {
+  localeLanguage = locale
+}
+
 // Preparation reads the page language once and shares it between break rules
 // and the measurement context.
 export function getDocumentLanguage(): string | null {
+  if (localeLanguage !== undefined) return localeLanguage
   if (typeof document === 'undefined') return null
   const root = document.documentElement as HTMLElement | null | undefined
   if (root == null) return null
@@ -243,9 +253,20 @@ function createMeasureContext(language: string | null): CanvasRenderingContext2D
   } else {
     throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
   }
-  if (language === '' && getEngineProfile().measureUnderDefaultLocale && 'lang' in measureContext) measureContext.lang = getBlinkDefaultLocale()
+  // A context's `lang` follows the page's, and preparation's can be setLocale()'s instead.
+  if (language !== null && 'lang' in measureContext) {
+    measureContext.lang = language === '' && getEngineProfile().measureUnderDefaultLocale ? getBlinkDefaultLocale() : language
+  }
   measureContextGenericFamilies = language !== null && getEngineProfile().namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, measureContext) : null
   return measureContext
+}
+
+// A text's letter spacing in CSS px, 0 by default. CSS and Canvas ignore a
+// non-finite one, which Pretext refuses rather than guess at.
+export function readLetterSpacing(letterSpacing: number | undefined): number {
+  const value = letterSpacing ?? 0
+  if (!Number.isFinite(value)) throw new RangeError(`letterSpacing must be a finite number of CSS px, not ${value}`)
+  return value
 }
 
 // A direct measurement under letter spacing, borrowing the primary context for
@@ -314,27 +335,28 @@ export function getEngineProfile(): EngineProfile {
   if (cachedEngineProfile !== null) return cachedEngineProfile
 
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  const engine = getLayoutEngine(ua)
+  // Engines Pretext doesn't recognize take Blink's profile (RESEARCH.md, Decisions Log).
+  const engine = getLayoutEngine(ua) ?? 'blink'
   // Fresh-entry observations are verified only for desktop Blink and Gecko.
   const isDesktop = /Windows NT|Macintosh|X11/.test(ua) && !/Android|Mobile|iPhone|iPad|iPod/.test(ua)
 
   const profile: EngineProfile = {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
-    lineBreakScan: engine === 'gecko' || engine === 'webkit' ? engine : 'blink',
+    lineBreakScan: engine,
     graphemeTable: engine === 'webkit' ? 'apple/char' : 'chromium/char',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
     prefixFitMinWidth: engine === 'webkit' ? 0 : engine === 'gecko' ? 80 : Infinity,
     measureTextWithFollowingSpace: engine === 'webkit',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
-    shapesMarksAcrossSoftHyphen: engine !== 'webkit' && engine !== 'gecko',
+    shapesMarksAcrossSoftHyphen: engine === 'blink',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : engine === 'gecko' ? 'full-width' : 'none',
     skipNarrowTabStops: engine === 'webkit',
     hangTabs: engine !== 'gecko',
     zeroWidthGlueTakesLine: engine !== 'gecko',
     hidesControlCharacters: engine === 'gecko',
-    hanKerning: engine !== 'webkit' && engine !== 'gecko',
+    hanKerning: engine === 'blink',
     hangsIdeographicSpace: engine !== 'webkit',
-    measureUnderDefaultLocale: engine !== 'webkit' && engine !== 'gecko',
+    measureUnderDefaultLocale: engine === 'blink',
     namesGenericFamiliesByLanguage: engine === 'webkit',
   }
   cachedEngineProfile = profile

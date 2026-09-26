@@ -40,8 +40,12 @@ export function buildLineTextFromRange(
   endGraphemeIndex: number,
 ): string {
   const { segmentFlags } = prepared
+  // A range kept from a longer text, such as one prepared again since, can end
+  // past this one, up to segment Infinity: its text stops at this text's end.
+  const segmentCount = prepared.segments.length
+  const segmentEnd = endSegmentIndex < segmentCount ? endSegmentIndex : segmentCount
   let text = ''
-  for (let i = startSegmentIndex; i < endSegmentIndex; i++) {
+  for (let i = startSegmentIndex; i < segmentEnd; i++) {
     // A soft hyphen shows only as the hyphen of a line that ends at it, and one the
     // Gecko scan takes as a zero-width break never does.
     const kind = segmentFlags[i]! & KIND_BITS
@@ -57,7 +61,7 @@ export function buildLineTextFromRange(
     }
   }
 
-  if (endGraphemeIndex > 0) {
+  if (endGraphemeIndex > 0 && endSegmentIndex < segmentCount) {
     const offsets = getSegmentGraphemeOffsets(endSegmentIndex, prepared.segments, cache)
     text += prepared.segments[endSegmentIndex]!.slice(
       offsets[startSegmentIndex === endSegmentIndex ? startGraphemeIndex : 0]!,

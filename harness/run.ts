@@ -1,8 +1,8 @@
-// One job: a list of cases recorded or predicted in one browser. The server serves page.ts, bundled with the library
-// build to predict with, and feeds the page chunks of cases. Cases are grouped into documents by page language and web
+// One job: a list of cases recorded or predicted in one browser. The server serves the build's adapter (page.ts),
+// bundled with its src/, and feeds the page chunks of cases. Cases are grouped into documents by page language and web
 // fonts, in the order they come, and a document ends after `documentSize` cases, so the page reloads into a fresh one.
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { environmentKey, FONTS_DIR, launch, type Session } from './browsers.ts'
 import { firefoxTextEmoji } from './score.ts'
@@ -24,9 +24,13 @@ export const LIB = resolve(import.meta.dir, '../src')
 // until 15 s after launch, in every job, recording or predicting.
 const FIREFOX_SETTLE_MS = 15_000
 
-async function bundle(lib: string): Promise<string> {
+// A build is a src/ and the adapter beside it, ../harness/page.ts, which predicts with it, so equal and --lib run whole
+// builds. A src/ with none beside it, such as a ref's from before the harness (096ae30e), takes this tree's adapter,
+// whose imports of the library go to that src/.
+export async function bundle(lib: string): Promise<string> {
+  const own = join(lib, '../harness/page.ts')
   const built = await Bun.build({
-    entrypoints: [join(import.meta.dir, 'page.ts')],
+    entrypoints: [existsSync(own) ? own : join(import.meta.dir, 'page.ts')],
     target: 'browser',
     format: 'esm',
     plugins: [{
@@ -176,7 +180,7 @@ export async function runJob<T extends Recording | Prediction>(job: Job): Promis
   }, 1000)
   const settled = Date.now() + (job.browser === 'firefox' ? FIREFOX_SETTLE_MS : 0)
   try {
-    session = await launch(job.browser, base + docUrl(0), id, tabUrl => tabUrl.startsWith(`${base}/doc?job=${id}`))
+    session = await launch(job.browser, base + docUrl(0), id, tabUrl => tabUrl.startsWith(`${base}/doc?job=${id}`), finish)
     await finished
   } finally {
     clearInterval(watchdog)

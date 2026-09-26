@@ -108,6 +108,17 @@ export function predictionChange(a: Prediction, b: Prediction): PredictionChange
   return change
 }
 
+// How two builds' predictions of one case differ, for equal: in their lines or widths, their line text, how another
+// line API disagrees with the walk, or the Canvas calls their line APIs made; null when they don't. Line text is
+// compared where both adapters hash it.
+export function buildChange(a: Prediction, b: Prediction): string | null {
+  const change = predictionChange(a, b)
+  if (change !== 'same' || !('lines' in a) || !('lines' in b)) return change === 'same' ? null : change
+  if (a.textHash !== b.textHash && a.textHash !== undefined && b.textHash !== undefined) return 'text'
+  if (a.disagreement !== b.disagreement) return 'disagreement'
+  return a.lineCalls === b.lineCalls ? null : 'Canvas calls after preparing'
+}
+
 // What predictions say about the library itself, whatever the browser did: the cases where another line API disagrees
 // with the walk, and those whose line APIs asked Canvas anything after preparing. Both block.
 export type Faults = { disagree: string[]; measuring: string[] }

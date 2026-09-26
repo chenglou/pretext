@@ -55,6 +55,8 @@ async function smokeJavaScriptEsm(tarballPath: string): Promise<void> {
       "import * as pretext from '@chenglou/pretext'",
       "if (typeof pretext.prepare !== 'function') throw new Error('prepare export missing')",
       "if (typeof pretext.layout !== 'function') throw new Error('layout export missing')",
+      "const rich = await import('@chenglou/pretext/rich-inline')",
+      "if (typeof rich.prepareRichInline !== 'function') throw new Error('prepareRichInline export missing')",
       "console.log('js-esm ok')",
       '',
     ].join('\n'),
@@ -95,7 +97,9 @@ async function smokeTypeScript(tarballPath: string): Promise<void> {
     path.join(projectDir, 'index.ts'),
     [
       "import { layout, prepare } from '@chenglou/pretext'",
+      "import { measureRichInlineStats, prepareRichInline } from '@chenglou/pretext/rich-inline'",
       "const prepared = prepare('hello', '16px Inter')",
+      "measureRichInlineStats(prepareRichInline([{ text: 'hi', font: '16px Inter', break: 'never' }]), 100).lineCount satisfies number",
       "const keepAllPrepared = prepare('안녕하세요 세계', '16px Inter', { wordBreak: 'keep-all' })",
       'const result = layout(prepared, 100, 20)',
       'const keepAllResult = layout(keepAllPrepared, 100, 20)',

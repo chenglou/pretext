@@ -1,33 +1,28 @@
 // Builds the grapheme check into .artifacts/grapheme-check/page/: a page that compares
 // src/graphemes.ts with the browser's own Intl.Segmenter (page.ts), and the texts it reads, which
-// are every corpus paragraph and the wrapping suite's texts and items.
+// are the harness's case texts, whole and run by run. The book set holds every corpus whole.
 //
 //   bun scripts/grapheme-check/build.ts
-//   bun scripts/grapheme-check/run.ts --browser=chrome|safari|firefox
+//   bun scripts/grapheme-check/run.ts --browser=chrome|firefox|webkit-host
 //   ENGINE=webkit bun scripts/grapheme-check/offline.ts
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { generateCases } from '../../tests/wrapping/cases.ts'
+import type { Case } from '../../harness/types.ts'
 
 const root = resolve(import.meta.dir, '../..')
 const out = join(root, '.artifacts/grapheme-check')
 mkdirSync(join(out, 'page'), { recursive: true })
 
 const texts = new Set<string>()
-const corpora = join(root, 'corpora')
-const files = readdirSync(corpora)
+const cases = join(root, 'harness/cases')
+const files = readdirSync(cases).filter(name => name.endsWith('.ndjson')).sort()
 for (let f = 0; f < files.length; f++) {
-  if (!files[f]!.endsWith('.txt')) continue
-  const paragraphs = readFileSync(join(corpora, files[f]!), 'utf8').split(/\n\s*\n/)
-  for (let p = 0; p < paragraphs.length; p++) if (paragraphs[p]!.trim() !== '') texts.add(paragraphs[p]!.trim())
-}
-const browsers = ['chrome', 'safari', 'firefox'] as const
-for (let b = 0; b < browsers.length; b++) {
-  const cases = generateCases(text => text.length * 8, { schedule: 'full', browser: browsers[b]! })
-  for (let c = 0; c < cases.length; c++) {
-    texts.add(cases[c]!.text)
-    const parts = cases[c]!.parts ?? []
-    for (let k = 0; k < parts.length; k++) texts.add(parts[k]!)
+  const lines = readFileSync(join(cases, files[f]!), 'utf8').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === '') continue
+    const runs = (JSON.parse(lines[i]!) as Case).paragraph.runs
+    texts.add(runs.map(run => run.text).join(''))
+    if (runs.length > 1) for (let r = 0; r < runs.length; r++) texts.add(runs[r]!.text)
   }
 }
 writeFileSync(join(out, 'page/texts.json'), JSON.stringify([...texts]))

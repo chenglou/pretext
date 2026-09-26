@@ -1,13 +1,7 @@
-// Cases whose input is exact and whose width is given, so they need no search for widths:
-// - filed reports, with the text, font, width and styles the reporter gave (issues whose width was measured from the
-//   reporter's own Canvas go through the width search instead, as catalog templates in catalog.ts);
-// - the oracles for documented modes in src/test-data.ts (pre-wrap, keep-all, symbols, letter spacing, soft hyphens),
-//   which main runs in Chrome and Safari only and the harness runs in every browser, since each browser's recording is
-//   its own answer.
-import {
-  DISCRETIONARY_ORACLE_CASES, KEEP_ALL_ORACLE_CASES, LETTER_SPACING_ORACLE_CASES, PRE_WRAP_ORACLE_CASES, SYMBOL_ORACLE_CASES,
-  type ProbeOracleCase,
-} from '../../src/test-data.ts'
+// Filed reports, with the text, font, width and styles the reporter gave, which need no search for widths. Issues whose
+// width was measured from the reporter's own Canvas go through the width search instead, as catalog templates in
+// catalog.ts. The oracles for documented modes (pre-wrap, keep-all, symbols, letter spacing, soft hyphens), which the
+// old harness ran in Chrome and Safari only, were taken once into oracles.ndjson, which every browser runs.
 import type { Case, Paragraph } from '../types.ts'
 import { makeCase, paragraph, parseFont, span } from './build.ts'
 
@@ -62,30 +56,5 @@ export function reportCases(): Case[] {
   }
   for (let i = 0; i < REPORTS.length; i++) add(REPORTS[i]!)
   for (const width of [50, 160, 320]) for (const letterSpacing of [0, 1]) add({ issue: '#206', text: SYMBOLS, font: '16px Arial', width, lineHeight: 20, letterSpacing })
-  return cases
-}
-
-// main's addOracle and its discretionary cases (tests/wrapping/cases.ts): the probe page's width less its 80 px of padding.
-export function oracleCases(): Case[] {
-  const cases: Case[] = []
-  const add = (family: string, input: ProbeOracleCase, width: number): void => {
-    const direction = input.dir ?? 'ltr'
-    const lang = input.lang ?? (direction === 'rtl' ? 'ar' : 'en')
-    const p = paragraph({
-      font: parseFont(input.font), lang, width, lineHeight: input.lineHeight,
-      whiteSpace: input.whiteSpace ?? (family === 'pre-wrap' ? 'pre-wrap' : 'normal'),
-      wordBreak: input.wordBreak ?? (family === 'keep-all' ? 'keep-all' : 'normal'),
-      letterSpacing: input.letterSpacing ?? 0, direction,
-    }, [input.text])
-    cases.push(makeCase('oracle', { family: `oracle/${family}`, origin: `src/test-data.ts ${family}: ${input.label}`, pageLang: lang, paragraph: p }))
-  }
-  const compact: ReadonlyArray<readonly [string, readonly ProbeOracleCase[]]> = [
-    ['pre-wrap', PRE_WRAP_ORACLE_CASES], ['keep-all', KEEP_ALL_ORACLE_CASES], ['symbols', SYMBOL_ORACLE_CASES], ['letter-spacing', LETTER_SPACING_ORACLE_CASES],
-  ]
-  for (let f = 0; f < compact.length; f++) {
-    const [family, inputs] = compact[f]!
-    for (let i = 0; i < inputs.length; i++) add(family, inputs[i]!, inputs[i]!.width - 80)
-  }
-  for (let i = 0; i < DISCRETIONARY_ORACLE_CASES.length; i++) add('soft-hyphen', DISCRETIONARY_ORACLE_CASES[i]!, DISCRETIONARY_ORACLE_CASES[i]!.width)
   return cases
 }

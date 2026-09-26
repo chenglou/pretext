@@ -48,6 +48,9 @@ export type PreparedLineBreakData = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
   segmentFlags: Uint8Array // Per segment, its flags byte, e.g. [TEXT, SPACE, TEXT]
   simpleLineWalkFastPath: boolean // Normal text can use the simple line stepper across all layout APIs
+  // Normal text, or text of its kinds where the scan gives no break at some segment
+  // boundary, which layout() counts with the simple stepper
+  simpleLineCountFastPath: boolean
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
   entryGeometry: (SegmentEntryGeometry | null)[] | null // Per segment, how its tails fit on a fresh line; null without any
   // Per segment with breakable fit advances, the graphemes that can't start a line, which
@@ -172,9 +175,11 @@ function getTerminalLetterSpacing(
 }
 
 // Mutates `cursor` to the next renderable line start. False when no line remains.
-// A chunk runs to a hard break or the end of the text. Chunks holding only source
-// that a line start consumes can occur consecutively: this normalizes through each
-// of them, while keeping actual empty hard-break chunks observable as empty lines.
+// A chunk runs to a hard break or the end of the text, and the hard break ends a
+// line however little the chunk holds: a chunk holding only its hard break, or only
+// source a line start consumes before it, such as soft hyphens, is an empty line,
+// which starts at its hard break. The rest of a chunk after a line that wrapped
+// inside it is no line of its own when a line start consumes all of it.
 export function normalizePreparedLineStart(
   prepared: PreparedLineBreakData,
   cursor: LineBreakCursor,
@@ -189,7 +194,7 @@ export function normalizePreparedLineStart(
   while (true) {
     const kind = segmentFlags[segmentIndex]! & KIND_BITS
     if (kind === HARD_BREAK) {
-      if (segmentIndex === 0 || (segmentFlags[segmentIndex - 1]! & KIND_BITS) === HARD_BREAK) {
+      if (atChunkStart) {
         cursor.segmentIndex = segmentIndex
         cursor.graphemeIndex = 0
         return true
@@ -246,7 +251,9 @@ export function walkPreparedLinesRaw(
 // starts the next one. The full walker costs three to five times as much per
 // segment, so one walker for all text was rejected (RESEARCH.md, Decisions Log).
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  if (!prepared.simpleLineWalkFastPath) return walkPreparedLinesRaw(prepared, maxWidth)
+  if (!prepared.simpleLineWalkFastPath) {
+    return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
+  }
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
   const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
   const segmentCount = widths.length
@@ -327,6 +334,32 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
     }
   }
   return count + (hasContent ? 1 : 0)
+}
+
+// layout()'s count of text of the simple walkers' kinds where the scan gives no
+// break at some segment boundary, as before NEL: the simple stepper's lines, except
+// that the full walker steps a line again where the stepper ended it at such a
+// boundary, before the segment or after the space before it, returning the line to
+// its last break. Checking for that inside the counter's loop slowed Firefox's and
+// Chrome's count of all other text once the check had ever held, and the line APIs
+// keep the full walker for this text, since the stepper's widths can differ from
+// its in the last bits (RESEARCH.md, Keeping Work Bounded).
+function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
+  const { segmentFlags } = prepared
+  const cursor: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  let count = 0
+  while (normalizePreparedLineStart(prepared, cursor)) {
+    const startSegmentIndex = cursor.segmentIndex
+    const startGraphemeIndex = cursor.graphemeIndex
+    stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
+    if (cursor.graphemeIndex === 0 && cursor.segmentIndex < segmentFlags.length && (segmentFlags[cursor.segmentIndex]! & UNBROKEN) !== 0) {
+      cursor.segmentIndex = startSegmentIndex
+      cursor.graphemeIndex = startGraphemeIndex
+      walkPreparedComplexLines(prepared, cursor, maxWidth, undefined, null, true)
+    }
+    count++
+  }
+  return count
 }
 
 // A return from an unfit discretionary hyphen needs an overflow that isolated
@@ -441,11 +474,8 @@ function walkPreparedComplexLines(
     let returnsFromHyphen = false
 
     let lineWidth: number | null = null
-    if (
-      (segmentFlags[lineStartSegmentIndex]! & KIND_BITS) === HARD_BREAK &&
-      (lineStartSegmentIndex === 0 || (segmentFlags[lineStartSegmentIndex - 1]! & KIND_BITS) === HARD_BREAK)
-    ) {
-      // A chunk holding only its hard break is an empty line.
+    if ((segmentFlags[lineStartSegmentIndex]! & KIND_BITS) === HARD_BREAK) {
+      // A line that starts at a hard break is an empty chunk's (normalizePreparedLineStart).
       cursor.segmentIndex = lineStartSegmentIndex + 1
       cursor.graphemeIndex = 0
       lineWidth = 0

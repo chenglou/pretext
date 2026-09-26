@@ -1,7 +1,7 @@
 // The grapheme check (build.ts): findGraphemeEnds under the table the engine profile picks, and
 // under the other table, against the runtime's own Intl.Segmenter, on:
 // - every code point in contexts that tell the classes of the character rules apart;
-// - every corpus paragraph and suite text, whole, and the segments prepareWithSegments() makes;
+// - every case text of the harness, whole and run by run, and the segments prepareWithSegments() makes;
 // - random strings of code points drawn from two to five random classes.
 // page.ts runs it in a browser; offline.ts under Bun, or under Node once bundled.
 import type { CharTable } from '../../src/generated/engine-break-data.ts'

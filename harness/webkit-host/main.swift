@@ -11,8 +11,10 @@
 //   (PageClientImpl::isViewVisible, Source/WebKit/UIProcess/mac/PageClientImplMac.mm), so the window reports .visible.
 // - A non-persistent data store, and the page over http from 127.0.0.1 (NSAllowsLocalNetworking).
 // - The user agent ends with `Version/<installed Safari's version> Safari/605.1.15 webkit-host/<WebKit CFBundleVersion>`.
-// - One private SPI, -[WKPreferences _setShouldAllowUserInstalledFonts:NO]: Safari hides user-installed fonts from web
-//   content, and WKWebView shows them by default.
+// - Two private SPIs: -[WKPreferences _setShouldAllowUserInstalledFonts:NO], as Safari hides user-installed fonts from
+//   web content and WKWebView shows them by default; and -[WKWebView _webProcessIdentifier], for the harness's memory
+//   bound (harness/browsers.ts): launchd starts the web content process, so each navigation that commits in another
+//   one prints `web content process <pid>` on stdout.
 // Exits 0 when the page's title matches --exit-title, 2 on bad arguments, 3 when the parent process exits, 4 when a
 // navigation fails, 5 when the web content process terminates.
 import AppKit
@@ -49,6 +51,7 @@ final class Host: NSObject, NSApplicationDelegate, WKNavigationDelegate {
   var window: HostWindow?
   var observation: NSKeyValueObservation?
   var activity: NSObjectProtocol?
+  var webContent: Int32 = 0
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     // Keeps App Nap from coalescing this process's timers and IPC while the window is behind other windows.
@@ -73,6 +76,9 @@ final class Host: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     }
     preferences.setValue(false, forKey: "shouldAllowUserInstalledFonts")
     let webView = WKWebView(frame: NSRect(origin: .zero, size: frame.size), configuration: configuration)
+    guard webView.responds(to: NSSelectorFromString("_webProcessIdentifier")) else {
+      fail("WKWebView lacks _webProcessIdentifier, so the harness can't bound the web content process's memory", status: 2)
+    }
     webView.navigationDelegate = self
     window.contentView = webView
     window.orderFront(nil)
@@ -90,6 +96,14 @@ final class Host: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     let nsError = error as NSError
     if (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled) || (nsError.domain == "WebKitErrorDomain" && nsError.code == 102) { return }
     fail("navigation failed: \(nsError.domain) \(nsError.code) \(nsError.localizedDescription)", status: 4)
+  }
+
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    let pid = (webView.value(forKey: "_webProcessIdentifier") as? NSNumber)?.int32Value ?? 0
+    if pid == webContent { return }
+    webContent = pid
+    print("web content process \(pid)")
+    fflush(stdout)
   }
 
   func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { navigationFailed(error) }

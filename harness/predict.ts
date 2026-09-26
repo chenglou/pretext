@@ -8,10 +8,14 @@
 // same case too, and the first way one disagrees with the walk is kept: layout() on prepare()'s handle (the resize path,
 // with its own line counter), measureLineStats, layoutNextLineRange, layoutNextLine, layoutWithLines and
 // materializeLineRange; for rich cases measureRichInlineStats, layoutNextRichInlineLineRange and
-// materializeRichInlineLineRange, whose fragments' text is checked against their items' own text. measureText calls are
-// counted apart while preparing and while the line APIs run.
+// materializeRichInlineLineRange, whose fragments' text is checked against their items' own text. The lines' text (the
+// fragments' for a rich case) goes out as a hash, for `equal` to compare builds by. measureText calls are
+// counted apart while preparing and while the line APIs run. A walk that goes past a line per source unit, plus one,
+// fails its case instead of stalling the page, and so does a range or a rich fragment that names no place in its text,
+// before its text is built, since builds before #353, which --lib can run, build the text of a range that ends at
+// segment Infinity without end. The offline invariants (invariants.ts) call the same agreement checks.
 import {
-  layout, layoutNextLine, layoutNextLineRange, layoutWithLines, materializeLineRange, measureLineStats, prepare, prepareWithSegments, setLocale,
+  layout, layoutNextLine, layoutNextLineRange, layoutWithLines, materializeLineRange, measureLineStats, prepare, prepareWithSegments,
   walkLineRanges, type LayoutCursor, type LayoutLineRange, type PrepareOptions, type PreparedTextWithSegments,
 } from '../src/layout.ts'
 import {
@@ -25,7 +29,7 @@ function sameStyle(a: TextRun, b: TextRun): boolean {
     && a.font.style === b.font.style && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing
 }
 
-function isRich(runs: readonly TextRun[]): boolean {
+export function isRich(runs: readonly TextRun[]): boolean {
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]!
     if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined) return true
@@ -130,19 +134,27 @@ function sourceRanges(source: string, prepared: PreparedTextWithSegments, whiteS
   }
 }
 
-// measureText calls, counted on the Canvas prototypes while a prediction prepares and while its line APIs run.
+// measureText calls, counted on the Canvas prototypes while a prediction prepares and while its line APIs run, and the
+// UTF-16 units submitted while preparing.
 let counting: 'prepare' | 'lines' | null = null
-const calls = { prepare: 0, lines: 0 }
+const calls = { prepare: 0, lines: 0, units: 0 }
 function countCalls(proto: { measureText: (this: unknown, text: string) => TextMetrics } | undefined): void {
   if (proto === undefined) return
   const original = proto.measureText
   proto.measureText = function (this: unknown, text: string): TextMetrics {
     if (counting !== null) calls[counting]++
+    if (counting === 'prepare') calls.units += text.length
     return original.call(this, text)
   }
 }
 countCalls(typeof CanvasRenderingContext2D === 'undefined' ? undefined : CanvasRenderingContext2D.prototype)
 countCalls(typeof OffscreenCanvasRenderingContext2D === 'undefined' ? undefined : OffscreenCanvasRenderingContext2D.prototype)
+
+// A 32-bit FNV-1a hash of line texts, each ended by a unit no text holds.
+function hashText(hash: number, text: string): number {
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619)
+  return Math.imul(hash ^ 0x10000, 16777619)
+}
 
 // The line APIs' widths are sums of the same advances in other orders.
 function sameWidth(a: number, b: number): boolean {
@@ -161,23 +173,38 @@ function showRange(line: { start: LayoutCursor; end: LayoutCursor; width: number
   return `${showCursor(line.start)}-${showCursor(line.end)} width ${line.width}`
 }
 
+// Whether a cursor names a place in a text of `segments` segments. The checks test each range before building its text:
+// the text builders of builds before #353, given a range that ends elsewhere, such as at segment Infinity, build its
+// text without end.
+function inText(c: LayoutCursor, segments: number): boolean {
+  return Number.isInteger(c.segmentIndex) && Number.isInteger(c.graphemeIndex) && c.graphemeIndex >= 0
+    && c.segmentIndex >= 0 && (c.segmentIndex < segments || c.segmentIndex === segments && c.graphemeIndex === 0)
+}
+
+// The line APIs the agreement checks call: this build's in the page, the build under test in the offline invariants
+// (invariants.ts).
+const LIBRARY = { layoutNextLine, layoutNextLineRange, layoutWithLines, materializeLineRange, measureLineStats, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats }
+export type LineApis = typeof LIBRARY
+
 // The first way the other text line APIs disagree with walkLineRanges' `walked` lines, or null. A stream that doesn't end
 // within a step per source unit, plus one, disagrees.
-function plainDisagreement(prepared: PreparedTextWithSegments, fastLines: { lineCount: number; height: number }, walked: LayoutLineRange[], walkedCount: number, width: number, lineHeight: number, steps: number): string | null {
+export function plainDisagreement(api: LineApis, prepared: PreparedTextWithSegments, fastLines: { lineCount: number; height: number }, walked: LayoutLineRange[], walkedCount: number, width: number, lineHeight: number, steps: number): string | null {
   const n = walked.length
   if (walkedCount !== n) return `walkLineRanges returns ${walkedCount} for ${n} lines`
   if (fastLines.lineCount !== n || fastLines.height !== n * lineHeight) return `layout() gives ${fastLines.lineCount} lines, height ${fastLines.height}; walkLineRanges ${n} lines`
   let widest = 0
   for (let i = 0; i < n; i++) widest = Math.max(widest, walked[i]!.width)
-  const stats = measureLineStats(prepared, width)
+  const stats = api.measureLineStats(prepared, width)
   if (stats.lineCount !== n || !sameWidth(stats.maxLineWidth, widest)) return `measureLineStats gives ${stats.lineCount} lines, widest ${stats.maxLineWidth}; walkLineRanges ${n}, widest ${widest}`
+  const segments = prepared.segments.length
   const texts: string[] = []
   for (let i = 0; i < n; i++) {
-    const line = materializeLineRange(prepared, walked[i]!)
+    if (!inText(walked[i]!.start, segments) || !inText(walked[i]!.end, segments)) return `walkLineRanges line ${i} is ${showRange(walked[i]!)}, outside the text's ${segments} segments`
+    const line = api.materializeLineRange(prepared, walked[i]!)
     if (!sameCursor(line.start, walked[i]!.start) || !sameCursor(line.end, walked[i]!.end) || !sameWidth(line.width, walked[i]!.width)) return `materializeLineRange of line ${i} gives ${showRange(line)}; walkLineRanges ${showRange(walked[i]!)}`
     texts.push(line.text)
   }
-  const batch = layoutWithLines(prepared, width, lineHeight)
+  const batch = api.layoutWithLines(prepared, width, lineHeight)
   if (batch.lineCount !== n || batch.lines.length !== n || batch.height !== n * lineHeight) return `layoutWithLines gives ${batch.lineCount} lines (${batch.lines.length} listed), height ${batch.height}; walkLineRanges ${n}`
   for (let i = 0; i < n; i++) {
     const line = batch.lines[i]!
@@ -185,8 +212,10 @@ function plainDisagreement(prepared: PreparedTextWithSegments, fastLines: { line
   }
   let cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   for (let i = 0; ; i++) {
-    const range = layoutNextLineRange(prepared, cursor, width)
-    const line = layoutNextLine(prepared, cursor, width)
+    const range = api.layoutNextLineRange(prepared, cursor, width)
+    // layoutNextLine builds the text of the same range.
+    if (range !== null && !inText(range.end, segments)) return `layoutNextLineRange line ${i} is ${showRange(range)}, outside the text's ${segments} segments`
+    const line = api.layoutNextLine(prepared, cursor, width)
     if (range === null || line === null) {
       if (range !== line) return `at line ${i}, layoutNextLineRange ${range === null ? 'ends' : 'goes on'} and layoutNextLine ${line === null ? 'ends' : 'goes on'}`
       return i === n ? null : `layoutNextLineRange gives ${i} lines; walkLineRanges ${n}`
@@ -209,89 +238,110 @@ function sameFragments(a: readonly RichInlineFragmentRange[], b: readonly RichIn
   return true
 }
 
-// The same for rich-inline, against walkRichInlineLineRanges' lines.
-function richDisagreement(prepared: ReturnType<typeof prepareRichInline>, walked: RichInlineLineRange[], walkedCount: number, width: number, steps: number): string | null {
+// The same for rich-inline, against walkRichInlineLineRanges' lines. A fragment's cursors index its item's own prepared
+// text, of `segmentsOf(itemIndex)` segments.
+export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prepareRichInline>, walked: RichInlineLineRange[], walkedCount: number, width: number, steps: number, segmentsOf: (itemIndex: number) => number): string | null {
   const n = walked.length
   if (walkedCount !== n) return `walkRichInlineLineRanges returns ${walkedCount} for ${n} lines`
   let widest = 0
   for (let i = 0; i < n; i++) widest = Math.max(widest, walked[i]!.width)
-  const stats = measureRichInlineStats(prepared, width)
+  const stats = api.measureRichInlineStats(prepared, width)
   if (stats.lineCount !== n || !sameWidth(stats.maxLineWidth, widest)) return `measureRichInlineStats gives ${stats.lineCount} lines, widest ${stats.maxLineWidth}; walkRichInlineLineRanges ${n}, widest ${widest}`
   let cursor: RichInlineCursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
   for (let i = 0; ; i++) {
-    const range = layoutNextRichInlineLineRange(prepared, width, cursor)
+    const range = api.layoutNextRichInlineLineRange(prepared, width, cursor)
     if (range === null) return i === n ? null : `layoutNextRichInlineLineRange gives ${i} lines; walkRichInlineLineRanges ${n}`
     if (i >= n || i > steps) return `layoutNextRichInlineLineRange gives more than ${Math.min(n, steps)} lines; walkRichInlineLineRanges ${n}`
     const line = walked[i]!
     if (!sameFragments(range.fragments, line.fragments) || !sameWidth(range.width, line.width) || range.end.itemIndex !== line.end.itemIndex || !sameCursor(range.end, line.end)) return `layoutNextRichInlineLineRange line ${i} differs from walkRichInlineLineRanges'`
-    const materialized = materializeRichInlineLineRange(prepared, line)
+    for (let k = 0; k < line.fragments.length; k++) {
+      const f = line.fragments[k]!
+      const segments = segmentsOf(f.itemIndex)
+      if (!inText(f.start, segments) || !inText(f.end, segments)) return `walkRichInlineLineRanges line ${i} fragment ${k} is item ${f.itemIndex}'s ${showCursor(f.start)}-${showCursor(f.end)}, outside its ${segments} segments`
+    }
+    const materialized = api.materializeRichInlineLineRange(prepared, line)
     if (!sameFragments(materialized.fragments, line.fragments) || materialized.width !== line.width) return `materializeRichInlineLineRange of line ${i} changes its fragments`
     cursor = range.end
   }
 }
 
-let locale: string | null = null
+// The prepare options of a case without inline structure.
+export function prepareOptions(c: Case): PrepareOptions {
+  const p = c.paragraph
+  const options: PrepareOptions = {}
+  if (p.whiteSpace === 'pre-wrap') options.whiteSpace = 'pre-wrap'
+  if (p.wordBreak === 'keep-all') options.wordBreak = 'keep-all'
+  if (p.runs[0]!.letterSpacing !== 0) options.letterSpacing = p.runs[0]!.letterSpacing
+  return options
+}
+
+// A rich case's items, one per run.
+export function richItems(runs: readonly TextRun[]): RichInlineItem[] {
+  const items: RichInlineItem[] = []
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i]!
+    items.push({
+      text: run.text, font: canvasFont(run.font), ...(run.letterSpacing === 0 ? {} : { letterSpacing: run.letterSpacing }),
+      ...(run.atomic === true ? { break: 'never' as const } : {}), ...(run.padding === undefined ? {} : { extraWidth: 2 * run.padding }),
+    })
+  }
+  return items
+}
 
 export function predict(c: Case): Prediction {
   const problem = unsupported(c)
   if (problem !== null) return { unsupported: problem }
   const p = c.paragraph
-  // An app sets the locale when its content language changes; setLocale() also clears the library's caches.
-  if (locale !== p.lang) {
-    locale = p.lang
-    setLocale(p.lang === '' ? undefined : p.lang)
-  }
   const whiteSpace = p.whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
   const runs = p.runs
   const lines: PredictedLine[] = []
   let disagreement: string | null
+  let textHash = 0x811c9dc5
   calls.prepare = 0
   calls.lines = 0
+  calls.units = 0
   let source = ''
   for (let i = 0; i < runs.length; i++) source += runs[i]!.text
+  // A walker that doesn't end within a line per source unit, plus one, fails the case instead of stalling the page.
+  const steps = source.length + 1
   try {
     if (!isRich(runs)) {
-      const options: PrepareOptions = {}
-      if (whiteSpace === 'pre-wrap') options.whiteSpace = 'pre-wrap'
-      if (p.wordBreak === 'keep-all') options.wordBreak = 'keep-all'
-      if (runs[0]!.letterSpacing !== 0) options.letterSpacing = runs[0]!.letterSpacing
+      const options = prepareOptions(c)
       const font = canvasFont(runs[0]!.font)
       counting = 'prepare'
       const prepared = prepareWithSegments(source, font, options)
       const fast = prepare(source, font, options)
       counting = 'lines'
       const walked: LayoutLineRange[] = []
-      const walkedCount = walkLineRanges(prepared, p.width, line => { walked.push(line) })
-      disagreement = plainDisagreement(prepared, layout(fast, p.width, p.lineHeight), walked, walkedCount, p.width, p.lineHeight, source.length + 1)
+      const walkedCount = walkLineRanges(prepared, p.width, line => { if (walked.push(line) > steps) throw new Error(`walkLineRanges gives more than ${steps} lines`) })
+      disagreement = plainDisagreement(LIBRARY, prepared, layout(fast, p.width, p.lineHeight), walked, walkedCount, p.width, p.lineHeight, steps)
+      // Every text API gave this text when none disagrees.
+      for (let i = 0; i < walked.length && disagreement === null; i++) textHash = hashText(textHash, materializeLineRange(prepared, walked[i]!).text)
       counting = null
       const range = sourceRanges(source, prepared, whiteSpace)
       for (let i = 0; i < walked.length; i++) lines.push({ ...range(walked[i]!.start, walked[i]!.end), width: walked[i]!.width })
     } else {
-      const items: RichInlineItem[] = []
-      for (let i = 0; i < runs.length; i++) {
-        const run = runs[i]!
-        items.push({
-          text: run.text, font: canvasFont(run.font), ...(run.letterSpacing === 0 ? {} : { letterSpacing: run.letterSpacing }),
-          ...(run.atomic === true ? { break: 'never' as const } : {}), ...(run.padding === undefined ? {} : { extraWidth: 2 * run.padding }),
-        })
-      }
+      const items = richItems(runs)
       counting = 'prepare'
       const prepared = prepareRichInline(items)
       counting = 'lines'
       const walked: RichInlineLineRange[] = []
-      const walkedCount = walkRichInlineLineRanges(prepared, p.width, line => { walked.push(line) })
-      disagreement = richDisagreement(prepared, walked, walkedCount, p.width, source.length + 1)
+      const walkedCount = walkRichInlineLineRanges(prepared, p.width, line => { if (walked.push(line) > steps) throw new Error(`walkRichInlineLineRanges gives more than ${steps} lines`) })
+      // Fragment cursors index prepareWithSegments(item.text) of the item's font and letter spacing, prepared here
+      // uncounted, as an app needs none of them. So each fragment's text is materializeLineRange's over those cursors; the
+      // text builder both share is src/layout.test.ts's to check.
       counting = null
-      // Fragment cursors index prepareWithSegments(item.text) of the item's font and letter spacing. So each fragment's
-      // text is materializeLineRange's over those cursors; the text builder both share is src/layout.test.ts's to check.
-      const handles: Array<PreparedTextWithSegments | undefined> = []
-      const handle = (i: number): PreparedTextWithSegments => handles[i] ??= prepareWithSegments(runs[i]!.text, items[i]!.font, runs[i]!.letterSpacing === 0 ? {} : { letterSpacing: runs[i]!.letterSpacing })
+      const handles = items.map(item => prepareWithSegments(item.text, item.font, item.letterSpacing === undefined ? {} : { letterSpacing: item.letterSpacing }))
+      counting = 'lines'
+      disagreement = richDisagreement(LIBRARY, prepared, walked, walkedCount, p.width, steps, i => handles[i]?.segments.length ?? -1)
+      counting = null
       for (let i = 0; i < walked.length && disagreement === null; i++) {
         const fragments = materializeRichInlineLineRange(prepared, walked[i]!).fragments
         for (let k = 0; k < fragments.length; k++) {
           const f = fragments[k]!
-          const text = materializeLineRange(handle(f.itemIndex), { start: f.start, end: f.end, width: 0 }).text
+          const text = materializeLineRange(handles[f.itemIndex]!, { start: f.start, end: f.end, width: 0 }).text
           if (f.text !== text) disagreement ??= `materializeRichInlineLineRange line ${i} fragment ${k} is ${JSON.stringify(f.text)}; its item's text there ${JSON.stringify(text)}`
+          textHash = hashText(textHash, f.text)
         }
       }
       const maps: Array<ReturnType<typeof sourceRanges> | undefined> = []
@@ -301,7 +351,7 @@ export function predict(c: Case): Prediction {
         base += items[i]!.text.length
       }
       const fragment = (f: RichInlineFragmentRange): { start: number; end: number } => {
-        const map = maps[f.itemIndex] ??= sourceRanges(runs[f.itemIndex]!.text, handle(f.itemIndex), 'normal')
+        const map = maps[f.itemIndex] ??= sourceRanges(runs[f.itemIndex]!.text, handles[f.itemIndex]!, 'normal')
         const range = map(f.start, f.end)
         return { start: bases[f.itemIndex]! + range.start, end: bases[f.itemIndex]! + range.end }
       }
@@ -321,5 +371,5 @@ export function predict(c: Case): Prediction {
   } finally {
     counting = null
   }
-  return { lines, prepareCalls: calls.prepare, lineCalls: calls.lines, disagreement }
+  return { lines, textHash: textHash >>> 0, prepareCalls: calls.prepare, prepareUnits: calls.units, lineCalls: calls.lines, disagreement }
 }

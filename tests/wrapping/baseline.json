@@ -1,4 +1,0 @@
-{
-  "revision": "ba36327a3ef7ef423fb53d9d4fb176efe4b76713",
-  "description": "Reviewed boundary, rich-inline, shared complex-walker, leading-ZWSP, exclamation-break, figure-space glue, pair-table gap, CJK closing-bracket, Safari line-edge kerning, WebKit engine routing, segment-break removal and Blink soft-hyphen retreat fixes, then each browser's own line breaker: ports of Blink's, WebKit's and Gecko's scans over their own tables, with the worst-case speedups, the ablations, the no-break-space and U+3000 fixes, Safari's generic families by page language and the full walker's engineering round. The runner measures this source and every candidate against the same fresh browser observations; existing mismatches remain observations, never expected answers."
-}

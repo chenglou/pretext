@@ -1,19 +1,11 @@
 # Corpora
 
-Starter long-form stress corpora for browser-layout experiments.
+Long-form text in the languages and punctuation systems apps lay out, checked in as clean source text.
+`sources.json` names each file's source, language and license.
 
-These files are checked in so we have stable canaries when probing languages and
-punctuation systems beyond the current 7680-case browser sweep. The main corpus
-set is wired into `/corpus` and the long-form rows on `/benchmark`; the checked-in
-`step=10` snapshots are the compact source of truth for current results. The
-Markdown chat demo also draws generated message text from the English, Chinese,
-Arabic and Hindi files.
-
-Machine-readable metadata lives in `sources.json`.
-
-Machine-readable corpus status lives in [chrome-step10.json](chrome-step10.json),
-[safari-step10.json](safari-step10.json) and [firefox-step10.json](firefox-step10.json).
-"step=10" means the `300..900` sweep.
-Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
-
-The corpus page is also available locally at `/corpus?id=<corpus-id>`.
+What reads them:
+- the harness's real-usage sample (`harness/sets/sample.ts`), which draws paragraphs from every file but
+  `mixed-app-text.txt`; so any edit to a file changes the sample, and a new draw must be recorded;
+- the harness's census, book and smoke sets, taken once from these files, `mixed-app-text.txt` included;
+- the bench's message families (`harness/bench/texts.ts`);
+- the Markdown chat demo, which draws its generated messages from the English, Chinese, Arabic and Hindi files.

@@ -138,7 +138,19 @@ any segment boundary instead gave `a`, U+00AD, WJ, `b` at 0px a line holding onl
 soft hyphen, and the second installed gate lost 9,068 line-count passes that way.
 Combining marks after zero-width glue or a control shape after the grapheme before
 them and what separates them, so they're measured as that source with the marks, minus
-the source, and take no letter spacing of their own. Measured alone, U+0301 took 2.97px
+the source, and take no letter spacing of their own. Measuring every run after the whole
+chain was quadratic, so past 96 UTF-16 units of what separates them, a run is measured
+after the grapheme and the fewest of the chain's last runs, each with the separators
+before it, that hold at least 96 units. Safari gives a run a width that depends on how
+far it sits from the grapheme, up to 61 units in the chains measured: after `क`, soft
+hyphens and U+0323 in 16px Georgia, the first mark takes 5.2px, the next 29 take 1.6px
+and the rest none. Keeping at most the last 96 units instead left only the separator
+after a run of 95 marks or more, and Safari then gave such runs up to 7.1px more than
+after the whole chain. In Chrome 154, Safari 27 and Firefox 156.0.1, runs measured
+this way within 0.0005px of their widths after the whole chain over 10,560 chains of
+one- and two-code-point runs in 24 fonts, and within 0.002px over 2,400 chains of six
+runs of 1 to 400 marks in 5 fonts, while leaving out the grapheme too took up to 25px
+off a run (#351). Measured alone, U+0301 took 2.97px
 in 16px Arial. Measured on the grapheme without the glue, Canvas composed the pair or drew
 it in another font: `a` with U+0323 in 16px Amiri took 2.22px more than `a`, where
 Chrome paints `a`, U+00AD, U+0301, U+00AD, U+0323, `b` as wide as `ab`. WebKit's
@@ -776,6 +788,18 @@ counts, so no rule inside `layout()` can repair the Arabic case; it needs
 contextual widths during preparation. An Arabic-letter guard across SHY, deleting
 raw CR and treating CR as a zero-width break each lost other native successes.
 
+Pretext consumes a soft hyphen at a paragraph or hard-break start (Firefox drops
+it too; Chrome and Safari keep it, ENGINE_FOLLOWUPS.md), but the hard break after
+it ends a line in all three browsers: `a`, LF, soft hyphen, LF, `b` in pre-wrap
+paints three lines in each, the second with nothing visible, as do two soft
+hyphens there and two such chunks in a row. Pretext used to drop a chunk that a
+line start consumed whole, its hard break included; the line start now takes a
+hard break that ends a chunk holding nothing else as an empty line. The same goes
+for collapsible spaces between two U+2028 or U+2029, which Safari takes as hard
+breaks in normal white space too and gives an empty line. At the end of the text,
+with no hard break after it, the soft hyphens Chrome and Safari keep still take a
+line, where Firefox and Pretext give none (ENGINE_FOLLOWUPS.md).
+
 Keep the original source through analysis:
 normalization can erase distinctions needed here. Chrome's normal-mode FORM FEED
 followed by ZWSP occupies two lines at width 1 but one at width 100, even though
@@ -987,6 +1011,36 @@ widths, not only requested widths, and prefer clear threshold brackets. Firefox
 box widths followed 1/60px rounding in a narrow sweep, but copying that rounding
 into line fitting regressed unrelated cases: box resolution does not establish
 the browser's text-fit rule.
+
+A span around each character is no witness of WebKit's breaks. WebKit breaks
+inside an inline box from that box's text and reads only the previous box's last
+two characters at a boundary, so the spans move breaks the text node doesn't
+have. Rechecked in Safari 27.0 on 1,336 of the harness's pre-wrap and URL-query
+cases (September 25), a span per grapheme laid 157 of them out at another height
+and gave 118 others another line start at the same height, mostly narrower than
+24px and at `?`, `=`, tabs and soft hyphens. The harness's Range reading, one
+code point at a time on the text node, is the one webkit-host's recordings and
+the WebKit scan agree with there, so Safari 26's extractor caveat for pre-wrap
+and URL queries was dropped with the span probes. Spans change Thai, Lao, Khmer
+and Myanmar breaks in every browser too: read them with Range. And take source
+offsets from prepared segments and grapheme cursors, never from
+`line.text.length`, whose text can hold a hyphen the source doesn't.
+
+One copy of the library can run slower than another copy of the same code for a
+whole document. In the bench's calibration of HEAD against itself (September 26,
+three sessions in each browser), Firefox's base copy took about twice as long as
+the other two to lay out kept CJK handles at widths used before in one session,
+and Safari's took 15-21% longer on keep-all brackets in two. The candidate and
+the control moved together there, so the control's band covers such a document,
+and a verdict needs every session, so one document can't carry one. The noise
+floors therefore take the largest deviation either copy held in one direction in
+all three sessions, 1-6% by row; floors taken from one copy made 0 and 1 false
+calls in 141 entries on the other. The largest deviation in any session, 2-51% by
+row, would have hidden four of the slowdowns the bench was checked against
+(217c84b8 against 6d1d2106): pre-wrap layout and walk at 1.05 of base's time in
+Chrome and 1.18-1.25 in Firefox, and letter-spaced CJK and control layouts at 1.12
+and 1.20 in Safari. With the floors it calls every one of them slower in all three
+browsers, and seen CJK faster.
 
 ## Rich Inline Boundaries
 
@@ -1270,7 +1324,7 @@ It returns no levels and assumes a left-to-right paragraph.
 ## Corpus Lessons
 
 Short examples catch regressions; long text reveals accumulated differences.
-Current counts belong in the `corpora/*-step10.json` snapshots, not here.
+Current counts are the census and book sets' in `bun harness check`, not here.
 
 - **Application text:** books miss URLs, numeric expressions, emoji sequences,
   non-breaking spaces and discretionary breaks.
@@ -1305,12 +1359,26 @@ history audit found these traps; the commits retain the implementation details:
 | Measuring every growing Canvas prefix | `fcf9c62` |
 | Searching hard-break chunks from the beginning for every streamed line | `2c52171` |
 | Retrying whitespace/font-size suffix regexes; restarting preferred-hyphen searches | [#221](https://github.com/chenglou/pretext/pull/221) |
+| Measuring each run of a chain of combining marks after the whole chain before it | `MARK_CHAIN_CONTEXT_UNITS` in `src/layout.ts` (#351) |
 
 The regex failures involved *internal* whitespace followed by content and long
 digit runs without `px`, not just long trailing whitespace or valid font strings.
 The preferred-break failure needed one long hyphenated run producing many lines.
 An arbitrary continuation must seek to its starting boundary; an already
 positioned scan can carry its index.
+
+A long chain of combining marks is trimmed in `getLongMarkChainContext()`, which
+runs only for a context longer than 96 units, apart from `getMarkContext()`, which
+`prepare()` calls for every segment. V8 inlines a function into its caller only
+while its bytecode stays under 460 bytes (`--max-inlined-bytecode-size`). In Node
+23's V8 12.9, over the bench's messages and worst-case shapes, main's
+`getMarkContext()` took 326 bytes and was inlined into `measureAnalysis()`; with
+the trimming loop inside, it took 519 bytes and wasn't (`--trace-turbo-inlining`),
+and Chrome 154's `prepare()` took 0.4 to 2.6% more time than main on most bench
+rows in every session, 1.8% on seen Arabic and 2.6% on letter-spaced CJK, while
+Firefox and Safari didn't move. With the loop apart, `getMarkContext()` takes 376
+bytes and is inlined again, and every Chrome row reads within noise: seen Arabic
+−0.2% and letter-spaced CJK +0.6% (#351).
 
 `layout()` needs only a count. On simple text, `countPreparedLines()` keeps just
 the line width and whether the line has content, with no line ends, pending
@@ -1333,13 +1401,14 @@ interleaved, while main's loop on the same prepared text took 1.0. Changing
 main's loop one step at a time toward it slowed only that step. Starting each
 line at 0 gave 0.87 to 1.04 there.
 
-The full walker lays out text with letter spacing, soft hyphens, controls, tabs,
-hard breaks or preserved spaces in every API. Its line state lived in variables
-its nested helpers closed over, which V8 boxes: each write cost 12-14ns there
-against about 1ns for a local, several per segment. It now keeps that state in
-locals of one function, reads each segment's kind, whether it takes letter
-spacing and whether the scan gives a break before it from one byte, and ends a
-line's walk at the next hard break instead of looking up chunk records.
+The full walker lays out text with letter spacing, soft hyphens, control segments,
+tabs, hard breaks or preserved spaces in every API, and in the line APIs text
+with a segment boundary the scan doesn't break at (below). Its line state lived
+in variables its nested helpers closed over, which V8 boxes: each write cost
+12-14ns there against about 1ns for a local, several per segment. It now keeps
+that state in locals of one function, reads each segment's kind, whether it takes
+letter spacing and whether the scan gives a break before it from one byte, and
+ends a line's walk at the next hard break instead of looking up chunk records.
 JavaScriptCore types an infinite default loop bound as a double: Bun walked
 letter-spaced and pre-wrap text 30-65% slower with one. Together these halve
 `layout()` of letter-spaced CJK in all three browsers and take pre-wrap
@@ -1349,6 +1418,66 @@ the line ends, pending breaks and paint widths the line APIs report, which a cou
 doesn't need. One walker for every text would make chat `layout()` two to seven
 times main's time, and chat's line APIs 1.4 to 7.2 times as slow as on the simple
 stepper, several of them then slower than main, so the simple walkers stay.
+
+Text of the simple walkers' kinds with a segment boundary the scan doesn't break
+at takes the full walker in the line APIs. `layout()` counts it with the simple
+stepper instead, and the full walker steps a line again where the stepper ended it
+at such a boundary, before the segment or after the space before it. On the old
+benchmark page's control row, 46 of 120 texts in the Gecko profile have one: 32
+before NEL (UAX #14 LB6), as in the Blink and WebKit scans, and 14 more after a
+space before a bidi control. Firefox leaves bidi controls out of the text runs it
+breaks (IsDiscardable, nsTextFrameUtils.cpp:32-49), so its break lands on the next
+character it keeps, after the control. While the full walker counted those texts,
+1,748 of the row's 4,049 segments, at five times the counter's cost per segment,
+Firefox's `layout()` of the row took 2.2 times the time of main before #340, which
+counted them with its counter. Stepping them, Firefox counts the row in 0.44 of
+main's time, Chrome in 0.59 and Safari, where NEL is a control segment, in 0.96.
+Against main before #340 the ratios move with what else the page runs: Firefox
+read 0.85 to 0.90 of its time at the benchmark's widths on pages of four
+libraries, 0.98 to 1.01 at a new width every pass, and about 1.07 on the full page
+of six; Chrome read 0.80 to 0.83. Paragraphs of 12 of those texts take 0.22 to
+0.24 of main's time in Firefox, 0.17 to 0.28 in Chrome and 0.97 to 0.98 in Safari.
+The other rows' `layout()` reads 0.97 to 1.04 of main's time in Chrome, 0.99 to
+1.03 in Firefox and 0.92 to 0.99 in Safari, where a second copy of main reads 0.96
+to 1.05, and preparation doesn't move either (same-document interleaved,
+foreground, two sessions per browser).
+
+Chrome's line APIs pay a little for it. Once `layout()` has counted such text with
+the simple stepper, Chrome's `walkLineRanges()` of chat messages and other simple
+text, which steps its lines with the same function, takes 2 to 4% more time than a
+second copy of main (same-document interleaved, foreground, 12 sessions over four
+page setups). The cost comes from the count sharing the stepper, by a mechanism
+not found. V8 does turn the stepper's six reads of the handle polymorphic once it
+has seen both kinds, since a `prepare()` handle has no `segments` or `kinds`
+(Node's `--log-ic`), but one shape for both kinds of handle, with those two fields
+null on a `prepare()` handle, reads the same as two shapes in Chrome, and makes
+Firefox's `walkLineRanges()` of simple text 1.01 to 1.14 of main's time, whether
+or not `layout()` steps such text, and whether the shape comes from one literal or
+from adding the two fields after it; a build with two literals holding the same
+fields takes 0.98 to 1.01. Firefox's walks swing by 10% with what else the page
+runs: with two shapes, it walks chat in 0.86 to 0.93 of main's time on a
+four-library page and 0.98 to 1.02 on the full one. A private copy of the stepper
+for the count, 77 more lines, is the only cure measured, and a few percent of JIT
+cost doesn't pay for a second stepper, so Chrome keeps it (ENGINE_FOLLOWUPS.md).
+
+A check inside the counter's loop, handing such a line to the full walker, counted
+the row as fast, but it slowed the count of all other text in Firefox and Chrome:
+up to 1.6 and 1.3 times main's time when the counter went on after the full
+walker's lines, and 5 to 26% more in Firefox when it handed the full walker the
+rest of the text or all of it, even with the hand-off after the loop. The check
+alone, with that text kept off the counter, and the counter taking that text
+without the check each cost nothing: the loop slows once the check has ever held.
+The same check in the simple stepper, which the count reaches only for that text,
+slowed Chrome's `walkLineRanges()` of other text by 4 to 5%, a little more than
+the count's own stepping costs it (above), so the count checks where each stepped
+line ended instead. Letting the stepper hand such lines off in the line APIs too
+would give the same lines, but a line whose space overflows paints the widths
+before the space summed there, and the sum after the space less the space in the
+full walker, which differ in the last bits: in 99 of 96,470 offline line checks in
+the Gecko profile. No harness prediction moves in any browser, though the harness
+compares widths exactly: the one webkit-host prediction that differed, Ethiopic
+text in a `system-ui` font list on the simple path, is one whose widths
+webkit-host moves with what the process measured before (harness/README.md).
 
 A fresh page pays to compile the whole library before its first `prepare()`. In
 Firefox 156, `new Function` over the fresh-page probe's minified bundle took 4.5 to
@@ -1385,12 +1514,12 @@ without library code showed the same split, and four extra Canvas calls per
 prepare restored the drop. Fresh text never reaches those hits. Compare submitted
 Canvas text and first cold prepares, and treat a warm-only change there as a
 cache phase until installed Safari shows it. Installed Safari 27 shows it on the
-benchmark page's Thai prose: main submitted 2,982 strings, 142 times 21, and the
-measurement part of its repeated cold prepares took 4ms in 5 of 12 page runs and
-about 15ms in the rest, while the WebKit scan's segments submit 2,978 and stayed
-near 18ms in 11 of 12. Timed around `measureText` in a foreground page, a first
-cold prepare of that text spends 20ms in Canvas with main and 15ms with the scan,
-and both fall under 1ms once the cache holds the strings.
+old benchmark page's Thai prose: main submitted 2,982 strings, 142 times 21, and
+the measurement part of its repeated cold prepares took 4ms in 5 of 12 page runs
+and about 15ms in the rest, while the WebKit scan's segments submit 2,978 and
+stayed near 18ms in 11 of 12. Timed around `measureText` in a foreground page, a
+first cold prepare of that text spends 20ms in Canvas with main and 15ms with
+the scan, and both fall under 1ms once the cache holds the strings.
 
 ## Decisions Log
 
@@ -1421,7 +1550,8 @@ reason still holds, and record the new decision here with its date.
   as Firefox's script itemizer does. It was rejected on 2026-09-16 for parity with
   Firefox's break oracle and approved under the relaxed stance: no suite or corpus
   text moves, only mixed-script strings with stray marks, and it removed 189 runtime
-  lines. Firefox 156 sides with the splits on those strings (VALIDATION.md).
+  lines. Firefox 156 sides with the splits on those strings
+  (`tests/wrapping/VALIDATION.md` at 6fadbe5).
 - **2026-09-24: there is no `glue` kind.** Runs of only no-break characters (NBSP,
   U+2007, U+202F, word joiner, U+FEFF) are text, so they take emergency breaks where
   browsers do; the scans already decide where they break, so the kind was only a
@@ -1432,7 +1562,7 @@ reason still holds, and record the new decision here with its date.
   follows the page language, and no locale changes the word boundaries Pretext reads
   in Thai, Lao, Khmer and Myanmar text, under 20 locales in V8 and JavaScriptCore.
   Removing it, or making it a language input for Safari's families or an element's
-  own `lang`, waits for the end of the project.
+  own `lang`, waits for the end of the project. Replaced on 2026-09-26, below.
 - **2026-09-24: Pretext finds grapheme clusters itself, fixed to Unicode 17.**
   Emergency breaks, letter spacing, emoji correction, line text and the Gecko scan's
   clusters come from Chrome 153's and libicucore 78.1's ICU character rules
@@ -1462,3 +1592,36 @@ reason still holds, and record the new decision here with its date.
 - **2026-09-24: the engine tables land before the new test harness**, judged by
   main's installed gate, the real-text sets and an attribution of every lost row.
   The harness replaces `tests/wrapping` and its snapshots in its own change.
+- **2026-09-25: a prepared handle needn't survive a JSON round trip.** Its
+  per-segment flags are a `Uint8Array`, which `JSON.stringify()` turns into an
+  object without a `length`, so the line walkers never finish on a JSON copy.
+  `structuredClone()` and `postMessage()` copies work, README calls the handle
+  opaque, and the offline invariants (`harness/invariants.ts`) copy handles with
+  `structuredClone()`. Cursors and ranges are plain JSON and resume the same from
+  a JSON copy.
+- **2026-09-25: the old wrapping suite, its snapshots and its diagnostic tools
+  are gone.** Browser-accuracy claims rest on the harness's recordings and
+  accepted lists. main's catalog, rich and oracle cases were taken once and stay
+  frozen, since their generator went with the suite. The font and Arabic joining
+  probes measure browsers, not `src/`, so they still run from 6fadbe5, a commit
+  from before their removal. Speed rests on same-document ratios from
+  `bun harness bench` in PR descriptions, with nothing timed checked in. The
+  benchmark page and `benchmarks/*.json` went once the bench's noise floors were
+  calibrated and it called a known change: 217c84b8's `src/` against 6d1d2106's
+  reads slower on letter-spaced CJK, soft hyphen, control and pre-wrap layout
+  and faster on seen CJK in all three browsers (Reading Browser Output).
+- **2026-09-26: `setLocale()` sets the language again**, the one preparation reads
+  in place of `<html lang>` for its break rules and measurement context, since it is
+  the only way to give a worker the page's language: a worker has no `<html lang>`.
+  An empty locale is a page's without a language, and `setLocale()` without one reads
+  `<html lang>` again. It still clears the caches, and prepared handles keep what
+  they have. A context with a `lang`, as in Chrome and Firefox, takes the language,
+  since it would follow the page's otherwise; `bun harness equal` moved no case in
+  either. An element's own `lang` still waits for the end of the project.
+- **2026-09-26: engines Pretext doesn't recognize take Blink's whole profile**, as
+  the docs already said. Three fields had differed: the discretionary hyphen took its
+  own letter spacing, a line whose hyphen didn't fit kept it, and on a desktop system
+  a line starting inside a segment holding a default-ignorable code point had no
+  entry geometry, where desktop Chrome fits the segment's rest by its fresh width.
+  Only unrecognized user agents move, such as Samsung TV web views, and the third
+  only on desktop ones.

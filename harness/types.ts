@@ -77,11 +77,13 @@ export type PredictedLine = { start: number; end: number; width: number }
 export type Status = 'pass' | 'count' | 'breaks' | 'error'
 export type Failure = Exclude<Status, 'pass'>
 
-// What a library build predicted: the walk's lines (predict.ts), the measureText calls made while preparing and while
-// the line APIs ran (they should make none), and the first way another line API disagrees with the walk, or null.
+// What a library build predicted: the walk's lines (predict.ts), a 32-bit hash of their text (of their fragments' for a
+// rich case; older adapters send none), the measureText calls made while preparing and while the line
+// APIs ran (they should make none), the UTF-16 units submitted while preparing, and the first way another line API
+// disagrees with the walk, or null.
 // `unsupported`: the adapter can't express the case. `error`: the library threw.
 export type Prediction =
-  | { lines: PredictedLine[]; prepareCalls: number; lineCalls: number; disagreement: string | null }
+  | { lines: PredictedLine[]; textHash?: number; prepareCalls: number; prepareUnits: number; lineCalls: number; disagreement: string | null }
   | { unsupported: string }
   | { error: string }
 
