@@ -1268,7 +1268,7 @@ private copies: `~/github/browser-engines/apps/Google Chrome 153.0.8010.50.app` 
 (`browser-build.ts` `LAB_APPS`). `bash rebuild/lab/pin-browser.sh chrome|firefox` makes a copy with `ditto`, which clones
 the files on APFS, so a copy costs no disk until the installed app changes. It hashes both trees (every file's path and
 sha256, every link's target), refuses a copy that differs, and writes the hash beside the copy as `<copy>.tree-sha256`. The
-installed apps aren't touched, the copies aren't edited, and both copies launch through `open -n -g -a` like the installed
+installed apps aren't touched, the copies aren't edited but for Firefox's update policy (below), and both copies launch through `open -n -g -a` like the installed
 apps did. `run.json` and the probe outputs record the app path and the tree hash (`app`), and rows keep `build` as before,
 so rows of a pinned run and of the installed app at the same build still meet (`score.ts --native-rows` compares `build`).
 In the pinned Chrome all 2,580 `runs` cases give the native observations the installed .50 gave in round 2, and the same
@@ -1285,6 +1285,11 @@ holds for Firefox.
   takes the `appUpdate` policy only from the bundle or the system (`UpdateServiceStub.sys.mjs` `updateDisabled`, Firefox
   156), so the lab's profiles set `app.update.auto` and `app.update.staging.enabled` to false (`FIREFOX_PIN_PREFS`); on
   macOS `app.update.auto` is an ordinary pref. The probe runner's sessions also run under Firefox's automation prefs.
+  Those prefs don't cover a launch under another profile: after a crash on 2026-09-25 macOS reopened the 156.0 copy at
+  login under the default profile, and Firefox updated the copy to 156.0.1. So `pin-browser.sh firefox` also writes
+  `Contents/Resources/distribution/policies.json` with `DisableAppUpdate` into the copy, and the copy's tree hash includes
+  it; the check against the installed bundle leaves it out. The file breaks the bundle's resource seal (`codesign
+  --verify` fails), and the copy, which carries no quarantine, still launches through `open -n -g -a`.
 - `LAB_CHROME_APP=<bundle>` and `LAB_FIREFOX_APP=<bundle>` name another bundle for one command, to try a new release
   before moving the pin. A new release gets a new copy and a new path in `LAB_APPS` (rebuild/TESTS.md §12). The bundle may
   be a Chrome for Testing build: the driver launches the bundle's `CFBundleExecutable`, and rows record that name as
