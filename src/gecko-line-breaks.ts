@@ -35,7 +35,7 @@ import {
 } from './generated/engine-break-data.js'
 import { getParagraphLevels } from './gecko-bidi-levels.js'
 import { findGraphemeEnds } from './graphemes.js'
-import { getBreakLanguage, getSmallTrieValue, unpackTable, unpackUint32Table } from './line-breaks.js'
+import { BREAK as OPPORTUNITY, CLUSTER_START, SOFT_HYPHEN_BREAK, getBreakLanguage, getSmallTrieValue, getWordSegmenter, unpackTable, unpackUint32Table } from './line-breaks.js'
 
 const CH_SHY = 0x00ad
 
@@ -62,7 +62,7 @@ function codePointFlag(pattern: RegExp): (cp: number) => boolean {
 
 const isMark = codePointFlag(/^\p{M}$/u)
 const isPunctuation = codePointFlag(/^\p{P}$/u)
-export const isDefaultIgnorable = codePointFlag(/^\p{Default_Ignorable_Code_Point}$/u)
+const isDefaultIgnorable = codePointFlag(/^\p{Default_Ignorable_Code_Point}$/u)
 const isEmoji = codePointFlag(/^\p{Emoji}$/u)
 const isHangul = codePointFlag(/^\p{sc=Hangul}$/u)
 
@@ -122,12 +122,12 @@ function isEastAsianWidthFHWExcludingEmoji(cp: number): boolean {
 }
 
 // nsUnicharUtils.cpp:500-504
-export function isSegmentBreakSkipChar(cp: number): boolean {
+function isSegmentBreakSkipChar(cp: number): boolean {
   return isEastAsianWidthFHWExcludingEmoji(cp) && !isHangul(cp) && cp !== 0x20a9
 }
 
 // nsUnicharUtils.cpp:506-527, with UnicodeProperties.h:187-199
-export function isEastAsianPunctuation(cp: number): boolean {
+function isEastAsianPunctuation(cp: number): boolean {
   return getEastAsianWidth(cp) !== 0 && ((isPunctuation(cp) && cp !== 0x20a9) || cp === 0xff5e || cp === 0x3000)
 }
 
@@ -142,7 +142,7 @@ function isInvalidChar(ch: number): boolean {
 
 // --- 1. TransformText (nsTextFrameUtils.cpp:84-401) ---
 
-type Transformed = { text: string, units: Uint16Array, orig: Int32Array, skipped: Uint8Array }
+type Transformed = { text: string, orig: Int32Array, skipped: Uint8Array }
 
 // IsDiscardable, nsTextFrameUtils.cpp:32-49
 export function isDiscardable(ch: number, is8bit: boolean): boolean {
@@ -190,9 +190,8 @@ export function isEastAsianSegmentBreak(text: string, start: number, end: number
     (japaneseOrChinese && (isEastAsianPunctuation(before) || isEastAsianPunctuation(after)))
 }
 
-function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserveWhiteSpace: boolean): Transformed {
-  const len = raw.length
-  const units = new Uint16Array(len)
+function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boolean): Transformed {
+  const len = input.length
   const orig = new Int32Array(len)
   const skipped = new Uint8Array(len)
   let n = 0
@@ -201,10 +200,9 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
   let sliceStart = 0
   let sliceEnd = 0
   const keep = (i: number, ch: number) => {
-    units[n] = ch
     orig[n] = i
     n++
-    if (ch !== raw[i]) {
+    if (ch !== input.charCodeAt(i)) {
       text += input.slice(sliceStart, sliceEnd) + ' '
       sliceStart = sliceEnd = i + 1
     } else if (i !== sliceEnd) {
@@ -219,7 +217,7 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
   if (preserveWhiteSpace) {
     // COMPRESS_NONE, nsTextFrameUtils.cpp:222-271
     for (let i = 0; i < len; i++) {
-      const ch = raw[i]!
+      const ch = input.charCodeAt(i)
       if (isDiscardable(ch, is8bit)) skipped[i] = 1
       else keep(i, ch)
     }
@@ -231,7 +229,7 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
     // src/analysis.ts), so a run keeps one space.
     const transformWhiteSpaces = (begin: number, end: number, hasSegmentBreak: boolean) => {
       for (let i = begin; i < end; i++) {
-        const ch = raw[i]!
+        const ch = input.charCodeAt(i)
         if (isDiscardable(ch, is8bit)) { skipped[i] = 1; continue }
         // A space or tab in a run with a segment break goes (:152-162), and the run's first
         // segment break stays as a space (:181-193).
@@ -242,7 +240,7 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
     }
     let i = 0
     while (i < len) {
-      const ch = raw[i]!
+      const ch = input.charCodeAt(i)
       if (!isSpaceOrTabOrSegmentBreak(ch) && !isDiscardable(ch, is8bit)) {
         keep(i, ch)
         inWhitespace = false
@@ -254,12 +252,12 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
         let hasSegmentBreak = ch === 0x0a
         let trailingDiscardables = 0
         let j = i + 1
-        while (j < len && (isSpaceOrTabOrSegmentBreak(raw[j]!) || isDiscardable(raw[j]!, is8bit))) {
-          if (raw[j] === 0x0a) hasSegmentBreak = true
+        while (j < len && (isSpaceOrTabOrSegmentBreak(input.charCodeAt(j)) || isDiscardable(input.charCodeAt(j), is8bit))) {
+          if (input.charCodeAt(j) === 0x0a) hasSegmentBreak = true
           j++
         }
-        while (isDiscardable(raw[j - 1]!, is8bit)) { j--; trailingDiscardables++ } // :334-336
-        if (!is8bit && raw[j - 1] === 0x20 && j < len && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
+        while (isDiscardable(input.charCodeAt(j - 1), is8bit)) { j--; trailingDiscardables++ } // :334-336
+        if (!is8bit && input.charCodeAt(j - 1) === 0x20 && j < len && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
         if (j > i) transformWhiteSpaces(i, j, hasSegmentBreak)
         if (keepLastSpace) { keep(j, 0x20); j++ }
         for (let k = 0; k < trailingDiscardables; k++) { skipped[j] = 1; j++ }
@@ -272,7 +270,7 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
     }
   }
   text += input.slice(sliceStart, sliceEnd)
-  return { text, units: units.subarray(0, n), orig: orig.subarray(0, n), skipped }
+  return { text, orig: orig.subarray(0, n), skipped }
 }
 
 // IsTrimmableSpace, nsTextFrame.cpp:921-942, in normal white space.
@@ -316,18 +314,18 @@ function replaceSeparator(u: number): number {
 // :1043-1053, Bidi::GetLogicalRun intl/components/src/Bidi.cpp:165-183). A left-to-right block
 // resolves bidi only for 16-bit text with right-to-left characters (Resolve :790-854,
 // ChildListMayRequireBidi :1467-1475).
-function getBidiRunStarts(raw: Uint16Array, preserveWhiteSpace: boolean): number[] {
+function getBidiRunStarts(source: string, preserveWhiteSpace: boolean): number[] {
   const starts: number[] = []
   let requires = false
-  for (let i = 0; i < raw.length && !requires; i++) requires = isUtf16CodeUnitBidi(raw[i]!)
+  for (let i = 0; i < source.length && !requires; i++) requires = isUtf16CodeUnitBidi(source.charCodeAt(i))
   if (!requires) return starts
   // Pre-wrap text resolves one line at a time, each ending after its LF (:1262-1357, :1089-1098).
-  for (let start = 0; start < raw.length;) {
-    let end = preserveWhiteSpace ? raw.indexOf(0x0a, start) + 1 : raw.length
-    if (end === 0) end = raw.length
+  for (let start = 0; start < source.length;) {
+    let end = preserveWhiteSpace ? source.indexOf('\n', start) + 1 : source.length
+    if (end === 0) end = source.length
     if (start > 0) starts.push(start)
     const paragraph = new Uint16Array(end - start)
-    for (let i = 0; i < paragraph.length; i++) paragraph[i] = replaceSeparator(raw[start + i]!)
+    for (let i = 0; i < paragraph.length; i++) paragraph[i] = replaceSeparator(source.charCodeAt(start + i))
     const levels = getParagraphLevels(paragraph)
     for (let i = 1; i < paragraph.length; i++) if (levels[i] !== levels[i - 1]) starts.push(start + i)
     start = end
@@ -353,17 +351,17 @@ function extendCluster(g: Glyphs, i: number): void {
 // reads the word alone (intl/lwbrk/Segmenter.cpp:174-187). Below U+0300 only CR and LF share a
 // cluster, which the generator checks, and words hold neither, so a word of such units has a
 // cluster at every unit. `ends` has room for the word's clusters.
-function setupClusterBoundaries(g: Glyphs, text: string, units: Uint16Array, from: number, to: number, graphemeTable: CharTable, ends: Int32Array): void {
-  let ch0 = units[from]!
-  if (to - from > 1 && isSurrogatePair(ch0, units[from + 1]!)) ch0 = combine(ch0, units[from + 1]!)
+function setupClusterBoundaries(g: Glyphs, text: string, from: number, to: number, graphemeTable: CharTable, ends: Int32Array): void {
+  let ch0 = text.charCodeAt(from)
+  if (to - from > 1 && isSurrogatePair(ch0, text.charCodeAt(from + 1))) ch0 = combine(ch0, text.charCodeAt(from + 1))
   if (isClusterExtender(ch0)) extendCluster(g, from)
   let low = from
-  while (low < to && units[low]! < 0x300) low++
+  while (low < to && text.charCodeAt(low) < 0x300) low++
   const count = low === to ? 0 : findGraphemeEnds(graphemeTable, text, from, to, ends)
   for (let k = 0, pos = from; pos < to; k++) {
-    const ch = units[pos]!
+    const ch = text.charCodeAt(pos)
     if (ch === 0x20 || ch === 0x3000) g.isSpace[pos] = 1
-    else if (ch === 0x09af && pos > from && units[pos - 1] === 0x09cd) extendCluster(g, pos) // BENGALI_YA after BENGALI_VIRAMA
+    else if (ch === 0x09af && pos > from && text.charCodeAt(pos - 1) === 0x09cd) extendCluster(g, pos) // BENGALI_YA after BENGALI_VIRAMA
     const end = count === 0 ? pos + 1 : ends[k]!
     for (pos++; pos < end; pos++) extendCluster(g, pos)
   }
@@ -374,17 +372,17 @@ function setupClusterBoundaries(g: Glyphs, text: string, units: Uint16Array, fro
 // character (:3877-3892) keeps a zero record. Below U+0100, IsBoundarySpace (:3317-3330) and
 // SetupClusterBoundaries(uint8_t) (gfxFont.cpp:771-795) answer as the char16_t versions, so 8-bit
 // text and 8-bit words take the char16_t path, at any word length (:3569-3577, :3817-3821).
-function splitAndInitTextRun(g: Glyphs, text: string, units: Uint16Array, start: number, end: number, graphemeTable: CharTable, ends: Int32Array): void {
+function splitAndInitTextRun(g: Glyphs, text: string, start: number, end: number, graphemeTable: CharTable, ends: Int32Array): void {
   let wordStart = start
   for (let i = start; i < end; i++) {
-    const ch = units[i]!
-    const boundary = (ch === 0x20 || ch === 0xa0) && !(i + 1 < end && isClusterExtender(units[i + 1]!))
+    const ch = text.charCodeAt(i)
+    const boundary = (ch === 0x20 || ch === 0xa0) && !(i + 1 < end && isClusterExtender(text.charCodeAt(i + 1)))
     if (!boundary && !isInvalidChar(ch)) continue
-    if (i > wordStart) setupClusterBoundaries(g, text, units, wordStart, i, graphemeTable, ends)
+    if (i > wordStart) setupClusterBoundaries(g, text, wordStart, i, graphemeTable, ends)
     if (ch === 0x20) g.isSpace[i] = 1
     wordStart = i + 1
   }
-  if (end > wordStart) setupClusterBoundaries(g, text, units, wordStart, end, graphemeTable, ends)
+  if (end > wordStart) setupClusterBoundaries(g, text, wordStart, end, graphemeTable, ends)
 }
 
 // --- 4. ICU4X 2.1.2's line iterator for one word (icu_segmenter src/line.rs) ---
@@ -429,7 +427,7 @@ function getComplexLanguage(u: number): number {
 // complex_language_segment_utf16 (complex/mod.rs:135-156): splits a run of SA code units by
 // language, and Intl.Segmenter words supply boundaries inside each Thai, Lao, Burmese and Khmer
 // slice. Every slice reports its end; other languages report nothing else (:149-151).
-function segmentComplex(units: number[], getWordSegmenter: () => Intl.Segmenter): number[] {
+function segmentComplex(units: number[]): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
     const language = getComplexLanguage(units[i]!)
@@ -459,16 +457,18 @@ type LineBreakIterator = {
   readonly base: number
   len: number
   readonly keepAll: boolean
-  readonly getWordSegmenter: () => Intl.Segmenter
   // Utf16Indices front_offset and current_pos_data (line.rs:821-823).
   front: number
   curPos: number
   curCp: number
+  // Break points cached by a complex-script run, each less `cacheOffset`, from `cacheAt`.
   cache: number[]
+  cacheAt: number
+  cacheOffset: number
 }
 
-function createLineBreakIterator(text: string, start: number, end: number, keepAll: boolean, getWordSegmenter: () => Intl.Segmenter): LineBreakIterator {
-  return { text, base: start, len: end - start, keepAll, getWordSegmenter, front: 0, curPos: -1, curCp: 0, cache: [] }
+function createLineBreakIterator(text: string, start: number, end: number, keepAll: boolean): LineBreakIterator {
+  return { text, base: start, len: end - start, keepAll, front: 0, curPos: -1, curCp: 0, cache: [], cacheAt: 0, cacheOffset: 0 }
 }
 
 // advance_iter (line.rs:1077-1079), Utf16Indices::next (indices.rs:58-83).
@@ -498,19 +498,18 @@ function nextLineBreak(it: LineBreakIterator): number {
   }
 
   // Break points cached by a complex-script run (:840-855).
-  if (it.cache.length > 0) {
-    const firstPos = it.cache[0]!
+  if (it.cacheAt < it.cache.length) {
+    const firstPos = it.cache[it.cacheAt]! - it.cacheOffset
     let i = 0
     for (;;) {
       if (i === firstPos) {
-        const rest: number[] = []
-        for (let k = 1; k < it.cache.length; k++) rest.push(it.cache[k]! - i)
-        it.cache = rest
+        it.cacheAt++
+        it.cacheOffset += i
         return it.curPos
       }
       i += it.curCp >= 0x10000 ? 2 : 1 // Utf16::char_len (rule_segmenter.rs:335-341)
       advanceLineIterator(it)
-      if (it.curPos < 0) { it.cache = []; return it.len }
+      if (it.curPos < 0) { it.cacheAt = it.cache.length; return it.len }
     }
   }
 
@@ -624,20 +623,21 @@ function handleComplexLanguage(it: LineBreakIterator, leftCodepoint: number): nu
     if (it.curPos < 0 || getLineBreakClass(it.curCp) !== SA) break
   }
   it.front = startFront; it.curPos = startPos; it.curCp = startCp
-  it.cache = segmentComplex(units, it.getWordSegmenter)
+  it.cache = segmentComplex(units)
+  it.cacheAt = 0
+  it.cacheOffset = 0
   if (it.cache.length === 0) return -1
   const firstPos = it.cache[0]!
   let i = 1
   for (;;) {
     if (i === firstPos) {
-      const rest: number[] = []
-      for (let k = 1; k < it.cache.length; k++) rest.push(it.cache[k]! - i)
-      it.cache = rest
+      it.cacheAt = 1
+      it.cacheOffset = i
       return it.curPos
     }
     i += 1
     advanceLineIterator(it)
-    if (it.curPos < 0) { it.cache = []; return it.len }
+    if (it.curPos < 0) { it.cacheAt = it.cache.length; return it.len }
   }
 }
 
@@ -659,14 +659,14 @@ const NON_BREAKABLE_ASCII = new Uint8Array([
 // word's FlushCurrentWord from Reset (nsLineBreaker.cpp:134-226, 710-720). Each word of more than
 // ASCII letters goes to LineBreaker::ComputeBreakPositions (intl/lwbrk/LineBreaker.cpp:112-194),
 // which keeps the state before its first unit (AutoRestore, :342, :604; skipSet = 1, :200-206).
-function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, afterLeadingWhitespace: boolean, keepAll: boolean, getWordSegmenter: () => Intl.Segmenter): Uint8Array {
-  const len = units.length
+function getBreakStates(text: string, is8bit: boolean, afterLeadingWhitespace: boolean, keepAll: boolean): Uint8Array {
+  const len = text.length
   const state = new Uint8Array(len)
   let afterBreakableSpace = afterLeadingWhitespace
   let wordStart = 0
   let wordMightBeBreakable = false
   for (let offset = 0; offset <= len; offset++) {
-    const ch = offset < len ? units[offset]! : -1
+    const ch = offset < len ? text.charCodeAt(offset) : -1
     // nsLineBreaker::IsSegmentSpace, nsLineBreaker.h:260-264
     const isSpace = ch === 0x20 || ch === 0x09 || ch === 0x0d
     if (afterBreakableSpace && !isSpace && ch >= 0) state[offset] = 1
@@ -678,7 +678,7 @@ function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, after
     }
     if (offset > wordStart && wordMightBeBreakable) {
       const saved = state[wordStart]!
-      const iterator = createLineBreakIterator(text, wordStart, offset, keepAll, getWordSegmenter)
+      const iterator = createLineBreakIterator(text, wordStart, offset, keepAll)
       for (let pos = nextLineBreak(iterator); pos >= 0 && pos < offset - wordStart; pos = nextLineBreak(iterator)) state[wordStart + pos] = 1
       state[wordStart] = saved
     }
@@ -700,26 +700,20 @@ export function getGeckoLineBreaks(
   preserveWhiteSpace: boolean,
   keepAll: boolean,
   graphemeTable: CharTable,
-  getWordSegmenter: () => Intl.Segmenter,
 ): Uint8Array {
   const len = source.length
   const flags = new Uint8Array(len + 1)
   if (len === 0) return flags
-  const raw = new Uint16Array(len)
   let is8bit = true
-  for (let i = 0; i < len; i++) {
-    const u = source.charCodeAt(i)
-    raw[i] = u
-    if (u >= 0x100) is8bit = false
-  }
+  for (let i = 0; i < len && is8bit; i++) is8bit = source.charCodeAt(i) < 0x100
   // CharacterDataBuffer::SetTo stores 1b text when every unit is below 256 (CharacterDataBuffer.cpp:235-286).
-  const tr = transformText(source, raw, is8bit, preserveWhiteSpace)
-  const n = tr.units.length
+  const tr = transformText(source, is8bit, preserveWhiteSpace)
+  const n = tr.text.length
   if (n === 0) return flags
 
   // The text run is built before the break sinks are set up (nsTextFrame.cpp:2860-2864).
   const runStarts = [0]
-  const bidiRunStarts = is8bit ? [] : getBidiRunStarts(raw, preserveWhiteSpace)
+  const bidiRunStarts = is8bit ? [] : getBidiRunStarts(source, preserveWhiteSpace)
   for (let k = 0; k < bidiRunStarts.length; k++) {
     let lo = 0, hi = n // partition_point(orig < start)
     while (lo < hi) {
@@ -731,18 +725,18 @@ export function getGeckoLineBreaks(
   }
   const g: Glyphs = { clusterStart: new Uint8Array(n).fill(1), isSpace: new Uint8Array(n) }
   const ends = new Int32Array(n)
-  for (let k = 0; k < runStarts.length; k++) splitAndInitTextRun(g, tr.text, tr.units, runStarts[k]!, k + 1 < runStarts.length ? runStarts[k + 1]! : n, graphemeTable, ends)
+  for (let k = 0; k < runStarts.length; k++) splitAndInitTextRun(g, tr.text, runStarts[k]!, k + 1 < runStarts.length ? runStarts[k + 1]! : n, graphemeTable, ends)
   for (let k = 0; k < runStarts.length; k++) g.clusterStart[runStarts[k]!] = 1 // gfxTextRun.cpp:2828-2835
 
-  const state = getBreakStates(tr.text, tr.units, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll, getWordSegmenter)
+  const state = getBreakStates(tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
     const rawPos = tr.orig[t]!
     const normal = state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)
-    const afterSoftHyphen = tr.skipped[rawPos - 1] === 1 && raw[rawPos - 1] === CH_SHY
+    const afterSoftHyphen = tr.skipped[rawPos - 1] === 1 && source.charCodeAt(rawPos - 1) === CH_SHY
     if (normal || afterSoftHyphen) {
-      flags[rawPos] = normal && afterSoftHyphen ? 3 : 1
+      flags[rawPos] = normal && afterSoftHyphen ? OPPORTUNITY | SOFT_HYPHEN_BREAK : OPPORTUNITY
     } else if (g.clusterStart[t] === 1) {
-      flags[rawPos] = 2
+      flags[rawPos] = CLUSTER_START
     }
   }
   return flags

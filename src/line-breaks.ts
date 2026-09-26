@@ -25,8 +25,8 @@
 // - Blink restarts ICU at each line start, which drops the context before the line
 //   (tbi.h:159-163, tbi_icu.cc:771-810). These scans read each text once.
 // - Chrome opens line_normal_cj.brk for zh content, and for content without a language
-//   under a Chinese UI. The scan takes the page language, and on a page without one the
-//   language V8 shows as its default locale, which is Chrome's UI language (getBlinkLineBreaks).
+//   under a Chinese UI. The scan takes preparation's language, which on a page without one
+//   is the language V8 shows as its default locale, Chrome's UI language (getBlinkLineBreaks).
 //   Content-Language headers and an element's own lang aren't read.
 // - WebKit splits items where bidi levels change (IIB:637-775), and swaps a Han-script
 //   locale for the user's first Chinese language (FontDescription.cpp:74-83, 107-113).
@@ -40,9 +40,18 @@ import {
   type LineTable,
 } from './generated/engine-break-data.js'
 
+// What a scan marks at a position of its text, as bits. A line may start at a BREAK. The WebKit
+// scan marks a FORCED_BREAK after a U+2028 or U+2029 that starts an item; the Gecko scan marks a
+// CLUSTER_START where a cluster starts without a break, and a SOFT_HYPHEN_BREAK with the BREAK
+// right after a soft hyphen.
+export const BREAK = 1
+export const CLUSTER_START = 2
+export const FORCED_BREAK = 4
+export const SOFT_HYPHEN_BREAK = 8
+
 // Page languages whose line-break rules differ in some engine. Every other
 // language, an empty or missing one, and no document read as root.
-export type BreakLanguage = 'root' | 'ja' | 'ko' | 'zh'
+type BreakLanguage = 'root' | 'ja' | 'ko' | 'zh'
 
 // The primary language subtag, ASCII case-insensitively, up to `-`, `_` or the
 // end. No allocation: preparation calls this once per text.
@@ -60,8 +69,8 @@ export function getBreakLanguage(tag: string | null): BreakLanguage {
 // The generated tables ship packed, in base64: the unpacked length, then runs of literal bytes,
 // each followed by a copy of earlier bytes (length - 4, then distance back), every count a
 // little-endian base-128 varint. A copy may reach back into a dictionary, another table's bytes.
-// Packing keeps the tables a page parses small; a page unpacks only its engine's tables and the
-// ones they pack against, once.
+// Packing keeps the tables a page parses small; a page unpacks only its engine's tables and, for
+// each, the tables it packs against.
 export function unpackTable(packed: string, dictionary: Uint8Array | null = null): Uint8Array {
   const input = atob(packed)
   let at = 0
@@ -100,13 +109,25 @@ export function unpackUint32Table(packed: string): Uint32Array {
   return new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.length >> 2)
 }
 
+// The scans read word boundaries only inside runs of Thai, Lao, Khmer and Myanmar
+// letters, where no locale changes them. They ask for the segmenter only when such a
+// run shows up (Chrome's and Safari's scans also in Tai Le, New Tai Lue, Tai Tham, Tai
+// Viet and Ahom runs), so other text prepares without Intl.Segmenter.
+let wordSegmenter: Intl.Segmenter | null = null
+
+export function getWordSegmenter(): Intl.Segmenter {
+  return wordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+}
+
+export function clearWordSegmenter(): void {
+  wordSegmenter = null
+}
+
 // --- ICU's rule-based iterator over compiled line rules ---
 
-const DONE = -1
 const START_STATE = 1 // rbbi.cpp:48
 const STOP_STATE = 0 // rbbi.cpp:51
 const ACCEPTING_UNCONDITIONAL = 1 // rbbidata.h:127
-const RBBI_BOF_REQUIRED = 2 // rbbidata.h:151
 const RBBI_8BITS_ROWS = 4 // rbbidata.h:152
 
 export type BreakRules = {
@@ -116,7 +137,6 @@ export type BreakRules = {
   rowWidth: number
   rows: Uint16Array
   lookAheadResultsSize: number
-  statusTable: Int32Array
   trieIndex: Uint16Array
   trieData: Uint16Array
   trieDataLength: number
@@ -130,8 +150,6 @@ function copyU16(bytes: Uint8Array, offset: number, count: number): Uint16Array 
   return out
 }
 
-// Compiled rules without the data package header: RBBIDataHeader (rbbidata.h:67-94),
-// checked as rbbidata.cpp:69-71 does, then the tables it points to.
 // A trie's data index past its fast range and below its high start: ucptrie_internalSmallIndex
 // (ucptrie.cpp:161-185) and ICU4X's internal_small_index (icu_collections 2.1.1
 // cptrie.rs:433-500), with SHIFT_1 14, SHIFT_2 9, SHIFT_3 4 and 5-bit masks.
@@ -158,14 +176,14 @@ export function getSmallTrieValue(index: Uint16Array, data: Uint8Array, highStar
   return data[getTrieDataIndex(index, 64, c)]!
 }
 
+// Compiled rules without the data package header: RBBIDataHeader (rbbidata.h:67-94),
+// checked as rbbidata.cpp:69-71 does, then the tables it points to.
 export function parseBreakRules(bytes: Uint8Array): BreakRules {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (view.getUint32(0, true) !== 0xb1a0 || bytes[4] !== 6) throw new Error('Expected ICU break rules, format 6')
   const catCount = view.getUint32(12, true)
   const table = view.getUint32(16, true)
   const trie = view.getUint32(32, true)
-  const statusOffset = view.getUint32(48, true)
-  const statusLength = view.getUint32(52, true)
 
   // RBBIStateTable, rbbidata.h:134-148: five uint32 fields, then rows of fAccepting,
   // fLookAhead, fTagsIdx and fNextState[catCount], 8 or 16 bits each (rbbidata.h:98-125).
@@ -200,11 +218,8 @@ export function parseBreakRules(bytes: Uint8Array): BreakRules {
     ? copyU16(bytes, dataStart, trieDataLength)
     : Uint16Array.from(bytes.subarray(dataStart, dataStart + trieDataLength))
 
-  const statusTable = new Int32Array(statusLength / 4) // rbbidata.cpp:133-134
-  new Uint8Array(statusTable.buffer).set(bytes.subarray(statusOffset, statusOffset + statusLength))
-
   return {
-    catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize, statusTable,
+    catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize,
     trieIndex, trieData, trieDataLength, trieHighStart,
   }
 }
@@ -218,127 +233,99 @@ export function getCategory(rules: BreakRules, c: number): number {
   return rules.trieData[getTrieDataIndex(index, 1020, c)]!
 }
 
-const RUN = 0
-const START = 1
-const END = 2
+// Apple's quotation remap for a locale: code points the line rules read as another category
+// (apple-rbbi.cpp:1061-1084).
+type CategoryOverrides = { readonly chars: readonly number[], readonly categories: readonly number[] }
+const NO_OVERRIDES: CategoryOverrides = { chars: [], categories: [] }
 
-// The state ICU's RuleBasedBreakIterator keeps over one text.
-type RuleBreakIterator = {
-  readonly rules: BreakRules
-  // Characters in dictionary categories since the last boundary (rbbi.cpp:854), which
-  // is when ICU would hand the segment to a dictionary (rbbi_cache.cpp:486-489).
-  dictionaryCharCount: number
-  text: string
-  position: number
-  // ICU allocates the look-ahead slots uninitialized (rbbi.cpp:122-129) and never
-  // resets them between calls. These start at -1.
-  readonly lookAheadMatches: Int32Array
-  readonly overrideChars: readonly number[]
-  readonly overrideCategories: readonly number[]
-}
-
-export function createRuleBreakIterator(rules: BreakRules, overrideChars: readonly number[] = [], overrideCategories: readonly number[] = []): RuleBreakIterator {
-  return {
-    rules,
-    dictionaryCharCount: 0,
-    text: '',
-    position: 0,
-    lookAheadMatches: new Int32Array(rules.lookAheadResultsSize).fill(-1),
-    overrideChars,
-    overrideCategories,
-  }
-}
-
-// handleNext(), rbbi.cpp:779-952: the next boundary, or DONE at the end of the text.
-// The text is read like utext_next32() over UTF-16 (utext.cpp:272-308), with
-// unpaired surrogates as code points.
-export function nextRuleBoundary(iterator: RuleBreakIterator): number {
-  const r = iterator.rules
+// ICU's handleNext() (rbbi.cpp:779-952) from each boundary to the next over the whole text:
+// flags[b] = 1 at every boundary 0 < b <= text.length, and at Intl.Segmenter word boundaries
+// strictly inside each run of dictionary characters of a segment that ICU would give to a
+// dictionary: one with a character in a dictionary category since its start (rbbi.cpp:854,
+// rbbi_cache.cpp:486-489). The line rules say $dictionary = [$SA]. The text is read like
+// utext_next32() over UTF-16 (utext.cpp:272-308), with unpaired surrogates as code points. ICU
+// allocates the look-ahead slots uninitialized (rbbi.cpp:122-129) and never resets them between
+// calls, since the rules read a slot only after setting it; here they start at -1 for each text.
+export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Array, overrides: CategoryOverrides = NO_OVERRIDES): void {
   const rows = r.rows
   const width = r.rowWidth
   const dictionaryStart = r.dictCategoriesStart
-  const text = iterator.text
   const length = text.length
-  const matches = iterator.lookAheadMatches
-  const overrideChars = iterator.overrideChars
+  const matches = new Int32Array(r.lookAheadResultsSize).fill(-1)
+  const overrideChars = overrides.chars
   const overrideCount = overrideChars.length
 
-  iterator.dictionaryCharCount = 0
-  const initialPosition = iterator.position
-  let result = initialPosition
-  if (initialPosition >= length) return DONE // rbbi.cpp:809-813
-
-  let pos = initialPosition
-  let c = text.charCodeAt(pos++)
-  if ((c & 0xfc00) === 0xd800 && pos < length) {
-    const trail = text.charCodeAt(pos)
-    if ((trail & 0xfc00) === 0xdc00) { pos++; c = ((c - 0xd800) << 10) + trail - 0xdc00 + 0x10000 }
-  }
-  let atEnd = false
-  let state = START_STATE
-  let row = state * width
-  let mode = RUN
-  let category = 0
-  if ((r.flags & RBBI_BOF_REQUIRED) !== 0) { category = 2; mode = START } // rbbi.cpp:823-826
-
-  for (;;) {
-    if (atEnd) { // rbbi.cpp:832-843
-      if (mode === END) break
-      mode = END
-      category = 1
+  for (let start = 0; start < length;) { // rbbi.cpp:809-813
+    let dictionaryCharCount = 0
+    let result = start
+    let boundary = -1
+    let pos = start
+    let c = text.charCodeAt(pos++)
+    if ((c & 0xfc00) === 0xd800 && pos < length) {
+      const trail = text.charCodeAt(pos)
+      if ((trail & 0xfc00) === 0xdc00) { pos++; c = ((c - 0xd800) << 10) + trail - 0xdc00 + 0x10000 }
     }
-    if (mode === RUN) { // rbbi.cpp:850-855, with Apple's overrides (apple-rbbi.cpp:1061-1084)
-      let overridden = false
-      for (let i = 0; i < overrideCount; i++) {
-        if (c === overrideChars[i]) { category = iterator.overrideCategories[i]!; overridden = true; break }
-      }
-      if (!overridden) {
-        category = getCategory(r, c)
-        if (category >= dictionaryStart) iterator.dictionaryCharCount++
-      }
-    }
-    state = rows[row + 3 + category]! // rbbi.cpp:874-877
-    row = state * width
+    let atEnd = false
+    let ended = false
+    let row = START_STATE * width
+    let category = 0
 
-    const accepting = rows[row]! // rbbi.cpp:880-896
-    if (accepting === ACCEPTING_UNCONDITIONAL) {
-      if (mode !== START) result = pos
-    } else if (accepting > ACCEPTING_UNCONDITIONAL) {
-      const lookAheadResult = matches[accepting]!
-      if (lookAheadResult >= 0) {
-        iterator.position = lookAheadResult
-        return lookAheadResult
-      }
-    }
-
-    const rule = rows[row + 1]! // rbbi.cpp:904-910
-    if (rule > ACCEPTING_UNCONDITIONAL) matches[rule] = pos
-
-    if (state === STOP_STATE) break // rbbi.cpp:912-917
-
-    if (mode === RUN) { // rbbi.cpp:923-929
-      if (pos >= length) {
-        atEnd = true
-      } else {
-        c = text.charCodeAt(pos++)
-        if ((c & 0xfc00) === 0xd800 && pos < length) {
-          const trail = text.charCodeAt(pos)
-          if ((trail & 0xfc00) === 0xdc00) { pos++; c = ((c - 0xd800) << 10) + trail - 0xdc00 + 0x10000 }
+    for (;;) {
+      if (atEnd) { // rbbi.cpp:832-843
+        if (ended) break
+        ended = true
+        category = 1
+      } else { // rbbi.cpp:850-855, with Apple's overrides (apple-rbbi.cpp:1061-1084)
+        let overridden = false
+        for (let i = 0; i < overrideCount; i++) {
+          if (c === overrideChars[i]) { category = overrides.categories[i]!; overridden = true; break }
+        }
+        if (!overridden) {
+          category = getCategory(r, c)
+          if (category >= dictionaryStart) dictionaryCharCount++
         }
       }
-    } else if (mode === START) {
-      mode = RUN
-    }
-  }
+      const state = rows[row + 3 + category]! // rbbi.cpp:874-877
+      row = state * width
 
-  if (result === initialPosition) { // rbbi.cpp:937-942
-    pos = initialPosition + 1
-    if ((text.charCodeAt(initialPosition) & 0xfc00) === 0xd800 && pos < length &&
-      (text.charCodeAt(pos) & 0xfc00) === 0xdc00) pos++
-    result = pos
+      const accepting = rows[row]! // rbbi.cpp:880-896
+      if (accepting === ACCEPTING_UNCONDITIONAL) {
+        result = pos
+      } else if (accepting > ACCEPTING_UNCONDITIONAL && matches[accepting]! >= 0) {
+        boundary = matches[accepting]!
+        break
+      }
+
+      const rule = rows[row + 1]! // rbbi.cpp:904-910
+      if (rule > ACCEPTING_UNCONDITIONAL) matches[rule] = pos
+
+      if (state === STOP_STATE) break // rbbi.cpp:912-917
+
+      if (!ended) { // rbbi.cpp:923-929
+        if (pos >= length) {
+          atEnd = true
+        } else {
+          c = text.charCodeAt(pos++)
+          if ((c & 0xfc00) === 0xd800 && pos < length) {
+            const trail = text.charCodeAt(pos)
+            if ((trail & 0xfc00) === 0xdc00) { pos++; c = ((c - 0xd800) << 10) + trail - 0xdc00 + 0x10000 }
+          }
+        }
+      }
+    }
+
+    if (boundary < 0) {
+      boundary = result
+      if (result === start) { // rbbi.cpp:937-942
+        boundary = start + 1
+        if ((text.charCodeAt(start) & 0xfc00) === 0xd800 && boundary < length &&
+          (text.charCodeAt(boundary) & 0xfc00) === 0xdc00) boundary++
+      }
+    }
+    flags[boundary] = 1
+    if (dictionaryCharCount > 0) markDictionaryWords(r, text, start, boundary, flags)
+    start = boundary // rbbi.cpp:945
   }
-  iterator.position = result // rbbi.cpp:945
-  return result
 }
 
 // --- Line tables ---
@@ -367,19 +354,7 @@ function isComplexContext(rules: BreakRules, c: number): boolean {
   return getCategory(rules, c) >= rules.dictCategoriesStart
 }
 
-// flags[b] = 1 at every ICU line boundary 0 < b <= text.length, and at Intl.Segmenter
-// word boundaries strictly inside each run of dictionary characters of a segment that
-// ICU would give to a dictionary. The line rules say $dictionary = [$SA].
-function markLineBoundaries(iterator: RuleBreakIterator, text: string, flags: Uint8Array, getWordSegmenter: () => Intl.Segmenter): void {
-  iterator.text = text
-  iterator.position = 0
-  for (let start = 0, b = nextRuleBoundary(iterator); b !== DONE; start = b, b = nextRuleBoundary(iterator)) {
-    flags[b] = 1
-    if (iterator.dictionaryCharCount > 0) markDictionaryWords(iterator.rules, text, start, b, flags, getWordSegmenter)
-  }
-}
-
-function markDictionaryWords(rules: BreakRules, text: string, start: number, end: number, flags: Uint8Array, getWordSegmenter: () => Intl.Segmenter): void {
+function markDictionaryWords(rules: BreakRules, text: string, start: number, end: number, flags: Uint8Array): void {
   let runStart = -1
   for (let i = start; i <= end;) {
     let dictionary = false
@@ -423,7 +398,6 @@ let blinkDefaultLocale: string | undefined
 export function getBlinkDefaultLocale(): string {
   return blinkDefaultLocale ??= new Intl.DateTimeFormat().resolvedOptions().locale
 }
-const blinkIterators = new Map<ChromiumLineTable, RuleBreakIterator>()
 // General category bits per UTF-16 code unit, filled on first use: 1 known, 2 letter
 // or number, 4 mark, 8 punctuation other than dashes and connectors.
 let categoryBits: Uint8Array | null = null
@@ -495,20 +469,16 @@ function shouldKeepAfterKeepAll(rules: BreakRules, lastLast: number, last: numbe
 // --lang, which is Chrome's UI language (tbi_icu.cc:71-75, text_break_iterator_internal_icu.cc:31-45,
 // platform/language.cc:94-99). Chrome also makes it the renderer's ICU default locale, which
 // V8's Intl reads (ui/base/l10n/l10n_util.cc:392-398, chrome/app/chrome_main_delegate.cc:1474-1476),
-// so the page reads it from Intl; navigator.language follows the accept languages instead.
-// Without a document the scan reads root.
-export function getBlinkLineBreaks(text: string, keepAll: boolean, language: string | null, getWordSegmenter: () => Intl.Segmenter): Uint8Array {
+// so preparation gives the scan that language from Intl for a page without one
+// (getPreparationLanguage in src/measurement.ts); navigator.language follows the accept
+// languages instead. Without a document the scan reads root.
+export function getBlinkLineBreaks(text: string, keepAll: boolean, language: string | null): Uint8Array {
   const length = text.length
   const breaks = new Uint8Array(length + 1)
   if (length < 2) return breaks
   const pairs = blinkPairs ??= unpackTable(blinkLinePairsPacked)
-  const locale = language === '' ? getBlinkDefaultLocale() : language
-  const table: ChromiumLineTable = getBreakLanguage(locale) === 'zh' ? 'line_normal_cj' : 'line_normal'
-  let iterator = blinkIterators.get(table)
-  if (iterator === undefined) {
-    iterator = createRuleBreakIterator(getLineRules(`chromium/${table}`))
-    blinkIterators.set(table, iterator)
-  }
+  const table: ChromiumLineTable = getBreakLanguage(language) === 'zh' ? 'line_normal_cj' : 'line_normal'
+  const rules = getLineRules(`chromium/${table}`)
   let icu: Uint8Array | null = null
   let lastLast = 0
   let last = text.charCodeAt(0)
@@ -518,13 +488,13 @@ export function getBlinkLineBreaks(text: string, keepAll: boolean, language: str
     if (isBlinkBreakableSpace(last)) { breaks[i] = 1; continue }
     const fast = shouldBreakFast(pairs, lastLast, last, ch)
     if (fast === CAN_BREAK) { breaks[i] = 1; continue } // tbi.cc:305-309
-    if (keepAll && shouldKeepAfterKeepAll(iterator.rules, lastLast, last, ch)) continue // tbi.cc:338-344
+    if (keepAll && shouldKeepAfterKeepAll(rules, lastLast, last, ch)) continue // tbi.cc:338-344
     if (fast === NO_BREAK) continue // tbi.cc:346-348
     // tbi.cc:350-383: ICU's first boundary after i - 1 is i exactly when i is a boundary,
     // since the unit before it isn't a space here.
     if (icu === null) {
       icu = new Uint8Array(length + 1)
-      markLineBoundaries(iterator, text, icu, getWordSegmenter)
+      markRuleBoundaries(rules, text, icu)
     }
     if (icu[i] === 1) breaks[i] = 1
   }
@@ -549,7 +519,8 @@ const PF = 1024
 const WEIRD = 32768
 
 let webkitPairs: Uint8Array | null = null
-const webkitIterators = new Map<string, RuleBreakIterator>()
+type WebKitLineRules = { readonly rules: BreakRules, readonly overrides: CategoryOverrides }
+const webkitLineRules = new Map<string, WebKitLineRules>()
 
 // BP.h:125-139 with NoBreakSpaceBehavior::Normal.
 function isWebKitBreakableSpace(c: number): boolean {
@@ -641,13 +612,12 @@ type Factory = {
   last: number
   // PriorContext::length counts trailing non-zero characters (TBI.h:277-283).
   priorLength: number
-  readonly iterator: RuleBreakIterator
-  readonly getWordSegmenter: () => Intl.Segmenter
+  readonly line: WebKitLineRules
   nextBoundary: Int32Array | null
 }
 
-function createFactory(text: string, iterator: RuleBreakIterator, getWordSegmenter: () => Intl.Segmenter): Factory {
-  return { text, secondToLast: 0, last: 0, priorLength: 0, iterator, getWordSegmenter, nextBoundary: null }
+function createFactory(text: string, line: WebKitLineRules): Factory {
+  return { text, secondToLast: 0, last: 0, priorLength: 0, line, nextBoundary: null }
 }
 
 // The first ICU boundary after `location`, or -1. `location` is -1 only with a prior
@@ -661,7 +631,7 @@ function following(f: Factory, location: number): number {
       : f.priorLength === 1 ? String.fromCharCode(f.last) : ''
     const text = prior + f.text
     const flags = new Uint8Array(text.length + 1)
-    markLineBoundaries(f.iterator, text, flags, f.getWordSegmenter)
+    markRuleBoundaries(f.line.rules, text, flags, f.line.overrides)
     next = new Int32Array(text.length + 2)
     next[text.length + 1] = -1
     for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : next[p + 1]!
@@ -750,21 +720,14 @@ function nextBreakableSpace(s: string, startPosition: number, punctuationBreaks:
   return s.length
 }
 
-// TU:398-422 with line-break auto (LineMode Default, TU:450-466) and BP.h:287-300. WebKit
-// stores a text holding a code unit above U+00FF in 16 bits, where keep-all also breaks
-// after punctuation.
-function findNextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number, keepAll: boolean, sixteenBit: boolean): number {
-  return keepAll ? nextBreakableSpace(f.text, startPosition, sixteenBit) : nextBreakablePosition(pairs, f, startPosition)
-}
-
 // ubrk_open(UBRK_LINE, locale) in libicucore (TBIICU.h:63-67): line_normal.brk for ja and
 // ko, line_cj.brk for zh and line.brk otherwise, plus the locale's quotation remap
 // (apple-brkiter.cpp:458-473, apple-rbbi.cpp:406-487), looked up with ICU's parent fallback
 // under ICU's case: lowercase language, title-case script, uppercase region (uloc_getName).
-function getWebKitLineIterator(language: string | null): RuleBreakIterator {
+function getWebKitLineRules(language: string | null): WebKitLineRules {
   const locale = language ?? ''
-  let iterator = webkitIterators.get(locale)
-  if (iterator !== undefined) return iterator
+  let line = webkitLineRules.get(locale)
+  if (line !== undefined) return line
   const breakLanguage = getBreakLanguage(locale)
   const rules = getLineRules(breakLanguage === 'ja' || breakLanguage === 'ko' ? 'apple/line_normal' : breakLanguage === 'zh' ? 'apple/line_cj' : 'apple/line')
   const subtags = locale.split(/[-_]/)
@@ -785,9 +748,9 @@ function getWebKitLineIterator(language: string | null): RuleBreakIterator {
     chars.push(remap[k]!)
     categories.push(getCategory(rules, remap[k + 1] === 0 ? 0x7b : 0x7d))
   }
-  iterator = createRuleBreakIterator(rules, chars, categories)
-  webkitIterators.set(locale, iterator)
-  return iterator
+  line = { rules, overrides: { chars, categories } }
+  webkitLineRules.set(locale, line)
+  return line
 }
 
 const TEXT = 0
@@ -797,20 +760,21 @@ const SOFT_LINE_BREAK = 2
 // Where a line may start in a text node's source: flags[i] = 1 for 0 < i < source.length.
 // These are the soft wrap opportunities between the items InlineItemsBuilder::build
 // makes (IIB:122-130), as the soft wrap index loop finds them (IFU:456-510): every item
-// boundary that isn't next to a forced break. flags[i] = 2 after a U+2028 or U+2029 that
-// starts an item, which forces a break. One that ICU's fast-forward passed stays inside
-// a text item and doesn't.
+// boundary that isn't next to a forced break. A U+2028 or U+2029 that starts an item
+// forces a break after it, marked FORCED_BREAK; one that ICU's fast-forward passed stays
+// inside a text item and doesn't.
 export function getWebKitLineBreaks(
   source: string,
   preserveNewlines: boolean,
   keepAll: boolean,
   language: string | null,
-  getWordSegmenter: () => Intl.Segmenter,
 ): Uint8Array {
   const pairs = webkitPairs ??= unpackTable(webkitLinePairsPacked)
-  const f = createFactory(source, getWebKitLineIterator(language), getWordSegmenter)
+  const f = createFactory(source, getWebKitLineRules(language))
   const length = source.length
   const breaks = new Uint8Array(length + 1)
+  // WebKit stores a text holding a code unit above U+00FF in 16 bits, where keep-all also
+  // breaks after punctuation.
   let sixteenBit = false
   for (let i = 0; keepAll && i < length && !sixteenBit; i++) sixteenBit = source.charCodeAt(i) > 0xff
   let previousKind = -1
@@ -823,7 +787,7 @@ export function getWebKitLineBreaks(
       // handleSegmentBreak, IIB:954-962.
       kind = SOFT_LINE_BREAK
       end++
-      if (c !== LF) breaks[end] = 2
+      if (c !== LF) breaks[end] = FORCED_BREAK
     } else {
       // handleWhitespace, IIB:963-992, with moveToNextNonWhitespacePosition (IIB:55-73).
       for (; end < length; end++) {
@@ -831,11 +795,12 @@ export function getWebKitLineBreaks(
         if (c !== SPACE && c !== TAB && (preserveNewlines || c !== LF)) break
       }
       if (end === position) {
-        // handleNonWhitespace, IIB:1012-1038, with moveToNextBreakablePosition (IIB:75-87).
+        // handleNonWhitespace, IIB:1012-1038, with moveToNextBreakablePosition (IIB:75-87),
+        // TU:398-422 with line-break auto (LineMode Default, TU:450-466) and BP.h:287-300.
         kind = TEXT
         end = length
         for (let p = position; p < length; p++) {
-          const next = findNextBreakablePosition(pairs, f, p, keepAll, sixteenBit)
+          const next = keepAll ? nextBreakableSpace(source, p, sixteenBit) : nextBreakablePosition(pairs, f, p)
           if (next !== position) { end = next; break }
         }
       }
@@ -852,9 +817,9 @@ export function getWebKitLineBreaks(
 // TU:374-396: whether a line may start where the next inline box starts, from a fresh
 // factory on that box with the previous box's last two characters as prior context.
 // hyphens: manual, so a trailing soft hyphen doesn't block the break.
-export function getWebKitBreakBetweenItems(previous: string, next: string, language: string | null, getWordSegmenter: () => Intl.Segmenter): boolean {
+export function getWebKitBreakBetweenItems(previous: string, next: string, language: string | null): boolean {
   const pairs = webkitPairs ??= unpackTable(webkitLinePairsPacked)
-  const f = createFactory(next, getWebKitLineIterator(language), getWordSegmenter)
+  const f = createFactory(next, getWebKitLineRules(language))
   const n = previous.length
   f.secondToLast = n > 1 ? previous.charCodeAt(n - 2) : 0
   f.last = n > 0 ? previous.charCodeAt(n - 1) : 0

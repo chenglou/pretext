@@ -99,14 +99,14 @@ const PLANTS: ReadonlyArray<readonly [string, Profile, string, string, ReadonlyA
   ['a painter reading a field only layoutNextLine returns would get nothing from layoutWithLines', 'unknown', 'extra-line-field', 'layout.ts',
     [[/return \{ text, width, start: lineStart, end \}/, 'return { text, width, start: lineStart, end, hyphenated: false }']], 'line objects'],
   ['a held handle would move when the same text is prepared again with other letter spacing (p04)', 'blink', 'entry-geometry-in-place', 'layout.ts',
-    [[/if \(geometry !== null && complete\) metrics\.entryGeometry = \{ letterSpacing, advances, emojiCorrection, geometry \}/,
-      'if (geometry !== null && complete) {\n      if (metrics.entryGeometry !== undefined) {\n        Object.assign(metrics.entryGeometry.geometry, geometry)\n        Object.assign(metrics.entryGeometry, { letterSpacing, advances, emojiCorrection })\n        return metrics.entryGeometry.geometry\n      }\n      metrics.entryGeometry = { letterSpacing, advances, emojiCorrection, geometry }\n    }']], 'held handles'],
+    [[/if \(geometry !== null\) fit\.entryGeometry = \{ letterSpacing, emojiCorrection, geometry \}/,
+      'if (geometry !== null) {\n      if (fit.entryGeometry !== null) {\n        Object.assign(fit.entryGeometry.geometry, geometry)\n        Object.assign(fit.entryGeometry, { letterSpacing, emojiCorrection })\n        return fit.entryGeometry.geometry\n      }\n      fit.entryGeometry = { letterSpacing, emojiCorrection, geometry }\n    }']], 'held handles'],
   ['a chip would be sized with its padding twice while its line stays right (p11)', 'unknown', 'extra-width-twice', 'rich-inline.ts',
     [[/collectWholeItem\(collectFragment, itemIndex, item, gapBefore, gapItemIndex, occupiedWidth\)/, 'collectWholeItem(collectFragment, itemIndex, item, gapBefore, gapItemIndex, occupiedWidth + item.extraWidth)']], 'rich lines'],
   ['a long word would measure every prefix, so preparing it grows with the square of its length (p08)', 'webkit', 'prefixes-uncapped', 'measurement.ts',
-    [[/if \(mode === 'pair-context' \|\| graphemes\.length > MAX_PREFIX_FIT_GRAPHEMES\) \{/, 'if (mode === \'pair-context\' || MAX_PREFIX_FIT_GRAPHEMES < 0) {']], 'growth'],
+    [[/const prefixes = mode === 'segment-prefixes' && count <= MAX_PREFIX_FIT_GRAPHEMES/, 'const prefixes = mode === \'segment-prefixes\'']], 'growth'],
   ['a message shown at two letter spacings would take the first one\'s fresh-line geometry at the second', 'blink', 'entry-geometry-ignores-letter-spacing', 'layout.ts',
-    [[/cached\.letterSpacing === letterSpacing &&\n\s*cached\.advances === advances/, 'cached.advances === advances']], 'held handles'],
+    [[/cached !== null && cached\.letterSpacing === letterSpacing && /, 'cached !== null && ']], 'held handles'],
   ['a list streaming lines until layoutNextLineRange ends would never stop', 'unknown', 'stream-never-ends', 'layout.ts',
     [[/return width === null \? null : \{ width, start: lineStart, end \}/, 'return width === null ? { width: 0, start: { ...start }, end: { ...start } } : { width, start: lineStart, end }']], 'walkers end'],
 ]
@@ -136,7 +136,7 @@ describe('equal --offline', () => {
   test('line text every text API gets wrong alike differs, and a prepare that measures each segment twice is measured otherwise with the same results: a build that paints no hyphen at a soft-hyphen break would equal main, or one that measures more pass unseen', async () => {
     const [hyphen, twice] = await Promise.all([
       offline(planted('offline-hyphen', 'line-text.ts', [[/\? text \+ '-' : text/, '? text : text']])),
-      offline(planted('offline-twice', 'measurement.ts', [[/width: ctx\.measureText\(seg\)\.width,/, 'width: (ctx.measureText(seg), ctx.measureText(seg).width),']])),
+      offline(planted('offline-twice', 'measurement.ts', [[/width: measurement\.state\.context\.measureText\(text\)\.width,/, 'width: (measurement.state.context.measureText(text), measurement.state.context.measureText(text).width),']])),
     ])
     expect([hyphen.differ > 0, hyphen.parts['prepareWithSegments'], hyphen.measuredOtherwise]).toEqual([true, undefined, 0])
     expect([twice.differ, twice.measuredOtherwise > 0]).toEqual([0, true])

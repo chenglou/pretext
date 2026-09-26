@@ -5,25 +5,36 @@ import { webkitGenericFamilies, webkitGenericFamilyNames, webkitScriptLanguages,
 import type { SegmentEntryGeometry } from './entry-geometry.js'
 import type { HanKerningFontData } from './han-kerning.js'
 
+// What preparation knows of a segment in a font. Each is created with all its fields,
+// so their reads see one shape.
 export type SegmentMetrics = {
   width: number
-  emojiCount?: number
-  breakableFitMode?: BreakableFitMode
-  breakableFitAdvances?: number[] | null
-  // With breakable fit advances in the WebKit profile, the graphemes after the first that
-  // WebKit doesn't start a line with when a line holds only an overflowing first character,
+  emojiCount: number // Emoji graphemes, or -1 until counted
+  fit: SegmentFit | null // Where it breaks under overflow, for the last fit mode asked
+}
+
+// Where a segment breaks under overflow-wrap: break-word in one fit mode (getSegmentFit),
+// replaced whole when another mode is asked for.
+export type SegmentFit = {
+  mode: BreakableFitMode
+  advances: number[] | null // Per grapheme, or null for one grapheme
+  // With advances in the WebKit profile, the graphemes after the first that WebKit
+  // doesn't start a line with when a line holds only an overflowing first character,
   // by their first code unit, as ascending grapheme indices. Null without any.
-  lineStartProhibitions?: number[] | null
-  entryGeometry?: {
+  lineStartProhibitions: number[] | null
+  entryGeometry: {
     letterSpacing: number
-    advances: readonly number[]
     emojiCorrection: number
     geometry: SegmentEntryGeometry
-  }
+  } | null
 }
 
 export type EngineProfile = {
-  entryFitBasis: 'fresh' | 'original' | 'disabled' // original whole minus consumed prefixes
+  // How a line that starts inside a segment holding a default-ignorable code point
+  // admits the segment's tail (src/entry-geometry.ts): by the tail's own measured start
+  // ('fresh', desktop Blink), by the whole segment's width minus the consumed prefixes
+  // ('original', desktop Gecko), or not at all ('disabled').
+  entryFitBasis: 'fresh' | 'original' | 'disabled'
   // Where preparation finds break opportunities: each engine's own scan. Blink and WebKit
   // scan the text with their pair tables and ICU line rules (src/line-breaks.ts), Gecko
   // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
@@ -88,9 +99,10 @@ export type EngineProfile = {
   // Blink lays out content without a language under its default locale, Chrome's UI
   // language, which Intl shows (getBlinkLineBreaks in src/line-breaks.ts): its line table,
   // font fallback and HanKerning's punctuation types follow it. Canvas under an empty page
-  // language doesn't, so the Chromium profile gives the context that locale. WebKit and
-  // Gecko take process languages a page can't read and keep the page's.
-  measureUnderDefaultLocale: boolean
+  // language doesn't, so the Chromium profile prepares such a page under that locale, its
+  // scan and its context alike (getPreparationLanguage). WebKit and Gecko take process
+  // languages a page can't read and keep the page's.
+  laysOutUnderDefaultLocale: boolean
   // WebKit's page resolves serif, sans-serif, cursive, fantasy and monospace to the
   // family Core Text names for the page language wherever WebKit's script for it
   // isn't Common (FontDescriptionCocoa.cpp:77-118, asked first by CSSFontSelector.cpp:
@@ -109,17 +121,23 @@ export type EngineProfile = {
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
 
-let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
-// Canvas resolves fonts under the context's language, the page's unless the
-// context has a `lang` to give it preparation's. Chrome keeps a resolved font
-// while its font string is unchanged, so the context, and every width measured
-// through it, belong to the language it was created under.
-let measureContextLanguage: string | null = null
-// The families the context's language gives the generic keywords, or null.
-let measureContextGenericFamilies: string[] | null = null
+// The measurement context and what preparation measured through it. Canvas resolves
+// fonts under the context's language, the page's unless the context has a `lang` to
+// give it preparation's. Chrome keeps a resolved font while its font string is
+// unchanged, so the context, and every width measured through it, belong to the
+// language it was created under: all of it is replaced when that language changes.
+type MeasureState = {
+  language: string | null
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+  genericFamilies: string[] | null // The families the language gives the generic keywords, or null
+  takesLetterSpacing: boolean // As Chrome's and Firefox's contexts do, as a string of CSS px
+  fonts: Map<string, FontMeasurement>
+}
+let measureState: MeasureState | null = null
 // What preparation keeps per font. It all goes together, when the caches clear or the
-// page language changes.
+// language changes.
 export type FontMeasurement = {
+  state: MeasureState // Its context, which getFontMeasurement() sets to the font
   // The font Canvas is given: the declared font, with the generic keywords the context's
   // language names replaced by their families.
   canvasFont: string
@@ -130,13 +148,13 @@ export type FontMeasurement = {
   emojiCorrection: number | null // Probed for the first text that may hold emoji
   hanKerning: HanKerningFontData | null | undefined // Read for the first text that may kern
 }
-const fontMeasurements = new Map<string, FontMeasurement>()
 let cachedEngineProfile: EngineProfile | null = null
 
-// Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
-// it measure every growing prefix of a giant segment recreates a pathological
-// superlinear prepare-time path. Past this size, switch to the cheaper
-// pair-context model and keep the public behavior linear.
+// Prefix fits, which preparation picks by engine, width and letter spacing
+// (measureAnalysis in src/layout.ts), measure every growing prefix of a
+// segment. That suits word-sized runs, but a giant segment would prepare in time
+// that grows with the square of its length. Past this size, the cheaper
+// pair-context model keeps preparation linear.
 const MAX_PREFIX_FIT_GRAPHEMES = 96
 
 // Graphemes drawn from the emoji font: those holding an emoji-presentation
@@ -228,37 +246,16 @@ export function setLocaleLanguage(locale: string | undefined): void {
   localeLanguage = locale
 }
 
-// Preparation reads the page language once and shares it between break rules
-// and the measurement context.
-export function getDocumentLanguage(): string | null {
-  if (localeLanguage !== undefined) return localeLanguage
-  if (typeof document === 'undefined') return null
-  const root = document.documentElement as HTMLElement | null | undefined
-  if (root == null) return null
-  const language = root.lang
-  return typeof language === 'string' ? language : null
-}
-
-export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
-  return measureContext ?? createMeasureContext(getDocumentLanguage())
-}
-
-function createMeasureContext(language: string | null): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
-  measureContextLanguage = language
-
-  if (typeof OffscreenCanvas !== 'undefined') {
-    measureContext = new OffscreenCanvas(1, 1).getContext('2d')!
-  } else if (typeof document !== 'undefined') {
-    measureContext = document.createElement('canvas').getContext('2d')!
-  } else {
-    throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
+// The language one preparation breaks and measures under, read once: setLocale()'s, or
+// else the page's, or null without a document. The Chromium profile lays out a page
+// without one under Blink's default locale (laysOutUnderDefaultLocale).
+export function getPreparationLanguage(profile: EngineProfile): string | null {
+  let language = localeLanguage ?? null
+  if (localeLanguage === undefined && typeof document !== 'undefined') {
+    const lang = (document.documentElement as HTMLElement | null | undefined)?.lang
+    if (typeof lang === 'string') language = lang
   }
-  // A context's `lang` follows the page's, and preparation's can be setLocale()'s instead.
-  if (language !== null && 'lang' in measureContext) {
-    measureContext.lang = language === '' && getEngineProfile().measureUnderDefaultLocale ? getBlinkDefaultLocale() : language
-  }
-  measureContextGenericFamilies = language !== null && getEngineProfile().namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, measureContext) : null
-  return measureContext
+  return language === '' && profile.laysOutUnderDefaultLocale ? getBlinkDefaultLocale() : language
 }
 
 // A text's letter spacing in CSS px, 0 by default. CSS and Canvas ignore a
@@ -269,48 +266,42 @@ export function readLetterSpacing(letterSpacing: number | undefined): number {
   return value
 }
 
-// A direct measurement under letter spacing, borrowing the primary context for
-// the synchronous call. It never enters the unspaced segment cache, and
-// letterSpacing is restored even when assignment or measurement fails. Null
-// where the context can't take the spacing.
-export function measureWithLetterSpacing(text: string, letterSpacing: number, emojiCorrection: number): number | null {
-  const primary = getMeasureContext()
-  if (!('letterSpacing' in primary)) return null
-  const previous = primary.letterSpacing
-  if (typeof previous !== 'string') return null
+// A direct measurement under letter spacing, borrowing the font's context for the
+// synchronous call. It never enters the unspaced segment cache, and letterSpacing
+// is restored even when assignment or measurement fails. Null where the context
+// can't take the spacing.
+export function measureWithLetterSpacing(text: string, letterSpacing: number, emojiCorrection: number, measurement: FontMeasurement): number | null {
+  const { context, takesLetterSpacing } = measurement.state
+  if (!takesLetterSpacing) return null
+  const previous = context.letterSpacing
   try {
-    primary.letterSpacing = `${letterSpacing}px`
-    if (Number.parseFloat(primary.letterSpacing) !== letterSpacing) return null
-    const width = getCorrectedSegmentWidth(text, { width: primary.measureText(text).width }, emojiCorrection)
+    context.letterSpacing = `${letterSpacing}px`
+    if (Number.parseFloat(context.letterSpacing) !== letterSpacing) return null
+    const width = context.measureText(text).width - (emojiCorrection === 0 ? 0 : countEmojiGraphemes(text) * emojiCorrection)
     return Number.isFinite(width) ? width : null
   } finally {
-    primary.letterSpacing = previous
+    context.letterSpacing = previous
   }
+}
+
+export function getSegmentMetrics(seg: string, measurement: FontMeasurement): SegmentMetrics {
+  return measurement.metrics.get(seg) ?? addMetrics(measurement.metrics, seg, seg, measurement)
 }
 
 // Metrics of seg measured together with one following U+0020.
-export function getFollowingSpaceMetrics(seg: string, cache: Map<string, SegmentMetrics>): SegmentMetrics {
-  let metrics = cache.get(seg)
-  if (metrics === undefined) {
-    const ctx = getMeasureContext()
-    metrics = {
-      width: ctx.measureText(seg + ' ').width,
-    }
-    cache.set(seg, metrics)
-  }
+export function getFollowingSpaceMetrics(seg: string, measurement: FontMeasurement): SegmentMetrics {
+  return measurement.followingSpaceMetrics.get(seg) ?? addMetrics(measurement.followingSpaceMetrics, seg, seg + ' ', measurement)
+}
+
+function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: string, measurement: FontMeasurement): SegmentMetrics {
+  const metrics: SegmentMetrics = { width: measurement.state.context.measureText(text).width, emojiCount: -1, fit: null }
+  cache.set(seg, metrics)
   return metrics
 }
 
-export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics>): SegmentMetrics {
-  let metrics = cache.get(seg)
-  if (metrics === undefined) {
-    const ctx = getMeasureContext()
-    metrics = {
-      width: ctx.measureText(seg).width,
-    }
-    cache.set(seg, metrics)
-  }
-  return metrics
+// A text's width in the font, less the emoji correction.
+export function getTextWidth(text: string, measurement: FontMeasurement, emojiCorrection: number): number {
+  return getCorrectedSegmentWidth(text, getSegmentMetrics(text, measurement), emojiCorrection)
 }
 
 export type LayoutEngine = 'blink' | 'webkit' | 'gecko'
@@ -356,7 +347,7 @@ export function getEngineProfile(): EngineProfile {
     hidesControlCharacters: engine === 'gecko',
     hanKerning: engine === 'blink',
     hangsIdeographicSpace: engine !== 'webkit',
-    measureUnderDefaultLocale: engine === 'blink',
+    laysOutUnderDefaultLocale: engine === 'blink',
     namesGenericFamiliesByLanguage: engine === 'webkit',
   }
   cachedEngineProfile = profile
@@ -378,9 +369,7 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
   if (correction !== null) return correction
 
   const fontSize = parseFontSize(font)
-  const ctx = getMeasureContext()
-  ctx.font = measurement.canvasFont
-  const canvasW = ctx.measureText('\u{1F600}').width
+  const canvasW = measurement.state.context.measureText('\u{1F600}').width
   correction = 0
   if (
     canvasW > fontSize + 0.5 &&
@@ -408,7 +397,7 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
 // worker has no document to measure the hidden span against, so the page reads
 // the correction for a font and the app hands the number over (#292).
 export function readEmojiCorrection(font: string): number {
-  const measurement = getFontMeasurement(font, getDocumentLanguage())
+  const measurement = getFontMeasurement(font, getPreparationLanguage(getEngineProfile()))
   return getEmojiCorrection(font, measurement)
 }
 
@@ -416,7 +405,7 @@ export function writeEmojiCorrection(font: string, correction: number): void {
   if (!Number.isFinite(correction) || correction < 0) {
     throw new RangeError('emoji correction must be a finite, non-negative number of pixels')
   }
-  const measurement = getFontMeasurement(font, getDocumentLanguage())
+  const measurement = getFontMeasurement(font, getPreparationLanguage(getEngineProfile()))
   measurement.emojiCorrection = correction
 }
 
@@ -431,9 +420,7 @@ function countEmojiGraphemes(text: string): number {
 }
 
 function getEmojiCount(seg: string, metrics: SegmentMetrics): number {
-  if (metrics.emojiCount === undefined) {
-    metrics.emojiCount = countEmojiGraphemes(seg)
-  }
+  if (metrics.emojiCount < 0) metrics.emojiCount = countEmojiGraphemes(seg)
   return metrics.emojiCount
 }
 
@@ -442,125 +429,95 @@ export function getCorrectedSegmentWidth(seg: string, metrics: SegmentMetrics, e
   return metrics.width - getEmojiCount(seg, metrics) * emojiCorrection
 }
 
-export function getSegmentBreakableFitAdvances(
+export function getSegmentFit(
   seg: string,
   metrics: SegmentMetrics,
-  cache: Map<string, SegmentMetrics>,
+  measurement: FontMeasurement,
   emojiCorrection: number,
   mode: BreakableFitMode,
   // When metrics measured seg together with one following U+0020, the width of
   // that space alone. The last grapheme then keeps its kerning with the space.
   followingSpaceWidth: number | null = null,
-  // Whether to record the segment's WebKit line-start prohibitions on metrics.
+  // Whether to find the segment's WebKit line-start prohibitions.
   withLineStartProhibitions = false,
-): number[] | null {
-  if (metrics.breakableFitAdvances !== undefined && metrics.breakableFitMode === mode) {
-    return metrics.breakableFitAdvances
-  }
-  metrics.breakableFitMode = mode
-
+): SegmentFit {
+  if (metrics.fit !== null && metrics.fit.mode === mode) return metrics.fit
   const ends = new Int32Array(seg.length)
-  const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, seg, 0, seg.length, ends)
-  if (graphemeCount <= 1) {
-    metrics.breakableFitAdvances = null
-    return metrics.breakableFitAdvances
-  }
-  const graphemes: string[] = []
-  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++]!) graphemes.push(seg.slice(start, ends[i]!))
+  const count = findGraphemeEnds(getEngineProfile().graphemeTable, seg, 0, seg.length, ends)
+  if (count <= 1) return metrics.fit = { mode, advances: null, lineStartProhibitions: null, entryGeometry: null }
+  let prohibitions: number[] | null = null
   if (withLineStartProhibitions) {
-    let prohibitions: number[] | null = null
-    for (let i = 1; i < graphemes.length; i++) if (!canWebKitLineStartWith(graphemes[i]!.charCodeAt(0))) (prohibitions ??= []).push(i)
-    metrics.lineStartProhibitions = prohibitions
+    for (let i = 1; i < count; i++) if (!canWebKitLineStartWith(seg.charCodeAt(ends[i - 1]!))) (prohibitions ??= []).push(i)
   }
-
-  if (mode === 'sum-graphemes') {
-    const advances: number[] = []
-    for (const grapheme of graphemes) {
-      const graphemeMetrics = getSegmentMetrics(grapheme, cache)
-      advances.push(getCorrectedSegmentWidth(grapheme, graphemeMetrics, emojiCorrection))
-    }
-    if (followingSpaceWidth !== null) addFollowingSpaceKerning(advances, seg, metrics, cache, followingSpaceWidth)
-    metrics.breakableFitAdvances = advances
-    return metrics.breakableFitAdvances
-  }
-
-  if (mode === 'pair-context' || graphemes.length > MAX_PREFIX_FIT_GRAPHEMES) {
-    const advances: number[] = []
-    let previousGrapheme: string | null = null
-    let previousWidth = 0
-
-    for (const grapheme of graphemes) {
-      const graphemeMetrics = getSegmentMetrics(grapheme, cache)
-      const currentWidth = getCorrectedSegmentWidth(grapheme, graphemeMetrics, emojiCorrection)
-
-      if (previousGrapheme === null) {
-        advances.push(currentWidth)
-      } else {
-        const pair = previousGrapheme + grapheme
-        const pairMetrics = getSegmentMetrics(pair, cache)
-        advances.push(getCorrectedSegmentWidth(pair, pairMetrics, emojiCorrection) - previousWidth)
-      }
-
-      previousGrapheme = grapheme
-      previousWidth = currentWidth
-    }
-
-    if (followingSpaceWidth !== null) addFollowingSpaceKerning(advances, seg, metrics, cache, followingSpaceWidth)
-    metrics.breakableFitAdvances = advances
-    return metrics.breakableFitAdvances
-  }
-
+  // Prefix widths, or each grapheme alone or after the one before it. Past
+  // MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
+  const prefixes = mode === 'segment-prefixes' && count <= MAX_PREFIX_FIT_GRAPHEMES
+  const pairs = mode !== 'sum-graphemes' && !prefixes
   const advances: number[] = []
-  let prefix = ''
-  let prefixWidth = 0
-
-  for (let i = 0; i < graphemes.length; i++) {
-    prefix += graphemes[i]!
-    // The whole segment is the last prefix; with a following space it was
-    // measured together with that space.
-    const nextPrefixWidth = followingSpaceWidth !== null && i === graphemes.length - 1
-      ? getCorrectedSegmentWidth(seg, metrics, emojiCorrection) - followingSpaceWidth
-      : getCorrectedSegmentWidth(prefix, getSegmentMetrics(prefix, cache), emojiCorrection)
-    advances.push(nextPrefixWidth - prefixWidth)
-    prefixWidth = nextPrefixWidth
+  let previousStart = 0
+  let previousWidth = 0
+  for (let i = 0, start = 0; i < count; start = ends[i++]!) {
+    const end = ends[i]!
+    if (prefixes) {
+      // The whole segment is the last prefix; with a following space it was
+      // measured together with that space.
+      const width = followingSpaceWidth !== null && i === count - 1
+        ? getCorrectedSegmentWidth(seg, metrics, emojiCorrection) - followingSpaceWidth
+        : getTextWidth(seg.slice(0, end), measurement, emojiCorrection)
+      advances.push(width - previousWidth)
+      previousWidth = width
+      continue
+    }
+    const width = getTextWidth(seg.slice(start, end), measurement, emojiCorrection)
+    advances.push(pairs && i > 0 ? getTextWidth(seg.slice(previousStart, end), measurement, emojiCorrection) - previousWidth : width)
+    previousStart = start
+    previousWidth = width
   }
-
-  metrics.breakableFitAdvances = advances
-  return metrics.breakableFitAdvances
+  // Advances that do not end in the whole segment's width take the kerning as a
+  // difference, which needs the segment measured alone too.
+  if (followingSpaceWidth !== null && !prefixes) {
+    advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+  }
+  return metrics.fit = { mode, advances, lineStartProhibitions: prohibitions, entryGeometry: null }
 }
 
-// Advances that do not end in the whole segment's width take the kerning as a
-// difference, which needs the segment measured alone too.
-function addFollowingSpaceKerning(
-  advances: number[],
-  seg: string,
-  followingSpaceMetrics: SegmentMetrics,
-  cache: Map<string, SegmentMetrics>,
-  followingSpaceWidth: number,
-): void {
-  const last = advances.length - 1
-  advances[last] = advances[last]! + followingSpaceMetrics.width - getSegmentMetrics(seg, cache).width - followingSpaceWidth
-}
-
-export function getFontMeasurement(font: string, documentLanguage: string | null): FontMeasurement {
-  // Preparation starts here, with the page language it read. After that language
+export function getFontMeasurement(font: string, language: string | null): FontMeasurement {
+  // Preparation starts here, with the language it resolved. After that language
   // changes, start again with a new context and empty caches; clearing the caches
   // alone would re-measure with fonts resolved under the old language.
-  if (measureContext !== null && documentLanguage !== measureContextLanguage) {
-    measureContext = null
-    clearMeasurementCaches()
-  }
-  const ctx = measureContext ?? createMeasureContext(documentLanguage)
-  let measurement = fontMeasurements.get(font)
+  if (measureState === null || measureState.language !== language) measureState = createMeasureState(language)
+  const state = measureState
+  let measurement = state.fonts.get(font)
   if (measurement === undefined) {
-    const canvasFont = measureContextGenericFamilies === null ? font : getCanvasFont(font, measureContextGenericFamilies)
-    measurement = { canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), emojiCorrection: null, hanKerning: undefined }
-    fontMeasurements.set(font, measurement)
+    const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
+    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), emojiCorrection: null, hanKerning: undefined }
+    state.fonts.set(font, measurement)
   }
-  ctx.font = measurement.canvasFont
+  state.context.font = measurement.canvasFont
   return measurement
 }
 
+function createMeasureState(language: string | null): MeasureState {
+  let context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+  if (typeof OffscreenCanvas !== 'undefined') {
+    context = new OffscreenCanvas(1, 1).getContext('2d')!
+  } else if (typeof document !== 'undefined') {
+    context = document.createElement('canvas').getContext('2d')!
+  } else {
+    throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
+  }
+  // A context's `lang` follows the page's, and preparation's can be setLocale()'s or
+  // Blink's default locale instead.
+  if (language !== null && 'lang' in context) context.lang = language
+  return {
+    language,
+    context,
+    genericFamilies: language !== null && getEngineProfile().namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, context) : null,
+    takesLetterSpacing: typeof context.letterSpacing === 'string',
+    fonts: new Map(),
+  }
+}
+
 export function clearMeasurementCaches(): void {
-  fontMeasurements.clear()
+  measureState?.fonts.clear()
 }

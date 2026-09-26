@@ -832,7 +832,7 @@ describe('the library through the adapter', () => {
   test('measureLineStats giving another widest line than the walk blocks: a bubble shrink-wrapped to it would be too wide', async () => {
     const c = paragraph('A message long enough to wrap at a few widths', 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('line-stats', 'layout.ts', /return measurePreparedLineGeometry\(getInternalPrepared\(prepared\), maxWidth\)/, 'const stats = measurePreparedLineGeometry(getInternalPrepared(prepared), maxWidth)\n  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
+    const stats = await planted('line-stats', 'layout.ts', /(walkPreparedLinesRaw\(getInternalPrepared\(prepared\), maxWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureLineStats gives')
   })
 

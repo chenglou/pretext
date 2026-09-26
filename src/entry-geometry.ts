@@ -141,15 +141,16 @@ export function getFreshLineEnd(geometry: SegmentEntryGeometry, start: number, e
 // Fresh terminal-inclusive width. Null means unobserved, including entry zero;
 // an observed zero is a real value, and negative increments remain ordered.
 export function getSegmentEntryWidth(
-  geometry: SegmentEntryGeometry | null | undefined,
+  geometry: SegmentEntryGeometry | null,
   start: number,
   end: number,
 ): number | null {
-  const entry = geometry?.entries[start]
-  if (entry == null) return null
+  if (geometry === null) return null
+  const entry = geometry.entries[start]!
+  if (entry === null) return null
   if (end === start) return 0
   const anchor = start + entry.head.length
   if (end <= anchor) return entry.head[end - start - 1]!
   return entry.head[entry.head.length - 1]! +
-    (geometry!.terminalPrefixes[end]! - geometry!.terminalPrefixes[anchor]!)
+    (geometry.terminalPrefixes[end]! - geometry.terminalPrefixes[anchor]!)
 }

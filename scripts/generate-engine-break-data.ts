@@ -47,11 +47,10 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import {
-  createRuleBreakIterator,
   getBreakLanguage,
   getCategory,
   getSmallTrieValue,
-  nextRuleBoundary,
+  markRuleBoundaries,
   parseBreakRules,
   unpackTable,
   type BreakRules,
@@ -152,8 +151,9 @@ function withoutDataHeader(bytes: Uint8Array): Uint8Array {
   return bytes.subarray(headerSize)
 }
 
-// The RBBIDataHeader (rbbidata.h:67-94), forward state table, trie and status table,
-// without the reverse table and rule source, which the iterator never reads.
+// The RBBIDataHeader (rbbidata.h:67-94), forward state table and trie that parseBreakRules()
+// reads for markRuleBoundaries(), plus the status table, which nothing reads but which is
+// kept so the packed data stays byte-identical. The reverse table and rule source are dropped.
 function compactBreakRules(bytes: Uint8Array): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const u32 = (offset: number) => view.getUint32(offset, true)
@@ -188,7 +188,7 @@ function sameRules(a: BreakRules, b: BreakRules): boolean {
   }
   return a.catCount === b.catCount && a.dictCategoriesStart === b.dictCategoriesStart && a.flags === b.flags &&
     a.rowWidth === b.rowWidth && a.lookAheadResultsSize === b.lookAheadResultsSize && a.trieDataLength === b.trieDataLength &&
-    a.trieHighStart === b.trieHighStart && same(a.rows, b.rows) && same(a.statusTable, b.statusTable) &&
+    a.trieHighStart === b.trieHighStart && same(a.rows, b.rows) &&
     same(a.trieIndex, b.trieIndex) && same(a.trieData, b.trieData)
 }
 
@@ -219,6 +219,7 @@ const lineTableBytes: Uint8Array[] = []
 const lineTablesPacked: Record<string, [string | null, string]> = {}
 for (let t = 0; t < lineTableSources.length; t++) {
   const bytes = readCompactBreakRules(lineTableSources[t]![1])
+  if ((parseBreakRules(bytes).flags & 2) !== 0) throw new Error(`${lineTableSources[t]![0]} has start-of-text rules, which src/line-breaks.ts doesn't read`)
   lineTableBytes.push(bytes)
   let entry: [string | null, string] = [null, packTable(bytes)]
   for (let r = 0; r < t; r++) {
@@ -423,14 +424,13 @@ function getGeckoClusterEnds(classes: readonly number[]): number[] {
   return ends
 }
 {
-  const iterator = createRuleBreakIterator(chromiumChar)
   const check = (classes: readonly number[]) => {
     let text = ''
     for (let i = 0; i < classes.length; i++) text += String.fromCodePoint(classRepresentatives[classes[i]!]!)
-    iterator.text = text
-    iterator.position = 0
+    const flags = new Uint8Array(text.length + 1)
+    markRuleBoundaries(chromiumChar, text, flags)
     const ends: number[] = []
-    for (let b = nextRuleBoundary(iterator); b !== -1; b = nextRuleBoundary(iterator)) ends.push(b)
+    for (let b = 1; b <= text.length; b++) if (flags[b] === 1) ends.push(b)
     const geckoEnds = getGeckoClusterEnds(classes)
     if (ends.length !== geckoEnds.length || ends.some((end, i) => end !== geckoEnds[i])) {
       throw new Error(`Firefox's grapheme data ends clusters of ${JSON.stringify(text)} at ${geckoEnds.join(',')}, Chrome's char.brk at ${ends.join(',')}`)

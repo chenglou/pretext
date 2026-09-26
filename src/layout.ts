@@ -9,9 +9,9 @@ import { observeSegmentEntries, type SegmentEntryGeometry } from './entry-geomet
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds } from './graphemes.js'
 import type { CharTable } from './generated/engine-break-data.js'
+import { clearWordSegmenter } from './line-breaks.js'
 import {
   analyzeText,
-  clearAnalysisCaches,
   type SegmentBreakKind,
   type TextAnalysis,
   type WhiteSpaceMode,
@@ -20,27 +20,29 @@ import {
 import {
   type BreakableFitMode,
   type EngineProfile,
+  type FontMeasurement,
   clearMeasurementCaches,
   getCorrectedSegmentWidth,
-  getDocumentLanguage,
-  getSegmentBreakableFitAdvances,
   getEngineProfile,
   getEmojiCorrection as probeFontEmojiCorrection,
   getFollowingSpaceMetrics,
   getFontMeasurement,
+  getPreparationLanguage,
+  getSegmentFit,
   getSegmentMetrics,
+  getTextWidth,
   measureWithLetterSpacing,
   readEmojiCorrection,
   readLetterSpacing,
   setLocaleLanguage,
   textMayContainEmoji,
   writeEmojiCorrection,
+  type SegmentFit,
   type SegmentMetrics,
 } from './measurement.js'
 import {
   countPreparedLines,
   getKindCode,
-  measurePreparedLineGeometry,
   normalizePreparedLineStart,
   RETURNABLE,
   SPACED,
@@ -190,17 +192,15 @@ function measureAnalysis(
   includeSegments: boolean,
   letterSpacing: number,
   engineProfile: EngineProfile,
-  documentLanguage: string | null,
+  language: string | null,
 ): InternalPreparedText | PreparedTextWithSegments {
-  const fontMeasurement = getFontMeasurement(font, documentLanguage)
-  const cache = fontMeasurement.metrics
+  const fontMeasurement = getFontMeasurement(font, language)
   const emojiCorrection = textMayContainEmoji(analysis.normalized) ? probeFontEmojiCorrection(font, fontMeasurement) : 0
   // The gap before the hyphen, plus the hyphen's own spacing where the engine
   // letter-spaces it.
-  const discretionaryHyphenWidth =
-    getCorrectedSegmentWidth('-', getSegmentMetrics('-', cache), emojiCorrection) +
+  const discretionaryHyphenWidth = getTextWidth('-', fontMeasurement, emojiCorrection) +
     (letterSpacing === 0 ? 0 : letterSpacing * (engineProfile.letterSpaceDiscretionaryHyphen ? 2 : 1))
-  const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache), emojiCorrection)
+  const spaceWidth = getTextWidth(' ', fontMeasurement, emojiCorrection)
   const tabStopAdvance = spaceWidth * 8
   const hasLetterSpacing = letterSpacing !== 0
 
@@ -239,14 +239,13 @@ function measureAnalysis(
   // instead of alone, so its kerned width costs no extra Canvas call. Other
   // occurrences of the same text measure it alone.
   function getTextMetrics(text: string, followingSpaceTail: string | null): SegmentMetrics {
-    if (followingSpaceTail !== '') return getSegmentMetrics(text, cache)
-    return getFollowingSpaceMetrics(text, fontMeasurement.followingSpaceMetrics)
+    return followingSpaceTail === '' ? getFollowingSpaceMetrics(text, fontMeasurement) : getSegmentMetrics(text, fontMeasurement)
   }
 
   // A zero-width break before the space ends the measured item, so only the
   // item's kerning with the space is added to the text's own width.
   function getTailKerning(item: string): number {
-    return getFollowingSpaceMetrics(item, fontMeasurement.followingSpaceMetrics).width - getSegmentMetrics(item, cache).width - spaceWidth
+    return getFollowingSpaceMetrics(item, fontMeasurement).width - getSegmentMetrics(item, fontMeasurement).width - spaceWidth
   }
 
   // WebKit splits text items where resolved bidi levels change before it
@@ -359,7 +358,7 @@ function measureAnalysis(
   // line, in text holding a code unit above U+00FF (InlineContentBreaker.cpp:124-158,
   // 222-233), by its scan's line-start table. Blink and Gecko end the line after the
   // first grapheme.
-  const keepsLineStartPunctuation = engineProfile.lineBreakScan === 'webkit' && /[\u0100-\uFFFF]/.test(analysis.source)
+  const keepsLineStartPunctuation = engineProfile.lineBreakScan === 'webkit' && /[\u0100-\uFFFF]/.test(analysis.normalized)
   const segments = includeSegments ? [] as string[] : null
   const retreatsFromUnfitHyphen = engineProfile.unfitHyphenRetreat !== 'none'
   let discretionaryHyphenContexts: number[] | null = null
@@ -370,247 +369,157 @@ function measureAnalysis(
   // the unbroken text together: cursive joins, marks and kerning across the soft
   // hyphen. Canvas shows how much narrower the neighbors measure joined than
   // apart, which isolated widths can't show when proving that a hyphen overflows.
-  function getJoinedNarrowing(analysisIndex: number): number {
-    const before = previousJoinablePiece
+  function getJoinedNarrowing(analysisIndex: number, before: string | null, beforeMetrics: SegmentMetrics | null): number {
     if (before === null) return 0
     let next = analysisIndex + 1
     while (next < analysis.kinds.length && analysis.kinds[next] === 'soft-hyphen') next++
-    if (next >= analysis.kinds.length) return 0
-    const nextKind = analysis.kinds[next]!
-    if (nextKind !== 'text') return 0
+    if (next >= analysis.kinds.length || analysis.kinds[next] !== 'text') return 0
     const after = analysis.texts[next]!
-    const joined = before + after
-    const apart =
-      getCorrectedSegmentWidth(before, previousJoinableMetrics!, emojiCorrection) +
-      getCorrectedSegmentWidth(after, getSegmentMetrics(after, cache), emojiCorrection)
-    const together = getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection)
+    const apart = getCorrectedSegmentWidth(before, beforeMetrics!, emojiCorrection) + getTextWidth(after, fontMeasurement, emojiCorrection)
+    const together = getTextWidth(before + after, fontMeasurement, emojiCorrection)
     return apart - together > engineProfile.lineFitEpsilon ? apart - together : 0
   }
 
-  function getEntryGeometry(
-    text: string,
-    metrics: SegmentMetrics,
-    advances: number[],
-    width: number,
-    fitBasis: 'fresh' | 'original',
-  ): SegmentEntryGeometry | null {
-    // The cache owner fixes the text and font, and Pretext sets no other context state.
-    const cached = metrics.entryGeometry
-    if (cached !== undefined && cached.letterSpacing === letterSpacing &&
-      cached.advances === advances && cached.emojiCorrection === emojiCorrection) return cached.geometry
-    let complete = true
-    const geometry = observeSegmentEntries(text, advances, letterSpacing, width, fitBasis, source => {
-      const measured = measureWithLetterSpacing(source, letterSpacing, emojiCorrection)
-      if (measured === null) complete = false
-      return measured
-    })
-    // Replacing this last successful observation leaves prepared copies intact.
-    if (geometry !== null && complete) metrics.entryGeometry = { letterSpacing, advances, emojiCorrection, geometry }
+  function getEntryGeometry(text: string, fit: SegmentFit, width: number, fitBasis: 'fresh' | 'original'): SegmentEntryGeometry | null {
+    // The fit fixes the text, font and advances, and Pretext sets no other context state.
+    // Only the WebKit profile moves the advances by a following space, and it observes
+    // no entries.
+    const cached = fit.entryGeometry
+    if (cached !== null && cached.letterSpacing === letterSpacing && cached.emojiCorrection === emojiCorrection) return cached.geometry
+    const geometry = observeSegmentEntries(text, fit.advances!, letterSpacing, width, fitBasis,
+      source => measureWithLetterSpacing(source, letterSpacing, emojiCorrection, fontMeasurement))
+    // Replacing this last observation leaves prepared copies intact.
+    if (geometry !== null) fit.entryGeometry = { letterSpacing, emojiCorrection, geometry }
     return geometry
   }
 
-  function pushMeasuredSegment(
-    text: string,
-    width: number,
-    kind: SegmentBreakKind,
-    breakableFitAdvance: number[] | null,
-    spacingGraphemeCount: number,
-    entry: SegmentEntryGeometry | null = null,
-    prohibitions: number[] | null = null,
-  ): void {
-    if (kind !== 'text' && kind !== 'space' && kind !== 'zero-width-break') {
-      simpleKinds = false
-    }
-    // The full walker, layout()'s count and rich-inline layout read where the scan
-    // gives no break.
-    const index = widths.length
-    segmentFlags[index] = getKindCode(kind) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0) |
-      (breaksBefore === null ? 0 : breaksBefore[index] ? RETURNABLE : UNBROKEN)
-    widths.push(width)
-    breakableFitAdvances.push(breakableFitAdvance)
-    if (entry !== null && entryGeometry === null) {
-      entryGeometry = Array.from({ length: widths.length - 1 }, () => null)
-    }
-    entryGeometry?.push(entry)
-    if (prohibitions !== null && lineStartProhibitions === null) {
-      lineStartProhibitions = Array.from({ length: widths.length - 1 }, () => null)
-    }
-    lineStartProhibitions?.push(prohibitions)
-    if (segments !== null) segments.push(text)
-    discretionaryHyphenContexts?.push(0)
-    if (kind !== 'text' && kind !== 'soft-hyphen') previousJoinablePiece = null
-  }
-
-  // With an empty following-space tail, textMetrics measured the text together
-  // with the space; with a zero-width tail, the item's kerning is added.
-  function pushMeasuredTextSegment(
-    text: string,
-    textMetrics: SegmentMetrics,
-    kind: SegmentBreakKind,
-    allowOverflowBreaks: boolean,
-    followingSpaceTail: string | null,
-  ): void {
-    if (kind === 'text') {
-      previousJoinablePiece = text
-      previousJoinableMetrics = textMetrics
-    }
-    const spacingGraphemeCount = hasLetterSpacing
-      ? countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
-      : 0
-    const measuredWithSpace = followingSpaceTail === ''
-    const followingSpaceKerning = followingSpaceTail === null || measuredWithSpace
-      ? 0
-      : getTailKerning(text + followingSpaceTail)
-    const width = addInternalLetterSpacing(
-      getCorrectedSegmentWidth(text, textMetrics, emojiCorrection) - (measuredWithSpace ? spaceWidth : 0) + followingSpaceKerning,
-      spacingGraphemeCount,
-      letterSpacing,
-    )
-
-    if (allowOverflowBreaks && text.length > 1) {
-      let fitMode: BreakableFitMode = 'sum-graphemes'
-      if (letterSpacing !== 0) {
-        fitMode = 'segment-prefixes'
-      } else if (numericRunRe.test(text)) {
-        fitMode = 'pair-context'
-      } else if (textMetrics.width >= engineProfile.prefixFitMinWidth) {
-        fitMode = 'segment-prefixes'
-      }
-      let fitAdvances = getSegmentBreakableFitAdvances(
-        text,
-        textMetrics,
-        cache,
-        emojiCorrection,
-        fitMode,
-        measuredWithSpace ? spaceWidth : null,
-        engineProfile.lineBreakScan === 'webkit',
-      )
-      // The cached advances are shared by every occurrence of this text; only
-      // the final grapheme touches the following space.
-      if (followingSpaceKerning !== 0 && fitAdvances !== null) {
-        fitAdvances = fitAdvances.slice()
-        fitAdvances[fitAdvances.length - 1] = fitAdvances[fitAdvances.length - 1]! + followingSpaceKerning
-      }
-      pushMeasuredSegment(
-        text,
-        width,
-        kind,
-        fitAdvances,
-        spacingGraphemeCount,
-        engineProfile.entryFitBasis !== 'disabled' && kind === 'text' && fitAdvances !== null
-          ? getEntryGeometry(text, textMetrics, fitAdvances, width, engineProfile.entryFitBasis) : null,
-        keepsLineStartPunctuation && fitAdvances !== null ? textMetrics.lineStartProhibitions! : null,
-      )
-      return
-    }
-
-    pushMeasuredSegment(
-      text,
-      width,
-      kind,
-      null,
-      spacingGraphemeCount,
-    )
+  // A text segment's width as measured: alone, or together with the following space less
+  // that space, plus the item's kerning with a space that follows zero-width breaks. Apart
+  // from the loop below, whose code JavaScriptCore otherwise never optimizes fully on CJK
+  // text (RESEARCH.md, Keeping Work Bounded).
+  function getTextSegmentWidth(text: string, textMetrics: SegmentMetrics, measuredWithSpace: boolean, followingSpaceKerning: number): number {
+    return getCorrectedSegmentWidth(text, textMetrics, emojiCorrection) - (measuredWithSpace ? spaceWidth : 0) + followingSpaceKerning
   }
 
   for (let mi = 0; mi < analysis.kinds.length; mi++) {
-    const segText = analysis.texts[mi]!
-    const segKind = analysis.kinds[mi]!
-
-    if (segKind === 'soft-hyphen') {
-      const narrowing = retreatsFromUnfitHyphen ? getJoinedNarrowing(mi) : 0
-      pushMeasuredSegment(
-        segText,
-        0,
-        segKind,
-        null,
-        0,
-      )
-      if (retreatsFromUnfitHyphen) {
-        discretionaryHyphenContexts ??= Array.from({ length: widths.length }, () => 0)
-        discretionaryHyphenContexts[widths.length - 1] = narrowing
+    const text = analysis.texts[mi]!
+    const kind = analysis.kinds[mi]!
+    let width = 0
+    // Graphemes that take letter spacing after them.
+    let spacingGraphemeCount = 0
+    let fitAdvances: number[] | null = null
+    let entry: SegmentEntryGeometry | null = null
+    let prohibitions: number[] | null = null
+    switch (kind) {
+      case 'text': {
+        // A control the engine hides takes no advance, only letter spacing.
+        if (engineProfile.hidesControlCharacters && controlCharacterRe.test(text)) {
+          spacingGraphemeCount = 1
+          break
+        }
+        // Such a run of marks adds its context with the marks, minus the context, and
+        // takes no letter spacing of its own.
+        const markContext = getMarkContext(mi)
+        if (markContext !== null) {
+          width = engineProfile.shapesMarksAcrossSoftHyphen && analysis.texts[mi - 1] === '\u00AD' && nonspacingMarkRunRe.test(text)
+            ? 0
+            : getTextWidth(markContext + text, fontMeasurement, emojiCorrection) - getTextWidth(markContext, fontMeasurement, emojiCorrection)
+          break
+        }
+        // With an empty following-space tail, the text is measured together with the
+        // space; with a zero-width tail, the item's kerning is added.
+        const followingSpaceTail = getFollowingSpaceTail(mi, text)
+        const measuredWithSpace = followingSpaceTail === ''
+        const textMetrics = getTextMetrics(text, followingSpaceTail)
+        previousJoinablePiece = text
+        previousJoinableMetrics = textMetrics
+        if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
+        const followingSpaceKerning = followingSpaceTail === null || measuredWithSpace ? 0 : getTailKerning(text + followingSpaceTail)
+        width = getTextSegmentWidth(text, textMetrics, measuredWithSpace, followingSpaceKerning)
+        // Under break-word, Blink retries an overflowing line with a break allowed between
+        // any two graphemes (line_breaker.cc), WebKit searches the word's grapheme prefixes
+        // (TextUtil::breakWord) and Gecko may wrap before any cluster (gfxTextRun.cpp:1069-1072),
+        // so every text segment takes emergency grapheme breaks, unless it is one Gecko cluster.
+        if (analysis.clusterSplits?.[mi] === false || text.length === 1) break
+        const fitMode: BreakableFitMode = letterSpacing !== 0 ? 'segment-prefixes'
+          : numericRunRe.test(text) ? 'pair-context'
+          : textMetrics.width >= engineProfile.prefixFitMinWidth ? 'segment-prefixes'
+          : 'sum-graphemes'
+        const fit = getSegmentFit(text, textMetrics, fontMeasurement, emojiCorrection, fitMode,
+          measuredWithSpace ? spaceWidth : null, engineProfile.lineBreakScan === 'webkit')
+        fitAdvances = fit.advances
+        if (fitAdvances === null) break
+        // The cached advances are shared by every occurrence of this text; only
+        // the final grapheme touches the following space.
+        if (followingSpaceKerning !== 0) {
+          fitAdvances = fitAdvances.slice()
+          fitAdvances[fitAdvances.length - 1] = fitAdvances[fitAdvances.length - 1]! + followingSpaceKerning
+        }
+        if (engineProfile.entryFitBasis !== 'disabled') {
+          entry = getEntryGeometry(text, fit, addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing), engineProfile.entryFitBasis)
+        }
+        if (keepsLineStartPunctuation) prohibitions = fit.lineStartProhibitions
+        break
       }
-      continue
+      case 'space':
+      case 'preserved-space':
+      case 'zero-width-break':
+        width = getTextWidth(text, fontMeasurement, emojiCorrection)
+        if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
+        break
+      case 'tab':
+        spacingGraphemeCount = 1
+        break
+      case 'control': {
+        width = getTextWidth(text, fontMeasurement, emojiCorrection)
+        // NEL shares a WebKit text item with the text before it and with
+        // combining marks after it, and the complex text path spaces it. Complex
+        // text shares the item only when its direction matches the page's, which
+        // preparation cannot see, so NEL next to complex text keeps its spacing.
+        const nextText = mi + 1 < analysis.kinds.length ? analysis.texts[mi + 1]! : ''
+        if (hasLetterSpacing && (
+          (mi > 0 && analysis.kinds[mi - 1] === 'text' && needsComplexTextPath(analysis.texts[mi - 1]!)) ||
+          (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
+        )) spacingGraphemeCount = 1
+        break
+      }
+      case 'soft-hyphen':
+      case 'zero-width-glue':
+      case 'hard-break':
+        break
     }
-
-    if (segKind === 'zero-width-glue') {
-      pushMeasuredSegment(segText, 0, segKind, null, 0)
-      continue
+    if (kind !== 'text' && kind !== 'space' && kind !== 'zero-width-break') simpleKinds = false
+    if (kind !== 'text' && kind !== 'soft-hyphen') previousJoinablePiece = null
+    // The full walker, layout()'s count and rich-inline layout read where the scan
+    // gives no break.
+    segmentFlags[mi] = getKindCode(kind) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0) |
+      (breaksBefore === null ? 0 : breaksBefore[mi] ? RETURNABLE : UNBROKEN)
+    widths.push(addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing))
+    breakableFitAdvances.push(fitAdvances)
+    if (entry !== null && entryGeometry === null) entryGeometry = Array.from({ length: mi }, () => null)
+    entryGeometry?.push(entry)
+    if (prohibitions !== null && lineStartProhibitions === null) lineStartProhibitions = Array.from({ length: mi }, () => null)
+    lineStartProhibitions?.push(prohibitions)
+    if (segments !== null) segments.push(text)
+    if (kind === 'soft-hyphen' && retreatsFromUnfitHyphen) {
+      discretionaryHyphenContexts ??= Array.from({ length: mi }, () => 0)
+      discretionaryHyphenContexts.push(getJoinedNarrowing(mi, previousJoinablePiece, previousJoinableMetrics))
+    } else {
+      discretionaryHyphenContexts?.push(0)
     }
-
-    if (segKind === 'hard-break') {
-      pushMeasuredSegment(segText, 0, segKind, null, 0)
-      continue
-    }
-
-    if (segKind === 'tab') {
-      pushMeasuredSegment(segText, 0, segKind, null, hasLetterSpacing ? 1 : 0)
-      continue
-    }
-
-    if (segKind === 'control') {
-      const width = getCorrectedSegmentWidth(segText, getSegmentMetrics(segText, cache), emojiCorrection)
-      // NEL shares a WebKit text item with the text before it and with
-      // combining marks after it, and the complex text path spaces it. Complex
-      // text shares the item only when its direction matches the page's, which
-      // preparation cannot see, so NEL next to complex text keeps its spacing.
-      const previousKind = mi > 0 ? analysis.kinds[mi - 1] : undefined
-      const nextText = mi + 1 < analysis.kinds.length ? analysis.texts[mi + 1]! : ''
-      const takesLetterSpacing = hasLetterSpacing && (
-        (previousKind === 'text' && needsComplexTextPath(analysis.texts[mi - 1]!)) ||
-        (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
-      )
-      pushMeasuredSegment(segText, width, segKind, null, takesLetterSpacing ? 1 : 0)
-      continue
-    }
-
-    // A control the engine hides takes no advance, only letter spacing.
-    if (engineProfile.hidesControlCharacters && controlCharacterRe.test(segText)) {
-      pushMeasuredSegment(segText, 0, segKind, null, hasLetterSpacing ? 1 : 0)
-      continue
-    }
-
-    // Such a run of marks adds its context with the marks, minus the context, and
-    // takes no letter spacing of its own.
-    const markContext = getMarkContext(mi)
-    if (markContext !== null) {
-      const joined = markContext + segText
-      const width = engineProfile.shapesMarksAcrossSoftHyphen && analysis.texts[mi - 1] === '\u00AD' && nonspacingMarkRunRe.test(segText)
-        ? 0
-        : getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
-          getCorrectedSegmentWidth(markContext, getSegmentMetrics(markContext, cache), emojiCorrection)
-      pushMeasuredSegment(segText, width, segKind, null, 0)
-      continue
-    }
-
-    const followingSpaceTail = segKind === 'text' ? getFollowingSpaceTail(mi, segText) : null
-    // Under break-word, Blink retries an overflowing line with a break allowed between
-    // any two graphemes (line_breaker.cc), WebKit searches the word's grapheme prefixes
-    // (TextUtil::breakWord) and Gecko may wrap before any cluster (gfxTextRun.cpp:1069-1072),
-    // so every text segment takes emergency grapheme breaks, unless it is one Gecko cluster.
-    const allowOverflowBreaks = segKind === 'text' && analysis.clusterSplits?.[mi] !== false
-    pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind, allowOverflowBreaks, followingSpaceTail)
   }
 
   // A segment's width is its width between the text before and after it; one that starts
   // a line takes back the halt Blink gives its first character there.
   let hanKerning: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null }
   if (engineProfile.hanKerning && textMayHanKern(analysis.normalized)) {
-    hanKerning = getHanKerningTrims(
-      fontMeasurement,
-      analysis.texts,
-      i => analysis.kinds[i] === 'text',
-      i => i === 0 ? -1 : analysis.normalized.charCodeAt(analysis.starts[i]! - 1),
-      i => i + 1 === analysis.kinds.length ? -1 : analysis.normalized.charCodeAt(analysis.starts[i + 1]!),
-      // A break directly after the segment: text after a break, or the end of the text.
-      i => i + 1 === analysis.kinds.length || (analysis.kinds[i + 1] === 'text' && breaksBefore?.[i + 1] !== false),
-    )
+    hanKerning = getHanKerningTrims(fontMeasurement, analysis)
     const trims = hanKerning.widthTrims
     if (trims !== null) for (let i = 0; i < trims.length; i++) widths[i] = widths[i]! - trims[i]!
   }
   let lineEndTrims = hanKerning.lineEndTrims
   if (engineProfile.hangsIdeographicSpace && analysis.normalized.includes('\u3000')) {
-    lineEndTrims = addIdeographicSpaceHangs(lineEndTrims, analysis.texts, analysis.kinds, breaksBefore, cache, letterSpacing, discretionaryHyphenWidth)
+    lineEndTrims = addIdeographicSpaceHangs(lineEndTrims, analysis.texts, analysis.kinds, breaksBefore, fontMeasurement, letterSpacing, discretionaryHyphenWidth)
   }
   const prepared = {
     widths,
@@ -652,7 +561,7 @@ function addIdeographicSpaceHangs(
   texts: readonly string[],
   kinds: readonly SegmentBreakKind[],
   breaksBefore: readonly boolean[] | null,
-  cache: Map<string, SegmentMetrics>,
+  measurement: FontMeasurement,
   letterSpacing: number,
   hyphenWidth: number,
 ): number[] | null {
@@ -666,7 +575,7 @@ function addIdeographicSpaceHangs(
     const run = text.slice(start)
     const previous = i > 0 ? texts[i - 1]! : ''
     const afterSoftHyphen = start === 0 && previous.charCodeAt(previous.length - 1) === 0xAD
-    const hang = getSegmentMetrics(run, cache).width + run.length * letterSpacing - (afterSoftHyphen ? hyphenWidth : 0)
+    const hang = getSegmentMetrics(run, measurement).width + run.length * letterSpacing - (afterSoftHyphen ? hyphenWidth : 0)
     if (hang <= 0) continue
     trims ??= Array.from({ length: texts.length }, () => 0)
     trims[i] = trims[i]! + hang
@@ -682,11 +591,11 @@ function prepareInternal(
 ): InternalPreparedText | PreparedTextWithSegments {
   const wordBreak = options?.wordBreak ?? 'normal'
   const letterSpacing = readLetterSpacing(options?.letterSpacing)
-  // One page-language read: break rules and measurement both follow it.
-  const documentLanguage = getDocumentLanguage()
   const engineProfile = getEngineProfile()
-  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, documentLanguage)
-  return measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, documentLanguage)
+  // One language read: break rules and measurement both follow it.
+  const language = getPreparationLanguage(engineProfile)
+  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
+  return measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, language)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
@@ -695,12 +604,19 @@ function prepareInternal(
 // same PreparedText can be laid out at any maxWidth and lineHeight via layout().
 //
 // Steps:
-//   1. Normalize collapsible whitespace (CSS white-space: normal behavior)
+//   1. Normalize white space as white-space: normal or pre-wrap does
 //   2. Find break opportunities with the engine's own line-break scan
 //   3. Split the text into segments between them ("better." as one unit)
-//   4. Measure each segment via canvas measureText, cache by (segment, font)
-//   5. Pre-measure graphemes of long words (for overflow-wrap: break-word)
-//   6. Correct emoji canvas inflation (auto-detected per font size)
+//   4. Measure each segment via canvas measureText, cache by (segment, font).
+//      A run of combining marks that glue or a control separates from its grapheme
+//      measures after that grapheme, and WebKit measures a word with the space after it
+//   5. Measure where each text segment of two or more graphemes can break under
+//      overflow-wrap: break-word: by graphemes, pairs or prefixes, per engine
+//   6. Correct emoji canvas inflation (probed once per font)
+//   7. Record what changes at a line's edges: Blink's halts of CJK punctuation,
+//      U+3000 hangs, how much narrower a soft hyphen's neighbors measure joined,
+//      fresh-line widths inside segments with invisible characters, and the
+//      characters WebKit keeps after an overflowing first one
 export function prepare(text: string, font: string, options?: PrepareOptions): PreparedText {
   return prepareInternal(text, font, false, options) as PreparedText
 }
@@ -717,13 +633,9 @@ function getInternalPrepared(prepared: PreparedText): InternalPreparedText {
 
 // Layout prepared text at a given max width and caller-provided lineHeight.
 // Pure arithmetic on cached widths — no canvas calls, no DOM reads, no string
-// operations, and no per-line allocations.
-// ~0.0002ms per text block. Call on every resize.
-//
-// Line breaking rules (matching CSS white-space: normal + overflow-wrap: break-word):
-//   - Break before any non-space segment that would overflow the line
-//   - Trailing whitespace hangs past the line edge (doesn't trigger breaks)
-//   - Segments wider than maxWidth are broken at grapheme boundaries
+// operations, and no per-line allocations. Call on every resize. Lines break
+// where the engine's page breaks them, under the CSS that README.md's Caveats
+// list.
 export function layout(prepared: PreparedText, maxWidth: number, lineHeight: number): LayoutResult {
   // The resize hot path counts the same lines as `layoutWithLines()` without
   // building line ranges or text.
@@ -827,7 +739,9 @@ export function measureLineStats(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
 ): LineStats {
-  return measurePreparedLineGeometry(getInternalPrepared(prepared), maxWidth)
+  const stats = { lineCount: 0, maxLineWidth: 0 }
+  walkPreparedLinesRaw(getInternalPrepared(prepared), maxWidth, undefined, stats)
+  return stats
 }
 
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is
@@ -917,7 +831,7 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
 }
 
 export function clearCache(): void {
-  clearAnalysisCaches()
+  clearWordSegmenter()
   clearMeasurementCaches()
 }
 

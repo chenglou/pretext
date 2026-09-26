@@ -1,11 +1,7 @@
 import type { SegmentBreakKind } from './analysis.js'
+import type { LayoutCursor, LineStats } from './layout.js'
 import { getEngineProfile } from './measurement.js'
 import { getFreshLineEnd, getSegmentEntryWidth, type SegmentEntryGeometry } from './entry-geometry.js'
-
-export type LineBreakCursor = {
-  segmentIndex: number
-  graphemeIndex: number
-}
 
 // A segment's flags byte: its kind's code in the low four bits, then what else
 // the walkers read of it.
@@ -72,12 +68,6 @@ export type PreparedLineBreakData = {
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
 }
 
-// A walk's line count and its widest line.
-export type WalkedLineStats = {
-  lineCount: number
-  maxLineWidth: number
-}
-
 type InternalLineVisitor = (
   width: number,
   startSegmentIndex: number,
@@ -141,6 +131,7 @@ function getOverflowingFirstGraphemeEnd(
 
 function getTerminalLetterSpacing(
   prepared: PreparedLineBreakData,
+  hangingKinds: number,
   startSegmentIndex: number,
   startGraphemeIndex: number,
   endSegmentIndex: number,
@@ -154,10 +145,8 @@ function getTerminalLetterSpacing(
   if (isDiscretionaryLineEnd(segmentFlags, endSegmentIndex, endGraphemeIndex)) return 0
   // A run of preserved spaces and tabs that hangs where the line wraps already
   // charged the gap after the glyph before it. Gecko doesn't hang tabs.
-  if (endSegmentIndex < segmentFlags.length && (segmentFlags[endSegmentIndex]! & KIND_BITS) !== HARD_BREAK) {
-    const kind = segmentFlags[endSegmentIndex - 1]! & KIND_BITS
-    if (kind === PRESERVED_SPACE || (kind === TAB && getEngineProfile().hangTabs)) return 0
-  }
+  if (endSegmentIndex < segmentFlags.length && (segmentFlags[endSegmentIndex]! & KIND_BITS) !== HARD_BREAK &&
+    (1 << (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) & hangingKinds) !== 0) return 0
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
     const flags = segmentFlags[i]!
@@ -182,7 +171,7 @@ function getTerminalLetterSpacing(
 // inside it is no line of its own when a line start consumes all of it.
 export function normalizePreparedLineStart(
   prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
+  cursor: LayoutCursor,
 ): boolean {
   const { segmentFlags } = prepared
   const segmentCount = segmentFlags.length
@@ -218,9 +207,9 @@ export function walkPreparedLinesRaw(
   prepared: PreparedLineBreakData,
   maxWidth: number,
   onLine?: InternalLineVisitor,
-  stats: WalkedLineStats = { lineCount: 0, maxLineWidth: 0 },
+  stats: LineStats = { lineCount: 0, maxLineWidth: 0 },
 ): number {
-  const cursor: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   if (!prepared.simpleLineWalkFastPath) {
     if (normalizePreparedLineStart(prepared, cursor)) walkPreparedComplexLines(prepared, cursor, maxWidth, onLine, stats)
     return stats.lineCount
@@ -238,7 +227,7 @@ export function walkPreparedLinesRaw(
     if (startSegmentIndex >= segmentCount) return stats.lineCount
     const startGraphemeIndex = cursor.graphemeIndex
     cursor.segmentIndex = startSegmentIndex
-    const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)!
+    const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
     stats.lineCount++
     if (width > stats.maxLineWidth) stats.maxLineWidth = width
     onLine?.(width, startSegmentIndex, startGraphemeIndex, cursor.segmentIndex, cursor.graphemeIndex)
@@ -265,8 +254,10 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
   let hasContent = false
 
   // Fast-path handles never start with a space, so this skip never runs, but
-  // Firefox counts Latin text at new widths 10-15% slower without it. A ZWSP at
-  // `first` starts the first line.
+  // without it Firefox 156 counted Latin chat messages at new widths in 1.10 to
+  // 1.15 of main's time (RESEARCH.md, Decisions Log). To re-check it, remove the
+  // skip and run `bun harness bench main --browser=firefox --rows=resize
+  // --sessions=2`. A ZWSP at `first` starts the first line.
   let first = 0
   while (first < segmentCount && (segmentFlags[first]! & KIND_BITS) === SPACE) first++
   for (let i = first; i < segmentCount; i++) {
@@ -346,7 +337,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
 // its in the last bits (RESEARCH.md, Keeping Work Bounded).
 function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   const { segmentFlags } = prepared
-  const cursor: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   let count = 0
   while (normalizePreparedLineStart(prepared, cursor)) {
     const startSegmentIndex = cursor.segmentIndex
@@ -377,7 +368,7 @@ export function canReturnFromUnfitHyphen(
   overflow: number,
 ): boolean {
   const { discretionaryHyphenContexts, segmentFlags } = prepared
-  if (discretionaryHyphenContexts === null || getEngineProfile().unfitHyphenRetreat === 'none') return false
+  if (discretionaryHyphenContexts === null) return false
   let narrowing = 0
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) narrowing += discretionaryHyphenContexts[i]!
   if (narrowing >= overflow) return false
@@ -395,10 +386,10 @@ export function canReturnFromUnfitHyphen(
 // 12-14ns there against about 1ns for a local.
 function walkPreparedComplexLines(
   prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
+  cursor: LayoutCursor,
   maxWidth: number,
   onLine: InternalLineVisitor | undefined,
-  stats: WalkedLineStats | null,
+  stats: LineStats | null,
   singleLine = false,
   // A single-line caller can end stepping at an ordinary break before this
   // cursor, as if the text continued past it. JavaScriptCore walked letter-spaced
@@ -432,7 +423,9 @@ function walkPreparedComplexLines(
   const availableWidth = Math.max(0, maxWidth)
   const fitLimit = availableWidth + engineProfile.lineFitEpsilon
   // Preparation records soft-hyphen contexts only where the engine retreats
-  // and the text has a soft hyphen.
+  // and the text has a soft hyphen. The profile test changes no result, but
+  // without it Chrome counted letter-spaced CJK and pre-wrap text 3-7% slower
+  // (RESEARCH.md, Keeping Work Bounded).
   const retreatsFromUnfitHyphen = prepared.discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat !== 'none'
   // Blink's retry leaves room for the hyphen at every earlier opportunity. Gecko
   // returns to any opportunity whose line fits, such as a break between text segments.
@@ -794,7 +787,7 @@ function walkPreparedComplexLines(
           (endSegmentIndex === hangEndSegmentIndex || endSegmentIndex === hangEndSegmentIndex + 1) &&
           (hangEndSegmentIndex === segmentCount || (segmentFlags[hangEndSegmentIndex]! & KIND_BITS) === HARD_BREAK)
         const paintWidth = (hangsWhereUnfit ? lineW : endWidth) +
-          getTerminalLetterSpacing(prepared, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex)
+          getTerminalLetterSpacing(prepared, hangingKinds, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex)
         lineWidth = hangsWhereUnfit ? Math.max(hangStartWidth, Math.min(paintWidth, availableWidth)) : paintWidth
       }
     }
@@ -811,16 +804,16 @@ function walkPreparedComplexLines(
   return lastLineWidth
 }
 
+// Steps one line of a fast-path handle from a normalized line start.
 function stepPreparedSimpleLineGeometry(
   prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
+  cursor: LayoutCursor,
   maxWidth: number,
-): number | null {
+): number {
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartExtras, lineEndTrims } = prepared
   // A negative width lays out as 0, as in the complex walker.
   const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
   const start = cursor.segmentIndex
-  if (start >= widths.length) return null
 
   // The first segment of the line, or the rest of one a line ended inside. One that
   // overflows and can break fills the line grapheme by grapheme.
@@ -889,12 +882,12 @@ function stepPreparedSimpleLineGeometry(
 }
 
 // Steps one line from a normalized line start. An end cursor stops stepping at
-// an ordinary break there, as if the text were cut at it, and returns the paint
-// width of a line that ends there. A cursor inside a segment needs that
+// an ordinary break there, as if the text continued past it, and returns the
+// paint width of a line that ends there. A cursor inside a segment needs that
 // segment's breakable fit advances.
 export function stepPreparedLineGeometryFromStart(
   prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
+  cursor: LayoutCursor,
   maxWidth: number,
   endSegmentIndex = prepared.widths.length,
   endGraphemeIndex = 0,
@@ -908,17 +901,11 @@ export function stepPreparedLineGeometryFromStart(
 
 export function stepPreparedLineGeometry(
   prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
+  cursor: LayoutCursor,
   maxWidth: number,
   endSegmentIndex = prepared.widths.length,
   endGraphemeIndex = 0,
 ): number | null {
   if (!normalizePreparedLineStart(prepared, cursor)) return null
   return stepPreparedLineGeometryFromStart(prepared, cursor, maxWidth, endSegmentIndex, endGraphemeIndex)
-}
-
-export function measurePreparedLineGeometry(prepared: PreparedLineBreakData, maxWidth: number): WalkedLineStats {
-  const stats = { lineCount: 0, maxLineWidth: 0 }
-  walkPreparedLinesRaw(prepared, maxWidth, undefined, stats)
-  return stats
 }
