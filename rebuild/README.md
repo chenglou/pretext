@@ -10,6 +10,10 @@ in all three engines, rich inline included; and the speed recipes end with Blink
 After that the work is upkeep: pinning newer browsers, syncing main and adopting new browser APIs. A premise about fonts
 that nobody has falsified may be taken for speed, as a documented default with a named gap, and where requirements have
 to give, ad hoc ones go first, then petty ones.
+Where it stands (2026-09-25): with words first and the cut predictor the speed recipes end, so that part is reached.
+The first part isn't met yet: the review of words first's gap naming found 12 layouts at DPR 1 that fail with no gap,
+one-LayoutUnit fits on first lines and at line starts not beside U+0020 and six not traced, which the line before words
+first fails too (TAKEOVER.md; the known tail's `blink/exact-fits-without-a-gap`). They are open correctness work.
 
 Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated

@@ -9722,7 +9722,7 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters where no ligature fact settles the offset, else unsafe-to-break) at the break the line's decision took (a point), where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
+   "statement": "the condition a wrapped line start's stand-in position rests on (limits.ts positionLimit: glyph-clusters inside a grapheme or where no ligature fact settles the offset, font-fallback beside a U+3000 whose font the facts don't name, in-word-prefix where letters join across the offset, else unsafe-to-break) at the break the line's decision took (a point), where the line's fit test is decided within what that position can be off by (the adjustment the port can't place, limits.ts positionBounds, in LayoutUnits) plus one: ShapeLine corrects the space a reshaped start leaves by the paragraph's width of the reshaped text, which reads the start's position; a plain paragraph reports nothing",
    "source": "shaping_line_breaker.cc:309-324; engines/blink/gaps.ts lineEdgeGaps, startSpread; engines/blink/limits.ts positionLimit; DESIGN.md §5",
    "probes": [],
    "tests": [

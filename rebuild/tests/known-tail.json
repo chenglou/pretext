@@ -5481,6 +5481,103 @@
       ],
       "source": "the loss round's window probe (bwf-loss-20260924/win-resid*, the comma probe); blink/gap/common-window-side, blink/measure/prefix-without-script-in-context; the verifier's runs bwf-final-20260925 (fonts-losses.txt, lab-lost.ndjson, the cut probe), as lab cases in .artifacts/tests/runs/bwf-gaps-20260925/cases",
       "note": "Skia's hindi-neutral under 1px of letter and -2px of word spacing at 28px and DPR 3 (3 widths): the range's side ` 2026` alone is Common where the paragraph shapes it as Devanagari, and its veto moves the cut into `श्री`; leaving the range out where a side is Common gives Chrome's lines there and loses Skia's 2px of word spacing at DPR 2, so it isn't taken. Italic Athelas's hindi-neutral at 20px and DPR 2: Chrome's ` , ` is wider than either tree measures it. Since 2026-09-25 a window whose side Canvas shapes as Common alone reports script-context at its offset where it shows an adjustment or vetoes the offset (blink/gap/common-window-side), and both are covered."
+    },
+    {
+      "id": "blink/phosphate-first-line-exact-fit",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Phosphate at 17px and DPR 3: words first fits a first line through `§4 LT ` where Chrome and the base break before `LT`",
+      "conditions": [
+        "context-past-a-word",
+        "script-context",
+        "float32-precision",
+        "unsafe-to-break"
+      ],
+      "cases": [
+        {
+          "id": "c-13432bacbeb00ad8",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 3, lost layouts"
+        },
+        {
+          "id": "c-5d8b427bb7cf0e4e",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 3, lost layouts"
+        }
+      ],
+      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr3.ndjson, lab/r2-dpr3, tools/cover2.py); blink/gap/common-window-side; DESIGN.md §4.6, \"Blink's words first\"",
+      "note": "A new loss instance against the base (61c376d) that the review found in 163,353 layouts, 2 breaks: `2026 Type ‘A’ LT We st naïve first 1,024 T” Th 2026 §4 LT 12:30 To café` at 393.27 and 393.28px, the exact fit of its first line a LayoutUnit wider. Words first fits the first line through `§4 LT ` by 0 and 3 LayoutUnits, where Chrome and the base break before `LT`, so the port's positions there are a few LayoutUnits narrower than Chrome's. Covered by context-past-a-word, where the cut search's positions and the words' part, and by script-context from blink/gap/common-window-side at the Common stretch `§4`, with float32-precision and unsafe-to-break on the line; which of them is the cause isn't traced. The plain lines equal 3189fe1's in all 163,353 layouts, these included, so the loss is words first's and not the gap naming's. What would convert it: a trace of the first line's positions against Chrome's in the window probe."
+    },
+    {
+      "id": "blink/exact-fits-without-a-gap",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Exact fits at DPR 1 that fail with no gap, the base's too: one-LayoutUnit fits on first lines and at line starts not beside U+0020, and six not traced",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-dfdc2e04495a0d9b",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Al Tarikh 44px under -1.25px of word spacing)"
+        },
+        {
+          "id": "c-8746f134a0b04791",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Al Bayan 22px)"
+        },
+        {
+          "id": "c-24fe0b2ea0f99822",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Beirut 34px)"
+        },
+        {
+          "id": "c-9cbd5a642f78dfe4",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Farah 15px (line count too))"
+        },
+        {
+          "id": "c-985edc4105669846",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (line start inside a word, Tamil Sangam MN 22px under 3px of word spacing)"
+        },
+        {
+          "id": "c-beaf7f17674aebfc",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (line start after U+2009, Waseem 34px)"
+        },
+        {
+          "id": "c-ec7f82a3e7f88032",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
+        },
+        {
+          "id": "c-4210c5feb1edf92a",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 30px under 2.5px of letter and 3px of word spacing)"
+        },
+        {
+          "id": "c-39e364af56c8b84d",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 40px under -2.5px of word spacing)"
+        },
+        {
+          "id": "c-c5130cdd1e547a3a",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Al Bayan 40px under -2.5px of word spacing)"
+        },
+        {
+          "id": "c-29698f6c7c2ff8db",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Beirut 30px)"
+        },
+        {
+          "id": "c-dcb752091f665695",
+          "browser": "chrome",
+          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (not traced, Waseem 24px under -0.3px of letter and -1.25px of word spacing)"
+        }
+      ],
+      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr1.ndjson, lab/r2-dpr1, tools/cover2.py --open, tools/native-vs-port.py); blink/gap/one-unit-fit; DESIGN.md §4.6, \"Blink's words first\"",
+      "note": "The review's exact-fit set r2 widens each layout of its fresh set r1 (15,936 cases in 83 faces outside the lab's lists) to its widest line's exact fit and a LayoutUnit either side. At DPR 1, 13 failures in 12 layouts are covered by no gap, and the base (61c376d) and 3189fe1 fail them alike, so they are no loss of words first; they are open correctness work, and rule (1) of the redo's stopping rule (rebuild/README.md) isn't met while they stand. Four are first lines the port fits by 0 LayoutUnits where Chrome breaks earlier: a first line has no start to correct (shaping_line_breaker.cc:309-324), so blink/gap/one-unit-fit doesn't fire there and something else decides them. Two are wrapped lines whose fit a LayoutUnit decides but whose start isn't beside U+0020 (inside a Tamil word under overflow-wrap, after U+2009), where the in-word condition reports in-word-prefix at the start alone and not at the break. The other six are not traced: Al Bayan at 30px (2 widths) and 40px (2 widths, a line end inside a word that Chrome fits by a LayoutUnit), Beirut at 30px, Waseem at 24px; at DPR 3 the same cases pass or are covered. What would convert them: a trace of each against Chrome's positions in the window probe, then a gap where the port's measurements show the condition, or a fix."
     }
   ]
 }

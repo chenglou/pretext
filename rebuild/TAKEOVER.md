@@ -71,6 +71,25 @@ The evidence (runs under `.artifacts/tests/runs/bwf-gaps-20260925`; pinned Chrom
 - The Blink gates (`tests/gates.ts --engine=blink --fresh`, 19 gates, on the frozen tree): every one exits 0 but the
   citation ledger, whose 16 lost citations are the ones it lost before these rounds; tier 1 shows every case the same
   with no question changed, 1,268 unit tests pass.
+- The adversarial review (`.artifacts/tests/runs/bwfg-review-20260925`, on a fresh worktree at `84dba25`) found no
+  must-fix. It reproduced the gates (18 of 19 exit 0, the same 16 lost citations) and ran two fresh sets in pinned
+  Chrome: `r1`, 15,936 cases in 83 faces outside the lab's lists at sizes of 15 to 44px, spacing values not used before,
+  Common stretches and other spaces, at four widths each; and `r2`, the exact fit of each layout's widest line and a
+  LayoutUnit either side, about 16,730; 163,353 layouts at DPR 1, 1.5, 2, 2.625 and 3. The plain lines equal `3189fe1`'s
+  in all of them, and the inspected ones the plain ones. Against the base, `r1`'s lines are the base's in all 79,680
+  layouts; `r2` gains 17 breaks and 3 counts and loses 2 breaks, 17px Phosphate at DPR 3, where words first fits the
+  first line through `§4 LT ` and Chrome and the base break before `LT`, covered by `context-past-a-word` and
+  `common-window-side` (the known tail's `blink/phosphate-first-line-exact-fit`). The round's conditions fire in 1.4% to
+  2.4% of `r1`'s layouts and 13% to 32% of `r2`'s, which are exact fits by construction, and `one-unit-fit` fires there
+  where Chrome agrees with the port in over 99%. The start reach runs up to 1,280 LayoutUnits on the tier cases (CJK
+  half-em trims, Courier New's Arabic fallback, Times's and Hoefler Text's kerns): honest, but wide at such starts.
+- Open, and not fixed in this round: 13 failures in 12 layouts of `r2` at DPR 1 are covered by no gap, and the base and
+  `3189fe1` fail them alike (the known tail's `blink/exact-fits-without-a-gap`). Four are first lines the port fits by 0
+  LayoutUnits where Chrome breaks earlier (Al Tarikh 44px, Al Bayan 22px, Beirut 34px, Farah 15px), which have no start
+  to correct; two are wrapped lines whose fit a LayoutUnit decides and whose start isn't beside U+0020 (inside a Tamil
+  Sangam MN word at 22px, after U+2009 in Waseem at 34px), where the in-word condition reports at the start and not at
+  the break; six are not traced (Al Bayan at 30 and 40px, Beirut at 30px, Waseem at 24px). So the first part of the
+  stopping rule, no unexplained difference on any set, isn't met on the review's sets, independently of words first.
 
 2026-09-24, Blink's words-first loss round (branch `blink-words-first`, unmerged; [DESIGN.md §4.4, §4.6](DESIGN.md)):
 every loss the verifier's fonts and bidi attacks found against the rebuild line (`61c376d`) in installed fonts, and the
