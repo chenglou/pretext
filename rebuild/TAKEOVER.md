@@ -1,5 +1,22 @@
 # Takeover decisions and evidence
 
+2026-09-25, the re-pin (`74678fe`): the lab runs Chrome 154.0.8037.57 and Firefox 156.0.1 (`lab/browser-build.ts`
+`LAB_APPS`), and the library accepts both as the builds its ports follow (`env.ts` `ACCEPTED_BUILDS`, before this
+`SOURCE_IDENTICAL_BUILDS`, with what changed between the tags). `PINNED_BUILDS` stays at 153.0.8010.48 and 156.0, whose
+source the ports cite, and the frozen references stay: they were recorded under 153.0.8010.50 and 156.0, and the new builds
+record the same. What was recorded again:
+- Firefox 156.0.1, in a worktree at `61c376d`, whose Gecko port, probes and `tests/facts.ts` are this tree's (its probe
+  output, runs and comparisons are in `.artifacts/tests/runs/repin-20260925/firefox-156.0.1`). The probe sets
+  (`tests/rerun-probes.sh firefox`) give `facts/gecko/156.0.1.ndjson`, 407 facts: against 156.0's, all 404 are
+  unchanged, no decisive value moved, no verdict flipped and none is missing; the 3 new ones are H3b's, now under the main
+  probe set too and holding with the follow-up set's values (extracted and released again from that folder, the same
+  facts). Tier 2, every set in both configurations and both orders, 63,771 cases each, recorded with `--record`: every
+  case asks the same Canvas questions in the same order and gets the same answers, and the browser's own predictions
+  equal the frozen references', the build and its `engine-build` gap left out. The ledgers change no status but on 5 of the suite
+  sample's cases, history-dependent in the reference and passing in every metric now (the known tail's
+  `gecko/process-font-fallback-state`), and the differing predicted values stay at 239 and 112 rect counts without facts
+  and 742 and 100 with them. Run from this tree, `probes/canvas-checks.ts` answers supported with every value 156.0's.
+
 2026-09-25, `pin-firefox-policy` merged (`9a5428c`): `lab/pin-browser.sh` writes
 `Contents/Resources/distribution/policies.json` with `DisableAppUpdate` into a Firefox copy before its first launch,
 checks the copy against the installed bundle without that file and hashes the tree with it, and sorts the tree hash's
