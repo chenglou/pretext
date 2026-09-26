@@ -27,6 +27,8 @@ export const CHROME_PIN_ARGS: readonly string[] = ['--disable-updater-scheduler'
 // takes the appUpdate policy only from the bundle or the system (UpdateServiceStub.sys.mjs updateDisabled, Firefox 156), so
 // the lab's profiles turn automatic download and install off; on macOS app.update.auto is an ordinary pref
 // (UpdateUtils.sys.mjs PER_INSTALLATION_PREFS_PLATFORMS). A fresh profile's first update check is hours away in any case.
+// A launch under another profile isn't covered (macOS reopened the 156.0 copy at login after a crash on 2026-09-25, and
+// Firefox updated it to 156.0.1), so pin-browser.sh also puts the DisableAppUpdate policy in the copy's bundle.
 export const FIREFOX_PIN_PREFS: ReadonlyArray<[string, boolean]> = [['app.update.auto', false], ['app.update.staging.enabled', false]]
 // The system WebKit.framework Safari and webkit-host load.
 const WEBKIT_FRAMEWORK = '/System/Library/Frameworks/WebKit.framework'

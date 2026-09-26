@@ -1,5 +1,13 @@
 # Takeover decisions and evidence
 
+2026-09-25, `pin-firefox-policy` merged (`9a5428c`): `lab/pin-browser.sh` writes
+`Contents/Resources/distribution/policies.json` with `DisableAppUpdate` into a Firefox copy before its first launch,
+checks the copy against the installed bundle without that file and hashes the tree with it, and sorts the tree hash's
+paths under the C locale ([lab/README.md](lab/README.md), "Pinned browsers"). After a crash that day macOS reopened the
+pinned 156.0 copy at login under the default profile, whose update prefs are Firefox's own, and Firefox updated the copy
+to 156.0.1; a release build takes the update policy only from its bundle or the system. The lab's pin stays at
+`Firefox 156.0.app` until the re-pin.
+
 2026-09-25, words first merged into `rebuild-20260916` (merge commit `f693c17`; `blink-words-first` at `cf1ac69`, whose
 tree the merge takes whole), then main merged at `48980bb`. The maintainer approved landing it with every remaining loss
 named as a gap. What words first changes ([DESIGN.md §4.4, §4.6](DESIGN.md), the dated entries below):
