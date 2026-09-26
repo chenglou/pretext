@@ -1,32 +1,32 @@
-# Security Policy
+# セキュリティポリシー
 
-## Reporting a Vulnerability
+## 脆弱性の報告
 
-If you believe you have found a security vulnerability in Pretext, please report it privately through GitHub's private vulnerability reporting flow:
+Pretext にセキュリティ脆弱性を発見したと思われる場合は、GitHub の非公開脆弱性報告フローを通じて、非公開で報告してください。
 
 <https://github.com/chenglou/pretext/security/advisories/new>
 
-Please do not open a public GitHub issue for sensitive reports.
+機微な内容の報告には、公開の GitHub Issue を使わないでください。
 
-When possible, include:
+可能であれば、以下を含めてください。
 
-- A short description of the issue and why it matters
-- Affected version(s)
-- Reproduction steps or a small proof of concept
-- Any suggested fix or mitigation
+- 問題の簡潔な説明と、それが重要である理由
+- 影響を受けるバージョン
+- 再現手順、または小さな概念実証 (PoC)
+- 修正案や緩和策の提案 (あれば)
 
-I will review reports on a best-effort basis and coordinate a fix before any public disclosure.
+報告はベストエフォートで確認し、公表前に修正の調整を行います。
 
-## Supported Versions
+## サポート対象バージョン
 
-Security fixes, when needed, will be made against the latest published version of `@chenglou/pretext`.
+セキュリティ修正は、必要に応じて、`@chenglou/pretext` の最新公開バージョンに対して行われます。
 
-## Scope
+## 対象範囲
 
-Pretext is a client-side text layout library. The most relevant reports are issues that could affect consumers using the package in real applications, for example:
+Pretext はクライアントサイドのテキストレイアウトライブラリです。最も関連性が高い報告は、実際のアプリケーションでパッケージを利用している消費者に影響しうる問題です。例えば次のようなものです。
 
-- Unexpected code execution paths
-- Vulnerabilities introduced by published package contents
-- Denial-of-service style behavior from malicious inputs
+- 想定外のコード実行経路
+- 公開パッケージの内容に起因する脆弱性
+- 悪意ある入力による DoS 的な挙動
 
-For non-security bugs or feature requests, please use public GitHub issues instead.
+セキュリティ以外のバグや機能要望については、代わりに公開の GitHub Issue を使ってください。
