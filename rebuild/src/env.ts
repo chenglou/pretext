@@ -16,11 +16,19 @@ export type EngineName = 'blink' | 'webkit' | 'gecko'
 // A layout for another build, or for an unknown one, reports the engine-build gap.
 export const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' } as const satisfies Record<EngineName, string>
 
-// Builds accepted as source-identical to the pinned one, each with its evidence. They report no engine-build gap.
+// Builds accepted as the pinned one, each with its evidence. They report no engine-build gap.
 // Chrome 153.0.8010.50 (installed since 2026-09-17): in the Chromium checkout, `git diff --name-only 153.0.8010.48
 // 153.0.8010.50` lists chrome/VERSION alone and DEPS is unchanged, so Blink, V8, HarfBuzz, ICU and Skia are the pinned
 // revisions; the lab's native views are equal on all 76,029 cases both builds observed (REPORT.md §2).
-export const SOURCE_IDENTICAL_BUILDS: Record<EngineName, readonly string[]> = { blink: ['153.0.8010.50'], webkit: [], gecko: [] }
+// Chrome 154.0.8037.57 (the lab's pin since 2026-09-25): from 153.0.8010.50 the Blink files the port reads change in
+// refactors and in what it doesn't model (line-clamp's ellipsis, text-box-trim on inline boxes, shrink-to-fit content
+// sizes, a vertical canvas element's font orientation); the HarfBuzz roll (dfdc088c to 886fc1e6) saturates positions
+// that would overflow; every ICU entry of data/blink is byte-identical in its icudtl.dat; V8 and Skia rolled. Recorded
+// again under it, the tier sets ask the same Canvas questions and get the same answers in both orders (TAKEOVER.md).
+// Firefox 156.0.1 (the lab's pin since 2026-09-25): from FIREFOX_156_0_RELEASE nothing under gfx/ or intl/ changes, and
+// under layout/ only AbsoluteContainingBlock.cpp (an anchor-positioning fallback, bug 2070171); recorded again, the tier
+// sets get the same Canvas answers.
+export const ACCEPTED_BUILDS: Record<EngineName, readonly string[]> = { blink: ['153.0.8010.50', '154.0.8037.57'], webkit: [], gecko: ['156.0.1'] }
 
 // The languages a browser process uses for content without a usable lang, per engine (DESIGN.md §1.4). No page API shows
 // them, and the library never reads them from the OS, so they are given facts; the lab sets or reads them when it

@@ -6,22 +6,23 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserBuild, BrowserKind } from './types.ts'
 
-// The apps the lab and the probe runner launch. Chrome and Firefox are private byte-identical copies of the installed
-// bundles, made and checked by pin-browser.sh: each browser's updater replaces the bundle it runs from or the path
-// registered with it, /Applications, so a copy keeps its build while the installed browser updates itself (Chrome went
-// from 153.0.8010.48 to .50 during ceiling round 2). Both drivers pass CHROME_PIN_ARGS, and their Firefox profiles set
-// FIREFOX_PIN_PREFS. A new release gets a new copy and a new path here (TESTS.md §12).
+// The apps the lab and the probe runner launch. Chrome and Firefox are private copies of the installed bundles,
+// byte-identical but for a Firefox copy's update policy, made and checked by pin-browser.sh: each browser's updater
+// replaces the bundle it runs from or the path registered with it, /Applications, so a copy keeps its build while the
+// installed browser updates itself (Chrome went from 153.0.8010.48 to .50 during ceiling round 2). Both drivers pass
+// CHROME_PIN_ARGS, and their Firefox profiles set FIREFOX_PIN_PREFS. A new release gets a new copy and a new path here
+// (TESTS.md §12).
 const PINNED_APPS = join(homedir(), 'github/browser-engines/apps')
 // LAB_CHROME_APP and LAB_FIREFOX_APP name another bundle for one command, to try a new release before moving the pin.
 export const LAB_APPS = {
-  chrome: process.env['LAB_CHROME_APP'] ?? join(PINNED_APPS, 'Google Chrome 153.0.8010.50.app'),
-  firefox: process.env['LAB_FIREFOX_APP'] ?? join(PINNED_APPS, 'Firefox 156.0.app'),
+  chrome: process.env['LAB_CHROME_APP'] ?? join(PINNED_APPS, 'Google Chrome 154.0.8037.57.app'),
+  firefox: process.env['LAB_FIREFOX_APP'] ?? join(PINNED_APPS, 'Firefox 156.0.1.app'),
   safari: '/Applications/Safari.app',
 } as const
 // Chrome's updater keeps one path per app id, and a Chrome started from another path registers that path 19 s after
 // startup (chrome_browser_main.cc PreCreateMainMessageLoop, browser_updater_client_util_mac.mm EnsureUpdater and
-// browser_updater_client_mac.mm AppMatches at Chromium 152; 153.0.8010.50's framework binary holds the switch). With this
-// switch Chrome never schedules that, so the installed Chrome stays the registered one.
+// browser_updater_client_mac.mm AppMatches at Chromium 152; the framework binaries of 153.0.8010.50 and 154.0.8037.57
+// hold the switch). With this switch Chrome never schedules that, so the installed Chrome stays the registered one.
 export const CHROME_PIN_ARGS: readonly string[] = ['--disable-updater-scheduler']
 // Firefox updates the bundle it runs from. A release build ignores app.update.disabledForTesting outside automation and
 // takes the appUpdate policy only from the bundle or the system (UpdateServiceStub.sys.mjs updateDisabled, Firefox 156), so

@@ -13,7 +13,7 @@ import { webkitFontChecks } from './engines/webkit/checks.js'
 import type { WebKitLineGeometry, WebKitLineStart } from './engines/webkit/geometry.js'
 import * as webkit from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
-import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
+import { ACCEPTED_BUILDS, PINNED_BUILDS, type Environment } from './env.js'
 import { createContextPool, type ContextPool } from './measure/canvas.js'
 import { withLearnedFontFacts } from './measure/font-checks.js'
 import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, RangeFillResultOf } from './model.js'
@@ -223,7 +223,7 @@ export function paragraphGaps(prepared: Prepared): Gap[] {
 // Each port follows one build's source; any other build, or an unknown one, is laid out by that port all the same.
 function buildGaps(env: Environment): Gap[] {
   const pinned = PINNED_BUILDS[env.engine]
-  if (env.build === pinned || (env.build !== null && SOURCE_IDENTICAL_BUILDS[env.engine].includes(env.build))) return []
+  if (env.build === pinned || (env.build !== null && ACCEPTED_BUILDS[env.engine].includes(env.build))) return []
   const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${env.build}; the port follows ${pinned}`
   return [{ gap: 'engine-build', run: null, detail }]
 }
