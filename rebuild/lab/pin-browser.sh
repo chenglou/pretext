@@ -13,8 +13,9 @@
 # Chrome's updater keeps one path per app id, and a Chrome running from another path registers that path 19 s after it
 # starts unless it runs with --disable-updater-scheduler (chrome_browser_main.cc PreCreateMainMessageLoop,
 # browser_updater_client_util_mac.mm EnsureUpdater, browser_updater_client_mac.mm AppMatches, read at Chromium 152; the
-# switch is in 153.0.8010.50's framework binary). The lab and the probe runner always pass it. Don't start the copy by hand
-# without it: the updater would then update the copy and leave the installed Chrome alone until it runs again.
+# switch is in the framework binaries of 153.0.8010.50 and 154.0.8037.57). The lab and the probe runner always pass it.
+# Don't start the copy by hand without it: the updater would then update the copy and leave the installed Chrome alone
+# until it runs again.
 #
 # Firefox updates the bundle it runs from, and a release build takes the update policy only from the bundle or the system
 # (UpdateServiceStub.sys.mjs updateDisabled). The lab's profiles turn updates off, but a launch under the default profile

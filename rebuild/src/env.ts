@@ -24,10 +24,12 @@ export const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27
 // refactors and in what it doesn't model (line-clamp's ellipsis, text-box-trim on inline boxes, shrink-to-fit content
 // sizes, a vertical canvas element's font orientation); the HarfBuzz roll (dfdc088c to 886fc1e6) saturates positions
 // that would overflow; every ICU entry of data/blink is byte-identical in its icudtl.dat; V8 and Skia rolled. Recorded
-// again under it, the tier sets ask the same Canvas questions and get the same answers in both orders (TAKEOVER.md).
+// again under it, the tier sets ask the same Canvas questions, get the same answers and predict the same: every case
+// without facts in both orders, and a stratified tenth of the cases with them (TAKEOVER.md).
 // Firefox 156.0.1 (the lab's pin since 2026-09-25): from FIREFOX_156_0_RELEASE nothing under gfx/ or intl/ changes, and
 // under layout/ only AbsoluteContainingBlock.cpp (an anchor-positioning fallback, bug 2070171); recorded again, the tier
-// sets get the same Canvas answers.
+// sets ask the same Canvas questions, get the same answers and predict the same in both configurations and both orders,
+// and every probe fact of 156.0 holds (facts/gecko/156.0.1.ndjson).
 export const ACCEPTED_BUILDS: Record<EngineName, readonly string[]> = { blink: ['153.0.8010.50', '154.0.8037.57'], webkit: [], gecko: ['156.0.1'] }
 
 // The languages a browser process uses for content without a usable lang, per engine (DESIGN.md §1.4). No page API shows

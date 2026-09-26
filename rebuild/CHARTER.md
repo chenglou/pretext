@@ -319,10 +319,12 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 
 - `contentLanguage` is read only by Blink, Chrome's accept languages have no input, and WebKit's full preferred-language
   list isn't settled.
-- The library pins Chrome 153.0.8010.48 and accepts .50 as source-identical (`env.ts` `SOURCE_IDENTICAL_BUILDS`); the pin
-  itself hasn't moved. A neighbouring build is predicted with the nearest data under `engine-build` (research/
-  VERSION-DRIFT.md: on Chrome 152 and 155 and Firefox 153.3esr and 157.0b2 no status changed outside the cases whose
-  native layout drifted, at most 0.07 points on a metric).
+- The library pins Chrome 153.0.8010.48 and Firefox 156.0, the builds whose source the ports cite, and accepts Chrome
+  153.0.8010.50 and 154.0.8037.57 and Firefox 156.0.1 as those builds (`env.ts` `ACCEPTED_BUILDS`, each with its
+  evidence); the lab runs 154.0.8037.57 and 156.0.1 since 2026-09-25, and the pins themselves haven't moved. A
+  neighbouring build is predicted with the nearest data under `engine-build` (research/VERSION-DRIFT.md: on Chrome 152
+  and 155 and Firefox 153.3esr and 157.0b2 no status changed outside the cases whose native layout drifted, at most 0.07
+  points on a metric).
 - The lab's page doesn't call `detectEngine()`: its predictor derives the engine from the browser it launched, so a lab
   run in a browser whose Canvas lacks an assumption still predicts. The probe `probes/canvas-checks.ts` is the check per
   release until the page refuses (tests owner).

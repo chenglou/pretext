@@ -46,6 +46,12 @@ The main requirement is decided before and independently of redo outcomes. Inspe
 The report also preserves the original canary's height-only criterion separately. That helper prepares raw source but paints maintained-normalized source. For each original book/font/width pair and job/order, `crossCaseHeights` compares raw predicted public/model height with the normalized paragraph's own native block height, using the literal `Math.round(difference) === 0` rule. It validates matching environments and styles, and keeps raw own-native height as separate evidence. These are different source contracts: this diagnostic does not establish source cuts, map offsets between sources, or automatically assign a raw/normalized semantic difference to redo. An original height pass may coexist with a wrong-cut main miss and no strong certificate. Fractional line-height diagnostics are unavailable without the maintained helper's independently observed used line-box advance.
 
 The recorded Firefox endpoint result is `.artifacts/tests/book-survey-runs/takeover-20260920/firefox/survey-check/report.json`.
+Since main `48980bb` (#340) `normalizeSource()` takes the content language and, for Gecko, drops a segment break between
+East Asian characters. The inputs prepared again under it on 2026-09-25 are in `.artifacts/tests/book-survey-inputs/repin-20260925`:
+Firefox's normalized paragraphs of `ja-rashomon`, `ja-kumo-no-ito`, `zh-zhufu` and `zh-guxiang` lose 34, 16, 109 and 94
+UTF-16 units at both widths, so those 8 cases have new ids; Firefox's other 64 cases and all of Chrome's and
+webkit-host's are byte for byte the 2026-09-20 inputs. The Firefox survey hasn't run on the new inputs yet, so the result
+and the table below describe the 2026-09-20 ones.
 All 72 raw/normalized cases pass redo and plain own-source count and visible cuts in both orders, with zero native
 variation, inconclusive evidence or parity/order losses. Main supplies 37 strong certificates and has 35 visible
 own-source misses. The original mixed-source height diagnostic passes 29/36 book/width pairs for main, redo and

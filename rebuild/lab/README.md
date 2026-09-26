@@ -1286,23 +1286,25 @@ first) and removes their profiles. It launches once and never retries.
 ## Pinned browsers
 
 Chrome updated itself from 153.0.8010.48 to .50 in the middle of ceiling round 2. So the lab and the probe runner launch
-private copies: `~/github/browser-engines/apps/Google Chrome 153.0.8010.50.app` and `Firefox 156.0.app`
-(`browser-build.ts` `LAB_APPS`). `bash rebuild/lab/pin-browser.sh chrome|firefox` makes a copy with `ditto`, which clones
-the files on APFS, so a copy costs no disk until the installed app changes. It hashes both trees (every file's path and
-sha256, every link's target), refuses a copy that differs, and writes the hash beside the copy as `<copy>.tree-sha256`. The
-installed apps aren't touched, the copies aren't edited but for Firefox's update policy (below), and both copies launch through `open -n -g -a` like the installed
-apps did. `run.json` and the probe outputs record the app path and the tree hash (`app`), and rows keep `build` as before,
-so rows of a pinned run and of the installed app at the same build still meet (`score.ts --native-rows` compares `build`).
-In the pinned Chrome all 2,580 `runs` cases give the native observations the installed .50 gave in round 2, and the same
-holds for Firefox.
+private copies under `~/github/browser-engines/apps/` (`browser-build.ts` `LAB_APPS`): since 2026-09-25 `Google Chrome
+154.0.8037.57.app` and `Firefox 156.0.1.app`, before that `Google Chrome 153.0.8010.50.app` and `Firefox 156.0.app`
+(TAKEOVER.md, the re-pin of 2026-09-25). `bash rebuild/lab/pin-browser.sh chrome|firefox` makes a copy with `ditto`,
+which clones the files on APFS, so a copy costs no disk until the installed app changes. It hashes both trees (every
+file's path and sha256, every link's target), refuses a copy that differs, and writes the hash beside the copy as
+`<copy>.tree-sha256`. The installed apps aren't touched, the copies aren't edited but for Firefox's update policy
+(below), and both copies launch through `open -n -g -a` like the installed apps did. `run.json` and the probe outputs
+record the app path and the tree hash (`app`), and rows keep `build` as before, so rows of a pinned run and of the
+installed app at the same build still meet (`score.ts --native-rows` compares `build`). In the pinned Chrome all 2,580
+`runs` cases give the native observations the installed .50 gave in round 2, and the same holds for Firefox.
 
 - Chrome's updater keeps one path per app id. A Chrome started from another path registers that path 19 s after startup
   (`chrome_browser_main.cc` `PreCreateMainMessageLoop`, `browser_updater_client_util_mac.mm` `EnsureUpdater`,
-  `browser_updater_client_mac.mm` `AppMatches`, read at Chromium 152), and the updater would then update the copy and leave
-  the installed Chrome alone until it runs again. `--disable-updater-scheduler` skips that scheduling (the switch is in
-  153.0.8010.50's framework binary), and both drivers always pass it (`CHROME_PIN_ARGS`). Never start the copy by hand
-  without it. After the round's pinned jobs the updater's record still names `/Applications/Google Chrome.app`
-  (`~/Library/Application Support/Google/GoogleUpdater/prefs.json`, `updateclientdata.apps`).
+  `browser_updater_client_mac.mm` `AppMatches`, read at Chromium 152), and the updater would then update the copy and
+  leave the installed Chrome alone until it runs again. `--disable-updater-scheduler` skips that scheduling (the switch
+  is in the framework binaries of 153.0.8010.50 and 154.0.8037.57), and both drivers always pass it (`CHROME_PIN_ARGS`).
+  Never start the copy by hand without it. After the round's pinned jobs the updater's record still names
+  `/Applications/Google Chrome.app` (`~/Library/Application Support/Google/GoogleUpdater/prefs.json`,
+  `updateclientdata.apps`).
 - Firefox updates the bundle it runs from. A release build ignores `app.update.disabledForTesting` outside automation and
   takes the `appUpdate` policy only from the bundle or the system (`UpdateServiceStub.sys.mjs` `updateDisabled`, Firefox
   156), so the lab's profiles set `app.update.auto` and `app.update.staging.enabled` to false (`FIREFOX_PIN_PREFS`); on

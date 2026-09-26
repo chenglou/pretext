@@ -24,10 +24,12 @@ Range and element geometry from the same output, by porting each engine's geomet
   which webkit-host shares;
 - Firefox 156.0 (Gecko, ICU4X `icu_segmenter` 2.1.2 with Firefox's baked data).
 
-The rules come from each engine's source and data at those versions (`specs/*.md`), or from recorded probe verdicts,
-never from UAX #14 defaults, float tolerances or lab counts. Where Canvas can't supply what the DOM uses, the design
-handles it with a recipe, takes the missing fact as an input, or reports a named gap (§5). Correctness came first and
-simplicity second; performance is the phase that starts now, from numbers (§4.7, research/PROFILING-START.md).
+Since 2026-09-25 the lab runs Chrome 154.0.8037.57 and Firefox 156.0.1, which `env.ts` `ACCEPTED_BUILDS` accepts as
+those builds, with what changed between the tags. The rules come from each engine's source and data at those versions
+(`specs/*.md`), or from recorded probe verdicts, never from UAX #14 defaults, float tolerances or lab counts. Where
+Canvas can't supply what the DOM uses, the design handles it with a recipe, takes the missing fact as an input, or
+reports a named gap (§5). Correctness came first and simplicity second; performance is the phase that starts now, from
+numbers (§4.7, research/PROFILING-START.md).
 
 ## How the library is built
 
@@ -578,6 +580,7 @@ type GeckoEnvironment = GeckoProcessLanguages & {
 }
 type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironment
 const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' }
+const ACCEPTED_BUILDS = { blink: ['153.0.8010.50', '154.0.8037.57'], webkit: [], gecko: ['156.0.1'] }
 ```
 
 The library reads only page facts (CHARTER.md, "Boundaries"), in two steps by what can change while the page lives:
@@ -607,18 +610,19 @@ calls, with no browser or version names:
 | WebKit | `letterSpacing`, `wordSpacing` (its context has no `lang`, `fontKerning` or `textRendering`, and the port assigns those their defaults only) | not read | none: WebKit's Canvas keeps optional ligatures under letter spacing |
 | Gecko | `lang`, `letterSpacing`, `direction` | the ligature test and the emoji font test | `0.001px` adds nothing to a character's width and leaves the ink box where it was |
 
-The letter spacing is measured over one letter 16 times in `16px serif`: a Canvas that adds the spacing as a fraction and
-rounds the total shows nothing on a letter or two. A browser that lacks something is unsupported, and the reason names
-each lack; no prediction is sound without them, so none becomes a gap. Probe `probes/canvas-checks.ts` runs the library's
-own `detectEngine()` in a browser: the pinned Chrome 153.0.8010.50, Firefox 156.0 and webkit-host, and Chrome 152 and 155
-and Firefox 153.3esr and 157.0b2, are supported; Firefox 140.16.0esr is refused for the missing `lang`, the spacing
-(0.00104px a character) and the ink box it moves. The lab's predictor derives the engine from the browser it launched and
-doesn't call `detectEngine()`, so neither the recorded Canvas answers nor the offline replay hold the checks' calls.
+The letter spacing is measured over one letter 16 times in `16px serif`: a Canvas that adds the spacing as a fraction
+and rounds the total shows nothing on a letter or two. A browser that lacks something is unsupported, and the reason
+names each lack; no prediction is sound without them, so none becomes a gap. Probe `probes/canvas-checks.ts` runs the
+library's own `detectEngine()` in a browser: the pinned Chrome 153.0.8010.50 and 154.0.8037.57, Firefox 156.0 and
+156.0.1 and webkit-host, and Chrome 152 and 155 and Firefox 153.3esr and 157.0b2, are supported; Firefox 140.16.0esr is
+refused for the missing `lang`, the spacing (0.00104px a character) and the ink box it moves. The lab's predictor
+derives the engine from the browser it launched and doesn't call `detectEngine()`, so neither the recorded Canvas
+answers nor the offline replay hold the checks' calls.
 
 | Field | Source | What reads it |
 |---|---|---|
 | `engine` | `navigator.userAgent`, read for the engine and not the brand: `Firefox/` is Gecko; `Chrome/` is Blink, so Edge, Opera, Samsung Internet and an Android WebView are; `AppleWebKit/` without `Chrome/` is WebKit, so every iOS browser and a WKWebView are. Only Chrome, Firefox and Safari on one Mac are pinned and tested. `detectEngine()` also checks the running Canvas (above) | the one switch (§3) |
-| `build` | given: the app bundle version (Chrome's and Firefox's `CFBundleShortVersionString`, WebKit.framework's `CFBundleVersion`). Chrome's reduced user agent shows only the major version | `paragraphGaps` reports `engine-build` first when it isn't `PINNED_BUILDS[engine]`, null included, and the lab's layout records the environment it ran under |
+| `build` | given: the app bundle version (Chrome's and Firefox's `CFBundleShortVersionString`, WebKit.framework's `CFBundleVersion`). Chrome's reduced user agent shows only the major version | `paragraphGaps` reports `engine-build` first when it is neither `PINNED_BUILDS[engine]` nor a build `ACCEPTED_BUILDS` lists, null included, and the lab's layout records the environment it ran under |
 | `devicePixelRatio` | `window.devicePixelRatio` | Blink: the layout zoom, device scale factor times browser zoom (specs/blink-lines.md §2.1; an emulated DPR lays out at zoom 1). Gecko: app units per device pixel = max(1, round(60 / dpr)) (specs/gecko-lines.md §2.1). WebKit: nothing on the line-breaking path (specs/webkit-lines.md §1.6) |
 | `pageZoom` (WebKit) | given | Safari's page zoom multiplies lengths and font sizes, and no page API shows it. null: laid out at 1 with `page-zoom`. Blink and Gecko include browser zoom in the DPR |
 | `pageLang` | `document.documentElement.lang` | Blink's and Gecko's OffscreenCanvas language when `ctx.lang` isn't set; the lab checks it against `case.pageLang` |
@@ -2928,7 +2932,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking. The one probed example doesn't show it: 16px Helvetica Neue's stops, 35.5859375px apart, are 8 × Canvas's space advance of 4.447998px rounded up to 1/128px (rebuild/platform-bugs/LEDGER.md, "Looked at and not reported"), so the condition is due a re-reading. |
 | UI language (`ui-language`) | all | §1.4 | The engine's given process languages. | The fact is null and content has no `lang`, `lang=""`, a Han `lang` (WebKit), or a locale ICU has no data for (WebKit quotes). |
 | Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and the process's font fallback state, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. Gecko: every U+FFFD outside the listed fonts (the process's cached fallback family); an emoji that asks for a color glyph and measures as another font; U+FE0E on an emoji-default character, whose text glyph only the system-wide search finds among the families whose character maps are loaded by then (gfxPlatformFontList.cpp:1474-1486). WebKit: a line measuring an item that another box of the same text and wrapping styles could end elsewhere, where the parts would measure otherwise or the item is content whose fit ended the line (or the builder reverted): a level boundary the text gets under either paragraph direction or one or two characters of context (UAX #9 classes), or preserved white space of two units, which break-spaces and word spacing split and pre-wrap keeps whole (TextBreakingPositionContext.h:30-80). |
-| Engine build (`engine-build`) | all | The ports follow one build each. | `env.build`, given. | `build` null or not `PINNED_BUILDS[engine]`. |
+| Engine build (`engine-build`) | all | The ports follow one build each. | `env.build`, given. | `build` null, or neither `PINNED_BUILDS[engine]` nor a build `ACCEPTED_BUILDS` lists. |
 
 **What Canvas can't be asked, tried again in correctness round 5** (2026-09-19). The round looked for a sound Canvas
 recipe for every group of main's true passes that the rebuild still fails (research/MAIN-FACTS-ANALYSIS.md has the
@@ -3536,7 +3540,8 @@ rebuild/
                     function sets (§2.9), the runtime font checks before the engine, the engine-build gap             architect
     model.ts        input tree, font facts, line slots, fragments, gaps, and what the function set returns
                     (FillResultOf, LinePieces, LineInspectionOf); names no engine                                     architect
-    env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
+    env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, ACCEPTED_BUILDS, detectEngine(),
+                    detectEnvironment()                                                                             architect
     content.ts      indexContent, styleUnder, and its test                                               architect
     font-family.ts  listedFamilies: a CSS font-family list as the families it names, the one parser the font checks
                     and the three ports read (§1.1), and its test                                                   architect
