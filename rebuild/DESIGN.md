@@ -2438,7 +2438,7 @@ Tamil Sangam MN at 22px, after U+2009 in Waseem at 34px), where the in-word cond
 the break; and six traced since (TAKEOVER.md, 2026-09-25): three more one-LayoutUnit fits, two at a start after a soft
 hyphen (Al Bayan at 30px) and one beside U+0020 whose `in-word-prefix` point the scorer's evidence doesn't reach (Waseem
 at 24px), and three break-all cuts inside joined Arabic words, which `unsafe-to-break` names at the break but not over
-the line's earlier rect differences (Al Bayan at 40px, Beirut at 30px). They are open correctness work (TAKEOVER.md).
+the line's earlier rect differences (Al Bayan at 40px, Beirut at 30px). They were open correctness work then (TAKEOVER.md).
 The redo finish (2026-09-26, TAKEOVER.md) names two more mechanisms, where the fit test is decided by under two
 LayoutUnits (`gaps.ts` `lineEdgeGaps`, `rtlEndReach`; the rules `blink/gap/one-unit-fit` and `rtl-end-reach`):
 - A wrapped start's correction reaches the line's end whatever the start is beside, so the condition reports at the

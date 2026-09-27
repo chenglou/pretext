@@ -1,47 +1,125 @@
 # Pretext rebuild
 
-The goal is a cheap stateless core with simple data flow and predictable cost, and tests that reflect native browser
-behavior. Optimize until the remaining gains are small relative to the code, assumptions and state they add. The
-engineering approach follows `~/github/vibescript/docs/engineering.md`.
+The redo is a per-engine, correctness-first reference for plain text. It ports how Blink, Gecko and WebKit break and
+measure lines, one port per engine, each citing its browser's source, and predicts each browser's own lines (line
+count, breaks and widths) from a font declaration, with Canvas `measureText` as its only measurement: no DOM reads and
+no font files. An inspected paragraph also reports where the prediction can't be sure, as named gaps. It isn't
+shipped: main's `src/` is the library, and the redo is the reference main can take findings from. The lab pins Chrome
+154.0.8037.57, Firefox 156.0.1 and webkit-host (WebKit 22625.1.29.11.27). The branch is `rebuild-20260916`.
 
-The redo stops (the maintainer's rule, 2026-09-25) when: every remaining difference from the browsers on every set is a
-named gap, a made-up or variation-extreme font, or a width under 24 px, and none is unexplained; it is a superset of main
-in all three engines, rich inline included; and the speed recipes end with Blink's words first and the cut predictor.
-After that the work is upkeep: pinning newer browsers, syncing main and adopting new browser APIs. A premise about fonts
-that nobody has falsified may be taken for speed, as a documented default with a named gap, and where requirements have
-to give, ad hoc ones go first, then petty ones.
-Where it stands (2026-09-26): the maintainer scoped the redo to plain text, with rich inline and the manual layout API
-to be derived from it later, and asked to close it once it is as correct as it can be, with the lines drawn stated
-(TAKEOVER.md, 2026-09-26). With words first and the cut predictor the speed recipes end. Rule (2), read for plain text:
-against main `48980bb` (lab/BASELINE-main.md) main alone is right on 16, 36 and 8 tier cases and 25, 26 and 8 cases of
-main's harness, leaving out page history, luck and widths under 24 px; the true redo losses among them, 7, 1 and 1 and
-6, 11 and 1, are each a named gap or a class of the known tail, rule families, suite cases and catalog classes, none of
-them real text. Since 2026-09-26 the Blink port takes HanKerning's contexts at the paragraph's script edges, which
-main's Chinese AI paragraph lost a character to, and the Gecko port an emoji modifier after a letter at Apple Color
-Emoji's device size (17 of main's harness cases). Rule (1) isn't met to the letter: ten exact fits at DPR 1 fail with no
-covering gap (the known tail's `blink/exact-fits-without-a-gap`); their mechanisms are named where the port can see
-them, at the breaks their decisions chose between (`one-unit-fit`, `rtl-end-reach`), and what the scorer still takes is
-rects inside joined Arabic words that the observation port limits and no line gap touches. Main's rich-inline chips and
-cloned padding have no form in the redo, and are out of its scope.
+## End state (2026-09-26)
 
-Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
+The redo is done but for upkeep. The maintainer scoped it to plain text and asked to close it once it is as correct
+as it can be, with the lines drawn stated (TAKEOVER.md, 2026-09-26). Upkeep is:
+- pinning newer browsers: record the tier sets again (a stratified sample where a whole configuration costs too much,
+  as the 2026-09-25 re-pin did for Chrome with facts) and check that no status moves;
+- syncing main (outside `rebuild/` the branch is main but for the few lines TAKEOVER.md lists);
+- adopting new browser APIs that can replace a Canvas measurement or a premise taken for speed.
+
+Scope: plain text. Main's manual layout API and rich inline are to be derived from it later; the plain path already
+fills line ranges and counts lines. Rich inline, with its nuances such as kerning between sibling spans, is "a big quest
+for another time" (the maintainer): main's chips (`break: 'never'`) and padding cloned on every line (`extraWidth`)
+have no form in the redo's model, whose atomic inlines are boxes of a declared size and whose box edges slice. The
+headline numbers are without supplied font facts; the lab's facts stay an optional exploration.
+
+The stopping rule (the maintainer, 2026-09-25, read for plain text since 2026-09-26) has three parts. Where each stands:
+
+1. **Every remaining difference from the browsers on every set is a named gap, a made-up or variation-extreme font, or a
+   width under 24 px, and none is unexplained.** Met for the predictions without facts but for ten layouts. On the tier
+   sets (69,224 Chrome, 63,771 Firefox and 63,987 webkit-host cases, the frozen references) without facts, every case
+   that fails line count, breaks or widths in any engine is covered by a named gap or is page history. Off the tier
+   sets, ten exact fits at DPR 1 in Chrome fail with no covering gap (the known tail's
+   `blink/exact-fits-without-a-gap`). Their mechanisms are named at the breaks the fit decided between (`one-unit-fit`,
+   `rtl-end-reach`), but the scorer also counts rects inside joined Arabic words that no line gap touches, so what
+   converts them is a scorer or lab change, not a library change. With the lab's facts one Chrome tier case is open (Al
+   Nile 40px, unbroken Arabic under `break-all`, `wide-group-cuts`) and 19 Firefox cases are in the residual class
+   `gecko/one-shaping-unit-one-app-unit`. The lab's painter, which draws the predicted lines in the DOM and is scored
+   apart from the predictions, keeps 4, 0 and 24 rows open without facts, a class the known tail names
+   (`painter/without-explanation`). Main's harness case files are judged by main's scorer, which reads no gaps, so there
+   only the cases main gets right were traced (part 2).
+2. **It is a superset of main in all three engines.** Met but for named classes, none of them real text. Against main
+   `48980bb` ([lab/BASELINE-main.md](lab/BASELINE-main.md)), each case main gets right and the redo doesn't was read
+   line by line and put in one class: page history, narrower than 24 px, main right by luck (its width of the
+   disputed line more than 0.05 px off the browser's), or a true redo loss.
+
+   | | Chrome | Firefox | webkit-host |
+   |---|---:|---:|---:|
+   | tier sets: main right, the redo not | 16 | 36 | 8 |
+   | of those, true redo losses | 7 | 1 | 1 |
+   | main's harness case files: main right, the redo not | 25 | 26 | 8 |
+   | of those, true redo losses | 6 | 11 | 1 |
+
+   Each true loss is under a named gap or a known-tail class. On the tier sets: Chrome's six kerned words in Times New
+   Roman and Hoefler Text (`unsafe-to-break`, which the lab's facts get right) and Amiri's `((tai`, Firefox's
+   `ws/text-nodes` and webkit-host's `suite/ligature-thresholds-v3`. On main's harness files: in Chrome rare characters
+   between Hangul or Hebrew letters (`blink/rare-characters-beside-hangul-and-hebrew`); in Firefox `b` after U+3000
+   U+200D and U+261D after Hangul (`gecko/font-kept-from-the-character-before`) and a Sinhala mark after a space
+   (`gecko/spacing-mark-after-a-space-at-a-break`); in webkit-host an Arabic `rule/joining` case
+   (`rtl-shaping-across-inline-boxes`). The census and the books are right in the redo in every browser. The other
+   way round, the redo is right where main isn't on 42,339, 32,184 and 35,651 tier cases (most of them cases main can't
+   express) and 4,066, 2,920 and 3,245 harness cases. Main's 391 rich-inline cases with a chip or cloned padding
+   weren't run; main is right on 232, 231 and 233 of the pinned ones.
+3. **The speed recipes end with Blink's words first and the cut predictor.** Met: both landed on 2026-09-25. The redo
+   is still slower than main in Chrome and Firefox (the rounds below and TAKEOVER.md).
+
+## Lines drawn
+
+How the redo decides what counts as done, as the maintainer set it over these sessions:
+- **No right line is traded away silently.** The no-loss rule exists so that a change can't quietly lose a line that
+  main or the base got right: every lost line is traced and classed before the change is accepted. The stopping rule
+  then allows a remaining difference only when it's explained and named, a made-up or variation-extreme font, or under
+  24 px. Some losses can't be seen from Canvas at all: Zapfino's morx state changes no advance, so no Canvas answer
+  shows the offset HarfBuzz marks unsafe to break (`blink/zapfino-morx-unsafe-state`); that stays a named font-level
+  limitation, with no code keyed on the font. And the old code got some lines right only by rounding luck (part 2's
+  "main right by luck"); those aren't losses to chase.
+- **Correctness first, but not completionism.** What would need the DOM or a whole new feature is a named exception,
+  not a goal. Main corrects Canvas's Apple Color Emoji width from a hidden DOM span; the redo reads no DOM, takes the
+  page's advance from Canvas at the device size, and names what that can't show
+  (`shared/apple-color-emoji-canvas-width`). Rich inline is a new feature, out of scope.
+- **The relaxed stance (2026-09-23).** A premise about fonts that nobody has falsified may be taken for speed, as a
+  documented default with a named gap that inspected paragraphs report, bounded where an installed face breaks it
+  (Core, below). Where requirements have to give, ad hoc ones go first, then petty ones that no real text exercises.
+  CJK stays well supported.
+- **A gap has to stay quiet where the browser agrees.** The finish's new reports fire on 215 of 134,093 real-text
+  lines (0.16%). Its first form fired on 11% of the census's lines, all Chinese and Japanese, where Chrome agreed with
+  the port, so `one-unit-fit` doesn't report at the breaks for a start between two CJK ideographs or symbols. That cut
+  rests on those counts and on no traced failure starting so, not on a source reading that Blink's correction can't act
+  there.
+- **A soft line on performance.** Plain, predictable code (monomorphic calls, stable object shapes, locals, integer
+  bounds, no per-call allocation, one clear path; `~/github/vibescript/docs/engineering.md`) over tuning to one JIT's
+  heuristics, which can flip with the next browser release or machine. A small regression that traces only to a JIT
+  quirk is accepted and documented rather than contorting the code. Cater to the worst case: even, predictable cost
+  over branches and caches that help the average, where a slight regression is acceptable.
+- **Timing and the machine.** Timing runs two sessions per browser with a control copy of the base by default, more only
+  when two sessions disagree about a verdict that matters, in the foreground. Every job is bounded: loops stop at the
+  source length plus one line or a time limit, every child has a timeout and dies with its parent, memory is checked
+  before heavy jobs, concurrent jobs share no scratch checkout, and browser jobs go through
+  `.artifacts/session/with-browser-lock.py`. Never `pkill` or `killall`; kill only pids you started, by exact pid.
+
+## Start here
+
+[TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated
 research reports preserve the prior endpoint, not another task queue. Its branch is backed up at
 `codex/redo-handoff-backup-20260920` (`9369b7f`), with all committed studies in a verified Git bundle.
 
-The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md). The completed follow-up
-round removes unused unsegmented preparation data and simplifies Blink's line records; its evidence and stopping point
+## Rounds
+
+From 2026-09-21 the rounds aimed at a cheap stateless core with simple data flow and predictable cost, and tests that
+reflect native browser behavior, optimizing until the remaining gains were small relative to the code, assumptions and
+state they add. The first completed bounded plaintext round is recorded in [STATELESS_ROUND.md](STATELESS_ROUND.md).
+The completed follow-up round removes unused unsegmented preparation data and simplifies Blink's line records; its evidence and stopping point
 are in [STATELESS_ROUND2.md](STATELESS_ROUND2.md). The completed [round 3](STATELESS_ROUND3.md) removes repeated
 Blink/Gecko lookups with preserved correctness outcomes and complete phase timings: useful repeat gains, no general
 preparation gain and mixed new-width costs. Main's resize gap remains open.
 
-The current [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md) specializes count-only layout in the public
+The [prepared plaintext round](PREPARED_LAYOUT_EXPERIMENT.md) specializes count-only layout in the public
 engine; the redo core matches `0bdea4d`. Main took a simpler form of that counter (#338), and since 2026-09-25 `src/` is
 main `48980bb`, which also takes each engine's own break and grapheme tables (#340, #344; TAKEOVER.md). Fair public-API pairs show ordinary repeats about 31–70% faster across all three
 browsers. A bounded numeric ASCII experiment supports Canvas-free layout on observed inputs, but leaves Unicode,
-contextual shaping, broader main-pass coverage and a large preparation gap open. Preparation ownership and the next
-broader representation are the priority. [Exact identity source maps](experiments/plaintext-round/preparation-cost-account.md)
-are deferred behind that work. Owned rendering and rich painting remain paused.
+contextual shaping, broader main-pass coverage and a large preparation gap open. It left preparation ownership and the
+next broader representation as the next questions, with [exact identity source maps](experiments/plaintext-round/preparation-cost-account.md)
+deferred behind them; the redo closed without them. Owned rendering and rich painting remain paused.
 
 Since 2026-09-23 Gecko decides a break scan from its shaping units' advances and passes over the candidates inside a
 word whose end fits (the word scan, DESIGN.md §4.6), on a premise about fonts the maintainer accepted; the rest of the
@@ -131,4 +209,4 @@ need planted defects that the old rule missed. Native history and predictor orde
 The native driver holds the maintained browser lock across its sequential jobs. Run one checker per
 browser. Keep timing work foreground and verify actual page focus. Laptop/battery runs are authorized; record their
 conditions. Do not alter unrelated processes. Use large evaluations for unresolved questions that focused evidence
-cannot answer. The current round changes public count-only layout without changing the API or package surface.
+cannot answer. The prepared plaintext round changed public count-only layout without changing the API or package surface.

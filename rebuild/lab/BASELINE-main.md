@@ -2,11 +2,12 @@
 
 `rebuild/lab/baselines/main-predictor.ts` predicts with the library in `src/` (main `48980bb`, source unchanged) through
 main's own harness adapter, `harness/predict.ts`: the way an app developer uses main, and the way main's harness judges it.
-It is the number the redo's stopping rule (2) measures against: a superset of main in all three engines, rich inline
-included (rebuild/README.md). The runs below are of 2026-09-25: every tier 2 set (`rebuild/tests/sets.ts`) in pinned
-Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host on WebKit 22625.1.29.11.27, at DPR 2, in file order, with their own
-native observations (`rebuild/tests/browser-sets.ts --predictor=rebuild/lab/baselines/main-predictor.ts`), and main's
-harness case files against main's recordings. Rows, joins and scripts are in `.artifacts/tests/runs/rule2-20260925/`.
+It is the number the redo's stopping rule (2) measures against: a superset of main in all three engines, read for plain
+text since the maintainer scoped the redo so on 2026-09-26 (rebuild/README.md); main's rich-inline cases stay measured.
+The runs below are of 2026-09-25: every tier 2 set (`rebuild/tests/sets.ts`) in pinned Chrome 154.0.8037.57, Firefox
+156.0.1 and webkit-host on WebKit 22625.1.29.11.27, at DPR 2, in file order, with their own native observations
+(`rebuild/tests/browser-sets.ts --predictor=rebuild/lab/baselines/main-predictor.ts`), and main's harness case files
+against main's recordings. Rows, joins and scripts are in `.artifacts/tests/runs/rule2-20260925/`.
 The baseline of main `2e5e2bd` (2026-09-16, five sets) is in this file's history; its rows stay in
 `.artifacts/lab/baseline-main/`.
 

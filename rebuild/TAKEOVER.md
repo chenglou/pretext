@@ -1,5 +1,24 @@
 # Takeover decisions and evidence
 
+2026-09-26, the end state written down (README.md, "End state (2026-09-26)" and "Lines drawn"). The maintainer asked to
+call the redo done once it is as correct as it can be, with this session's lines drawn stated. README's opening now says
+what the redo is, that it is done but for upkeep (re-pinning with a sample check, syncing main, adopting new browser
+APIs), its scope (plain text; the manual layout API and rich inline derived from it later, rich inline with kerning
+between sibling spans "a big quest for another time"), where each part of the stopping rule stands, and the lines drawn:
+the no-loss rule and what the stopping rule allows, correctness first but not completionism, the relaxed stance, gaps
+that stay quiet where the browser agrees, the soft line on performance, and the timing and machine rules. The round
+history under it is unchanged but for sentences that named a current round or a priority; `lab/BASELINE-main.md`'s
+opening and one DESIGN.md sentence (§4.6, the exact fits "open correctness work") read as of the end state. Read for
+it from the frozen tier ledgers (`.artifacts/tests/reference/<browser>-<config>/ledger`), with no new run:
+- Without facts, no case failing line count, breaks or widths lacks a covering gap in any engine: Chrome 1,109 covered;
+  Firefox 1,680 covered and 318 history-dependent; webkit-host 398 and 279.
+- With facts, one Chrome case is open, `c-44fe1286823f2c98` (`wide-group-cuts`, `cuts/arabic-unbroken`: 40px Al Nile
+  under `break-all`, breaks), the one left of the seven HANDOFF.md's backlog lists, in no known-tail item; Firefox has
+  19 in the residual class `gecko/one-shaping-unit-one-app-unit` (17 probed, 2 by signature); webkit-host as without.
+- The painter, scored apart from the predictions, has 4, 0 and 24 rows open without facts and 10, 34 and 25 with them,
+  the known tail's `painter/without-explanation` class.
+No library change.
+
 2026-09-26, the redo finish (branch `redo-finish`: `8937933` and `c80488e`; runs, probes and lab cases in
 `.artifacts/tests/runs/redo-finish-20260926`). The maintainer scoped the redo to plain text (rich inline and the manual
 layout API come from it later), and asked to close it once it is as correct as it can be, with the lines drawn stated.
