@@ -9723,7 +9723,7 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "in-word-prefix at the breaks a wrapped line's decision chose between (points: the start's correction moves no glyph): the break it took and, where the line's own end is what its fit test decided, the break before the text that end holds (LineInfo.decisionStart), where the line starts at an offset the port's width tests call safe, beside a space or not (after a soft hyphen, another space character or inside a word, where in-word-prefix also reports at the start), and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; a plain paragraph reports nothing",
+   "statement": "in-word-prefix at the breaks a wrapped line's decision chose between (points: the start's correction moves no glyph): the break it took and, where the line's own end is what its fit test decided, the break before the text that end holds (LineInfo.decisionStart), where the line starts at an offset the port's width tests call safe, beside a space or not (after a soft hyphen, another space character or inside a word, where in-word-prefix also reports at the start; between two CJK ideographs or symbols, which Canvas measures as words of their own, at the start alone), and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; a plain paragraph reports nothing",
    "source": "shaping_line_breaker.cc:309-324; line_breaker.cc CanFitOnLine; engines/blink/gaps.ts lineEdgeGaps; DESIGN.md §4.6, §5",
    "probes": [
     "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively",
@@ -10409,7 +10409,7 @@
   "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
   "blink/measure/han-kerning-at-script-edges": "24568b772dfa7a8c",
   "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e",
-  "blink/gap/one-unit-fit": "ced37b169b7b343f",
+  "blink/gap/one-unit-fit": "f24286462ccf125e",
   "blink/gap/stand-in-start-reach": "70bb708757421395",
   "blink/gap/rtl-end-reach": "7c76a4efc0dbb898",
   "blink/gap/white-space-window-side": "5a09a3ca764abccf",

@@ -20,7 +20,7 @@ import type { BlinkLineStart } from './geometry.js'
 import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
-import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
+import { USCRIPT_COMMON, USCRIPT_INHERITED, isCjkIdeographOrSymbol, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, canvasString, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
   joinsAcross, measuredAsCommon, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt, spaceTakesScript,
@@ -712,12 +712,21 @@ function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: bool
   //   The adjustment is taken over the whole measured piece around k (adjust16), so nothing the port can measure interacts
   //   across k here, at any distance.
   // - A wrapped line start's correction moves the line's end against its space as it does beside a space, so the condition
-  //   also reports at the breaks the decision chose between (Al Bayan's line after a soft hyphen, Waseem's after U+2009 and
-  //   Tamil Sangam MN's inside a word, at DPR 1).
+  //   also reports at the breaks the decision chose between (Waseem's line after U+2009 and Tamil Sangam MN's inside a
+  //   word, at DPR 1). Not between two CJK ideographs or symbols, which Canvas measures as words of their own
+  //   (NextWordEndIndex, plain_text_node.cc:93-155), so that no window shows anything across such a start: there the
+  //   condition held on 2,973 of the census's 26,716 lines, every one in its Chinese and Japanese texts, which Chrome lays
+  //   out as the port does, and no traced failure starts so; it reports at the start alone.
   if (margin < 2) {
     addGap(gaps, 'in-word-prefix', run, IN_WORD_DETAIL, at)
-    for (let i = 0; i < decided.length; i++) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_IN_WORD_DETAIL, decided[i]!)
+    if (!betweenCjk(p, k)) for (let i = 0; i < decided.length; i++) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_IN_WORD_DETAIL, decided[i]!)
   }
+}
+
+// Whether the code points on both sides of offset k are CJK ideographs or symbols (Character::IsCjkIdeographOrSymbol).
+function betweenCjk(p: BlinkPrepared, k: number): boolean {
+  const low = (p.text.charCodeAt(k - 1) & 0xfc00) === 0xdc00 && k >= 2
+  return isCjkIdeographOrSymbol(p.text.codePointAt(low ? k - 2 : k - 1)!) && isCjkIdeographOrSymbol(p.text.codePointAt(k)!)
 }
 
 const ONE_UNIT_FIT_DETAIL = 'a wrapped line start beside a space that the port\'s width tests call safe, on a line whose fit test is decided by under two LayoutUnits (the line\'s end, or the end of the content that didn\'t fit, against the space it has plus one, line_breaker.cc CanFitOnLine): HarfBuzz can flag the start unsafe to break with no width signature (AAT state, contextual lookups that change no width), where Blink reshapes it and corrects the space by old_width − SnappedWidth, 0 or −1 LayoutUnits (shaping_line_breaker.cc:309-324), which moves the line\'s end against the space'

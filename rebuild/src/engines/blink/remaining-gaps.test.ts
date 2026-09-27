@@ -80,6 +80,7 @@ function withDetail(gaps: readonly Gap[], prefix: string): Gap[] {
 
 const ONE_UNIT = 'a wrapped line start beside a space that the port'
 const ONE_UNIT_IN_WORD = 'a wrapped line start that isn\'t beside a space'
+const IN_WORD = 'a line edge inside a word where the pair total shows no adjustment'
 const RTL_END_REACH = 'a line that ends inside a right-to-left item'
 const START_REACH = 'a wrapped line start taken from a stand-in position, and the line'
 const WHITE_SPACE_SIDE = 'a window side of white space alone'
@@ -111,6 +112,12 @@ describe('blink gaps of a fit within what positions can be off by', () => {
     expect(exact.map(line => line.end)).toEqual([9, 19, 23])
     expect(withDetail(exact[1]!.gaps, ONE_UNIT_IN_WORD).map(gap => [gap.gap, gap.at])).toEqual([['in-word-prefix', { start: 19, end: 19 }], ['in-word-prefix', { start: 14, end: 14 }]])
     for (const line of lines(prepared('Mono', text), 95)) expect(withDetail(line.gaps, ONE_UNIT_IN_WORD)).toEqual([])
+    // Between two ideographs the start's condition reports at the start alone (and the end's at the end, as before):
+    // `日本語` fills 30px exactly on every line.
+    const cjk = lines(prepared('Mono', '日本語日本語日本語'), 30)
+    expect(cjk.map(line => line.end)).toEqual([3, 6, 9])
+    expect(withDetail(cjk[1]!.gaps, IN_WORD).map(gap => gap.at)).toEqual([{ start: 3, end: 3 }, { start: 6, end: 6 }])
+    expect(withDetail(cjk[1]!.gaps, ONE_UNIT_IN_WORD)).toEqual([])
   })
 
   test('a line that ends inside an RTL item reports the conditions of the item\'s text after its end where the fit lies within a LayoutUnit', () => {
