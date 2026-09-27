@@ -400,7 +400,6 @@ const geckoLineClassRanges: number[] = []
   }
   for (let c = 0; c <= 0x10ffff; c++) {
     const byCategory = geckoLineClasses[chromiumLineCategories[c]!]!
-    if (byCategory < 0x80) continue
     const value = geckoLineValues[c]!
     if (rangeStart >= 0 && value === rangeValue) rangeEnd = c
     else if (value === (byCategory & 0x7f)) close()
@@ -416,7 +415,7 @@ const geckoLineClassRanges: number[] = []
   }
   for (let c = 0; c <= 0x10ffff; c++) {
     const byCategory = geckoLineClasses[chromiumLineCategories[c]!]!
-    const value = byCategory < 0x80 ? byCategory : inRange[c]! >= 0 ? inRange[c]! : byCategory & 0x7f
+    const value = inRange[c]! >= 0 ? inRange[c]! : byCategory & 0x7f
     if (value !== geckoLineValues[c]) throw new Error(`Firefox's Line_Break value of U+${c.toString(16)} reads as ${value}, not ${geckoLineValues[c]}`)
   }
 }

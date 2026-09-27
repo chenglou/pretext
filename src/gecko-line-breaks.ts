@@ -365,10 +365,8 @@ let lineData: LineData | null = null
 // code points take several. Error value 0 above U+10FFFF.
 function getLineBreakClass(line: LineData, c: number): number {
   if (c > 0x10ffff) return 0
-  const value = line.classes[getCategory(line.rules, c)]!
-  if (value < 0x80) return value
   const other = getRangeValue(line.ranges, c)
-  return other === 0 ? value & 0x7f : other - 1
+  return other !== 0 ? other - 1 : line.classes[getCategory(line.rules, c)]! & 0x7f
 }
 
 // Line_Break property values of the data (line.rs:18-128).
