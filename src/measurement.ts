@@ -49,7 +49,15 @@ export type EngineProfile = {
   // prefixes (TextUtil::breakWord), and Gecko adds the advances of the word shaped whole
   // (gfxTextRun::BreakAndMeasureText), which prefixes follow in joined scripts where
   // standalone graphemes don't. Blink sums standalone graphemes. Segments at least this
-  // wide fit from prefixes, narrower ones from standalone graphemes.
+  // wide fit from prefixes, narrower ones from standalone graphemes. A segment breaks
+  // only on a line narrower than itself, so every line at least this wide gets prefixes.
+  // Gecko's 80px is a premise, not a browser rule: prefixes cost a Canvas call per
+  // grapheme of every new word, most of the calls a lower floor adds are in words 24-80px
+  // wide, and taking them from 24px or everywhere made Firefox 156 prepare new Latin,
+  // Arabic and mixed messages and UI labels 28-68% slower (99 measureText calls per 1,000
+  // units against 62). Its gap is at 24-80px: 281 of the harness's Firefox cases fail
+  // there that prefixes pass, and 14 pass that they fail, one of them a real-usage draw
+  // (RESEARCH.md, Decisions Log).
   prefixFitMinWidth: number
   // WebKit measures a text item together with a directly following U+0020 and
   // subtracts one unshaped space, so the item keeps its kerning with that space
@@ -285,6 +293,8 @@ export function measureWithLetterSpacing(text: string, letterSpacing: number, em
   }
 }
 
+// The lookup is the first to hash seg and internalizes it, so V8 hands Canvas a Latin-1
+// segment one-byte, which Chrome measures as Latin (RESEARCH.md, Measurement Model).
 export function getSegmentMetrics(seg: string, measurement: FontMeasurement): SegmentMetrics {
   return measurement.metrics.get(seg) ?? addMetrics(measurement.metrics, seg, seg, measurement)
 }

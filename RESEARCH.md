@@ -22,6 +22,32 @@ whole word also does not establish the widths of its possible line prefixes.
 Engine profiles describe the layout engine, not the browser brand;
 `getLayoutEngine()` in `src/measurement.ts` explains how the user agent names it.
 
+In Chrome a Latin-1 string's storage decides how Canvas shapes it. Blink shapes a
+one-byte string as one Latin segment, and runs its script segmenter over a two-byte
+one alone (harfbuzz_shaper.cc:1072-1101). V8 keeps a slice of 13 units or more cut
+from a string that holds a unit above U+00FF two-byte, and copies shorter ones into
+one byte. Using a string as a `Map` key internalizes it, and V8 makes the
+internalized copy one-byte when its units fit only if that lookup is the first to
+hash the string (`known_one_byte_content`, string-table.cc:411-421); a two-byte
+string hashed earlier keeps two-byte storage. Nothing hashes a segment before its
+metrics lookup, so every Latin-1 segment the metrics caches look up reaches Canvas
+one-byte and is measured as Latin. Chrome paints a run of script-neutral characters
+that way after Latin text and in text that is all Latin-1, but not after Arabic or
+Han, or between em dashes with no letter around: Blink gives the run the script of
+the text before it, and only a run at the paragraph start takes the script after it
+(script_run_iterator.cc:503-516, ENGINE_FOLLOWUPS.md). Rejected (2026-09-27):
+keying the caches by another string, so that Canvas gets each slice as it was built.
+It changes only runs of 13 units or more cut from such text, and moved none of
+41,788 Chrome predictions. Of 18 fonts probed, only Amiri and Noto Naskh Arabic
+measure the two storages differently (17 of 504 font and run pairs). On templates in
+those fonts it fixed every such run after Arabic, Han or an em dash, and broke every
+one after Latin in text that also holds an emoji or `ā`: it breaks `)`×15 between
+`abc ` and ` بتث`, and fixes it between `بتث ` and ` abc`. The storage follows a
+slice's length and the text it was cut from, not the text before the run, which the
+page follows. It also costs a string per lookup, and a canvas asked for the same
+characters in both storages answers both with whichever it shaped first
+(PLATFORM_BUGS.md).
+
 ## Break Opportunities From Engine Data
 
 Chrome, Safari and Firefox take break opportunities from ports of their engines' own
@@ -240,6 +266,28 @@ right-to-left line counts against prefixes everywhere and gains 652 and 291;
 against main it loses fewer rows than prefixes everywhere did (477 left-to-right
 and 314 right-to-left where main placed every character or wasn't placed, against
 675 and 343).
+
+The 80px has no browser reason: it was the old suite's boundary for narrow widths.
+Measured again with the harness in Firefox 156 (2026-09-27), a 24px floor, where the
+harness's layouts narrower than real ones end, costs what prefixes everywhere cost,
+since the prefixes' calls sit in words 24-80px wide. Either takes 99 measureText calls
+per 1,000 units while preparing where 80px takes 62 (with the 24px floor, 11,367
+against 5,857 on the census and 434,843 against 278,106 on the real-usage draws), and
+`bun harness bench main` reads new Latin, Arabic and mixed messages and UI labels
+28-68% slower in both sessions; new CJK and Thai, seen text and the worst shapes read
+within noise. Lines at 24px and wider move the same under both: 281 Firefox cases at
+24-80px pass that fail with the floor, 172 of them the old gate's Arabic words with
+vowel marks before brackets, quotes, controls or Latin, and 14 fail that pass. Ten of
+those are `a ★ーb` in 16px Arial at 25-29px: Firefox's Canvas measures `★ー` at 32px, as
+the browser lays it out alone, where the paragraph lays it out at 26.65px after `a `,
+which summed standalone widths (10.65px and 16px) match by luck. Three are Amiri
+Arabic split at 24.45px, 1/64px from where the lines change, and one is a real-usage
+draw, `TKT-84565` in a 31.25px table cell in 16px Helvetica Neue: prefixes give the
+hyphen that starts the second line all 2.05px of its kerning with the `T` before it,
+so `-845` fits at 30.87px, where Firefox moves the `5` on. No real-usage draw gains,
+and 188 of the 11,901 (1.5% of their weight) are narrower than 80px. Below 24px, the
+24px floor fixes 40 cases and loses 36, prefixes everywhere 44 and 50. The floor stays
+at 80px as a premise (Decisions Log).
 
 An overflowing segment used to end its emergency split after its last hyphen that
 fit. Those preferred breaks recovered ordinary breaks the merged segmentation hid
@@ -1886,3 +1934,11 @@ reason still holds, and record the new decision here with its date.
   breakable runs, pre-wrap chunks, keep-all CJK brackets and Latin messages seen
   before 2 to 5% slower than main; with the test also written out in the first
   setup's loop, every one of them reads within noise (Bidi Levels).
+- **2026-09-27: the Gecko profile keeps its 80px floor for prefix fits, as a
+  premise.** Prefixes model Firefox's whole-word advances better than standalone
+  graphemes, and the floor has no browser reason, but a floor at 24px or none made
+  Firefox 156 prepare new Latin, Arabic and mixed messages and UI labels 28-68%
+  slower. In exchange, 281 adversarial cases at 24-80px would pass and 14 fail, and
+  the one real-usage draw that moves would fail. Words narrower than 80px keep summing
+  standalone graphemes where lines narrower than 80px split them (Break Opportunities
+  From Engine Data).
