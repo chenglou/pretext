@@ -356,19 +356,35 @@ function splitAndInitTextRun(g: Glyphs, text: string, start: number, end: number
 
 // --- 4. ICU4X 2.1.2's line iterator for one word (icu_segmenter src/line.rs) ---
 
-// Firefox's line data, which the first scan unpacks (getGeckoLineBreaks), with Chrome's line_normal
-// rules, whose categories give its Line_Break values.
-type LineData = { readonly rules: BreakRules, readonly classes: Uint8Array, readonly ranges: RangeTable, readonly states: Uint8Array }
+// Firefox's line data, which the first scan unpacks (getGeckoLineBreaks): its Line_Break values through
+// Chrome's line_normal categories, or the range holding a code point where a category's code points take
+// several, read once per code unit below U+10000.
+type LineData = {
+  readonly rules: BreakRules, readonly classes: Uint8Array, readonly ranges: RangeTable, readonly bmp: Uint8Array,
+  readonly states: Uint8Array,
+}
 let lineData: LineData | null = null
 
-// The Line_Break value: its Chrome category's, or the value of the range holding it where the category's
-// code points take several. Error value 0 above U+10FFFF.
-function getLineBreakClass(line: LineData, c: number): number {
-  if (c > 0x10ffff) return 0
-  const value = line.classes[getCategory(line.rules, c)]!
+function readLineBreakClass(rules: BreakRules, classes: Uint8Array, ranges: RangeTable, c: number): number {
+  const value = classes[getCategory(rules, c)]!
   if (value < 0x80) return value
-  const other = getRangeValue(line.ranges, c)
+  const other = getRangeValue(ranges, c)
   return other === 0 ? value & 0x7f : other - 1
+}
+
+function unpackLineData(): LineData {
+  const rules = getLineRules('chromium/line_normal')
+  const classes = unpackTable(geckoLineClassesPacked)
+  const ranges = unpackRanges(geckoLineClassRangesPacked, false)
+  const bmp = new Uint8Array(0x10000)
+  for (let c = 0; c < 0x10000; c++) bmp[c] = readLineBreakClass(rules, classes, ranges, c)
+  return { rules, classes, ranges, bmp, states: unpackTable(geckoLineBreakStatesPacked) }
+}
+
+// The Line_Break value, with error value 0 above U+10FFFF.
+function getLineBreakClass(line: LineData, c: number): number {
+  if (c < 0x10000) return line.bmp[c]!
+  return c > 0x10ffff ? 0 : readLineBreakClass(line.rules, line.classes, line.ranges, c)
 }
 
 // Line_Break property values of the data (line.rs:18-128).
@@ -660,12 +676,7 @@ export function getGeckoLineBreaks(
   for (let k = 0; k < runStarts.length; k++) splitAndInitTextRun(g, tr.text, runStarts[k]!, k + 1 < runStarts.length ? runStarts[k + 1]! : n, graphemeTable, ends)
   for (let k = 0; k < runStarts.length; k++) g.clusterStart[runStarts[k]!] = 1 // gfxTextRun.cpp:2828-2835
 
-  const line = lineData ??= {
-    rules: getLineRules('chromium/line_normal'),
-    classes: unpackTable(geckoLineClassesPacked),
-    ranges: unpackRanges(geckoLineClassRangesPacked, true),
-    states: unpackTable(geckoLineBreakStatesPacked),
-  }
+  const line = lineData ??= unpackLineData()
   const state = getBreakStates(line, tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
     const rawPos = tr.orig[t]!
