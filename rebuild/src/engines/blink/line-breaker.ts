@@ -79,6 +79,10 @@ export type LineInfo = {
   // the current style's own break type, before any break-character override (at least one unit past it), for the gaps the
   // decision rests on.
   decisionEnd: number
+  // Not Blink's: the break opportunity before the text the line's end holds (its last word, or under break-all its last
+  // cluster), where the decision's other candidate lies when the line's own end is what its fit test decided, by under two
+  // LayoutUnits; the line's end elsewhere, where the line holds no earlier opportunity, and on a plain paragraph.
+  decisionStart: number
   // Not Blink's: break opportunities the port gave up because their line-end reshape failed ShapeLine's fit test, on a
   // wrapped line start, with no shaping run edge after the line start and before the opportunity. Every safe offset the
   // port found there, the start included, is safe by its width tests alone; if HarfBuzz flags them all, Blink has no safe
@@ -405,13 +409,25 @@ export class LineBreaker {
     // switches to break-character (RetryAfterOverflow), so the look-ahead is the next opportunity under that type.
     const breakType = this.iterator.breakType
     let decisionEnd = contentEnd
-    if (this.sh.p.inspect !== null && contentEnd < this.text.length) {
-      this.iterator.breakType = this.iterator.settings.breakType
-      decisionEnd = Math.max(contentEnd + 1, Math.min(this.text.length, this.iterator.nextBreakOpportunity(contentEnd + 1)))
-      this.iterator.breakType = breakType
+    let decisionStart = contentEnd
+    if (this.sh.p.inspect !== null) {
+      if (contentEnd < this.text.length) {
+        this.iterator.breakType = this.iterator.settings.breakType
+        decisionEnd = Math.max(contentEnd + 1, Math.min(this.text.length, this.iterator.nextBreakOpportunity(contentEnd + 1)))
+        this.iterator.breakType = breakType
+      }
+      // Under the break type the line ended with, before its trailing spaces; only where the line's own end is decided by
+      // under two LayoutUnits, the one case a gap reads it (gaps.ts lineEdgeGaps), so no other line asks the break iterator
+      // (a dictionary segmenter among its answers) anything more.
+      const start = this.token.textOffset
+      let end = contentEnd
+      while (end > start && isSpaceSLB(this.char(end - 1))) end--
+      if (Math.abs(this.availableWidth + 1 - this.position) < 2 && end - 1 > start) decisionStart = this.iterator.previousBreakOpportunity(end - 1, start)
+      if (decisionStart <= start) decisionStart = contentEnd
     }
     return {
       decisionEnd,
+      decisionStart,
       untestedEnds: this.untestedEnds,
       clampedStarts: this.clampedStarts,
       endTests: this.endTests,

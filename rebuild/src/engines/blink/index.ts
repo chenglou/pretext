@@ -24,7 +24,7 @@ import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
 import { isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import { isClusterBoundary, measureGroups, type Shaper } from './shape.js'
+import { isClusterBoundary, measureGroups, NO_EDGE_TRIMS, type Shaper } from './shape.js'
 import type { BlinkGroup, BlinkPrepared, BlinkStyle, InlineItem } from './types.js'
 
 export { paragraphGaps } from './gaps.js'
@@ -64,7 +64,7 @@ function shapingGroups(items: readonly InlineItem[], styles: readonly BlinkStyle
     }
     const length = end - s.start
     const group: BlinkGroup = {
-      start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0,
+      start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0, edgeTrims: NO_EDGE_TRIMS,
       prefix16: new Float64Array(length).fill(NaN), pair16: new Float64Array(length).fill(NaN), wide16: new Float64Array(length).fill(NaN), words: false, whole: null,
     }
     groupOfUnit.fill(groups.length, group.start, group.end)

@@ -131,6 +131,9 @@ export type BlinkGroup = {
   // What HanKerning's start and end contexts halt at the group's edges.
   startTrim16: number
   endTrim16: number
+  // What they halt at the paragraph's script edges inside the group, as [edge, halted offset, 16.16 trim] triples in order
+  // (shape.ts hanKerningAtScriptEdges); empty for most groups.
+  edgeTrims: readonly number[]
   // What measuring found per offset from `start` in the group's own shaping call, NaN until it is first asked: the 16.16
   // advance sum before the offset (shape.ts groupPrefix16), and the pair window's and the wide window's adjustment across
   // it (pairAdjust16, adjust16), which positions and safe-to-break tests both read. Blink's ShapeResult keeps the same per

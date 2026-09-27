@@ -1116,8 +1116,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
             const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
             for (let c = 0; c + 1 < boundaries.length; c++) {
-              const cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
-              const first = cluster.codePointAt(0)!
+              let cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
+              let first = cluster.codePointAt(0)!
               const spaceDivisor = cluster.length === 1 ? synthesizedSpaceDivisor(first) : 0
               if (spaceDivisor > 0) {
                 // A Unicode space no font in the list covers gets no fallback font: InitScriptRun gives it the space glyph at
@@ -1136,8 +1136,19 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               }
               // A character without the Emoji property gets text presentation in fallback, which looks for a font without
               // color glyphs (gfxTextRun.cpp:3541-3546); a cluster extender takes the previous character's font (:3181-3194).
-              const presentation = emojiPresentation(first)
-              if (presentation === 'text-only') continue
+              let presentation = emojiPresentation(first)
+              if (presentation === 'text-only') {
+                // An emoji modifier after a character without the Emoji property is in that character's cluster, not always in
+                // its font: a cluster extender takes the font before it only where that font has it (FindFontForChar,
+                // gfxTextRun.cpp:3181-3194), so after a letter of a text font U+1F3FB is a font run of Apple Color Emoji, which
+                // the DOM draws at the device size (main's harness catalog/classes/EM: `ab`, U+1F3FB, `ab` in 16px Arial at DPR 2,
+                // the modifier 16px natively and 21px in Canvas). The recipe runs on the modifier and what follows it.
+                const modifier = cluster.search(/[\u{1f3fb}-\u{1f3ff}]/u)
+                if (modifier < 0) continue
+                cluster = cluster.slice(modifier)
+                first = cluster.codePointAt(0)!
+                presentation = emojiPresentation(first)
+              }
               // One measureText gives the cluster's width and its ink box, in the run's font list and in "Apple Color Emoji" alone.
               const own = bounds(context, cluster)
               const inEmoji = bounds(emojiFontContext(font.size), cluster)
