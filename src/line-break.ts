@@ -23,7 +23,9 @@ const BREAK_AFTER_KINDS = 1 << SPACE | 1 << ZERO_WIDTH_BREAK | 1 << SOFT_HYPHEN 
 export type PreparedLineBreakData = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
   segmentFlags: Uint8Array // Per segment, its flags byte, e.g. [TEXT, SPACE, TEXT]
-  simpleLineWalkFastPath: boolean // Normal text can use the simple line stepper across all layout APIs
+  // Normal text can use the simple line stepper across all layout APIs, and layout()
+  // counts it with one numeric loop where it has no overflow trims
+  simpleLineWalkFastPath: boolean
   // Normal text, or text of its kinds where the scan gives no break at some segment
   // boundary, which layout() counts with the simple stepper
   simpleLineCountFastPath: boolean
@@ -39,6 +41,10 @@ export type PreparedLineBreakData = {
   // Per segment, width it drops where a line ends after it and it doesn't fit otherwise,
   // as Blink's line-end halt of a closing mark. Null without any.
   lineEndTrims: number[] | null
+  // Per segment, width it drops in place of that where it overflows a line that has no break
+  // before it and the line ends after it: Blink retries such a line with a break after every
+  // grapheme, so it halts a closing mark before a hard break or a space too. Null without any.
+  overflowLineEndTrims: number[] | null
   letterSpacing: number // Extra advance between rendered graphemes on the same line
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
   // Per segment, how much narrower a soft hyphen's neighboring text measures
@@ -249,7 +255,8 @@ export function walkPreparedLinesRaw(
 // starts the next one. The full walker costs three to five times as much per
 // segment, so one walker for all text was rejected (RESEARCH.md, Decisions Log).
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  if (!prepared.simpleLineWalkFastPath) {
+  // The loop takes no overflow trims, which the stepper takes for a line's first segment.
+  if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
     return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
   }
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
@@ -419,6 +426,7 @@ function walkPreparedComplexLines(
     letterSpacing,
     lineStartExtras,
     lineEndTrims,
+    overflowLineEndTrims,
     tabStopAdvance,
   } = prepared
   const segmentCount = segmentFlags.length
@@ -459,11 +467,13 @@ function walkPreparedComplexLines(
     let fitBreakSegmentIndex = -1
     let fitBreakPaintWidth = 0
     // The latest run of preserved spaces and tabs: the segment after it, and the
-    // line's width before it, with the gap after the glyph before it.
+    // line's width before it, less the line-end trim of the text it follows, with
+    // the gap after the glyph before it.
     let hangEndSegmentIndex = -1
     let hangStartWidth = 0
-    // The line-end trim of the last whole segment, where only that trim let it fit.
-    // Every later segment overflows, so the line ends after it and paints that much less.
+    // The line-end trim of the last whole segment, where only that trim let it fit, kept
+    // past segments after it that take no room at the line end, as spaces. Every later
+    // segment that takes room overflows, so the line ends before it and paints that much less.
     let lineEndTrimmed = 0
     // Retained line-start ZWSP establishes the line without owning a spacing gap.
     let zeroWidthPrefix = true
@@ -584,7 +594,7 @@ function walkPreparedComplexLines(
             }
             const hangs = (1 << kind & hangingKinds) !== 0
             if (hangs) {
-              if (hangEndSegmentIndex !== i) hangStartWidth = lineW + leadingSpacing
+              if (hangEndSegmentIndex !== i) hangStartWidth = lineW - lineEndTrimmed + leadingSpacing
               hangEndSegmentIndex = i + 1
             }
             // Where glue can't hold a line, glue at a line start isn't the line's content: the
@@ -613,7 +623,12 @@ function walkPreparedComplexLines(
                 fillEnd = breakableFitAdvances[i]!.length
               } else {
                 const startExtra = lineStartExtras === null ? 0 : lineStartExtras[i]!
-                if (fitAdvance + startExtra - endTrim > fitLimit && breakableFitAdvances[i] !== null) {
+                // With no break before it on the line, an overflowing segment is laid out
+                // by Blink's retry between graphemes, which halts where that lets it fit.
+                const startTrim = overflowLineEndTrims !== null && fitAdvance + startExtra - overflowLineEndTrims[i]! <= fitLimit
+                  ? overflowLineEndTrims[i]!
+                  : endTrim
+                if (fitAdvance + startExtra - startTrim > fitLimit && breakableFitAdvances[i] !== null) {
                   fillStart = 0
                   fillEnd = breakableFitAdvances[i]!.length
                 } else {
@@ -621,7 +636,7 @@ function walkPreparedComplexLines(
                   lineEndSegmentIndex = i + 1
                   lineEndGraphemeIndex = 0
                   lineW = w + startExtra
-                  lineEndTrimmed = fitAdvance + startExtra > fitLimit ? endTrim : 0
+                  lineEndTrimmed = fitAdvance + startExtra > fitLimit ? startTrim : 0
                   // The break segment hangs with the gap before it, a run of preserved
                   // spaces and tabs hangs whole, and a tab that doesn't hang counts whole.
                   if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
@@ -661,7 +676,19 @@ function walkPreparedComplexLines(
                   lineEndSegmentIndex = pendingBreakSegmentIndex
                   lineEndGraphemeIndex = 0
                 }
-                if (!unbroken || pendingBreakSegmentIndex >= 0 || breakableFitAdvances[i] === null) {
+                if (!unbroken || pendingBreakSegmentIndex >= 0) {
+                  returnsFromHyphen = true
+                  break decided
+                }
+                // Blink's retry halts the segment where that lets it fit, and the line ends after it.
+                if (overflowLineEndTrims !== null && newFitW - overflowLineEndTrims[i]! <= fitLimit) {
+                  lineW += advance
+                  lineEndSegmentIndex = i + 1
+                  lineEndGraphemeIndex = 0
+                  lineEndTrimmed = overflowLineEndTrims[i]!
+                  continue
+                }
+                if (breakableFitAdvances[i] === null) {
                   returnsFromHyphen = true
                   break decided
                 }
@@ -681,10 +708,12 @@ function walkPreparedComplexLines(
                 lineW += advance
                 lineEndSegmentIndex = i + 1
                 lineEndGraphemeIndex = 0
-                lineEndTrimmed = newFitW > fitLimit ? endTrim : 0
+                // A segment that takes no room at the line end, as a space, leaves the glyph
+                // before it last on the line, with its trim.
+                if (fitAdvance !== 0 && !hangs) lineEndTrimmed = newFitW > fitLimit ? endTrim : 0
                 if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
                   pendingBreakSegmentIndex = i + 1
-                  pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance
+                  pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance - lineEndTrimmed
                 }
                 if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + reservedHyphenWidth <= fitLimit) {
                   fitBreakSegmentIndex = pendingBreakSegmentIndex
@@ -808,7 +837,7 @@ function walkPreparedComplexLines(
           hangEndSegmentIndex >= 0 &&
           (endSegmentIndex === hangEndSegmentIndex || endSegmentIndex === hangEndSegmentIndex + 1) &&
           (hangEndSegmentIndex === segmentCount || (segmentFlags[hangEndSegmentIndex]! & KIND_BITS) === HARD_BREAK)
-        const paintWidth = (hangsWhereUnfit ? lineW : endWidth) +
+        const paintWidth = (hangsWhereUnfit ? lineW - lineEndTrimmed : endWidth) +
           getTerminalLetterSpacing(prepared, hangingKinds, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex)
         lineWidth = hangsWhereUnfit ? Math.max(hangStartWidth, Math.min(paintWidth, availableWidth)) : paintWidth
       }
@@ -832,7 +861,7 @@ function stepPreparedSimpleLineGeometry(
   cursor: LayoutCursor,
   maxWidth: number,
 ): number {
-  const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartExtras, lineEndTrims } = prepared
+  const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartExtras, lineEndTrims, overflowLineEndTrims } = prepared
   // A negative width lays out as 0, as in the complex walker.
   const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
   const start = cursor.segmentIndex
@@ -841,7 +870,11 @@ function stepPreparedSimpleLineGeometry(
   // overflows and can break fills the line grapheme by grapheme.
   const startAdvances = breakableFitAdvances[start]
   const startW = lineStartExtras === null ? widths[start]! : widths[start]! + lineStartExtras[start]!
-  const startTrim = lineEndTrims === null ? 0 : lineEndTrims[start]!
+  const startEndTrim = lineEndTrims === null ? 0 : lineEndTrims[start]!
+  // Blink's retry between graphemes halts an overflowing first segment where that lets it fit.
+  const startTrim = overflowLineEndTrims !== null && startW - overflowLineEndTrims[start]! <= fitLimit
+    ? overflowLineEndTrims[start]!
+    : startEndTrim
   // A line that starts inside a segment where it has fresh-line geometry takes the
   // tail, and goes on, or its fresh prefixes.
   const entry = cursor.graphemeIndex > 0 && entryGeometry !== null ? entryGeometry[start]! : null

@@ -448,7 +448,7 @@ export function measureAnalysis(
 
   // A segment's width is its width between the text before and after it; one that starts
   // a line takes back the halt Blink gives its first character there.
-  let hanKerning: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null }
+  let hanKerning: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null, overflowLineEndTrims: null }
   if (engineProfile.hanKerning && textMayHanKern(normalized)) {
     hanKerning = getHanKerningTrims(fontMeasurement, analysis)
     const trims = hanKerning.widthTrims
@@ -471,6 +471,7 @@ export function measureAnalysis(
     lineStartProhibitions,
     lineStartExtras: hanKerning.lineStartExtras,
     lineEndTrims,
+    overflowLineEndTrims: hanKerning.overflowLineEndTrims,
     tabStopAdvance,
   } as unknown as PreparedTextWithSegments
   if (segments !== null && kinds !== null) {

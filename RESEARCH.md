@@ -362,8 +362,17 @@ Chrome's default `text-spacing-trim: normal` halts CJK punctuation through Blink
 HanKerning (han_kerning.cc): a fullwidth opening mark after an opening, middle,
 closing or narrow opening mark, a closing mark before a closing, middle or narrow
 closing mark, and a closing mark at a line end where the line doesn't fit otherwise
-(shaping_line_breaker.cc:344-363); a wrapped line start keeps its opening mark whole
-(text_spacing_trim.h:31-34). Canvas halts a pair only inside what it shapes as one
+and a break follows it (shaping_line_breaker.cc:344-363); a wrapped line start keeps
+its opening mark whole (text_spacing_trim.h:31-34). Blink's scan gives no break
+before a space, tab or line feed, which continue a run of spaces
+(text_break_iterator.cc:284-291), but a line that no break of the scan's fits is laid
+out again under `overflow-wrap: break-word` with a break after every grapheme
+(HandleOverflow, line_breaker.cc:4259-4263), and there the halt applies before
+anything: in 16px PingFang SC in pre-wrap, Chrome fits `的」` before a line feed at
+24px, while `的的」` before a line feed at 40-47px still ends its first line after
+the first `的`. Safari and Firefox halt nothing: WebKit's `text-spacing-trim` is off
+by default and initially `space-all` (CSSTextSpacingTrimEnabled), and Gecko 156 has
+no such property. Canvas halts a pair only inside what it shapes as one
 word: Blink's Canvas cuts a string before and after CJK ideographs and symbols and
 shapes each word alone (plain_text_node.cc:93-155, 377-400), and curly quotes, ASCII
 brackets, U+00B7, U+2027 and U+FF1B aren't CJK symbols. So the Chromium profile adds
@@ -1731,6 +1740,25 @@ and about 15ms in the rest, while the WebKit scan's segments submit 2,978 and
 stayed near 18ms in 11 of 12. Timed around `measureText` in a foreground page, a
 first cold prepare of that text spends 20ms in Canvas with main and 15ms with
 the scan, and both fall under 1ms once the cache holds the strings.
+
+HanKerning's per-segment trims (`src/han-kerning.ts`) start as zeros pushed in a
+loop. Made with `Array.from({ length: count }, () => 0)`, which reads every index
+off the object and calls the map function for each, one more such array, the
+overflow trims about a quarter of the bench's CJK messages hold, made Chrome 154
+prepare seen CJK 5.7% slower than main in both sessions of two runs; with all four
+pushed in a loop, it read 9 to 11% faster than main in two runs (#366). layout()'s
+numeric count loop (`countPreparedLines()`) takes no overflow trims: it hands a
+handle with any to the simple stepper, which takes them for a line's first segment.
+Read in that loop, where only a line whose first segment overflows reaches them,
+they made Firefox 156 count long breakable runs 13 to 26% slower than main and Thai
+at widths seen before 10 to 12% slower, in both sessions of two runs, and read
+through a helper there, Latin at widths seen before took 2.5 times as long. The line
+APIs keep such a handle on the simple walk fast path, since a halt later in a line
+follows text the scan gives no break before, which leaves the fast path anyway.
+Taken off it, the 31 of the bench's 134 CJK messages that hold overflow trims walked
+with the full walker, and in two foreground pages Chrome 154 ran `measureLineStats()`
+81 to 84%, `walkLineRanges()` 102 to 108% and `layoutNextLineRange()` 62 to 65% slower
+than main on the 134 (#366).
 
 ## Decisions Log
 

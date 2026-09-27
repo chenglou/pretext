@@ -1,4 +1,4 @@
-// The behaviour catalog's templates, before widths.ts cuts them. Six sources:
+// The behaviour catalog's templates, before widths.ts cuts them. Seven sources:
 // - the per-engine rebuild's rule families (data/rule-families.ndjson), the flat ones within what the library takes;
 // - filed reports whose reporter measured the width with their own Canvas;
 // - a matrix of every UAX #14 line-break class between the scripts apps mix, under the CSS settings the library takes,
@@ -7,6 +7,7 @@
 //   change of each;
 // - chains of combining-mark runs longer than the part of the chain a run's context keeps, each shape a family of its own,
 //   so the cover keeps a change of each;
+// - a CJK closing mark at a line end before a line feed or a space;
 // - bidi controls where Firefox's line breaker, which never sees them, starts or ends a line, each shape a family of its
 //   own.
 // main's adversarial families were taken once from the old harness's generator, which is gone: their cases,
@@ -215,6 +216,24 @@ export function markChainTemplates(): Template[] {
   return out
 }
 
+// `漢字」` at a line end in pre-wrap, before a line feed with text after it, a line feed that ends the paragraph and a
+// space with text after it, in one family, whose changes the cover keeps where they show a new line break. Chrome halts
+// a closing mark at a line end where a break follows it, and before a line feed or a space where no break before the
+// mark fits, as that line breaks after every grapheme (src/han-kerning.ts). Which marks halt before which ending is
+// src/layout.test.ts's: the cover describes `」` and `。` alike, both UAX #14 class CL. 20, 28 and 40 px besides the
+// grid give each layout from one character to three a width inside it.
+export function lineEndMarkTemplates(): Template[] {
+  const endings = ['\n漢字', '\n', ' 漢字']
+  const out: Template[] = []
+  for (let e = 0; e < endings.length; e++) {
+    out.push({
+      family: 'line-end-marks', origin: 'src/han-kerning.ts: a closing mark at a line end', pageLang: 'zh', widths: [20, 28, 40], grid: true,
+      paragraph: paragraph({ font: font('"PingFang SC"', 16), lang: 'zh', whiteSpace: 'pre-wrap', lineHeight: 32 }, [`漢字\u300D${endings[e]}`]),
+    })
+  }
+  return out
+}
+
 // Bidi controls, which Firefox leaves out of the text runs it breaks (src/analysis.ts): a chunk of only them between hard
 // breaks, as a run, at the paragraph start and end, a control before a hard break, and one after a space where a line can
 // end, in both white-space modes and as an isolate around a word. Two words on each side give the search widths where the
@@ -245,9 +264,9 @@ export function catalogTemplates(): Template[] {
   const catalog: Template[] = []
   const seen = new Set<string>()
   // The order decides which template shows a line break first, which the cover keeps (widths.ts): filed reports, the
-  // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, then the bidi controls. main's
-  // families came before the class matrix when they were cut.
-  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), bidiControlTemplates()]
+  // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, the line-end marks, then the bidi
+  // controls. main's families came before the class matrix when they were cut.
+  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), lineEndMarkTemplates(), bidiControlTemplates()]
   for (let l = 0; l < lists.length; l++) {
     for (let i = 0; i < lists[l]!.length; i++) {
       const t = lists[l]![i]!

@@ -7,7 +7,10 @@
 // (text_spacing_trim.h:31-34), and the line start is reshaped with is_line_start, which skips
 // the character before it (shaping_line_breaker.cc:91-109, 307-324; harfbuzz_shaper.cc:1019-1030;
 // han_kerning.cc:266). At a line end it halts a closing mark that doesn't otherwise fit, where
-// a break follows it (shaping_line_breaker.cc:342-363).
+// a break follows it (shaping_line_breaker.cc:342-363). The scan gives none before a space, tab
+// or line feed (text_break_iterator.cc:284-291), but under overflow-wrap: break-word a line that
+// no break of the scan's fits is laid out again with a break after every grapheme (HandleOverflow,
+// line_breaker.cc:4259-4263, 4617-4625), so there the halt applies before anything.
 //
 // Canvas applies the pair rules only inside what it shapes as one word: Blink's Canvas cuts a
 // string before and after CJK ideographs and symbols and shapes each word alone
@@ -185,17 +188,28 @@ export type HanKerningTrims = {
   lineStartExtras: number[] | null
   // Per segment, the halt of its last character where the line ends after it. Null without any.
   lineEndTrims: number[] | null
+  // Per segment, that halt where the scan gives no break after it, which only a line that
+  // Blink retries between graphemes takes. Null without any.
+  overflowLineEndTrims: number[] | null
+}
+
+// A zero per segment, pushed in a loop: Array.from over `{ length }` reads every index off the
+// object and calls its map function for each.
+function zeros(count: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < count; i++) out.push(0)
+  return out
 }
 
 // The trims of an analysis' text segments, read from the characters before and after each.
 export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextAnalysis): HanKerningTrims {
-  const out: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null }
+  const out: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null, overflowLineEndTrims: null }
   const data = getFontData(measurement)
   if (data === null) return out
   const { flags, starts, normalized } = analysis
   const count = flags.length
   const addWidthTrim = (i: number, trim: number): void => {
-    out.widthTrims ??= Array.from({ length: count }, () => 0)
+    out.widthTrims ??= zeros(count)
     out.widthTrims[i] = out.widthTrims[i]! + trim
   }
   for (let i = 0; i < count; i++) {
@@ -205,7 +219,7 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     const first = normalized.charCodeAt(start)
     if (i > 0 && maybeHanKerns(first) && haltedSide(getCharType(data, normalized, start - 1), getCharType(data, normalized, start)) === 1) {
       const trim = getTrim(data, first, measurement)
-      out.lineStartExtras ??= Array.from({ length: count }, () => 0)
+      out.lineStartExtras ??= zeros(count)
       out.lineStartExtras[i] = trim
       addWidthTrim(i, trim)
     }
@@ -228,11 +242,14 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     // halts the character whatever the font types it (han_kerning.cc:284-285, 312-313); the
     // port asks for a closing type, since only then does 2 W(c) - W(cc) measure the halt.
     const lastType = getStaticCharType(normalized, end - 1)
+    if ((lastType !== CLOSE && lastType !== CLOSE_QUOTE) || getCharType(data, normalized, end - 1) !== CLOSE) continue
     // A break directly after the segment: text after a break, or the end of the text.
-    if ((lastType === CLOSE || lastType === CLOSE_QUOTE) && getCharType(data, normalized, end - 1) === CLOSE &&
-      (atEnd || ((flags[i + 1]! & KIND_BITS) === TEXT && (flags[i + 1]! & UNBROKEN) === 0))) {
-      out.lineEndTrims ??= Array.from({ length: count }, () => 0)
+    if (atEnd || ((flags[i + 1]! & KIND_BITS) === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) {
+      out.lineEndTrims ??= zeros(count)
       out.lineEndTrims[i] = getTrim(data, last, measurement)
+    } else {
+      out.overflowLineEndTrims ??= zeros(count)
+      out.overflowLineEndTrims[i] = getTrim(data, last, measurement)
     }
   }
   return out

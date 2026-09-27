@@ -603,12 +603,18 @@ function stepRichInlineLine(
       }
     }
 
+    // The walk takes the item's start as a line start, where Blink's retry between
+    // graphemes halts a closing mark before a space. Blink retries only a line that
+    // no break fits, and the break before the item fits.
+    const prepared = hasContent && atItemStart && item.breakBefore && item.prepared.overflowLineEndTrims !== null
+      ? { ...item.prepared, overflowLineEndTrims: null }
+      : item.prepared
     const availableWidth = Math.max(1, remainingWidth - reservedWidth)
     const lineEnd: LayoutCursor = {
       segmentIndex: cursor.segmentIndex,
       graphemeIndex: cursor.graphemeIndex,
     }
-    let lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth)
+    let lineWidthForItem = stepPreparedLineGeometry(prepared, lineEnd, availableWidth)
     if (lineWidthForItem === null) continue
 
     let itemOccupiedWidth = lineWidthForItem + item.extraWidth
@@ -621,7 +627,6 @@ function stepRichInlineLine(
     // too, unless the Chromium or Gecko profile returns to the break before the
     // item: Chromium where that line leaves room for the hyphen, Gecko where it fits.
     if (hasContent && atItemStart && lineWidthContribution > remainingWidth + lineFitEpsilon) {
-      const { prepared } = item
       if (!isDiscretionaryLineEnd(prepared.segmentFlags, lineEnd.segmentIndex, lineEnd.graphemeIndex)) break lineLoop
       const softHyphenIndex = lineEnd.segmentIndex - 1
       const beforeHyphen: LayoutCursor = { segmentIndex: cursor.segmentIndex, graphemeIndex: cursor.graphemeIndex }
@@ -648,14 +653,14 @@ function stepRichInlineLine(
     // the line ends at the latest joined break after it that fits before the next
     // segment start with a break.
     const { joinedBreaks } = item
-    const { segmentFlags, segments } = item.prepared
+    const { segmentFlags, segments } = prepared
     const splitsWord = lineEnd.graphemeIndex > 0 || (lineEnd.segmentIndex < segments.length && (segmentFlags[lineEnd.segmentIndex]! & UNBROKEN) !== 0)
     let joinedWidth: number | null = null
     if (joinedBreaks !== null && splitsWord) {
       let k = 0
       while (k < joinedBreaks.length && !isBeforeCursor(lineEnd, joinedBreaks[k]!)) k++
       if (k > 0 && isBeforeCursor(cursor, joinedBreaks[k - 1]!)) {
-        joinedWidth = stepItemToBreak(item.prepared, cursor, availableWidth, joinedBreaks[k - 1]!, lineEnd)
+        joinedWidth = stepItemToBreak(prepared, cursor, availableWidth, joinedBreaks[k - 1]!, lineEnd)
       }
     } else if (joinedBreaks !== null) {
       let runEnd = lineEnd.segmentIndex + 1
@@ -664,7 +669,7 @@ function stepRichInlineLine(
         const joinedBreak = joinedBreaks[k]!
         if (joinedBreak.segmentIndex >= runEnd) continue
         const reached = cloneCursor(cursor)
-        const width = stepPreparedLineGeometry(item.prepared, reached, availableWidth, joinedBreak.segmentIndex, joinedBreak.graphemeIndex)
+        const width = stepPreparedLineGeometry(prepared, reached, availableWidth, joinedBreak.segmentIndex, joinedBreak.graphemeIndex)
         if (width === null || isBeforeCursor(reached, joinedBreak)) continue
         joinedWidth = width
         lineEnd.segmentIndex = reached.segmentIndex
@@ -681,13 +686,13 @@ function stepRichInlineLine(
 
     if (
       carryWidth !== 0 &&
-      lineEnd.segmentIndex === item.prepared.segments.length &&
+      lineEnd.segmentIndex === prepared.segments.length &&
       lineEnd.graphemeIndex === 0 &&
       lineWidthContribution + carryWidth > remainingWidth + lineFitEpsilon
     ) {
       const runStart = item.lastRunStart
       if (isBeforeCursor(cursor, runStart)) {
-        const beforeRunWidth = stepItemToBreak(item.prepared, cursor, availableWidth, runStart, lineEnd)
+        const beforeRunWidth = stepItemToBreak(prepared, cursor, availableWidth, runStart, lineEnd)
         if (beforeRunWidth !== null) {
           lineWidthForItem = beforeRunWidth
           itemOccupiedWidth = lineWidthForItem + item.extraWidth
