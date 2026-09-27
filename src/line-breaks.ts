@@ -412,7 +412,7 @@ type ChromiumLineTable = 'line_normal' | 'line_normal_cj'
 
 const lineRules: Partial<Record<LineTable, BreakRules>> = {}
 
-function getLineRules(table: LineTable): BreakRules {
+export function getLineRules(table: LineTable): BreakRules {
   return lineRules[table] ?? (lineRules[table] = parseBreakRules(unpackTableFrom(lineTablesPacked, table)))
 }
 

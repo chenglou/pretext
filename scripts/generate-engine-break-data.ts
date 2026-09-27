@@ -365,6 +365,62 @@ const {
 // src/gecko-line-breaks.ts reads Line_Break values by number (icu_segmenter line.rs:18-128).
 if (geckoLineField('complex_property') !== 46) throw new Error('Expected SA to be Line_Break value 46')
 
+// Firefox's Line_Break values through Chrome's line_normal.brk categories, which src/gecko-line-breaks.ts
+// reads in place of Firefox's trie: each category's most common value, plus 0x80 where some of its code
+// points take another, and ranges of those code points with their values. A range may span code points
+// of categories that take one value. Checked on every code point.
+const chromiumLineRules = parseBreakRules(lineTableBytes[0]!)
+const geckoLineIndexValues = readValues(Uint16Array, geckoLineIndex)
+const geckoLineValues = new Uint8Array(0x110000)
+const chromiumLineCategories = new Uint8Array(0x110000)
+const categoryValueCounts: Map<number, number>[] = Array.from({ length: chromiumLineRules.catCount }, () => new Map())
+for (let c = 0; c <= 0x10ffff; c++) {
+  const value = geckoLineValues[c] = getSmallTrieValue(geckoLineIndexValues, geckoLineData, geckoLineField('high_start'), c)
+  const counts = categoryValueCounts[chromiumLineCategories[c] = getCategory(chromiumLineRules, c)]!
+  counts.set(value, (counts.get(value) ?? 0) + 1)
+}
+const geckoLineClasses = new Uint8Array(chromiumLineRules.catCount)
+for (let k = 0; k < geckoLineClasses.length; k++) {
+  const counts = Array.from(categoryValueCounts[k]!).sort((a, b) => b[1] - a[1] || a[0] - b[0])
+  if (counts.length > 0 && counts[0]![0] >= 0x80) throw new Error('Expected Line_Break values below 128')
+  geckoLineClasses[k] = counts.length === 0 ? 0 : counts[0]![0] | (counts.length > 1 ? 0x80 : 0)
+}
+// Greedy is shortest: a range holds one value, so a code point taking another always ends it.
+const geckoLineClassRanges: number[] = []
+{
+  let previousEnd = -1
+  let rangeStart = -1
+  let rangeEnd = -1
+  let rangeValue = -1
+  const close = () => {
+    if (rangeStart < 0) return
+    geckoLineClassRanges.push(rangeStart - previousEnd - 1, rangeEnd - rangeStart, rangeValue + 1)
+    previousEnd = rangeEnd
+    rangeStart = -1
+  }
+  for (let c = 0; c <= 0x10ffff; c++) {
+    const byCategory = geckoLineClasses[chromiumLineCategories[c]!]!
+    if (byCategory < 0x80) continue
+    const value = geckoLineValues[c]!
+    if (rangeStart >= 0 && value === rangeValue) rangeEnd = c
+    else if (value === (byCategory & 0x7f)) close()
+    else { close(); rangeStart = rangeEnd = c; rangeValue = value }
+  }
+  close()
+  const inRange = new Int16Array(0x110000).fill(-1)
+  let at = -1
+  for (let r = 0; r < geckoLineClassRanges.length; r += 3) {
+    const start = at + 1 + geckoLineClassRanges[r]!
+    at = start + geckoLineClassRanges[r + 1]!
+    inRange.fill(geckoLineClassRanges[r + 2]! - 1, start, at + 1)
+  }
+  for (let c = 0; c <= 0x10ffff; c++) {
+    const byCategory = geckoLineClasses[chromiumLineCategories[c]!]!
+    const value = byCategory < 0x80 ? byCategory : inRange[c]! >= 0 ? inRange[c]! : byCategory & 0x7f
+    if (value !== geckoLineValues[c]) throw new Error(`Firefox's Line_Break value of U+${c.toString(16)} reads as ${value}, not ${geckoLineValues[c]}`)
+  }
+}
+
 // Firefox's grapheme clusters, from ICU4X's grapheme data, which src/graphemes.ts doesn't ship:
 // it takes Chrome's char.brk in Firefox. Checked here: both tables split the code points into the
 // same classes, and ICU4X's RuleBreakIterator::next (icu_segmenter 2.1.2 rule_segmenter.rs:72-213,
@@ -532,15 +588,15 @@ export const webkitLinePairsPacked = '${packTable(webkitPairs)}'
 // 0 for the category of U+007B or 1 for U+007D. A locale without an entry takes its parent's.
 export const appleQuoteRemaps: Record<string, readonly number[]> = ${remapsJson}
 
-// Firefox's baked ICU4X line data: a small CodePointTrie of Line_Break values (icu_collections
-// 2.1.1 codepointtrie), with the index as u16 little-endian, and the BreakState byte of each pair
-// of properties (icu_segmenter 2.1.2 src/provider/mod.rs:288-310).
-export const geckoLineTrieHighStart = ${geckoLineField('high_start')}
+// Firefox's baked ICU4X line data: its Line_Break values through Chrome's line_normal categories,
+// each category's value plus 0x80 where some of its code points take another, those code points'
+// values plus 1 in [start - previous end - 1, end - start, value] triples of u32 little-endian,
+// and the BreakState byte of each pair of properties (icu_segmenter 2.1.2 src/provider/mod.rs:288-310).
 export const geckoLinePropertyCount = ${geckoLinePropertyCount}
 export const geckoLineLastCodepointProperty = ${geckoLineField('last_codepoint_property')}
 export const geckoLineEotProperty = ${geckoLineField('eot_property')}
-export const geckoLineTrieIndexPacked = '${packTable(geckoLineIndex)}'
-export const geckoLineTrieDataPacked = '${packTable(geckoLineData)}'
+export const geckoLineClassesPacked = '${packTable(geckoLineClasses)}'
+export const geckoLineClassRangesPacked = '${packTable(new Uint8Array(Uint32Array.from(geckoLineClassRanges).buffer))}'
 export const geckoLineBreakStatesPacked = '${packTable(geckoLineStates)}'
 
 // icu_properties 2.1.2's Bidi_Class other than L, and its East_Asian_Width H (2), F (3) and W (5),
@@ -560,7 +616,7 @@ const summary = [
   `character tables packed ${Object.entries(charTablesPacked).map(([table, [reference, data]]) => `${table} ${data.length} B${reference === null ? '' : ` against ${reference}`}`).join(', ')}`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
-  `Firefox line data ${geckoLineIndex.length + geckoLineData.length + geckoLineStates.length} B`,
+  `Firefox line data ${geckoLineIndex.length + geckoLineData.length + geckoLineStates.length} B, read as ${geckoLineClassRanges.length / 3} ranges`,
   `Firefox properties ${gzipSize(geckoPropertiesJson)} B gzipped`,
   `module ${nextSource.length} B, ${gzipSize(nextSource)} B gzipped`,
 ].join('; ')
