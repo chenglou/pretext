@@ -1478,7 +1478,12 @@ decimal that parses back to the same double, so a float32 size reaches the CSS p
   agree: integers, halves and quarters below 32px agree; 13.33px becomes 13.375px in Canvas, so it reports
   `font-size-quantization`. For Apple Color Emoji at DPR d the DOM asks Core Text at the device size: measure at that
   size and scale, `au = round(W × 60) × apd / 60` (specs/gecko-canvas.md §2 A12). 12px at DPR 2: Canvas at 24px gives
-  25px, so the DOM width is 12.5px. `measureText` returns `float(au) / 60` as a float
+  25px, so the DOM width is 12.5px. This is how the redo meets Mozilla #2020894 and Chromium #489494015, Canvas measuring
+  Apple Color Emoji wider than the page at small sizes, which main corrects from a hidden DOM span: Blink's contexts are at
+  the zoomed size already, and Gecko asks Canvas at the device size per cluster Apple Color Emoji draws, and since
+  2026-09-26 for an emoji modifier after a letter too, which is in the letter's grapheme cluster but in a font run of its
+  own where the letter's font lacks it (FindFontForChar, gfxTextRun.cpp:3181-3194; the known tail's
+  `shared/apple-color-emoji-canvas-width`). `measureText` returns `float(au) / 60` as a float
   (CanvasRenderingContext2D.cpp:5277), so `au = round(W × 60)` is exact only below 2^18 px; the space-in-shaping test runs
   in windows under that, and a wider unit reports `float32-precision`.
 
@@ -2434,6 +2439,27 @@ the break; and six traced since (TAKEOVER.md, 2026-09-25): three more one-Layout
 hyphen (Al Bayan at 30px) and one beside U+0020 whose `in-word-prefix` point the scorer's evidence doesn't reach (Waseem
 at 24px), and three break-all cuts inside joined Arabic words, which `unsafe-to-break` names at the break but not over
 the line's earlier rect differences (Al Bayan at 40px, Beirut at 30px). They are open correctness work (TAKEOVER.md).
+The redo finish (2026-09-26, TAKEOVER.md) names two more mechanisms, where the fit test is decided by under two
+LayoutUnits (`gaps.ts` `lineEdgeGaps`, `rtlEndReach`; the rules `blink/gap/one-unit-fit` and `rtl-end-reach`):
+- A wrapped start's correction reaches the line's end whatever the start is beside, so the condition reports at the
+  breaks the decision chose between after a soft hyphen, another space character or inside a word too, where it had
+  reported in-word-prefix at the start alone; not between two CJK ideographs or symbols, which Canvas measures as words
+  of their own, so that no window shows anything across the start: there the condition held on 2,973 of the census's
+  26,716 lines, every one in its Chinese and Japanese texts, which Chrome lays out as the port does, and it stays at the
+  start. Where the line's own end is what the fit test decided, it reports at the break before the text that end holds as
+  well as at the one taken (`LineInfo.decisionStart`, asked of the break iterator only then): Waseem's ` الله` at 24px
+  ends before the port's break.
+- An RTL position is counted from the item's logical end (CachedPositionForOffset, shape_result.cc:2325-2363), so both of
+  a line's edge positions inside an RTL item read the advance of the item's text after the line end, and their ceilings
+  move the line's width by one LayoutUnit wherever that advance is off. The conditions reported over that text reach the
+  decision's breaks. Al Tarikh's first line at 44px fits by 0 in the port where Chrome breaks a word earlier, every item's
+  snapped width is Chrome's a LayoutUnit wider, and with the `&` after the line end left out the two agree.
+On the tier cases without facts they report in 2,090 cases (3.0%) and 2,871 of 247,575 lines, most of them in the rule
+families, whose widths are exact fits by construction: at a start not beside a space in 910 cases and 1,342 lines, the
+second break beside a space in 1,355 and 1,504, the RTL reach in 29 and 29. On main's real-text harness sets in pinned
+Chrome they report on 215 of 134,093 lines (0.16%): 26 of the census's 26,716, 7 of the sample's 28,507 and 182 of the
+books' 78,870, in 28 of the 72. Plain lines don't move. Two of the twelve exact fits are covered since (Tamil Sangam MN, Al Tarikh); the known tail's
+`blink/exact-fits-without-a-gap` says what the scorer still takes on the other ten.
 
 **Blink's cut predictor** (2026-09-23; `shape.ts` `windowAdjust16`, `predictedWindow`, `predictionMargin16`; the recipe is
 in §4.4). It rests on a **premise about fonts**, taken as a documented default with a named gap as words first's are: a
@@ -2931,7 +2957,7 @@ neither the count nor the order of measuring calls shows in a row.
 | Float32 precision (`float32-precision`) | Blink, Gecko | Blink: 16.16 values are exact in float32 only below 256 px. Gecko: `measureText` returns `float(au) / 60`, exact only below 2^18 px. | Blink: measure per Canvas word; a float32 holds 24 bits, so sums of multiples of 2^g units are exact below 2^(24 + g) units, a run that ends below 256 px can't round, and fonts of 2048 units per em at whole zoomed sizes are always exact. Gecko: the space-in-shaping test runs in windows under 2^18 px. | Blink: a Canvas item of 256 zoomed px or more whose advances' granularity doesn't keep the sums exact. Gecko: a shaping unit 2^18 px or wider; in the observation port, edges beyond 2^20 / apd device px. |
 | String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. Blink: that is the HTML parser's rule, and V8's but for slices of 13 units or more out of a two-byte string and what is built from them. | Parser-created or edited nodes stored 16-bit. Blink: nodes made from such strings, with no condition. WebKit: a line measuring keep-all punctuation in Latin-1 text, or taking an emergency break in Latin-1 text whose second unit can't start a line. |
 | Dictionary breaks (`dictionary-breaks-unavailable`, `dictionary-breaks-stand-in`) | all | Thai, Lao, Khmer and Myanmar need dictionary or LSTM data (§6.3). | The running browser's own segmenter. | `unavailable`: SA runs get no interior opportunities. WebKit stand-in: a dictionary range that starts with a combining mark (27 of 282,337 positions). |
-| HanKerning (`han-kerning`) | Blink | Blink trims fullwidth punctuation with `halt` using characters outside the shaped range and at line ends (han_kerning.cc, shaping_line_breaker.cc:344-378). | The trims from Canvas facts (blink audit B6). | Fonts whose `halt` detection isn't probed; neighbours on another line. |
+| HanKerning (`han-kerning`) | Blink | Blink trims fullwidth punctuation with `halt` using characters outside the shaped range, at every script edge inside a shaping call, and at line ends (han_kerning.cc, harfbuzz_shaper.cc:895, shaping_line_breaker.cc:344-378). | The trims from Canvas facts (blink audit B6); at a script edge the port measures each segment alone and subtracts the halt (`shape.ts` `hanKerningAtScriptEdges`). | Fonts whose `halt` detection isn't probed, or whose `「` halt leaves as it is (Nanum Brush Script and Nanum Pen Script, the known tail's `blink/han-kerning-halt-canvas-cannot-show`); neighbours on another line. |
 | Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking. The one probed example doesn't show it: 16px Helvetica Neue's stops, 35.5859375px apart, are 8 × Canvas's space advance of 4.447998px rounded up to 1/128px (rebuild/platform-bugs/LEDGER.md, "Looked at and not reported"), so the condition is due a re-reading. |
 | UI language (`ui-language`) | all | §1.4 | The engine's given process languages. | The fact is null and content has no `lang`, `lang=""`, a Han `lang` (WebKit), or a locale ICU has no data for (WebKit quotes). |
 | Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and the process's font fallback state, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. Gecko: every U+FFFD outside the listed fonts (the process's cached fallback family); an emoji that asks for a color glyph and measures as another font; U+FE0E on an emoji-default character, whose text glyph only the system-wide search finds among the families whose character maps are loaded by then (gfxPlatformFontList.cpp:1474-1486). WebKit: a line measuring an item that another box of the same text and wrapping styles could end elsewhere, where the parts would measure otherwise or the item is content whose fit ended the line (or the builder reverted): a level boundary the text gets under either paragraph direction or one or two characters of context (UAX #9 classes), or preserved white space of two units, which break-spaces and word spacing split and pre-wrap keeps whole (TextBreakingPositionContext.h:30-80). |

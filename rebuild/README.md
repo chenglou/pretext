@@ -10,15 +10,19 @@ in all three engines, rich inline included; and the speed recipes end with Blink
 After that the work is upkeep: pinning newer browsers, syncing main and adopting new browser APIs. A premise about fonts
 that nobody has falsified may be taken for speed, as a documented default with a named gap, and where requirements have
 to give, ad hoc ones go first, then petty ones.
-Where it stands (2026-09-25): with words first and the cut predictor the speed recipes end, so that part is reached.
-The first part isn't met yet: the review of words first's gap naming found 12 layouts at DPR 1 that fail with no gap,
-which the line before words first fails too: nine one-LayoutUnit fits (on first lines, at line starts not beside U+0020
-or after a soft hyphen, and one that `one-unit-fit` names at a point the scorer's evidence doesn't reach) and three
-break-all cuts inside joined Arabic words that `unsafe-to-break` names at the break alone (TAKEOVER.md; the known tail's
-`blink/exact-fits-without-a-gap`). They are open correctness work. The second part isn't met either: against main
-`48980bb` (lab/BASELINE-main.md), main is right where the redo isn't on 9 tier cases and 36 cases of main's harness,
-leaving out page history, luck and widths under 24 px, and main's rich-inline chips and cloned padding have no form in
-the redo.
+Where it stands (2026-09-26): the maintainer scoped the redo to plain text, with rich inline and the manual layout API
+to be derived from it later, and asked to close it once it is as correct as it can be, with the lines drawn stated
+(TAKEOVER.md, 2026-09-26). With words first and the cut predictor the speed recipes end. Rule (2), read for plain text:
+against main `48980bb` (lab/BASELINE-main.md) main alone is right on 16, 36 and 8 tier cases and 25, 26 and 8 cases of
+main's harness, leaving out page history, luck and widths under 24 px; the true redo losses among them, 7, 1 and 1 and
+6, 11 and 1, are each a named gap or a class of the known tail, rule families, suite cases and catalog classes, none of
+them real text. Since 2026-09-26 the Blink port takes HanKerning's contexts at the paragraph's script edges, which
+main's Chinese AI paragraph lost a character to, and the Gecko port an emoji modifier after a letter at Apple Color
+Emoji's device size (17 of main's harness cases). Rule (1) isn't met to the letter: ten exact fits at DPR 1 fail with no
+covering gap (the known tail's `blink/exact-fits-without-a-gap`); their mechanisms are named where the port can see
+them, at the breaks their decisions chose between (`one-unit-fit`, `rtl-end-reach`), and what the scorer still takes is
+rects inside joined Arabic words that the observation port limits and no line gap touches. Main's rich-inline chips and
+cloned padding have no form in the redo, and are out of its scope.
 
 Start here. [TAKEOVER.md](TAKEOVER.md) records the current decisions, evidence and open failures. [DESIGN.md](DESIGN.md)
 is the implementation reference; [TESTS.md](TESTS.md) documents broader checks. `HANDOFF.md`, `CHARTER.md` and dated

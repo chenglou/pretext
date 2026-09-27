@@ -4200,7 +4200,7 @@
       "id": "blink/han-kerning-full-stop-before-closing-bracket",
       "engine": "blink",
       "kind": "open rows",
-      "title": "An ideographic full stop before a closing corner bracket is set at half width natively and predicted at full width",
+      "title": "An ideographic full stop before a closing corner bracket was set at half width natively and predicted at full width: closed on 2026-09-26, the brackets resolve to Hangul and HanKerning's end context halts `。` at the script edge",
       "conditions": [],
       "cases": [
         {
@@ -4219,8 +4219,8 @@
           "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
         }
       ],
-      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line; research/ROUND4-CRITIC.md §2 and §7 (han_kerning.cc:417-535 read for a trace)",
-      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome. The round 4 critic traced `c-26737b4c93d3c46b` and `c-571b183504971c3f`: `。` before `」` is 6.5px natively in 13px Hiragino Sans under lang=en and 13px predicted, on its own line and beside the bracket (the line is 39px predicted and 32.5px native). The cause isn't found: the port's glyph-type grouping, the dot group of four, matches han_kerning.cc. Without facts the rows read covered by script-context; HanKerning doesn't read script lookups, so that cover is by position."
+      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line; research/ROUND4-CRITIC.md §2 and §7 (han_kerning.cc:417-535 read for a trace); the redo finish (2026-09-26, .artifacts/tests/runs/redo-finish-20260926/lab/hk-eval, base-nofacts and base-facts; shape.ts hanKerningAtScriptEdges)",
+      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome. The round 4 critic traced `c-26737b4c93d3c46b` and `c-571b183504971c3f`: `。` before `」` is 6.5px natively in 13px Hiragino Sans under lang=en and 13px predicted, on its own line and beside the bracket (the line is 39px predicted and 32.5px native). The cause isn't found: the port's glyph-type grouping, the dot group of four, matches han_kerning.cc. Without facts the rows read covered by script-context; HanKerning doesn't read script lookups, so that cover is by position. Closed on 2026-09-26. `「` after the Hangul run and a space takes the Hangul run's script (its scripts list Hang), so `」` does too (ScriptRunIterator's brackets), and the kana run ends at `。`: a RunSegmenter segment edge inside the group, where HanKerning's end context reads `」` and halts `。` (harfbuzz_shaper.cc:895, han_kerning.cc:264-300), and where the port measured the kana segment alone. With the halts at a group's script edges all three cases pass every metric in both configurations in pinned Chrome 154, where the base failed widths in both."
     },
     {
       "id": "blink/soft-hyphen-line-one-unit-off-without-facts",

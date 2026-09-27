@@ -141,6 +141,15 @@ laid out again:
   `old-gate/space` and `old-gate/mixed`, and rich Myanmar; Firefox's `rule/joining` in Geeza Pro; webkit-host's
   `rule/joining` at 42-54 px (0.4-4 px) and `source-views/long-tail-edge-falsifier`.
 
+Since 2026-09-26 (the redo finish, TAKEOVER.md; `.artifacts/tests/runs/redo-finish-20260926/harness`, the same run,
+join and scripts on the round's library) the Blink port takes HanKerning's contexts at the paragraph's script edges and
+the Gecko port an emoji modifier after a letter at Apple Color Emoji's device size. `sample/ai/paragraph/zh` and the 17
+`catalog/classes/EM` cases in Firefox are right, and no other line of main's 41,360 Chrome and 42,532 Firefox harness
+cases moved: main alone is right on 25, 26 and 8 of them, the true redo losses 6, 11 and 1, each a class of the known
+tail (`blink/rare-characters-beside-hangul-and-hebrew`, `gecko/font-kept-from-the-character-before`,
+`gecko/spacing-mark-after-a-space-at-a-break`) or named as above. The tier sets are as the table above says: neither
+change moves a tier line.
+
 ## Unsupported cases
 
 `predict` returns `{ error: 'unsupported by main: <reasons>' }`, every reason joined, for a case main's adapter can't

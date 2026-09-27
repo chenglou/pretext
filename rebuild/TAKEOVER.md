@@ -1,5 +1,88 @@
 # Takeover decisions and evidence
 
+2026-09-26, the redo finish (branch `redo-finish`: `8937933` and `c80488e`; runs, probes and lab cases in
+`.artifacts/tests/runs/redo-finish-20260926`). The maintainer scoped the redo to plain text (rich inline and the manual
+layout API come from it later), and asked to close it once it is as correct as it can be, with the lines drawn stated.
+What was fixed:
+- HanKerning at the paragraph's script edges (`shape.ts` `hanKerningAtScriptEdges`, rule
+  `blink/measure/han-kerning-at-script-edges`). HarfBuzzShaper makes a HanKerning of every RunSegmenter segment of a
+  shaping call (harfbuzz_shaper.cc:895), whose first and last characters read the characters beside them in
+  text_content (han_kerning.cc:235-300); the port measures each script segment of a group in its own Canvas string,
+  where neither has a neighbour, and added those contexts at group edges only. A `}` that pairs with a `{` after Latin
+  letters is Latin (ScriptRunIterator's brackets), so in main's `sample/ai/paragraph/zh` (15px PingFang SC at 864 px)
+  Chrome halts the `。` before it, 7.5 px, where the port measured it whole and ended the first line a character early.
+  No installed face has `chws` (the 33 families with `halt`, read with fonttools), so HanKerning's own pair rule applies
+  inside a segment and at its edges alike. The port subtracts those halts from every range that holds the halted
+  character, trims measured once per group, and a start-context halt marks its offset unsafe to break, as HanKerning
+  does. A probe of the 33 families at 16px in pinned Chrome 154 (`probe/out-b`, `out-b2`): `。` before a Latin-paired `}`,
+  `」` before a Latin-paired `)` and `。` before U+00B7 in kana or Hangul were measured whole in 25, 27 and 23 families,
+  and now match Chrome in every family but Nanum Brush Script and Nanum Pen Script, whose `「` halt leaves as it is, so
+  the port takes them for faces without halt (the known tail's `blink/han-kerning-halt-canvas-cannot-show`). The zh
+  paragraph passes every metric in both configurations as a lab case (`lab/hk-zh`), and so do the three eval-r4-2 cases
+  of the known tail's `blink/han-kerning-full-stop-before-closing-bracket` (`lab/hk-eval`: `。」` after Hangul, where the
+  brackets resolve to Hangul; widths failed in both configurations on the base), which closes that item. No tier case
+  holds such an edge: the fix alone changed no tier prediction and no question.
+- Firefox: an emoji modifier after a letter (`engines/gecko/prepare.ts`, step 7). It is in the letter's grapheme
+  cluster but gets a font run of its own where the letter's font lacks it (FindFontForChar, gfxTextRun.cpp:3181-3194),
+  so Apple Color Emoji's device-size recipe, which ran on a cluster's first code point only, runs on the modifier too.
+  Main's 17 `catalog/classes/EM` cases (`ab` U+1F3FB `ab` in 16px Arial, U+1F3FB 16 px natively and 21 in Canvas) now
+  pass; tier 1 in Firefox changes no prediction and no question.
+What was named (known tail, DESIGN.md §4.6, §5):
+- The one-LayoutUnit fits. A wrapped start's correction reaches the line's end whatever the start is beside, so
+  `blink/gap/one-unit-fit` reports at the breaks the decision chose between after a soft hyphen, another space character
+  or inside a word too, but not between two CJK ideographs or symbols, which Canvas measures as words of their own (there
+  the condition held on 2,973 of the census's 26,716 lines, every one in its Chinese and Japanese texts, which Chrome lays
+  out as the port does); and where the line's own end is what the fit test decided, also at the break before the text
+  that end holds (`LineInfo.decisionStart`). In an RTL item both of a line's edge positions count from the item's logical
+  end (CachedPositionForOffset, shape_result.cc:2325-2363), so the conditions reported over the item's text after the line
+  end reach an exactly fitting line's breaks (`blink/gap/rtl-end-reach`). The item probe (`probe/out-fits-ar`) found every
+  item of the four first lines Chrome's to the LayoutUnit a LayoutUnit wider, and the variants (`out-fitvar`,
+  `out-fitvar2`) that Al Tarikh's line agrees without the `&` after its end and Beirut's with the text after its line cut.
+  At DPR 1 (`fits/tip`) two of the twelve exact fits are covered since: Tamil Sangam MN's start inside a word and Al
+  Tarikh's first line. The other ten stay in `blink/exact-fits-without-a-gap`, which says why the scorer leaves each
+  open: the conditions touch the decision text on four of them, but the scorer also takes code point rects inside joined
+  Arabic words before it, which the observation port limits under glyph-clusters and no line gap touches; Farah's and
+  Beirut's stand-ins carry no reported condition; Al Bayan 30px's are taken for a line whose rects agree; and the three
+  break-all cuts are as traced.
+- Firefox's and Chrome's Canvas measure Apple Color Emoji wider than the page at small sizes (Mozilla #2020894,
+  Chromium #489494015): main corrects it from a hidden DOM span; the redo reads no DOM by design and takes the page's
+  advance from Canvas at the device size, Blink's contexts being at the zoomed size already
+  (`shared/apple-color-emoji-canvas-width`).
+- The other rule-(2) losses, each traced on the recheck's rows: in Firefox `b` after U+3000 U+200D and U+261D after
+  Hangul, drawn in the font of the character before them where Canvas measuring the port's in-word side alone matches
+  fonts from the list's start (10 cases, `gecko/font-kept-from-the-character-before`, under in-word-prefix), and U+0DD8
+  after a space, which Firefox starts the next line with in its own font run while the port keeps the cluster's advance
+  on the space (`gecko/spacing-mark-after-a-space-at-a-break`); in Chrome U+2E3B between Hangul, Hangul jamo after a
+  syllable and U+1F3FB after Hebrew, measured apart from the run that draws them (`blink/rare-characters-beside-hangul-and-hebrew`,
+  under script-context, glyph-clusters and unsafe-to-break). None is cheap to fix from Canvas; each is named where it
+  differs, and all are catalog classes, not real text.
+Where the lines are drawn:
+- Rule (2), plain text, against main `48980bb`: on main's harness case files main alone is right on 25, 26 and 8 cases
+  (26, 43 and 8 before), of which 6, 11 and 1 are true redo losses, each a named class above or of the tier's list; the
+  tier sets are as before (16, 36 and 8; true losses 7, 1 and 1, all under a gap: Times New Roman's and Hoefler Text's
+  kerned words under unsafe-to-break, which the lab's facts settle, Amiri's `((tai`, `ws/text-nodes`,
+  `ligature-thresholds-v3`). The rest is page history, main right by luck, widths under 24 px, and rich inline, which is
+  out of the redo's scope.
+- Rule (1): ten exact fits at DPR 1 fail with no covering gap; their mechanisms are named where the port can see them,
+  and what converts them is a scorer rule (limits as touched) or a line gap over the observation's glyph-clusters limits
+  on a disputed line, not a library change.
+- Nothing moved that should not have: main's harness cases change lines in one Chrome case of 41,360 (the zh paragraph)
+  and 17 Firefox cases of 42,532 (the EM class), the census, the books and the sample among them; tier 2 in pinned Chrome
+  154, both orders and both configurations, recorded at `8937933`: against the references it replaces (`93c4a53`,
+  recorded under 153.0.8010.50, read with `--allow=build`) 4 and 16 status transitions, every one a failing case covered
+  before that takes one more gap, or a differing predicted value now limited; differing predicted values 302 -> 302 and
+  807 -> 785 (22 in `rule/object-replacement` now limited by the new points); rect counts 1,035 and 880 unchanged. Where
+  the conditions fire, on the tier cases without facts (the frozen references at `c80488e`): 2,090 cases (3.0%) and
+  2,871 of 247,575 lines, 910 and 1,342 at a start not beside a space, 1,355 and 1,504 at the second break beside a
+  space, 29 and 29 the RTL reach, most of them in the rule families, whose widths are exact fits; on main's real-text
+  harness sets in pinned Chrome, 215 of 134,093 lines (0.16%): 26 of the census's 26,716,
+  7 of the sample's 28,507 and 182 of the books' 78,870.
+- References: Chrome's tier 2 of `8937933` packed (69,224 of 69,224 cases replay exactly in both configurations) and
+  frozen at `c80488e` in the shared `.artifacts/tests/reference/chrome-{no-facts,facts}`; the ones they replace are kept
+  beside them as `*.pre-redo-finish`. Firefox's and webkit-host's stay. The quick gates on `c80488e`, all
+  engines and fresh, exit 0: 25 gates, tier 1 the same in all six pairs with no question changed, plain and pure pass
+  every case, 1,272 unit tests (`hankerning.test.ts` and `remaining-gaps.test.ts` hold the new ones).
+
 2026-09-25, rule (2) of the stopping rule measured against main `48980bb` ([lab/BASELINE-main.md](lab/BASELINE-main.md);
 runs, joins and scripts in `.artifacts/tests/runs/rule2-20260925`). The lab's main baseline now predicts through main's
 own harness adapter, `harness/predict.ts`, so rich inline is in (`1318d10`). A case is right when its line count is the
