@@ -1,5 +1,26 @@
 # Takeover decisions and evidence
 
+2026-09-26, the check before the merge (a fresh detached worktree at `63ce694`; runs in
+`.artifacts/tests/runs/redo-finish-check-20260926`). What held:
+- The quick gates, all engines and fresh: exit 0, 25 gates, tier 1 the same in all six pairs with no question changed,
+  plain and pure pass every case, 1,272 unit tests. `hankerning.test.ts` fails with the halts at script edges left out.
+- The fixed cases laid out again with their own natives: `lab/hk-zh`, and `sample/ai/paragraph/zh` in the rule-2
+  recheck under an en-US interface, right in Chrome; `lab/hk-eval` passes line count, breaks and widths in both
+  configurations; the 17 `catalog/classes/EM` cases right in Firefox. The recheck's other main-only cases (25 in Chrome,
+  26 in Firefox) are as before, with the gaps they had. The exact fits at DPR 1 (`fits12`) lay out and score as the redo
+  finish recorded: Tamil Sangam MN and Al Tarikh covered, the ten others open. The HanKerning probe of the 33 families
+  again leaves only Nanum Brush Script and Nanum Pen Script.
+- The numbers README.md gives, read again from the frozen ledgers, the harness joins and the rows: the covered,
+  history, open and painter counts; 16, 36 and 8 and 25, 26 and 8 main-only cases; 1 of 41,360 Chrome and 17 of 42,532
+  Firefox harness cases with other lines; the new reports on 2,090 tier cases and 2,871 lines, and on 26, 7 and 182 of
+  the census's, the sample's and the books' lines.
+What was corrected, in the docs only: the zh paragraph's lost character was on its second line, not its first
+(TAKEOVER.md, the rule's probe); the three eval-r4-2 cases don't pass every metric, since one painter row moves from
+pass to fail, covered by `han-kerning` (below, and the known tail); two `catalog/classes/JV` cases of main's harness
+fail breaks with no gap on the disputed syllable, which README.md now counts beside the ten exact fits; "Lines drawn"
+marks the quiet-gap line as the redo's own and says main right by luck as part 2 defines it, not as rounding luck. The
+redo finish's commit message `8937933` has the same first-line slip.
+
 2026-09-26, the end state written down (README.md, "End state (2026-09-26)" and "Lines drawn"). The maintainer asked to
 call the redo done once it is as correct as it can be, with this session's lines drawn stated. README's opening now says
 what the redo is, that it is done but for upkeep (re-pinning with a sample check, syncing main, adopting new browser
@@ -29,7 +50,8 @@ What was fixed:
   text_content (han_kerning.cc:235-300); the port measures each script segment of a group in its own Canvas string,
   where neither has a neighbour, and added those contexts at group edges only. A `}` that pairs with a `{` after Latin
   letters is Latin (ScriptRunIterator's brackets), so in main's `sample/ai/paragraph/zh` (15px PingFang SC at 864 px)
-  Chrome halts the `。` before it, 7.5 px, where the port measured it whole and ended the first line a character early.
+  Chrome halts the `。` before it, 7.5 px, where the port measured it whole and ended the second line, which holds two
+  such stops (15 px), a character early.
   No installed face has `chws` (the 33 families with `halt`, read with fonttools), so HanKerning's own pair rule applies
   inside a segment and at its edges alike. The port subtracts those halts from every range that holds the halted
   character, trims measured once per group, and a start-context halt marks its offset unsafe to break, as HanKerning
@@ -37,9 +59,12 @@ What was fixed:
   `」` before a Latin-paired `)` and `。` before U+00B7 in kana or Hangul were measured whole in 25, 27 and 23 families,
   and now match Chrome in every family but Nanum Brush Script and Nanum Pen Script, whose `「` halt leaves as it is, so
   the port takes them for faces without halt (the known tail's `blink/han-kerning-halt-canvas-cannot-show`). The zh
-  paragraph passes every metric in both configurations as a lab case (`lab/hk-zh`), and so do the three eval-r4-2 cases
-  of the known tail's `blink/han-kerning-full-stop-before-closing-bracket` (`lab/hk-eval`: `。」` after Hangul, where the
-  brackets resolve to Hangul; widths failed in both configurations on the base), which closes that item. No tier case
+  paragraph passes every metric in both configurations as a lab case (`lab/hk-zh`), and the three eval-r4-2 cases of
+  the known tail's `blink/han-kerning-full-stop-before-closing-bracket` pass line count, breaks and widths in both
+  (`lab/hk-eval`: `。」` after Hangul, where the brackets resolve to Hangul; widths failed in both configurations on the
+  base), which closes that item. The painter's row of `c-26737b4c93d3c46b` goes from pass to fail, covered by
+  `han-kerning`: at 1px its line 29 holds the `。` alone, which the prediction now gives Chrome's 6.5 px, and the painter,
+  which draws each line in a node of its own, draws it at 13 px without the `」` that starts the next line. No tier case
   holds such an edge: the fix alone changed no tier prediction and no question.
 - Firefox: an emoji modifier after a letter (`engines/gecko/prepare.ts`, step 7). It is in the letter's grapheme
   cluster but gets a font run of its own where the letter's font lacks it (FindFontForChar, gfxTextRun.cpp:3181-3194),

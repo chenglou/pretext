@@ -25,13 +25,16 @@ headline numbers are without supplied font facts; the lab's facts stay an option
 The stopping rule (the maintainer, 2026-09-25, read for plain text since 2026-09-26) has three parts. Where each stands:
 
 1. **Every remaining difference from the browsers on every set is a named gap, a made-up or variation-extreme font, or a
-   width under 24 px, and none is unexplained.** Met for the predictions without facts but for ten layouts. On the tier
-   sets (69,224 Chrome, 63,771 Firefox and 63,987 webkit-host cases, the frozen references) without facts, every case
-   that fails line count, breaks or widths in any engine is covered by a named gap or is page history. Off the tier
-   sets, ten exact fits at DPR 1 in Chrome fail with no covering gap (the known tail's
+   width under 24 px, and none is unexplained.** Met for the predictions without facts but for twelve cases off the
+   tier sets. On the tier sets (69,224 Chrome, 63,771 Firefox and 63,987 webkit-host cases, the frozen references)
+   without facts, every case that fails line count, breaks or widths in any engine is covered by a named gap or is page
+   history. Off the tier sets, ten exact fits at DPR 1 in Chrome fail with no covering gap (the known tail's
    `blink/exact-fits-without-a-gap`). Their mechanisms are named at the breaks the fit decided between (`one-unit-fit`,
    `rtl-end-reach`), but the scorer also counts rects inside joined Arabic words that no line gap touches, so what
-   converts them is a scorer or lab change, not a library change. With the lab's facts one Chrome tier case is open (Al
+   converts them is a scorer or lab change, not a library change. Two of main's harness cases laid out again in the lab
+   fail with no covering gap too, Hangul jamo U+118F after a syllable at 29.85 and 31 px (`catalog/classes/JV`):
+   `glyph-clusters` and `unsafe-to-break` fire on the line but not at the syllable whose line is in dispute (the known
+   tail's `blink/rare-characters-beside-hangul-and-hebrew`). With the lab's facts one Chrome tier case is open (Al
    Nile 40px, unbroken Arabic under `break-all`, `wide-group-cuts`) and 19 Firefox cases are in the residual class
    `gecko/one-shaping-unit-one-app-unit`. The lab's painter, which draws the predicted lines in the DOM and is scored
    apart from the predictions, keeps 4, 0 and 24 rows open without facts, a class the known tail names
@@ -67,11 +70,11 @@ The stopping rule (the maintainer, 2026-09-25, read for plain text since 2026-09
 How the redo decides what counts as done, as the maintainer set it over these sessions:
 - **No right line is traded away silently.** The no-loss rule exists so that a change can't quietly lose a line that
   main or the base got right: every lost line is traced and classed before the change is accepted. The stopping rule
-  then allows a remaining difference only when it's explained and named, a made-up or variation-extreme font, or under
-  24 px. Some losses can't be seen from Canvas at all: Zapfino's morx state changes no advance, so no Canvas answer
-  shows the offset HarfBuzz marks unsafe to break (`blink/zapfino-morx-unsafe-state`); that stays a named font-level
-  limitation, with no code keyed on the font. And the old code got some lines right only by rounding luck (part 2's
-  "main right by luck"); those aren't losses to chase.
+  then allows a remaining difference only where a named gap covers it, the font is made up or at a variation extreme,
+  or the width is under 24 px. Some losses can't be seen from Canvas at all: Zapfino's morx state changes no advance, so
+  no Canvas answer shows the offset HarfBuzz marks unsafe to break (`blink/zapfino-morx-unsafe-state`); that stays a
+  named font-level limitation, with no code keyed on the font. And main gets some lines right only by luck, its own
+  width of the disputed line more than 0.05 px off the browser's (part 2); those aren't losses to chase.
 - **Correctness first, but not completionism.** What would need the DOM or a whole new feature is a named exception,
   not a goal. Main corrects Canvas's Apple Color Emoji width from a hidden DOM span; the redo reads no DOM, takes the
   page's advance from Canvas at the device size, and names what that can't show
@@ -80,16 +83,17 @@ How the redo decides what counts as done, as the maintainer set it over these se
   documented default with a named gap that inspected paragraphs report, bounded where an installed face breaks it
   (Core, below). Where requirements have to give, ad hoc ones go first, then petty ones that no real text exercises.
   CJK stays well supported.
-- **A gap has to stay quiet where the browser agrees.** The finish's new reports fire on 215 of 134,093 real-text
-  lines (0.16%). Its first form fired on 11% of the census's lines, all Chinese and Japanese, where Chrome agreed with
-  the port, so `one-unit-fit` doesn't report at the breaks for a start between two CJK ideographs or symbols. That cut
-  rests on those counts and on no traced failure starting so, not on a source reading that Blink's correction can't act
-  there.
+- **A gap has to stay quiet where the browser agrees.** This one is the redo's own line, not the maintainer's. The
+  reports the last round added (2026-09-26) fire on 215 of 134,093 real-text lines (0.16%: the census, main's sample
+  and the books). Their first form fired on 11% of the census's lines, all Chinese and Japanese, where Chrome agreed
+  with the port, so `one-unit-fit` doesn't report at the breaks for a start between two CJK ideographs or symbols. That
+  cut rests on those counts and on no traced failure starting so, not on a source reading that Blink's correction can't
+  act there.
 - **A soft line on performance.** Plain, predictable code (monomorphic calls, stable object shapes, locals, integer
   bounds, no per-call allocation, one clear path; `~/github/vibescript/docs/engineering.md`) over tuning to one JIT's
   heuristics, which can flip with the next browser release or machine. A small regression that traces only to a JIT
-  quirk is accepted and documented rather than contorting the code. Cater to the worst case: even, predictable cost
-  over branches and caches that help the average, where a slight regression is acceptable.
+  quirk is accepted and documented rather than contorting the code. Cater to the worst case: prefer even, predictable
+  cost to branches and caches that help only the average case, even at a slight cost to the average.
 - **Timing and the machine.** Timing runs two sessions per browser with a control copy of the base by default, more only
   when two sessions disagree about a verdict that matters, in the foreground. Every job is bounded: loops stop at the
   source length plus one line or a time limit, every child has a timeout and dies with its parent, memory is checked
