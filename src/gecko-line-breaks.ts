@@ -80,7 +80,7 @@ function isClusterExtenderExcludingJoiners(cp: number): boolean {
 }
 
 // nsBidiUtils.h:84-90
-function isBidiControl(cp: number): boolean {
+export function isBidiControl(cp: number): boolean {
   return ((cp & 0xff00) === 0x2000 && ((cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069) || (cp & ~1) === 0x200e)) ||
     cp === 0x061c
 }

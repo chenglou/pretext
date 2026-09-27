@@ -282,6 +282,7 @@ export function measureAnalysis(
   // the scan breaks at every segment boundary, and layout() counts it with the
   // simple stepper where it doesn't (countPreparedLines).
   let simpleKinds = !hasLetterSpacing
+  let hasGlue = false
   const breakableFitAdvances: (number[] | null)[] = []
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
   let lineStartProhibitions: (number[] | null)[] | null = null
@@ -423,7 +424,10 @@ export function measureAnalysis(
       case HARD_BREAK:
         break
     }
-    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) simpleKinds = false
+    // layout() counts text with zero-width glue that can't hold a line with the simple stepper, which steps
+    // past it at a line start (countPreparedLines); the line APIs lay it out with the full walker.
+    if (kind === ZERO_WIDTH_GLUE) hasGlue = true
+    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK && (kind !== ZERO_WIDTH_GLUE || engineProfile.zeroWidthGlueTakesLine)) simpleKinds = false
     if (kind !== TEXT && kind !== SOFT_HYPHEN) previousJoinablePiece = null
     segmentFlags[mi] = (segment & ~ONE_CLUSTER) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0)
     widths.push(addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing))
@@ -457,7 +461,7 @@ export function measureAnalysis(
   const prepared = {
     widths,
     segmentFlags,
-    simpleLineWalkFastPath: simpleKinds && !analysis.hasUnbroken,
+    simpleLineWalkFastPath: simpleKinds && !analysis.hasUnbroken && !hasGlue,
     simpleLineCountFastPath: simpleKinds,
     breakableFitAdvances,
     entryGeometry,

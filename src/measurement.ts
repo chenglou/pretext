@@ -85,8 +85,9 @@ export type EngineProfile = {
   hangTabs: boolean
   // Blink's break-anywhere retry and WebKit's grapheme search can end a line after
   // zero-width glue when the grapheme after it doesn't fit, so the glue takes a line of
-  // its own. Gecko drops soft hyphens from its text run and clusters a ZWSP with the marks
-  // after it, so glue at a line start can't hold the line: the segment after it starts it.
+  // its own. Gecko drops soft hyphens and bidi controls from its text run and clusters a
+  // ZWSP with the marks after it, so glue at a line start can't hold the line: the segment
+  // after it starts it.
   zeroWidthGlueTakesLine: boolean
   // Blink's HanKerning under text-spacing-trim: normal halts CJK opening and closing marks
   // next to other punctuation and at line ends (src/han-kerning.ts). WebKit and Gecko

@@ -1,4 +1,4 @@
-// The behaviour catalog's templates, before widths.ts cuts them. Five sources:
+// The behaviour catalog's templates, before widths.ts cuts them. Six sources:
 // - the per-engine rebuild's rule families (data/rule-families.ndjson), the flat ones within what the library takes;
 // - filed reports whose reporter measured the width with their own Canvas;
 // - a matrix of every UAX #14 line-break class between the scripts apps mix, under the CSS settings the library takes,
@@ -6,7 +6,9 @@
 // - shapes ENGINE_FOLLOWUPS.md names, with their neighbours, each neighbour a family of its own, so the cover keeps a
 //   change of each;
 // - chains of combining-mark runs longer than the part of the chain a run's context keeps, each shape a family of its own,
-//   so the cover keeps a change of each.
+//   so the cover keeps a change of each;
+// - bidi controls where Firefox's line breaker, which never sees them, starts or ends a line, each shape a family of its
+//   own.
 // main's adversarial families were taken once from the old harness's generator, which is gone: their cases,
 // `catalog/main/*` and `rich/main/*`, stay in the case files as they were cut, and `make.ts cut` keeps them.
 import { readFileSync } from 'node:fs'
@@ -213,13 +215,39 @@ export function markChainTemplates(): Template[] {
   return out
 }
 
+// Bidi controls, which Firefox leaves out of the text runs it breaks (src/analysis.ts): a chunk of only them between hard
+// breaks, as a run, at the paragraph start and end, a control before a hard break, and one after a space where a line can
+// end, in both white-space modes and as an isolate around a word. Two words on each side give the search widths where the
+// lines around it change.
+export function bidiControlTemplates(): Template[] {
+  const shapes: ReadonlyArray<readonly [string, string, 'normal' | 'pre-wrap']> = [
+    ['between', 'ab cd\n\u200E\nef gh', 'pre-wrap'],
+    ['run', 'ab cd\n\u200F\u2067\u2069\nef gh', 'pre-wrap'],
+    ['start', '\u200F\nab cd', 'pre-wrap'],
+    ['end', 'ab cd\n\u202A', 'pre-wrap'],
+    ['before-break', 'ab cd \u200E\nef gh', 'pre-wrap'],
+    ['after-space', 'ab cd \u200Eef gh', 'normal'],
+    ['after-space-pre-wrap', 'ab cd \u200Eef gh', 'pre-wrap'],
+    ['isolate-after-space', 'ab cd \u2068ef\u2069 gh', 'normal'],
+  ]
+  const out: Template[] = []
+  for (let i = 0; i < shapes.length; i++) {
+    const [name, text, whiteSpace] = shapes[i]!
+    out.push({
+      family: `bidi-controls/${name}`, origin: `src/analysis.ts: Firefox leaves bidi controls out of its text runs, ${name}`,
+      pageLang: 'en', paragraph: paragraph({ font: font('Arial', 16), lang: 'en', whiteSpace }, [text]), widths: [], grid: true,
+    })
+  }
+  return out
+}
+
 export function catalogTemplates(): Template[] {
   const catalog: Template[] = []
   const seen = new Set<string>()
   // The order decides which template shows a line break first, which the cover keeps (widths.ts): filed reports, the
-  // rebuild's rule families, the class matrix, the follow-ups' shapes, then the mark chains. main's families came before
-  // the class matrix when they were cut.
-  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates()]
+  // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, then the bidi controls. main's
+  // families came before the class matrix when they were cut.
+  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), bidiControlTemplates()]
   for (let l = 0; l < lists.length; l++) {
     for (let i = 0; i < lists[l]!.length; i++) {
       const t = lists[l]![i]!

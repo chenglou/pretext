@@ -143,6 +143,31 @@ function getTerminalLetterSpacing(
   return 0
 }
 
+// normalizePreparedLineStart() at glue that can't hold a line, which Gecko leaves out of its
+// text run with the soft hyphens beside it, so a line start looks past both. Firefox keeps a
+// newline, so a chunk of only those and its hard break is an empty line, and a line of only
+// those is none (nsTextFrame.cpp:11421-11429, nsLineLayout.cpp:912). A line after a wrap,
+// which Firefox starts past what it left out, takes the glue along with what it consumes. At a
+// chunk start the glue starts the line before other content, a space included: Firefox trims a
+// line's leading white space from the start of its source only (nsTextFrame.cpp:10935-10950),
+// so none after a character it leaves out.
+function normalizeLineStartAtGlue(prepared: PreparedLineBreakData, cursor: LayoutCursor, segmentIndex: number, atChunkStart: boolean): boolean {
+  const { segmentFlags } = prepared
+  let after = segmentIndex + 1
+  while (after < segmentFlags.length && ((segmentFlags[after]! & KIND_BITS) === ZERO_WIDTH_GLUE || (segmentFlags[after]! & KIND_BITS) === SOFT_HYPHEN)) after++
+  if (after >= segmentFlags.length) return false
+  const next = segmentFlags[after]! & KIND_BITS
+  if (next === HARD_BREAK && atChunkStart) segmentIndex = after
+  else if (next === HARD_BREAK || (!atChunkStart && consumesAtLineStart(next, false))) {
+    cursor.segmentIndex = next === HARD_BREAK ? after + 1 : after
+    cursor.graphemeIndex = 0
+    return cursor.segmentIndex < segmentFlags.length && normalizePreparedLineStart(prepared, cursor)
+  }
+  cursor.segmentIndex = segmentIndex
+  cursor.graphemeIndex = 0
+  return true
+}
+
 // Mutates `cursor` to the next renderable line start. False when no line remains.
 // A chunk runs to a hard break or the end of the text, and the hard break ends a
 // line however little the chunk holds: a chunk holding only its hard break, or only
@@ -175,6 +200,7 @@ export function normalizePreparedLineStart(
     } else if (consumesAtLineStart(kind, atChunkStart)) {
       if (++segmentIndex >= segmentCount) return false
     } else {
+      if (kind === ZERO_WIDTH_GLUE && !getEngineProfile().zeroWidthGlueTakesLine) return normalizeLineStartAtGlue(prepared, cursor, segmentIndex, atChunkStart)
       cursor.segmentIndex = segmentIndex
       cursor.graphemeIndex = 0
       return true
@@ -317,6 +343,7 @@ function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): n
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   let count = 0
   while (normalizePreparedLineStart(prepared, cursor)) {
+    stepPastGlue(segmentFlags, cursor)
     const startSegmentIndex = cursor.segmentIndex
     const startGraphemeIndex = cursor.graphemeIndex
     stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
@@ -349,9 +376,14 @@ export function canReturnFromUnfitHyphen(
   let narrowing = 0
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) narrowing += discretionaryHyphenContexts[i]!
   if (narrowing >= overflow) return false
+  // Zero-width glue holds no opportunity of its own: no break falls before a ZWSP or soft
+  // hyphen, and one before a run of bidi controls is the one after it.
+  let previousKind = -1
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
-    if (breaksAfterKind(segmentFlags[i]! & KIND_BITS)) continue
-    if (i > targetSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) return false
+    const kind = segmentFlags[i]! & KIND_BITS
+    if (kind === ZERO_WIDTH_GLUE) continue
+    if (!breaksAfterKind(kind) && previousKind >= 0 && !breaksAfterKind(previousKind)) return false
+    previousKind = kind
   }
   return true
 }
@@ -555,9 +587,17 @@ function walkPreparedComplexLines(
               if (hangEndSegmentIndex !== i) hangStartWidth = lineW + leadingSpacing
               hangEndSegmentIndex = i + 1
             }
-            // Where glue can't hold a line, glue at a line start isn't the line's content:
-            // the segment after it starts the line, however wide.
-            if (!hasContent && kind === ZERO_WIDTH_GLUE && !zeroWidthGlueTakesLine) {
+            // Where glue can't hold a line, glue at a line start isn't the line's content: the
+            // segment after it starts the line, however wide. Where the line can end after the
+            // glue too, as around bidi controls, which Firefox leaves out of its text run, the
+            // line takes it: Firefox breaks in text-run offsets and maps a line end past what it
+            // left out (nsTextFrame.cpp:11161-11164), so a break or a hanging run before the glue
+            // goes on past it.
+            if (kind === ZERO_WIDTH_GLUE && !zeroWidthGlueTakesLine &&
+              (!hasContent || i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
+              if (pendingBreakSegmentIndex === i) pendingBreakSegmentIndex = i + 1
+              if (fitBreakSegmentIndex === i) fitBreakSegmentIndex = i + 1
+              if (hangEndSegmentIndex === i) hangEndSegmentIndex = i + 1
               lineEndSegmentIndex = i + 1
               lineEndGraphemeIndex = 0
               continue
@@ -634,7 +674,7 @@ function walkPreparedComplexLines(
                   pendingBreakSegmentIndex = i
                   pendingBreakWidth = lineW
                 }
-                if (retreatsAtFullWidth && !breakAfter && (flags & UNBROKEN) === 0 && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) {
+                if (retreatsAtFullWidth && !breakAfter && (flags & UNBROKEN) === 0 && fitBreakSegmentIndex !== i && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) {
                   fitBreakSegmentIndex = i
                   fitBreakPaintWidth = lineW
                 }
@@ -861,6 +901,13 @@ function stepPreparedSimpleLineGeometry(
   cursor.segmentIndex = widths.length
   cursor.graphemeIndex = 0
   return lineW - endTrimmed
+}
+
+// Moves a normalized line start past the glue it starts at, for the simple stepper: glue
+// there can't hold a line (prepare admits only that glue to the simple kinds), and the
+// content after it starts the line.
+function stepPastGlue(segmentFlags: Uint8Array, cursor: LayoutCursor): void {
+  while ((segmentFlags[cursor.segmentIndex]! & KIND_BITS) === ZERO_WIDTH_GLUE) cursor.segmentIndex++
 }
 
 // Steps one line from a normalized line start. An end cursor stops stepping at

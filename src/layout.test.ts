@@ -580,7 +580,7 @@ describe('boundary-policy regressions', () => {
     expect(analyzeText('\u0D4E\u05D0', geckoProfile).flags[0]! & ONE_CLUSTER).toBe(0)
     // A word a level run cuts finds its clusters again in each piece: after the ALM, which the text
     // run leaves out, the vowel killer starts a level run, and the Bengali letter after it a cluster.
-    expect(analyzeText('\u0937\u061C\u1B44\u09B0', geckoProfile).texts).toEqual(['\u0937\u061C', '\u1B44', '\u09B0'])
+    expect(analyzeText('\u0937\u061C\u1B44\u09B0', geckoProfile).texts).toEqual(['\u0937', '\u061C', '\u1B44', '\u09B0'])
     // A ZWJ that ends the paragraph resolves to level 0 (UAX #9 L1), so after a Hebrew letter it
     // starts one too, and its segment is no longer one cluster. Before more text it keeps the
     // letter's level.
@@ -950,11 +950,11 @@ describe('boundary-policy regressions', () => {
     const profile = getEngineProfile()
     const previous = { lineBreakScan: profile.lineBreakScan, zeroWidthGlueTakesLine: profile.zeroWidthGlueTakesLine }
     try {
-      const lines = (text: string, width: number) => {
-        const prepared = prepareWithSegments(text, FONT)
+      const lines = (text: string, width: number, options?: { whiteSpace: 'normal' | 'pre-wrap' }) => {
+        const prepared = prepareWithSegments(text, FONT, options)
         const result = layoutWithLines(prepared, width, LINE_HEIGHT)
         expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
-        expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+        expect(layout(prepare(text, FONT, options), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
         return result.lines.map(line => slicePreparedText(prepared, line.start, line.end))
       }
       // Blink has no break between a soft hyphen and a closing bracket, and its
@@ -970,6 +970,23 @@ describe('boundary-policy regressions', () => {
       expect(prepareWithSegments('\u00ADa\u00ADb', FONT).kinds[0]).toBe('zero-width-glue')
       expect(lines('\u00ADa\u00ADb', 0)).toEqual(['\u00ADa\u00AD', 'b'])
       expect(lines('\u00ADb', 1)).toEqual(['\u00ADb'])
+      // It drops bidi controls too, so its line breaker doesn't see them: a line start looks
+      // past them, taking them along with a hard break or the text end, so a chunk of them holds
+      // a line only by its hard break, and after a wrap with the spaces it consumes, but at a
+      // chunk start it trims no space after one. A line that ends after them leaves out the
+      // space before them.
+      expect(prepareWithSegments('\u202A\u200Eab', FONT).kinds).toEqual(['zero-width-glue', 'text'])
+      expect(lines('\u202A\u200Eab', 1)).toEqual(['\u202A\u200Ea', 'b'])
+      expect(lines('\u200E ab', 1)).toEqual(['\u200E ', 'a', 'b'])
+      expect(lines('ab\u200E cd', 1)).toEqual(['a', 'b\u200E ', 'c', 'd'])
+      expect(lines('\u200E', 100)).toEqual([])
+      expect(lines('a\n\u200E\nb', 1, { whiteSpace: 'pre-wrap' })).toEqual(['a\n', '\n', 'b'])
+      expect(lines('ab \u200E\ncd', measureWidth('ab', FONT), { whiteSpace: 'pre-wrap' })).toEqual(['ab \u200E\n', 'cd'])
+      const fits = measureWidth('ab', FONT) + measureWidth(' ', FONT)
+      for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+        expect(lines('ab \u200Ecd', fits, { whiteSpace })).toEqual(['ab \u200E', 'cd'])
+        expect(layoutWithLines(prepareWithSegments('ab \u200Ecd', FONT, { whiteSpace }), fits, LINE_HEIGHT).lines[0]!.width).toBe(measureWidth('ab', FONT))
+      }
       // A soft hyphen taken as a zero-width break leaves line text, drawing no hyphen.
       const cjk = prepareWithSegments('漢字\u00ADabc', FONT)
       const cjkWidth = measureWidth('漢字', FONT) + 0.1
@@ -3772,7 +3789,7 @@ describe('layout invariants', () => {
 
   test('countPreparedLines counts text with boundaries the scan does not break as the full walker does', () => {
     const profile = getEngineProfile()
-    const previous = profile.lineBreakScan
+    const previous = { lineBreakScan: profile.lineBreakScan, zeroWidthGlueTakesLine: profile.zeroWidthGlueTakesLine }
     const texts = [
       // No break before NEL (UAX #14 LB6), after text or a space.
       'alpha\u0085beta gamma \u0085delta epsilon\u0085',
@@ -3780,14 +3797,16 @@ describe('layout invariants', () => {
       'one\u0001two three\u0007 four fivesixseven\u0001eight',
       // A mark after a control stays apart from the text after it.
       'x\u0001\u0301yz abc\u0001\u0301',
-      // Gecko breaks after a bidi control that follows a space, not before it.
-      'said \u2066quoted\u2069 words and \u200Emore \u202Bnested\u202C text',
+      // Gecko finds no break at a bidi control: after a space, its break after the control is
+      // one before it, and inside a word neither side breaks.
+      'said \u2066quoted\u2069 words and mo\u200Ere \u202Bnested\u202C text',
     ]
     const scans = ['blink', 'gecko'] as const
     try {
       for (let scanIndex = 0; scanIndex < scans.length; scanIndex++) {
         const scan = scans[scanIndex]!
         profile.lineBreakScan = scan
+        profile.zeroWidthGlueTakesLine = scan !== 'gecko'
         clearCache()
         for (let textIndex = 0; textIndex < texts.length; textIndex++) {
           const text = texts[textIndex]!
@@ -3813,7 +3832,8 @@ describe('layout invariants', () => {
         }
       }
     } finally {
-      profile.lineBreakScan = previous
+      profile.lineBreakScan = previous.lineBreakScan
+      profile.zeroWidthGlueTakesLine = previous.zeroWidthGlueTakesLine
       clearCache()
     }
   })

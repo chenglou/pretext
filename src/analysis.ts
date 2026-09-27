@@ -1,4 +1,4 @@
-import { getGeckoLineBreaks, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail } from './gecko-line-breaks.js'
+import { getGeckoLineBreaks, isBidiControl, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail } from './gecko-line-breaks.js'
 import type { CharTable } from './generated/engine-break-data.js'
 import { BREAK, CLUSTER_START, FORCED_BREAK, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
 
@@ -15,7 +15,8 @@ export type SegmentBreakKind =
   | 'zero-width-break'
   | 'soft-hyphen'
   // A ZWSP or soft hyphen the engine's scan doesn't break after: zero width, no
-  // letter spacing, no break on either side.
+  // letter spacing, no break on either side. A run of bidi controls is glue in Gecko,
+  // with the breaks its scan gives around it.
   | 'zero-width-glue'
   | 'hard-break'
   | 'control'
@@ -154,6 +155,8 @@ function normalizeWhitespacePreWrap(text: string): string {
 }
 
 const combiningMarkRe = /\p{M}/u
+// Every character isBidiControl() takes.
+const bidiControlRe = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/
 
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if (whiteSpace === 'pre-wrap') {
@@ -225,9 +228,9 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 
 // A FORCED_BREAK after U+2028 or U+2029 makes the separator a hard break in every white-space
 // mode, and a SOFT_HYPHEN_BREAK makes a soft hyphen a zero-width break: the line can end there
-// without a hyphen. One with only soft hyphens before it on its chunk stays a soft hyphen, since
-// a zero-width break there holds a line and Firefox, which drops soft hyphens from its text runs,
-// gives it none.
+// without a hyphen. One with only soft hyphens and bidi controls before it on its chunk stays a
+// soft hyphen, since a zero-width break there holds a line and Firefox, which drops both from its
+// text runs, gives it none.
 function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if ((code === 0x2028 || code === 0x2029) && (breaks[i + 1]! & FORCED_BREAK) !== 0) return HARD_BREAK
   if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
@@ -236,14 +239,14 @@ function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, 
 
 function followsChunkContent(normalized: string, i: number): boolean {
   let j = i - 1
-  while (j >= 0 && normalized.charCodeAt(j) === 0x00AD) j--
+  while (j >= 0 && isDiscardable(normalized.charCodeAt(j), false)) j--
   return j >= 0 && normalized.charCodeAt(j) !== 0x0A
 }
 
 // Characters of these kinds share a segment when no break falls between them. Each
 // tab, hard break, ZWSP and NEL control stays its own segment.
 function gathersKind(kind: number): boolean {
-  return kind === TEXT || kind === SPACE || kind === PRESERVED_SPACE || kind === SOFT_HYPHEN
+  return kind === TEXT || kind === SPACE || kind === PRESERVED_SPACE || kind === SOFT_HYPHEN || kind === ZERO_WIDTH_GLUE
 }
 
 // A control character that stays its own text segment, measured alone: the C0 and C1
@@ -269,9 +272,13 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   const flags: number[] = []
   let lastAlone = false
   let markRun = false
+  // Gecko drops bidi controls from its text run, as it drops soft hyphens (IsDiscardable,
+  // nsTextFrameUtils.cpp:32-49), so it finds no cluster or break at one, gives it no letter
+  // spacing, and a line can't hold only such characters: a run of them is zero-width glue.
+  const bidiGlue = scan === 'gecko' && bidiControlRe.test(normalized)
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
-    const kind = classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan)
+    const kind = bidiGlue && isBidiControl(code) ? ZERO_WIDTH_GLUE : classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan)
     const alone = kind === TEXT && isControlSegmentCode(code)
     const last = flags.length - 1
     // The first unit has no segment before it to join, so it starts one.
@@ -300,6 +307,13 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
     const kind = flags[j]! & KIND_BITS
     const next = flags[j + 1]! & KIND_BITS
     if ((breaks[starts[j + 1]!]! & BREAK) !== 0 || kind === HARD_BREAK || !(next === TEXT || next === ZERO_WIDTH_GLUE || next === CONTROL)) continue
+    // Gecko's line breaker doesn't see a run of bidi controls, the only glue here before the
+    // loop reaches it: the boundary before one is the boundary after it, which the loop has
+    // passed, and text after one that starts a chunk starts its line.
+    if (scan === 'gecko' && (
+      (kind === ZERO_WIDTH_GLUE && (j === 0 || (flags[j - 1]! & KIND_BITS) === HARD_BREAK)) ||
+      (next === ZERO_WIDTH_GLUE && isBidiControl(normalized.charCodeAt(starts[j + 1]!)) && (j + 2 === count || (flags[j + 2]! & UNBROKEN) === 0))
+    )) continue
     if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~KIND_BITS | ZERO_WIDTH_GLUE
     flags[j + 1] = flags[j + 1]! | UNBROKEN
     hasUnbroken = true

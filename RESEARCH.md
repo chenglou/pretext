@@ -130,7 +130,30 @@ in the Gecko profile glue at a line start isn't the line's content and the segme
 it starts the line however wide it is. Letting the glue start the line gave `SHY a SHY b`
 at 0px an empty first line, which the Gecko scan's installed gate lost on 428 Firefox
 rows; applying the same rule to the Chrome and Safari profiles loses 101 Chrome and 866
-Safari rows in an offline replay. The walkers end a line only where the scan breaks: prepared
+Safari rows in an offline replay. Gecko drops bidi controls from its text run too
+(IsDiscardable, nsTextFrameUtils.cpp:32-49), breaks lines in text-run offsets and maps
+a line end past the characters it dropped (nsTextFrame.cpp:11161-11164), never starts
+a line with an emergency break (gfxTextRun.cpp:1047-1051) and keeps no frame of
+dropped characters as a line's content (nsTextFrame.cpp:11421-11429), so a line never
+starts, ends or stands alone because of one. In the Gecko profile a run of them is
+zero-width glue whose boundary before it breaks where the boundary after it does. A
+line start after a wrap takes the run along with the spaces it consumes, and at a
+chunk start the run starts the line, whose leading spaces stay: Firefox trims them
+from the start of its source only (nsTextFrame.cpp:10935-10950), and the control stops
+the trim. A line that ends after the run hangs the space before it. Text with glue
+takes the full walker in the line APIs and the stepper in `layout()`, which steps past
+glue at a line start; the simple walkers' own loops don't meet glue, since a check for
+it there slowed every text (ENGINE_FOLLOWUPS.md, Cost). Classifying the controls as
+glue alone lost the text after a pre-wrap chunk holding only controls (`a`, LF, LRM,
+LF, `b` in one line), which no harness case held; counting text with glue with the
+full walker made `layout()` of right-to-left messages starting with RLM 6 to 7 times
+as long offline; and starting a line at a run before a space, which `layout()`'s count
+consumed, let `layout()` and the line APIs disagree on LRM, space, `ab` at 1px.
+Firefox also collapses the spaces on both sides of a control into one, keeps a space
+before a control and a combining mark as the mark's base, and joins a mark or ZWJ
+after a control to the cluster before it, which the profile's white-space step and
+graphemes don't see (ENGINE_FOLLOWUPS.md).
+The walkers end a line only where the scan breaks: prepared
 text records the segments that follow no break, a line that overflows before one
 returns to its last break, and a line without one fills graphemes across the unbroken
 run, as Blink's break-anywhere retry and WebKit's `TextUtil::breakWord` do. Ending at

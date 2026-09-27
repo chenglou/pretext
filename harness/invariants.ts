@@ -11,7 +11,8 @@
 // - every line API agrees with walkLineRanges (predict.ts's check), and layoutWithLines and layoutNextLine give equal
 //   line objects, so a field one of them forgets shows;
 // - lines cover the source forward without overlap, at a fixed width and at one that changes per line, and between lines
-//   leave only collapsed spaces, a soft hyphen or ZWSP that doesn't break, or a pre-wrap line feed;
+//   leave only collapsed spaces, a soft hyphen or ZWSP that doesn't break, a pre-wrap line feed, or in Firefox a bidi
+//   control;
 // - stepping leaves its start cursor as it was, the ranges a stream gives stay as they were, JSON copies of cursors and
 //   ranges resume the same, and a materialized line passed back as a range gives the same line;
 // - a visitor that edits the range it's given doesn't change the lines after it;
@@ -128,9 +129,13 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   const same = (a: unknown, b: unknown): boolean => Bun.deepEquals(a, b, true)
   const json = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
-  // Lines that cover `stream` forward without overlap, leaving between them only what may go unpainted there.
+  // Lines that cover `stream` forward without overlap, leaving between them only what may go unpainted there: in
+  // Firefox bidi controls too, which it leaves out of its text runs.
+  const gecko = profile === 'gecko'
+  const unpaintedNormal = gecko ? /^[ \u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[ \u00AD\u200B]*$/
+  const unpaintedPreWrap = gecko ? /^[\n\u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\u00AD\u200B]*$/
   const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0): string | null => {
-    const unpainted = whiteSpace === 'normal' ? /^[ \u00AD\u200B]*$/ : /^[\n\u00AD\u200B]*$/
+    const unpainted = whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
     let end = from
     for (let i = 0; i < spans.length; i++) {
       const [s, e] = spans[i]!

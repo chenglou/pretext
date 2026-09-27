@@ -273,9 +273,6 @@ rich-dc32f2338a9ef485 breaks
 rich-e39dffbcecc02030 count
 rich-eec4090d7b04c6cf count
 
-## Lost against main before #340 (6d1d210): "AA", WJ, a space and "B" before a line feed and LRE (the engine fact at layout.test.ts:3764), at the width that just fits; Firefox fits "AA B" on the line, the library breaks before "B"
-facts-2510c55a541f4026 breaks
-
 ## Lost against main before #340 (6d1d210): "AV((To" in 32 px Arial; Firefox breaks after "A" and keeps "V((" together, the library keeps "AV(" together
 old-gate-c3afe2d7b44933ef count
 
@@ -624,7 +621,7 @@ catalog-1382a2b6ae87c0fe count
 catalog-139779f88bed6341 count
 catalog-13b0b2b3bb0f5dbc count
 catalog-13bb845f06b814d6 count
-catalog-13bd2abb88e5b633 count
+catalog-13bd2abb88e5b633 breaks
 catalog-13f32f2245143750 count
 catalog-1464d965c4357039 count
 catalog-14ae716a9f9f2c13 count
@@ -633,7 +630,6 @@ catalog-157c46d2531105ae count
 catalog-159b806e7ef876a1 count
 catalog-160c08cf329f357e count
 catalog-160e4efa9a4da867 count
-catalog-16684871427389cd count
 catalog-170b78f6816679db count
 catalog-17783575d9c64397 count
 catalog-1820dbd22e2042d1 count
@@ -1033,7 +1029,6 @@ catalog-7cb1d0b444151db6 breaks
 catalog-7cd8bc83320e0268 count
 catalog-7ce81b195308da95 count
 catalog-7ced74f60d21b92d count
-catalog-7cf324e63603e319 count
 catalog-7d15e0f785585db3 count
 catalog-7d1964fce02d2ad7 count
 catalog-7d3c750397109bab count
@@ -1216,7 +1211,6 @@ catalog-a8a9f4483c89ec92 count
 catalog-a8f74989d9f39b09 count
 catalog-a91fb10d211e01bf count
 catalog-a9920be7f1ef645b count
-catalog-a9a6269cdbe0e464 count
 catalog-a9be1f2145edca27 count
 catalog-aa107f1de9326d12 count
 catalog-aa15104c4605b4c5 count
@@ -1316,7 +1310,6 @@ catalog-c250118d7a744376 count
 catalog-c25b82491aecc23e count
 catalog-c26eea8f79febb15 breaks
 catalog-c289c059c2250085 count
-catalog-c28d4bc6311c9b21 count
 catalog-c2d6949a6eec68be count
 catalog-c31631f6201d82e3 count
 catalog-c373c48fdca95349 count
@@ -1473,7 +1466,7 @@ catalog-e8e41da48b64782e count
 catalog-e95bbc0102af51e8 count
 catalog-e986f8682449bf27 count
 catalog-e9ad1de60ec3b508 breaks
-catalog-e9b72e365be7885a count
+catalog-e9b72e365be7885a breaks
 catalog-e9cdbad56db44ca0 count
 catalog-ea24598856ca7f32 count
 catalog-ea3f8c7eccf83370 count
@@ -1623,9 +1616,7 @@ catalog-03ae2b35ac96230c count
 catalog-041a84a095cffe07 count
 catalog-048860f029720a18 count
 catalog-057973a8e0cb5689 count
-catalog-05cc511ceb8c638b count
 catalog-05db906f29cc270b count
-catalog-05e1a0abfd5bae5f count
 catalog-0663a12252bb1880 count
 catalog-0763c7f28cced41a count
 catalog-07ab7dee847cf8e1 count
@@ -1672,7 +1663,6 @@ catalog-1d3907d77591d53a count
 catalog-1d3c18fb12b53ad7 count
 catalog-1dafa920843d5758 count
 catalog-1dd8ae0d2e733b24 count
-catalog-1f3de60818df515a count
 catalog-1f5c0a46e8cc67e7 count
 catalog-200f2bdd8d33342e count
 catalog-205691d13546617a count
@@ -1768,7 +1758,6 @@ catalog-5525e07e172c68f4 count
 catalog-56586b4d871c627d count
 catalog-56680a09c0d830a9 count
 catalog-56e604d3a6afbd4f count
-catalog-575720c0ebf6b498 count
 catalog-57a09b93d0e05b98 count
 catalog-57d884efa9efcd84 count
 catalog-57dd08b76a73f49e count
@@ -1863,7 +1852,6 @@ catalog-82562eb8eb37c8b0 count
 catalog-8329a85c9700815b count
 catalog-8354ebf64c046e21 count
 catalog-837753a5c57c0bf9 count
-catalog-83a68af542c427b1 count
 catalog-83ee0d7d306bc5cf count
 catalog-8506d4d73f80a7c2 count
 catalog-8507e73fca0204b7 count
@@ -1950,7 +1938,6 @@ catalog-b135a7f7c45c325a count
 catalog-b185400e48336a69 count
 catalog-b26eace5b83df83a count
 catalog-b2a458c0b76f16ac count
-catalog-b375b23f69b22639 count
 catalog-b41fd846b4501945 count
 catalog-b428d4aaff8458b3 count
 catalog-b52a1476d8b145ba count
@@ -1997,7 +1984,6 @@ catalog-d063320ba8566131 count
 catalog-d14a6efeb7e38d91 breaks
 catalog-d14e81c38f3bf9b9 count
 catalog-d1f9bc67139f2f82 count
-catalog-d2b62a30cd13dbe6 count
 catalog-d301391432f4296c count
 catalog-d3122e8af68f39a1 count
 catalog-d31af7db940bdfd0 breaks
@@ -2063,7 +2049,6 @@ catalog-f2d8342a7691f75a count
 catalog-f2df8341ebe1f2f2 count
 catalog-f3437aac51054f40 count
 catalog-f34d917783659cbd count
-catalog-f58d345276c7ced4 count
 catalog-f728e55a6a28ce0a count
 catalog-f888d894013eb4cf count
 catalog-f906afcdcfa5fe5b count
@@ -2076,7 +2061,6 @@ catalog-faf7d5dd62e1ed1a count
 catalog-fb2b79d9e7dfbcb4 count
 catalog-fb7ace09f4c56fb6 count
 catalog-fb8da236f33a3fa6 count
-catalog-fc456034f827ad7d count
 catalog-fc57ac7e661d67dd count
 catalog-fd6f880ff605c454 count
 catalog-fda48a50071288f5 count
@@ -2084,22 +2068,18 @@ catalog-fde6c3aa70744e0d count
 catalog-ffa9651fd6cd2369 count
 facts-1945c789bdf13a4b count
 facts-1aac752cc8ef26c8 count
-facts-2d55135f769f7d03 count
 facts-38a1ce8c61ba552d count
 facts-3e78dd044ebb2381 count
 facts-437d795022462393 count
 facts-46e103bf142a6b39 count
 facts-4859e8de92154112 count
 facts-4bd70c5097dd6770 count
-facts-528d4f88f71c11c7 count
 facts-66523fa8da148ed6 count
 facts-6a07afc638d6fe5c count
 facts-6f5dcfc72b0c443c count
 facts-71aeb6c8e04ba54d count
 facts-73ca725aaf1ed4ef count
-facts-7c30dc7fe14e210f count
 facts-7e8326e8413d2bf9 count
-facts-8dc470392273257a count
 facts-8fab603262b33a0a count
 facts-9cb5f7202e01e6b6 count
 facts-9cea8f5d4795276e count
@@ -2114,7 +2094,6 @@ facts-c1f4773e3c55c010 count
 facts-c2189ac992e9299c count
 facts-cb2d5cc303747edb count
 facts-cc939d224ccd4816 count
-facts-d2b62a30cd13dbe6 count
 facts-d5a3d937459712e1 count
 facts-fc69084749bc97f4 count
 rich-a560650dfbeafe72 count
