@@ -41,7 +41,7 @@ import {
   scriptExtensionsOf, scriptOf,
 } from './props.js'
 import { scriptsPerUnit } from './script.js'
-import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
+import type { BlinkGroup, BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
 
 const f32 = Math.fround
 // Float32 holds every 16.16 integer below 2^24, 256 px.
@@ -461,8 +461,17 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   // Keep the actual script at the question's start, and walk past only those ignored boundaries.
   while (end < to && (p.text.charCodeAt(end) & 0xfc00) === 0xdc00) end = p.segments.scriptEndForOrdinal(++ordinal)
   const sourceOrdinal = ordinal === firstOrdinal ? -1 : firstOrdinal
-  if (end < to) return measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, into, ordinal, end, domScript, sourceOrdinal)
-  return measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal)
+  const w = end < to ? measureScriptSegments16(sh, g, from, to, callStart, callEnd, noLigatures, into, ordinal, end, domScript, sourceOrdinal) :
+    measureSameScript16(sh, g, from, to, callStart, callEnd, noLigatures, into, domScript, sourceOrdinal)
+  const trims = p.groups[g]!.edgeTrims
+  if (trims.length === 0) return w
+  // What HanKerning halts at the script edges inside the call, of the characters in the range (hanKerningAtScriptEdges).
+  let trim = 0
+  for (let i = 0; i < trims.length; i += 3) {
+    const at = trims[i + 1]!
+    if (at >= from && at < to && trims[i]! > callStart && trims[i]! < callEnd) trim += trims[i + 2]!
+  }
+  return w - trim
 }
 
 // A measured total, and how far it can be from the DOM's. Canvas converts each shaped run's 16.16 sum to float32 and sums
@@ -1299,9 +1308,11 @@ export function measureGroups(sh: Shaper): void {
   const p = sh.p
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
-    // The paragraph's shaping of the group reads the characters on both sides of it (HanKerning context).
+    // The paragraph's shaping of the group reads the characters on both sides of it and of its script edges (HanKerning
+    // context).
     group.startTrim16 = hanKerningStartTrim16(sh, g, group.start, group.end, false)
     group.endTrim16 = hanKerningEndTrim16(sh, g, group.start, group.end)
+    group.edgeTrims = hanKerningAtScriptEdges(sh, g)
     group.words = holdsSpace(p, group.start, group.end) && takesWords(p, group.style) && !recomposesAcrossWords(p, group.start, group.end)
     if (p.inspect !== null) {
       cutGroup({ p, gaps: new GapAccumulator(p.index.text.length), aside: 'search' }, g, false)
@@ -1444,6 +1455,46 @@ function hanKerningEndTrim16(sh: Shaper, g: number, a: number, b: number): numbe
   return trim16(p, style, c)
 }
 
+// The same contexts at the paragraph's script edges inside group g. HarfBuzzShaper makes a HanKerning of every
+// RunSegmenter segment of a call (harfbuzz_shaper.cc:895), whose first character reads the one before it and whose last
+// the one after it in text_content, where measure16 hands each segment to Canvas alone and neither has one. A `}` that
+// pairs with a `{` after Latin letters is Latin (ScriptRunIterator's brackets), so `。` before it is halted natively and
+// was measured whole: 15px PingFang SC at 864 px, 7.5 px a stop and the line a character short (main's harness,
+// sample/ai/paragraph/zh); so was `」` before such a `)`, and `。` before `·` in kana or Hangul, whose scripts U+00B7 doesn't
+// list. The end context marks no offset unsafe to break, the start context the one before its character
+// (han_kerning.cc:235-300), which safeToBreak reads. [edge, halted offset, trim] triples, measured once per group.
+// rule blink/measure/han-kerning-at-script-edges
+export const NO_EDGE_TRIMS: readonly number[] = []
+
+function hanKerningAtScriptEdges(sh: Shaper, g: number): readonly number[] {
+  const p = sh.p
+  const group = p.groups[g]!
+  if (p.segments === null || !hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) return NO_EDGE_TRIMS
+  const data = hanKerningFontData(p, group.style)
+  if (!data.hasHalt) return NO_EDGE_TRIMS
+  let trims: number[] | null = null
+  for (let ordinal = p.segments.scriptOrdinal(group.start); ; ordinal++) {
+    const e = p.segments.scriptEndForOrdinal(ordinal)
+    if (e >= group.end) break
+    // measure16 splits no range at a low surrogate.
+    if ((p.text.charCodeAt(e) & 0xfc00) === 0xdc00) continue
+    const type = resolvedCharType(data, p.text.charCodeAt(e))
+    const last = resolvedCharType(data, p.text.charCodeAt(e - 1))
+    const at = shouldKernLast(type, last) ? e - 1 : shouldKern(type, last) ? e : -1
+    if (at < 0) continue
+    hanKerningTrim(sh.gaps, p, group.style, at)
+    ;(trims ??= []).push(e, at, trim16(p, group.style, p.text.charCodeAt(at)))
+  }
+  return trims ?? NO_EDGE_TRIMS
+}
+
+// Whether HanKerning's start context halted the character at script edge k inside group g, which marks k unsafe to break.
+function haltedAfterScriptEdge(group: BlinkGroup, k: number): boolean {
+  const trims = group.edgeTrims
+  for (let i = 0; i < trims.length; i += 3) if (trims[i] === k && trims[i + 1] === k) return true
+  return false
+}
+
 // A ShapeResult for one item: a text item's cut of its group, or the tab run CreateForTabulationCharacters builds.
 export type ShapeResult =
   | { kind: 'group'; group: number; start: number; end: number; rtl: boolean; width16: number; base16: number }
@@ -1486,6 +1537,7 @@ function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
       const group = sh.p.groups[sr.group]!
       if (k <= group.start) return group.startTrim16 === 0
       if (k >= group.end) return true
+      if (haltedAfterScriptEdge(group, k)) return false
       if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
       return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
         pairAdjust16(sh, sr.group, k, group.start, group.end) === 0

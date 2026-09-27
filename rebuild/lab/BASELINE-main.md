@@ -2,11 +2,12 @@
 
 `rebuild/lab/baselines/main-predictor.ts` predicts with the library in `src/` (main `48980bb`, source unchanged) through
 main's own harness adapter, `harness/predict.ts`: the way an app developer uses main, and the way main's harness judges it.
-It is the number the redo's stopping rule (2) measures against: a superset of main in all three engines, rich inline
-included (rebuild/README.md). The runs below are of 2026-09-25: every tier 2 set (`rebuild/tests/sets.ts`) in pinned
-Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host on WebKit 22625.1.29.11.27, at DPR 2, in file order, with their own
-native observations (`rebuild/tests/browser-sets.ts --predictor=rebuild/lab/baselines/main-predictor.ts`), and main's
-harness case files against main's recordings. Rows, joins and scripts are in `.artifacts/tests/runs/rule2-20260925/`.
+It is the number the redo's stopping rule (2) measures against: a superset of main in all three engines, read for plain
+text since the maintainer scoped the redo so on 2026-09-26 (rebuild/README.md); main's rich-inline cases stay measured.
+The runs below are of 2026-09-25: every tier 2 set (`rebuild/tests/sets.ts`) in pinned Chrome 154.0.8037.57, Firefox
+156.0.1 and webkit-host on WebKit 22625.1.29.11.27, at DPR 2, in file order, with their own native observations
+(`rebuild/tests/browser-sets.ts --predictor=rebuild/lab/baselines/main-predictor.ts`), and main's harness case files
+against main's recordings. Rows, joins and scripts are in `.artifacts/tests/runs/rule2-20260925/`.
 The baseline of main `2e5e2bd` (2026-09-16, five sets) is in this file's history; its rows stay in
 `.artifacts/lab/baseline-main/`.
 
@@ -140,6 +141,15 @@ laid out again:
 - Main right by luck: Chrome's `ideographic-source-edge` with U+0600 (main 16 px off), `classes/CB`, a facts case,
   `old-gate/space` and `old-gate/mixed`, and rich Myanmar; Firefox's `rule/joining` in Geeza Pro; webkit-host's
   `rule/joining` at 42-54 px (0.4-4 px) and `source-views/long-tail-edge-falsifier`.
+
+Since 2026-09-26 (the redo finish, TAKEOVER.md; `.artifacts/tests/runs/redo-finish-20260926/harness`, the same run,
+join and scripts on the round's library) the Blink port takes HanKerning's contexts at the paragraph's script edges and
+the Gecko port an emoji modifier after a letter at Apple Color Emoji's device size. `sample/ai/paragraph/zh` and the 17
+`catalog/classes/EM` cases in Firefox are right, and no other line of main's 41,360 Chrome and 42,532 Firefox harness
+cases moved: main alone is right on 25, 26 and 8 of them, the true redo losses 6, 11 and 1, each a class of the known
+tail (`blink/rare-characters-beside-hangul-and-hebrew`, `gecko/font-kept-from-the-character-before`,
+`gecko/spacing-mark-after-a-space-at-a-break`) or named as above. The tier sets are as the table above says: neither
+change moves a tier line.
 
 ## Unsupported cases
 

@@ -20,7 +20,7 @@ import type { BlinkLineStart } from './geometry.js'
 import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
-import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
+import { USCRIPT_COMMON, USCRIPT_INHERITED, isCjkIdeographOrSymbol, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, canvasString, ceilFrom16, clusterStartAtOrBefore, clusterEndAfter, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
   joinsAcross, measuredAsCommon, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt, spaceTakesScript,
@@ -644,7 +644,7 @@ function groupAround(p: BlinkPrepared, k: number): number {
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
 // a reshape at an unsafe offset (a wrapped line start's available-width correction, a line end before a space). `margin`:
 // how many LayoutUnits the line's decision is from going the other way.
-function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: boolean, margin: number, decided: { start: number; end: number } | null = null): void {
+function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: boolean, margin: number, decided: readonly { start: number; end: number }[] = []): void {
   const p = sh.p
   const g = groupAround(p, k)
   if (g < 0) return
@@ -698,7 +698,7 @@ function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: bool
     // reshapes a wrapped line start that HarfBuzz flags, which it can with nothing the pair window shows (AAT state,
     // contextual lookups that change no width: Apple SD Gothic Neo's start after a space under -0.5px of word spacing,
     // DESIGN.md §4.6), and corrects the space by 0 or −1 LayoutUnits, which turns a fit decided by under two.
-    if (decided !== null && margin < 2) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_DETAIL, decided)
+    if (margin < 2) for (let i = 0; i < decided.length; i++) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_DETAIL, decided[i]!)
     return
   }
   // The pair window shows nothing across k, but HarfBuzz can still mark k unsafe to break (contextual lookups, width-neutral
@@ -711,10 +711,27 @@ function edgeGap(gaps: GapAccumulator, sh: Shaper, k: number, fromPosition: bool
   //   where the port's own margin, a whole number of LayoutUnits, is 0 or 1.
   //   The adjustment is taken over the whole measured piece around k (adjust16), so nothing the port can measure interacts
   //   across k here, at any distance.
-  if (margin < 2) addGap(gaps, 'in-word-prefix', run, IN_WORD_DETAIL, at)
+  // - A wrapped line start's correction moves the line's end against its space as it does beside a space, so the condition
+  //   also reports at the breaks the decision chose between (Waseem's line after U+2009 and Tamil Sangam MN's inside a
+  //   word, at DPR 1). Not between two CJK ideographs or symbols, which Canvas measures as words of their own
+  //   (NextWordEndIndex, plain_text_node.cc:93-155), so that no window shows anything across such a start: there the
+  //   condition held on 2,973 of the census's 26,716 lines, every one in its Chinese and Japanese texts, which Chrome lays
+  //   out as the port does, and no traced failure starts so; it reports at the start alone.
+  if (margin < 2) {
+    addGap(gaps, 'in-word-prefix', run, IN_WORD_DETAIL, at)
+    if (!betweenCjk(p, k)) for (let i = 0; i < decided.length; i++) addGap(gaps, 'in-word-prefix', run, ONE_UNIT_FIT_IN_WORD_DETAIL, decided[i]!)
+  }
+}
+
+// Whether the code points on both sides of offset k are CJK ideographs or symbols (Character::IsCjkIdeographOrSymbol).
+function betweenCjk(p: BlinkPrepared, k: number): boolean {
+  const low = (p.text.charCodeAt(k - 1) & 0xfc00) === 0xdc00 && k >= 2
+  return isCjkIdeographOrSymbol(p.text.codePointAt(low ? k - 2 : k - 1)!) && isCjkIdeographOrSymbol(p.text.codePointAt(k)!)
 }
 
 const ONE_UNIT_FIT_DETAIL = 'a wrapped line start beside a space that the port\'s width tests call safe, on a line whose fit test is decided by under two LayoutUnits (the line\'s end, or the end of the content that didn\'t fit, against the space it has plus one, line_breaker.cc CanFitOnLine): HarfBuzz can flag the start unsafe to break with no width signature (AAT state, contextual lookups that change no width), where Blink reshapes it and corrects the space by old_width − SnappedWidth, 0 or −1 LayoutUnits (shaping_line_breaker.cc:309-324), which moves the line\'s end against the space'
+
+const ONE_UNIT_FIT_IN_WORD_DETAIL = 'a wrapped line start that isn\'t beside a space (after a soft hyphen, another space character or inside a word) and that the port\'s width tests call safe, on a line whose fit test is decided by under two LayoutUnits: where HarfBuzz flags the start unsafe to break, Blink reshapes it and corrects the space by old_width − SnappedWidth, 0 or −1 LayoutUnits with the paragraph\'s glyphs (shaping_line_breaker.cc:309-324), which moves the line\'s end against the space'
 
 const START_REACH_DETAIL = 'a wrapped line start taken from a stand-in position, and the line\'s fit test decided within what that position can be off by: ShapeLine corrects the space a reshaped start leaves by the paragraph\'s width of the reshaped text, old_width − SnappedWidth (shaping_line_breaker.cc:309-324), which reads the start\'s position, so an adjustment there that no fact places (limits.ts positionLimit, positionBounds) moves the line\'s end against the space by as much'
 
@@ -729,6 +746,44 @@ function startSpread(sh: Shaper, k: number): { limit: GapName; units: number } |
   if (limit === null) return null
   const d = positionAdjust16(sh, g, clusterStartAtOrBefore(p, k, group.start), group.start, group.end)
   return d === 0 ? null : { limit, units: Math.ceil(Math.abs(d) / 1024) }
+}
+
+const RTL_END_REACH_DETAIL = 'a line that ends inside a right-to-left item, whose fit test is decided by under two LayoutUnits, where the item\'s text after the line end holds this condition: in RTL a position is counted from the item\'s logical end (CachedPositionForOffset, shape_result.cc:2325-2363), so both of the line\'s edge positions in the item read the advance of that text, and their ceilings move the line\'s width by a LayoutUnit wherever the advance is off'
+
+// A line that ends inside an RTL item: the conditions the paragraph and the line report over the item's text after the line
+// end reach the breaks its decision chose between. 44px Al Tarikh at DPR 1 fits its first line by 0 in the port where Chrome
+// breaks a word earlier, and with the `&` after the line end, where the port's window side is Common (script-context),
+// left out the two agree; so do Beirut 34px and Al Bayan 22px with the text after their first lines cut. A first line has
+// no start correction (one-unit-fit), so nothing named them before.
+function rtlEndReach(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[], info: LineInfo, candidates: readonly { start: number; end: number }[]): void {
+  const p = sh.p
+  let r: LineInfo['results'][number] | null = null
+  for (let i = info.results.length - 1; i >= 0 && r === null; i--) {
+    const it = info.results[i]!
+    if (p.items[it.itemIndex]!.type === 'text' && it.shape !== null && !it.hasOnlyPreWrapTrailingSpaces) r = it
+  }
+  if (r === null || (p.items[r.itemIndex]!.bidiLevel & 1) === 0) return
+  const end = r.trimmedEnd ?? r.end
+  const itemEnd = p.items[r.itemIndex]!.end
+  if (end >= itemEnd) return
+  // A line end reshaped (ShapeLine's line-end reshape) takes its position from the reshape, which reads nothing after it.
+  const view = r.shape!
+  for (let i = 0; i < viewPartCount(view); i++) {
+    const part = viewPartAt(view, i)
+    if (part.kind === 'reshape' && part.end >= end) return
+  }
+  const after = sourceRange(p, end, itemEnd)
+  const seen = new Set<string>()
+  const reach = (g: Gap): void => {
+    if (g.at === undefined || !(g.at.start < after.end && g.at.end > after.start) || g.detail === RTL_END_REACH_DETAIL) return
+    const key = g.gap + '\0' + g.run
+    if (seen.has(key)) return
+    seen.add(key)
+    for (let i = 0; i < candidates.length; i++) addGap(gaps, g.gap, g.run, RTL_END_REACH_DETAIL, candidates[i]!)
+  }
+  for (const i of p.inspect!.paragraphIndex!.intersect(after.start, after.end)) reach(paragraph[i]!)
+  const line = gaps.snapshot()
+  for (let i = 0; i < line.length; i++) reach(line[i]!)
 }
 
 const ITEM_EDGE_DETAIL = 'an item edge inside a shaping call (a span edge between characters Blink shapes together): a glyph cluster over the edge goes to the item holding its first character (CopyRanges and FindGlyphDataRange, inline_node.cc:1781, glyph_data_range.cc:56-90), and item sizes are ceiled one by one, so the items around the edge, the x of the items after them and the line\'s width rest on a position the port doesn\'t know'
@@ -787,6 +842,13 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
     const spread = startSpread(sh, start.textOffset)
     if (spread !== null && margin < 2 + spread.units) addGap(gaps, spread.limit, runAt(p, start.textOffset), START_REACH_DETAIL, decided!)
   }
+  // The breaks the decision chose between, where a LayoutUnit decides it: the one it took and, where the line's own end is
+  // what the fit test decided, the break before the text that end holds (LineInfo.decisionStart), where Chrome breaks when
+  // the line comes out a LayoutUnit wider. At the taken break alone a start's condition missed a line Chrome ends before its
+  // last word: Waseem 24px at DPR 1, whose disputed text ` الله` ends before the port's break.
+  const candidates = [sourceOffsetAt(p, contentEnd)]
+  if (Math.abs(bound - info.unclampedWidth) < 2 && info.decisionStart < contentEnd) candidates.push(sourceOffsetAt(p, info.decisionStart))
+  if (margin < 2) rtlEndReach(gaps, sh, paragraph, info, candidates)
   // Positions inside a ligature over graphemes are what the decision reads at its candidate offset, where Blink gives every
   // character of a glyph the glyph's position (ComputePositionData, shape_result.cc:2113-2200) and the port Canvas prefixes:
   // ProbeShantell `ffiffl` natively fits `ffif` on the first line. So the content the decision measured past the line's end
@@ -874,7 +936,7 @@ function lineEdgeGaps(gaps: GapAccumulator, sh: Shaper, paragraph: readonly Gap[
   }
   // A wrapped line start: ShapeLine reshapes [start, first safe) and corrects the available width by the paragraph's
   // positions (shaping_line_breaker.cc:309-324).
-  if (wrapped) edgeGap(gaps, sh, start.textOffset, true, margin, decided)
+  if (wrapped) edgeGap(gaps, sh, start.textOffset, true, margin, candidates)
   // The end, the paragraph's last line included: a line ending before hanging or trimmed spaces takes its width there.
   // Preserved trailing spaces the line's width holds end at the paragraph position after them, whose adjustment with what
   // follows sits on their last glyph (c-05bd16ecf8949f4c: `xx ` before `AAAA` in Times New Roman).

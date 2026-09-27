@@ -9681,6 +9681,25 @@
    "replacedBy": []
   },
   {
+   "id": "blink/measure/han-kerning-at-script-edges",
+   "engine": "blink",
+   "area": "hankerning",
+   "kind": "ported rule",
+   "statement": "HarfBuzzShaper makes a HanKerning of every RunSegmenter segment of a shaping call, so at every script edge inside a group or a reshape HanKerning's end context halts the character before the edge when ShouldKernLast holds with the one after it, and its start context the character after the edge when ShouldKern holds with the one before it, reading text_content across the edge; measure16 measures each segment in its own Canvas string, where neither context has a character, so it subtracts those halts from every range that holds the halted character, with the trims of the style's font data measured once per group; the start context marks the offset of its character unsafe to break, the end context marks none",
+   "source": "harfbuzz_shaper.cc:895, :1018-1048; han_kerning.cc:235-300; script_run_iterator.cc:354-403; engines/blink/shape.ts hanKerningAtScriptEdges, measure16, safeToBreak",
+   "probes": [
+    "probe redo-finish HanKerning pairs (2026-09-26, pinned Chrome 154): in the 33 installed families with halt at 16px, `。` before a `}` that pairs with a `{` after Latin, `」` before such a `)` and `。` before U+00B7 in kana or Hangul are halted natively and were measured whole in 25, 27 and 23 families, and with the halts in every family but Nanum Brush Script and Nanum Pen Script, whose 「 no halt changes; sample/ai/paragraph/zh in main's harness, 15px PingFang SC at 864 px, ended its second line, which holds two such stops, a character early"
+   ],
+   "tests": [
+    "src/engines/blink/hankerning.test.ts :: HanKerning at script edges > a stop before a `}` that pairs with a `{` after Latin is halted: the `}` is Latin, so the edge reads it",
+    "src/engines/blink/hankerning.test.ts :: HanKerning at script edges > a close mark before a `)` that pairs with a `(` after Latin, and an open mark after such a `(`"
+   ],
+   "declaredBy": "redo finish (2026-09-26)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
    "id": "blink/measure/prefix-without-script-in-context",
    "engine": "blink",
    "area": "measure",
@@ -9704,15 +9723,17 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "in-word-prefix at the break a wrapped line's decision took (a point: the start's correction moves no glyph), where the line starts beside a space at an offset the port's width tests call safe and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; inside a word the same condition reports at the start alone (blink/gap/in-word-prefix); a plain paragraph reports nothing",
+   "statement": "in-word-prefix at the breaks a wrapped line's decision chose between (points: the start's correction moves no glyph): the break it took and, where the line's own end is what its fit test decided, the break before the text that end holds (LineInfo.decisionStart), where the line starts at an offset the port's width tests call safe, beside a space or not (after a soft hyphen, another space character or inside a word, where in-word-prefix also reports at the start; between two CJK ideographs or symbols, which Canvas measures as words of their own, at the start alone), and its fit test (the line's end, or the end of the content that didn't fit, against the space it has plus one LayoutUnit) is decided by under two LayoutUnits: HarfBuzz can flag such a start unsafe to break with no width signature, and Blink then reshapes it and corrects the space by old_width - SnappedWidth, 0 or -1 LayoutUnits, which moves the line's end; a plain paragraph reports nothing",
    "source": "shaping_line_breaker.cc:309-324; line_breaker.cc CanFitOnLine; engines/blink/gaps.ts lineEdgeGaps; DESIGN.md §4.6, §5",
    "probes": [
-    "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively"
+    "the words-first loss round's window probe (2026-09-24): Apple SD Gothic Neo's neutral-words under -0.5px of word spacing at 28px and DPR 3, whose line start Chrome takes as unsafe to break with every position Chrome's, fits a LayoutUnit less natively",
+    "the redo finish's exact fits (2026-09-26): at DPR 1 Al Bayan 30px after a soft hyphen, Waseem 34px after U+2009 and Tamil Sangam MN 22px inside a word fit a LayoutUnit otherwise than Chrome, and Waseem 24px beside U+0020 ends a word later, its disputed text before the break it took"
    ],
    "tests": [
-    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix at the break its decision took"
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start beside a space whose line fits within a LayoutUnit reports in-word-prefix at the break its decision took",
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start after a soft hyphen whose line fits within a LayoutUnit reports at the breaks its decision chose between"
    ],
-   "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "declaredBy": "redo finish (2026-09-26)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -9729,6 +9750,24 @@
     "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a wrapped line start taken from a stand-in position reports its reach where the fit lies within the adjustment"
    ],
    "declaredBy": "the gap-naming round of words first (2026-09-25)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/gap/rtl-end-reach",
+   "engine": "blink",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "every condition the paragraph and the line report over a right-to-left item's text after the line end, at the breaks the line's decision chose between (points), where the line ends inside the item from the item's own shape result and its fit test is decided by under two LayoutUnits: an RTL position is counted from the item's logical end (CachedPositionForOffset: the left edge of the next character from the visual left), so both of the line's edge positions in the item read the advance of the text after the end, and their ceilings move the line's width by one LayoutUnit wherever that advance is off; a plain paragraph reports nothing",
+   "source": "shape_result.cc:2261-2363; shaping_line_breaker.cc:303-331; engines/blink/gaps.ts lineEdgeGaps, rtlEndReach; DESIGN.md §5",
+   "probes": [
+    "the redo finish's exact fits (2026-09-26, pinned Chrome 154 at DPR 1): 44px Al Tarikh, 34px Beirut and 22px Al Bayan first lines fit by 0 LayoutUnits in the port where Chrome breaks a word earlier, with every item's snapped width Chrome's a LayoutUnit wider; with the `&` after Al Tarikh's line end left out, or Beirut's text after its line cut, the two agree"
+   ],
+   "tests": [
+    "src/engines/blink/remaining-gaps.test.ts :: blink gaps of a fit within what positions can be off by > a line that ends inside an RTL item reports the conditions of the item's text after its end where the fit lies within a LayoutUnit"
+   ],
+   "declaredBy": "redo finish (2026-09-26)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -10368,9 +10407,11 @@
   "blink/measure/exact-canvas-answers": "8afb0c72a1939d15",
   "blink/measure/ignorables-as-word-joiner": "808fe85d3d196a1e",
   "blink/measure/canvas-string-in-group-direction": "550000a5755840b2",
+  "blink/measure/han-kerning-at-script-edges": "b4e1c14ca6d93d5e",
   "blink/measure/prefix-without-script-in-context": "a0aa4c588d9f1d5e",
-  "blink/gap/one-unit-fit": "725c89ddce35b31a",
-  "blink/gap/stand-in-start-reach": "8010ae772d37258f",
+  "blink/gap/one-unit-fit": "f24286462ccf125e",
+  "blink/gap/stand-in-start-reach": "70bb708757421395",
+  "blink/gap/rtl-end-reach": "7c76a4efc0dbb898",
   "blink/gap/white-space-window-side": "5a09a3ca764abccf",
   "blink/gap/common-window-side": "685612e3325f90c3"
  }

@@ -4200,7 +4200,7 @@
       "id": "blink/han-kerning-full-stop-before-closing-bracket",
       "engine": "blink",
       "kind": "open rows",
-      "title": "An ideographic full stop before a closing corner bracket is set at half width natively and predicted at full width",
+      "title": "An ideographic full stop before a closing corner bracket was set at half width natively and predicted at full width: closed on 2026-09-26, the brackets resolve to Hangul and HanKerning's end context halts `。` at the script edge",
       "conditions": [],
       "cases": [
         {
@@ -4219,8 +4219,8 @@
           "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
         }
       ],
-      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line; research/ROUND4-CRITIC.md §2 and §7 (han_kerning.cc:417-535 read for a trace)",
-      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome. The round 4 critic traced `c-26737b4c93d3c46b` and `c-571b183504971c3f`: `。` before `」` is 6.5px natively in 13px Hiragino Sans under lang=en and 13px predicted, on its own line and beside the bracket (the line is 39px predicted and 32.5px native). The cause isn't found: the port's glyph-type grouping, the dot group of four, matches han_kerning.cc. Without facts the rows read covered by script-context; HanKerning doesn't read script lookups, so that cover is by position."
+      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line; research/ROUND4-CRITIC.md §2 and §7 (han_kerning.cc:417-535 read for a trace); the redo finish (2026-09-26, .artifacts/tests/runs/redo-finish-20260926/lab/hk-eval, base-nofacts and base-facts; shape.ts hanKerningAtScriptEdges)",
+      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome. The round 4 critic traced `c-26737b4c93d3c46b` and `c-571b183504971c3f`: `。` before `」` is 6.5px natively in 13px Hiragino Sans under lang=en and 13px predicted, on its own line and beside the bracket (the line is 39px predicted and 32.5px native). The cause isn't found: the port's glyph-type grouping, the dot group of four, matches han_kerning.cc. Without facts the rows read covered by script-context; HanKerning doesn't read script lookups, so that cover is by position. Closed on 2026-09-26. `「` after the Hangul run and a space takes the Hangul run's script (its scripts list Hang), so `」` does too (ScriptRunIterator's brackets), and the kana run ends at `。`: a RunSegmenter segment edge inside the group, where HanKerning's end context reads `」` and halts `。` (harfbuzz_shaper.cc:895, han_kerning.cc:264-300), and where the port measured the kana segment alone. With the halts at a group's script edges all three cases pass line count, breaks and widths in both configurations in pinned Chrome 154, where the base failed widths in both. One painter row goes from pass to fail, covered by han-kerning: at 1px `c-26737b4c93d3c46b`'s line 29 holds the `。` alone, which the prediction now gives Chrome's 6.5px, and the painter, which draws each line in a node of its own, draws it at 13px without the `」` that starts the next line."
     },
     {
       "id": "blink/soft-hyphen-line-one-unit-off-without-facts",
@@ -5512,14 +5512,13 @@
       "id": "blink/exact-fits-without-a-gap",
       "engine": "blink",
       "kind": "open rows",
-      "title": "Exact fits at DPR 1 that fail with no gap, the base's too: one-LayoutUnit fits on first lines, at line starts not beside U+0020 and at one the gap names at a point the scorer doesn't reach, and break-all cuts inside joined words",
-      "conditions": [],
+      "title": "Exact fits at DPR 1 that fail with no covering gap, the base's too: one-LayoutUnit fits whose decision a gap names at its breaks while the scorer also takes rect differences inside joined Arabic words, three first lines, a second line the scorer takes for the failing one, and break-all cuts inside joined words",
+      "conditions": [
+        "in-word-prefix",
+        "script-context",
+        "unsafe-to-break"
+      ],
       "cases": [
-        {
-          "id": "c-dfdc2e04495a0d9b",
-          "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Al Tarikh 44px under -1.25px of word spacing)"
-        },
         {
           "id": "c-8746f134a0b04791",
           "browser": "chrome",
@@ -5534,11 +5533,6 @@
           "id": "c-9cbd5a642f78dfe4",
           "browser": "chrome",
           "where": "the gap-naming review's exact-fit set r2 at DPR 1 (first line, Farah 15px (line count too))"
-        },
-        {
-          "id": "c-985edc4105669846",
-          "browser": "chrome",
-          "where": "the gap-naming review's exact-fit set r2 at DPR 1 (line start inside a word, Tamil Sangam MN 22px under 3px of word spacing)"
         },
         {
           "id": "c-beaf7f17674aebfc",
@@ -5576,8 +5570,117 @@
           "where": "the gap-naming review's exact-fit set r2 at DPR 1 (one LayoutUnit beside U+0020: Chrome fits at 5152, the port at 5151, and its in-word-prefix point is outside the scorer's evidence; Waseem 24px under -0.3px of letter and -1.25px of word spacing)"
         }
       ],
-      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr1.ndjson, lab/r2-dpr1, tools/cover2.py --open, tools/native-vs-port.py; the trace in .artifacts/tests/runs/rule2-20260925/fits); blink/gap/one-unit-fit; DESIGN.md §4.6, \"Blink's words first\"",
-      "note": "The review's exact-fit set r2 widens each layout of its fresh set r1 (15,936 cases in 83 faces outside the lab's lists) to its widest line's exact fit and a LayoutUnit either side. At DPR 1, 13 failures in 12 layouts are covered by no gap, and the base (61c376d) and 3189fe1 fail them alike, so they are no loss of words first; they are open correctness work, and rule (1) of the redo's stopping rule (rebuild/README.md) isn't met while they stand. Four are first lines the port fits by 0 LayoutUnits where Chrome breaks earlier: a first line has no start to correct (shaping_line_breaker.cc:309-324), so blink/gap/one-unit-fit doesn't fire there and something else decides them. Two are wrapped lines whose fit a LayoutUnit decides but whose start isn't beside U+0020 (inside a Tamil word under overflow-wrap, after U+2009), where the in-word condition reports in-word-prefix at the start alone and not at the break. The other six, traced on 2026-09-25 against Chrome's positions in the window probe (rebuild/TAKEOVER.md): Al Bayan at 30px (2 widths) are one-LayoutUnit fits at a line start after a soft hyphen, which the same condition at such a start would name; Waseem at 24px is a one-LayoutUnit fit beside U+0020, where in-word-prefix fires at the port's break and the scorer's evidence, the text before it, doesn't reach it; Al Bayan at 40px (2 widths) and Beirut at 30px end at a break-all cut inside a joined word, where whether Blink reshapes decides by far more than a LayoutUnit and unsafe-to-break names the break but not the line's earlier rect differences. At DPR 3 the same cases pass or are covered. What would convert them: that start condition, the point reported over the decision, and a name for the rect differences inside joined words, or fixes."
+      "source": "the gap-naming round's review (2026-09-25, .artifacts/tests/runs/bwfg-review-20260925: cases/r2-dpr1.ndjson, lab/r2-dpr1, tools/cover2.py --open, tools/native-vs-port.py; the trace in .artifacts/tests/runs/rule2-20260925/fits); blink/gap/one-unit-fit; DESIGN.md §4.6, \"Blink's words first\"; the redo finish (2026-09-26, .artifacts/tests/runs/redo-finish-20260926: fits12.ndjson, fits/tip, probe/fit-probe.ts and out-fitvar, out-fitvar2, out-fits-ar); blink/gap/rtl-end-reach",
+      "note": "The review's exact-fit set r2 widens each layout of its fresh set r1 (15,936 cases in 83 faces outside the lab's lists) to its widest line's exact fit and a LayoutUnit either side. At DPR 1, 13 failures in 12 layouts are covered by no gap, and the base (61c376d) and 3189fe1 fail them alike, so they are no loss of words first; they are open correctness work, and rule (1) of the redo's stopping rule (rebuild/README.md) isn't met while they stand. Four are first lines the port fits by 0 LayoutUnits where Chrome breaks earlier: a first line has no start to correct (shaping_line_breaker.cc:309-324), so blink/gap/one-unit-fit doesn't fire there and something else decides them. Two are wrapped lines whose fit a LayoutUnit decides but whose start isn't beside U+0020 (inside a Tamil word under overflow-wrap, after U+2009), where the in-word condition reports in-word-prefix at the start alone and not at the break. The other six, traced on 2026-09-25 against Chrome's positions in the window probe (rebuild/TAKEOVER.md): Al Bayan at 30px (2 widths) are one-LayoutUnit fits at a line start after a soft hyphen, which the same condition at such a start would name; Waseem at 24px is a one-LayoutUnit fit beside U+0020, where in-word-prefix fires at the port's break and the scorer's evidence, the text before it, doesn't reach it; Al Bayan at 40px (2 widths) and Beirut at 30px end at a break-all cut inside a joined word, where whether Blink reshapes decides by far more than a LayoutUnit and unsafe-to-break names the break but not the line's earlier rect differences. At DPR 3 the same cases pass or are covered. What would convert them: that start condition, the point reported over the decision, and a name for the rect differences inside joined words, or fixes. Since 2026-09-26 (the redo finish) two of the twelve are covered and left this item: Tamil Sangam MN 22px, whose wrapped start inside a word now reports blink/gap/one-unit-fit at the breaks its decision chose between, and Al Tarikh 44px, whose first line blink/gap/rtl-end-reach names (the `&` after the line end, where the port's window side is Common: with it left out Chrome and the port agree, and every item's snapped width is Chrome's a LayoutUnit wider). Of the other ten: Waseem 24px beside U+0020 and Waseem 34px after U+2009 now report in-word-prefix at both candidate breaks, inside the scorer's decision text, and Al Bayan 22px's first line rtl-end-reach there, but the scorer's evidence also takes code point rects inside joined words before the decision text (the port's in-word positions, which the observation port limits under glyph-clusters; `في` whose `ي` Chrome reports on two lines), which no line gap touches; Farah 15px's first line holds the stand-in inside the line (with the `&` before its end left out the two agree) and Beirut 34px's after the line end in text with no reported condition (with the text after the line cut they agree), so nothing names them; Al Bayan 30px at 10350 and 11615 LayoutUnits, whose fourth line starts after a soft hyphen between joined letters, reshaped in both, are taken by the scorer for their second line, where the port's rects and Chrome's are the same (`ر` and the hanging space on two lines under overflow-wrap: anywhere) and no gap is reported; and the three break-all cuts are as traced. What would convert them: a line gap for the observation's glyph-clusters limits on a line whose break is disputed, or a scorer that takes limits as touched; for Farah and Beirut the stand-in named."
+    },
+    {
+      "id": "blink/han-kerning-halt-canvas-cannot-show",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Nanum Brush Script and Nanum Pen Script have halt, but halt leaves their 「 as it is, so the port takes them for faces without it and adds no HanKerning trim",
+      "conditions": [],
+      "cases": [],
+      "source": "han_kerning.cc:417-420 (has_alternate_spacing is the font's halt feature); engines/blink/hankerning.ts measureHanKerningFontData (hasHalt from the 「「 trim); the redo finish's probe of the 33 installed families with halt (2026-09-26, .artifacts/tests/runs/redo-finish-20260926/probe/out-b2, pinned Chrome 154, 16px)",
+      "note": "Blink tests the font's GPOS for halt; Canvas shows it only where halt changes a glyph the port asks, 2 × W(「) − W(「「). In the two faces 「 is 0.351 em and halt changes nothing, where it halves 。 (0.94 em): `안녕。` before a Latin-paired `}` or before U+00B7 is halted natively at a script edge and full width in the port, with no gap. No tier case has either face with fullwidth punctuation. What would convert it: asking 。。 where 「「 shows no trim, two more Canvas questions for every style of a face without halt."
+    },
+    {
+      "id": "shared/apple-color-emoji-canvas-width",
+      "engine": "shared",
+      "kind": "browser bug",
+      "title": "Firefox's and Chrome's Canvas measure Apple Color Emoji wider than the page at small sizes on macOS (Mozilla #2020894, Chromium #489494015): the redo takes the page's advance from Canvas at the device size, with no DOM span",
+      "conditions": [
+        "page-history",
+        "bitmap-emoji-size"
+      ],
+      "cases": [],
+      "source": "~/github/pretext/PLATFORM_BUGS.md (the two reports); rebuild/platform-bugs/LEDGER.md item D; engines/gecko/prepare.ts step 7 (gfxMacFont.cpp:437-463; specs/gecko-canvas.md §2 A12); DESIGN.md §4.3; main's harness catalog/classes/EM and EB, and the redo finish's run of it (.artifacts/tests/runs/redo-finish-20260926/harness)",
+      "note": "Apple Color Emoji is an sbix font whose strikes aren't linear in the size: at DPR 2 the page draws 16px U+1F3FB from the 32px strike, 16 CSS px, where Canvas at the CSS size gives 21. Main corrects it by the difference a hidden DOM span shows (getEmojiCorrection), one of its documented DOM reads; the redo reads no DOM by design. Blink's port measures in contexts at the zoomed size, which is the device size, so it gets the page's advance as it is. Gecko's port measures at the CSS size and, per cluster Apple Color Emoji draws (Canvas measures it the same in the run's font list as in Apple Color Emoji alone, at both sizes, with the same ink box), takes the advance at the device size in the page's app units. Until 2026-09-26 that ran on a cluster's first code point only, and an emoji modifier after a letter, which extends the letter's grapheme cluster but gets a font run of its own where the letter's font lacks it (FindFontForChar, gfxTextRun.cpp:3181-3194), kept Canvas's 21px: 17 of main's harness cases (catalog/classes/EM, `ab` U+1F3FB `ab` in 16px Arial and 15px Helvetica Neue) that main passes; since then the recipe runs on the modifier and they pass, and no other line of main's 42,532 Firefox harness cases moved. What stays: where the document's font fallback pinned an emoji to another font (gecko/process-font-fallback-state, page-history), a device size off Canvas's 7-bit size grid (bitmap-emoji-size), and a boundary U+00A0 under a list whose first family is Apple Color Emoji (gecko/nbsp-first-family-apple-color-emoji)."
+    },
+    {
+      "id": "gecko/font-kept-from-the-character-before",
+      "engine": "gecko",
+      "kind": "open rows",
+      "title": "A character Gecko draws in the font of the character before it, where Canvas measuring the port's in-word side alone matches fonts from the list's start: `b` after U+3000 U+200D, U+261D after Hangul",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "catalog-223bc80125c5c5f9",
+          "browser": "firefox",
+          "where": "main's harness catalog/main/ideographic-source-edge (16px Arial `a` U+3000 U+200D `b` at 24.92px; four of its kind at that width)"
+        },
+        {
+          "id": "catalog-08b87636f61c44ac",
+          "browser": "firefox",
+          "where": "main's harness catalog/main/ideographic-source-edge (24px Amiri at 34.10px; four of its kind)"
+        },
+        {
+          "id": "catalog-20da438693e8de15",
+          "browser": "firefox",
+          "where": "main's harness catalog/classes/EB (16px Arial `한글☝한글` at 48.05px)"
+        },
+        {
+          "id": "catalog-73a1e688c43b4d7f",
+          "browser": "firefox",
+          "where": "main's harness catalog/classes/EB (at 48.10px)"
+        }
+      ],
+      "source": "gfxTextRun.cpp:3178-3325 (FindFontForChar: a cluster extender and a character after U+200D take the previous character's font where it has them); the rule-2 recheck (.artifacts/tests/runs/rule2-20260925/harness/recheck, firefox-redo rows)",
+      "note": "A character after U+200D takes the font of the character before the joiner, so `b` after U+3000 U+200D is drawn in the fallback font that drew U+3000 (9.38px at 16px against Arial's 8.90, 14.07 against Amiri's 11.67 at 24px), and U+261D after a Hangul syllable in Arial is drawn by the Hangul's fallback face (13.83px, the syllables' advance) where alone it takes 15.03. The port measures the word whole, which is right, and splits it by sides measured alone, which match fonts from the list's start: U+3000 with the joiner comes out 0.48px (2.4px) wider and `글` 1.2px narrower than natively, and the line breaks a character early or late. The port reports in-word-prefix there, and main is right because it sums its segments' widths. What would convert it: measuring a side after U+200D behind the character before the joiner."
+    },
+    {
+      "id": "gecko/spacing-mark-after-a-space-at-a-break",
+      "engine": "gecko",
+      "kind": "open rows",
+      "title": "A spacing mark after a space starts the next line in Firefox with its own font run's advance, where the port keeps the cluster's advance on the space, which hangs",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "catalog-8588965d2bc50535",
+          "browser": "firefox",
+          "where": "main's harness catalog/classes/CM (16px Arial `xx  ` U+0DD8 `  yy` at 24px)"
+        }
+      ],
+      "source": "UAX #14 LB10 (a combining mark after a space is AL); gfxTextRun.cpp:3181-3194; the rule-2 recheck (.artifacts/tests/runs/rule2-20260925/harness/recheck, firefox-redo rows)",
+      "note": "The space and U+0DD8 are one grapheme cluster, but Firefox breaks between them, and the mark, which Arial lacks, is a font run of its own: natively it starts the second line 14.13px wide and the spaces after it hang. The port's unit gives the cluster's advance to the space, which hangs at the first line's end, and the mark 0 at the second line's start, so `yy` fits there. In-word-prefix is reported on the line. What would convert it: an advance per font run inside a cluster the line breaks."
+    },
+    {
+      "id": "blink/rare-characters-beside-hangul-and-hebrew",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Rare characters between Hangul or Hebrew letters, measured apart from the run that draws them: U+2E3B, Hangul jamo after a syllable, U+1F3FB after Hebrew",
+      "conditions": [
+        "script-context",
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "cases": [
+        {
+          "id": "catalog-6dcfef0b078b1dc2",
+          "browser": "chrome",
+          "where": "main's harness catalog/classes/B2 (16px Arial `한글⸻한글` at 69.30px; one more at 89.75px)"
+        },
+        {
+          "id": "catalog-8bc95079a1c1b60b",
+          "browser": "chrome",
+          "where": "main's harness catalog/classes/JV (U+118F at 29.85px; one more at 31px)"
+        },
+        {
+          "id": "catalog-ae96b3cdfcb2e2c2",
+          "browser": "chrome",
+          "where": "main's harness catalog/classes/JV (U+D7C6 at 60.11px)"
+        },
+        {
+          "id": "catalog-b5c582e71182d23a",
+          "browser": "chrome",
+          "where": "main's harness catalog/classes/EM (Hebrew and U+1F3FB at 29.67px)"
+        }
+      ],
+      "source": "the rule-2 recheck (.artifacts/tests/runs/rule2-20260925/harness/recheck, chrome-redo rows)",
+      "note": "U+2E3B between Hangul is 41.64px natively and 40.09 in the port, which measures it as Common apart from the Hangul run's font (script-context at it); U+D7C6 after a syllable is 12px natively and 10.16 in the port, and after U+118F Chrome keeps the next syllable on the jamo's line where the port breaks before it (glyph-clusters and unsafe-to-break there: HarfBuzz's Hangul shaper joins jamo to the syllable beside them, which Canvas totals don't show); U+1F3FB after Hebrew is 16px natively and 12 in the port's split of the RTL cluster (script-context). Each is named where it differs; main is right on them. Catalog classes, not real text. On the two U+118F cases (29.85px and 31px) glyph-clusters and unsafe-to-break fire on the line but not at the syllable whose line is in dispute, so the lab's scorer counts their breaks uncovered (the check before the redo finish's merge, 2026-09-26: .artifacts/tests/runs/redo-finish-check-20260926/recheck)."
     }
   ]
 }
