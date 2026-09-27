@@ -149,37 +149,20 @@ function getTerminalLetterSpacing(
   return 0
 }
 
-// normalizePreparedLineStart() at glue that can't hold a line, which Gecko leaves out of its
-// text run with the soft hyphens beside it, so a line start looks past both. Firefox keeps a
-// newline, so a chunk of only those and its hard break is an empty line, and a line of only
-// those is none (nsTextFrame.cpp:11421-11429, nsLineLayout.cpp:912). A line after a wrap,
-// which Firefox starts past what it left out, takes the glue along with what it consumes. At a
-// chunk start the glue starts the line before other content, a space included: Firefox trims a
-// line's leading white space from the start of its source only (nsTextFrame.cpp:10935-10950),
-// so none after a character it leaves out.
-function normalizeLineStartAtGlue(prepared: PreparedLineBreakData, cursor: LayoutCursor, segmentIndex: number, atChunkStart: boolean): boolean {
-  const { segmentFlags } = prepared
-  let after = segmentIndex + 1
-  while (after < segmentFlags.length && ((segmentFlags[after]! & KIND_BITS) === ZERO_WIDTH_GLUE || (segmentFlags[after]! & KIND_BITS) === SOFT_HYPHEN)) after++
-  if (after >= segmentFlags.length) return false
-  const next = segmentFlags[after]! & KIND_BITS
-  if (next === HARD_BREAK && atChunkStart) segmentIndex = after
-  else if (next === HARD_BREAK || (!atChunkStart && consumesAtLineStart(next, false))) {
-    cursor.segmentIndex = next === HARD_BREAK ? after + 1 : after
-    cursor.graphemeIndex = 0
-    return cursor.segmentIndex < segmentFlags.length && normalizePreparedLineStart(prepared, cursor)
-  }
-  cursor.segmentIndex = segmentIndex
-  cursor.graphemeIndex = 0
-  return true
-}
-
 // Mutates `cursor` to the next renderable line start. False when no line remains.
 // A chunk runs to a hard break or the end of the text, and the hard break ends a
 // line however little the chunk holds: a chunk holding only its hard break, or only
 // source a line start consumes before it, such as soft hyphens, is an empty line,
 // which starts at its hard break. The rest of a chunk after a line that wrapped
 // inside it is no line of its own when a line start consumes all of it.
+// Where glue can't hold a line, as around what Gecko leaves out of its text run, a
+// line start looks past it and the soft hyphens beside it. Firefox keeps a newline,
+// so a chunk of only those and its hard break is an empty line, and a line of only
+// those is none (nsTextFrame.cpp:11421-11429, nsLineLayout.cpp:912). A line after a
+// wrap, which Firefox starts past what it left out, takes the glue along with what it
+// consumes. At a chunk start the glue starts the line before other content, a space
+// included: Firefox trims a line's leading white space from the start of its source
+// only (nsTextFrame.cpp:10935-10950), so none after a character it leaves out.
 export function normalizePreparedLineStart(
   prepared: PreparedLineBreakData,
   cursor: LayoutCursor,
@@ -206,7 +189,16 @@ export function normalizePreparedLineStart(
     } else if (consumesAtLineStart(kind, atChunkStart)) {
       if (++segmentIndex >= segmentCount) return false
     } else {
-      if (kind === ZERO_WIDTH_GLUE && !getEngineProfile().zeroWidthGlueTakesLine) return normalizeLineStartAtGlue(prepared, cursor, segmentIndex, atChunkStart)
+      if (kind === ZERO_WIDTH_GLUE && !getEngineProfile().zeroWidthGlueTakesLine) {
+        let after = segmentIndex + 1
+        while (after < segmentCount && ((segmentFlags[after]! & KIND_BITS) === ZERO_WIDTH_GLUE || (segmentFlags[after]! & KIND_BITS) === SOFT_HYPHEN)) after++
+        if (after >= segmentCount) return false
+        const next = segmentFlags[after]! & KIND_BITS
+        if (next === HARD_BREAK || (!atChunkStart && consumesAtLineStart(next, false))) {
+          segmentIndex = after
+          continue
+        }
+      }
       cursor.segmentIndex = segmentIndex
       cursor.graphemeIndex = 0
       return true

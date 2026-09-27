@@ -155,8 +155,6 @@ function normalizeWhitespacePreWrap(text: string): string {
 }
 
 const combiningMarkRe = /\p{M}/u
-// Every character isBidiControl() takes.
-const bidiControlRe = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/
 
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if (whiteSpace === 'pre-wrap') {
@@ -264,7 +262,7 @@ function isControlSegmentCode(code: number): boolean {
 // Combining marks right after it, or after a control, stay apart from the text after
 // them, since they shape on the grapheme before it (measureAnalysis). Where the Gecko
 // scan marks cluster starts, a segment is ONE_CLUSTER unless one falls inside it.
-function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): TextAnalysis {
+function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], dropsBidiControl: boolean): TextAnalysis {
   const oneCluster = scan === 'gecko' ? ONE_CLUSTER : 0
   const starts: number[] = []
   // A plain array, which measurement copies into the prepared handle's bytes: a Uint8Array for
@@ -274,11 +272,11 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let markRun = false
   // Gecko drops bidi controls from its text run, as it drops soft hyphens (IsDiscardable,
   // nsTextFrameUtils.cpp:32-49), so it finds no cluster or break at one, gives it no letter
-  // spacing, and a line can't hold only such characters: a run of them is zero-width glue.
-  const bidiGlue = scan === 'gecko' && bidiControlRe.test(normalized)
+  // spacing, and a line can't hold only such characters: where its scan's text run dropped
+  // one, a run of them is zero-width glue.
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
-    const kind = bidiGlue && isBidiControl(code) ? ZERO_WIDTH_GLUE : classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan)
+    const kind = dropsBidiControl && isBidiControl(code) ? ZERO_WIDTH_GLUE : classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan)
     const alone = kind === TEXT && isControlSegmentCode(code)
     const last = flags.length - 1
     // The first unit has no segment before it to join, so it starts one.
@@ -344,15 +342,21 @@ export function analyzeText(
   const keepAll = wordBreak === 'keep-all'
   let breaks: Uint8Array
   let spaceSources: Uint16Array | null = null
+  let dropsBidiControl = false
   if (profile.lineBreakScan === 'blink') {
     breaks = getBlinkLineBreaks(normalized, keepAll, language)
   } else {
     // WebKit and Gecko scan the source. Gecko's scan collapses its white space as Firefox does.
-    const sourceBreaks = profile.lineBreakScan === 'webkit'
-      ? getWebKitLineBreaks(source, preserve, keepAll, language)
-      : getGeckoLineBreaks(source, preserve, keepAll, profile.graphemeTable)
+    let sourceBreaks: Uint8Array
+    if (profile.lineBreakScan === 'webkit') {
+      sourceBreaks = getWebKitLineBreaks(source, preserve, keepAll, language)
+    } else {
+      const gecko = getGeckoLineBreaks(source, preserve, keepAll, profile.graphemeTable)
+      sourceBreaks = gecko.breaks
+      dropsBidiControl = gecko.dropsBidiControl
+    }
     if (profile.lineBreakScan === 'webkit' && !preserve && source !== normalized) spaceSources = new Uint16Array(normalized.length)
     breaks = source === normalized ? sourceBreaks : mapSourceLineBreaks(source, normalized.length, sourceBreaks, whiteSpace, spaceSources)
   }
-  return segmentAtLineBreaks(normalized, spaceSources, breaks, whiteSpace, profile.lineBreakScan)
+  return segmentAtLineBreaks(normalized, spaceSources, breaks, whiteSpace, profile.lineBreakScan, dropsBidiControl)
 }
