@@ -169,7 +169,12 @@ from the start of its source only (nsTextFrame.cpp:10935-10950), and the control
 the trim. A line that ends after the run hangs the space before it. Text with glue
 takes the full walker in the line APIs and the stepper in `layout()`, which steps past
 glue at a line start; the simple walkers' own loops don't meet glue, since a check for
-it there slowed every text (ENGINE_FOLLOWUPS.md, Cost). Classifying the controls as
+it there slowed every text (ENGINE_FOLLOWUPS.md, Cost). The scan's white-space step notes
+whether it dropped a control as it drops them, and only then does the analysis look for
+the controls to make glue: a regex scan of each text, or a test of each unit alone, made
+Firefox prepare seen Latin and CJK messages 1 to 3% slower. The guard for bidi levels
+reads the same note instead of scanning right-to-left text for a control (Bidi Levels),
+which makes Firefox prepare seen Arabic messages 2% faster. Classifying the controls as
 glue alone lost the text after a pre-wrap chunk holding only controls (`a`, LF, LRM,
 LF, `b` in one line), which no harness case held; counting text with glue with the
 full walker made `layout()` of right-to-left messages starting with RLM 6 to 7 times
