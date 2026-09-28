@@ -3,20 +3,23 @@ import {
   CODE_BLOCK_PADDING_Y,
   CODE_FONT,
   CODE_LINE_HEIGHT,
-  createPreparedChatMessages,
+  createChatHistory,
+  dropHistoryChunks,
+  findFrameScrollTop,
   findScrollAnchor,
   findVisibleRange,
   getMaxChatWidth,
+  getMessageTopAnchor,
   getOcclusionBannerHeight,
   IMAGE_PADDING_X,
   INLINE_CODE_PADDING_X,
-  layoutConversation,
   layoutMessage,
+  loadHistoryChunks,
   MARKER_FONT,
   MARKER_FONT_SIZE,
   OCCLUSION_BANNER_HEIGHT,
   type BlockLayout,
-  type ConversationLayout,
+  type HistoryWindow,
   type PreparedChatMessage,
   type QuoteRailLayout,
   type ScrollAnchor,
@@ -24,13 +27,14 @@ import {
 } from './markdown-chat.model.ts'
 
 type State = {
-  conversation: ConversationLayout
   endScrollTop: number // the scroll position that showed the canvas's end in the last frame, computed from its height, not read
   events: {
+    jump: ScrollAnchor | 'end' | null // the last jump asked for since the last frame: to a linked message, the first message or the end
     toggleVisualization: boolean
   }
+  historyWindow: HistoryWindow | null // laid out as the screen shows it; null before the first frame
   isVisualizationOn: boolean
-  scrollAnchor: ScrollAnchor | 'end' // 'end' until the user scrolls: the chat opens on its last message and keeps it above the bottom banner
+  scrollAnchor: ScrollAnchor | 'end' // 'end' until the user scrolls or jumps to a message: the chat opens on its last message and keeps it above the bottom banner
   scrollTop: number // where the last frame left the scroll position, as read back
 }
 
@@ -40,21 +44,22 @@ const domCache = {
   viewport: getRequiredDiv('chat-viewport'),
   canvas: getRequiredDiv('chat-canvas'),
   toggleButton: getRequiredButton('virtualization-toggle'),
-  rows: [] as Array<HTMLElement | undefined>, // cache lifetime: on visibility changes
-  mountedStart: 0, // cache lifetime: on visibility changes
-  mountedEnd: 0, // cache lifetime: on visibility changes
+  rows: [] as Array<HTMLElement | undefined>, // by message ordinal; cache lifetime: on visibility changes
+  mountedStart: 0, // an ordinal; cache lifetime: on visibility changes
+  mountedEnd: 0, // an ordinal; cache lifetime: on visibility changes
 }
 
-const preparedMessages = createPreparedChatMessages()
+const history = createChatHistory()
 const st: State = {
-  conversation: layoutConversation(preparedMessages, getMaxChatWidth(domCache.viewport.clientWidth)),
-  // The empty canvas shows its end at 0, so the first frame's end has moved.
+  // The first frame has no layout that placed the end, so it scrolls to it anyway.
   endScrollTop: 0,
   events: {
+    // The page opens on the message its URL links to, else on the end.
+    jump: parseMessageLink(location.hash, history.length),
     toggleVisualization: false,
   },
+  historyWindow: null,
   isVisualizationOn: false,
-  // The empty canvas can't scroll, so the first frame reads 0 and keeps the end.
   scrollAnchor: 'end',
   scrollTop: 0,
 }
@@ -74,6 +79,27 @@ domCache.toggleButton.addEventListener('click', () => {
 
 domCache.viewport.addEventListener('scroll', scheduleRender, { passive: true })
 window.addEventListener('resize', scheduleRender)
+// The browser's Home and End, and Command-Up and Command-Down on a Mac, scroll to
+// an end of the scroll range, which holds only the loaded chunks. These jump to
+// the history's first message and its end instead.
+window.addEventListener('keydown', event => {
+  if (event.altKey || event.ctrlKey || event.shiftKey) return
+  if (event.metaKey ? event.key === 'ArrowUp' : event.key === 'Home') {
+    st.events.jump = getMessageTopAnchor(0)
+  } else if (event.metaKey ? event.key === 'ArrowDown' : event.key === 'End') {
+    st.events.jump = 'end'
+  } else {
+    return
+  }
+  event.preventDefault()
+  scheduleRender()
+})
+window.addEventListener('hashchange', () => {
+  const jump = parseMessageLink(location.hash, history.length)
+  if (jump === null) return
+  st.events.jump = jump
+  scheduleRender()
+})
 
 scheduleRender()
 
@@ -114,44 +140,66 @@ function render(): void {
   if (st.events.toggleVisualization) isVisualizationOn = !isVisualizationOn
 
   const chatWidth = getMaxChatWidth(viewportWidth)
-  const previousConversation = st.conversation
-  const needsRelayout = previousConversation.chatWidth !== chatWidth
-  const conversation = needsRelayout ? layoutConversation(preparedMessages, chatWidth) : previousConversation
+  const previousWindow = st.historyWindow
+  // The last frame's layout, with the anchor where the last frame put it. There's
+  // none before the first frame, or when the frame jumps to a new anchor.
+  const anchoredWindow = st.events.jump === null ? previousWindow : null
 
-  // st.scrollTop is where the last frame left the scroll position, so any other
-  // value is the user's scroll: anchor the first message whose top shows below
-  // the top banner, in the layout they scrolled. Otherwise keep the anchor.
-  const scrollAnchor = scrollTop === st.scrollTop
-    ? st.scrollAnchor
-    : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
-  const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
-  const endScrollTop = canvasHeight - viewportHeight
-  // The scroll position stays whatever it reads, even past an end while it
-  // bounces, unless this layout moved the anchor from where the last frame put
-  // it. Then the anchored message's top goes back to its distance below the
-  // banner, or the end anchor to the canvas's end. The browser keeps the scroll
-  // inside the canvas.
-  let adjustedScrollTop = scrollTop
-  if (scrollAnchor === 'end') {
-    if (endScrollTop !== st.endScrollTop) adjustedScrollTop = endScrollTop
-  } else if (conversation.tops[scrollAnchor.index] !== previousConversation.tops[scrollAnchor.index]) {
-    adjustedScrollTop = conversation.tops[scrollAnchor.index]! - scrollAnchor.offset
+  // A jump anchors its message, or the end. Otherwise st.scrollTop is where the
+  // last frame left the scroll position, so any other value is the user's scroll:
+  // anchor the first message whose top shows below the top banner, in the layout
+  // they scrolled. Otherwise keep the anchor.
+  let scrollAnchor = st.events.jump ?? st.scrollAnchor
+  if (anchoredWindow !== null && scrollTop !== st.scrollTop) {
+    scrollAnchor = findScrollAnchor(anchoredWindow, scrollTop, viewportHeight, occlusionBannerHeight)
   }
-
-  // Rows mount for the position clamped between 0 and the canvas's end. The
-  // browser clamps the scroll below the same way, and a bounce past an end shows
-  // no message the end doesn't.
-  const { start, end } = findVisibleRange(
-    conversation,
-    Math.max(0, Math.min(endScrollTop, adjustedScrollTop)),
+  // The window keeps the anchored message, or the last one for the end, and unless
+  // the frame jumps, what the screen shows: the last frame's layout at the position
+  // read. Then it loads what the screen shows at the position this frame leaves,
+  // until it holds all of that, so the frame shows every message after a jump, a
+  // new width or a taller room. It drops chunks only then, so it never drops one
+  // it has to prepare again.
+  let firstKeptOrdinal = scrollAnchor === 'end' ? history.length - 1 : scrollAnchor.ordinal
+  let lastKeptOrdinal = firstKeptOrdinal
+  if (anchoredWindow !== null) {
+    const shown = findVisibleRange(anchoredWindow, scrollTop, viewportHeight, occlusionBannerHeight)
+    firstKeptOrdinal = Math.min(firstKeptOrdinal, shown.start)
+    lastKeptOrdinal = Math.max(lastKeptOrdinal, shown.end - 1)
+  }
+  let historyWindow = loadHistoryChunks(history, previousWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+  for (;;) {
+    const shown = findVisibleRange(
+      historyWindow,
+      findFrameScrollTop(historyWindow, anchoredWindow, scrollAnchor, scrollTop, st.endScrollTop, viewportHeight, occlusionBannerHeight),
+      viewportHeight,
+      occlusionBannerHeight,
+    )
+    firstKeptOrdinal = Math.min(firstKeptOrdinal, shown.start)
+    lastKeptOrdinal = Math.max(lastKeptOrdinal, shown.end - 1)
+    const loadedWindow = loadHistoryChunks(history, historyWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+    if (loadedWindow === historyWindow) break
+    historyWindow = loadedWindow
+  }
+  historyWindow = dropHistoryChunks(historyWindow, firstKeptOrdinal, lastKeptOrdinal)
+  // A mounted row keeps its contents when only the window changes.
+  const needsRelayout = previousWindow === null || previousWindow.layout.chatWidth !== chatWidth
+  const canvasHeight = historyWindow.layout.totalHeight + occlusionBannerHeight * 2
+  const adjustedScrollTop = findFrameScrollTop(
+    historyWindow,
+    anchoredWindow,
+    scrollAnchor,
+    scrollTop,
+    st.endScrollTop,
     viewportHeight,
     occlusionBannerHeight,
   )
+  const { start, end } = findVisibleRange(historyWindow, adjustedScrollTop, viewportHeight, occlusionBannerHeight)
 
-  st.conversation = conversation
-  st.endScrollTop = endScrollTop
+  st.endScrollTop = canvasHeight - viewportHeight
+  st.historyWindow = historyWindow
   st.isVisualizationOn = isVisualizationOn
   st.scrollAnchor = scrollAnchor
+  st.events.jump = null
   st.events.toggleVisualization = false
 
   domCache.root.style.setProperty('--chat-width', `${chatWidth}px`)
@@ -169,7 +217,7 @@ function render(): void {
     : 'Show virtualization mask'
   domCache.toggleButton.setAttribute('aria-pressed', String(isVisualizationOn))
 
-  projectVisibleRows(conversation, occlusionBannerHeight, start, end, needsRelayout)
+  projectVisibleRows(historyWindow, occlusionBannerHeight, start, end, needsRelayout)
 
   // The last effect. Browsers round scrollTop, so store the position read back,
   // not the one asked for, or the next frame would take it for a user scroll.
@@ -182,36 +230,48 @@ function render(): void {
   }
 }
 
-// Rows that stop showing leave. A row that starts showing goes before the first
-// row kept when it's above that row, else last, so the canvas holds its rows in
-// message order.
+// A link to a message is #message-<n>, counting from 1, and jumps to it. Other
+// fragments, and messages past the history's end, link to none.
+function parseMessageLink(hash: string, messageCount: number): ScrollAnchor | null {
+  const match = /^#message-([1-9]\d*)$/.exec(hash)
+  if (match === null) return null
+  const ordinal = Number(match[1]) - 1
+  return ordinal < messageCount ? getMessageTopAnchor(ordinal) : null
+}
+
+// start and end are ordinals. Rows are cached by ordinal, so a row stays mounted
+// while chunks load and unload around it. Rows that stop showing leave. A row
+// that starts showing goes before the first row kept when it's above that row,
+// else last, so the canvas holds its rows in message order.
 function projectVisibleRows(
-  conversation: ConversationLayout,
+  historyWindow: HistoryWindow,
   occlusionBannerHeight: number,
   start: number,
   end: number,
   needsRelayout: boolean,
 ): void {
-  const { chatWidth, heights, tops } = conversation
+  const { firstOrdinal, layout, messages } = historyWindow
+  const { chatWidth, heights, tops } = layout
   const previousStart = domCache.mountedStart
   const previousEnd = domCache.mountedEnd
-  for (let index = previousStart; index < previousEnd; index++) {
-    if (index >= start && index < end) continue
-    domCache.rows[index]!.remove()
-    domCache.rows[index] = undefined
+  for (let ordinal = previousStart; ordinal < previousEnd; ordinal++) {
+    if (ordinal >= start && ordinal < end) continue
+    domCache.rows[ordinal]!.remove()
+    domCache.rows[ordinal] = undefined
   }
 
   const keptStart = Math.max(start, previousStart)
   const firstKeptRow = keptStart < Math.min(end, previousEnd) ? domCache.rows[keptStart]! : null
-  for (let index = start; index < end; index++) {
-    const preparedMessage = preparedMessages[index]!
-    let row = domCache.rows[index]
+  for (let ordinal = start; ordinal < end; ordinal++) {
+    const index = ordinal - firstOrdinal
+    const preparedMessage = messages[index]!
+    let row = domCache.rows[ordinal]
     if (row === undefined) {
       row = document.createElement('article')
       row.className = `msg msg--${preparedMessage.role}`
-      domCache.rows[index] = row
+      domCache.rows[ordinal] = row
       renderMessageContents(row, preparedMessage, chatWidth, heights[index]!)
-      domCache.canvas.insertBefore(row, index < keptStart ? firstKeptRow : null)
+      domCache.canvas.insertBefore(row, ordinal < keptStart ? firstKeptRow : null)
     } else if (needsRelayout) {
       renderMessageContents(row, preparedMessage, chatWidth, heights[index]!)
     }

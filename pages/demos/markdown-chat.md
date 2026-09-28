@@ -6,14 +6,14 @@ The [Markdown chat demo](https://chenglou.me/pretext/markdown-chat/) renders 10,
 
 ## What it costs
 
-The chat prepares every message at startup and keeps them all:
+Before the history window, the chat prepared every message at startup and kept them all:
 
 | Messages | First message on screen | JS heap | Worst frame, a resize |
 |---|---|---|---|
 | 10,000 | 0.65-0.74 s | 48 MB | 7.9-13.1 ms |
 | 100,000 | 4.9-5.4 s | 402 MB | 54.9-55.2 ms |
 
-Installed Chrome 153 on an Apple M5 Max at a device pixel ratio of 2, in a 1280×900 frame with an 860 px chat. A frame is its main-thread task in Chrome's trace, and ranges span runs. Measured before [#325](https://github.com/chenglou/pretext/pull/325) simplified painting, which didn't change preparation or the height pass.
+Installed Chrome 153 on an Apple M5 Max at a device pixel ratio of 2, in a 1280×900 frame with an 860 px chat. A frame is its main-thread task in Chrome's trace, and ranges span runs. Measured before [#325](https://github.com/chenglou/pretext/pull/325) simplified painting, which didn't change preparation or the height pass. The history window prepares only the chunks around the screen, so startup and memory don't grow with the history, and each chunk costs its preparation when it loads; [#312](https://github.com/chenglou/pretext/pull/312) has numbers.
 
 ## Measure what you paint
 
@@ -23,7 +23,7 @@ Installed Chrome 153 on an Apple M5 Max at a device pixel ratio of 2, in a 1280�
 
 ## Prepare once, lay out per width
 
-**Prepare each block once.** Preparing measures text with canvas; layout is arithmetic over the widths it cached. `createPreparedChatMessages()` runs once, at startup. It lexes each message with `marked.lexer()` and prepares one text per block, since one paragraph's lines never depend on another's:
+**Prepare each block once.** Preparing measures text with canvas; layout is arithmetic over the widths it cached. `loadHistoryChunks()` prepares a chunk's messages once, when the chunk loads. It lexes each message with `marked.lexer()` and prepares one text per block, since one paragraph's lines never depend on another's:
 
 - paragraphs, headings and list items with `prepareRichInline()`, one item per run of same-styled text;
 - code fences, tables and block HTML with `prepareWithSegments(text, font, { whiteSpace: 'pre-wrap' })`;
@@ -33,7 +33,7 @@ Never prepare again for a new width.
 
 **Heights from line counts; lines only for rows on screen.** `layoutConversation()` asks each block only for a line count, through `measureRichInlineStats()` or `layout()`. `layoutMessage()` walks one message's lines, only when its row is built or the chat width changes. Both wrap at `getBlockLineWidth()` and size blocks with `getBlockHeight()`, so painted lines match counted heights. Before [#286](https://github.com/chenglou/pretext/pull/286) the chat built every message's lines on each width change and allocated 11-14 MB, which pushed its slowest resize frames to 14-17 ms (in Node). Skip it when building every message's lines per width fits your frame.
 
-**Heights and tops in typed arrays, without the page chrome.** `ConversationLayout` keeps every message's height and top in two `Float64Array`s, filled by one loop per chat width (`needsRelayout` in `render()`). Tops leave out the banners, so when the banners change height on short viewports, nothing is laid out again. Skip it when histories are small and nothing above the list changes height.
+**Heights and tops in typed arrays, without the page chrome.** `ConversationLayout` keeps every loaded message's height and top in two `Float64Array`s, filled by one loop each time the chat width or the loaded chunks change. Tops leave out the banners, so when the banners change height on short viewports, nothing is laid out again. Skip it when histories are small and nothing above the list changes height.
 
 ## The frame loop
 
@@ -63,11 +63,17 @@ Never prepare again for a new width.
 
 ## Keep the reading position
 
-**Anchor a message when heights above it change.** On a width change, every message above the viewport rewraps. Before [#302](https://github.com/chenglou/pretext/pull/302), resizing slid the chat by up to 590 px in Chrome. The chat keeps an anchor: a message index, plus how far that message's top sits below the top banner. A `scrollTop` other than the value the last frame read back means the user scrolled, and `findScrollAnchor()` picks the first message whose top shows. Only when laying out again moves the anchored message's top does the chat scroll, to `tops[anchor.index] - anchor.offset`, and the browser keeps that inside the scroll range. Otherwise the position stays whatever it reads. Scrolling on every frame to a target clamped to the range pulled the chat back while iOS Safari bounced past either end, so it jittered instead of bouncing. Through resizes, the anchored message moved 0 px in Chrome 153 and Safari 26.5.2, and 0.07 px in Firefox 155. Only the anchor holds still: a message at mid-screen still moves. Skip it when nothing above the viewport changes height while someone reads.
+**Anchor a message when heights above it change.** On a width change, every message above the viewport rewraps. Before [#302](https://github.com/chenglou/pretext/pull/302), resizing slid the chat by up to 590 px in Chrome. The chat keeps an anchor: a message's ordinal in the history, plus how far that message's top sits below the top banner. A `scrollTop` other than the value the last frame read back means the user scrolled, and `findScrollAnchor()` picks the first message whose top shows. The chat scrolls only when the frame's layout moves the anchored message's top, as a new width or a chunk loaded or dropped above can: to that top minus the offset (`findFrameScrollTop()`), and the browser keeps that inside the scroll range. Otherwise the position stays whatever it reads. Scrolling on every frame to a target clamped to the range pulled the chat back while iOS Safari bounced past either end, so it jittered instead of bouncing. Through resizes, the anchored message moved 0 px in Chrome 153 and Safari 26.5.2, and 0.07 px in Firefox 155. Only the anchor holds still: a message at mid-screen still moves. Skip it when nothing above the viewport changes height while someone reads.
 
 **Store the scroll position the browser reports back.** Browsers round `scrollTop`, so the value read after `scrollTo()` can differ from the value asked for. Comparing against the requested value, or setting a "programmatic scroll" flag, mistakes rounding or your own scroll event for a user scroll. Adding each frame's height change to `scrollTop`, instead of starting from the anchor, lets that rounding add up.
 
 **Open on the latest message.** `st.scrollAnchor` starts as `'end'`, so until the user scrolls, a width change keeps the last message showing. The first frame writes the canvas height and the last rows before its `scrollTo()`, so the first paint already shows the end. That needs exact heights: with estimates, the end keeps moving as real heights arrive.
+
+## Load history in chunks
+
+**Prepare only the chunks around the screen.** Preparing every message at startup makes the first paint wait and keeps every prepared message in memory; at 100,000 messages it crashed Safari on an iPhone. `loadHistoryChunks()` prepares and lays out whole chunks of 24 messages: the chunks holding the anchored message and the messages on screen, and one more on either side. `dropHistoryChunks()` drops the farthest chunk while more than four are loaded and the screen doesn't need it. The scroll area holds only the loaded chunks, at their exact heights, so every painted frame is exact, and a chunk loaded or dropped above is one more layout change the anchor absorbs. A dropped chunk is prepared again when it comes back. The costs: a scrollbar that covers only the loaded chunks, with a thumb that jumps on each load; a scroll past the loaded chunks within one frame stops at their edge until the next frame; and in Safari, a wheel event right after a load's scroll can apply to the position from before it. Skip it when preparing every message fits your startup and memory.
+
+**Jump by setting the anchor.** Home and End scroll to the ends of the scroll area, which now holds only the loaded chunks. The chat takes over Home, End, Command-↑ and Command-↓, and follows links to `#message-<n>`. A jump sets the anchor: the linked or first message 14 px below the banner, or the end. The frame then loads the chunks around it, none in between, and scrolls there, the one scroll the chat makes without a layout change. Skip it when the scroll area holds the whole history.
 
 ## Not covered
 
@@ -82,4 +88,3 @@ Never prepare again for a new width.
 - **Estimated heights.** An estimate that's too large skips messages that are really on screen, the scrollbar thumb gets the wrong size, content jumps when real heights arrive, and a jump to a message lands off. Pretext gives exact heights before paint.
 - **Correcting heights with `ResizeObserver`.** The heights arrive after the frame has painted, and Pretext already knows them.
 - **Pooling DOM nodes.** At most 20 messages were on screen in 800 and 1,600 px tall viewports (in Node), so there's little to save, and reusing a node ties a selection or focus to whichever message gets it next.
-- **A window over loaded chunks.** Draft [#312](https://github.com/chenglou/pretext/pull/312) prepared and laid out only chunks of messages around the screen, and left the rest out of the scroll area. Every painted frame stayed exact, and at 100,000 messages a resize took under 2 ms against about 55 ms. But the scrollbar covered only the loaded chunks and its thumb jumped on each load, which feels bad. A scrollbar that covers the whole history exactly needs every message's height at the current width, which is the chat's model.
