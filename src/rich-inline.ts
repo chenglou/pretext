@@ -48,6 +48,8 @@ import { measureAnalysis } from './prepare.js'
 
 declare const preparedRichInlineBrand: unique symbol
 
+const PRESERVED_WHITE_SPACE = 1 << PRESERVED_SPACE | 1 << TAB
+
 export type RichInlineItem = {
   text: string // Raw author text, including any leading/trailing collapsible spaces
   font: string // Canvas font shorthand used to prepare and measure this item
@@ -187,6 +189,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // One language read for the paragraph's analysis and every item's measurement.
   const profile = getEngineProfile()
   const language = getPreparationLanguage(profile)
+  // Whether a line can end before preserved white space that starts an item: WebKit finds a soft wrap opportunity
+  // next to every white-space item (isAtSoftWrapOpportunity, InlineFormattingUtils.cpp:406-418), which is part of how
+  // it finds breaks between inline items, so the profile's scan names it.
+  const whiteSpaceItemBreaks = profile.lineBreakScan === 'webkit'
 
   // A paragraph of one styled run is the most common one, and is that run's text: its handle is
   // the one prepareWithSegments() makes, laid out as layout()'s walkers lay it out.
@@ -278,8 +284,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   let firstTextItem = -1
   let fontsDiffer = false
   let simple = !analysis.hasUnbroken
-  // Whether an item's start edge added a segment with no break before it (below), in a paragraph
-  // whose analysis found none, so its other segments aren't marked as breaks to return to.
+  // Whether a segment got no break before it here (below), an item's start edge or white space that
+  // goes on from the item before, in a paragraph whose analysis found none, so its other segments
+  // aren't marked as breaks to return to.
   let marksReturnable = false
   // Where the item at hand starts among the paragraph's segments.
   let itemStart = 0
@@ -375,10 +382,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // after one, follow no text.
         const afterTextSpaces = at - 1 > previousItemStart && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && (flags[at - 2]! & KIND_BITS) !== TAB
         const fit = getOpeningFit(sub.segmentFlags, extraWidth, afterObject, afterTextSpaces, profile)
-        // WebKit allows wrapping next to a white-space item (InlineFormattingUtils.cpp:406-418), so there a
-        // break comes before white space that starts an item, and none before a hard break, after an object
-        // too (nextWrapOpportunity, :469-475).
-        const breaksBefore = at === 0 || (profile.lineBreakScan === 'webkit' ? firstKind !== HARD_BREAK : afterObject)
+        // In WebKit a break comes before white space that starts an item (whiteSpaceItemBreaks), and none
+        // before a hard break, after an object too (nextWrapOpportunity, InlineFormattingUtils.cpp:469-475).
+        const breaksBefore = at === 0 || (whiteSpaceItemBreaks ? firstKind !== HARD_BREAK : afterObject)
         widths.push(extraWidth)
         // A line that takes the opening paints the whole edge, whatever of it the line fitted (ParagraphSegmentData,
         // openingEdges). An opening no edge of which is fitted takes no room among the white space around it,
@@ -412,7 +418,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (spaced) width += letterSpacing
       if (holdsExtra) width += extraWidth
       widths.push(width)
-      flags.push(sub.segmentFlags[s]!)
+      let segmentFlags = sub.segmentFlags[s]!
+      // No break comes before white space (UAX #14 LB7), so none inside a run of preserved spaces and tabs that goes
+      // on from the item before, but in WebKit (whiteSpaceItemBreaks).
+      if (s === 0 && at > 0 && !whiteSpaceItemBreaks && (1 << (segmentFlags & KIND_BITS) & PRESERVED_WHITE_SPACE) !== 0 && (1 << (flags[at - 1]! & KIND_BITS) & PRESERVED_WHITE_SPACE) !== 0) {
+        segmentFlags |= UNBROKEN
+        if (!analysis.hasUnbroken) marksReturnable = true
+      }
+      flags.push(segmentFlags)
       breakableFitAdvances.push(advances)
       const normalizedStart = analysis.starts[i]!
       const normalizedEnd = i + 1 < count ? analysis.starts[i + 1]! : analysis.normalized.length

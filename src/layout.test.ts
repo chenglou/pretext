@@ -3914,6 +3914,43 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('no line ends inside a run of preserved spaces that goes on across items, but in the WebKit profile', () => {
+    const BOLD = '700 16px Test Sans'
+    const boldSpace = measureWidth(' ', BOLD)
+    const texts = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
+      const prepared = prepareRichInline(items, { whiteSpace: 'pre-wrap' })
+      const out: string[] = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        out.push(materializeRichInlineLineRange(prepared, range).fragments.map(f => f.text).join('|'))
+      })
+      expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
+      return out
+    }
+    const profile = getEngineProfile()
+    const previous = { paddedOpeningFit: profile.paddedOpeningFit, lineBreakScan: profile.lineBreakScan }
+    try {
+      // A run of preserved spaces goes on across items with no break inside it (UAX #14 LB7), so where the
+      // start edge of a padded span that the run goes into doesn't fit, the line returns to the break
+      // before the word: Chrome and Firefox lay out `Some words`, a bold `  `, an italic ` `, an
+      // 8px-padded ` x y` and ` tail` in 16px Arial at 103px as `Some `, then `words` through `y`.
+      // WebKit finds a break next to each white-space item, so there the line ends between two.
+      const run = [{ text: 'foo bar', font: FONT }, { text: '  ', font: BOLD }, { text: ' ', font: BOLD }, { text: ' x', font: FONT, extraWidth: 40 }]
+      const width = measureWidth('foo bar', FONT) + 3 * boldSpace + 1
+      profile.paddedOpeningFit = 'start'
+      expect(texts(run, width)).toEqual(['foo ', 'bar|  | | ', 'x'])
+      profile.paddedOpeningFit = 'both'
+      expect(texts(run, width)).toEqual(['foo ', 'bar|  | ', ' x'])
+      profile.lineBreakScan = 'webkit'
+      profile.paddedOpeningFit = 'placed'
+      clearCache()
+      expect(texts(run, width)).toEqual(['foo bar|  | ', ' x'])
+    } finally {
+      profile.paddedOpeningFit = previous.paddedOpeningFit
+      profile.lineBreakScan = previous.lineBreakScan
+      clearCache()
+    }
+  })
+
   test('a padded rich item that starts with a line feed returns its line to a break, or else starts the next line, and a blank line is one empty fragment', () => {
     const round = (value: number) => Math.round(value * 1e6) / 1e6
     const lines = (items: Parameters<typeof prepareRichInline>[0], width: number) => {

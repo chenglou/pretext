@@ -37,7 +37,10 @@ export type EngineProfile = {
   // Where preparation finds break opportunities: each engine's own scan. Blink and WebKit
   // scan the text with their pair tables and ICU line rules (src/line-breaks.ts), Gecko
   // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
-  // doesn't recognize take Blink's scan.
+  // doesn't recognize take Blink's scan. WebKit's scan between two inline items also finds
+  // a break before preserved white space that starts one (isAtSoftWrapOpportunity,
+  // InlineFormattingUtils.cpp:406-418), which rich inline reads off this field
+  // (prepareRichInline in src/rich-inline.ts).
   lineBreakScan: 'blink' | 'webkit' | 'gecko'
   // Where grapheme clusters end: the engine's ICU character rules (src/graphemes.ts).
   // libicucore's add Apple's transcoding hints to Extend. Firefox's ICU4X data gives the
