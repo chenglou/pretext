@@ -3574,6 +3574,15 @@ describe('rich-inline invariants', () => {
       expect(lines([item('中中\u3000'), item('\u00ADab'), item('c')], 40)).toEqual(['中中\u3000:32', 'ab|c:28.8'])
       expect(lines([item('中中\u3000'), item(' '), item('\u200Bab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000| :32', '\u200Bab:19.2'])
       expect(lines([item('中中\u3000'), item('\u300D中')], 48)).toEqual(['中:16', '中\u3000|\u300D:48', '中:16'])
+      // A collapsible space right before the run in its item is all Blink's line trails, so the
+      // run starts the next line, as in one text node; a run in an item of its own is trailed,
+      // and so is one after a preserved space.
+      for (const maxWidth of [40, 47, 48, 60]) {
+        expect({ maxWidth, lines: lines([item('中中 \u3000'), item('\u300D中')], maxWidth).map(line => line.replace('|', '')) }).toEqual({ maxWidth, lines: flat('中中 \u3000\u300D中', maxWidth) })
+      }
+      expect(lines([item('中中 \u3000'), item('\u300D中')], 44)).toEqual(['中中 :32', '\u3000|\u300D:32', '中:16'])
+      expect(lines([item('中中 '), item('\u3000'), item('\u300D中')], 44)).toEqual(['中中|\u3000:37.28', '\u300D中:32'])
+      expect(lines([item('中中 \u3000'), item('\u300D中')], 44, { whiteSpace: 'pre-wrap' })).toEqual(['中中 \u3000:37.28', '\u300D中:32'])
       // Gecko gives the next text frame its text up to its first break and places a frame that
       // is then empty wherever it falls: a ZWSP, or a run of U+3000 that hangs, after a box of
       // width 0 too, stays on the line, and the white space before it still hangs. So does a
@@ -3583,6 +3592,11 @@ describe('rich-inline invariants', () => {
       expect(lines([item('中中\u3000'), item('\u200B'), item('ab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
       expect(lines([item('中中\u3000'), { width: 0 }, item('\u3000中中')], 40)).toEqual(['中中\u3000||\u3000:32', '中中:32'])
       expect(lines([item('ab cd     '), item('\u200Bef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', 'ef:19.2'])
+      // Preserved spaces after that start hang with it, and a tab, which takes room, starts the
+      // next line, after those spaces too.
+      expect(lines([item('ab cd     '), item('\u200B  ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B  :19.2', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u200B\tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', '\t:0', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u200B  \tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B  :19.2', '\t:0', 'ef:19.2'])
     } finally {
       profile.paddedOpeningFit = previousFit
     }

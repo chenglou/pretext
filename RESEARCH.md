@@ -919,12 +919,19 @@ none of its cases moved.
   white space only where the frame itself breaks, `nsTextFrame.cpp:11202-11214`). Rich inline had kept the item's
   width without the run and put the next item over it. What the next span starts with, where no break comes before it,
   tells the two engines apart. Chrome's trailing line ends before it whatever it is: `文字`, U+3000 and a span `」文`
-  are `文字　` and `」文` at 32-47px, where their text in one node returns to the break before `字`. Firefox gives
-  the next frame its text up to its first break and places a frame that is then empty past the line's end
-  (`gfxTextRun.cpp:1091-1101`, `CanPlaceFrame`, `nsLineLayout.cpp:1264-1270`), so a ZWSP or a U+3000 that starts the
-  span stays on the run's line, after a box of width 0 too, unless that line has no break of its own
-  (ENGINE_FOLLOWUPS.md), and a closing mark there takes the line back to its latest break: with a span of a ZWSP and
-  `ab`, both browsers give `文字　` and `ab` at 32-44px.
+  are `文字　` and `」文` at 32-47px, where their text in one node returns to the break before `字`. Chrome trails
+  the run only where its trailing white space starts with it: after a collapsible space in the same span its line
+  trails that space alone, and the run starts the next line (`line_breaker.cc:2447-2471` and `2518-2522`), so
+  `日本語 `, U+3000 and a span `」文` are `日本語` and `　」文` at 54-60px. Firefox fits the next frame's text to the
+  room left, none after white space that hangs, without the spaces a break follows, and takes the first break
+  whatever fits (`BreakAndMeasureText`, `gfxTextRun.cpp:1091-1107` and `1152-1160`), and it places a frame that is
+  then empty past the line's end (`CanPlaceFrame`, `nsLineLayout.cpp:1264-1270`). So a start that takes no room, a
+  ZWSP, a word joiner or a U+3000 that hangs, stays on the run's line with the preserved spaces after it, after a
+  box of width 0 too, unless that line has no break of its own (ENGINE_FOLLOWUPS.md); a tab after that start, which
+  is no space to that fit, starts the next line, and a closing mark there takes the line back to its latest break.
+  With a span of a ZWSP and `ab`, both browsers give `文字　` and `ab` at 32-44px; in 16px Arial pre-wrap at
+  40-52px, after `ab cd   `, Firefox keeps the two spaces of a span of a ZWSP, two spaces and `ef` on the first line
+  and starts the second with the tab of a span of a ZWSP, a tab and `ef`.
 - Chrome's `text-spacing-trim` halts a pair of fullwidth marks that a span edge splits as in one text node, whatever
   the two spans' weights, sizes or families and with padding between them, each mark by the font of its own span, since
   `HanKerning::Compute` reads the paragraph's text on both sides of each shaped run (`han_kerning.cc:262-320`): `文字」`
@@ -941,9 +948,9 @@ at a span's end before letters, digits, emoji, boxes, chips, closing marks, a ZW
 normal white space and pre-wrap; a ZWSP or U+3000 that starts a span after other overflow; and a chip of only white
 space, Objects Inside A Line), #TBD fixed 3,170 Chrome, 506 Firefox and 357 webkit-host cases and lost none
 (2026-10-01): the styled sentences went from 5,608 to 6,199 of 6,210 in Chrome through the pair halt, and none moved
-in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. What it leaves is in
-ENGINE_FOLLOWUPS.md (Rich-inline item edges, CJK at an item's edge). A Chrome that stops halting across spans, which
-the rich set's `item-edges` cases would show at a repin, reopens the second fact.
+in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. What it
+leaves is in ENGINE_FOLLOWUPS.md (Line edges; Rich-inline item edges, CJK at an item's edge). A Chrome that stops
+halting across spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
 
 #### Objects Inside A Line
 
