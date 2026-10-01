@@ -271,7 +271,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // handle with soft-hyphen contexts: where an item's measurement made some, and, where the engine
   // keeps an unfit hyphen in one text, where a run can reach a soft hyphen across items, as the
   // line then returns to the break before that run (returnsFromUnfitHyphen in src/line-break.ts).
-  let retreatsFromUnfitHyphen = profile.unfitHyphenRetreat === 'none' && analysis.hasUnbroken && source.includes('\u00AD')
+  let retreatsFromUnfitHyphen = profile.unfitHyphenRetreat === 'none' && source.includes('\u00AD')
   let insideExtras: number[] | null = null
   let fillExtras: number[] | null = null
   // Each text item's hyphen width and tab stop advance, and whether two items differ in one.
@@ -362,7 +362,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // content that fills it, gets a start edge of its own before them: an empty segment as wide as
     // the extraWidth, which fits by the edges the engine fits where a line takes the item's
     // opening and no more of it (getOpeningFit), and no break comes before it, as none comes
-    // before white space or a hard break in the text (UAX #14 LB6, LB7), but after an object.
+    // before white space or a hard break in the text (UAX #14 LB6, LB7), but after an object in
+    // Blink and Gecko.
     const extraWidth = item.extraWidth ?? 0
     let first = to
     if (extraWidth !== 0) {
@@ -377,7 +378,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // after one, follow no text.
         const afterTextSpaces = at - 1 > previousItemStart && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && (flags[at - 2]! & KIND_BITS) !== TAB
         const fit = getOpeningFit(sub.segmentFlags, extraWidth, afterObject, afterTextSpaces, profile)
-        const breaksBefore = at === 0 || (afterObject && !(firstKind === HARD_BREAK && profile.lineBreakScan === 'webkit'))
+        // WebKit allows wrapping next to a white-space item (InlineFormattingUtils.cpp:406-418), so there a
+        // break comes before white space that starts an item, and none before a hard break, after an object
+        // too (nextWrapOpportunity, :469-475).
+        const breaksBefore = at === 0 || (profile.lineBreakScan === 'webkit' ? firstKind !== HARD_BREAK : afterObject)
         widths.push(extraWidth)
         // An opening no edge of which is fitted hangs with the white space around it. Else it is an object:
         // the white space after it stays on its line, as the line keeps the opening it took.
