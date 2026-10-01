@@ -189,15 +189,17 @@ export type EngineProfile = {
   // shaping_line_breaker.cc:490-495), the line trails them, taking the open tag and white space or
   // a forced break after them with no fit (HandleTrailingSpaces, :2426-2534), so Blink fits no
   // edge where the content before the spaces fits; after spaces that start an item, before which
-  // no break comes (UAX #14 LB7), it fits the start edge with them. WebKit fits a box that opens
-  // in the content it places without its cloned end edge (placedClonedDecorationWidth,
+  // no break comes (UAX #14 LB7), it fits the start edge with them; a line that trails a run of
+  // U+3000 at an item's end ends before the next item too (stepRichInlineLine). WebKit fits a
+  // box that opens in the content it places without its cloned end edge (placedClonedDecorationWidth,
   // InlineLineBuilder.cpp:1501-1523), but that content runs on past the inline box ends after a
   // line break or white space (nextWrapOpportunity, InlineFormattingUtils.cpp:470-475, 530-538),
   // so it fits the end edge too of an item of white space that ends there, and leaves white space
   // that hangs before the box out of the fit (hangingContentWidth, InlineContentBreaker.cpp:
   // 183-186, 956-958): 'placed'. Gecko fits a frame's whole width, its cloned end edge too, and
   // lets only an empty frame past the line's end (CanPlaceFrame, nsLineLayout.cpp:1217-1270),
-  // wherever it falls, so an atomic item of width 0 stays on a line that already overflows: 'both'. In 15px Helvetica Neue, `Unbreakable` and a span with 20px padding that starts with a
+  // wherever it falls, so an atomic item of width 0 stays on a line that already overflows, and so
+  // does the start of a text item that takes no room: 'both'. In 15px Helvetica Neue, `Unbreakable` and a span with 20px padding that starts with a
   // line feed keep the line feed from 107px in Chrome and Safari, from 127px in Firefox, and
   // `Unbreakable   ` and that span from 86px in Chrome, 105px in Safari and 138px in Firefox;
   // `Ping `, the chip `@alice` and a span with 12px padding that starts with two spaces keep them

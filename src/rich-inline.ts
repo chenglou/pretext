@@ -949,6 +949,13 @@ function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, 
   return retreat
 }
 
+// Whether the item's first segment takes no room where a line ends after it: a zero-width break,
+// or text that is all line-end trim, as a run of U+3000 that hangs.
+function opensEmpty(data: PreparedSegments): boolean {
+  const kind = data.segmentFlags[0]! & KIND_BITS
+  return kind === ZERO_WIDTH_BREAK || (kind === TEXT && data.widths[0]! <= (data.lineEndTrims === null ? 0 : data.lineEndTrims[0]!))
+}
+
 // The first of an item's segments that isn't a preserved space or a tab, or their count.
 function getWhiteSpaceEnd(segmentFlags: Uint8Array): number {
   let i = 0
@@ -1072,8 +1079,12 @@ function stepRichInlineLine(
   // where `i` would fit after `文字`. At the paragraph's end, and before a hard break that
   // starts the next item, which ends the line with nothing after the run, it stays out, as in
   // one text.
-  // Chrome ends that line whatever the next item starts with, where a line here returns to its
-  // latest break if no break comes before that item (ENGINE_FOLLOWUPS.md). A closing mark
+  // Blink's trailing line ends before that item whatever it starts with, so the line records a
+  // break there (below): Chrome gives `文字\u3000` and a span `」文` the lines `文字\u3000` and
+  // `」文` at 32-47px, where their text in one node, with no break before `」`, returns to the
+  // break before `字`. Gecko places the start of that item where it takes no room (opensEmpty,
+  // below). Where the run fits and that item's start doesn't, Chrome ends the line after the
+  // run too, and a line here returns to its latest break (ENGINE_FOLLOWUPS.md). A closing mark
   // Blink halts at an item's end stays halted, and the line goes on from there: Chrome lays
   // out `文字」` and a span `i` in one 43.81px line at 44-47px, where one text node takes two.
   let endHang = 0
@@ -1129,7 +1140,8 @@ function stepRichInlineLine(
     // The run takes its room (endHang) before an item that takes part in the line, or that the
     // line can end before (below), but for one that starts with a hard break, in its own item's
     // fragment: the last one of an item that isn't one a line start consumes.
-    if (endHang > 0 && (item.establishesLine || item.walked || item.continued) && (item.lineData.segmentFlags[0]! & KIND_BITS) !== HARD_BREAK) {
+    const trails = endHang > 0 && (item.establishesLine || item.walked || item.continued) && (item.lineData.segmentFlags[0]! & KIND_BITS) !== HARD_BREAK
+    if (trails) {
       lineWidth += endHang
       remainingWidth = safeWidth - lineWidth
       lineHangWidth = endHang
@@ -1143,8 +1155,11 @@ function stepRichInlineLine(
 
     // The line can end before a continued item that follows a break, as the run the next
     // item continues can move to the next line, and, where it has no break yet, before one that
-    // a line that can't fit the next item's padding ends before (retreatsBefore).
-    if (item.continued && hasContent && (item.breakBefore || (breakItemIndex < 0 && hardBreakItemRetreat !== 'item' && retreatsBefore(flow, itemIndex)))) {
+    // a line that can't fit the next item's padding ends before (retreatsBefore). Blink's line
+    // can end before the item after a run of U+3000 it trails (endHang), whatever break the
+    // text gives there ('start', whose line trails white space).
+    if (hasContent && ((trails && paddedOpeningFit === 'start') ||
+      (item.continued && (item.breakBefore || (breakItemIndex < 0 && hardBreakItemRetreat !== 'item' && retreatsBefore(flow, itemIndex)))))) {
       breakItemIndex = itemIndex
       breakSegmentIndex = 0
       breakGraphemeIndex = 0
@@ -1180,14 +1195,15 @@ function stepRichInlineLine(
       const occupiedWidth = item.naturalWidth + item.extraWidth
       const totalWidth = gapBefore + occupiedWidth
       // Gecko places an empty frame wherever it falls (CanPlaceFrame, which 'both' ports), where
-      // Blink and WebKit move an atomic item of width 0 to the next line as any other.
+      // Blink and WebKit move an atomic item of width 0 to the next line as any other. Past the
+      // line's end, it leaves the white space that hangs there the last thing on the line.
       if (hasContent && totalWidth > remainingWidth + lineFitEpsilon && !(paddedOpeningFit === 'both' && occupiedWidth === 0)) break
 
       collectItemRest(fragments, itemIndex, item, EMPTY_LAYOUT_CURSOR, gapBefore, gapItemIndex, occupiedWidth)
+      if (totalWidth <= remainingWidth + lineFitEpsilon) lineHangWidth = 0
       hasContent = true
       lineWidth += totalWidth
       remainingWidth = safeWidth - lineWidth
-      lineHangWidth = 0
       continue
     }
 
@@ -1208,8 +1224,24 @@ function stepRichInlineLine(
     // the run the line ends with, so the reserved width of an item that starts with them fits
     // where the line's content before that run fits, as WebKit fits a box's edge
     // (InlineContentBreaker, hangingContentWidth), though WebKit leaves out only the last
-    // white-space item's (ENGINE_FOLLOWUPS.md).
+    // white-space item's (ENGINE_FOLLOWUPS.md). Gecko gives a text frame its text up to its
+    // first break wherever the frame starts (BreakAndMeasureText takes the first break it
+    // meets, gfxTextRun.cpp:1091-1101) and places a frame that is then empty past the line's
+    // end (CanPlaceFrame, nsLineLayout.cpp:1264-1270), and in pre-wrap a frame whose white
+    // space hangs ends at the line's end (nsTextFrame.cpp:11216-11229). So where the line
+    // overflows only by white space that hangs, an item without padding that opens with a ZWSP
+    // or a run of U+3000 that hangs (opensEmpty) is walked with no room, which takes that and
+    // no text, and the white space the line hung before it still ends the line (hangBefore):
+    // in 16px Hiragino Sans at 32-44px, Firefox 156 lays out `文字\u3000`, a box of width 0
+    // and `\u3000です` as `文字\u3000` and `です`, and `文字\u3000` and a span of a ZWSP and
+    // `ab` as `文字\u3000` and `ab`. Where the line's content overflows, no break fit on it,
+    // and the frame's first break is the emergency one at its start, which ends the line before
+    // the item, as below: Firefox gives the ZWSP of items `A` and a ZWSP a line of its own at
+    // a width under `A`'s. In normal white space it does so too after white space that hangs
+    // on a line with no break (ENGINE_FOLLOWUPS.md).
     const reservedWidth = gapBefore + item.extraWidth
+    let room = remainingWidth
+    let hangBefore = 0
     if (hasContent && reservedWidth > remainingWidth + lineFitEpsilon && (item.establishesLine || reservedWidth > 0) &&
       !fitsOpening(flow, itemIndex, lineWidth, lineHangWidth, safeWidth + lineFitEpsilon, paddedOpeningFit, startItemIndex, startSegmentIndex)) {
       const firstKind = item.lineData.segmentFlags[0]! & KIND_BITS
@@ -1237,7 +1269,10 @@ function stepRichInlineLine(
         }
       }
       const hangs = (firstKind === PRESERVED_SPACE || (firstKind === TAB && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon
-      if (!keepsHardBreak && !hangs) {
+      if (paddedOpeningFit === 'both' && reservedWidth <= 0 && lineWidth - lineHangWidth <= safeWidth + lineFitEpsilon && opensEmpty(item.lineData)) {
+        room = 0
+        hangBefore = lineHangWidth
+      } else if (!keepsHardBreak && !hangs) {
         returnsToBreak = !item.breakBefore
         break
       }
@@ -1245,12 +1280,12 @@ function stepRichInlineLine(
 
     if (atItemStart && !item.walked) {
       const totalWidth = reservedWidth + item.naturalWidth
-      if (totalWidth <= remainingWidth + lineFitEpsilon) {
+      if (totalWidth <= room + lineFitEpsilon) {
         collectItemRest(fragments, itemIndex, item, EMPTY_LAYOUT_CURSOR, gapBefore, gapItemIndex, item.naturalWidth + item.extraWidth)
         hasContent = true
         lineWidth += totalWidth
         remainingWidth = safeWidth - lineWidth
-        lineHangWidth = item.hangWidth
+        lineHangWidth = hangBefore + item.hangWidth
         continue
       }
     }
@@ -1262,7 +1297,7 @@ function stepRichInlineLine(
     // hyphen where the break follows one. A walk after content that can't take the
     // item's first segment ends the line before the item (firstSegmentOverflows), so that
     // line ends here without one.
-    if (hasContent && firstSegmentOverflows(item, remainingWidth - reservedWidth + lineFitEpsilon)) {
+    if (hasContent && firstSegmentOverflows(item, room - reservedWidth + lineFitEpsilon)) {
       returnsToBreak = !item.breakBefore
       break
     }
@@ -1306,7 +1341,7 @@ function stepRichInlineLine(
     // space hangs and its hard break ends the line.
     const availableWidth = !hasContent ? Math.max(1, remainingWidth - reservedWidth)
       : fitsOpening(flow, itemIndex, lineWidth, lineHangWidth, safeWidth + lineFitEpsilon, paddedOpeningFit, startItemIndex, startSegmentIndex)
-        ? Math.max(0, remainingWidth - reservedWidth) : remainingWidth - reservedWidth
+        ? Math.max(0, remainingWidth - reservedWidth) : room - reservedWidth
     const lineWidthForItem = stepPreparedLineGeometryFromStart(item.lineData, lineEnd, availableWidth, itemLine)
     if (lineWidthForItem === null) {
       collectItemRest(fragments, itemIndex, item, cursor, 0, -1, 0)
@@ -1335,7 +1370,7 @@ function stepRichInlineLine(
     hasContent = true
     lineWidth += gapBefore + itemOccupiedWidth
     remainingWidth = safeWidth - lineWidth
-    lineHangWidth = itemLine.hangWidth
+    lineHangWidth = hangBefore + itemLine.hangWidth
 
     // A line that takes the item's end goes on, unless a hard break ends it there,
     // from the latest break the walk leaves, whose width leaves out what hangs there. A break

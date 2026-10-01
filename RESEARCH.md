@@ -917,7 +917,14 @@ none of its cases moved.
   text node: `文字`, U+3000 and a span `i` take two lines at 36-47px, where `i` would fit after `文字` (Blink's
   `HandleTrailingSpaces`, `line_breaker.cc:2447-2456` and `2518-2533`, Chromium 153; Gecko trims a frame's trailing
   white space only where the frame itself breaks, `nsTextFrame.cpp:11202-11214`). Rich inline had kept the item's
-  width without the run and put the next item over it.
+  width without the run and put the next item over it. What the next span starts with, where no break comes before it,
+  tells the two engines apart. Chrome's trailing line ends before it whatever it is: `文字`, U+3000 and a span `」文`
+  are `文字　` and `」文` at 32-47px, where their text in one node returns to the break before `字`. Firefox gives
+  the next frame its text up to its first break and places a frame that is then empty past the line's end
+  (`gfxTextRun.cpp:1091-1101`, `CanPlaceFrame`, `nsLineLayout.cpp:1264-1270`), so a ZWSP or a U+3000 that starts the
+  span stays on the run's line, after a box of width 0 too, unless that line has no break of its own
+  (ENGINE_FOLLOWUPS.md), and a closing mark there takes the line back to its latest break: with a span of a ZWSP and
+  `ab`, both browsers give `文字　` and `ab` at 32-44px.
 - Chrome's `text-spacing-trim` halts a pair of fullwidth marks that a span edge splits as in one text node, whatever
   the two spans' weights, sizes or families and with padding between them, each mark by the font of its own span, since
   `HanKerning::Compute` reads the paragraph's text on both sides of each shaped run (`han_kerning.cc:262-320`): `文字」`
@@ -928,12 +935,15 @@ none of its cases moved.
   `文字」` and a span `i` take one 43.81px line at 44-47px, where their text in one node takes two, of 40px and
   3.81px. Rich inline did this before #TBD, and still does.
 
-On a probe of 15,343 cases recorded fresh (styled Japanese and Chinese sentences at 120-600px in five font stacks,
-pairs and U+3000 at span edges at 14-158px in normal white space and pre-wrap, and a chip of only white space, Objects
-Inside A Line), #TBD fixed 3,187 Chrome, 374 Firefox and 48 webkit-host cases and lost none (2026-10-01): the styled
-sentences went from 2,684 to 4,180 of 4,185 in Chrome. What it leaves is in ENGINE_FOLLOWUPS.md (Rich-inline item
-edges, CJK at an item's edge). A Chrome that stops halting across spans, which the rich set's `item-edges` cases would
-show at a repin, reopens the second fact.
+On a probe of 23,757 cases recorded fresh in two document orders (styled Japanese and Chinese sentences at 120-600px
+in nine font stacks; pairs of marks across span edges at 16-160px, and inside units filled grapheme by grapheme; U+3000
+at a span's end before letters, digits, emoji, boxes, chips, closing marks, a ZWSP, a soft hyphen and a word joiner, in
+normal white space and pre-wrap; a ZWSP or U+3000 that starts a span after other overflow; and a chip of only white
+space, Objects Inside A Line), #TBD fixed 3,170 Chrome, 506 Firefox and 357 webkit-host cases and lost none
+(2026-10-01): the styled sentences went from 5,608 to 6,199 of 6,210 in Chrome through the pair halt, and none moved
+in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. What it leaves is in
+ENGINE_FOLLOWUPS.md (Rich-inline item edges, CJK at an item's edge). A Chrome that stops halting across spans, which
+the rich set's `item-edges` cases would show at a repin, reopens the second fact.
 
 #### Objects Inside A Line
 

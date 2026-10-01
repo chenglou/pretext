@@ -3559,6 +3559,33 @@ describe('rich-inline invariants', () => {
       expect({ maxWidth, lines: lines([item('中中'), item('\u3000'), item('\n'), item('a')], maxWidth, { whiteSpace: 'pre-wrap' }).map(line => line.replaceAll('|', '')) }).toEqual({ maxWidth, lines: want })
     }
     expect(lines([item('中中\u3000'), item('\na')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|:32', 'a:9.6'])
+    // Where the text gives no break before the next item, as before a closing mark, a ZWSP or a
+    // soft hyphen, Blink's line trails the run and ends before the item, whichever item holds the
+    // run, where one text node returns to its latest break. Where the run fits, the line returns
+    // to that break too (Chrome ends it after the run there as well: ENGINE_FOLLOWUPS.md).
+    const profile = getEngineProfile()
+    const previousFit = profile.paddedOpeningFit
+    try {
+      profile.paddedOpeningFit = 'start'
+      expect(lines([item('中中\u3000'), item('\u300D中')], 40)).toEqual(['中中\u3000:32', '\u300D中:32'])
+      expect(lines([item('中中\u3000'), item('\u300D中', { extraWidth: 2 })], 40)).toEqual(['中中\u3000:32', '\u300D中:34'])
+      expect(lines([item('中中'), item('\u3000'), item('\u300D中')], 40)).toEqual(['中中|\u3000:32', '\u300D中:32'])
+      expect(lines([item('中中\u3000'), item('\u200Bab')], 40)).toEqual(['中中\u3000:32', '\u200Bab:19.2'])
+      expect(lines([item('中中\u3000'), item('\u00ADab'), item('c')], 40)).toEqual(['中中\u3000:32', 'ab|c:28.8'])
+      expect(lines([item('中中\u3000'), item(' '), item('\u200Bab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000| :32', '\u200Bab:19.2'])
+      expect(lines([item('中中\u3000'), item('\u300D中')], 48)).toEqual(['中:16', '中\u3000|\u300D:48', '中:16'])
+      // Gecko gives the next text frame its text up to its first break and places a frame that
+      // is then empty wherever it falls: a ZWSP, or a run of U+3000 that hangs, after a box of
+      // width 0 too, stays on the line, and the white space before it still hangs. So does a
+      // ZWSP after preserved spaces that overflow.
+      profile.paddedOpeningFit = 'both'
+      expect(lines([item('中中\u3000'), item('\u200Bab')], 40)).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
+      expect(lines([item('中中\u3000'), item('\u200B'), item('ab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
+      expect(lines([item('中中\u3000'), { width: 0 }, item('\u3000中中')], 40)).toEqual(['中中\u3000||\u3000:32', '中中:32'])
+      expect(lines([item('ab cd     '), item('\u200Bef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', 'ef:19.2'])
+    } finally {
+      profile.paddedOpeningFit = previousFit
+    }
   })
 
   test('a rich fragment shows its item\'s own text, and the hyphen of a soft hyphen it ends at where its line\'s width counts one', () => {
