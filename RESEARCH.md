@@ -890,15 +890,21 @@ spacing (Engine Facts, Chrome).
 
 The Chromium profile also takes the kerning between two kana (#TBD; `getKanaKerning()` in `src/measurement.ts`,
 `addKanaKerning()` in `src/prepare.ts`). The Japanese fonts of macOS pair kana: of the 14,285 pairs of 83 hiragana and
-of 86 katakana, Chrome's layout kerns 2,149 in 17px Hiragino Sans and Hiragino Kaku Gothic ProN, by up to 3.73px,
-2,637 in Hiragino Mincho ProN, 2,023 in Hiragino Maru Gothic ProN, 2,721 in Yu Gothic, 826 in Yu Mincho and 1,519 in
-Toppan Bunkyu Gothic, and none in Osaka or PingFang SC. It kerns no hiragana with a katakana (15,480 pairs), which
-are two scripts and two shaping runs, no kana with an ideograph (52,800), no ideograph with another (22,500) and no
-kana with a Latin letter. Canvas cuts a string before each kana or ideograph that follows another and shapes the
-pieces apart, so it reported none of the kana pairs, only a kana's kerning with a mark such as `ー` or a full stop
-that it keeps in the kana's word, and the profile, which also measures each kana as a segment of its own, lost both.
-Its lines of Japanese came out 1 to 7px too wide, and Chrome fit one more character: all 15 failures under the
-harness's "Real usage: Japanese and Chinese lines" were this, none of them Chinese.
+of 86 katakana, Chrome's layout kerns 2,149 in 17px Hiragino Sans and Hiragino Kaku Gothic ProN, by up to 3.73px, 2,637
+in Hiragino Mincho ProN, 2,023 in Hiragino Maru Gothic ProN, 2,721 in Yu Gothic, 826 in Yu Mincho and 1,519 in Toppan
+Bunkyu Gothic, and none in Osaka or PingFang SC. Blink takes katakana for hiragana so that the two stay in one run
+(`GetScriptForOpenType`, `script_run_iterator.cc:20-36`), and a hiragana kerns with a katakana where the font pairs
+them: 8 of 15,480 such pairs in 16px Klee, by up to 0.64px, 6 in Tsukushi A Round Gothic (`すノ` by 3.84px) and 5 in
+Tsukushi B Round Gothic, and none in the Hiragino, Yu and Toppan families, so those pairs are asked about like any
+other. It kerns no kana with an ideograph (52,800), no ideograph with another (22,500) and no kana with a Latin letter.
+Canvas cuts a string before each kana or ideograph that follows another and shapes the pieces apart, so it reported none
+of the kana pairs, only a kana's kerning with a mark such as `ー` or a full stop that it keeps in the kana's word, and
+the profile, which also measures each kana as a segment of its own, lost both. Its lines of Japanese came out 1 to 7px
+too wide, and Chrome fit one more character: all 15 failures under the harness's "Real usage: Japanese and Chinese
+lines" were this, none of them Chinese. Inside a segment the profile follows Canvas's words: a letter is cut from the
+word before it once that word holds a letter, and a word that marks or CJK punctuation began takes the first letter
+after them (`NextWordEndIndex`, `plain_text_node.cc:129-153`), so `ーメン` under keep-all, which Canvas measures with the
+kerning of `ーメ`, takes none for that pair.
 
 Under `textRendering = 'optimizeLegibility'` Canvas shapes a string whole where the lookups of the list's first font
 with a space cover the space glyph (Engine Facts, Chrome), which those of all seven kerning families do: a second
@@ -922,16 +928,16 @@ in Yu Gothic, and none does now. Of 60 other Japanese texts at 13 widths in 24 f
 wrong and 68 are, none lost, all 68 in lists that start with Helvetica Neue or Verdana, which the second context
 doesn't shape whole.
 
-The cost is a Canvas call for each distinct pair of kana in a font, whether the font kerns kana or not, and pairs
-repeat less than characters do: the two Japanese corpora hold 727 distinct characters and 784 distinct pairs in 8,576
+The cost is a Canvas call for each distinct pair of kana in a font, whether the font kerns kana or not, and pairs repeat
+less than characters do: the two Japanese corpora hold 727 distinct characters and 784 distinct pairs in 8,576
 characters. The 290 paragraphs hold 9,844 kana pairs among 25,347 characters, 1,142 of them distinct (781 after the
-first 100 paragraphs), and preparing them in one font takes 2,294 calls where it took 1,288, 1.8 times. Short text
-that is mostly kana costs more of what it cost: 40 chat and interface sentences prepared in order in 16px Hiragino
-Sans take 959 calls where they took 287, 3.3 times (the first 10, 356 for 172), each of them alone in a new font 1.5
-times the calls and 1.8 times the units, and 60 more such texts 1,812 for 369. PingFang SC, which kerns none, pays
-the same. The harness's sample, mostly not Japanese, takes 2.2% more calls (275,073 to 281,021) and 1.3% more
-submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas doesn't shape whole, words broken
-between characters, kana across a ZWSP or a ZWJ, and fonts of other systems.
+first 100 paragraphs; 125 a hiragana with a katakana), and preparing them in one font takes 2,419 calls where it took
+1,288, 1.9 times. Short text that is mostly kana costs more of what it cost: 40 chat and interface sentences prepared in
+order in 16px Hiragino Sans take 1,053 calls where they took 287, 3.7 times (the first 10, 374 for 172), each of them
+alone in a new font 1.6 times the calls and 1.9 times the units, and 60 more such texts 1,959 for 369. PingFang SC,
+which kerns none, pays the same. The harness's sample, mostly not Japanese, takes 2.2% more calls (275,073 to 281,021)
+and 1.3% more submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas doesn't shape whole,
+words broken between characters, kana across a ZWSP or a ZWJ, and fonts of other systems.
 
 Where a pair's adjustment sits decides what a break inside the pair leaves on each side: GPOS pair positioning puts it
 all on the first glyph, the legacy `kern` table half on each (`hb-kern.hh:102-106`). On macOS, Times New Roman, Verdana,
