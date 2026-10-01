@@ -362,6 +362,45 @@ describe('shared public contracts', () => {
     }
   })
 
+  test('a JSON copy of a handle lays out the same lines', () => {
+    // A handle needn't survive JSON (RESEARCH.md, Decisions Log), but no walker may run on
+    // without end on a copy, whose per-segment flags have no length. Today a copy lays out
+    // the same; if a change makes one lay out otherwise, what has to hold is that every
+    // walker ends. The stream stops by itself past a line per unit, so it goes first.
+    for (const [text, options] of [
+      ['aaaa bbbb 中文字', {}],
+      ['aaaa\u0085bbbb cccc', {}],
+      ['aaaa bb­bb cc­cc', {}],
+      ['aaaa  bbbb\n\tcccc', { whiteSpace: 'pre-wrap' }],
+      ['aaaa bbbb cccc', { letterSpacing: 1 }],
+    ] as const) {
+      const prepared = prepareWithSegments(text, FONT, options)
+      const copy = JSON.parse(JSON.stringify(prepared)) as typeof prepared
+      for (const width of [1, measureWidth('aaaa bb-', FONT), Infinity]) {
+        const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+        expect(collectStreamedLines(copy, width)).toEqual(result.lines)
+        expect(layoutWithLines(copy, width, LINE_HEIGHT)).toEqual(result)
+        expect(measureLineStats(copy, width)).toEqual(measureLineStats(prepared, width))
+        expect(layout(copy, width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+      }
+    }
+    // Rich inline walks each item's handle with the same walkers.
+    const items = [{ text: 'aaaa bb\u00ADbb ', font: FONT }, { text: 'cccc  dddd', font: FONT, extraWidth: 4 }]
+    for (const options of [{}, { whiteSpace: 'pre-wrap' }] as const) {
+      const rich = prepareRichInline(items, options)
+      const copy = JSON.parse(JSON.stringify(rich)) as typeof rich
+      for (const width of [1, measureWidth('aaaa bb-', FONT), Infinity]) {
+        const ranges = (prepared: typeof rich): unknown[] => {
+          const lines: unknown[] = []
+          walkRichInlineLineRanges(prepared, width, line => lines.push(line))
+          return lines
+        }
+        expect(ranges(copy)).toEqual(ranges(rich))
+        expect(measureRichInlineStats(copy, width)).toEqual(measureRichInlineStats(rich, width))
+      }
+    }
+  })
+
   test('a NaN or missing width lays out as an unbounded one in every line API', () => {
     // layout() counts the first text in its own loop, the second, where the scan gives
     // no break at NEL, with the simple stepper, and the rest with the full walker.

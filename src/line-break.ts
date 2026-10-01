@@ -23,7 +23,8 @@ const BREAK_AFTER_KINDS = 1 << SPACE | 1 << ZERO_WIDTH_BREAK | 1 << SOFT_HYPHEN 
 export type PreparedLineBreakData = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
   // Per segment, its flags byte, e.g. [TEXT, SPACE, TEXT]. A JSON copy of the handle turns it into an
-  // object with no length, on which the walkers never finish (RESEARCH.md, Decisions Log)
+  // object with no length, so the walkers take the segment count from `widths`: counting to this
+  // array's length, they never finished on such a copy (RESEARCH.md, Decisions Log)
   segmentFlags: Uint8Array
   // Normal text can use the simple line stepper across all layout APIs, and layout()
   // counts it with one numeric loop where it has no overflow trims
@@ -105,10 +106,11 @@ export function endsLineBefore(previousKind: number, kind: number, unbroken: boo
 // from the endpoint instead of treating every consumed SHY as visible.
 export function isDiscretionaryLineEnd(
   segmentFlags: Uint8Array,
+  segmentCount: number,
   endSegmentIndex: number,
   endGraphemeIndex: number,
 ): boolean {
-  return endGraphemeIndex === 0 && endSegmentIndex > 0 && endSegmentIndex < segmentFlags.length &&
+  return endGraphemeIndex === 0 && endSegmentIndex > 0 && endSegmentIndex < segmentCount &&
     (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) === SOFT_HYPHEN
 }
 
@@ -164,10 +166,11 @@ function getTerminalLetterSpacing(
 
   if (endGraphemeIndex > 0) return (segmentFlags[endSegmentIndex]! & SPACED) !== 0 ? letterSpacing : 0
 
-  if (isDiscretionaryLineEnd(segmentFlags, endSegmentIndex, endGraphemeIndex)) return 0
+  const segmentCount = prepared.widths.length
+  if (isDiscretionaryLineEnd(segmentFlags, segmentCount, endSegmentIndex, endGraphemeIndex)) return 0
   // A run of preserved spaces and tabs that hangs where the line wraps already
   // charged the gap after the glyph before it. Gecko doesn't hang tabs.
-  if (endSegmentIndex > startSegmentIndex && endSegmentIndex < segmentFlags.length && (segmentFlags[endSegmentIndex]! & KIND_BITS) !== HARD_BREAK &&
+  if (endSegmentIndex > startSegmentIndex && endSegmentIndex < segmentCount && (segmentFlags[endSegmentIndex]! & KIND_BITS) !== HARD_BREAK &&
     (1 << (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) & hangingKinds) !== 0) return 0
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
@@ -196,7 +199,7 @@ export function normalizePreparedLineStart(
   cursor: LayoutCursor,
 ): boolean {
   const { segmentFlags } = prepared
-  const segmentCount = segmentFlags.length
+  const segmentCount = prepared.widths.length
   let segmentIndex = cursor.segmentIndex
   if (segmentIndex >= segmentCount) return false
   if (cursor.graphemeIndex > 0) return true
@@ -242,7 +245,7 @@ export function walkPreparedLinesRaw(
   // stepPreparedLineGeometryFromStart(), walked chat 6 to 32% slower in Chrome and
   // Firefox (RESEARCH.md, Keeping Work Bounded).
   const { segmentFlags } = prepared
-  const segmentCount = segmentFlags.length
+  const segmentCount = prepared.widths.length
   while (true) {
     let startSegmentIndex = cursor.segmentIndex
     const atTextStart = startSegmentIndex === 0
@@ -359,13 +362,14 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
 // its in the last bits (RESEARCH.md, Keeping Work Bounded).
 function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   const { segmentFlags } = prepared
+  const segmentCount = prepared.widths.length
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   let count = 0
   while (normalizePreparedLineStart(prepared, cursor)) {
     const startSegmentIndex = cursor.segmentIndex
     const startGraphemeIndex = cursor.graphemeIndex
     stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
-    if (cursor.graphemeIndex === 0 && cursor.segmentIndex < segmentFlags.length && (segmentFlags[cursor.segmentIndex]! & UNBROKEN) !== 0) {
+    if (cursor.graphemeIndex === 0 && cursor.segmentIndex < segmentCount && (segmentFlags[cursor.segmentIndex]! & UNBROKEN) !== 0) {
       cursor.segmentIndex = startSegmentIndex
       cursor.graphemeIndex = startGraphemeIndex
       walkPreparedComplexLines(prepared, cursor, maxWidth, undefined, null, true)
@@ -446,7 +450,7 @@ function walkPreparedComplexLines(
     overflowLineEndTrims,
     tabStopAdvance,
   } = prepared
-  const segmentCount = segmentFlags.length
+  const segmentCount = widths.length
   const engineProfile = getEngineProfile()
   // Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
   // §4.1.2), so they take no room when fitting and don't size the line (§8.2).

@@ -2348,9 +2348,16 @@ decisions for the maintainer.
   not new shortcuts. It still costs three to five times as much per segment as the counter `layout()` runs
   (`countPreparedLines()`), so one walker for all text was rejected (Keeping Work Bounded).
 - **2026-09-25: a prepared handle needn't survive a JSON round trip.** Its per-segment flags are a `Uint8Array`, which
-  `JSON.stringify()` turns into an object without a `length`, so the line walkers never finish on a JSON copy;
-  `structuredClone()` and `postMessage()` copies work, and README calls the handle opaque. Cursors and ranges are plain
-  JSON and resume the same from a copy.
+  `JSON.stringify()` turns into an object without a `length`; `structuredClone()` and `postMessage()` copies work, and
+  README calls the handle opaque. From #340 the line walkers counted segments to that length and never finished on a
+  JSON copy; since #TBD they count to `widths`' length, so every walker ends on one. A copy of `prepare()`'s or
+  `prepareWithSegments()`'s handle now lays out as the handle does (140,385 offline comparisons in each engine profile,
+  2026-09-30, and a unit test), which is still no promise. A copy of a rich-inline handle throws a `TypeError` where an
+  item left no entry in it, since the missing entry comes back as `null`: an empty item, or, where white space
+  collapses, an item of only white space, such as the space between two styled runs. Every other rich copy lays out
+  the same (6,000 offline paragraphs at four widths in each profile, 2026-10-01: 4,455 the same, 1,545 thrown; and the
+  unit test). Before #TBD, of 1,200 of those paragraphs about 720 never finished, 260 laid out the same and 217 threw,
+  in each profile. Cursors and ranges are plain JSON and resume the same from a copy.
 - **2026-09-25: the old test suite, its snapshots, its diagnostic tools and the benchmark page are gone**; accuracy and
   speed claims rest where AGENTS.md says. The benchmark page went once the noise floors of `bun harness bench` caught a
   known change (harness/README.md, Bench), and what the harness took from the old suite stays frozen, since its

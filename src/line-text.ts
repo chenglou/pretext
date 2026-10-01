@@ -72,5 +72,5 @@ export function buildLineTextFromRange(
     )
   }
 
-  return isDiscretionaryLineEnd(walkedFlags, endSegmentIndex, endGraphemeIndex) ? text + '-' : text
+  return isDiscretionaryLineEnd(walkedFlags, segmentCount, endSegmentIndex, endGraphemeIndex) ? text + '-' : text
 }

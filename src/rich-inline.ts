@@ -268,7 +268,7 @@ function getItemLevels(items: Array<RichInlineItem | RichInlineBox>, texts: stri
 // False where that is all of the item.
 function normalizeItemLineStart(data: PreparedSegments, start: LayoutCursor): boolean {
   if (!normalizePreparedLineStart(data, start)) return false
-  return !(isDiscardedBreak(data, start.segmentIndex) && ++start.segmentIndex === data.segmentFlags.length)
+  return !(isDiscardedBreak(data, start.segmentIndex) && ++start.segmentIndex === data.widths.length)
 }
 
 function createItemLine(continues: boolean): ItemLine {
@@ -863,7 +863,7 @@ function firstSegmentOverflows(item: PreparedRichInlineItem, fitLimit: number): 
 // and here only that grapheme starting the line is left.
 function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, startGraphemeIndex: number, overflow: number, keepsFit: boolean, at: LayoutCursor): number | null {
   const { breakableFitAdvances, letterSpacing, segmentFlags, segments, widths } = item.lineData
-  const s = segmentFlags.length - 1
+  const s = widths.length - 1
   const kind = segmentFlags[s]! & KIND_BITS
   if (item.break === 'never' || (kind !== TEXT && kind !== PRESERVED_SPACE)) return null
   let retreat: number
@@ -925,11 +925,11 @@ function spacesFollowText(flow: InternalPreparedRichInline, itemIndex: number, s
     const item = flow.items[k]
     if (item === undefined) continue
     if (item.break === 'never') return false
-    const { segmentFlags } = item.lineData
+    const { segmentFlags, widths } = item.lineData
     const from = k === startItemIndex ? startSegmentIndex : 0
-    let s = segmentFlags.length - 1
+    let s = widths.length - 1
     while (s >= from && (segmentFlags[s]! & KIND_BITS) === PRESERVED_SPACE) s--
-    if (s >= from) return s < segmentFlags.length - 1 && (segmentFlags[s]! & KIND_BITS) !== TAB
+    if (s >= from) return s < widths.length - 1 && (segmentFlags[s]! & KIND_BITS) !== TAB
   }
   return false
 }
@@ -954,7 +954,7 @@ function retreatsBefore(flow: InternalPreparedRichInline, itemIndex: number): bo
   const next = flow.items[nextIndex]
   if (next === undefined || next.breakBefore || (next.prepared.segmentFlags[0]! & KIND_BITS) !== HARD_BREAK) return false
   const { breakableFitAdvances, segmentFlags, segments } = item.prepared
-  if (segmentFlags.length !== 1) return false
+  if (segments.length !== 1) return false
   const kind = segmentFlags[0]! & KIND_BITS
   const advances = breakableFitAdvances[0] ?? null
   return (kind === TEXT && (advances === null || advances.length === 1)) || (kind === PRESERVED_SPACE && segments[0]!.length === 1)
@@ -1026,7 +1026,7 @@ function stepRichInlineLine(
   const startGraphemeIndex = cursor.graphemeIndex
   // A line that starts inside the preserved spaces that end an item, after those the line before
   // kept (getEndRetreat), takes the rest of them, which hang, and goes on at the next item.
-  if (firstItem !== undefined && cursor.graphemeIndex > 0 && cursor.segmentIndex === firstItem.lineData.segmentFlags.length - 1 &&
+  if (firstItem !== undefined && cursor.graphemeIndex > 0 && cursor.segmentIndex === firstItem.lineData.widths.length - 1 &&
     (firstItem.lineData.segmentFlags[cursor.segmentIndex]! & KIND_BITS) === PRESERVED_SPACE) {
     const rest = (firstItem.prepared.segments[cursor.segmentIndex]!.length - cursor.graphemeIndex) * getSpaceAdvance(firstItem.lineData, cursor.segmentIndex)
     collectItemRest(fragments, itemIndex, firstItem, cursor, 0, -1, rest + firstItem.extraWidth)
@@ -1256,7 +1256,7 @@ function stepRichInlineLine(
         breakHangWidth = itemLine.breakHangWidth
         breakFragmentCount = fragments === null ? 0 : fragments.length
         breakFits = breakLineWidth - breakHangWidth + (
-          isDiscretionaryLineEnd(item.lineData.segmentFlags, breakSegmentIndex, breakGraphemeIndex) ? 0 : getHyphenRoom(item, unfitHyphenRetreat)
+          isDiscretionaryLineEnd(item.lineData.segmentFlags, segmentCount, breakSegmentIndex, breakGraphemeIndex) ? 0 : getHyphenRoom(item, unfitHyphenRetreat)
         ) <= safeWidth + lineFitEpsilon
       }
       continue
