@@ -372,7 +372,7 @@ function getWalkedHandle(prepared: PreparedSegments, flags: Uint8Array): Prepare
 // fragment spans, so that a line starting at the box doesn't take that start for its end
 // (stepRichInlineLine).
 const BOX_HANDLE: PreparedSegments = {
-  segments: [''], widths: [0], segmentFlags: Uint8Array.of(TEXT), simpleLineWalkFastPath: false, simpleLineCountFastPath: false,
+  segments: [''], widths: [0], segmentFlags: Uint8Array.of(TEXT), simpleLineWalkFastPath: false, simpleLineCountFastPath: false, oneLineFit: NaN,
   breakableFitAdvances: [null], entryGeometry: null, lineStartProhibitions: null, lineStartExtras: null, lineEndTrims: null,
   overflowLineEndTrims: null, letterSpacing: 0, discretionaryHyphenWidth: 0, discretionaryHyphenContexts: null, tabStopAdvance: 0,
 }

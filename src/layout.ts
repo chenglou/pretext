@@ -24,6 +24,7 @@ import {
 import { measureAnalysis } from './prepare.js'
 import {
   countPreparedLines,
+  getOneLineFit,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
   walkPreparedLinesRaw,
@@ -104,7 +105,10 @@ function prepareInternal(
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  return measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, language, true)
+  const prepared = measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, language, true) as InternalPreparedText
+  // Only layout() reads it, so a rich-inline item's handle isn't given one.
+  prepared.oneLineFit = getOneLineFit(prepared)
+  return prepared
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,

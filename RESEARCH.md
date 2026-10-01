@@ -1304,6 +1304,25 @@ time (the PRs hold the per-row tables):
   1.39-1.64 in Safari, 1.10-1.13 in Chrome and 1.06-1.07 in Firefox, so items on fast-path handles continue their lines
   in the full walker (#369, 2026-09-27).
 
+`layout()` counts a text that fits one line from its handle (#TBD, 2026-09-30). `oneLineFit` is the least fit limit, a
+width plus the engine's line-fit allowance, from which the counter's loop takes every segment whole, found in
+`prepare()` by one pass of that loop's own fit tests (`getOneLineFit()`), so at or above it `layout()` is one
+comparison. It gives main's counts: none of 203 million `layout()` results differed offline across the four profiles,
+widths within three floating-point steps of each limit included, and no prediction moved in Chrome 154, Firefox 156.0.1
+or webkit-host. Only a handle the counter's loop counts has one, as every chat message but one and every label of the
+bench does; text the stepper or the full walker counts (letter spacing, preserved spaces, tabs, hard breaks, soft
+hyphens, controls) has none, since a limit for it would take a mirror of those walkers' fit tests. Rich inline doesn't
+read it, so the Markdown chat's height pass, which counts prose through `measureRichInlineStats()`, gains nothing.
+Offline (Node 23's V8, Bun 1.4's and Safari 27's JavaScriptCore; the bench's bundles and texts on a stand-in Canvas,
+both builds timed in each round of one process, on a busy machine; hypotheses until a bench): a `layout()` call on a
+text that fits takes 30-55% less time in V8 and 55-80% less in JavaScriptCore, about 10 to 25 ns, and a text that wraps
+reads within what a second copy of main reads. A pass over the bench's chat messages at its resize widths, where 14-25%
+of the messages fit one line and hold 1-3% of the units, reads within noise in V8 and 0-6% less in JavaScriptCore; a
+pass over UI labels at 240-460px, where 72-90% fit, 19% and 60-69% less. The pass in `prepare()` costs 2 ns a segment in
+V8 and 4-5 in JavaScriptCore, under 1% and about 2% of a `prepare()` of text measured before, and a handle grows by 24
+bytes in Node's V8 and not at all in JavaScriptCore. The bench has no row of texts that mostly fit one line, as it times
+labels only with their `prepare()`.
+
 Removing the three pieces #357 kept for Chrome's JIT (#364; Decisions Log, 2026-09-26), namely checks in rich inline's
 stepper that change no result, a redundant `unfitHyphenRetreat` test and the peeled first character of the segmentation
 loop, cost Chrome 154 11% on rich stats, 5% on letter-spaced CJK `layout()` and 8-13% on preparing long breakable runs
@@ -1983,11 +2002,8 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   million fuzzed checks, and alone it drag-resized 10,000 messages under 1 ms, but new widths ran up to 26% slower in
   Chrome, more than the slight worst-case regression allowed (Part 1, Engineering; Decisions Log, 2026-09-26), and it
   cost about 155 lines and immutable handles. Reopens if a memo leaves layout at new widths within noise; one kept only
-  for texts that wrap is untried.
-- **A one-line limit on handles** (2026-09-26), which the same study proposed in place of the memo and didn't build:
-  each handle keeps the narrowest width at which its text is one line, found once in `prepare()`, so `layout()` at or
-  above it is one comparison and the worst case stays flat. Untimed; it helps only the texts that fit a line at the
-  width asked (TODO.md).
+  for texts that wrap is untried. What the same study proposed in place of the memo, a width on each handle from which
+  its text is one line, is `oneLineFit` (Keeping Work Bounded, The Walkers' Shapes).
 - **Width ranges in the chat** (draft #280, branch `exact-height-intervals`, 2026-09-14): 1 px drags at 10k went 3.5 →
   0.3 ms, but ranges are 3-7 px wide, so random jumps got about 10% slower, for 440 more lines; and line counts needn't
   fall as width grows. Reopens if small drags at large histories matter.

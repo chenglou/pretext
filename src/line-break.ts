@@ -31,6 +31,11 @@ export type PreparedLineBreakData = {
   // Normal text, or text of its kinds where the scan gives no break at some segment
   // boundary, which layout() counts with the simple stepper
   simpleLineCountFastPath: boolean
+  // The least fit limit, a width plus the engine's line-fit allowance, from which
+  // layout()'s counting loop takes every segment whole, so that the text is one line
+  // (getOneLineFit). NaN, which no comparison holds for, where that loop doesn't count
+  // the text, where the text has no line, and on a rich-inline item's handle.
+  oneLineFit: number
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
   entryGeometry: (SegmentEntryGeometry | null)[] | null // Per segment, how its tails fit on a fresh line; null without any
   // Per segment with breakable fit advances, the graphemes that can't start a line, which
@@ -269,8 +274,10 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
   if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
     return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
   }
-  const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
   const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
+  // Every fit test the loop would make on the way to one line holds (getOneLineFit).
+  if (prepared.oneLineFit <= fitLimit) return 1
+  const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
   const segmentCount = widths.length
   let count = 0
   // Every line starts at 0 and adds its content's widths. Firefox runs this loop
@@ -345,6 +352,42 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
     }
   }
   return count + (hasContent ? 1 : 0)
+}
+
+// The least fit limit from which countPreparedLines()'s loop takes every segment whole
+// and so counts one line, found once per handle: the loop's own fit tests on the way
+// there, in its order and over its sums, so the two compare the same numbers, and the
+// limit doesn't move with the width, since no line ends before it. layout() then
+// counts a text that fits a line with one comparison, as most labels and many chat
+// messages do at the widths apps give them. Below the limit the loop still counts,
+// and can still count one line: where a space that ends the text overflows and hangs,
+// or the first segment overflows whole and its graphemes' advances add up to less.
+// NaN for a handle the loop doesn't count, the stepper's and the full walker's, and
+// for a text without a line. A width that isn't a number stays NaN through Math.max(),
+// so the loop counts that handle too.
+export function getOneLineFit(prepared: PreparedLineBreakData): number {
+  if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) return NaN
+  const { widths, segmentFlags, breakableFitAdvances, lineStartExtras, lineEndTrims } = prepared
+  let fit = -Infinity
+  let lineW = 0
+  let hasContent = false
+  for (let i = 0; i < widths.length; i++) {
+    const w = widths[i]!
+    const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
+    if (hasContent) {
+      fit = Math.max(fit, lineW + w - endTrim)
+      lineW += w
+      continue
+    }
+    const kind = segmentFlags[i]! & KIND_BITS
+    if (kind === SPACE || (kind === ZERO_WIDTH_BREAK && i > 0)) continue
+    const startW = lineStartExtras === null ? w : w + lineStartExtras[i]!
+    // A first segment that can't break starts the line however wide.
+    if (breakableFitAdvances[i] !== null) fit = startW - endTrim
+    lineW = startW
+    hasContent = true
+  }
+  return hasContent ? fit : NaN
 }
 
 // layout()'s count of text of the simple walkers' kinds where the scan gives no

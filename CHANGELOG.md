@@ -11,6 +11,7 @@
 
 ### Changed
 
+- `layout()` is faster on text that fits on one line at the width asked, as most UI labels and short messages do, where the text has no letter spacing, preserved spaces, tabs, hard breaks, soft hyphens or invisible controls other than zero-width spaces: each prepared handle now holds the width from which its text is one line, so such a call is one comparison (#TBD).
 - `measureRichInlineStats()`, `walkRichInlineLineRanges()` and `layoutNextRichInlineLineRange()` now lay out a paragraph of one item without `extraWidth` or `break: 'never'`, such as a message in one style, with the line walkers of `measureLineStats()` and `walkLineRanges()`, giving the same lines, fragments and cursors as before. The Markdown chat demo's height pass, where 86% of paragraphs are one item, is about 25% faster in Chrome, 23% in Firefox and 17-22% in Safari (#383).
 - `measureRichInlineStats()` is about 25% faster in Chrome and Firefox and 14% in Safari, and `walkRichInlineLineRanges()` and `layoutNextRichInlineLineRange()` 13-16% faster in Chrome and Firefox, on chat messages with inline code, since a line that can't take the start of the next item now ends before it without laying that item out (#375).
 - A rich-inline atomic item's (`break: 'never'`) own leading or trailing white space no longer gives a gap before or after it, as browsers trim that white space inside the item's box: where only that white space stood, `gapBefore` is now 0 and `gapItemIndex` -1, where they measured a space in the atomic item's font and named that item (#369).

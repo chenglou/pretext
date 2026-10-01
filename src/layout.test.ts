@@ -4752,8 +4752,32 @@ describe('layout invariants', () => {
         const counted = countPreparedLines(prepared, width)
         const walked = walkPreparedLinesRaw(prepared, width)
         expect(counted).toBe(walked)
+        // Without its one-line fit, a handle is counted by the loop alone.
+        expect(countPreparedLines({ ...prepared, oneLineFit: NaN }, width)).toBe(counted)
       }
     }
+  })
+
+  test('a handle\'s one-line fit is the widest sum layout()\'s loop tests on the way to one line', () => {
+    const epsilon = getEngineProfile().lineFitEpsilon
+    const fitOf = (text: string, options?: Parameters<typeof prepare>[2]): number =>
+      (prepare(text, FONT, options) as unknown as { oneLineFit: number }).oneLineFit
+    const natural = measureWidth('hello', FONT) + measureWidth(' ', FONT) + measureWidth('world', FONT)
+    expect(fitOf('hello world')).toBe(natural)
+    expect(fitOf('hello world')).toBe((prepareWithSegments('hello world', FONT) as unknown as { oneLineFit: number }).oneLineFit)
+    expect(layout(prepare('hello world', FONT), natural - epsilon, LINE_HEIGHT).lineCount).toBe(1)
+    expect(layout(prepare('hello world', FONT), natural - epsilon - 0.001, LINE_HEIGHT).lineCount).toBe(2)
+    // A first segment that can't break starts the line however wide, so nothing tests it.
+    expect(fitOf('a')).toBe(-Infinity)
+    expect(layout(prepare('a', FONT), 0, LINE_HEIGHT).lineCount).toBe(1)
+    expect(fitOf('a b')).toBe(measureWidth('a', FONT) + measureWidth(' ', FONT) + measureWidth('b', FONT))
+    // A text without a line has none at any width, and the loop doesn't count preserved
+    // spaces, letter-spaced text or soft hyphens.
+    expect(fitOf('')).toBeNaN()
+    expect(layout(prepare('', FONT), Infinity, LINE_HEIGHT).lineCount).toBe(0)
+    expect(fitOf('hello world', { whiteSpace: 'pre-wrap' })).toBeNaN()
+    expect(fitOf('hello world', { letterSpacing: 1 })).toBeNaN()
+    expect(fitOf('hel\u00ADlo world')).toBeNaN()
   })
 
   test('countPreparedLines counts text with boundaries the scan does not break as the full walker does', () => {

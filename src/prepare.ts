@@ -457,6 +457,7 @@ export function measureAnalysis(
     segmentFlags,
     simpleLineWalkFastPath: simpleKinds && !analysis.hasUnbroken,
     simpleLineCountFastPath: simpleKinds,
+    oneLineFit: NaN,
     breakableFitAdvances,
     entryGeometry,
     letterSpacing,
