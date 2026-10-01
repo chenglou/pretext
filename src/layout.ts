@@ -1,6 +1,5 @@
 // Prepare text with engine segmentation rules and cached Canvas measurements, then
-// lay it out with arithmetic. Emoji calibration may perform a cached DOM read
-// during preparation; layout itself does no measurement or string work.
+// lay it out with arithmetic. Layout itself does no measurement or string work.
 // Rich APIs add source cursors and text materialization.
 // Browser measurement limitations are documented in README.md and PLATFORM_BUGS.md.
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
@@ -19,6 +18,7 @@ import {
   getEngineProfile,
   getPreparationLanguage,
   readLetterSpacing,
+  setGivenDevicePixelRatio,
   setLocaleLanguage,
 } from './measurement.js'
 import { measureAnalysis } from './prepare.js'
@@ -121,7 +121,7 @@ function prepareInternal(
 //      measures after that grapheme, and WebKit measures a word with the space after it
 //   5. Measure where each text segment of two or more graphemes can break under
 //      overflow-wrap: break-word: by graphemes, pairs or prefixes, per engine
-//   6. Correct emoji canvas inflation (probed once per font)
+//   6. Correct emoji canvas inflation (measured once per font and device pixel ratio)
 //   7. Record what changes at a line's edges: Blink's halts of CJK punctuation,
 //      U+3000 hangs, how much narrower a soft hyphen's neighbors measure joined,
 //      fresh-line widths inside segments with invisible characters, and the
@@ -350,4 +350,11 @@ export function clearCache(): void {
 export function setLocale(locale?: string): void {
   setLocaleLanguage(locale)
   clearCache()
+}
+
+// Sets the device pixel ratio later preparation corrects emoji widths under in place
+// of the page's `devicePixelRatio`, which a worker doesn't have. Without a ratio,
+// preparation reads the page's again. Prepared handles keep their widths.
+export function setDevicePixelRatio(ratio?: number): void {
+  setGivenDevicePixelRatio(ratio)
 }

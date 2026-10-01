@@ -30,6 +30,7 @@ let measureLineStats: LayoutModule['measureLineStats']
 let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let setLocale: LayoutModule['setLocale']
+let setDevicePixelRatio: LayoutModule['setDevicePixelRatio']
 let clearCache: LayoutModule['clearCache']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
@@ -273,6 +274,7 @@ beforeAll(async () => {
     measureNaturalWidth,
     walkLineRanges,
     setLocale,
+    setDevicePixelRatio,
     clearCache,
   } = mod)
   ;({ countPreparedLines, walkPreparedLinesRaw } = lineBreakMod)
@@ -1688,14 +1690,14 @@ describe('engine break scans', () => {
 })
 
 describe('measurement invariants', () => {
-  test('font-size parsing retains pixel and fallback behavior', async () => {
-    const { parseFontSize: parseCssFontSize } = await import('./measurement.ts')
+  test('a font\'s generic counterpart keeps its style and scales its first pixel size', async () => {
+    const { getGenericFont } = await import('./measurement.ts')
     for (const [font, expected] of [
-      ['700 12.5px/1.4 Test Sans', 12.5],
-      ['12.34.56px Test Sans', 34.56],
-      ['12\tpx Test Sans', 12],
-      [`${'1'.repeat(4096)}pt Test Sans`, 16],
-    ] as const) expect(parseCssFontSize(font)).toBe(expected)
+      ['italic 700 12.5px/1.4 "Test Sans", Arial', 'italic 700 25px serif'],
+      ['12.34.56px Test Sans', '12.69.12px serif'],
+      ['12\tpx Test Sans', '24px serif'],
+      [`${'1'.repeat(4096)}pt Test Sans`, null],
+    ] as const) expect(getGenericFont(font, 2)).toBe(expected)
   })
 
   test('breakable fit cache distinguishes fit modes', () => {
@@ -1712,48 +1714,56 @@ describe('measurement invariants', () => {
     expect(getSegmentFit('abc', metrics, measurement, 0, 'sum-graphemes').advances).toEqual([10, 20, 30])
   })
 
-  test('the emoji correction counts the glyphs the emoji font draws', () => {
-    // Like Chrome and Firefox on macOS at small sizes, Canvas measures each glyph of the
-    // emoji font 20px wide where DOM text draws it 16px wide. Each font shapes its own
-    // characters together, so a grapheme is drawn as the longest pieces a font has a
-    // glyph for. The named font draws U+26A1 itself, 9.5px wide, U+26AA nearly as wide as
-    // an emoji, and U+231A where U+FE0E asks for a text font.
-    const font = '16px Emoji Correction Test'
-    const emojiFontGlyphs = [
-      '\u{1F600}', '\u2764\uFE0F', '\u{1F44B}', '\u{1F44B}\u{1F3FD}', '\u{1F3FB}', '\u{1F3FD}', '\u231A', '\u{1F680}', '1\uFE0F\u20E3', '#\uFE0F\u20E3',
-      // Chrome and Firefox draw these from the emoji font too, with the same gap.
-      '1\uFE0F', '#\uFE0F',
-      // The emoji font draws U+26A1 before U+FE0F.
-      '\u26A1\uFE0F',
-      // No text font has U+1F336, a pictograph whose presentation is text by default, so
-      // the emoji font draws it with no U+FE0F.
-      '\u{1F336}',
-      // Sequences, and the parts the emoji font draws where it has no glyph for the whole.
-      '\u{1F468}\u200D\u{1F680}', '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}', '\u{1F469}\u200D\u{1F467}',
-      '\u{1F468}', '\u{1F469}', '\u{1F467}', '\u{1F1EF}\u{1F1F5}', '\u{1F1EF}', '\u{1F1F5}',
-    ]
-    const pieces = new Map<string, number>([
-      ['\u26A1', 9.5], ['\u26AA', 20.25], ['\u231A\uFE0E', 9.25], ['\u00A9', 11.75], ['\u306A', 16], ['\u17C8', 3],
-      ['\u200D', 0], ['\uFE0F', 0], ['\uFE0E', 0],
-      // Chrome sends a cluster with a glyph the emoji font lacks to the next font whole,
-      // and none has a skin tone before U+0301: the named font's missing glyph.
-      ['\u{1F3FB}\u0301', 12],
-      // Chrome's Canvas draws U+20E3 alone, after U+FE0F too, as a glyph of the emoji font,
-      // and after a character of the named font as its missing glyph, which after `1` adds
-      // up to an emoji's width, as in 12px Baskerville.
-      ['\u20E3', 20], ['\uFE0F\u20E3', 20], ['a\uFE0F\u20E3', 21.5], ['1\u20E3', 20], ['\u00A9\u20E3', 23.75],
-    ])
-    for (let i = 0; i < emojiFontGlyphs.length; i++) pieces.set(emojiFontGlyphs[i]!, 20)
+  // Like Chrome and Firefox on macOS, a Canvas whose emoji font gives a glyph 20px at
+  // 16px, 22px at 20px and its size from 24px, where an outline glyph scales with the
+  // size. Each font shapes its own characters together, so a grapheme is drawn as the
+  // longest pieces a font has a glyph for. The named font draws U+26A1 itself, 9.5px wide
+  // at 16px, U+26AA nearly as wide as an emoji, and U+231A where U+FE0E asks for a text
+  // font.
+  const emojiFontGlyphs = new Set([
+    '\u{1F600}', '\u2764\uFE0F', '\u{1F44B}', '\u{1F44B}\u{1F3FD}', '\u{1F3FB}', '\u{1F3FD}', '\u231A', '\u{1F680}', '1\uFE0F\u20E3', '#\uFE0F\u20E3',
+    // Chrome and Firefox draw these from the emoji font too, with the same gap.
+    '1\uFE0F', '#\uFE0F',
+    // The emoji font draws U+26A1 before U+FE0F.
+    '\u26A1\uFE0F',
+    // No text font has U+1F336, a pictograph whose presentation is text by default, so
+    // the emoji font draws it with no U+FE0F.
+    '\u{1F336}',
+    // Chrome's Canvas draws U+20E3 alone, after U+FE0F too, as a glyph of the emoji font.
+    '\u20E3', '\uFE0F\u20E3',
+    // Sequences, and the parts the emoji font draws where it has no glyph for the whole.
+    '\u{1F468}\u200D\u{1F680}', '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}', '\u{1F469}\u200D\u{1F467}',
+    '\u{1F468}', '\u{1F469}', '\u{1F467}', '\u{1F1EF}\u{1F1F5}', '\u{1F1EF}', '\u{1F1F5}',
+  ])
+  // Other fonts' glyphs, by their width at 16px.
+  const otherGlyphs = new Map<string, number>([
+    ['\u26A1', 9.5], ['\u26AA', 20.25], ['\u231A\uFE0E', 9.25], ['\u00A9', 11.75], ['\u306A', 16], ['\u17C8', 3],
+    ['\u200D', 0], ['\uFE0F', 0], ['\uFE0E', 0],
+    // Chrome sends a cluster with a glyph the emoji font lacks to the next font whole,
+    // and none has a skin tone before U+0301: the named font's missing glyph.
+    ['\u{1F3FB}\u0301', 12],
+    // After a character of the named font U+20E3 is its missing glyph, which after `1`
+    // adds up to an emoji's width, as in 12px Baskerville.
+    ['a\uFE0F\u20E3', 21.5], ['1\u20E3', 20], ['\u00A9\u20E3', 23.75],
+  ])
+  let emojiMissing = false
+  function withEmojiFont(run: () => void): void {
     const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
     Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', {
       ...measureText,
       value(this: TestCanvasRenderingContext2D, text: string) {
+        const size = parseFontSize(this.font)
+        // A family that draws emoji itself gives them outline glyphs, 18px at 16px, and
+        // Firefox's box for a missing glyph is 17px at any size.
+        const emojiGlyph = emojiMissing ? 17 : this.font.includes('Own Emoji') ? size * 1.125 : size === 16 ? 20 : size === 20 ? 22 : size
         let width = 0
         for (const grapheme of getSegmentGraphemes(text)) {
           for (let at = 0, end = 0; at < grapheme.length; at = end) {
             end = grapheme.length
-            while (end > at && !pieces.has(grapheme.slice(at, end))) end--
-            if (end > at) width += pieces.get(grapheme.slice(at, end))!
+            while (end > at && !emojiFontGlyphs.has(grapheme.slice(at, end)) && !otherGlyphs.has(grapheme.slice(at, end))) end--
+            const piece = grapheme.slice(at, end)
+            if (emojiFontGlyphs.has(piece)) width += emojiGlyph
+            else if (end > at) width += otherGlyphs.get(piece)! * size / 16
             else width += measureWidth(grapheme.slice(at, end = at + String.fromCodePoint(grapheme.codePointAt(at)!).length), this.font)
           }
         }
@@ -1761,6 +1771,17 @@ describe('measurement invariants', () => {
         return { width: Math.fround(width * (1 + 2 ** -24)) }
       },
     })
+    try {
+      run()
+    } finally {
+      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
+      Reflect.deleteProperty(globalThis, 'devicePixelRatio')
+      setDevicePixelRatio()
+    }
+  }
+
+  test('the emoji correction counts the glyphs the emoji font draws', () => {
+    const font = '16px Emoji Correction Test'
     const cases: [string, number][] = [
       ['a\uFE0Fb', 0],
       [' \uFE0F', 0],
@@ -1805,19 +1826,67 @@ describe('measurement invariants', () => {
       // U+20E3 isn't asked alone, where it is an emoji and wide enough to pass that bound.
       ['\u00A9\u20E3', 0],
     ]
-    try {
+    withEmojiFont(() => {
+      // Without a device pixel ratio, as in a worker, nothing is corrected.
       const uncorrected = cases.map(([text]) => measureNaturalWidth(prepareWithSegments(text, font)))
-      Reflect.set(globalThis, 'document', {
-        body: { appendChild: () => undefined, removeChild: () => undefined },
-        createElement: () => ({ style: {}, getBoundingClientRect: () => ({ width: 16 }) }),
-      })
-      clearCache()
+      Reflect.set(globalThis, 'devicePixelRatio', 2)
       const removed = cases.map(([text], i) => Math.round(uncorrected[i]! - measureNaturalWidth(prepareWithSegments(text, font))))
       expect(removed).toEqual(cases.map(([, count]) => count * 4))
-    } finally {
-      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
-      Reflect.deleteProperty(globalThis, 'document')
-    }
+    })
+  })
+
+  test('the emoji correction follows the device pixel ratio', () => {
+    const font = '16px Emoji Ratio Test'
+    const emojiWidth = (): number => Math.round(measureNaturalWidth(prepareWithSegments('\u{1F600}', font)) * 100) / 100
+    // An emoji and `!` are one segment, which breaks between them on a narrow line.
+    const lineWidths = (): number[] => layoutWithLines(prepareWithSegments('\u{1F600}!', font), 10, 20).lines.map(line => Math.round(line.width * 100) / 100)
+    withEmojiFont(() => {
+      // A worker has no devicePixelRatio: Canvas's own width.
+      expect(emojiWidth()).toBe(20)
+      expect(lineWidths()).toEqual([20, 6.4])
+      // The page's ratio: the width at the device size, 32px, over the ratio. The font's
+      // cached segments and their fits follow without clearCache().
+      Reflect.set(globalThis, 'devicePixelRatio', 2)
+      expect(emojiWidth()).toBe(16)
+      expect(lineWidths()).toEqual([16, 6.4])
+      // A given ratio comes before the page's: 22px at 20px, over 1.25.
+      setDevicePixelRatio(1.25)
+      expect(emojiWidth()).toBe(17.6)
+      expect(lineWidths()).toEqual([17.6, 6.4])
+      setDevicePixelRatio(1)
+      expect(emojiWidth()).toBe(20)
+      setDevicePixelRatio()
+      expect(emojiWidth()).toBe(16)
+      // A font whose own family draws the emoji takes none, nor does one without a px size.
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F600}', '16px Own Emoji Ratio Test'))).toBeCloseTo(18, 4)
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F600}', '12pt Emoji Ratio Test'))).toBeCloseTo(20, 4)
+      // Nor does a probe as wide at the device size as at the font's, which is no glyph.
+      emojiMissing = true
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F600}', '16px Missing Emoji Ratio Test'))).toBeCloseTo(17, 4)
+      emojiMissing = false
+      // At a size the emoji font scales from, nothing is corrected.
+      expect(measureNaturalWidth(prepareWithSegments('\u{1F600}', '24px Emoji Ratio Test'))).toBeCloseTo(24, 4)
+      for (const ratio of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) expect(() => setDevicePixelRatio(ratio)).toThrow(RangeError)
+    })
+  })
+
+  test('the Safari profile takes no emoji correction', () => {
+    // WebKit's page draws an emoji as wide as its Canvas measures it, so the profile reads
+    // no device pixel ratio. The engine profile is computed once per process.
+    const layoutUrl = new URL('./layout.ts', import.meta.url).href
+    expect(runInChild(`
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
+      } })
+      Object.defineProperty(globalThis, 'devicePixelRatio', { get() { throw new Error('read') } })
+      globalThis.OffscreenCanvas = class {
+        getContext() {
+          return { font: '', measureText(text) { return { width: text.length * (this.font.startsWith('32px') ? 16 : 10) } } }
+        }
+      }
+      const { prepareWithSegments, measureNaturalWidth } = await import(${JSON.stringify(layoutUrl)})
+      console.log(measureNaturalWidth(prepareWithSegments('\\u{1F600}', '16px Arial')))
+    `).trim()).toBe('20')
   })
 })
 

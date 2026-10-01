@@ -127,7 +127,7 @@ export function measureAnalysis(
   const { normalized, texts, starts, flags } = analysis
   const segmentCount = flags.length
   const fontMeasurement = getFontMeasurement(font, language)
-  const emojiCorrection = textMayContainEmoji(normalized) ? getEmojiCorrection(font, fontMeasurement) : 0
+  const emojiCorrection = textMayContainEmoji(normalized) ? getEmojiCorrection(fontMeasurement) : 0
   // The gap before the hyphen, plus the hyphen's own spacing where the engine
   // letter-spaces it.
   const discretionaryHyphenWidth = getTextWidth('-', fontMeasurement, emojiCorrection) +

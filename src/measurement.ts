@@ -237,8 +237,12 @@ export type FontMeasurement = {
   // Metrics of a text item measured together with one following U+0020, keyed by
   // the item alone. The width includes that space.
   followingSpaceMetrics: Map<string, SegmentMetrics>
-  emojiCorrection: number | null // Probed for the first text that may hold emoji
-  emojiWidth: number // Canvas's width of one glyph of the emoji font, measured with the correction
+  // What Canvas measures a glyph of the emoji font wider than the page draws it under
+  // emojiRatio, the device pixel ratio it was measured for, 0 before the first text that
+  // may hold emoji; and Canvas's width of one such glyph (getEmojiCorrection).
+  emojiCorrection: number
+  emojiRatio: number
+  emojiWidth: number
   hanKerning: HanKerningFontData | null | undefined // Read for the first text that may kern
 }
 let cachedEngineProfile: EngineProfile | null = null
@@ -338,6 +342,15 @@ let localeLanguage: string | undefined
 
 export function setLocaleLanguage(locale: string | undefined): void {
   localeLanguage = locale
+}
+
+// The device pixel ratio setDevicePixelRatio() gave, which the emoji correction reads in
+// place of the page's, or undefined.
+let givenDevicePixelRatio: number | undefined
+
+export function setGivenDevicePixelRatio(ratio: number | undefined): void {
+  if (ratio !== undefined && !(Number.isFinite(ratio) && ratio > 0)) throw new RangeError(`The device pixel ratio must be a finite number above 0, not ${ratio}`)
+  givenDevicePixelRatio = ratio
 }
 
 // The language one preparation breaks and measures under, read once: setLocale()'s, or
@@ -467,50 +480,71 @@ export function getEngineProfile(): EngineProfile {
   return profile
 }
 
-export function parseFontSize(font: string): number {
-  // A failed size can restart at the next digit run, not at every digit in it.
-  const m = font.match(/(?:^|\D)(\d+(?:\.\d+)?)\s*px/)
-  return m ? parseFloat(m[1]!) : 16
-}
-
 export function textMayContainEmoji(text: string): boolean {
   return maybeEmojiRe.test(text)
 }
 
-export function getEmojiCorrection(font: string, measurement: FontMeasurement): number {
-  let correction = measurement.emojiCorrection
-  if (correction !== null) return correction
-
-  const fontSize = parseFontSize(font)
-  const canvasW = measurement.emojiWidth = measurement.state.context.measureText('\u{1F600}').width
-  correction = 0
-  // document.body is null until the parser reaches <body>, which lib.dom's type leaves out.
-  if (
-    canvasW > fontSize + 0.5 &&
-    typeof document !== 'undefined' &&
-    (document.body as HTMLElement | null) !== null
-  ) {
-    const span = document.createElement('span')
-    span.style.font = font
-    span.style.display = 'inline-block'
-    span.style.visibility = 'hidden'
-    span.style.position = 'absolute'
-    span.textContent = '\u{1F600}'
-    document.body.appendChild(span)
-    const domW = span.getBoundingClientRect().width
-    document.body.removeChild(span)
-    if (canvasW - domW > 0.5) {
-      correction = canvasW - domW
-    }
-  }
-  measurement.emojiCorrection = correction
-  return correction
+// A font's style and weight with the generic family `serif` in place of its families, at
+// `ratio` times its size, the first px length of its shorthand, or null without one. A
+// failed size can restart at the next digit run, not at every digit in it.
+export function getGenericFont(font: string, ratio: number): string | null {
+  const size = /(^|\D)(\d+(?:\.\d+)?)\s*px/.exec(font)
+  return size === null ? null : `${font.slice(0, size.index)}${size[1]}${Number.parseFloat(size[2]!) * ratio}px serif`
 }
 
 // Canvas reports a width as a 32-bit float, so a few equal advances measure that many
 // times one only within its rounding: 2e-6 px off in Firefox 156, whose emoji take a
 // fractional advance in a bold font.
 const CANVAS_WIDTH_ROUNDING = 1 / 1024
+
+// What Canvas measures a glyph of the emoji font wider than the page draws it. Blink's and
+// Gecko's pages size text at the device size, the font size times the device pixel ratio,
+// where their Canvas sizes it at the CSS size (Blink's resets the computed size to skip
+// zoom, canvas_rendering_context_2d.cc:690-726). An outline glyph scales with the size,
+// so that changes no advance, but Apple Color Emoji holds bitmaps and gives a glyph 20px
+// at 16px and 32px at 32px (Gecko asks Core Text at the font's size, gfxMacFont.cpp:
+// 437-463). So the correction is Canvas's width of U+1F600 in the font, less its width at
+// the device size over the ratio, which is the page's advance: 16px at 16px and ratio 2,
+// where Canvas gives 20px in Chrome and 21px in Firefox. It can be negative at a
+// fractional ratio: -0.2px at 12px and ratio 1.25 in Chrome. There is none where the
+// font's own families draw the probe, which then measures otherwise than after a generic
+// family. WebKit's page and Canvas both size the emoji at the CSS size and take none;
+// that is read off the profile's scan, since a field of its own, the profile's 25th,
+// made Chrome's line APIs 11-18% slower (RESEARCH.md, JavaScript Engines).
+// The device size is asked after the generic family, never in the font's own list: in
+// Chrome at ratio 2, measuring at 32px in a `system-ui` list before the page lays out its
+// 16px text makes that text 11% narrower (PLATFORM_BUGS.md, `system-ui` in Canvas and DOM).
+// The ratio is setDevicePixelRatio()'s, or else the page's devicePixelRatio, or 1 in a
+// worker, which has none; it is read for each text that may hold emoji, and a font
+// measured under another ratio starts over, since its segments' fits hold the old
+// correction. No DOM is read.
+export function getEmojiCorrection(measurement: FontMeasurement): number {
+  const ratio = getEngineProfile().lineBreakScan === 'webkit' ? 1 : givenDevicePixelRatio ?? (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)
+  if (measurement.emojiRatio === ratio) return measurement.emojiCorrection
+  if (measurement.emojiRatio !== 0) {
+    measurement.metrics.clear()
+    measurement.followingSpaceMetrics.clear()
+  }
+  let correction = 0
+  const genericFont = ratio === 1 ? null : getGenericFont(measurement.canvasFont, 1)
+  if (genericFont !== null) {
+    const context = measurement.state.context
+    const width = measurement.emojiWidth = context.measureText('\u{1F600}').width
+    context.font = genericFont
+    if (context.measureText('\u{1F600}').width === width) {
+      context.font = getGenericFont(measurement.canvasFont, ratio)!
+      const deviceWidth = context.measureText('\u{1F600}').width
+      // A glyph's advance changes with its size. Firefox's box for a missing glyph has one
+      // width at any size (gfxFontMissingGlyphs.cpp:530-545), and for a moment it draws
+      // U+1F600 itself as one, while the installed families' character maps load.
+      if (deviceWidth !== width) correction = width - deviceWidth / ratio
+      if (Math.abs(correction) < CANVAS_WIDTH_ROUNDING) correction = 0
+    }
+    context.font = measurement.canvasFont
+  }
+  measurement.emojiRatio = ratio
+  return measurement.emojiCorrection = correction
+}
 
 // How many glyphs of the emoji font draw a text: the emoji font gives every glyph one
 // advance, the probe's, so text it draws measures a whole number of them, and none
@@ -648,7 +682,7 @@ export function getFontMeasurement(font: string, language: string | null): FontM
   let measurement = state.fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), emojiCorrection: null, emojiWidth: 0, hanKerning: undefined }
+    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), emojiCorrection: 0, emojiRatio: 0, emojiWidth: 0, hanKerning: undefined }
     state.fonts.set(font, measurement)
   }
   state.context.font = measurement.canvasFont

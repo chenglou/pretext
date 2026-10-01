@@ -31,6 +31,11 @@ rich-bf66fbd64988de97 breaks
 rich-d91958dcd0c9e964 breaks
 rich-fb40dedd1c6e8356 breaks
 
+## An emoji in a bold span within 1/64 px of where the browser's lines change, at 24 px and wider: Firefox rounds the emoji's advance and its synthetic bold step to the page's app units, 30 per device pixel at ratio 2, where the emoji correction reads the advance from Canvas at the device size, rounded at 60 per device pixel, so each bold emoji is up to 1/60 px off; the whole-pixel widths inside both layouts pass (ENGINE_FOLLOWUPS.md, Emoji correction)
+rich-2b57afb171123941 count
+rich-2fb6bf05a0dcf7ba breaks
+rich-7bdef4b9cd73fc47 breaks
+
 ## Arabic and Hebrew beside brackets, controls, U+FFFC or rich-item edges, at 24 px and wider: Firefox breaks there where the library doesn't
 catalog-0bbc041b22a8eb25 count
 catalog-17b324c3ade315fe breaks

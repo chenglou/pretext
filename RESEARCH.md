@@ -64,19 +64,21 @@ Decisions Log entry states what holds now and names what it replaced.
 Inside these, fixes land on judgement; outside, ask the maintainer first.
 
 - **No DOM**: `prepare()` and `layout()` read no DOM or computed style and force no style or layout, since a style
-  recalc triggers reflow; a fix that needs it is rejected, and the browser's limitation documented. Three reads are the
-  exceptions (AGENTS.md): the emoji-correction span, a hidden element that measures one emoji in the DOM to correct
-  Canvas's emoji width, read once per font, never per text box; the `<html lang>` read (Caching And API Design; Content
-  Language And Fonts has its cost); and, where `OffscreenCanvas` is missing, a canvas element Pretext creates and never
-  attaches (`src/measurement.ts`).
+  recalc triggers reflow; a fix that needs it is rejected, and the browser's limitation documented. Two reads are the
+  exceptions (AGENTS.md): the `<html lang>` read (Caching And API Design; Content Language And Fonts has its cost); and,
+  where `OffscreenCanvas` is missing, a canvas element Pretext creates and never attaches (`src/measurement.ts`). A third
+  went in #TBD: the emoji correction measured one emoji in a hidden DOM span, once per font, and now asks Canvas at the
+  device size (Part 2, Emoji).
 - **Canvas widths only**, from a font declaration, through APIs all three browsers have: no font files (even the app's),
   glyph pixels, language detection or font loading. Designs where the app supplies facts about its fonts are ideas only,
   not planned; font knowledge enters only as general facts baked in, as a last resort.
 - **No hidden inputs**: nothing read from the page may change under a prepared handle unseen. Reading `<html dir>` in
   every `prepare()` was removed for this, which also argues against reading `devicePixelRatio` in `layout()`. The page
   language is the exception, read because line breaking needs it (Caching And API Design), on condition that `prepare()`
-  and `layout()` do nothing new and expensive in the browser for it; any new read of browser state needs the
-  maintainer's decision.
+  and `layout()` do nothing new and expensive in the browser for it. `devicePixelRatio` is a second, read by
+  `prepare()` only for text that may hold emoji, in Chrome and Firefox, whose pages draw an emoji at a width that
+  depends on it (#TBD; Part 2, Emoji); `setDevicePixelRatio()` gives it where there is none. Any new read of browser
+  state needs the maintainer's decision.
 - **Browsers**: the major engines and their mainstream variants, Edge as Blink, detected by engine, not brand; a modeled
   engine is never refused or shown nothing. A fringe browser gets a fix of its own only when it's extremely cheap and
   also serves the major browsers; unrecognized engines take Blink's profile; runtimes such as React Native need only not
@@ -1142,8 +1144,8 @@ in Safari, 19.45px in Firefox; March 2026).
 
 #### Emoji
 
-PLATFORM_BUGS.md has the bug and the correction, whose shape rests on the widening depending only on the size, matching
-across 59 emoji and 7 families and adding up per emoji (March 2026). Taking the font size for the DOM's emoji width
+PLATFORM_BUGS.md has the bug. The correction's shape rests on the widening depending only on the size, matching across
+59 emoji and 7 families and adding up per emoji (March 2026). Taking the font size for the DOM's emoji width
 over-corrected Safari by 4px an emoji, and Firefox's DOM sizes Apple Color Emoji in device pixels, its Canvas in CSS
 pixels (12.5px at 12px and DPR 2, 2026-09-15). The gap belongs to the emoji font's glyphs, and Canvas shows which
 characters it drew: Apple Color Emoji gives every glyph one advance at a size, so a stretch of emoji characters it draws
@@ -1168,11 +1170,26 @@ measures anything else. Counting glyphs that way in every grapheme that holds an
 
 What it still gets wrong, and the mixes it newly gets wrong, are in ENGINE_FOLLOWUPS.md, Emoji correction. Text fonts
 whose glyphs are exactly as wide as an emoji's, beyond the two found there, or a platform with the gap whose emoji
-font varies its advances would reopen it. The rebuild's DOM-free formulas, W being Canvas's width at a size: Chrome's
-DOM width is `Math.ceil(64 × W(size × DPR)) / (64 × DPR)` at DPR 2 and `W(size)` at DPR 1, Firefox's
-`W(size × DPR) / DPR`, Safari's `W(size)` (September 2026). They'd retire the DOM exception and work in workers, but
-make prepared widths depend on the DPR at prepare time, which the API discussion planned before a release decides
-(TODO.md, End of project).
+font varies its advances would reopen it.
+
+The correction itself comes from Canvas (#TBD), as in the per-engine rebuild. Chrome's and Firefox's pages size Apple
+Color Emoji at the device size, the font size times the device pixel ratio, and their Canvas at the CSS size, and the
+font's advance isn't proportional to its size, so with W Canvas's width of U+1F600 at a size, the page draws an emoji
+`W(size × ratio) / ratio` wide and the correction is `W(size)` less that: 4px at 16px and ratio 2 in Chrome (20 and 32 /
+2), 5px in Firefox (21), 2.4px at ratio 1.25, none at ratio 1 or from 24-26px, and -0.2px at 12px and ratio 1.25.
+Safari's page draws `W(size)`, so the WebKit profile takes none. Until then a hidden DOM span was measured once per
+font, which a worker lacks, which kept the ratio it was read under until `clearCache()`, and which dropped gaps of 0.5px
+or less. Prepared fresh at each ratio, over the same graphemes in 30 font lists at eight sizes from 10 to 24px, the
+widths more than 0.1px off the DOM's of 707,040 went, from the span to Canvas, in Chrome 154.0.8037.57 from 178,166 to
+2,874 at ratio 1.25 and from 90,280 to 2,634 at 1.5, and stayed 2,983 at 1, 2,271 at 2 and 2,150 at 3, all the skin tone
+after a character that isn't an emoji; in Firefox 156.0.1 from 176,156 to 0 at 1.25 and from 88,078 to 0 at 1.5, and 0
+at 1, 2 and 3 either way (2026-09-30; ratios forced with `--force-device-scale-factor` and `layout.css.devPixelsPerPx`).
+The 430 emoji paragraphs of the harness's real-usage sample inside what Pretext claims have the same wrong lines either
+way at each of those ratios, 1 or 2 in Chrome and none in Firefox. In a worker given the page's ratio, 48 emoji widths
+in 8 fonts equal the page's own, where without a correction 42 are off in Chrome and 41 in Firefox, by up to 25px. The
+device size is asked after a generic family, never in the font's own list, because of Chrome's `system-ui` cache
+(PLATFORM_BUGS.md), and what the formula gets wrong is in ENGINE_FOLLOWUPS.md, Emoji correction. Nothing but macOS was
+measured: another platform's emoji font, or a browser that fixes its Canvas, reopens it.
 
 #### Widths That Depend On Context
 

@@ -72,7 +72,7 @@ Chrome 153, Apple M5 Max, device pixel ratio 2, a 1280×900 frame with an 860 px
 - **Streaming a message.** Markdown isn't stable while it grows (a closing `**` or a later `===` line changes what came before), so re-lex the whole message on each token and reuse the prepared blocks that didn't change. [Issue #313](https://github.com/chenglou/pretext/issues/313) has numbers.
 - **Selection, find, keyboard and screen readers across rows that scroll out.** Unmounted rows don't exist, a wrapped link paints one `<a>` per fragment, and the chat hasn't been tested with a screen reader.
 - **Web fonts that load late.** The chat uses installed fonts; a prepared handle keeps the widths it was measured with, so after a web font loads, call `clearCache()` and prepare again.
-- **Layout in workers.** `setLocale()` gives a worker the page's language ([#356](https://github.com/chenglou/pretext/pull/356)), but emoji aren't exact there: the emoji width correction measures a DOM span, which a worker doesn't have, so in Chrome and Firefox on macOS small emoji measure too wide ([issue #292](https://github.com/chenglou/pretext/issues/292)).
+- **Layout in workers.** The chat lays out on the main thread. `setLocale()` gives a worker the page's language ([#356](https://github.com/chenglou/pretext/pull/356)) and `setDevicePixelRatio()` its device pixel ratio, which emoji widths in Chrome and Firefox on macOS depend on ([issue #292](https://github.com/chenglou/pretext/issues/292)).
 - **Content Pretext can't size.** Images without known sizes, embeds and math need measuring after mount, plus anchoring.
 
 ## Tried and dropped

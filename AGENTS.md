@@ -31,9 +31,10 @@ judgement; one outside them needs the maintainer first.
 
 - **What Pretext Is For.** Layout in app code without DOM measurement, above all virtualized lists that prepare many
   texts, so preparing new text matters as much as `layout()`. Heights are exact, never estimated.
-- **Limits.** `prepare()` and `layout()` read no DOM or style beyond the emoji-correction span, the `<html lang>` read
-  and, without `OffscreenCanvas`, a canvas element never attached. Widths come only from Canvas `measureText`. Every
-  browser on a modeled engine gets a layout. Stricter editorial whole-word handling stays in userland.
+- **Limits.** `prepare()` and `layout()` read no DOM or style beyond the `<html lang>` read and, without
+  `OffscreenCanvas`, a canvas element never attached; text that may hold emoji reads `devicePixelRatio`. Widths come only
+  from Canvas `measureText`. Every browser on a modeled engine gets a layout. Stricter editorial whole-word handling
+  stays in userland.
 - **The Correctness Stance.** Port each engine's rule; never go back to rules keyed on what a failing input looks like. A
   premise no real font breaks may be taken for speed, with a named gap. CJK stays well supported.
 - **Tests And Losses.** A lost pass may be luck or a wrong oracle; a true loss is the maintainer's call. Cases grow by a
