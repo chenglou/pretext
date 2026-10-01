@@ -1214,12 +1214,15 @@ pixels (12.5px at 12px and DPR 2, 2026-09-15). The gap belongs to the emoji font
 characters it drew: Apple Color Emoji gives every glyph one advance at a size, so a stretch of emoji characters it draws
 measures a whole number of U+1F600's Canvas width, the count of its glyphs, and one with a glyph of another font
 measures anything else. A whole number means to within the rounding of a 32-bit float, which is what Canvas reports
-(`CanvasRenderingContext2D.cpp:5277` in Firefox 156, `text_metrics.cc:179` in Chromium 153): each rounding moves a
-width by up to 2^-24 of itself, Firefox rounds each width once, dividing a whole number of app units, and Chrome once
-for each advance it adds, and the count allows 2^-20 of the width, sixteen roundings. That is 0.00002px at 20px, far
-under the steps widths come in (1/60px in Firefox, its app unit; 0.008px for an advance at 16px in a font of 2,048
-units to the em), so "exactly as wide as an emoji" below means equal but for that rounding. Counting glyphs that way in every grapheme that holds an emoji or a pictograph, in Chrome
-154.0.8037.57 and Firefox 156.0.1 at DPR 2 (2026-10-01, #TBD), took the widths more than 0.1px off the DOM's:
+(`CanvasRenderingContext2D.cpp:5277` in Firefox 156, `text_metrics.cc:179` in Chromium 153): each rounding moves a width
+by up to 2^-24 of itself. Firefox rounds each width once, dividing a whole number of app units. Chrome adds a run's
+advances in 16.16 fixed point and rounds once per run, then once more for each run it adds (`shape_result.cc:1573-1576`
+and `1609`, `text_metrics.cc:222`). Two widths are compared, the emoji's and the stretch's, so a stretch drawn as one
+run needs two roundings, and the count allows 2^-20 of the width, sixteen. That is 0.00002px at 20px, far under the
+steps widths come in (1/60px in Firefox, its app unit; 0.008px for an advance at 16px in a font of 2,048 units to the
+em), so "exactly as wide as an emoji" below means equal but for that rounding. Counting glyphs that way in every
+grapheme that holds an emoji or a pictograph, in Chrome 154.0.8037.57 and Firefox 156.0.1 at DPR 2 (2026-10-01, #TBD),
+took the widths more than 0.1px off the DOM's:
 - from 2,571 of 265,140 to 807 in Chrome and from 2,298 to 0 in Firefox, over 1,473 emoji graphemes alone and inside a
   word in 30 font lists at 12, 16 and 20px; Chrome's 807 are a skin tone after a character that isn't an emoji;
 - from 25,084 of 350,776 to 0 in Chrome and from some 25,800 to 7-20 in Firefox (one of the first families measured,
@@ -1237,22 +1240,21 @@ units to the em), so "exactly as wide as an emoji" below means equal but for tha
   set, and 22 and 263 in Firefox, its box for a missing glyph at 13px.
 
 What it still gets wrong, and the mixes it newly gets wrong, are in ENGINE_FOLLOWUPS.md, Emoji correction. Text fonts
-whose glyphs are exactly as wide as an emoji's, beyond the two found there, or a platform with the gap whose emoji
-font varies its advances would reopen it. Two of the count's steps serve only graphemes that two fonts draw: asking a
-stretch that isn't all emoji glyphs character by character, and bounding the count by the emoji widths that fit in
-the grapheme. Without them, 13 runtime lines fewer, every harness prediction is the same (42,890 in Chrome, 43,997 in
-Firefox), as is every line count of 417,820 layouts of realistic chat paragraphs, with the same `measureText` calls;
-over the six probe sets of widths here and in ENGINE_FOLLOWUPS.md, the widths that were right under one correction
-per grapheme and are wrong go from 604 to 2,518 in Chrome and from 451 to 3,867 in Firefox, nearly all in shapes only
-fuzzing produces (a text font's pictograph joined by a ZWJ to an emoji, a skin tone after a combining mark). In
-emoji-test.txt, Firefox alone differs: three ZWJ sequences written with no U+FE0F after their first character
-(`2764 200D 1F525`, `2764 200D 1FA79`, `26D3 200D 1F4A5`), which it draws as a text font's glyph and an emoji, need
-the first step, and `26F9 200D 2640 FE0F` and `26F9 200D 2642 FE0F`, which a text font draws whole, are right only
-without it (the PR, #TBD, has both tables). The rebuild's DOM-free formulas, W being Canvas's width at a size: Chrome's
-DOM width is `Math.ceil(64 × W(size × DPR)) / (64 × DPR)` at DPR 2 and `W(size)` at DPR 1, Firefox's
-`W(size × DPR) / DPR`, Safari's `W(size)` (September 2026). They'd retire the DOM exception and work in workers, but
-make prepared widths depend on the DPR at prepare time, which the API discussion planned before a release decides
-(TODO.md, End of project).
+whose glyphs are exactly as wide as an emoji's, beyond the two found there, or a platform with the gap whose emoji font
+varies its advances would reopen it. Two of the count's steps serve only graphemes that two fonts draw: asking a stretch
+that isn't all emoji glyphs character by character, and bounding the count by the emoji widths that fit in the grapheme.
+Without them, 13 runtime lines fewer, every harness prediction is the same (42,890 in Chrome, 43,997 in Firefox), as is
+every line count of 417,820 layouts of realistic chat paragraphs, with the same `measureText` calls; over the six probe
+sets of widths here and in ENGINE_FOLLOWUPS.md, the widths that were right under one correction per grapheme and are
+wrong go from 604 to 2,518 in Chrome and from 451 to 3,867 in Firefox, nearly all in shapes only fuzzing produces (a
+text font's pictograph joined by a ZWJ to an emoji, a skin tone after a combining mark). In emoji-test.txt, Firefox
+alone differs: three ZWJ sequences written with no U+FE0F after their first character (`2764 200D 1F525`,
+`2764 200D 1FA79`, `26D3 200D 1F4A5`), which it draws as a text font's glyph and an emoji, need the first step, and
+`26F9 200D 2640 FE0F` and `26F9 200D 2642 FE0F`, which a text font draws whole, are right only without it (the PR, #TBD,
+has both tables). The rebuild's DOM-free formulas, W being Canvas's width at a size: Chrome's DOM width is
+`Math.ceil(64 × W(size × DPR)) / (64 × DPR)` at DPR 2 and `W(size)` at DPR 1, Firefox's `W(size × DPR) / DPR`, Safari's
+`W(size)` (September 2026). They'd retire the DOM exception and work in workers, but make prepared widths depend on the
+DPR at prepare time, which the API discussion planned before a release decides (TODO.md, End of project).
 
 #### Widths That Depend On Context
 
