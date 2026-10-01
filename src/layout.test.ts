@@ -5319,6 +5319,106 @@ test('the Safari profile breaks inside rich items from each item alone', () => {
   ])
 })
 
+test('ordinary text split into same-font items lays out as its text in one node, in the Chromium and Firefox profiles', () => {
+  // Blink and Gecko break the text their inline items join, so same-font items with nothing
+  // around them, cut anywhere, take the lines of their text in one node, and the widths, on a
+  // Canvas that adds up each character's advance. A seeded draw checks that for chat-like text:
+  // Latin words with their punctuation, numbers, a URL, emoji, CJK, Hangul, Thai and U+3000
+  // between words, under normal and keep-all word breaking, each paragraph cut at random into
+  // items and laid out at nine widths. The engine profile is computed once per process, so each
+  // runs in a child process. Left out, as text whose spans the browsers or rich inline lay out
+  // otherwise than one node (ENGINE_FOLLOWUPS.md): a newline next to CJK, which Firefox removes
+  // inside one text frame only; U+3000 inside a unit that fills a line grapheme by grapheme,
+  // which only an item's end hangs there; and Chrome's text-spacing-trim, which this Canvas
+  // doesn't show. WebKit breaks inside an item from that item's text alone.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  for (const userAgent of [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0',
+  ]) {
+    const script = `
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: ${JSON.stringify(userAgent)}, vendor: '' } })
+      class Context {
+        font = ''
+        measureText(text) {
+          let width = 0
+          for (const ch of text) {
+            const c = ch.codePointAt(0)
+            width += c === 0x20 ? 4 : c === 0x200D || (c >= 0x300 && c <= 0x36F) || (c >= 0x1F3FB && c <= 0x1F3FF) ? 0 : c >= 0x2E80 ? 16 : "il.,:;!'\u2019".includes(ch) ? 4 : 9
+          }
+          return { width }
+        }
+      }
+      globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+      const { layoutWithLines, prepareWithSegments } = await import(${JSON.stringify(layoutUrl)})
+      const { prepareRichInline, walkRichInlineLineRanges, materializeRichInlineLineRange, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
+      let seed = 20260930
+      function random() {
+        seed = (seed + 0x6D2B79F5) >>> 0
+        let t = seed
+        t = Math.imul(t ^ (t >>> 15), t | 1)
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+      }
+      const pick = list => list[Math.floor(random() * list.length)]
+      const LATIN = ['a', 'I', 'an', 'the', 'word', 'hello', 'Pretext', 'layout', 'e-mail', 'state-of-the-art', 'https://example.com/a/b?c=d', '@maya', '#42', '3.14', '50%', '$20', '(note)', '"quoted"', 'don\u2019t', 'wait\u2026', 'so\u2014then', 'yes!', 'why?', 'first,', 'end.', 'key:', 'x', '10:30', 'A/B', '\u{1F600}', '\u{1F44D}\u{1F3FD}', 'caf\u00E9', 'nai\u0308ve']
+      const CJK = ['\u4E2D', '\u6587', '\u5B57', '\u65E5\u672C\u8A9E', '\u3067\u3059', '\u3053\u308C\u306F', '\u300C\u5F15\u7528\u300D', '\u6771\u4EAC\u3002', '\u306F\u3044\u3001', '\uD55C\uAD6D\uC5B4', '\uAE00', '\uFF08\u6CE8\uFF09', '\u30FC', '\u3041', '\u5B57\u3000\u6587', '\u6771\u4EAC\u3000x', '\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22', '\u0E44\u0E17\u0E22']
+      const GAPS = [' ', ' ', ' ', ' ', '', '  ', '\\n', ' \\n ']
+      function paragraph(keepAll) {
+        let text = ''
+        let afterCjk = false
+        for (let i = 0, n = 2 + Math.floor(random() * 12); i < n; i++) {
+          const cjk = random() < 0.3
+          let token = pick(cjk ? CJK : LATIN)
+          if (keepAll && token.includes('\u3000')) token = '\u5B57'
+          let gap = i === 0 ? '' : afterCjk && cjk && random() < 0.7 ? '' : pick(GAPS)
+          if ((gap.includes('\\n') && (afterCjk || cjk)) || (i > 0 && token.includes('\u3000'))) gap = ' '
+          text += gap + token
+          afterCjk = cjk
+        }
+        return text
+      }
+      const font = '16px Test'
+      const differ = []
+      let compared = 0
+      for (let p = 0; p < 300; p++) {
+        const wordBreak = random() < 0.15 ? 'keep-all' : 'normal'
+        const text = paragraph(wordBreak === 'keep-all')
+        const points = Array.from(text)
+        const parts = []
+        let part = ''
+        for (let i = 0; i < points.length; i++) {
+          part += points[i]
+          if (i + 1 < points.length && random() < 0.25) {
+            parts.push(part)
+            part = ''
+          }
+        }
+        parts.push(part)
+        const flatHandle = prepareWithSegments(text, font, { wordBreak })
+        const prepared = prepareRichInline(parts.map(text => ({ text, font })), { wordBreak })
+        const natural = layoutWithLines(flatHandle, 1e6, 20).lines[0].width
+        for (const width of [30, 47, 60, 85, 120, 16 + natural * random(), 16 + natural * random(), natural, natural + 1]) {
+          compared++
+          const flat = layoutWithLines(flatHandle, width, 20)
+          const want = flat.lines.map(line => [line.text.trimEnd(), Math.round(line.width * 1e6) / 1e6])
+          const rich = []
+          walkRichInlineLineRanges(prepared, width, range => {
+            const line = materializeRichInlineLineRange(prepared, range)
+            rich.push([line.fragments.map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd(), Math.round(line.width * 1e6) / 1e6])
+          })
+          if (JSON.stringify(rich) !== JSON.stringify(want) || measureRichInlineStats(prepared, width).lineCount !== flat.lineCount) {
+            if (differ.length < 3) differ.push({ parts, width, wordBreak, want, rich })
+          }
+        }
+      }
+      console.log(JSON.stringify({ compared, differ }))
+    `
+    expect({ userAgent, ...JSON.parse(runInChild(script)) }).toEqual({ userAgent, compared: 2700, differ: [] })
+  }
+})
+
 test('the Firefox profile breaks rich items only where their joined text breaks', () => {
   // The engine profile is computed once per process, so Firefox runs in a child
   // process. Every character but a space is 8px, and a space 4px. Gecko collects
