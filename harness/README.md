@@ -25,13 +25,15 @@ Firefox 156.0 and Safari 27.0 (WebKit 22625.1.29.11.27); the pins moved to Chrom
 A case is one paragraph at one width. It passes when the line count is the browser's and each line's first and last
 visible character sits in the predicted line of that index. `check` prints each failure with its status: `count` (a
 wrong line count), `breaks` (the right count with a character on the wrong line) or `error` (the prediction threw).
-Widths aren't judged. The shrink-wrap check, whether a bubble sized to the predicted widest line, rounded up, is at
-least as wide as the browser's widest line, prints but never fails a run. The library's consistency blocks on every
-case, recorded or not: the line APIs (`layout()`, `measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`,
-`layoutNextLine()`, `layoutWithLines()`, `materializeLineRange()` and their rich-inline counterparts) must agree on
-lines, widths and text, and none may call `measureText` after preparing. A rich fragment's text is
-`materializeLineRange()`'s over its cursors in its item's own prepared text, but for the hyphen of a soft hyphen it ends
-at, which the text the items join decides.
+`check` judges no width. It prints two things about the passing cases' widths and never fails on them: the shrink-wrap
+check, whether a bubble sized to the predicted widest line, rounded up, is at least as wide as the browser's widest
+line, and the share of lines whose predicted width is more than 0.05, 0.5 and 1 px from the recorded one. Between two
+builds widths are compared exactly: to `equal <ref>` a line width that differs at all is a difference, on every case
+(Proving "no change"). The library's consistency blocks on every case, recorded or not: the line APIs (`layout()`,
+`measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`, `layoutNextLine()`, `layoutWithLines()`,
+`materializeLineRange()` and their rich-inline counterparts) must agree on lines, widths and text, and none may call
+`measureText` after preparing. A rich fragment's text is `materializeLineRange()`'s over its cursors in its item's own
+prepared text, but for the hyphen of a soft hyphen it ends at, which the text the items join decides.
 
 A recording counts only under the environment that made it, the key in its file's first line: browser build, OS build,
 OS languages, page languages, device pixel ratio and a hash of the served fonts. `check` refuses to score under any
@@ -49,14 +51,29 @@ layouts" (the narrowest real-usage draw is 25 px).
 ### Two kinds of set
 
 - **The real-usage sample** answers how often a user sees a wrong line. Its draws follow how often apps lay out each
-  surface (chat bubbles, AI replies, cards, documents, UI labels, editorial pages), script, style and width, each share
-  in `sets/weights.json` naming its source or what its guess leans on. The headline, which `check` prints first, is the
-  weighted share of draws that pass, with a 95% interval. Rare groups get at least 300 draws, weighted back, so one with
-  no failure is under 1% wrong at 95% confidence. The headline also prints the share without cases outside what Pretext
-  claims: styles the adapter can't express (`break-all`) or a `system-ui` font list (README,
-  Caveats).
+  surface (chat bubbles, AI replies, cards, documents, UI labels, editorial pages), script, style and width, by the
+  shares in `sets/weights.json`. A share names a source or says it is a guess, and most are guesses, many with nothing
+  written that they lean on (`bun harness/sets/make.ts sizes` counts them); a share that names a source may still be a
+  judgement made from it. The headline, which `check` prints first, is the weighted share of draws that pass, over
+  every draw and, always beside it, over the draws inside what Pretext claims: neither a style the adapter can't
+  express (`break-all`) nor a `system-ui` font list (README, Caveats). Each has a 95% interval, which covers the error
+  of drawing a sample and none of the guesses, so the headline is no firmer than the weights. Rare groups get at least
+  300 draws, weighted back, so one with no failure is under 1% wrong at 95% confidence.
+- **What the headline pools away** prints under it. About half the sample's weight is paragraphs the browser lays out
+  on one line, which nearly always pass, so `check` prints the share right where the browser wraps, and the share with
+  a wrong line count, the wrong height a virtualized list would get. Then a table counts draws one each, by script and
+  by style (letter spacing, soft hyphens, pre-wrap, keep-all, rich inline, emoji): draws and failures, the same among
+  the draws the browser wraps, and the passing draws that fail the shrink-wrap check. A row's rate doesn't move with
+  the share `weights.json` gives its script or style, though the mix inside the row still follows the weights. Read the
+  worst rows with the headline: easy kinds flatter a pooled number (`RESEARCH.md`, Evaluation Traps).
 - **The behaviour catalog** (`catalog`, `facts`, `rich`) answers which behaviours we model; deduplicated by what the
-  browsers do, its size says nothing about real use.
+  browsers do, its size says nothing about real use. `check` counts a behaviour as modelled when each of its cases
+  away from the edges passes, width 1 and the widths under 24 px included, which are narrower than any real layout.
+  Beside that it prints the count over the behaviour's cases at 24 px and wider, among the behaviours that have one
+  there, away from the edges, that the browser lays out on more than one line. The others aren't counted: two thirds
+  of the catalog's behaviours have a single case that wide, at 100,000 px on one line, which passes whatever the
+  library does at a break. The count at the edges is likewise among the behaviours whose lines change at 24 px or
+  wider.
 
 | File in `cases/` | Holds | Made by |
 |---|---|---|
@@ -69,6 +86,11 @@ layouts" (the narrowest real-usage draw is 25 px).
 | `oracles.ndjson` | The mode oracles (pre-wrap, keep-all, symbols, letter spacing, soft hyphens) the old test suite ran | taken once |
 | `followups.ndjson` | Two fuzz strings `ENGINE_FOLLOWUPS.md` names | taken once |
 | `old-gate.ndjson` | Cases the old test suite's pre-landing check (its gate) lost to #340's engine ports at 24 px and wider, whose input no other case showed failing | taken once |
+
+A browser takes the cases every browser shares and the ones its own width search made, which a case's `browsers`
+names, so the files' total is no browser's count: each takes about three fifths of them (`bun harness/sets/make.ts
+sizes` prints each file's count per browser and the totals). A case another browser's search made is neither recorded
+nor predicted there.
 
 A contributor adds to the catalog, facts or rich set through a template (How cases grow); the sets taken once can't be
 made again, since their generators are gone. The old test suite is `tests/wrapping`, which the harness replaced (#341)
@@ -147,6 +169,12 @@ main passes since #340, whose break rules port the engines' own, not what main b
 case that passes again or is gone blocks until `check --accept` takes it off, so a fix gets recorded. A lost pass isn't
 a regression until it's attributed: a true loss, two errors that cancelled, or a bad test or recording.
 
+A reason isn't always a cause. The reasons #340's failures were accepted under name a shape of input and say that the
+browser breaks there otherwise ("Arabic and Hebrew beside brackets, controls, U+FFFC or rich-item edges, at 24 px and
+wider: Chrome breaks there where the library doesn't"), not the engine's rule: about a fifth of Chrome's and Firefox's
+entries and a twelfth of webkit-host's (2026-09-30). Those entries are untraced, not explained. A new reason names the
+browser's rule, or says that it isn't traced.
+
 `varying/<browser>.txt` lists predictions that move with the browser's state, between runs (`runs`, never judged) or
 with what was predicted before (`order`, judged in their own order). A lone prediction can't tell the library's caches
 from the browser's Canvas, so attribution never calls such a move a library defect; Chrome's per-canvas shape cache
@@ -166,6 +194,9 @@ A cleanup changes nothing only when every tool says so, run on old and new with 
 (`--offline` first, then in the browsers), `check`, `gate`, the offline invariants (`bun test
 harness/invariants.test.ts`) and the bench's floors.
 
+- `equal` compares each case's predictions in the two builds, pinned or not: the lines, each line's width exactly, the
+  line text, the line APIs' disagreements and the Canvas calls after preparing. So a change that moves only widths,
+  which `check` never fails on, still shows there.
 - An offline replay detects change but isn't an oracle: its stand-in Canvas gives each character a width from a
   formula, moved a little by each pair of neighbouring characters (`offline-equal.ts`), so it can't fail on shaping,
   painting or string storage.
@@ -210,10 +241,15 @@ pinned, and a macOS update moves all three browsers (system fonts, Core Text, IC
 with the new build into a scratch copy of the recordings and prints the cases laid out otherwise, the new page history,
 and whether the browser's break data still matches `scripts/engine-data/`.
 
-webkit-host lays text out as Safari 27.0 does: the same line geometry on 25,180 cases in both orders (2026-09-17) and on
-installed Safari's 2,000-case sample except page history (2026-09-24); a Safari or macOS update voids that until
-`repin safari`, which records both, shows they agree again. Installed Safari stalls when hidden (WebKit suspends a
-hidden page past a CPU limit averaged over 8 minutes), so keep its window uncovered during a job.
+webkit-host lays text out as Safari 27.0 does: the same line geometry on 25,180 cases in both orders (2026-09-17, in
+the per-engine rebuild's harness) and on installed Safari's 2,000-case sample here, where the 1,990 cases pinned in both
+recordings are identical, widths included, and the other 5 are page history in webkit-host (2026-09-24). That
+compares the browsers' layouts only. Pretext's predictions aren't scored in installed Safari: it has no accepted list,
+so `check --browser=safari` would report webkit-host's accepted failures as new, and its sample holds none of the cases
+added since it was drawn. A Safari or macOS update voids the comparison, and no command makes it again: `repin safari`
+records both browsers and prints each one's drift against its own earlier recordings, never one against the other, so
+compare the two scratch recordings by hand, over the cases pinned in both. Installed Safari stalls when hidden (WebKit
+suspends a hidden page past a CPU limit averaged over 8 minutes), so keep its window uncovered during a job.
 
 Firefox changes fonts after it starts (see also `PLATFORM_BUGS.md`, the late family names): emoji beside Arial laid out
 otherwise when recorded 11 s after launch than at 12, 15 or 30 s (91 cases, 2026-09-24), so each Firefox job holds its
@@ -233,14 +269,22 @@ breaking, kept as the plain-text correctness reference; September 2026). Tools d
 `rmSync`.
 
 The harness can't see the hyphen drawn at a soft-hyphen break: recordings keep no glyphs, and a rule over the boxes
-found 93-358 mismatches per browser, some the recording's (2026-09-24), so it's left to `src/layout.test.ts`. Nor does
-it see re-layout at a line's own width; a defect that changes the widths a prepared handle keeps for one way of fitting
-lines when another is used (the stand-in Canvas gives the same widths to every way); a bracket-pair error in the Gecko
-bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an
-emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter writes as plain
-text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box of width 0,
-which has no rectangle, but through the text around it; Chrome's UI language, and so its `zh` table for pages without a
-`lang`; rendering other than macOS's, though Android and Windows are 65% of page views (`weights.json`); text chat users
-wrote (the sample's chat draws are stand-ins); or the demos' painted layout. No planted defect guards the watchdog's
-kill, the bench's shuffle and its separate compiles (each copy of the library compiled in a module of its own),
-Firefox's start-up hold, the page passing the browser's name to the recorder, or the cap on a job's browser.
+found 93-358 mismatches per browser, some the recording's (2026-09-24), so it's left to `src/layout.test.ts`. A recorded
+line width is the extent of the line's text boxes (`observe.ts`), which leaves out a padded span's padding at either end
+of a line, so the shrink-wrap check can't fail on such a line and the width report counts the padding as a difference.
+In webkit-host and Safari a line that ends in a space with a box, as a pre-wrap line that wraps at a space does, is
+recorded in whole pixels, up to a pixel narrower than drawn: the recorder takes the space off by its box, which WebKit
+rounds (`types.ts`, `wholePixelBoxes`). The width report leaves those lines out and prints how many: with them 8.6% of
+the lines of webkit-host's passing sample draws inside the claims were more than 0.05 px off, without them 0.8%
+(2026-10-01). The shrink-wrap check keeps them, so there it misses a box up to a pixel too narrow where such a line is
+the widest, as in a fifth of the sample's pre-wrap draws, and webkit-host's `narrow` column reads low on pre-wrap text.
+The harness doesn't see re-layout at a line's own width; a defect that changes the widths a prepared handle keeps for
+one way of fitting lines when another is used (the stand-in Canvas gives the same widths to every way); a bracket-pair
+error in the Gecko bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`,
+Harness debt); an emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter
+writes as plain text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box
+of width 0, which has no rectangle, but through the text around it; Chrome's UI language, and so its `zh` table for
+pages without a `lang`; rendering other than macOS's, though Android and Windows are 65% of page views (`weights.json`);
+text chat users wrote (the sample's chat draws are stand-ins); or the demos' painted layout. No planted defect guards
+the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the library compiled in a module of its
+own), Firefox's start-up hold, the page passing the browser's name to the recorder, or the cap on a job's browser.

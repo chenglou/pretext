@@ -81,10 +81,12 @@ Inside these, fixes land on judgement; outside, ask the maintainer first.
   engine is never refused or shown nothing. A fringe browser gets a fix of its own only when it's extremely cheap and
   also serves the major browsers; unrecognized engines take Blink's profile; runtimes such as React Native need only not
   crash or do anything catastrophically worse than main before #340; Firefox ESR, old browsers and quirks mode get
-  nothing that costs complexity; the WebKit profile follows Safari 27 only (Decisions Log). Windows is untested, and
-  sampling platforms the project can't run (Windows, Android) stays modest, since fewer Pretext users target them. For
-  the harness's real-usage sample (harness/README.md, Two kinds of set), choosing which real text it holds matters more
-  than adding platforms (2026-09-24).
+  nothing that costs complexity; the WebKit profile follows Safari 27 only (Decisions Log, 2026-09-16, has what that
+  costs Safari 26). Windows and Android are untested, not untestable: an Android emulator is installed on the
+  development Mac, and no harness run has used it. Sampling them stays modest, since fewer Pretext users target them.
+  For the harness's real-usage sample (harness/README.md, Two kinds of set), choosing which real text it holds matters
+  more than adding platforms (2026-09-24). What moves with the device pixel ratio, page zoom and text-only zoom is
+  under Part 2, Measurement Model.
 - **Keep fixing** common app text (Latin, CJK, Arabic, Hebrew, emoji, chat punctuation, URLs), rich inline, the
   documented CSS and the major browsers; rare Unicode (NEL, controls) only when the fix is cheap and costs no other
   case. Document, don't chase, browser bugs, effects Canvas can't see and text shapes only fuzzing produces. Speed may
@@ -157,8 +159,10 @@ is written out in `rebuild/README.md`, "Lines drawn" (1f380af7). In short:
   where one does, the premise is bounded by zoomed size (Part 2, Measurement Model), a font property Canvas can check or
   the text the engine's source shows it failing on, never by a font's name, and the exact recipe runs there.
 
-The rebuild scores itself on case sets of its own and never runs main's harness cases, so compare a rule by reading it
-and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source.
+The rebuild scores itself on case sets of its own and has no checked-in way to run main's harness cases: it predicted
+them once, before it closed, through a patch that wasn't committed, against main at 48980bb (`rebuild/README.md` has
+the table: main right and the rebuild not on 25, 26 and 8 pinned cases in Chrome, Firefox and webkit-host). So compare
+a rule by reading it and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source.
 
 ### Tests And Losses
 
@@ -241,11 +245,19 @@ and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source
 - **Design from shared structure**: once plain speed engineering is exhausted, find what calls share and skip
   recomputing it, from a cost model first. Demos show hard technical cases that developers adapt to their own uses; they
   don't tell which uses are common (2026-09-26). Don't overfit to today's uses.
-- **The public exports grew only by types** while the engine work from #340 on landed: `RichInlineOptions` for the
-  options `prepareRichInline()` now takes (#379, #381), `RichInlineBox` for its box items (#387) and
-  `SegmentBreakKind` (#TBD). The API discussion, a review of the whole public API at the end of the project and before
-  any release, has issue #321's `direction` option and `devicePixelRatio` in `layout()` on its list (TODO.md). One
-  bundle serves every engine (Decisions Log, 2026-09-26).
+- **The engine work changed no public export**, from #340 to #375. Rich inline has since gained an options argument
+  (`wordBreak`, #379; `whiteSpace`, #381, which an editor in #173 was laying out itself) and boxes (`RichInlineBox`,
+  #387, in place of the stand-in characters of #201). The API discussion, a review of the whole public API at the end
+  of the project and before any release, has issue #321's `direction` option and `devicePixelRatio` in `layout()` on
+  its list (TODO.md). One bundle serves every engine (Decisions Log, 2026-09-26).
+- **No public API that serves no known user (2026-09-29).** A new option or export needs an app or a person who needs
+  it. One without is described in an issue, kept simple, with whoever has the use asked there, as #382 asks about
+  padding on an item split across lines.
+- **Past a certain point, specified programmatically** (2026-09-29, tentative: the maintainer's guideline, given with
+  the caveat that the needs may prove otherwise). Rich inline takes the facts a layout needs as values, such as an
+  `extraWidth` or a box's width, and shouldn't keep growing options that mirror CSS properties one by one; where
+  userland can build a behaviour from the line APIs, baking it in may not be worth it. It bears on the open questions
+  about per-item `white-space` and CSS names for padding (TODO.md).
 - **The rich surface** stays split between stats and range helpers and materializing ones, one decision algorithm behind
   batch walks and one-line steps; speed work for rich text and manual layout belongs in the range and cursor APIs.
   `getTextClusters()`, a Canvas API that returns each cluster's position (behind a flag in Chrome 153; Engine Facts,
@@ -319,9 +331,10 @@ and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source
 - **Voice**: short, nuances kept, each document in its own tone (AGENTS.md) and `thoughts.md` in the maintainer's. A
   rewrite keeps technical meaning and opinions and loses pseudo-jargon, common words in uncommon senses, vague pronouns
   and slogans, but not words that carry meaning, such as "regression". Concrete cases over a general warning.
-- **A PR's story stays in the PR (2026-09-28).** Its full account (the rounds, the probes, every case it moved) goes in
-  its description; this file gets the durable fact: the claim, its number, build and date, its source and what would
-  reopen it. Six PRs in a row appended about 7,500 words here before this rule.
+- **A PR's story stays in the PR.** Its full account (the rounds, the probes, every case it moved) goes in its
+  description; this file gets the durable fact: the claim, its number, build and date, its source and what would
+  reopen it. Six PRs in a row appended about 7,500 words here before the docs took this rule in #374. Length alone
+  isn't the worry: the maintainer has said not to mind it in docs other than the README.
 - **What goes in**: point to numbers that go stale rather than copy them; give a fresh agent objective facts, not
   designs that fence it in. A cleanup removes only what's provably stale; docs another agent wrote are checked for
   accuracy and for fitting what was done. The changelog rule is the maintainer's own AGENTS.md line, kept word for
@@ -337,15 +350,20 @@ and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source
   the project's known goals, with the code staying reasonably simple, is a good merge. A change trading one against
   another goes to the maintainer with numbers; the maintainer may choose to ignore one named cost when judging it.
 - **Try fixes eagerly**, long-standing gaps included, but hold back one that doesn't make sense even when validation
-  passes: losses nobody can attribute, complexity out of proportion to the gain, special-case hacks. If a change makes a
-  worst case worse, its fix goes in the same PR. Close an issue only when it's solved on main, and a superseded
-  community PR with thanks.
+  passes: losses nobody can attribute, complexity out of proportion to the gain, special-case hacks. A worst case may
+  regress slightly for a real gain (Engineering, 2026-09-26); a regression that isn't slight is fixed in the PR that
+  causes it, as #340's worst-case rows were (2026-09-24), or the change waits, as the width memo does. Close an issue
+  only when it's solved on main, and a superseded community PR with thanks.
 - **Public posts** go out only at the maintainer's word, once verified, and sound like them: casual, details kept, no
   report phrasing or demands, in the contributor's language. Public issues and branches carry no private details. A
   feature too hard for now is parked in an issue with the findings and what support would take; a stale public issue
   gets a new comment and a one-line status at the top.
 - **Browser bugs** are recorded and filed as PLATFORM_BUGS.md says. A crash or hang found while probing stays out of
-  public issues, branches and docs until triaged; one such Chrome hang went in as a restricted security report.
+  public issues, branches and docs until triaged. The rule came a day late for the one case so far: a Chrome hang went
+  in as a restricted security report on 2026-09-19, after its page had been pushed with the rebuild's branch on
+  2026-09-18. The page came off that branch's tip, and public history still holds it, a cost the maintainer was told
+  of and accepted that day; main never held it. Whether a ref cut from the rebuild before then still holds the page
+  at its own tip is an open check (TODO.md).
 - **License notices** for the ported engine code and data are deferred until the end of the project (TODO.md, End of
   project).
 
@@ -425,6 +443,27 @@ integer app units, 60 per px, rounded per glyph: 16px Courier New `aaaa bbbb` is
 WebKit profile fits with WebKit's 1/64 px, the Blink and Gecko profiles with 0.005px, no engine's arithmetic; Chrome's
 grid needs a DPR `layout()` doesn't read (ENGINE_FOLLOWUPS.md).
 
+Canvas measures at the CSS size whatever the device pixel ratio or page zoom (Blink resets a Canvas font's size "so we
+skip zoom and minimum font size", `canvas_rendering_context_2d.cc:702-706`), and the page lays text out at the size
+times both, so Pretext rests on advances scaling with size. On macOS they do. With the real-usage sample
+(harness/README.md, Two kinds of set) recorded and predicted at each setting, the share of its draws inside Pretext's
+claims that fail was 0.49-0.58% in Chrome at ratios 0.5 to 3.5 and at page zooms of 67% to 200% at ratio 2 (0.49% at
+ratio 2 itself; to Blink, zoom and ratio are one number), 0.13-0.17% in Firefox at ratios 1 to 3, and 0.08-0.09% in
+webkit-host at page zooms of 85% to 150% (Chrome 154.0.8037.57, Firefox 156.0.1, webkit-host, 2026-09-30; other
+operating systems unmeasured). Predictions for text without emoji didn't move with the ratio. What doesn't hold:
+- The emoji correction is read at one ratio and goes stale at another (ENGINE_FOLLOWUPS.md, Emoji correction).
+- Chrome's worst setting, a ratio of 0.9 (0.58%), floors some whole font sizes a hundredth of a zoomed px low, as it
+  floors fractional ones at ratio 2 (Engine Facts, Chrome).
+- In webkit-host, `system-ui` and `-apple-system` lists, outside the claims, that pass at 100% zoom stop passing: 111
+  more of the sample's cases fail at 110% and 328 at 150%.
+- Text-only zoom isn't zoom to Canvas. Firefox's Zoom Text Only and WebKit's text zoom at 120% paint text larger than
+  the size Pretext is given while widths and `devicePixelRatio` stay, and about half the paragraphs break otherwise
+  (253 of 521 draws in Firefox, 250 of 520 in webkit-host); they scale a px `line-height` too, and WebKit a px
+  `letter-spacing`. A minimum font size does the same to text under it, in Safari as in Chrome and Firefox (Content
+  Language And Fonts): at a 14px minimum, webkit-host failed 2.9% of the in-claims weight, where 9.9% of the sample's
+  weight is text under 14px. iPhone Safari's text autosizing does it to blocks wider than the viewport unless the page
+  sets `-webkit-text-size-adjust: 100%` (25 more failures of 10,345 draws in the iOS 26.0 simulator).
+
 Emergency breaks follow each engine's loop: Chrome lays the line out again with a break allowed between any two
 graphemes (`line_breaker.cc:4258-4330`), Firefox takes a cluster start only while the line has no ordinary break
 (`gfxTextRun.cpp:1068-1074`), and Safari searches prefixes in a fixed order, carrying the rest unmeasured (Engine Facts,
@@ -494,7 +533,8 @@ move later results, so each standalone repro page for a browser bug (PLATFORM_BU
 and profile and finishes from promises, not timers, which a hidden window stalls; a page whose bug is a call that never
 returns first sets its title to `STEP ...`, so a driver records a hang after 30 s. Chrome's `Range.getClientRects()` can
 hang forever on one narrow constructed case, reported to Chromium with restricted access, so jobs drawing generated
-cases need a stall limit and a way to skip, and the trigger stays unpublished (Part 1, Merge Bars And Landing). Read
+cases need a stall limit and a way to skip; main's docs leave the trigger out, though the rebuild's public history
+holds its page (Part 1, Merge Bars And Landing). Read
 engine source at the revision the browser ships. Setting `font` after `line-height` resets the line height. Nothing
 independent checks Safari's line placement: webkit-host reads the same rects, where Chrome's and Firefox's were also
 checked against the emulation study.
@@ -538,18 +578,27 @@ lines gets Cn for U+3400.
 
 The tables are ICU's compiled state machines, whose states a small rule change renumbers. As 480 KB of base64 they cost
 a fresh Firefox page 5.2 ms evaluating the bundle, against 1.2 ms before #340, so each is stored as byte ranges of an
-earlier table plus literal bytes and a browser unpacks only its own, 0.4-0.6 ms a page, for 133 KB minified and 64 KB
-gzipped. Keeping Chrome's root table whole and copying the other line tables from it at runtime instead gave 238 KB and
-57 KB and took 3.6 ms in Firefox (2026-09-24). The tables stay as they are, and one bundle serves every engine
-(Decisions Log, 2026-09-26).
+earlier table plus literal bytes. The earlier table is the one that packs it shortest, across engines: Chrome's
+`line_normal` alone, Chrome's Chinese table and Safari's `line_normal` against it, Safari's `line` against that and its
+`line_cj` against `line`, and Safari's grapheme table against Chrome's. So a browser unpacks the tables its own are
+packed against too, Safari three for `line`, about 0.6 ms once per page. That gave a 120 KB minified layout bundle, 57
+KB gzipped, on the branch then, where packing each engine's tables only against its own gave 133 KB and 64 KB, and
+keeping Chrome's root table whole with the other line tables as copies from it and every other table unpacked gave 238
+KB and 57 KB and took 3.6 ms in Firefox (2026-09-24). Measured from main (`bun build src/layout.ts --minify`, then
+`gzip -9`): 80 KB and 21 KB before #340, 108 KB and 52 KB at its merge (f26640eb), and 115 KB and 56 KB on 2026-09-30
+(8e88756b), of which the packed tables are 47 KB of base64 and about 30 KB of the gzipped size. Taking one table's
+string out of that bundle shrinks the gzipped size by 9.5 KB for Chrome's root line table, 4.2 KB for its Chinese
+table, 7.0 KB for Firefox's line data, 2.8 KB for Firefox's bidi classes, 3.0 KB for Chrome's grapheme table and 2.5 KB
+for all four of Safari's. The tables stay as they are, and one bundle serves every engine (Decisions Log, 2026-09-26).
 
 In Line_Break=SA runs (Thai, Lao, Khmer, Myanmar, and in the Blink and WebKit scans also Tai Le, New Tai Lue, Tai Tham,
 Tai Viet and Ahom), `Intl.Segmenter` words stand in for the engines' dictionaries. Chrome 153's equal those of
 `Intl.v8BreakIterator`, which runs the ICU of Chrome's layout, on 273 corpus paragraphs, though the Blink scan misses 69
-Khmer positions; JavaScriptCore's differ from libicucore's line iterator at 27 of 282,337 positions, all where a range
-starts with a combining mark; Firefox 155's matched Gecko's models on all 54,588 breaks once breaks inside clusters are
-dropped, as Gecko drops them. Offline replays can't cover these runs: Bun has no `v8BreakIterator`, and its words differ
-from Firefox's on some Thai.
+Khmer positions; JavaScriptCore's, as the rebuild's WebKit port reads them, differ from libicucore's line iterator at 27
+of 282,337 positions, all where a range starts with a combining mark, and main's WebKit scan was never checked against
+it (ENGINE_FOLLOWUPS.md, Language and generic families); Firefox 155's matched Gecko's models on all 54,588 breaks once
+breaks inside clusters are dropped, as Gecko drops them. Offline replays can't cover these runs: Bun has no
+`v8BreakIterator`, and its words differ from Firefox's on some Thai.
 
 The scans read the whole text, since merging punctuation, URLs or numbers into units first erased context later passes
 couldn't recover; the Gecko scan dropped merges Firefox contradicts, such as keeping `|` with the letter after it in
@@ -749,7 +798,12 @@ Chrome's layout kerns across spaces, ZWSP, soft hyphens and same-font spans, whe
 (Engine Facts, Chrome), reports none of it for Arial or Times New Roman; the Chromium profile follows Canvas's cuts
 (headless Chromium 147, 2026-09-12; Dead Ends). In Chrome 153 a run measured whole equals its words measured with the
 spaces beside them, less each inner space once, at all 379,714 positions where both sides hold a character of a script
-of its own, and misses at 818 of 28,774 where one side holds none, all in Amiri (rebuild harness).
+of its own, and misses at 818 of 28,774 where one side holds none, all in Amiri (rebuild harness). This kerning is the
+largest cause of Chrome's wrong lines in real usage, across spaces in Latin text and between kana, which Canvas cuts
+apart as it cuts around every CJK character: 15px Arial `x A x` lays out 31.69px wide where Canvas measures 33.34px,
+and 16px Hiragino Sans `キス` eight times 244.96px where Canvas measures 256px, as Firefox and Safari lay it out
+(Chrome 154.0.8037.57, Firefox 156.0.1, webkit-host, 2026-09-30; ENGINE_FOLLOWUPS.md, Kerning Chrome's Canvas doesn't
+report, has the rates and what a fix would cost).
 
 Where a pair's adjustment sits decides what a break inside the pair leaves on each side: GPOS pair positioning puts it
 all on the first glyph, the legacy `kern` table half on each (`hb-kern.hh:102-106`). On macOS, Times New Roman, Verdana,
@@ -768,9 +822,13 @@ paragraph's joined text. Measuring alone is a premise whose gap is out of scope 
 between sibling spans is left for later (Part 1, The Per-Engine Rebuild And What Counts As Done): Chrome and Firefox
 kern across same-font spans, so Arial `community` + `,` fits about 1px earlier than its two widths, and Safari doesn't
 (2026-09-12). Where Pretext's plain-text walkers, given the joined text as one string, and the browser's lines for the
-same text in one text node disagree, rich inline follows the plain-text walkers. It takes the premise that a browser
-lays spans out as it lays out their text in one text node; where browsers don't, mostly at soft hyphens, bidi controls
-and separators beside white space at a span's edge, is in ENGINE_FOLLOWUPS.md, Rich-inline item edges.
+same text in one text node disagree, rich inline follows the plain-text walkers, but for a few places where it follows
+the browser and the walkers don't yet: in the Gecko profile a rich line hangs the space before a soft hyphen Firefox
+drops and its start consumes that soft hyphen, and in every profile an item whose whole width fits goes on its line
+(ENGINE_FOLLOWUPS.md, White space and controls, and Negative letter spacing and hanging spaces). It takes the premise
+that a browser lays spans out as it lays out their text in one text node; where browsers don't, mostly at soft
+hyphens, bidi controls and separators beside white space at a span's edge, is in ENGINE_FOLLOWUPS.md, Rich-inline item
+edges.
 
 The rich-inline counts below from 2026-09-26 to 28 are of *probes*: cases generated for one change, each beside the
 same text in one text node, recorded in Chrome, Firefox and webkit-host and not checked in, and counted against the
@@ -968,7 +1026,8 @@ preparing again on each resize costs them.
 
 - Zero-width items keep their source identity: dropping them lost standalone ZWSPs, and compressing the item array broke
   cursor and fragment indices. Both analyses stay, each item's own and the joined text's: their segments differ in 457
-  of 3,000 random rich-inline flows, and the joined pass is about 1% of preparation (2026-09-16).
+  of 3,000 random rich-inline flows, and the joined pass was about 1% of preparation on 2026-09-16, before #369 to #371
+  gave it joined windows, a second handle per item and Firefox's levels; it hasn't been timed since.
 - Measure a collapsed space itself: `measureText('A A') - measureText('AA')` includes A–A kerning.
 - An item's reserved width, the collapsed space before it plus its `extraWidth`, is checked before the whole item's fit,
   and rejects the item only when it's above the remaining width plus the fit epsilon (`lineFitEpsilon`): checking the
@@ -1255,7 +1314,8 @@ lines up to 4,096 units, not time, so time the walkers on a long run by hand.
 Count the text submitted to Canvas, not calls: measuring every prefix or suffix is quadratic even at one ask per
 position. So prefix fits stop at 96 graphemes and take pairs beyond, which bounds the amplification, not the shaper's
 own cost, and a context query charges its overlapping source too. Main at the time spent 46ms analyzing and 70ms
-measuring of Chrome 153's 115ms on the corpora (`corpora/`), but 46ms and 305ms of Safari 26.5.2's 350ms (2026-09-15):
+measuring of Chrome 153's 115ms on the corpora (`corpora/`), but 46ms and 305ms of Safari 26.5.2's 350ms (2026-09-15,
+before #340's scans and #344's grapheme tables made analysis faster; the split hasn't been measured since):
 Safari gains must come from measuring less. Korean, Thai, Khmer, Burmese and Hindi cost Chrome about 4 times English
 under system fallback, twice with a named font for the script.
 
@@ -1403,9 +1463,10 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   object's properties fast either way (2026-09-30). So the Gecko profile's rule for an atomic item of width 0 reads
   `paddedOpeningFit`, whose `'both'` already ports the function it comes from (`CanPlaceFrame`), and a new profile
   field is benched before it lands.
-- **Class fields in Firefox**: any class field seems to make Firefox 156 compile the whole bundle up front, 4.5-4.8ms on
-  a fresh page against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors; V8 and
-  JavaScriptCore didn't care (#340, 2026-09-23).
+- **Class fields in Firefox**: with any class field in the bundle, Firefox 156 took 4.5-4.8ms to evaluate it on a fresh
+  page, against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors, seemingly because it
+  then compiles the whole bundle up front (the doubling is measured, the cause a guess); V8 and JavaScriptCore didn't
+  care (#340, 2026-09-23).
 - **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
   full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
   nothing (#350, 2026-09-26).
@@ -1794,8 +1855,10 @@ on the old suite.
 
 - **`Intl.Segmenter` word boundaries patched into break opportunities**: about 20 merge passes over 2,494 lines of
   `analysis.ts`, one rule per failing shape, with deciders near CJK that disagreed, so punctuation bugs kept returning
-  (#274, #276, #290, #291, #293). The scans take 341 lines, at 86 → 88 Chrome Canvas calls per real paragraph; "Fixing a
-  mismatch" (AGENTS.md) forbids the pattern, so nothing reopens it.
+  (#274, #276, #290, #291, #293). With #340, `analysis.ts` fell to 343 lines and the scans took 869
+  (`line-breaks.ts`), 794 (`gecko-line-breaks.ts`) and 520 (`gecko-bidi-levels.ts`), runtime source going from 6,391
+  lines to 6,214, at 86 → 88 Chrome Canvas calls per real paragraph; "Fixing a mismatch" (AGENTS.md) forbids the
+  pattern, so nothing reopens it.
 - **A fix for issue #210 (a leading zero-width space lost at a line start) that loses nothing** (2026-09-11) needs a
   guard keyed to the failing shape: `ZWSP ب SHY ب` and `ZWSP Ꙝ SHY Ꙝ` prepare alike but take 2 and 4 Chrome lines at
   9-14.75 px, as do `CR ZWSP` and `LF ZWSP`. Reopens with contextual widths during preparation or a per-engine model of
@@ -1843,7 +1906,8 @@ Mostly on main as it was then, measured with the old suite in installed browsers
 - **Soft-hyphen returns**: returning from a soft hyphen to an earlier break works only when isolated widths show the
   overflow and the break returned to is truly the latest. Returning past breaks with no segment kind lost 142 Chrome
   rows, both rules for a soft hyphen with no fitting opportunity hundreds (the #323 entries on `harness/accepted/`'s
-  lists), Firefox's (4e6d4dd5) 15 per direction. They reopen with contextual widths during preparation.
+  lists), Firefox's (4e6d4dd5, branch `archive/gecko-soft-hyphen-return`) 15 per direction. They reopen with contextual
+  widths during preparation.
 - **Other returns from an unfit hyphen in rich inline** (tried for #369, 2026-09-27, Chrome 154): returning only to a
   break a pixel before its item's end, else to the break before the item, as Blink's `HandleOverflow` breaks earlier
   text items again at their width less one pixel, fixed 35 probe cases that main and the branch failed and lost 12 they
@@ -1885,7 +1949,9 @@ Mostly on main as it was then, measured with the old suite in installed browsers
 - **Other shapes of Safari's space-kerning rule** before #311's (2026-09-15): none across format characters (33 rows
   lost), a narrower rule, kerning only under letter spacing, and direction marks as non-letters.
 - **Chrome Canvas kerning settings** (`optimizeLegibility`, `fontKerning`) shape whole strings in only some fonts and
-  turn features on for every measurement (Engine Facts, Chrome). Reopens with a whole-string mode.
+  turn features on for every measurement (Engine Facts, Chrome). Reopens with a whole-string mode, which U+2028 in
+  place of each space is, as the rebuild measures: it was never weighed for main on its own (ENGINE_FOLLOWUPS.md,
+  Kerning Chrome's Canvas doesn't report).
 - **WebKit letter-spaced ligatures** (in the rebuild, from 2026-09-17; Measurement Model): no separator sets two letters
   unligated in one shaping call (U+200C ends the simple path's call, U+034F doesn't stop the ligature, U+180B brings a
   fallback glyph), and a group heuristic was 1.9 px off; a styled connected `<canvas>` would fix about 721 cases but is
@@ -1953,21 +2019,29 @@ below 256 px, Canvas totals are exact (Engine Facts, Chrome).
 #### Tables, Bundles And Data
 
 - **Firefox's line data in Chrome's format** (2026-09-26; branches `ff-table-format-bmp` and
-  `ff-table-format-ranges-first`): 8.7 KB of state machines for Firefox's 0.8 KB, or Chrome's code-point lookup, exact
-  and 3.2 KB off 55 KB gzipped but tying Firefox to Chrome's table and slowing its Arabic, Hebrew, Hindi and Urdu
-  analysis 13% (Decisions Log). Reopens only if table size and per-engine bundles both return.
-- **One bundle per engine** (372-788 KB minified, measured on the rebuild), ruled out on 2026-09-26 (Decisions Log).
-  Reopens if apps ship per-browser builds.
+  `ff-table-format-ranges-first`): 8.7 KB of state machines for Firefox's 0.8 KB pair table, 38 to 482 bytes saved by
+  packing Firefox's data against Chrome's, or Firefox's classes read through Chrome's code-point lookup, exact on every
+  code point and 3.2 KB off 55 KB gzipped, with refreshes still one generator step, but slowing Firefox's Arabic,
+  Hebrew, Hindi and Urdu analysis 13%, or its first `prepare()` by up to 2.3 ms (offline, in Bun), and tying Firefox to
+  Chrome's table, which costs nothing while one bundle serves every engine and would be a loss with a bundle per engine
+  (Decisions Log). The sizes behind the question were mixed units: Firefox's line data, called the largest table at 19.7
+  KB, is that unpacked, and 9.8 KB of base64 and 7.0 KB gzipped as shipped, less than Chrome's root line table (15.0 KB
+  and 9.5 KB), which no option targeted (Break Opportunities From Engine Data has each table's share). Reopens with the
+  table-size question, as 3.2 KB against that Firefox cost.
+- **One bundle per engine** (372-788 KB minified, measured on the rebuild), ruled out for now on 2026-09-26 (Decisions
+  Log). Reopens if apps ship per-browser builds; an app picking an engine's entry point itself with a dynamic import
+  wasn't weighed.
 - **Tables shrunk by computation**: remapping onto base classes fails for Chrome's Chinese table (`〜` and `゠` need a
   class the base lacks), and runtime state machines mean porting ICU's rule compiler, where today's tables need no
   upkeep between refreshes. Reopens with the table-size question.
-- **Dictionaries or ICU4X's LSTM model** for Thai, Lao, Khmer and Burmese (2026-09-25): hundreds of KB each, and slower
-  in JavaScript than in Firefox. Reopens for runtimes without `Intl.Segmenter`.
+- **Dictionaries or ICU4X's LSTM model** for Thai, Lao, Khmer and Burmese (2026-09-25; weighed, not built): hundreds of
+  KB each, and a JavaScript copy of Firefox's model is expected to run slower than Firefox's own, which wasn't
+  measured. Reopens for runtimes without `Intl.Segmenter`.
 - **`Intl.v8BreakIterator` for Chrome's breaks** (the emulation study, 2026-09-16 to 09-20) drops `-u-lb-*` keywords,
   lacks Blink's fast table, space rule and CSS handling, is gone from Node and Deno, and saves nothing while Safari
   needs the tables. Reopens if `Intl.Segmenter` gains a standard line granularity (Stage 1 since 2021).
-- **Safari's libicucore tables shipped whole** (26c3e231, 2026-09-16): 75 fewer runtime lines for about 30 KB more
-  gzipped; overtaken by packing each table against an earlier one.
+- **Safari's libicucore tables shipped whole** (26c3e231, branch `archive/safari-line-tables-whole`, 2026-09-16): 75
+  fewer runtime lines for about 30 KB more gzipped; overtaken by packing each table against an earlier one.
 - **One bidi resolver with per-engine switches** (in the rebuild): ICU isn't structured like UAX #9 (brackets pair while
   explicit levels are computed; weak and neutral rules resume after isolates), so nine or more switches, redone at every
   ICU roll (Bidi Levels). Reopens only if Blink and WebKit stop running ICU's resolver.
@@ -1976,7 +2050,7 @@ below 256 px, Canvas totals are exact (Engine Facts, Chrome).
 
 #### Caching, State And API Designs
 
-Studied 2026-09-13 to 09-26, mostly in Bun on a stand-in Canvas with the results checked in Chrome, against the cost
+Studied 2026-09-13 to 09-30, mostly in Bun on a stand-in Canvas with the results checked in Chrome, against the cost
 model below; most are parked for the API discussion (TODO.md), not refuted.
 
 - **Handle-free layout over a size-limited global table** (2026-09-26): the chat lays out all 18,613 blocks per width
@@ -2019,9 +2093,37 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   repeats in 0.14 µs, while stored answers go stale after a late web font in every engine and Chrome's lookup changes
   string storage (Keeping Work Bounded, String Storage); Chrome's next gain has to come from fewer questions. Reopens
   for a stateful API with an invalidation contract, in Gecko and WebKit only (`rebuild/research/PERF-CONTEXT-STORE.md`).
+- **Plain text as a rich paragraph of one item**, so that `prepare()`, `layout()` and the line APIs become rich inline
+  (2026-09-29, main at dc75b5bc rewired so, Chrome 154, two bench sessions): `layout()` took 1.4-2.0 times as long
+  (43-60% more at widths seen before, 61-95% at new ones), `walkLineRanges()` 3.0 times, `measureLineStats()` and
+  `layoutNextLineRange()` 2.5 times, and preparing text seen before 5-10% more, to delete about 285 of 5,461 code
+  lines; callers would also lose `segments`, `kinds` and the small opaque handle. It is the rejected one walker for all
+  text again (Decisions Log, 2026-09-24). What it found on the way landed as #383: a one-item paragraph counted its
+  lines at 2.5 times plain text's cost, and now takes the text walkers.
+- **One handle type, every `prepare()` keeping its segment strings** (the same study): time moved 0.5-2.2%, but each
+  handle held 1.5-2.1 times the heap (a 144-unit Latin message 1.6 to 2.8 kB in V8, a label 0.9 to 1.3 kB), the per-row
+  memory a virtualized list keeps, against `prepare()` paying for nothing `layout()` doesn't read; and a `layout()` that
+  also takes rich handles brings rich inline into every plain bundle (55.1 to 59.9 kB gzipped). Reopens as the deep
+  form, rich inline as one analysis of the paragraph cut at item boundaries, of which a plain handle is the case with no
+  boundary (TODO.md; not prototyped).
+- **Objects inside a line, handed to the app** (2026-09-30, weighed for #387 beside the box; stand-in Canvas only; the
+  box's other rejected forms are under Rich Inline Boundaries, Objects Inside A Line):
+  - *A hand-off between text runs.* The app keeps its objects out of Pretext and runs the line loop, Pretext stepping
+    each text run between two objects with the line's state handed from one run to the next. A prototype (108 code
+    lines in `src/rich-inline.ts`, kept on no branch) gave main's lines on 66,000 fuzzed paragraphs in every profile:
+    every engine allows a break on both sides of an inline-block, so only the line's width crosses an object, three
+    values in the WebKit profile. But the app still passes each object's width into the step, since the gap, the hang
+    and the fit depend on the text beside it, so it gains the loop and decides nothing at the edge; and a paragraph
+    with k objects takes k+1 handles, a step that can ask the app to redo the run before (the WebKit profile's return
+    to the break before an object), and no stats in one call, all worse for virtualized lists. Reopens for text glued
+    to an object, such as `$x$,` kept with its comma, which no width expresses and which needs the rich stepper's
+    pending break.
+  - *The app splits the paragraph at its objects and lays each run out with today's API.* A run laid out alone doesn't
+    know what its line already holds: `xy `, a 24px object and ` abc def` at 60px are `xy`, the object / `abc def` as
+    one paragraph and `xy`, the object, `ab` / `c def` split, a word broken and the gaps beside the object lost.
 - **Other API ideas**: every in-word position measured in `prepare()` (about 2.4× Blink's cold calls; maybe an idle-time
   call); no handle (prepare is about 10× a warm break pass); reused rich items (about 3 a paragraph); a JSON guard on
-  handles; a public diagnostics prepare.
+  handles (Decisions Log, 2026-09-24, has what a JSON copy does today); a public diagnostics prepare.
 - **The cost model** (main on that date, Chrome 154, 2026-09-26): 20 live fields take 28-270 µs an event, a handle per
   paragraph of a long document 85-300 µs a keystroke, a warm short `prepare()` about 5 µs, and streaming Latin stays
   under 1 ms to about 24,000 characters. Only a 100,000-character text with no breaks is a problem (4.2 ms Latin, 14 ms
@@ -2048,9 +2150,10 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   prepared texts held 76-79% of retained heap, and three exact cuts (lazy preferred breaks, no grapheme counts without
   letter spacing, arrays trimmed to length) took 27-28% off with identical heights and Canvas calls. Preferred breaks
   have since left main. Reopens if memory at 100k matters; measure today's handles first.
-- **One analysis for rich inline**: the joined pass is about 1% of prepare and carries the per-item cursors (Rich Inline
-  Boundaries), and Safari's extra calls are prefix fits WebKit needs. The reverse, one analysis of the paragraph cut at
-  item boundaries, is on the API discussion's list (Rich Inline Boundaries, Continuing The Line; TODO.md).
+- **One analysis for rich inline**: the joined pass was about 1% of prepare (2026-09-16, before #369 to #371 added to
+  it; not timed since) and carries the per-item cursors (Rich Inline Boundaries), and Safari's extra calls are prefix
+  fits WebKit needs. The reverse, one analysis of the paragraph cut at item boundaries, is on the API discussion's list
+  (Rich Inline Boundaries, Continuing The Line; TODO.md).
 - **The chat's scale** (2026-09-14 to 09-16, stand-in Canvas, before #338, #340 and #344; remeasure before relying on
   it): 46-100 µs to prepare a message the first time, 0.4-0.7 µs to lay it out, 43-59 ms median to resize 100,000, so 10
   ms fits about 13,000-15,000. A pixel position needs every height above it at the current width, so a thumb over
@@ -2196,8 +2299,9 @@ widths: both measure Pretext, not a browser.
   details, never runs the plain one: a planted fit change on plain paragraphs passed offline replay, which is blind to
   alignment too, on 134,130 Chrome cases, and passed the browser runs that usually follow it. A test that restates the
   rule or reimplements the algorithm checks nothing (in March 2026 `bun test` ran a simplified copy of it), `skipIf` on
-  files outside the repo passes silently, `bun test` runs only the Blink profile (Bun's user agent names no browser, so
-  the profile for unrecognized engines applies), and walkers written apart drift unless a test makes them agree.
+  files outside the repo passes silently, `bun test` runs the Blink profile wherever a test doesn't set a user agent
+  itself (Bun's names no browser, so the profile for unrecognized engines applies; the profile matrices of
+  `src/layout.test.ts` set Safari's and Firefox's), and walkers written apart drift unless a test makes them agree.
 - **Planted defects found harness false greens**: a negative or null width hid an omitted glyph, six jobs missing the
   same rects agreed with each other and were certified, and a run missing expected cases, even an empty one, passed. So
   geometry and the set of cases a run observed are validated before scoring, net gains never offset a loss, and
@@ -2282,9 +2386,11 @@ write log matching `^R*W*S?R?$`). Viewport emulation can hide a one-frame lag; r
 
 ## Part 3: Decisions Log
 
-Decisions the maintainer made or accepted whose reasons the code doesn't show, by date; code comments that cite this
-log mark where one applies. Before reversing one, check whether its reason still holds and record the new decision here
-with its date; an entry that replaces another says so and keeps its reason. The old test suite is `tests/wrapping`,
+Decisions whose reasons the code doesn't show, by date; code comments that cite this log mark where one applies. Most
+are the maintainer's. An entry that says it landed on judgement is a call made inside Part 1's limits while landing a
+change and reported afterwards, which the maintainer hasn't ruled on: it holds for its reason, and gives way to a
+ruling. Before reversing one, check whether its reason still holds and record the new decision here with its date; an
+entry that replaces another says so and keeps its reason. The old test suite is `tests/wrapping`,
 removed on 2026-09-25 in favour of the harness. The per-engine rebuild is branch `rebuild-20260916`, a from-scratch
 port of each engine's line breaking, kept as the plain-text correctness reference. Issue #321 is the public summary of
 the emulation study (2026-09-15 to 20), which ran each engine's own break and shaping code offline and listed ten
@@ -2304,9 +2410,19 @@ decisions for the maintainer.
   only painting a line without its paragraph's bidi context goes wrong.
 - **2026-09-16: the WebKit profile follows Safari 27 only.** Safari 26, on macOS and iOS 26, breaks differently around
   curly quotes, guillemets, keep-all punctuation, U+2028 and U+2029, and an overflowing first character; following 27
-  cost it about 2,900 left-to-right and 1,150 right-to-left line counts in the old test suite, mostly at widths
-  narrower than one character. A profile can't tell the two apart: only Safari's own user agent names a version, not
-  the other WebKit browsers on iPhone and iPad.
+  cost it about 2,900 left-to-right and 1,150 right-to-left line counts in the old test suite, mostly at widths narrower
+  than one character. On real text only keep-all shows: in Safari 26.0.1 (the iOS 26.0 simulator, a page with a viewport
+  and `text-size-adjust: 100%`, 2026-09-30) the real-usage sample's draws inside Pretext's claims fail as often under
+  `word-break: normal` as in Safari 27's WebKit (23 of 10,029 against 24, 0.08% by weight) and 26 of 316 under keep-all,
+  about a quarter by weight, against none: every Chinese or Japanese keep-all paragraph that wraps (19 of 23) and 7 of
+  281 Hangul ones, 10 of the 26 with a wrong line count. Of the 23, one is Safari 26's alone, a curly quote beside
+  Hangul, and no guillemet case fails. The user agent can't tell the two apart, since only Safari's own names a version,
+  not the other WebKit browsers on iPhone and iPad; a feature can: `typeof ReadableStream.from` is `'function'` in
+  WebKit 7625 (Safari 27) and `'undefined'` through 7624.5 (Safari 26.x), on the page and in a worker, the boundary at
+  which `BreakablePositions.h` changes (read in WebKit's tags; run only in 26.0.1 and 27.0). So the reason left is the
+  one in Part 1, Limits: old browsers get nothing that costs complexity, here a second WebKit rule set that no pinned
+  browser checks. It reopens if keep-all on Safari 26 matters to an app while Safari 26 is in wide use: restoring Safari
+  26's keep-all rule alone left 23 failures in a prototype, level with Safari 27.
 - **2026-09-18: Firefox measures on an OffscreenCanvas, as the other engines do.** A `<canvas>` element's context would
   get `system-ui` and optical-size variable fonts right, but forces style updates once a page inserts a CSS rule, and
   workers have none (Dead Ends, DOM And Canvas-Element Paths). On 2026-09-19 it was allowed only if it proved light and
@@ -2322,17 +2438,18 @@ decisions for the maintainer.
 - **2026-09-23: the Blink scan uses Chromium's Chinese line table**, `line_normal_cj.brk`, on `zh` pages and on pages
   without a language under a Chinese UI, as Chrome does (Content Language And Fonts has what it changes). Issue #321's
   eighth decision advised recording the gap instead; main kept the table when the engine tables landed (#340), 46 test
-  cases for 8.6 KB gzipped and 16 lines (Chrome 153). It was never decided on its own: the acceptance of the tables'
-  bundle that day covers it.
+  cases for 16 lines (Chrome 153) and 4.2 KB gzipped as it ships, packed against Chrome's root table (8.6 KB whole,
+  before the packing). It was never decided on its own: the acceptance of the tables' bundle that day covers it.
 - **2026-09-23: a new harness replaces the old test suite, and what must not regress is decided afresh**, since main's
   tests were old: the engine tables (#340), the harness (#341), then the suite's removal (#348) (harness/README.md, "Why
   the old suite went").
 - **2026-09-24: no must-pass tier.** Every repeatable case is pinned alike, so a hard trade-off in the heuristics is
   marked case by case on the accepted list, not forbidden by a tier.
-- **2026-09-24: the Gecko scan doesn't split text runs where the script changes**, as Firefox's script itemizer does.
-  Dropping the splits was first rejected on 2026-09-16, to match Firefox, then approved under the relaxed stance of
-  2026-09-23: only mixed-script fuzz strings with a stray mark moved, no text from the old test suite or the corpora
-  (Dead Ends, Rules Per Input Shape).
+- **2026-09-24: the Gecko scan doesn't split text runs where the script changes**, as Firefox's script itemizer does. A
+  simplification pass had kept the splits on 2026-09-16, to match Firefox, a call made on judgement that the maintainer
+  hadn't ruled on; asked on 2026-09-24, the maintainer approved dropping them, under the relaxed stance of 2026-09-23:
+  only mixed-script fuzz strings with a stray mark moved, no text from the old test suite or the corpora (Dead Ends,
+  Rules Per Input Shape).
 - **2026-09-24: there is no `glue` kind.** Runs of only no-break characters (NBSP, U+2007, U+202F, word joiner, U+FEFF)
   are text and take emergency breaks where browsers do; the scans already decide their breaks, so the kind was only a
   label, unlike zero-width glue, which stays its own segment since folding it into the text after it lost rows (Break
@@ -2349,17 +2466,24 @@ decisions for the maintainer.
   walkers don't cover, was sped up by data layout, fewer allocations, smaller representations and plain indexed code,
   not new shortcuts. It still costs three to five times as much per segment as the counter `layout()` runs
   (`countPreparedLines()`), so one walker for all text was rejected (Keeping Work Bounded).
-- **2026-09-25: a prepared handle needn't survive a JSON round trip.** Its per-segment flags are a `Uint8Array`, which
+- **2026-09-24: a prepared handle isn't promised to survive a JSON round trip** (it stopped surviving one in #340, a
+  cost listed in that PR's description, not a ruling). Since #340 its per-segment flags are a `Uint8Array`, which
   `JSON.stringify()` turns into an object without a `length`; `structuredClone()` and `postMessage()` copies work, and
-  README calls the handle opaque. From #340 the line walkers counted segments to that length and never finished on a
-  JSON copy; since #TBD they count to `widths`' length, so every walker ends on one. A copy of `prepare()`'s or
-  `prepareWithSegments()`'s handle now lays out as the handle does (140,385 offline comparisons in each engine profile,
-  2026-09-30, and a unit test), which is still no promise. A copy of a rich-inline handle throws a `TypeError` where an
-  item left no entry in it, since the missing entry comes back as `null`: an empty item, or, where white space
-  collapses, an item of only white space, such as the space between two styled runs. Every other rich copy lays out
-  the same (6,000 offline paragraphs at four widths in each profile, 2026-10-01: 4,455 the same, 1,545 thrown; and the
-  unit test). Before #TBD, of 1,200 of those paragraphs about 720 never finished, 260 laid out the same and 217 threw,
-  in each profile. Cursors and ranges are plain JSON and resume the same from a copy.
+  README calls the handle opaque. Until #TBD the walkers counted segments to that length, so on a JSON copy the line
+  APIs never returned, nor did `layout()` for text off its counter's path, such as text with a soft hyphen
+  (`measureLineStats()` and that `layout()` were still running after 5 s on a 27-character text, 8e88756b, 2026-09-30),
+  where 0.0.9 laid a JSON copy out as the handle. They now count to `widths`' length, so every walker ends on a copy,
+  and a copy of `prepare()`'s or `prepareWithSegments()`'s handle lays out as the handle does (140,385 offline
+  comparisons in each engine profile, 2026-09-30, and a unit test), which is still no promise. A copy of a rich-inline
+  handle throws a `TypeError` where an item left no entry in it, since the missing entry comes back as `null`: an empty
+  item, or, where white space collapses, an item of only white space, such as the space between two styled runs. Every
+  other rich copy lays out the same (6,000 offline paragraphs at four widths in each profile, 2026-10-01: 4,455 the
+  same, 1,545 thrown; and the unit test), which is what 0.0.9 did (3,000 paragraphs of text items, the same ones
+  throwing). Before #TBD, of 1,200 of those paragraphs about 720 never finished, 260 laid out the same and 217 threw,
+  in each profile. Cursors and ranges are plain JSON and resume the same from a copy. Told of the hang, the maintainer
+  asked only when a handle would ever be serialized to JSON, and no such use has turned up. A promise that copies work
+  reopens with one; a walker that throws on a handle whose flags have no length was the cheap guard against the hang
+  (Dead Ends, Caching, State And API Designs, Other API ideas).
 - **2026-09-25: the old test suite, its snapshots, its diagnostic tools and the benchmark page are gone**; accuracy and
   speed claims rest where AGENTS.md says. The benchmark page went once the noise floors of `bun harness bench` caught a
   known change (harness/README.md, Bench), and what the harness took from the old suite stays frozen, since its
@@ -2368,12 +2492,12 @@ decisions for the maintainer.
   runnable took the tarball from 238 kB to 620 kB, needed a Bun-only server script and shipped again content whose
   licenses aren't recorded; that version is parked as closed PR #343, in case this changes.
 - **2026-09-26: `setLocale()` sets the language again** (#356), the one preparation reads in place of `<html lang>` for
-  its break rules and measurement context, and still clears the caches: only so can a worker, which has no
-  `<html lang>`, get the page's language. An empty locale is a page's without a language, and a call with none reads
-  `<html lang>` again. Contexts with a `lang`, in Chrome and Firefox, take it too; `bun harness equal` moved no case.
-  This replaces the 2026-09-24 decision to have it only clear the caches, taken because no locale changes the Thai,
-  Lao, Khmer and Myanmar word boundaries Pretext reads (20 locales, V8 and JavaScriptCore). An element's own `lang`
-  waits for the end of the project (TODO.md, End of project).
+  its break rules and measurement context, and still clears the caches: only so can a worker, which has no `<html
+  lang>`, get the page's language. An empty locale is a page's without a language, and a call with none reads `<html
+  lang>` again. Contexts with a `lang`, in Chrome and Firefox, take it too; `bun harness equal` moved no case. Before,
+  #340 had left it only clearing the caches, since no locale changes the Thai, Lao, Khmer and Myanmar word boundaries
+  Pretext reads (20 locales, V8 and JavaScriptCore); that was #340's state, not a decision, as the maintainer put the
+  question off on 2026-09-24. An element's own `lang` waits for the end of the project (TODO.md, End of project).
 - **2026-09-26: engines Pretext doesn't recognize take Blink's whole profile** (#356), as the docs already said, and are
   owed what Part 1, Limits, says. Only unrecognized user agents moved, such as Samsung TV web views.
 - **2026-09-26: cater to the worst case, and allow it a slight regression for a real gain.** This replaces a stricter
@@ -2385,27 +2509,30 @@ decisions for the maintainer.
   loop's first pass peeled before the loop counts, since the loop repeats it. Live code split apart or placed for a JIT
   isn't dead and stays, such as `getLongMarkChainContext()` (#351) and `getTextSegmentWidth()` (#358). Removing the
   three pieces #357 had kept for Chrome's JIT cost Chrome 154 up to 13%, and removing `countPreparedLines()`'s
-  leading-space skip, a loop that never runs, kept on 2026-09-24 for Firefox, cost Firefox 156 3 to 7% on resizing Latin
-  chat messages to new widths (#364). Counted on 2026-09-29, only one of the checks removed skipped work that mattered,
-  the rich stepper's line-start test, whose saving #375 took back plainly; the rest was placement or too small to read
-  (Keeping Work Bounded). A check that changes no result can still skip work, so count the work it skips before calling
-  a slowdown one JIT's. Nor is a rule written out twice for one JIT: the Gecko scan's two text-run setups share one
-  word-end test, whose call makes Firefox 156 prepare four kinds of row 2 to 5% slower than two copies would (#365; Bidi
-  Levels has the rows). That was judged a good trade on 2026-09-27.
-- **2026-09-26: one bundle serves every engine.** An app can't import a bundle made for one browser, since its users run
-  them all, and fetching one engine's tables at runtime would make the first `prepare()` asynchronous, so every browser
-  downloads every engine's tables.
-- **2026-09-26: the break tables stay as they are**, closing the check the 2026-09-23 entry left for the end. The one
-  alternative left to weigh, Firefox's line data stored in Chrome's format, was worth taking only without a maintenance
-  burden, and it wasn't worth it (Dead Ends, Tables, Bundles And Data). It reopens only if table size and per-engine
-  bundles both return.
-- **2026-09-27: the Gecko profile keeps its 80px floor for prefix fits, as a premise.** A prefix fit finds where an
-  emergency break falls inside a segment by measuring the segment's grapheme prefixes, and the Gecko profile makes one
-  only in segments at least 80px wide. Prefixes model Firefox's whole-word advances better than standalone graphemes,
-  and the floor has no browser reason, but a lower floor fixed adversarial cases at 24-80px while making Firefox prepare
-  new Latin, Arabic and mixed text much slower, and lost the one case of the harness's real-usage sample that it moved.
-  Words narrower than 80px keep summing standalone graphemes where lines narrower than 80px split them (Break
-  Opportunities From Engine Data has the numbers).
+  leading-space skip, a loop that never runs, kept on 2026-09-24 for Firefox, read 3 and 7% slower in Firefox 156's two
+  sessions on resizing Latin chat messages to new widths, within noise (#364). Counted on 2026-09-29, only one of the
+  checks removed skipped work that mattered, the rich stepper's line-start test, whose saving #375 took back plainly;
+  the rest was placement or too small to read (Keeping Work Bounded). A check that changes no result can still skip
+  work, so count the work it skips before calling a slowdown one JIT's. Nor is a rule written out twice for one JIT: the
+  Gecko scan's two text-run setups share one word-end test, whose call makes Firefox 156 prepare four kinds of row 2 to
+  5% slower than two copies would (#365; Bidi Levels has the rows). That was judged a good trade on 2026-09-27.
+- **2026-09-26: one bundle serves every engine, for now.** An app can't import a bundle made for one browser, since its
+  users run them all, and fetching one engine's tables at runtime would make the first `prepare()` asynchronous, so
+  every browser downloads every engine's tables.
+- **2026-09-26: the break tables stay as they are**, closing the check the 2026-09-23 entry left for the end. The
+  maintainer would weigh one alternative, Firefox's line data stored in Chrome's format, and only if it brought no
+  maintenance trouble. Measured, the format itself was larger, and the one variant that saved bytes, Firefox's classes
+  read through Chrome's code-point lookup, took 3.2 KB off 55 KB gzipped, exactly and with no new upkeep, for Arabic,
+  Hebrew, Hindi and Urdu analysis 13% slower in Firefox, so it was dropped (Dead Ends, Tables, Bundles And Data). It
+  reopens with the table-size question; a bundle per engine would make sharing Chrome's lookup a loss, not reopen it.
+- **2026-09-27: the Gecko profile keeps its 80px floor for prefix fits, as a premise** (landed on judgement with #367).
+  A prefix fit finds where an emergency break falls inside a segment by measuring the segment's grapheme prefixes, and
+  the Gecko profile makes one only in segments at least 80px wide. Prefixes model Firefox's whole-word advances better
+  than standalone graphemes, and the floor has no browser reason, but a lower floor fixed adversarial cases at 24-80px
+  while making Firefox prepare new Latin, Arabic and mixed text much slower, and lost the one case of the harness's
+  real-usage sample that it moved. Words narrower than 80px keep summing standalone graphemes where lines narrower than
+  80px split them (Break Opportunities From Engine Data has the numbers). It gives way if prefixes get cheaper or real
+  usage shows the gap.
 - **2026-09-27: Firefox's bidi controls are laid out by the Gecko profile's analysis, not by its walkers** (#368). A run
   of soft hyphens and bidi controls holding a control joins the segment before it, and the profile's graphemes and
   white-space collapse read past such characters (Break Opportunities From Engine Data), so neither the walkers nor

@@ -1,5 +1,5 @@
 {
-  "about": "How often apps lay out each kind of paragraph, for the real-usage sample (harness/sets/sample.ts). A weighted list is [[value, share, source], ...]; shares are relative within their list. A source is a key of `sources` or starts with 'guess:', saying what the guess leans on. The sample draws `draws` paragraphs by these weights, then tops every group in sample.ts up to `minimumPerGroup` draws and weights each draw back to its real share. Only macOS rendering is measured: Android and Windows are 38.66% and 26.49% of page views (SC) and aren't covered.",
+  "about": "How often apps lay out each kind of paragraph, for the real-usage sample (harness/sets/sample.ts). A weighted list is [[value, share, source], ...]; shares are relative within their list. A source is a key of `sources`, or is a guess: 'guess', or 'guess:' and what the guess leans on (`bun harness/sets/make.ts sizes` counts each kind). The sample draws `draws` paragraphs by these weights, then tops every group in sample.ts up to `minimumPerGroup` draws and weights each draw back to its real share. Only macOS rendering is measured: Android and Windows are 38.66% and 26.49% of page views (SC) and aren't covered.",
   "seed": "harness-sample-20260924",
   "draws": 10000,
   "minimumPerGroup": 300,

@@ -10,7 +10,8 @@
 //                                                             # the set's main/* cases, taken once, kept as they are;
 //                                                             # only the templates the saved search holds survive
 //                                                             # (harness/README.md, How cases grow)
-//   bun harness/sets/make.ts sizes                            # each case file's cases and units per browser
+//   bun harness/sets/make.ts sizes                            # each case file's cases and units per browser, their
+//                                                             # totals, and how many of weights.json's shares are guesses
 //
 // then `bun harness record --only-new` records the new cases `check` compares against.
 import { existsSync, readdirSync } from 'node:fs'
@@ -22,7 +23,7 @@ import { catalogTemplates } from './catalog.ts'
 import { reportCases } from './exact.ts'
 import { factTemplates } from './facts.ts'
 import { richTemplates } from './rich.ts'
-import { checkedInSample, sampleReport } from './sample.ts'
+import { checkedInSample, sampleReport, shareSources } from './sample.ts'
 import { bisect, CUT_BROWSERS, cut, recordFirst, select, unitsPerBrowser, type Template } from './widths.ts'
 
 const CASES = join(import.meta.dir, '../cases')
@@ -80,8 +81,18 @@ switch (command) {
     break
   }
   case 'sizes': {
+    // A browser takes the cases every browser shares and its own width-search cases (a case's `browsers`), so the total
+    // of the files is no browser's count.
     const files = readdirSync(CASES).filter(name => name.endsWith('.ndjson')).sort()
-    for (let i = 0; i < files.length; i++) printSizes(files[i]!, readCases(join(CASES, files[i]!)))
+    const all: Case[] = []
+    for (let i = 0; i < files.length; i++) {
+      const cases = readCases(join(CASES, files[i]!))
+      printSizes(files[i]!, cases)
+      for (let k = 0; k < cases.length; k++) all.push(cases[k]!)
+    }
+    printSizes('every file', all)
+    const s = shareSources
+    console.log(`weights.json: ${s.shares} shares; ${s.shares - s.guesses} name a source, ${s.guesses} are guesses, ${s.bare} of them with nothing written that they lean on`)
     break
   }
   default:

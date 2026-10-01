@@ -5,8 +5,8 @@
 // character (observe.ts). A right count with a wrong break is a failure of its own kind, 'breaks': main before #340
 // passed 4.5-8.1% of its census cases that way by accident.
 import { createRng } from './sets/build.ts'
-import { recordingText, type Varying } from './store.ts'
-import { BROWSER, type BrowserKind, type Case, type Failure, type Prediction, type Recording, type Status } from './types.ts'
+import { caseText, recordingText, type Varying } from './store.ts'
+import { BROWSER, isRich, type BrowserKind, type Case, type Failure, type Prediction, type Recording, type Status } from './types.ts'
 
 export type Outcome = { status: Status; line: number; detail: string }
 
@@ -134,10 +134,11 @@ export function libraryFaults(predictions: ReadonlyMap<string, Prediction>): Fau
 // macOS.
 export const SYSTEM_UI_FONT = /^\s*(system-ui|-apple-system|BlinkMacSystemFont|ui-sans-serif)\b/
 
-// Whether a case is outside what the library claims: a style the adapter can't express (break-all) or a system-ui font
-// list. The headline prints its share, and the share right without it.
-export function outsideClaims(c: Case, prediction: Prediction): boolean {
-  return 'unsupported' in prediction || SYSTEM_UI_FONT.test(c.paragraph.font.family)
+// Why a case is outside what the library claims, or null when it is inside: a style the adapter can't express (break-all),
+// in the adapter's words, or a system-ui font list. The headline prints the share outside, and the share right without it.
+export function outsideClaims(c: Case, prediction: Prediction): string | null {
+  if ('unsupported' in prediction) return prediction.unsupported
+  return SYSTEM_UI_FONT.test(c.paragraph.font.family) ? 'a system-ui font list' : null
 }
 
 export function widthBand(c: Case): string {
@@ -181,6 +182,176 @@ export function headline(draws: ReadonlyArray<{ group: string; weight: number; p
   for (let r = 0; r < 1000; r++) shares.push(share(list => list[Math.floor(random() * list.length)]!))
   shares.sort((a, b) => a - b)
   return { share: share((list, k) => list[k]!), low: shares[24]!, high: shares[975]! }
+}
+
+// ---- What check prints beside the headline ----
+//
+// The headline is one number over a sample drawn by sets/weights.json's shares, many of them guesses, and about half
+// its weight is paragraphs of one line, which nearly always pass. So check prints beside it the share right where the
+// browser wraps, the share with a wrong height, and a table that counts draws one each.
+
+// A draw of the real-usage sample as check scored it. `inClaims`: inside what the library claims. `wrapped`: the browser
+// lays it out on more than one line. `height`: the prediction has the browser's line count, so a virtualized list gives
+// the paragraph its height, whichever line a character is on.
+export type Draw = { group: string; weight: number; pass: boolean; inClaims: boolean; wrapped: boolean; height: boolean }
+
+export function percent(part: number, whole: number): string {
+  return whole === 0 ? '-' : `${(100 * part / whole).toFixed(2)}%`
+}
+
+// The share of the weight of the draws `among` picks that `of` picks too.
+export function weightedShare(draws: readonly Draw[], among: (draw: Draw) => boolean, of: (draw: Draw) => boolean): string {
+  let part = 0
+  let whole = 0
+  for (let i = 0; i < draws.length; i++) {
+    const draw = draws[i]!
+    if (!among(draw)) continue
+    whole += draw.weight
+    if (of(draw)) part += draw.weight
+  }
+  return percent(part, whole)
+}
+
+// The styles the table has a row for. Emoji are the characters a browser paints in color: those of emoji presentation,
+// and any before U+FE0F.
+const STYLES: ReadonlyArray<readonly [string, (c: Case, text: string) => boolean]> = [
+  ['letter spacing', c => c.paragraph.runs.some(run => run.letterSpacing !== 0)],
+  ['soft hyphens', (_, text) => text.includes('\u00AD')],
+  ['pre-wrap', c => c.paragraph.whiteSpace === 'pre-wrap'],
+  ['keep-all', c => c.paragraph.wordBreak === 'keep-all'],
+  ['rich inline', c => isRich(c.paragraph.runs)],
+  ['emoji', (_, text) => /[\p{Emoji_Presentation}\uFE0F]/u.test(text)],
+]
+
+// The table's rows a draw inside the claims counts in: its script, which ends its family (sets/sample.ts), and each of
+// STYLES it has.
+export function strata(c: Case): string[] {
+  const text = caseText(c)
+  const out = [`script ${c.family.slice(c.family.lastIndexOf('/') + 1)}`]
+  for (let i = 0; i < STYLES.length; i++) if (STYLES[i]![1](c, text)) out.push(STYLES[i]![0])
+  return out
+}
+
+// A row of the table: its draws and those that fail, the same among the draws the browser wraps, and the passing draws
+// whose box would be too narrow (`narrow`: shrinkWrapShort).
+export type Stratum = { draws: number; wrong: number; wrapped: number; wrappedWrong: number; narrow: number }
+
+const IN_CLAIMS = 'in claims'
+const OUTSIDE = 'outside claims: '
+
+// The rows a draw counts in: every draw inside the claims and its strata, or the reason it is outside them
+// (outsideClaims).
+export function drawRows(c: Case, outside: string | null): string[] {
+  return outside === null ? [IN_CLAIMS, ...strata(c)] : [OUTSIDE + outside]
+}
+
+export function countDraw(table: Map<string, Stratum>, rows: readonly string[], pass: boolean, wrapped: boolean, narrow: boolean): void {
+  for (let i = 0; i < rows.length; i++) {
+    let row = table.get(rows[i]!)
+    if (row === undefined) table.set(rows[i]!, row = { draws: 0, wrong: 0, wrapped: 0, wrappedWrong: 0, narrow: 0 })
+    row.draws++
+    if (wrapped) row.wrapped++
+    if (!pass) row.wrong++
+    if (!pass && wrapped) row.wrappedWrong++
+    if (narrow) row.narrow++
+  }
+}
+
+// The table as check prints it: the draws inside the claims, then by script, the most drawn first, then by style, then
+// the draws outside the claims, by reason. Each share is of the count two columns to its left; `narrow` is a share of
+// the row's draws.
+export function tableLines(table: ReadonlyMap<string, Stratum>): string[] {
+  const byDraws = (a: string, b: string): number => table.get(b)!.draws - table.get(a)!.draws || (a < b ? -1 : 1)
+  const names = [...table.keys()]
+  const order = [
+    ...names.filter(name => name === IN_CLAIMS), ...names.filter(name => name.startsWith('script ')).sort(byDraws),
+    ...STYLES.map(style => style[0]).filter(name => table.has(name)), ...names.filter(name => name.startsWith(OUTSIDE)).sort(byDraws),
+  ]
+  let label = 0
+  for (let i = 0; i < order.length; i++) label = Math.max(label, order[i]!.length)
+  const count = (n: number, width: number): string => String(n).padStart(width)
+  const share = (part: number, whole: number): string => percent(part, whole).padStart(8)
+  const out = [`${''.padEnd(label)}  draws  wrong            wrapped  wrong            narrow`]
+  for (let i = 0; i < order.length; i++) {
+    const row = table.get(order[i]!)!
+    out.push(`${order[i]!.padEnd(label)}  ${count(row.draws, 5)}  ${count(row.wrong, 5)} ${share(row.wrong, row.draws)}  ${count(row.wrapped, 7)}  ${count(row.wrappedWrong, 5)} ${share(row.wrappedWrong, row.wrapped)}  ${count(row.narrow, 6)} ${share(row.narrow, row.draws)}`)
+  }
+  return out
+}
+
+// The distances check counts lines beyond: the old suite's width tolerance, half a pixel and a pixel.
+export const WIDTH_STEPS: readonly number[] = [0.05, 0.5, 1]
+
+// Lines counted by how far their predicted width is from the recorded one, and the lines left out (`inexact`).
+export type WidthTally = { lines: number; over: number[]; inexact: number }
+
+// Counts the lines of a case that passes, whose lines pair up with the recorded ones. `text` is the case's text in a
+// browser that gives a character's box in whole pixels (BROWSER's `wholePixelBoxes`), else null. The recorder takes the
+// spaces that end a line off its width by their boxes (observe.ts, lineWidths), so there a line that ends in a space
+// with a box, as pre-wrap's do, is recorded up to a pixel narrower than the browser draws it. Such a line is left out,
+// not counted as a difference: in webkit-host they were 91% of the sample's lines more than 0.05 px off (2026-10-01).
+export function countWidths(tally: WidthTally, recording: Recording, prediction: Prediction, text: string | null): void {
+  if ('error' in recording || !('lines' in prediction)) return
+  for (let i = 0; i < recording.lines.length; i++) {
+    const line = recording.lines[i]!
+    if (text !== null && line.last >= 0 && text.charCodeAt(line.last) === 0x20) {
+      tally.inexact++
+      continue
+    }
+    const gap = Math.abs(prediction.lines[i]!.width - line.width)
+    tally.lines++
+    for (let k = 0; k < WIDTH_STEPS.length; k++) if (gap > WIDTH_STEPS[k]!) tally.over[k]!++
+  }
+}
+
+export function widthShares(tally: WidthTally): string {
+  return `${tally.over.map(n => percent(n, tally.lines)).join(' / ')} of the ${tally.lines} lines`
+}
+
+// ---- The behaviour catalog's counts ----
+
+// A behaviour as check scored its cases. `inside`: each case away from the edges where its lines change passes; `edges`:
+// each case at an edge does. Then its cases at 24 px and wider (the narrowest real-usage draw is 25 px): `wraps`, the
+// browser lays one of them away from the edges out on more than one line; `wide` and `wideEdges`, as `inside` and
+// `edges`, over those cases alone; `edgeThere`, one of them is at an edge.
+export type Behaviour = { inside: boolean; edges: boolean; wraps: boolean; wide: boolean; wideEdges: boolean; edgeThere: boolean }
+
+export function countBehaviour(list: Map<string, Behaviour>, c: Case, wrapped: boolean, pass: boolean): void {
+  let entry = list.get(c.behaviour!)
+  if (entry === undefined) list.set(c.behaviour!, entry = { inside: true, edges: true, wraps: false, wide: true, wideEdges: true, edgeThere: false })
+  const wide = c.paragraph.width >= 24
+  if (c.edge === true) {
+    entry.edges &&= pass
+    if (wide) entry.wideEdges &&= pass
+    if (wide) entry.edgeThere = true
+  } else {
+    entry.inside &&= pass
+    if (wide) entry.wide &&= pass
+    if (wide && wrapped) entry.wraps = true
+  }
+}
+
+// A set's line of check's report. The first two counts fail a behaviour for a case at width 1 or under 24 px, narrower
+// than any real layout. The counts at 24 px and wider are over the behaviours the browser wraps there, since two thirds
+// of the catalog's have one case that wide, at 100,000 px on one line, which passes whatever the library does at a
+// break; and the count at the edges is over the ones whose lines change there.
+export function behaviourLine(set: string, list: ReadonlyMap<string, Behaviour>): string {
+  let modelled = 0
+  let exact = 0
+  let wraps = 0
+  let wide = 0
+  let edged = 0
+  let wideExact = 0
+  for (const entry of list.values()) {
+    if (entry.inside) modelled++
+    if (entry.inside && entry.edges) exact++
+    if (!entry.wraps) continue
+    wraps++
+    if (entry.wide) wide++
+    if (entry.edgeThere) edged++
+    if (entry.edgeThere && entry.wide && entry.wideEdges) wideExact++
+  }
+  return `${set}: ${modelled} of ${list.size} behaviours modelled, ${exact} of them also 1/64 px either side of where the lines change; at 24 px and wider, ${wide} modelled of the ${wraps} the browser wraps there, ${wideExact} also at the edges of the ${edged} whose lines change there`
 }
 
 // What the accepted-failures list makes of the pinned cases' outcomes. A failure off the list is new and blocks. An

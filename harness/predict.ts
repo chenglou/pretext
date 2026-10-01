@@ -28,20 +28,7 @@ import {
 } from '../src/rich-inline.ts'
 import { findGraphemeEnds } from '../src/graphemes.ts'
 import { getEngineProfile } from '../src/measurement.ts'
-import type { Case, CssFont, Prediction, PredictedLine, TextRun } from './types.ts'
-
-function sameStyle(a: TextRun, b: TextRun): boolean {
-  return a.font.family === b.font.family && a.font.size === b.font.size && a.font.weight === b.font.weight
-    && a.font.style === b.font.style && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing
-}
-
-export function isRich(runs: readonly TextRun[]): boolean {
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i]!
-    if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined || run.box !== undefined) return true
-  }
-  return false
-}
+import { isRich, type Case, type CssFont, type Prediction, type PredictedLine, type TextRun } from './types.ts'
 
 // Why the library can't express the case, or null.
 export function unsupported(c: Case): string | null {
