@@ -922,15 +922,18 @@ none of its cases moved.
   the two spans' weights, sizes or families and with padding between them, each mark by the font of its own span, since
   `HanKerning::Compute` reads the paragraph's text on both sides of each shaped run (`han_kerning.cc:262-320`): `文字」`
   and a span `。文字` are 88px wide, where the two measured apart take 96px, and a 20px `「引用」` before a 16px `。` halts
-  `」` by 10px. Measured apart, `これは`, a bold `「引用」` and `。と言った` wrapped otherwise than Chrome at 68 of 142
+  `」` by 10px. Measured apart, `これは`, a bold `「引用」` and `。と言った` wrapped otherwise than Chrome at 68 of 141
   widths from 60 to 200px.
 - A closing mark that Chrome halts at a span's end, where the span fits only so, stays halted where the line goes on:
   `文字」` and a span `i` take one 43.81px line at 44-47px, where their text in one node takes two, of 40px and
   3.81px. Rich inline did this before #TBD, and still does.
 
-On two probes of 4,212 and 2,866 cases the change fixed 1,642 Chrome and 303 Firefox cases and lost none; what it
-leaves is in ENGINE_FOLLOWUPS.md (Rich-inline item edges, CJK at an item's edge). A Chrome that stops halting across
-spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
+On a probe of 15,343 cases recorded fresh (styled Japanese and Chinese sentences at 120-600px in five font stacks,
+pairs and U+3000 at span edges at 14-158px in normal white space and pre-wrap, and a chip of only white space, Objects
+Inside A Line), #TBD fixed 3,187 Chrome, 374 Firefox and 48 webkit-host cases and lost none (2026-10-01): the styled
+sentences went from 2,684 to 4,180 of 4,185 in Chrome. What it leaves is in ENGINE_FOLLOWUPS.md (Rich-inline item
+edges, CJK at an item's edge). A Chrome that stops halting across spans, which the rich set's `item-edges` cases would
+show at a repin, reopens the second fact.
 
 #### Objects Inside A Line
 

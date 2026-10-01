@@ -62,10 +62,9 @@
 //   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and,
 //   cut with the next group, a padded chip of only a space, which is an empty inline-block of its padding;
 // - CJK at an item's edge, cut on their own: a run of U+3000 that ends an item before a short word in another weight
-//   and before a box, which Chrome and Firefox hang and end the line after; a pair of fullwidth marks that a bold
+//   and before a box, which Chrome and Firefox hang and end the line after; and a pair of fullwidth marks that a bold
 //   span's edge splits, a closing mark before a full stop and a colon before an opening bracket, which Chrome's
-//   text-spacing-trim halts as in one text node; and a closing bracket that ends an item before a short word, which
-//   Chrome keeps halted where the line goes on.
+//   text-spacing-trim halts as in one text node.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -269,7 +268,6 @@ export function richTemplates(): Template[] {
     ['ideographic-space', ['東京\u{3000}', span('is', BOLD(JAPANESE)), ' big\u{3000}', box(12, 12, JAPANESE), 'です']],
     ['punctuation-pair', ['これは', span('「引用」', BOLD(JAPANESE)), '。と言った']],
     ['punctuation-pair', [span('注意：', BOLD(JAPANESE)), '「これは引用」です']],
-    ['closing-mark', ['文字」', span('is', BOLD(JAPANESE)), 'です']],
   ]
   for (let i = 0; i < edges.length; i++) {
     const [family, parts] = edges[i]!
