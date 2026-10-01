@@ -9,10 +9,11 @@
 //   recording as its line's first or last visible character. The pass rule (score.ts) checks both ends of each line, which
 //   checks every visible character when the line index of visible characters never decreases in source order.
 // - A box's U+FFFC takes the box's rect (boxRect), so a box with a width is a visible character, and a line of boxes
-//   alone is a line.
+//   alone is a line. The white space of a chip that holds nothing else takes the chip's rect likewise: its inline-block
+//   is empty, so no Range rect shows where it sits.
 // - Short paragraphs are read code point by code point. Longer ones search from each line's first visible character for
 //   the next line's: a few Range calls per line instead of one per code point.
-import { BROWSER, type BrowserKind, type Case, type Recording, type RecordedLine, type Rect } from './types.ts'
+import { BROWSER, type BrowserKind, type Case, type Recording, type RecordedLine, type Rect, type TextRun } from './types.ts'
 
 // Paragraphs at least this long are searched instead of scanned.
 export const SEARCH_FROM_UNITS = 1000
@@ -214,7 +215,7 @@ function setFont(style: CSSStyleDeclaration, font: Case['paragraph']['font']): v
 
 // The paragraph as an app would write it: a block of the case's width with its styles, and each run as a bare text node
 // or a span, its text inserted exactly as given, or a box as an empty inline-block. Returns each run's text node, or a
-// box's element, and the styles the browser refused, whose layout isn't the case's.
+// box's or a blank chip's element, and the styles the browser refused, whose layout isn't the case's.
 function buildParagraph(c: Case): { element: HTMLDivElement; nodes: Array<Text | HTMLElement>; refused: string[] } {
   const p = c.paragraph
   const element = document.createElement('div')
@@ -277,17 +278,23 @@ function buildParagraph(c: Case): { element: HTMLDivElement; nodes: Array<Text |
       span.style.display = 'inline-block'
       span.style.whiteSpace = 'nowrap'
     }
+    if (isBlankChip(run)) nodes[i] = span
     span.append(text)
     element.append(span)
   }
   return { element, nodes, refused }
 }
 
+// Whether the run is a chip of only white space: an empty inline-block, as its white space collapses away.
+const isBlankChip = (run: TextRun): boolean => run.atomic === true && /^[ \t\n\r\f]+$/.test(run.text)
+
 // A box's rect, as the line grouping takes it: its line's first line height from its top, where `vertical-align: top`
-// puts the top of its line, so that its centre is its line's text's whatever its height.
-function boxRect(box: HTMLElement, origin: DOMRect, lineHeight: number): Rect {
+// puts the top of its line, so that its centre is its line's text's whatever its height. A blank chip has no height
+// and sits on its line's baseline, so its rect is the line height above that, whose centre is less than half a line
+// height above its line's text's.
+function boxRect(box: HTMLElement, origin: DOMRect, lineHeight: number, onBaseline: boolean): Rect {
   const r = box.getBoundingClientRect()
-  return { x: r.x - origin.x, y: r.y - origin.y, width: r.width, height: lineHeight }
+  return { x: r.x - origin.x, y: (onBaseline ? r.bottom - lineHeight : r.y) - origin.y, width: r.width, height: lineHeight }
 }
 
 function relativeRects(list: DOMRectList, origin: DOMRect, into: Rect[]): Rect[] {
@@ -312,15 +319,16 @@ export function recordCase(c: Case, range: Range, browser: BrowserKind): Recordi
     for (let i = 0; i < runs.length; i++) {
       starts.push(text.length)
       text += runs[i]!.text
-      if (runs[i]!.box !== undefined) nodeRects.push(boxRect(nodes[i] as HTMLElement, origin, lineHeight))
-      if (runs[i]!.box !== undefined || runs[i]!.text.length === 0) continue
+      const boxed = runs[i]!.box !== undefined || isBlankChip(runs[i]!)
+      if (boxed) nodeRects.push(boxRect(nodes[i] as HTMLElement, origin, lineHeight, runs[i]!.box === undefined))
+      if (boxed || runs[i]!.text.length === 0) continue
       range.selectNodeContents(nodes[i]!)
       relativeRects(range.getClientRects(), origin, nodeRects)
     }
     const rectsAt: RectsAt = offset => {
       let run = runs.length - 1
       while (starts[run]! > offset) run--
-      if (runs[run]!.box !== undefined) return [boxRect(nodes[run] as HTMLElement, origin, lineHeight)]
+      if (runs[run]!.box !== undefined || isBlankChip(runs[run]!)) return [boxRect(nodes[run] as HTMLElement, origin, lineHeight, runs[run]!.box === undefined)]
       const local = offset - starts[run]!
       range.setStart(nodes[run]!, local)
       range.setEnd(nodes[run]!, local + codePointLength(text, offset))

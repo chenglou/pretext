@@ -59,7 +59,8 @@
 // - boxes (RichInlineBox), cut on their own: custom emoji at the line height between words with spaces on both sides,
 //   before punctuation and at the paragraph's end; boxes inside words, of width 0 and beside U+00A0; adjacent boxes, a
 //   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; and in pre-wrap,
-//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one;
+//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and,
+//   cut with the next group, a padded chip of only a space, which is an empty inline-block of its padding;
 // - CJK at an item's edge, cut on their own: a run of U+3000 that ends an item before a short word in another weight
 //   and before a box, which Chrome and Firefox hang and end the line after; a pair of fullwidth marks that a bold
 //   span's edge splits, a closing mark before a full stop and a colon before an opening bracket, which Chrome's
@@ -258,6 +259,7 @@ export function richTemplates(): Template[] {
     ['adjacent-and-wide', ARIAL, [box(40, 20, ARIAL), box(40, 20, ARIAL), ' a photo ', box(260, 120, ARIAL), ' and after it'], 'en', 'normal', 'normal'],
     ['keep-all', KOREAN, ['안녕하세요', box(20, 20, KOREAN), '님, 반가워요 ', box(20, 20, KOREAN), '오늘'], 'ko', 'keep-all', 'normal'],
     ['pre-wrap', ARIAL, [box(60, 20, ARIAL), '  ', span(' ', BOLD(ARIAL)), 'next words', box(30, 40, ARIAL), '\n', emoji, '\tgo'], 'en', 'normal', 'pre-wrap'],
+    ['blank-chip', ARIAL, ['hello', span(' ', ARIAL, { atomic: true, padding: 6 }), 'world again'], 'en', 'normal', 'normal'],
   ]
   for (let i = 0; i < boxes.length; i++) {
     const [family, base, parts, lang, wordBreak, whiteSpace] = boxes[i]!

@@ -70,6 +70,9 @@ const COLLAPSIBLE = /^[ \t\n\r\f]$/
 // The segments a box's fragment cursors index: one empty segment (src/rich-inline.ts).
 export const BOX_SEGMENTS: readonly string[] = ['']
 
+// Whether the item is a chip of only white space, which lays out as a box of its extraWidth (src/rich-inline.ts).
+export const isBlankChip = (item: RichInlineItem): boolean => item.break === 'never' && /^[ \t\n\r\f]+$/.test(item.text)
+
 // For each UTF-16 unit of the library's segment stream, the source range it stands for. Normalization only rewrites or
 // removes white space (normal: a run of SPACE, TAB, LF, CR and FF becomes one SPACE, a leading and a trailing one go,
 // and some engines remove a run with LF next to a ZWSP; pre-wrap: CRLF, CR and FF become LF), so a greedy walk aligns
@@ -372,7 +375,7 @@ export function predict(c: Case): Prediction {
       // join decides; the text builder both share is src/layout.test.ts's to check. A box's fragment spans one empty
       // segment and has no text.
       counting = null
-      const handles = items.map(item => item.text === undefined ? null : prepareWithSegments(item.text, item.font, itemOptions(item, options)))
+      const handles = items.map(item => item.text === undefined || isBlankChip(item) ? null : prepareWithSegments(item.text, item.font, itemOptions(item, options)))
       counting = 'lines'
       const offsets = handles.map(handle => cursorOffsets(handle === null ? BOX_SEGMENTS : handle.segments))
       disagreement = richDisagreement(LIBRARY, prepared, walked, walkedCount, p.width, steps, i => offsets[i])
@@ -381,7 +384,7 @@ export function predict(c: Case): Prediction {
         const fragments = materializeRichInlineLineRange(prepared, walked[i]!).fragments
         for (let k = 0; k < fragments.length; k++) {
           const f = fragments[k]!
-          if (items[f.itemIndex]!.text === undefined) {
+          if (handles[f.itemIndex] === null) {
             if (f.text !== '') disagreement ??= `materializeRichInlineLineRange line ${i} fragment ${k}, a box, is ${JSON.stringify(f.text)}`
             textHash = hashText(textHash, f.text)
             continue
@@ -401,8 +404,8 @@ export function predict(c: Case): Prediction {
       }
       const fragment = (f: RichInlineFragmentRange): { start: number; end: number } => {
         const item = items[f.itemIndex]!
-        // A box's fragment is its U+FFFC.
-        if (item.text === undefined) return { start: bases[f.itemIndex]!, end: bases[f.itemIndex]! + 1 }
+        // A box's fragment is its U+FFFC, and a blank chip's its white space.
+        if (item.text === undefined || isBlankChip(item)) return { start: bases[f.itemIndex]!, end: bases[f.itemIndex]! + runs[f.itemIndex]!.text.length }
         const map = maps[f.itemIndex] ??= sourceRanges(runs[f.itemIndex]!.text, handles[f.itemIndex]!, item.break === 'never' ? 'normal' : whiteSpace)
         const range = map(f.start, f.end)
         return { start: bases[f.itemIndex]! + range.start, end: bases[f.itemIndex]! + range.end }

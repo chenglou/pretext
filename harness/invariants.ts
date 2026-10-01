@@ -36,7 +36,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { LayoutCursor, LayoutLine, LayoutLineRange, PrepareOptions, PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
 import type { PreparedRichInline, RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineLineRange, RichInlineOptions } from '../src/rich-inline.ts'
-import { BOX_SEGMENTS, canvasFont, cursorOffsets, isRich, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
+import { BOX_SEGMENTS, canvasFont, cursorOffsets, isBlankChip, isRich, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
 import { createRng } from './sets/build.ts'
 import type { Case } from './types.ts'
 
@@ -222,10 +222,10 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   const rich = (label: string, items: Array<RichInlineItem | RichInlineBox>, width: number, options: RichInlineOptions = {}): void => {
     const at = `${label} at ${width}`
     // Everything prepared first, so what follows asks Canvas nothing: the paragraph, each item alone (whose own
-    // prepared text the fragments' cursors index; a box's fragment spans one empty segment), the paragraph after an
+    // prepared text the fragments' cursors index; a box's fragment, and a blank chip's, spans one empty segment), the paragraph after an
     // empty item, and without extraWidth.
     const prepared = api.prepareRichInline(items, options)
-    const segmentsOf = items.map(item => item.text === undefined ? BOX_SEGMENTS : api.prepareWithSegments(item.text, item.font, itemOptions(item, options)).segments)
+    const segmentsOf = items.map(item => item.text === undefined || isBlankChip(item) ? BOX_SEGMENTS : api.prepareWithSegments(item.text, item.font, itemOptions(item, options)).segments)
     const atomic = items.map(item => item.text === undefined || item.break === 'never')
     const shiftedPrepared = api.prepareRichInline([{ text: '', font: '16px Test' }, ...items], options)
     const extraOf = (item: RichInlineItem | RichInlineBox): number => item.text === undefined ? 0 : item.extraWidth ?? 0

@@ -2972,17 +2972,31 @@ describe('rich-inline invariants', () => {
     expect(gapItems([{ text: 'Tag' }, { text: ' @maya', break: 'never' }])).toEqual([[[0, -1], [1, -1]]])
     expect(gapItems([{ text: '@maya ', break: 'never' }, { text: 'Tag' }])).toEqual([[[0, -1], [1, -1]]])
     expect(gapItems([{ text: '@maya ', break: 'never' }, { text: ' Tag' }])).toEqual([[[0, -1], [1, 1]]])
-    // An atomic item of only white space has no text left, so it makes no gap and no fragment,
-    // as an empty item, with or without extraWidth, in pre-wrap too.
+    // An atomic item of only white space is an empty inline-block: it makes no gap, and lays out
+    // as a box of its extraWidth, which a line breaks before and after, in pre-wrap too.
     for (const options of [{}, { whiteSpace: 'pre-wrap' }] as const) {
       for (const extraWidth of [0, 20]) {
-        const blank = prepareRichInline([{ text: 'a', font: FONT }, { text: ' \n ', font: FONT, break: 'never', extraWidth }, { text: 'b', font: FONT }], options)
-        const line = layoutNextRichInlineLineRange(blank, Infinity)!
-        expect(line.fragments.map(fragment => [fragment.itemIndex, fragment.gapItemIndex, fragment.gapBefore])).toEqual([[0, -1, 0], [2, -1, 0]])
-        expect(line.width).toBe(measureWidth('ab', FONT))
+        const around = (item: RichInlineItem | RichInlineBox) => prepareRichInline([{ text: 'ab', font: FONT }, item, { text: 'cd', font: FONT }], options)
+        const blank = around({ text: ' \n ', font: FONT, break: 'never', extraWidth })
+        const line = materializeRichInlineLineRange(blank, layoutNextRichInlineLineRange(blank, Infinity)!)
+        expect(line.fragments.map(fragment => [fragment.itemIndex, fragment.text, fragment.gapItemIndex, fragment.gapBefore, fragment.occupiedWidth]))
+          .toEqual([[0, 'ab', -1, 0, measureWidth('ab', FONT)], [1, '', -1, 0, extraWidth], [2, 'cd', -1, 0, measureWidth('cd', FONT)]])
+        const box = around({ width: extraWidth })
+        for (let width = 1; width <= measureWidth('abcd', FONT) + extraWidth; width++) {
+          const lines: unknown[] = []
+          walkRichInlineLineRanges(blank, width, range => lines.push(range))
+          const boxLines: unknown[] = []
+          walkRichInlineLineRanges(box, width, range => boxLines.push(range))
+          expect({ width, lines }).toEqual({ width, lines: boxLines })
+        }
+        // `abcd` in one item fits no break between `ab` and `cd`.
+        expect(measureRichInlineStats(blank, measureWidth('abc', FONT)).lineCount).toBe(extraWidth === 0 ? 2 : 3)
       }
     }
-    expect(gapItems([{ text: ' ', break: 'never' }, { text: 'b' }])).toEqual([[[1, -1]]])
+    expect(gapItems([{ text: ' ', break: 'never' }, { text: 'b' }])).toEqual([[[0, -1], [1, -1]]])
+    // An empty atomic item is no item, as any empty item.
+    expect(gapItems([{ text: 'a' }, { text: '', break: 'never' }, { text: 'b' }])).toEqual([[[0, -1], [2, -1]]])
+    expect(measureRichInlineStats(prepareRichInline([{ text: 'a', font: FONT }, { text: '', font: FONT, break: 'never', extraWidth: 20 }]), 1e5).maxLineWidth).toBe(measureWidth('a', FONT))
     // One that isn't atomic makes the gap, and its extraWidth goes with its fragment.
     const padded = layoutNextRichInlineLineRange(prepareRichInline([{ text: 'a', font: FONT }, { text: ' ', font: FONT, extraWidth: 20 }, { text: 'b', font: FONT }]), Infinity)!
     expect(padded.fragments.map(fragment => [fragment.itemIndex, fragment.gapItemIndex])).toEqual([[0, -1], [2, 1]])
@@ -4195,8 +4209,9 @@ describe('rich-inline invariants', () => {
   test('a rich item\'s extraWidth that isn\'t finite throws at preparation, naming the item', () => {
     for (const extraWidth of [NaN, Infinity, -Infinity]) {
       expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth }])).toThrow(RangeError)
-      // An item that gets no fragment is checked too.
+      // An item that gets no fragment is checked too, and an atomic one of only white space.
       expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, extraWidth }])).toThrow(RangeError)
+      expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, break: 'never', extraWidth }])).toThrow('Item 1\'s extraWidth')
     }
     expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth: NaN }])).toThrow('Item 1\'s extraWidth')
     // A negative one is the app's, as chrome narrower than the text it stands for.

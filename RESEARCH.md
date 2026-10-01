@@ -954,6 +954,14 @@ moves to the next line (`one two`, a -15px box, `three four five` in 16px Arial,
 layouts of four shapes at 10-120px differ in Chrome and none in the others (2026-09-30). No app was found that needs
 one; the negative values apps pass are `extraWidth`s relative to a stand-in character. That reopens if one does.
 
+An atomic item whose text is only white space is a box of its `extraWidth` (#TBD): its inline-block trims the white
+space and is then empty, so it makes no gap, keeps its padding and breaks on both sides. The paragraph's height tells,
+since nothing of the chip is visible: of 150 layouts at 20-150px (`hello`, a chip of a space and `world again` in 16px
+Arial, bare, with 6px of padding on each side, with spaces around the chip and in pre-wrap, and a padded one between
+ideographs in 16px Hiragino Sans), the box gives the browser's line count in all 150 in Chrome 154.0.8037.57, Firefox
+156.0.1 and webkit-host, where the gap that main made of the chip in normal white space, and the item of no segments
+it made in pre-wrap, gave it in 128, 130 and 128 (2026-10-01). An empty atomic item stays no item, as any empty item.
+
 Heights stay the app's (Limits), and with `vertical-align: top` or `bottom` on every box a line is as tall as the
 paragraph's line-height or its tallest box, whichever is taller, to within one layout unit: about 13,000 lines with
 boxes per browser in Arial, Helvetica Neue, Georgia, PingFang SC and the Shantell Sans web font, emoji and CJK fallback

@@ -384,6 +384,16 @@ const BOX_HANDLE: PreparedSegments = {
   overflowLineEndTrims: null, letterSpacing: 0, discretionaryHyphenWidth: 0, discretionaryHyphenContexts: null, tabStopAdvance: 0,
 }
 
+// An atomic item's text that is only white space, which its inline-block trims (prepareRichInline).
+const onlyWhiteSpaceRe = /^[ \t\n\r\f]+$/
+
+// An item's extraWidth. One that isn't finite would give lines of width NaN or Infinity. A negative
+// one stands for chrome narrower than the text it replaces.
+function readExtraWidth(extraWidth: number | undefined, index: number): number {
+  if (extraWidth !== undefined && !Number.isFinite(extraWidth)) throw new RangeError(`Item ${index}'s extraWidth must be a finite number of CSS px, not ${extraWidth}`)
+  return extraWidth ?? 0
+}
+
 export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, options?: RichInlineOptions): PreparedRichInline {
   const whiteSpace = options?.whiteSpace ?? 'normal'
   const wordBreak = options?.wordBreak ?? 'normal'
@@ -537,19 +547,25 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
-    if (item.text === undefined) {
+    if (item.text === undefined || (item.break === 'never' && onlyWhiteSpaceRe.test(item.text))) {
       // A box: an atomic item with no text, and so no white space of its own, which takes the gap
       // before it, breaks on both sides and keeps white space after it on its line as an atomic item
       // does (below), whose updates at the item's end this repeats; the test that a box lays out as the
       // atomic NBSP it replaces keeps the two alike (src/layout.test.ts). All its width is extraWidth,
       // which a line never hangs (hangTrailingFragments). A width that isn't finite would give lines of
       // width NaN or Infinity, and Chrome breaks lines around a negative one otherwise than a negative
-      // extraWidth does (RESEARCH.md, Objects Inside A Line), so Pretext refuses both.
-      if (!Number.isFinite(item.width) || item.width < 0) throw new RangeError(`Item ${index} has no text, so it's a box, whose width must be a finite number of CSS px, at least 0, not ${item.width}`)
+      // extraWidth does (RESEARCH.md, Objects Inside A Line), so Pretext refuses both. An atomic item
+      // of only white space is a box of its extraWidth, in pre-wrap too: its inline-block trims its
+      // white space (ownsWhiteSpace, below) and is then empty, so it makes no gap, takes its padding
+      // and breaks on both sides, as all three browsers lay out `hello`, an inline-block of a space
+      // and `world again` in 16px Arial: `helloworld`, 72.04px wide, from 74px, and `hello` / `world`
+      // at 46-70px.
+      if (item.text === undefined && (!Number.isFinite(item.width) || item.width < 0)) throw new RangeError(`Item ${index} has no text, so it's a box, whose width must be a finite number of CSS px, at least 0, not ${item.width}`)
+      const width = item.text === undefined ? item.width : readExtraWidth(item.extraWidth, index)
       finishJoinedText()
       const box: PreparedRichInlineItem = {
         break: 'never', breakBefore: pendingGapWidth !== null || previousItem !== null, continued: false, walked: false,
-        establishesLine: true, extraWidth: item.width, gapBefore: pendingGapWidth ?? 0, gapItemIndex: pendingGapWidth === null ? -1 : pendingGapItemIndex,
+        establishesLine: true, extraWidth: width, gapBefore: pendingGapWidth ?? 0, gapItemIndex: pendingGapWidth === null ? -1 : pendingGapItemIndex,
         hyphenBefore: 0, innerBreaks: null, naturalWidth: 0, hangWidth: 0, endHangs: false, lineFeedAfterReturn: false, openingEdge: -1, prepared: BOX_HANDLE, lineData: BOX_HANDLE,
       }
       preparedItems[index] = previousItem = box
@@ -560,21 +576,16 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       continue
     }
     const letterSpacing = readLetterSpacing(item.letterSpacing)
-    // An extraWidth that isn't finite would give lines of width NaN or Infinity. A negative one
-    // stands for chrome narrower than the text it replaces.
-    const extraWidth = item.extraWidth ?? 0
-    if (!Number.isFinite(extraWidth)) throw new RangeError(`Item ${index}'s extraWidth must be a finite number of CSS px, not ${extraWidth}`)
+    const extraWidth = readExtraWidth(item.extraWidth, index)
     const text = texts[index]!
     let start = 0
     while (!preserve && start < text.length && isCollapsibleSpaceCode(text.charCodeAt(start))) start++
 
     // An item with no text gets no fragment, and its extraWidth goes with it: apps pass an
     // empty item to hide a run. One of only white space makes the gap between the items around
-    // it, but for an atomic item, whose white space is its own (ownsWhiteSpace, below): its box
-    // trims it and is then empty, which a box (RichInlineBox) stands for where it should take
-    // room (ENGINE_FOLLOWUPS.md).
+    // it (ENGINE_FOLLOWUPS.md); an atomic one is a box (above).
     if (start === text.length) {
-      if (start > 0 && item.break !== 'never' && (pendingGapWidth === null || !whitespaceRunOpen)) {
+      if (start > 0 && (pendingGapWidth === null || !whitespaceRunOpen)) {
         pendingGapWidth = whitespaceRunOpen ? 0 : getCollapsedSpaceWidth(item.font, letterSpacing, language)
         pendingGapItemIndex = index
         whitespaceRunOpen = true
@@ -616,8 +627,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // chip ` @bob ` 6.6px narrower than the chip's text with its spaces.
     const itemBreak = item.break ?? 'normal'
     const analysis = analyzeText(item.text, profile, itemBreak === 'never' ? 'normal' : whiteSpace, wordBreak, language)
-    // Under pre-wrap too, an atomic item of only white space has no text (above).
-    if (analysis.flags.length === 0) continue
     const prepared = measureAnalysis(analysis, item.font, true, letterSpacing, profile, language, itemBreak !== 'never') as PreparedSegments
     const { segmentFlags } = prepared
     // A collapsible space before a hard break goes with the line's end (CSS Text 3

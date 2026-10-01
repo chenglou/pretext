@@ -64,7 +64,7 @@ layouts" (the narrowest real-usage draw is 25 px).
 | `reports.ndjson` | Filed reports with the text, font and width as filed (`sets/exact.ts`) | `make.ts write` |
 | `catalog.ndjson` | Families of templates, from the engines' rules, the UAX #14 classes between the scripts apps mix, the shapes `ENGINE_FOLLOWUPS.md` names and bidi controls where Firefox's line breaking looks past them, plus adversarial `main/*` cases taken from the old test suite | the width search |
 | `facts.ndjson` | The engine facts `src/layout.test.ts` checks on plain text, in a browser | the width search |
-| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, U+3000 and fullwidth punctuation at an item's edge, plus `main/*` cases | the width search |
+| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned) and a chip of only white space, the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, U+3000 and fullwidth punctuation at an item's edge, plus `main/*` cases | the width search |
 | `census.ndjson`, `books.ndjson`, `smoke.ndjson` | Real paragraphs of `corpora/` at several widths, and whole books, from the per-engine rebuild | taken once |
 | `oracles.ndjson` | The mode oracles (pre-wrap, keep-all, symbols, letter spacing, soft hyphens) the old test suite ran | taken once |
 | `followups.ndjson` | Two fuzz strings `ENGINE_FOLLOWUPS.md` names | taken once |
@@ -238,8 +238,8 @@ it see re-layout at a line's own width; a defect that changes the widths a prepa
 lines when another is used (the stand-in Canvas gives the same widths to every way); a bracket-pair error in the Gecko
 bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an
 emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter writes as plain
-text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box of width 0,
-which has no rectangle, but through the text around it; Chrome's UI language, and so its `zh` table for pages without a
+text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box of width 0, or an
+unpadded chip of only white space, which have no rectangle, but through the text around them; Chrome's UI language, and so its `zh` table for pages without a
 `lang`; rendering other than macOS's, though Android and Windows are 65% of page views (`weights.json`); text chat users
 wrote (the sample's chat draws are stand-ins); or the demos' painted layout. No planted defect guards the watchdog's
 kill, the bench's shuffle and its separate compiles (each copy of the library compiled in a module of its own),
