@@ -940,15 +940,15 @@ ports this for any atomic item of width 0, a chip of only a ZWSP too. Of 36,764 
 with a 0px box after every space at 120-600px in three fonts and two-word shapes at 10-34px, it passes 3,280 that failed
 and fails 8 that passed, all at −0.08px letter spacing, where the box is inside Firefox's line and past the end of
 Pretext's, and which passed only while the profile kept the box wherever it fell (2026-10-01, #TBD; ENGINE_FOLLOWUPS.md,
-Letter spacing, and Boxes for white space in a span that ends the paragraph; the harness now records a box of width 0 by
-its top). That reopens if a Firefox build changes `CanPlaceFrame` or how a text frame trims the white space it breaks
-after (`nsTextFrame.cpp:11202-11229`). A negative width is refused, as one that isn't finite is. An inline-block of
-width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and webkit-host, but
-Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the box, where the
-negative width would bring the line back within its width, and fits a word after it that rich inline moves to the next
-line (`one two`, a -15px box, `three four five` in 16px Arial, `one two three` at 77.5px): 51 of 884 layouts of four
-shapes at 10-120px differ in Chrome and none in the others (2026-09-30). No app was found that needs one; the negative
-values apps pass are `extraWidth`s relative to a stand-in character. That reopens if one does.
+Letter spacing, and Rich-inline item edges for white space in a span that ends the paragraph; the harness now records a
+box of width 0 by its top). That reopens if a Firefox build changes `CanPlaceFrame` or how a text frame trims the white
+space it breaks after (`nsTextFrame.cpp:11202-11229`). A negative width is refused, as one that isn't finite is. An
+inline-block of width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and
+webkit-host, but Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the
+box, where the negative width would bring the line back within its width, and fits a word after it that rich inline
+moves to the next line (`one two`, a -15px box, `three four five` in 16px Arial, `one two three` at 77.5px): 51 of 884
+layouts of four shapes at 10-120px differ in Chrome and none in the others (2026-09-30). No app was found that needs
+one; the negative values apps pass are `extraWidth`s relative to a stand-in character. That reopens if one does.
 
 Heights stay the app's (Limits), and with `vertical-align: top` or `bottom` on every box a line is as tall as the
 paragraph's line-height or its tallest box, whichever is taller, to within one layout unit: about 13,000 lines with
