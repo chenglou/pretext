@@ -5539,9 +5539,9 @@ test('the Chromium profile takes the kerning between two kana', () => {
   // The engine profile is computed once per process, so Chrome runs in a child
   // process. Every kana is 16px and a space 4px. Canvas cuts a string before each
   // kana letter and shapes the pieces apart, keeping a mark such as ー with the
-  // letter before it, where アー kerns -1px. A context under optimizeLegibility
-  // shapes a string whole: there あい kerns -2px, ーア -3px, and あア -5px, which
-  // the page, shaping hiragana and katakana apart, never shows.
+  // letter before it, where アー kerns -1px, and a mark that starts the string with
+  // the letter after it. A context under optimizeLegibility shapes a string whole:
+  // there あい kerns -2px, ーア -3px, and あア, a hiragana with a katakana, -5px.
   const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
@@ -5561,6 +5561,7 @@ test('the Chromium profile takes the kerning between two kana', () => {
         for (const ch of text) width += ch === ' ' ? 4 : 16
         width -= count(text, 'アー')
         if (whole) width -= 2 * count(text, 'あい') + 3 * count(text, 'ーア') + 5 * count(text, 'あア')
+        else if (text.startsWith('ーア')) width -= 3
         return { width }
       }
     }
@@ -5569,7 +5570,8 @@ test('the Chromium profile takes the kerning between two kana', () => {
     const { prepareRichInline, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
     const widths = []
     for (const [text, options] of [
-      ['あいう', {}], ['アーア', {}], ['あいう', { wordBreak: 'keep-all' }], ['アーア', { wordBreak: 'keep-all' }], ['あア', {}], ['あ い', {}],
+      ['あいう', {}], ['アーア', {}], ['あいう', { wordBreak: 'keep-all' }], ['アーア', { wordBreak: 'keep-all' }], ['ーアア', { wordBreak: 'keep-all' }], ['aーア', { wordBreak: 'keep-all' }],
+      ['あア', {}], ['あ い', {}],
     ]) widths.push(prepareWithSegments(text, '16px Test', options).widths)
     const lines = []
     for (const [text, width] of [['あいう', 30.5], ['あいう', 16.5], ['ああい', 32.5]]) {
@@ -5578,12 +5580,11 @@ test('the Chromium profile takes the kerning between two kana', () => {
     }
     const rich = [[{ text: 'あい', font: '16px Test' }], [{ text: 'あ', font: '16px Test' }, { text: 'い', font: '16px Test' }]]
       .map(items => measureRichInlineStats(prepareRichInline(items), 100).maxLineWidth)
-    const crossed = measured.includes('whole あア')
     measured.length = 0
     prepare('あいあいあい', '16px Fresh')
-    console.log(JSON.stringify({ widths, lines, rich, crossed, asked: measured.filter(text => text.startsWith('whole ')).sort() }))
+    console.log(JSON.stringify({ widths, lines, rich, asked: measured.filter(text => text.startsWith('whole ')).sort() }))
   `
-  const { widths, lines, rich, crossed, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'crossed' | 'asked', unknown>
+  const { widths, lines, rich, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'asked', unknown>
   expect(widths).toEqual([
     // The pair's kerning goes on the second kana's segment.
     [16, 14, 16],
@@ -5593,11 +5594,15 @@ test('the Chromium profile takes the kerning between two kana', () => {
     // kerning with the letter before it.
     [46],
     [44],
-    // A hiragana and a katakana are two runs, and a space parts a pair.
-    [16, 16],
+    // A mark that starts a segment is in Canvas's word with the letter after it, which
+    // has their kerning already. After a Latin letter Canvas cuts between the two.
+    [45],
+    [45],
+    // A hiragana and a katakana are one run and kern where the font pairs them. A space
+    // parts a pair.
+    [16, 11],
     [16, 4, 16],
   ])
-  expect(crossed).toBe(false)
   expect(lines).toEqual([
     { lines: [['あい', 30], ['う', 16]], lineCount: 2 },
     // A kana that starts a line has nothing before it to kern with.

@@ -35,6 +35,7 @@ import {
   getSegmentFit,
   getSegmentMetrics,
   getSpaceKerning,
+  isCanvasWord,
   getTextWidth,
   measureWithLetterSpacing,
   textMayContainEmoji,
@@ -626,37 +627,38 @@ export function measureAnalysis(
 // Two characters of the Hiragana and Katakana blocks in a row.
 const kanaPairRe = /[\u3041-\u30FF]{2}/
 
-// A kana letter, which has a script of its own. The blocks' other characters, such as U+30FC,
-// are marks that Canvas keeps in the word of the character before them.
-function isKanaLetter(code: number): boolean {
-  return (code >= 0x3041 && code <= 0x3096) || (code >= 0x30a1 && code <= 0x30fa)
-}
-
-// Blink's layout shapes a run of one script in one call, so a kana kerns with the kana after it
-// in fonts that pair them, as Hiragino and Yu Gothic do: 2,149 of the 14,285 pairs of 83
-// hiragana and of 86 katakana in Hiragino Sans, by up to 3.73px at 17px, and none of a hiragana
-// with a katakana, which are two scripts and two runs. Canvas cuts the two apart
-// (getKanaKerning), and preparation measures segments apart, so each pair's kerning is added
-// here. A pair's adjustment sits on its first glyph, and a line that breaks between the two is
-// shaped again without it (ShapingLineBreaker::ShapeLine, shaping_line_breaker.cc:511-584), so
-// the kerning goes on the segment of the second character, which a line start gives back.
-// An emergency break inside a segment takes none (ENGINE_FOLLOWUPS.md).
+// Blink's layout shapes a run of one script in one call, and takes katakana for hiragana so that
+// the two stay in one run (GetScriptForOpenType, script_run_iterator.cc:20-36), so a kana kerns
+// with the kana after it in fonts that pair them, as Hiragino and Yu Gothic do: 2,149 of the
+// 14,285 pairs of 83 hiragana and of 86 katakana in Hiragino Sans, by up to 3.73px at 17px, and
+// in Klee and the Tsukushi round gothics a few pairs of a hiragana with a katakana too. Canvas
+// cuts the two apart (getKanaKerning), and preparation measures segments apart, so each pair's
+// kerning is added here. A pair's adjustment sits on its first glyph, and a line that breaks
+// between the two is shaped again without it (ShapingLineBreaker::ShapeLine,
+// shaping_line_breaker.cc:511-584), so the kerning goes on the segment of the second character,
+// which a line start gives back. An emergency break inside a segment takes none
+// (ENGINE_FOLLOWUPS.md).
 function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = 0; i < flags.length; i++) {
     if ((flags[i]! & KIND_BITS) !== TEXT) continue
     const start = starts[i]!
     const end = i + 1 < flags.length ? starts[i + 1]! : normalized.length
-    // The segment's first character pairs with the character before it, the last of a segment.
-    for (let k = Math.max(start, 1); k < end; k++) {
-      const before = normalized.charCodeAt(k - 1)
+    // Whether Canvas cuts before a kana letter here. Inside a segment it cuts only before a
+    // letter, a mark such as U+30FC staying in the word before it, and not before the first
+    // letter of a word that marks and punctuation of the CJK ranges began (NextWordEndIndex's
+    // has_any_script, plain_text_node.cc:129-153): it has measured that pair together. A
+    // character below those ranges is in a word of other scripts, which ends before the letter.
+    let cuts = false
+    for (let k = start; k < end; k++) {
       const after = normalized.charCodeAt(k)
+      const letter = isCanvasWord(after)
+      // The segment's first character pairs with the character before it, the last of a segment.
+      const cut = k === start ? k > 0 : letter && cuts
+      cuts = letter || (after >= 0x3041 && after <= 0x30ff ? cuts : after < 0x2e80)
+      if (!cut) continue
+      const before = normalized.charCodeAt(k - 1)
       if (before < 0x3041 || before > 0x30ff || after < 0x3041 || after > 0x30ff) continue
-      // Inside a segment Canvas keeps a mark in the word before it, and a hiragana and a
-      // katakana are two runs wherever they meet.
-      const letter = isKanaLetter(after)
-      if (k > start && !letter) continue
-      if (letter && isKanaLetter(before) && (before < 0x30a0) !== (after < 0x30a0)) continue
       const kerning = getKanaKerning(before, after, measurement)
       if (kerning === 0) continue
       widths[i] = widths[i]! + kerning

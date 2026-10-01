@@ -443,7 +443,7 @@ const combiningMarkRe = /\p{M}/u
 // and isn't asked: it shapes each ideograph and kana as a word of its own (NextWordEndIndex,
 // plain_text_node.cc:92-153, over kIsCjkIdeographOrSymbolRanges, character_property_data.h:40-80).
 // These are the letters among those ranges, without their marks, punctuation and symbols.
-function isCanvasWord(code: number): boolean {
+export function isCanvasWord(code: number): boolean {
   return (code >= 0x3041 && code <= 0x3096) || (code >= 0x30a1 && code <= 0x30fa) ||
     (code >= 0x3400 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff)
 }
@@ -572,9 +572,7 @@ export function getKanaKerning(before: number, after: number, measurement: FontM
     if (state.wholeRunFont !== measurement.canvasFont) state.wholeRunContext.font = state.wholeRunFont = measurement.canvasFont
     const first = String.fromCharCode(before)
     const second = String.fromCharCode(after)
-    kerning = state.wholeRunContext.measureText(first + second).width - getSegmentMetrics(first, measurement).width - getSegmentMetrics(second, measurement).width
-    // Canvas widths are float32 sums, so two that should agree can differ in their last bits.
-    if (Math.abs(kerning) < 1 / 128) kerning = 0
+    kerning = getPairKerning(state.wholeRunContext.measureText(first + second).width, getSegmentMetrics(first, measurement).width, getSegmentMetrics(second, measurement).width)
     measurement.kanaKerning.set(key, kerning)
   }
   return kerning
