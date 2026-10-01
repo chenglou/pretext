@@ -271,7 +271,7 @@ function normalizeItemLineStart(data: PreparedSegments, start: LayoutCursor): bo
 }
 
 function createItemLine(continues: boolean): ItemLine {
-  return { continues, breakBefore: false, fitsBreakBefore: false, innerBreaks: null, lineOffset: 0, breakSegmentIndex: -1, breakGraphemeIndex: 0, breakWidth: 0, breakHangWidth: 0, hangWidth: 0 }
+  return { continues, breakBefore: false, fitsBreakBefore: false, endUnbroken: false, innerBreaks: null, lineOffset: 0, breakSegmentIndex: -1, breakGraphemeIndex: 0, breakWidth: 0, breakHangWidth: 0, hangWidth: 0 }
 }
 
 // The item's width on a line of its own, from `start`, which it moves past what a line
@@ -968,17 +968,16 @@ function stepRichInlineLine(
     // 1px after `e` and the first soft hyphen's hyphen. No break comes right before a hard
     // break (UAX #14 LB6), so where none comes before the item either, as after collapsed
     // white space, a line keeps an item that starts with one where it reserves nothing for
-    // it. Where the item's padding doesn't fit, the line returns to the latest break it
-    // holds, as the three engines return to theirs, else it ends before the item, as
-    // Blink's retry of an overflowing line breaks between any two graphemes
-    // (kBreakCharacter, line_breaker.cc:4259-4264, 4617-4619); WebKit and Gecko end it
-    // before the end of the text before the item. After text that ends with preserved
-    // spaces the line doesn't hold the break before that text's last word (below;
-    // ENGINE_FOLLOWUPS.md). Preserved spaces or tabs that hang go on the run the line ends
-    // with, so the reserved width of an item that starts with them fits where the line's
-    // content before that run fits, as WebKit fits a box's edge (InlineContentBreaker,
-    // hangingContentWidth), though WebKit leaves out only the last white-space item's
-    // (ENGINE_FOLLOWUPS.md).
+    // it. Where the item's padding doesn't fit, the line returns to its latest break, as
+    // the three engines do, else it ends before the item, as Blink's retry of an
+    // overflowing line breaks between any two graphemes (kBreakCharacter,
+    // line_breaker.cc:4259-4264, 4617-4619); WebKit and Gecko end it before the end of the
+    // text before the item, and WebKit inside the preserved spaces that end that text even
+    // where a break comes before them (ENGINE_FOLLOWUPS.md). Preserved spaces or tabs that
+    // hang go on the run the line ends with, so the reserved width of an item that starts
+    // with them fits where the line's content before that run fits, as WebKit fits a box's
+    // edge (InlineContentBreaker, hangingContentWidth), though WebKit leaves out only the
+    // last white-space item's (ENGINE_FOLLOWUPS.md).
     const reservedWidth = gapBefore + item.extraWidth
     if (hasContent && reservedWidth > remainingWidth + lineFitEpsilon && (item.establishesLine || reservedWidth > 0) && !item.keepsOpening) {
       const firstKind = item.lineData.segmentFlags[0]! & KIND_BITS
@@ -1035,6 +1034,7 @@ function stepRichInlineLine(
       cursor.graphemeIndex = lineEnd.graphemeIndex
     }
     itemLine.continues = hasContent
+    itemLine.endUnbroken = item.continued
     itemLine.breakBefore = hasContent && (item.breakBefore || breakItemIndex >= 0)
     // An engine that keeps an unfit hyphen returns only to a break before a run that
     // continues from an earlier item.
@@ -1086,7 +1086,11 @@ function stepRichInlineLine(
     // A line that takes the item's end goes on, unless a hard break ends it there,
     // from the latest break the walk leaves, whose width leaves out what hangs there. A break
     // the walk leaves at the item's end, after its preserved spaces, is the next item's, which
-    // the text the items join gives or not (breakBefore).
+    // the text the items join gives or not (breakBefore); where it gives none, as before a hard
+    // break or a space (UAX #14 LB6, LB7), the walk leaves the break before it (endUnbroken),
+    // as before the item's last word, which Blink's search back for a break that fits ends at
+    // (HandleOverflow, line_breaker.cc:4079-4305) and Gecko's second pass over the line breaks
+    // at, its last optional break (GetLastOptionalBreakPosition, nsBlockFrame.cpp:5170-5194).
     const segmentCount = item.prepared.segments.length
     const endsAfterHardBreak = lineEnd.graphemeIndex === 0 && lineEnd.segmentIndex > 0 &&
       (item.prepared.segmentFlags[lineEnd.segmentIndex - 1]! & KIND_BITS) === HARD_BREAK

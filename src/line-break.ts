@@ -58,10 +58,12 @@ export type PreparedLineBreakData = {
 
 // A rich-inline item's line (src/rich-inline.ts). In: whether the walk continues a line
 // with content, whether that line can end before the item and a return from an unfit
-// soft hyphen can too, per segment, the graphemes inside it that the text the items
-// join breaks before, else null, and where the item's text starts on the line, which its
-// tab stops count from. Out, where the walk takes the item's end: the line's latest break
-// (segment -1 without one) and the width a line ending there paints. In and out,
+// soft hyphen can too, whether the next item goes on from the item's end with no break
+// there, per segment, the graphemes inside it that the text the items join breaks before,
+// else null, and where the item's text starts on the line, which its tab stops count
+// from. Out, where the walk takes the item's end: the line's latest break (segment -1
+// without one), which isn't the item's end where no break comes there, and the width a
+// line ending there paints. In and out,
 // `hangWidth`: the width of the run of preserved spaces and tabs that ends the line
 // before the item, which goes on into the item's own and hangs with them. Out, it and
 // `breakHangWidth` give what the rich line hangs (stepRichInlineLine) where the walk and
@@ -73,6 +75,7 @@ export type ItemLine = {
   continues: boolean
   breakBefore: boolean
   fitsBreakBefore: boolean
+  endUnbroken: boolean
   innerBreaks: (number[] | null)[] | null
   lineOffset: number
   breakSegmentIndex: number
@@ -445,6 +448,9 @@ function walkPreparedComplexLines(
     tabStopAdvance,
   } = prepared
   const segmentCount = segmentFlags.length
+  // The white space that ends a rich item leaves no break after it where the next item goes
+  // on from it (ItemLine), so the line's latest break stays the one before it.
+  const breaksAtEnd = item === null || !item.endUnbroken
   const engineProfile = getEngineProfile()
   // Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
   // §4.1.2), so they take no room when fitting and don't size the line (§8.2).
@@ -642,7 +648,7 @@ function walkPreparedComplexLines(
                 }
                 // The break segment hangs with the gap before it, a run of preserved
                 // spaces and tabs hangs whole, and a tab that doesn't hang counts whole.
-                if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
+                if (breakAfter && (i + 1 === segmentCount ? breaksAtEnd : (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
                   pendingBreakSegmentIndex = i + 1
                   pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance
                 }
@@ -741,7 +747,7 @@ function walkPreparedComplexLines(
               // A segment that takes no room at the line end, as a space, leaves the glyph
               // before it last on the line, with its trim.
               if (fitAdvance !== 0 && !hangs) lineEndTrimmed = newFitW > fitLimit ? endTrim : 0
-              if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
+              if (breakAfter && (i + 1 === segmentCount ? breaksAtEnd : (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
                 pendingBreakSegmentIndex = i + 1
                 pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance - lineEndTrimmed
               }

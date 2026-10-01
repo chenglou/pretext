@@ -1012,14 +1012,28 @@ item's hanging width from the fit (`InlineContentBreaker`) and Gecko hangs each 
 `line_breaker.cc:2963-2971`, WebKit's pen position, Gecko's `CalcTabWidths`, `nsTextFrame.cpp:4298-4378`). No break
 comes before a hard break (UAX #14 LB6). A padded span that starts with one, or with white space, takes the ordinary
 fit of its whole `extraWidth` where a line with content would take that opening and no more of the span, and where it
-doesn't fit the line returns to the latest break it holds, or without one ends before the span. That is Firefox's fit,
-as Gecko fits a frame's cloned end edge, and Chrome's line end, as its retry of an overflowing line breaks between any
-two graphemes. Chrome fits fewer edges, the span's start edge or none, Safari the start edge and sometimes the end edge,
-and without a break Firefox and Safari end the line before the last grapheme of the text before the span; rich inline
-models none of that, since no real-usage draw has such a span, of the few that could (Decisions Log, 2026-09-30;
+doesn't fit the line returns to its latest break, or without one ends before the span. That is Firefox's fit, as Gecko
+fits a frame's cloned end edge, and Chrome's line end, as its retry of an overflowing line breaks between any two
+graphemes. Chrome fits fewer edges, the span's start edge or none, Safari the start edge and sometimes the end edge, and
+without a break Firefox and Safari end the line before the last grapheme of the text before the span; rich inline models
+none of that, since no real-usage draw has such a span, of the few that could (Decisions Log, 2026-09-30;
 ENGINE_FOLLOWUPS.md, Rich-inline item edges, has each engine's rule and its source). A break the walk of an item gives
-after its preserved spaces is the next item's, which the text the items join decides; after such text the line doesn't
-hold the break before its last word, which Firefox returns to (ENGINE_FOLLOWUPS.md). WebKit's
+after its preserved spaces is the next item's, which the text the items join decides. Where that text gives none, as
+before a hard break or a space (UAX #14 LB6, LB7), the walk leaves the break before it, so a line that can't take the
+next item returns to the break before the last word of such text, as Blink's search back for a break that fits does
+(`HandleOverflow`, `line_breaker.cc:4079-4305`) and Gecko's second pass over the line, which breaks at its last optional
+break (`GetLastOptionalBreakPosition`, `nsBlockFrame.cpp:5170-5194`). Before #TBD the walk left only the break at the
+item's end, which hid that one, so the line returned to a break in an earlier item or to none. On 4,181 fresh cases in
+two sets (Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host, 2026-10-01), 117 Firefox and 4 Chrome cases pass that
+failed, where text ends with spaces or a tab right before a span with no break before it, and no webkit-host case passes
+or fails otherwise. 8 Firefox cases that passed by luck fail, a tab before a span that starts a text run with a
+combining mark, a variation selector or a ZWJ, where Firefox breaks after the tab and the joined text gives no break,
+and that shape gets a wrong line count in 17 more of its 168 cases (ENGINE_FOLLOWUPS.md, Rich-inline item edges, the
+spans laid out otherwise than one text node). Inside the widths where Chrome and Safari keep a padded opening that rich
+inline moves, the line that the return starts may not take the opening either, so the paragraph comes out a line further
+from theirs: 2 of the fresh Chrome cases, and 2 Chrome and 3 webkit-host cases of the rich set's template of the shape,
+two words and spaces before a padded line feed, of whose 10 Firefox cases 9 pass. Safari ends such a line before the
+spaces that don't fit, whatever break comes before them, which rich inline doesn't model (ENGINE_FOLLOWUPS.md). WebKit's
 soft wrap index loop ends the content it places after a line break item (`InlineFormattingUtils.cpp:456-475`), so no
 break comes before a line feed that starts a box there either, after an atomic item too, and allows wrapping next to a
 white-space item (`:406-418`). A carriage return that ends one item and a

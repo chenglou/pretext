@@ -53,7 +53,8 @@
 //   feed or spaces after a word that ends with spaces, whose opening Chrome's line takes with no padding, and before
 //   whose line feed, where its padding doesn't fit, Safari keeps the spaces that fit and Firefox all but the last
 //   (these padded openings record what the engines do, where rich inline takes the ordinary fit of the span's whole
-//   padding: ENGINE_FOLLOWUPS.md, Rich-inline item edges); and, cut on their own too, a
+//   padding: ENGINE_FOLLOWUPS.md, Rich-inline item edges); and, cut on its own too, that line feed after two words and
+//   spaces, where a line that can't take it returns to the break before the second word; and, cut on their own too, a
 //   chip before preserved spaces split across spans, which all stay on its line however far it overflows, before text
 //   and before the paragraph's own text that starts with more of them, and before a tab, which Firefox doesn't hang and
 //   moves to the next line with them;
@@ -238,6 +239,7 @@ export function richTemplates(): Template[] {
     ['padded-span-after-chip', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), span('  \n', CODE, { padding: 12 }), 'next words']],
     ['line-feed-starts-padded-item', HELVETICA, ['Unbreakable   ', span('\nnext line', CODE, { padding: 20 }), ' after']],
     ['spaces-at-padded-edges', HELVETICA, ['Unbreakable   ', span('  spaced code', CODE, { padding: 20 }), ' after']],
+    ['line-feed-starts-padded-item', HELVETICA, ['Two words   ', span('\nnext line', CODE, { padding: 20 }), ' after']],
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  ', BOLD(HELVETICA)), 'next words']],
     ['chip-before-split-spaces', HELVETICA, [span('@alice', CHIP, { atomic: true, padding: 11 }), span(' ', BOLD(HELVETICA)), '  next words']],
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  \t', BOLD(HELVETICA)), 'next words']],

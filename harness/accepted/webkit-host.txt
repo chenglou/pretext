@@ -1,6 +1,10 @@
 ## A padded rich pre-wrap span that starts on the line it ends inside, at a line feed or after spaces that hang, at 24 px and wider: Safari fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-f7c605f19ec5d469 breaks
 
+## A padded rich pre-wrap span that starts with a line feed after words that end with spaces, where its padding doesn't fit, at 24 px and wider: Safari ends the line before those spaces, whatever break comes before them, and keeps the line feed on their line, where the library returns the line to the break before the last word and then gives the line feed a line of the span's padding, a line more than Safari's (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-92283fa5ef5b80f8 count
+rich-c7f9c7e8ef9f2cb4 count
+
 ## A padded rich pre-wrap span that starts with spaces after a word that ends with spaces, at 24 px and wider: Safari fits the span's start edge with the word's spaces, as it leaves only the span's own out of the fit (its last white-space item's width, hangingContentWidth), where the library leaves the word's spaces out and fits both edges (ENGINE_FOLLOWUPS.md)
 rich-5e1adef196a86585 breaks
 rich-a3217381ee65daac breaks
@@ -10,16 +14,19 @@ rich-04f0598ec195fb34 breaks
 rich-0748133bb6c69f43 count
 rich-08dfff76129fca74 breaks
 rich-0ffe4f2949ecf038 count
+rich-10a104043d47c8a0 count
 rich-159d5454254e58d9 breaks
 rich-249a3c85bd43968d breaks
 rich-257646a5756e1b85 breaks
 rich-282c131412220cb9 breaks
 rich-2abeb9ff099cd450 count
 rich-2bdd2c0fb87f6f33 count
+rich-2c26a6ca1dd00f9e count
 rich-38fe4aec2cea7a7d count
 rich-3d6b0dd007f16ed1 count
 rich-3da09ecc79ec88a7 count
 rich-4302094dfda2c6a8 breaks
+rich-433211665955b0f3 count
 rich-4b6c3103882378ca breaks
 rich-4f15fde45eab6842 breaks
 rich-56df98d07a0b6d9f count
@@ -30,9 +37,13 @@ rich-5d70187605d82e3f breaks
 rich-5e99068ad647d79e breaks
 rich-64050b9e463dfd5f count
 rich-661a9948e26bacb4 count
+rich-71be6b1337043758 count
 rich-802ab61d3ac8387d count
+rich-850dcfcd337a5f4a count
+rich-892c3051db08fde4 count
 rich-8b59b0767bc19148 count
 rich-8f6d553b94095415 count
+rich-9511634261b446ef count
 rich-a21ce9b6e60ce0f5 count
 rich-aa9a900cbc4b3d3c count
 rich-ab18f5ea1fbc6f41 breaks
@@ -2740,6 +2751,7 @@ rich-61a0d94181d91eec count
 rich-62a3fc75836c636c count
 rich-650f9c1a169f4811 count
 rich-668d6722303f2370 count
+rich-697c76f383be8646 count
 rich-6a71666ed4d69cb1 count
 rich-7207dfa4e9dfe793 count
 rich-79670bc9d59f6e67 count

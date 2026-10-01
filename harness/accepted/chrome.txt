@@ -6,6 +6,10 @@ report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
 
+## A padded rich pre-wrap span that starts with a line feed after spaces and whose text then breaks across lines, at 24 px and wider: Chrome keeps the line feed on the line of those spaces, as it fits no edge after spaces that hang, and pads only the first piece's start and the last piece's end, where the library gives the line feed a line of the span's padding and charges the whole extraWidth on every piece, so a piece overflows and breaks again (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-8bfcc17e2cadb58d count
+rich-b67c546c84228c14 count
+
 ## A padded rich pre-wrap span that starts with a line feed or preserved spaces: where a line would take only that opening, Chrome fits the span's start edge alone, and no edge after spaces that hang or of a span of only white space, where the library fits the span's whole extraWidth, as Firefox does (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-04612f36870bf78f count
 rich-0fb80d1f5379f5ea count
@@ -13,11 +17,13 @@ rich-12330d46b3992dce count
 rich-257646a5756e1b85 breaks
 rich-27b2afd36fa4a13f count
 rich-3da09ecc79ec88a7 count
+rich-3dd1a699e6ef4606 count
 rich-4afad5b0a15fc737 count
 rich-5156e88e59216278 count
 rich-55dcdbd35e013223 count
 rich-57754ca5442bbc6e count
 rich-5cb5d691fcdbb8dd count
+rich-71be6b1337043758 count
 rich-8208fa1071a3591d count
 rich-86825394e9548313 count
 rich-8cc375f66409c1bb count
@@ -28,11 +34,15 @@ rich-a5dc6d0eab15393d count
 rich-acdfb25b8a2b81d8 count
 rich-b5f1210c58e4b4de count
 rich-b655ddb1fbd25f53 count
+rich-b8836bb28e952091 count
+rich-d29d7dd66c191b2a count
 rich-e1d52d1f9746b7a1 count
 rich-e9e6a57e9806972d count
+rich-eb46faea85667bc4 count
 rich-f54dcb299b9d4a45 count
 rich-f5ed5f0028fb9f3c count
 rich-f95d942ec8b4ce07 count
+rich-fc00412478efbe79 count
 rich-fe3ef95cc1294333 count
 
 ## A padded rich pre-wrap span whose line ends inside it, at a line feed or after spaces that hang, at 24 px and wider: Chrome fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
@@ -3289,6 +3299,7 @@ rich-5a97ab786f3e057e count
 rich-61a0d94181d91eec count
 rich-62a3fc75836c636c count
 rich-668d6722303f2370 count
+rich-697c76f383be8646 count
 rich-7207dfa4e9dfe793 count
 rich-807cbc79ec3f2948 count
 rich-81926e46654c3d06 count

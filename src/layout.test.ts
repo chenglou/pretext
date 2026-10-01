@@ -3818,6 +3818,12 @@ describe('rich-inline invariants', () => {
     expect(texts([{ text: 'foofoo   ', font: FONT }, feed], foofoo + spaces + 15)).toEqual(['foofoo   |', 'bar'])
     expect(texts([{ text: 'foo', font: FONT }, { text: '  bar', font: FONT, extraWidth: 15 }], foo + 10)[0]).toBe('foo')
     expect(texts([{ text: 'foo', font: FONT }, { text: '  bar', font: FONT, extraWidth: 15 }], foo + 15)[0]).toBe('foo|  ')
+    // The break a walk leaves at the end of text that ends with preserved spaces is the next
+    // item's, and none comes before a line feed or a space (UAX #14 LB6, LB7), so the line returns
+    // to the break before that text's last word, not to one in an earlier item or to none.
+    expect(texts([{ text: 'foo foo   ', font: FONT }, feed], words + spaces + 5)).toEqual(['foo ', 'foo   |', 'bar'])
+    expect(texts([{ text: 'foo ', font: FONT }, { text: 'foo', font: FONT, extraWidth: 2 }, { text: ' foo foo   ', font: FONT }, feed], measureWidth('foo foo foo foo   ', FONT) + 2 + 5)).toEqual(['foo |foo| foo ', 'foo   |', 'bar'])
+    expect(texts([{ text: 'foo foo   ', font: FONT }, { text: '  bar', font: FONT, extraWidth: 15 }], words + 5)).toEqual(['foo ', 'foo   |  ', 'bar'])
     // A blank line is the next item's line feed, and the line feed that ends the paragraph makes
     // no line: its item gives the last line an empty fragment.
     expect(lines([{ text: 'foo\n', font: FONT }, { text: '\nbaz', font: FONT, extraWidth: 8 }, { text: '\n', font: FONT }], 200)).toEqual([
