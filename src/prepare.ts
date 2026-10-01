@@ -115,30 +115,42 @@ function isSpaceKind(kind: number): boolean {
   return kind === SPACE || kind === PRESERVED_SPACE
 }
 
-// Half of a surrogate pair counts with Common: nearly every character past the BMP that text
-// holds beside a space is an emoji.
-const kerningScriptRe = /(\p{sc=Latn})|(\p{sc=Cyrl})|(\p{sc=Grek})|[\p{sc=Zyyy}\p{sc=Zinh}\p{Cs}]/u
+// The scripts a character can be in as far as kerning with a space goes, as bits: Latin,
+// Cyrillic, Greek and one bit for every other script. A character of any script has them all.
+const LATIN_SCRIPT = 1
+const OTHER_SCRIPT = 8
+const ANY_SCRIPT = 15
+// Blink reads a character's Script_Extensions (ICUScriptData::GetScripts,
+// script_run_iterator.cc:120-216). An Inherited character, or a Common one without extensions,
+// joins any run. A Common one with extensions is in those scripts only, so an ideographic full
+// stop ends a Latin run, and a middle dot, which Latin and Greek share, ends neither. (With one
+// extension it still joins any run in Blink; here it is in that script, which is Han for
+// nearly all of them.) Half of a surrogate pair counts with Common: nearly every character
+// past the BMP that text holds beside a space is an emoji.
+const anyScriptRe = /[\p{sc=Zinh}\p{scx=Zyyy}\p{Cs}]/u
+const latinScriptRe = /\p{scx=Latn}/u
+const cyrillicScriptRe = /\p{scx=Cyrl}/u
+const greekScriptRe = /\p{scx=Grek}/u
 // General categories Ps and Pe, which hold every opening and closing paired bracket
 // (Bidi_Paired_Bracket_Type) and a few characters more, such as the low quotation marks.
 const openingBracketRe = /\p{Ps}/u
 const closingBracketRe = /\p{Pe}/u
 
-// A character's script as far as kerning with a space goes: 0 for Common and Inherited, which
-// take the script of the run they sit in, 1 Latin, 2 Cyrillic, 3 Greek, 4 any other.
-function getKerningScript(character: string): number {
+function getKerningScripts(character: string): number {
   // ASCII letters are Latin and the rest of ASCII is Common.
   const code = character.charCodeAt(0)
-  if (code < 0x80) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? 1 : 0
-  const match = kerningScriptRe.exec(character)
-  return match === null ? 4 : match[1] !== undefined ? 1 : match[2] !== undefined ? 2 : match[3] !== undefined ? 3 : 0
+  if (code < 0x80) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? LATIN_SCRIPT : ANY_SCRIPT
+  if (anyScriptRe.test(character)) return ANY_SCRIPT
+  return (latinScriptRe.test(character) ? LATIN_SCRIPT : 0) | (cyrillicScriptRe.test(character) ? 2 : 0) |
+    (greekScriptRe.test(character) ? 4 : 0) || OTHER_SCRIPT
 }
 
-// How far a text's script runs were read, the script of the run there, 0 before any character
-// with a script, and the script of the run the last opening bracket is in: -1 before a
-// bracket, 0 while its run goes on (readScriptRuns). The functions that read it stay apart
-// from measureAnalysis: as its closures they made preparation up to 1.3 times slower where
-// many words kern with the space before them (Node 23's V8, stand-in Canvas, 2026-10-01).
-type ScriptRuns = { read: number, script: number, bracket: number }
+// How far a text's script runs were read, the scripts the run there can be in, and the script
+// of the run the last opening bracket is in: 0 before a bracket, -1 while its run goes on
+// (readScriptRuns). The functions that read it stay apart from measureAnalysis: as its closures
+// they made preparation up to 1.3 times slower where many words kern with the space before
+// them (Node 23's V8, stand-in Canvas, 2026-10-01).
+type ScriptRuns = { read: number, scripts: number, bracket: number }
 
 // Whether the space before the text segment text[at..end) is in the script run of the character
 // it kerns with there, the segment's first past default ignorables (getSpaceKerning). Blink
@@ -148,45 +160,55 @@ type ScriptRuns = { read: number, script: number, bracket: number }
 // kerns with a word after it only where that word goes on in the same script. The search back
 // ends at the nearest character with a script, which every word that asks starts with, so a
 // text's searches together read it once. A closing bracket takes its opening bracket's script
-// instead, which only reading the runs from the text's start gives.
+// instead, and a character of several scripts the one its run has left it, which only reading
+// the runs from the text's start gives.
 function spaceSharesScriptRun(text: string, at: number, end: number, runs: ScriptRuns): boolean {
-  let script = getKerningScript(text[at]!)
+  let scripts = getKerningScripts(text[at]!)
   // The default ignorables text holds are Common or Inherited; one with a script of its own,
   // as U+061C, counts as the word's first letter.
-  while (script === 0 && at + 1 < end && defaultIgnorableRe.test(text[at]!)) script = getKerningScript(text[++at]!)
-  if (script === 0) return true
+  while (scripts === ANY_SCRIPT && at + 1 < end && defaultIgnorableRe.test(text[at]!)) scripts = getKerningScripts(text[++at]!)
+  if (scripts === ANY_SCRIPT) return true
   for (let i = at - 1; i >= 0; i--) {
     const character = text[i]!
-    const before = getKerningScript(character)
-    if (before !== 0) return before === script
-    if (character !== ' ' && closingBracketRe.test(character)) {
-      const run = readScriptRuns(text, at, runs)
-      return run === 0 || run === script
+    const before = getKerningScripts(character)
+    if (before === ANY_SCRIPT ? character !== ' ' && closingBracketRe.test(character) : (before & (before - 1)) !== 0) {
+      return (readScriptRuns(text, at, runs) & scripts) !== 0
     }
+    if (before !== ANY_SCRIPT) return (before & scripts) !== 0
   }
   return true
 }
 
-// The script of the run that ends before text[to], read on from where the last call stopped as
-// ScriptRunIterator::Consume reads it (script_run_iterator.cc:325-429): a run takes the script
-// of its first character that has one and ends before the next character of another. A closing
-// bracket takes the script of the run its opening bracket is in, once that run has ended
-// (CloseBracket, :443-489, and FixupStack, :574-595). Any opening bracket pairs with any
+// The scripts of the run that ends before text[to], read on from where the last call stopped as
+// ScriptRunIterator::Consume reads it (script_run_iterator.cc:325-429): a run keeps the scripts
+// all its characters share and ends before a character that shares none (MergeSets, :490-565).
+// A closing bracket takes the script of the run its opening bracket is in, once that run has
+// ended (CloseBracket, :443-489, and FixupStack, :574-595). Any opening bracket pairs with any
 // closing one here: Blink pairs them by Bidi_Paired_Bracket, on a stack that keeps a matched
-// opening bracket, so with one kind of bracket it too matches the last one opened.
+// opening bracket, so with one kind of bracket it too matches the last one opened. A Common
+// opening bracket that is East Asian wide, fullwidth or halfwidth is in the Han scripts
+// (FixScriptsByEastAsianWidth, :83-110); past U+2329 those start at U+FE17.
 function readScriptRuns(text: string, to: number, runs: ScriptRuns): number {
   for (; runs.read < to; runs.read++) {
     const character = text[runs.read]!
-    let script = getKerningScript(character)
-    if (script === 0) {
-      if (openingBracketRe.test(character)) runs.bracket = 0
-      else if (runs.bracket > 0 && closingBracketRe.test(character)) script = runs.bracket
+    let scripts = getKerningScripts(character)
+    // Brackets are Common or, with extensions, East Asian.
+    const opens = (scripts & OTHER_SCRIPT) !== 0 && openingBracketRe.test(character)
+    if (opens) {
+      if (character.charCodeAt(0) >= 0xfe17) scripts = OTHER_SCRIPT
+    } else if (runs.bracket > 0 && (scripts & OTHER_SCRIPT) !== 0 && closingBracketRe.test(character)) {
+      scripts = runs.bracket
     }
-    if (script === 0 || script === runs.script) continue
-    if (runs.script !== 0 && runs.bracket === 0) runs.bracket = runs.script
-    runs.script = script
+    if ((runs.scripts & scripts) !== 0) {
+      runs.scripts &= scripts
+    } else {
+      // The run that ends takes the first of the scripts it has left, Latin before the others.
+      if (runs.bracket === -1) runs.bracket = runs.scripts & -runs.scripts
+      runs.scripts = scripts
+    }
+    if (opens) runs.bracket = -1
   }
-  return runs.script
+  return runs.scripts
 }
 
 // Bidi class B: the characters that end a bidi paragraph.
@@ -305,11 +327,8 @@ export function measureAnalysis(
   // Canvas shows a pair only left to right. Which spaces share a level with the word beside
   // them depends on the paragraph's direction, which preparation cannot see, so text that
   // holds a right-to-left letter or an explicit bidi control takes no kerning with spaces. A
-  // text is scanned once, when a word of it first kerns with a space.
+  // text is scanned once, at its first word beside a space, before Canvas is asked.
   let oneDirection: boolean | null = null
-  function isOneDirection(): boolean {
-    return oneDirection ??= !rightToLeftLetterRe.test(normalized) && !explicitBidiControlRe.test(normalized)
-  }
 
   // The source a run of combining marks shapes after when only zero-width glue,
   // controls or other such runs, with no break, separate the run from the grapheme
@@ -379,6 +398,8 @@ export function measureAnalysis(
 
   // Made for the first word whose kerning with the space before it asks for the space's run.
   let scriptRuns: ScriptRuns | null = null
+  // What the word before a space adds to that space, the next segment (SpaceKerning.space).
+  let spaceShare = 0
 
   const widths: number[] = []
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
@@ -478,14 +499,15 @@ export function measureAnalysis(
         if (engineProfile.kerningReach === 'script-run') {
           const afterSpace = mi > 0 && isSpaceKind(flags[mi - 1]! & KIND_BITS)
           const beforeSpace = mi + 1 < segmentCount && isSpaceKind(flags[mi + 1]! & KIND_BITS)
-          if (afterSpace || beforeSpace) {
+          if ((afterSpace || beforeSpace) && (oneDirection ??= !rightToLeftLetterRe.test(normalized) && !explicitBidiControlRe.test(normalized))) {
             const kerning = textMetrics.spaceKerning ?? getSpaceKerning(text, textMetrics, fontMeasurement, spaceWidth)
-            if ((kerning.after !== 0 || kerning.before !== 0) && isOneDirection()) {
-              if (beforeSpace) followingSpaceKerning = kerning.after
-              // The space hangs where a line ends at it, and what it took with it.
-              if (afterSpace && kerning.before !== 0 && !spacesStartLine(mi - 1) && spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length, scriptRuns ??= { read: 0, script: 0, bracket: -1 })) {
-                widths[mi - 1] = widths[mi - 1]! + kerning.before
-              }
+            if (beforeSpace) {
+              followingSpaceKerning = kerning.after
+              spaceShare = kerning.space
+            }
+            // The space hangs where a line ends at it, and what it took with it.
+            if (afterSpace && kerning.before !== 0 && !spacesStartLine(mi - 1) && spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length, scriptRuns ??= { read: 0, scripts: ANY_SCRIPT, bracket: 0 })) {
+              widths[mi - 1] = widths[mi - 1]! + kerning.before
             }
           }
         }
@@ -519,7 +541,8 @@ export function measureAnalysis(
       case SPACE:
       case PRESERVED_SPACE:
       case ZERO_WIDTH_BREAK:
-        width = getTextWidth(text, fontMeasurement, emojiCorrection)
+        width = getTextWidth(text, fontMeasurement, emojiCorrection) + spaceShare
+        spaceShare = 0
         if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
         break
       case TAB:

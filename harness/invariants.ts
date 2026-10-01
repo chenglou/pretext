@@ -6,10 +6,10 @@
 // Each process gives the library a stand-in Canvas: at 16 px a character is 8 px, a space 4, a mark or a format character
 // 0, plus the letter spacing per grapheme. U+2028 measures as the space, whose glyph Chrome draws it with, and kerns 0,
 // 0.5 or 1 px with the character on either side of it, so the Chromium profile's kerning with spaces (getSpaceKerning in
-// src/measurement.ts) is taken here, and a context under text-rendering: optimizeLegibility, where Chrome shapes a string
-// whole, kerns two kana in a row by as much (getKanaKerning). The Blink and Gecko processes run under a desktop user
-// agent with a string `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths
-// those browsers take.
+// src/measurement.ts) is taken here; it shows none under `fontKerning`, so that kerning sits half on each glyph, as a
+// `kern` table's. A context under text-rendering: optimizeLegibility, where Chrome shapes a string whole, kerns two kana
+// in a row by as much (getKanaKerning). The Blink and Gecko processes run under a desktop user agent with a string
+// `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
 // The inputs are seeded draws from harness/cases (a failure names its case, at its width, half and 1.5 times it, 1 and
 // Infinity) and a few fixed ones. The checks:
 // - every line API agrees with walkLineRanges (predict.ts's check), and layoutWithLines and layoutNextLine give equal
