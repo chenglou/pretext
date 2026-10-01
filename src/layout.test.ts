@@ -3592,11 +3592,26 @@ describe('rich-inline invariants', () => {
       expect(lines([item('中中\u3000'), item('\u200B'), item('ab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
       expect(lines([item('中中\u3000'), { width: 0 }, item('\u3000中中')], 40)).toEqual(['中中\u3000||\u3000:32', '中中:32'])
       expect(lines([item('ab cd     '), item('\u200Bef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', 'ef:19.2'])
-      // Preserved spaces after that start hang with it, and a tab, which takes room, starts the
-      // next line, after those spaces too.
+      // Preserved spaces after that start hang with it, in the next item too.
       expect(lines([item('ab cd     '), item('\u200B  ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B  :19.2', 'ef:19.2'])
-      expect(lines([item('ab cd     '), item('\u200B\tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', '\t:0', 'ef:19.2'])
-      expect(lines([item('ab cd     '), item('\u200B  \tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B  :19.2', '\t:0', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u200B'), item('  ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B|  :19.2', 'ef:19.2'])
+      // A tab takes room, and Gecko breaks only after a run of spaces and tabs, so where that
+      // start or those spaces run into a tab, whatever items they span, the item takes nothing
+      // and starts the next line, as in one text, whose line start consumes the ZWSP.
+      for (const parts of [['\u200B\tef'], ['\u200B  \tef'], ['\u200B', '  \tef'], ['\u200B  ', '\tef'], ['\u200B', '  ', '\tef'], ['\u200B\u200B\tef'], ['\u2060 \tef']]) {
+        const got = lines([item('ab cd     '), ...parts.map(part => item(part))], 40, { whiteSpace: 'pre-wrap' }).map(line => line.replace(/[|\u200B]/g, ''))
+        expect({ parts, lines: got }).toEqual({ parts, lines: flat(`ab cd     ${parts.join('')}`, 40, { whiteSpace: 'pre-wrap' }).map(line => line.replace('\u200B', '')) })
+      }
+      expect(lines([item('ab cd     '), item('\u200B  \tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     :19.2', '\u200B  \t:0', 'ef:19.2'])
+      // Firefox gives a run of U+3000 right before a line feed in its item its width, so such
+      // an item takes nothing either; before the next item's line feed, or a letter, the run hangs.
+      for (const text of ['\u3000\nef', '\u3000\u3000\nef', '\u200B\u3000\nef']) {
+        const got = lines([item('ab cd     '), item(text)], 40, { whiteSpace: 'pre-wrap' }).map(line => line.replace('\u200B', ''))
+        expect({ text, lines: got }).toEqual({ text, lines: flat(`ab cd     ${text}`, 40, { whiteSpace: 'pre-wrap' }).map(line => line.replace('\u200B', '')) })
+      }
+      expect(lines([item('ab cd     '), item('\u3000\nef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     :19.2', '\u3000:16', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u3000'), item('\nef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u3000|:40', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u3000ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u3000:19.2', 'ef:19.2'])
     } finally {
       profile.paddedOpeningFit = previousFit
     }
