@@ -1381,6 +1381,9 @@ export function layoutNextRichInlineLineRange(
   start: RichInlineCursor = RICH_INLINE_START_CURSOR,
 ): RichInlineLineRange | null {
   const flow = getInternalPreparedRichInline(prepared)
+  // A start before the first item or an item's first segment, or at no number, has no
+  // line: the walk counts up from it, so one far below 0 would run that long.
+  if (!(start.itemIndex >= 0 && start.segmentIndex >= 0)) return null
   const only = flow.onlyItem
   if (only !== null && start.itemIndex === 0) {
     const safeWidth = Math.max(1, maxWidth)

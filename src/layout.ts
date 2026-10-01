@@ -275,6 +275,10 @@ function stepNextLine(
   lineEnd: LayoutCursor,
 ): number | null {
   const internal = getInternalPrepared(prepared)
+  // A start at no segment of this text, as a cursor kept from a longer text can be, has
+  // no line, like a start past the text's end: the walkers count up from a line's
+  // start, so one far below 0 would run that long.
+  if (internal.widths[start.segmentIndex] === undefined) return null
   lineEnd.segmentIndex = start.segmentIndex
   lineEnd.graphemeIndex = start.graphemeIndex
   if (!normalizePreparedLineStart(internal, lineEnd)) return null

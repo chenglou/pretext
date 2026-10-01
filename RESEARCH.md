@@ -2419,3 +2419,8 @@ decisions for the maintainer.
   with no fragment. A box's width is final, fixed when it's prepared and at least 0, and heights stay the app's, with the
   README's `vertical-align: top` rule (Rich Inline Boundaries, Objects Inside A Line, has the evidence and what reopens
   negative widths and widths given at layout).
+- **2026-10-01: a streamed line's start is checked where it comes in** (#TBD). `layoutNextLine()` and
+  `layoutNextLineRange()` return `null` for a start at a segment the text doesn't have, and
+  `layoutNextRichInlineLineRange()` for an item or segment index that isn't 0 or more (ENGINE_FOLLOWUPS.md, Small ones).
+  The checks aren't in the walkers, which count up from a line's start and so never finished from `-Infinity`, nor
+  since #340 from `NaN` on text the full walker lays out.

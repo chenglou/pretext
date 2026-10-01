@@ -362,6 +362,39 @@ describe('shared public contracts', () => {
     }
   })
 
+  test('a start cursor that is no position in the text gives no line', () => {
+    // The soft hyphen moves the second text to the full walker.
+    for (const text of ['alpha beta', 'alpha be\u00ADta']) {
+      const prepared = prepareWithSegments(text, FONT)
+      for (const start of [
+        terminalCursor(prepared),
+        // A cursor kept from a longer text.
+        { segmentIndex: 99, graphemeIndex: 0 },
+        { segmentIndex: 99, graphemeIndex: 2 },
+        // A segment index that is none of the text's. The walkers count up from a line's
+        // start, so one at -Infinity would never get to the text.
+        { segmentIndex: -1, graphemeIndex: 0 },
+        { segmentIndex: -Infinity, graphemeIndex: 0 },
+        { segmentIndex: 0.5, graphemeIndex: 0 },
+        { segmentIndex: NaN, graphemeIndex: 0 },
+        {} as TestLayoutCursor,
+      ]) for (const width of [1, 100]) {
+        expect(layoutNextLine(prepared, start, width)).toBeNull()
+        expect(layoutNextLineRange(prepared, start, width)).toBeNull()
+      }
+    }
+    // A rich start before the first item, or before an item's first segment.
+    const rich = prepareRichInline([{ text: 'alpha be\u00ADta ', font: FONT }, { text: 'gamma', font: FONT, extraWidth: 4 }])
+    for (const start of [
+      { itemIndex: -1, segmentIndex: 0, graphemeIndex: 0 },
+      { itemIndex: -Infinity, segmentIndex: 0, graphemeIndex: 0 },
+      { itemIndex: NaN, segmentIndex: 0, graphemeIndex: 0 },
+      { itemIndex: 0, segmentIndex: -1, graphemeIndex: 0 },
+      { itemIndex: 1, segmentIndex: -Infinity, graphemeIndex: 0 },
+      { itemIndex: 0, segmentIndex: NaN, graphemeIndex: 0 },
+    ]) expect(layoutNextRichInlineLineRange(rich, 100, start)).toBeNull()
+  })
+
   test('a JSON copy of a handle lays out the same lines', () => {
     // A handle needn't survive JSON (RESEARCH.md, Decisions Log), but no walker may run on
     // without end on a copy, whose per-segment flags have no length. Today a copy lays out
