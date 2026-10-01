@@ -275,10 +275,15 @@ function stepNextLine(
   lineEnd: LayoutCursor,
 ): number | null {
   const internal = getInternalPrepared(prepared)
-  // A start at no segment of this text, as a cursor kept from a longer text can be, has
-  // no line, like a start past the text's end: the walkers count up from a line's
-  // start, so one far below 0 would run that long.
+  // A start is at one of this text's segments, and inside it only before one of the
+  // graphemes its fit advances hold, which is where a line can end. Any other, as a
+  // cursor kept from another text can be, has no line, like a start past the text's
+  // end: the walkers count up from a line's start, so one far below 0 would run that long.
   if (internal.widths[start.segmentIndex] === undefined) return null
+  if (start.graphemeIndex > 0) {
+    const advances = internal.breakableFitAdvances[start.segmentIndex] as number[] | null
+    if (advances === null || advances[start.graphemeIndex] === undefined) return null
+  }
   lineEnd.segmentIndex = start.segmentIndex
   lineEnd.graphemeIndex = start.graphemeIndex
   if (!normalizePreparedLineStart(internal, lineEnd)) return null

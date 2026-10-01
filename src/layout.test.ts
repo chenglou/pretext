@@ -363,14 +363,22 @@ describe('shared public contracts', () => {
   })
 
   test('a start cursor that is no position in the text gives no line', () => {
-    // The soft hyphen moves the second text to the full walker.
+    // The soft hyphen moves the second text to the full walker. Its first segment, and
+    // 'alpha beta''s, has five graphemes, and a space follows.
     for (const text of ['alpha beta', 'alpha be\u00ADta']) {
       const prepared = prepareWithSegments(text, FONT)
+      expect(prepared.segments.slice(0, 2)).toEqual(['alpha', ' '])
       for (const start of [
         terminalCursor(prepared),
         // A cursor kept from a longer text.
         { segmentIndex: 99, graphemeIndex: 0 },
         { segmentIndex: 99, graphemeIndex: 2 },
+        { segmentIndex: 0, graphemeIndex: 99 },
+        // After a segment's last grapheme is the next segment's start, which is how a
+        // line's end has it.
+        { segmentIndex: 0, graphemeIndex: 5 },
+        // A space has no position inside.
+        { segmentIndex: 1, graphemeIndex: 1 },
         // A segment index that is none of the text's. The walkers count up from a line's
         // start, so one at -Infinity would never get to the text.
         { segmentIndex: -1, graphemeIndex: 0 },
@@ -378,10 +386,18 @@ describe('shared public contracts', () => {
         { segmentIndex: 0.5, graphemeIndex: 0 },
         { segmentIndex: NaN, graphemeIndex: 0 },
         {} as TestLayoutCursor,
+        { segmentIndex: 0, graphemeIndex: 1.5 },
       ]) for (const width of [1, 100]) {
         expect(layoutNextLine(prepared, start, width)).toBeNull()
         expect(layoutNextLineRange(prepared, start, width)).toBeNull()
       }
+      // A grapheme inside a word is a position, and a grapheme index that isn't above 0
+      // reads as the segment's start.
+      expect(layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 2 }, 1)!.text).toBe('p')
+      expect(layoutNextLine(prepared, { segmentIndex: 0 } as TestLayoutCursor, 1)!.text).toBe('a')
+      // A line that ends with a segment's last grapheme ends at a segment's start: here
+      // after the space, which hangs.
+      expect(layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 4 }, 1)!.end).toEqual({ segmentIndex: 2, graphemeIndex: 0 })
     }
     // A rich start before the first item, or before an item's first segment.
     const rich = prepareRichInline([{ text: 'alpha be\u00ADta ', font: FONT }, { text: 'gamma', font: FONT, extraWidth: 4 }])

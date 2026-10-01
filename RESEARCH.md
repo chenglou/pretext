@@ -2419,8 +2419,13 @@ decisions for the maintainer.
   with no fragment. A box's width is final, fixed when it's prepared and at least 0, and heights stay the app's, with the
   README's `vertical-align: top` rule (Rich Inline Boundaries, Objects Inside A Line, has the evidence and what reopens
   negative widths and widths given at layout).
-- **2026-10-01: a streamed line's start is checked where it comes in** (#TBD). `layoutNextLine()` and
-  `layoutNextLineRange()` return `null` for a start at a segment the text doesn't have, and
-  `layoutNextRichInlineLineRange()` for an item or segment index that isn't 0 or more (ENGINE_FOLLOWUPS.md, Small ones).
-  The checks aren't in the walkers, which count up from a line's start and so never finished from `-Infinity`, nor
-  since #340 from `NaN` on text the full walker lays out.
+- **2026-10-01: a streamed line starts only where a line can end** (#TBD). `layoutNextLine()` and
+  `layoutNextLineRange()` return `null` for a start at a segment the text doesn't have, or inside a segment anywhere but
+  before one of the graphemes its fit advances hold; `layoutNextRichInlineLineRange()` checks only that the item and
+  segment indexes are 0 or more (ENGINE_FOLLOWUPS.md, Small ones). The checks sit where a cursor comes in, not in the
+  walkers, which count up from a line's start and so never finished from `-Infinity`, nor since #340 from `NaN` on text
+  the full walker lays out. A start after a segment's last grapheme gets `null` too, not the next segment's line: a
+  cursor's grapheme index is 0 at a segment boundary, no line API ends a line otherwise (none of 1.1 to 1.4 million
+  cursors inside a segment in each engine profile, offline, 2026-10-01), and only a segment that can break inside keeps
+  a grapheme count at layout time, so reading such a start as the next one would hold after those segments alone. It
+  reopens if a line API comes to emit such a cursor.
