@@ -4752,7 +4752,7 @@ describe('layout invariants', () => {
         const counted = countPreparedLines(prepared, width)
         const walked = walkPreparedLinesRaw(prepared, width)
         expect(counted).toBe(walked)
-        // Without its one-line fit, a handle is counted by the loop alone.
+        // Without its one-line fit, a handle is counted segment by segment.
         expect(countPreparedLines({ ...prepared, oneLineFit: NaN }, width)).toBe(counted)
       }
     }
@@ -4771,8 +4771,10 @@ describe('layout invariants', () => {
     expect(fitOf('a')).toBe(-Infinity)
     expect(layout(prepare('a', FONT), 0, LINE_HEIGHT).lineCount).toBe(1)
     expect(fitOf('a b')).toBe(measureWidth('a', FONT) + measureWidth(' ', FONT) + measureWidth('b', FONT))
-    // A text without a line has none at any width, and the loop doesn't count preserved
-    // spaces, letter-spaced text or soft hyphens.
+    // A ZWSP at the start of the text starts the line too.
+    expect(fitOf('\u200Ba b')).toBe(fitOf('a b'))
+    // A text without a line has none at any width, and preserved spaces, letter-spaced
+    // text and soft hyphens are off the simple walkers' fast path.
     expect(fitOf('')).toBeNaN()
     expect(layout(prepare('', FONT), Infinity, LINE_HEIGHT).lineCount).toBe(0)
     expect(fitOf('hello world', { whiteSpace: 'pre-wrap' })).toBeNaN()
@@ -5048,6 +5050,27 @@ describe('layout invariants', () => {
           expect(layoutWithLines(complex, width, LINE_HEIGHT)).toEqual(lines)
         }
       }
+      // A handle with overflow trims, which the stepper counts, has a one-line fit too: the
+      // stepper counts the same without it, and the line walkers the same, at every width.
+      const trimmedTexts = ['中」 中', '」\u200B中', '中」 中」 中', '「中」 「中」']
+      for (let t = 0; t < trimmedTexts.length; t++) {
+        const prepared = prepareWithSegments(trimmedTexts[t]!, font)
+        const { oneLineFit, overflowLineEndTrims } = prepared as unknown as { oneLineFit: number, overflowLineEndTrims: number[] | null }
+        expect(overflowLineEndTrims).not.toBeNull()
+        expect(oneLineFit).toBeLessThanOrEqual(measureNaturalWidth(prepared))
+        expect(countPreparedLines(prepared, oneLineFit)).toBe(1)
+        for (let width = 0; width <= 120; width += 0.5) {
+          const counted = countPreparedLines(prepared, width)
+          expect({ text: trimmedTexts[t], width, counted: countPreparedLines({ ...prepared, oneLineFit: NaN }, width) }).toEqual({ text: trimmedTexts[t], width, counted })
+          expect(walkPreparedLinesRaw(prepared, width)).toBe(counted)
+        }
+      }
+      // A closing mark that ends the line fits halted, so the fit takes its line-end trim,
+      // of the first segment and of a later one.
+      const fitOf = (text: string): number => (prepare(text, font) as unknown as { oneLineFit: number }).oneLineFit
+      expect(fitOf('中」')).toBe(24)
+      expect(fitOf('中中中中」')).toBe(72)
+      expect(fitOf('「中」 「中」')).toBe(measureNaturalWidth(prepareWithSegments('「中」 「中」', font)) - 8)
       // A line that ends with a halted mark paints it halted, where what follows it takes no room:
       // a space, which fits with letter spacing where the mark and the gap after it don't, and
       // a preserved space that fits at the end of the text.
