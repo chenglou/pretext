@@ -10,7 +10,7 @@
 //   the rebuild's runs families do, and spaces at span edges;
 // - chips and code spans as the demos write them: an atomic mention chip with padding, and inline code with padding
 //   that can break (pages/demos/rich-note.model.ts, markdown-chat.model.ts); and, cut on its own, chips of only white
-//   space and with no text, padded and bare, which are boxes in their line as any chip;
+//   space, padded and bare, which are boxes in their line as any chip;
 // - the shapes whose lines changed when items began to continue the line instead of starting one, each beside a
 //   neighbour, cut on their own since the other templates' widths were searched in older browser builds: a soft hyphen
 //   that starts an item after other text, after an ideograph or emoji, before a combining mark or after a space, two
@@ -168,8 +168,8 @@ export function richTemplates(): Template[] {
     out.push(template(chip ? 'chips' : 'code-spans', chip ? 'an atomic mention chip with padding (pages/demos/rich-note.model.ts)' : 'inline code with padding (pages/demos/rich-note.model.ts)',
       HELVETICA, [...(before === '' ? [] : [before]), run, after], lang))
   }
-  out.push(template('chips-without-text', 'atomic items of only white space and of no text (src/layout.test.ts, rich-inline invariants)', HELVETICA,
-    ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review ', span('', CHIP, { atomic: true, padding: 11 }), 'merging', span('', CHIP, { atomic: true }), 'now']))
+  out.push(template('chips-of-white-space', 'atomic items of only white space, padded and bare (src/layout.test.ts, rich-inline invariants)', HELVETICA,
+    ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review ', span('\n', CHIP, { atomic: true, padding: 11 }), 'merging', span(' ', CHIP, { atomic: true }), 'now']))
   const continued: ReadonlyArray<readonly [string, readonly Part[], string?]> = [
     ['soft-hyphen-start', ['Pre', '\u{AD}text lays out text']], ['soft-hyphen-start', ['na', '\u{AD}tion', 'al parks']],
     ['soft-hyphen-after-ideograph', ['漢字', '\u{AD}ab', 'cd'], 'zh'], ['soft-hyphen-after-ideograph', ['\u{1F60A}', '\u{AD}ab cd']],
@@ -254,7 +254,7 @@ export function richTemplates(): Template[] {
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  ', BOLD(HELVETICA)), 'next words']],
     ['chip-before-split-spaces', HELVETICA, [span('@alice', CHIP, { atomic: true, padding: 11 }), span(' ', BOLD(HELVETICA)), '  next words']],
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  \t', BOLD(HELVETICA)), 'next words']],
-    ['chip-without-text', HELVETICA, ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review']],
+    ['chip-of-white-space', HELVETICA, ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review']],
     ['spaces-in-spans-before-padded-span', HELVETICA, ['Some words', span('  ', BOLD(HELVETICA)), span(' ', ITALIC(HELVETICA)), span(' x y', CODE, { padding: 8 }), ' tail']],
   ]
   for (let i = 0; i < preWrap.length; i++) {

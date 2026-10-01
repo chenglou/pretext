@@ -3238,31 +3238,38 @@ describe('rich-inline invariants', () => {
     }
   })
 
-  test('an atomic rich item of only white space, or of no text, is an object as wide as its extraWidth', () => {
+  test('an atomic rich item of only white space is an object as wide as its extraWidth, and one of no text is dropped', () => {
     // An inline-block is a box in its line whatever its text: its own white space collapses away inside
     // it, and a line can break on both sides of it. Chrome, Firefox and Safari lay out `ab`, a chip of two
     // spaces with 5px padding and `cd` in 16px Arial at 40px as `ab` and the chip, then `cd`, in normal
     // white space and in pre-wrap.
     const ab = measureWidth('ab', FONT)
     const round = (value: number) => Math.round(value * 1e6) / 1e6
+    const lines = (items: Parameters<typeof prepareRichInline>[0], whiteSpace: 'normal' | 'pre-wrap', width: number) => {
+      const prepared = prepareRichInline(items, { whiteSpace })
+      const out: Array<Array<[number, string, number, number, number]>> = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        out.push(materializeRichInlineLineRange(prepared, range).fragments.map(f => [f.itemIndex, f.text, round(f.occupiedWidth), f.sourceStart, f.sourceEnd]))
+      })
+      expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
+      return out
+    }
     for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
-      for (const text of ['  ', '\n', '']) {
+      for (const text of ['  ', '\n']) {
         const items = [{ text: 'ab', font: FONT }, { text, font: FONT, break: 'never', extraWidth: 10 } as const, { text: 'cd', font: FONT }]
-        const prepared = prepareRichInline(items, { whiteSpace })
-        const lines = (width: number) => {
-          const out: Array<Array<[number, string, number, number, number]>> = []
-          walkRichInlineLineRanges(prepared, width, range => {
-            out.push(materializeRichInlineLineRange(prepared, range).fragments.map(f => [f.itemIndex, f.text, round(f.occupiedWidth), f.sourceStart, f.sourceEnd]))
-          })
-          expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
-          return out
-        }
         const chip: [number, string, number, number, number] = [1, '', 10, text.length, text.length]
-        expect(lines(Infinity)).toEqual([[[0, 'ab', round(ab), 0, 2], chip, [2, 'cd', round(ab), 0, 2]]])
-        expect(measureRichInlineStats(prepared, Infinity).maxLineWidth).toBeCloseTo(2 * ab + 10, 6)
-        expect(lines(ab + 10)).toEqual([[[0, 'ab', round(ab), 0, 2], chip], [[2, 'cd', round(ab), 0, 2]]])
-        expect(lines(ab + 9)).toEqual([[[0, 'ab', round(ab), 0, 2]], [chip], [[2, 'cd', round(ab), 0, 2]]])
+        expect(lines(items, whiteSpace, Infinity)).toEqual([[[0, 'ab', round(ab), 0, 2], chip, [2, 'cd', round(ab), 0, 2]]])
+        expect(measureRichInlineStats(prepareRichInline(items, { whiteSpace }), Infinity).maxLineWidth).toBeCloseTo(2 * ab + 10, 6)
+        expect(lines(items, whiteSpace, ab + 10)).toEqual([[[0, 'ab', round(ab), 0, 2], chip], [[2, 'cd', round(ab), 0, 2]]])
+        expect(lines(items, whiteSpace, ab + 9)).toEqual([[[0, 'ab', round(ab), 0, 2]], [chip], [[2, 'cd', round(ab), 0, 2]]])
       }
+      // An item whose text is empty is dropped, an atomic one with its extraWidth too: no fragment, no
+      // width and no break where it was, as apps empty a run to hide it.
+      const hidden = [{ text: 'ab', font: FONT }, { text: '', font: FONT, break: 'never' } as const, { text: '', font: FONT, break: 'never', extraWidth: 10 } as const, { text: 'cd', font: FONT }]
+      expect(lines(hidden, whiteSpace, Infinity)).toEqual([[[0, 'ab', round(ab), 0, 2], [3, 'cd', round(ab), 0, 2]]])
+      expect(measureRichInlineStats(prepareRichInline(hidden, { whiteSpace }), Infinity).maxLineWidth).toBeCloseTo(2 * ab, 6)
+      expect(lines(hidden, whiteSpace, 2 * ab)).toHaveLength(1)
+      expect(lines([{ text: '', font: FONT, break: 'never', extraWidth: 10 }], whiteSpace, Infinity)).toEqual([])
     }
   })
 

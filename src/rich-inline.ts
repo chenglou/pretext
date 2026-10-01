@@ -214,7 +214,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // trailing (InlineLineBuilder.cpp:646); Gecko's text run stops at the box
   // (BuildTextRunsScanner::ScanFrame, nsTextFrame.cpp:2248-2254), and its own lines skip leading
   // white space (nsTextFrame.cpp:10935-10944) and trim trailing (nsBlockFrame.cpp:5844). So an
-  // atomic item of only white space, or of no text, is still an object, as wide as its extraWidth.
+  // atomic item of only white space is still an object, as wide as its extraWidth. An item whose
+  // text is empty, atomic or not, is dropped, with no fragment and no width: apps empty a run to
+  // hide it (RESEARCH.md, Objects Inside A Line).
   let source = ''
   const starts: number[] = []
   const atomic: boolean[] = []
@@ -237,7 +239,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       paddedOrObject = true
       continue
     }
-    const isAtomic = item.break === 'never'
+    const isAtomic = item.break === 'never' && item.text !== ''
     atomic.push(isAtomic)
     if (isAtomic) {
       source += '\uFFFC'
