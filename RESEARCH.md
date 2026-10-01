@@ -241,9 +241,11 @@ and its unit tests (`rebuild/src/engines/<engine>/`) against the engine's source
 - **Design from shared structure**: once plain speed engineering is exhausted, find what calls share and skip
   recomputing it, from a cost model first. Demos show hard technical cases that developers adapt to their own uses; they
   don't tell which uses are common (2026-09-26). Don't overfit to today's uses.
-- **The public exports didn't change** while the engine work from #340 on landed. The API discussion, a review of the
-  whole public API at the end of the project and before any release, has issue #321's `direction` option and
-  `devicePixelRatio` in `layout()` on its list (TODO.md). One bundle serves every engine (Decisions Log, 2026-09-26).
+- **The public exports grew only by types** while the engine work from #340 on landed: `RichInlineOptions` for the
+  options `prepareRichInline()` now takes (#379, #381), `RichInlineBox` for its box items (#387) and
+  `SegmentBreakKind` (#TBD). The API discussion, a review of the whole public API at the end of the project and before
+  any release, has issue #321's `direction` option and `devicePixelRatio` in `layout()` on its list (TODO.md). One
+  bundle serves every engine (Decisions Log, 2026-09-26).
 - **The rich surface** stays split between stats and range helpers and materializing ones, one decision algorithm behind
   batch walks and one-line steps; speed work for rich text and manual layout belongs in the range and cursor APIs.
   `getTextClusters()`, a Canvas API that returns each cluster's position (behind a flag in Chrome 153; Engine Facts,

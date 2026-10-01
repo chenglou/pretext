@@ -96,9 +96,11 @@ async function smokeTypeScript(tarballPath: string): Promise<void> {
   await writeFile(
     path.join(projectDir, 'index.ts'),
     [
-      "import { layout, prepare } from '@chenglou/pretext'",
+      "import { layout, prepare, prepareWithSegments, type SegmentBreakKind } from '@chenglou/pretext'",
       "import { measureRichInlineStats, prepareRichInline, type RichInlineBox } from '@chenglou/pretext/rich-inline'",
       "const prepared = prepare('hello', '16px Inter')",
+      "const kinds: SegmentBreakKind[] = prepareWithSegments('hello world', '16px Inter').kinds",
+      'kinds.length satisfies number',
       "const box: RichInlineBox = { width: 20 }",
       "measureRichInlineStats(prepareRichInline([{ text: 'hi', font: '16px Inter', break: 'never' }, box]), 100).lineCount satisfies number",
       "const keepAllPrepared = prepare('안녕하세요 세계', '16px Inter', { wordBreak: 'keep-all' })",

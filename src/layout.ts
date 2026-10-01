@@ -50,6 +50,8 @@ export type PreparedTextWithSegments = InternalPreparedText & {
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
 }
 
+export type { SegmentBreakKind }
+
 export type LayoutCursor = {
   segmentIndex: number // Segment index in `segments`
   graphemeIndex: number // Grapheme index within that segment; `0` at segment boundaries
