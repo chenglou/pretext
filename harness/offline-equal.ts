@@ -2,8 +2,8 @@
 // (invariants.ts), in seconds, before any browser time. cli.ts runs this file once per engine profile, since the library
 // reads the profile from the user agent once per process:
 //
-//   bun harness/offline-equal.ts --profile=blink|webkit|gecko|unknown --a=<src dir> --b=<src dir> [--draws=15000] [--rich=1500]
-//     [--bench=none]
+//   bun harness/offline-equal.ts --profile=blink|webkit|webkit-safari-26|gecko|unknown --a=<src dir> --b=<src dir>
+//     [--draws=15000] [--rich=1500] [--bench=none]
 //
 // Each process loads both builds and gives them the same inputs in the same order, each under its page language:
 // seeded draws from harness/cases and the bench's texts. Every 200 inputs it clears both builds' caches. An input differs
@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path'
 import type { LayoutCursor, PrepareOptions } from '../src/layout.ts'
 import type { RichInlineBox, RichInlineCursor, RichInlineItem } from '../src/rich-inline.ts'
 import { labels, MESSAGE_FAMILIES, reader, richItems as benchItems, shapes, STYLE } from './bench/texts.ts'
-import { drawCases, PROFILES, standInWidth, type Profile } from './invariants.ts'
+import { drawCases, PROFILES, standInBrowser, standInWidth, type Profile } from './invariants.ts'
 import { canvasFont, isRich, prepareOptions, richItems, richOptions } from './predict.ts'
 
 const flag = (name: string): string | undefined => process.argv.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
@@ -31,7 +31,7 @@ const spaced = profile === 'blink' || profile === 'gecko'
 const measured = [0, 1].map(() => ({ calls: 0, units: 0, log: '' }))
 let current = measured[0]!
 const root = { lang: '' }
-Object.defineProperty(globalThis, 'navigator', { value: { userAgent: PROFILES[profile] }, configurable: true })
+standInBrowser(profile)
 Object.defineProperty(globalThis, 'document', { value: { documentElement: root, body: null }, configurable: true })
 Reflect.set(globalThis, 'OffscreenCanvas', class {
   getContext(): unknown {

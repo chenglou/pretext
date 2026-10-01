@@ -1,8 +1,11 @@
 // What an app relies on in the line APIs that no recording shows, checked offline. `bun test harness` runs it in one
 // process per engine profile, since the library reads the profile from the user agent once per process:
 //
-//   bun harness/invariants.ts --profile=blink|webkit|gecko|unknown [--lib=<src dir>] [--draws=500] [--rich=100]
+//   bun harness/invariants.ts --profile=blink|webkit|webkit-safari-26|gecko|unknown [--lib=<src dir>] [--draws=500]
+//     [--rich=100]
 //
+// `webkit` is Safari 27 and `webkit-safari-26` the WebKit profile under Safari 26's line-break rules, which no pinned
+// browser runs (ENGINE_FOLLOWUPS.md, Safari 26).
 // Each process gives the library a stand-in Canvas: at 16 px a character is 8 px, a space 4, a mark or a format character
 // 0, plus the letter spacing per grapheme. The Blink and Gecko processes run under a desktop user agent with a string
 // `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
@@ -43,6 +46,7 @@ import type { Case } from './types.ts'
 export const PROFILES = {
   blink: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
   webkit: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
+  'webkit-safari-26': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15',
   gecko: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0',
   unknown: '',
 } as const
@@ -58,6 +62,16 @@ export function standInWidth(text: string, font: string, letterSpacing: number):
   let count = 0
   if (letterSpacing !== 0) for (const _ of graphemes.segment(text)) count++
   return width * size + count * letterSpacing
+}
+
+// The browser this process stands in for: the profile's user agent, and for Safari 26 neither of the two APIs the
+// library takes for Safari 27's WebKit (isWebKitBefore7625 in src/measurement.ts), both of which Bun has.
+export function standInBrowser(profile: Profile): void {
+  Object.defineProperty(globalThis, 'navigator', { value: { userAgent: PROFILES[profile] }, configurable: true })
+  if (profile === 'webkit-safari-26') {
+    Reflect.deleteProperty(ReadableStream, 'from')
+    Reflect.deleteProperty(WebAssembly, 'Suspending')
+  }
 }
 
 // measureText calls and the UTF-16 units submitted to them.
@@ -76,7 +90,7 @@ function installStandIn(profile: Profile): void {
     }
     return ctx
   }
-  Object.defineProperty(globalThis, 'navigator', { value: { userAgent: PROFILES[profile] }, configurable: true })
+  standInBrowser(profile)
   Reflect.set(globalThis, 'OffscreenCanvas', class { getContext(): ReturnType<typeof context> { return context() } })
 }
 
@@ -127,6 +141,10 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
     failures.counts[check] = (failures.counts[check] ?? 0) + 1
     if (failures.list.length < 40) failures.list.push(`${check}: ${label}: ${detail}`)
   }
+  // The library must read this process as the profile's browser, or the run repeats another profile's.
+  const { getEngineProfile } = await import(join(lib, 'measurement.ts')) as typeof import('../src/measurement.ts')
+  const scan = getEngineProfile().lineBreakScan
+  if (scan !== (profile === 'unknown' ? 'blink' : profile)) fail('profile', profile, `the library takes the ${scan} scan`)
   const same = (a: unknown, b: unknown): boolean => Bun.deepEquals(a, b, true)
   const json = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 

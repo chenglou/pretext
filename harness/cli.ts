@@ -445,7 +445,7 @@ export async function equal(browser: BrowserKind, cases: Case[], setOf: Map<stri
 // after 60 s. It compares src/ only, as this tree's harness drives both builds.
 async function offlineEqual(ref: string, lib: string, io: Io): Promise<boolean> {
   const theirs = srcOf(ref)
-  const results = await Promise.all(['blink', 'webkit', 'gecko', 'unknown'].map(async profile => {
+  const results = await Promise.all(['blink', 'webkit', 'webkit-safari-26', 'gecko', 'unknown'].map(async profile => {
     const child = Bun.spawn([process.execPath, join(import.meta.dir, 'offline-equal.ts'), `--profile=${profile}`, `--a=${lib}`, `--b=${theirs}`], { stdout: 'pipe', stderr: 'inherit', timeout: 60_000, killSignal: 'SIGKILL' })
     const [out, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
     if (code !== 0) throw new Error(`equal --offline in the ${profile} profile exited ${code}`)
