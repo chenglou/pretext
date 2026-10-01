@@ -5253,6 +5253,17 @@ describe('layout invariants', () => {
       expect(measureRichInlineStats(halted, 46)).toEqual({ lineCount: 1, maxLineWidth: 45 })
       expect(measureRichInlineStats(halted, 53)).toEqual({ lineCount: 1, maxLineWidth: 53 })
       expect(measureRichInlineStats(halted, 52)).toEqual({ lineCount: 2, maxLineWidth: 48 })
+      // Blink halts it only where a break comes right after it, and its scan gives none before
+      // a space, so before its item's own trailing space, the next item's leading one or an item
+      // of one, the mark keeps its width, as in one text; before a letter it halts.
+      for (const items of [[{ text: '中中」 ' }, { text: '中' }], [{ text: '中中」' }, { text: ' 中' }], [{ text: '中中」' }, { text: ' ' }, { text: '中' }]]) {
+        for (const width of [40, 47, 48]) {
+          const flat = layoutWithLines(prepareWithSegments('中中」 中', font), width, LINE_HEIGHT).lines.map(line => `${line.text.trimEnd()}:${Math.round(line.width * 100) / 100}`)
+          expect({ items, width, lines: richLines(items, width) }).toEqual({ items, width, lines: flat })
+        }
+        expect(richLines(items, 46)).toEqual(['中:16', '中」:32', '中:16'])
+      }
+      expect(richLines([{ text: '中中」' }, { text: '中' }], 46)).toEqual(['中中」:40', '中:16'])
     } finally {
       Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
     }

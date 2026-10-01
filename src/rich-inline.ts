@@ -502,6 +502,21 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
   }
 
+  // Blink halts a closing mark at a line's end only where a break comes right after it, and its
+  // scan gives none before a space, a tab or a line feed (src/han-kerning.ts), whichever item
+  // holds that. There the halt an item's own text gives the mark it ends with is the one only a
+  // line broken between graphemes takes (overflowLineEndTrims), as in one text: in 16px
+  // Hiragino Sans, Chrome 154 fits `文字）` in 40-47px before a span `i`, and before a span that
+  // starts with a space it breaks before `字`.
+  function leaveEndHaltToOverflow(item: PreparedRichInlineItem): void {
+    const { prepared } = item
+    const last = prepared.widths.length - 1
+    const trim = prepared.lineEndTrims === null ? 0 : prepared.lineEndTrims[last]!
+    if (trim === 0 || prepared.segments[last]!.endsWith('\u3000')) return
+    prepared.lineEndTrims![last] = 0
+    ;(prepared.overflowLineEndTrims ??= zeros(last + 1))[last] = trim
+  }
+
   function finishJoinedText(): void {
     if (joinedPortions.length > 1) {
       // Only a window with an item boundary needs its text.
@@ -540,6 +555,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
             const before = joinedPortions[i - 1]!
             if (joinedText.charCodeAt(portion.start) === 0x3000) before.item.endHangs = false
             if (profile.hanKerning) haltAcrossItems(before, portion, joinedText)
+            if (!portion.item.breakBefore) leaveEndHaltToOverflow(before.item)
           }
           recordJoinedBreaks(portion, joined, j, i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length, walkedFlags)
         }
@@ -756,6 +772,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 
     if (previousItem === null || whitespaceBefore || preparedItem.break === 'never' || previousItem.break === 'never') {
       finishJoinedText()
+      if (whitespaceBefore && previousItem !== null) leaveEndHaltToOverflow(previousItem)
       preparedItem.breakBefore = whitespaceBefore || (previousItem !== null && breaksAfterAtomic)
     }
     if (preparedItem.break === 'never') {

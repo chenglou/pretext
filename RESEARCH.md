@@ -940,7 +940,14 @@ none of its cases moved.
   widths from 60 to 200px.
 - A closing mark that Chrome halts at a span's end, where the span fits only so, stays halted where the line goes on:
   `文字」` and a span `i` take one 43.81px line at 44-47px, where their text in one node takes two, of 40px and
-  3.81px. Rich inline did this before #TBD, and still does.
+  3.81px. Rich inline did this before #TBD, and still does. Chrome halts the mark only where a break comes right
+  after it (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:342-363`), and its scan gives none before a
+  space, a tab or a line feed: `文字）` before a span that starts with a space, or with that space ending its own
+  span, or before a span that starts with a line feed in pre-wrap, breaks before `字` at 40-47px, as in one node.
+  Rich inline had kept `文字）` halted on one line there, since an item's own text ends at the mark: 8 of the 49
+  widths from 28px to 76px for each of 12 such shapes, and 50 of 726 widths for six styled sentences with a space
+  after a bold or linked closing bracket, which all pass since #TBD but 32 widths of two sentences that fail for
+  U+3000 after a space (below).
 
 On a probe of 23,757 cases recorded fresh in two document orders (styled Japanese and Chinese sentences at 120-600px
 in nine font stacks; pairs of marks across span edges at 16-160px, and inside units filled grapheme by grapheme; U+3000
@@ -948,7 +955,13 @@ at a span's end before letters, digits, emoji, boxes, chips, closing marks, a ZW
 normal white space and pre-wrap; a ZWSP or U+3000 that starts a span after other overflow; and a chip of only white
 space, Objects Inside A Line), #TBD fixed 3,170 Chrome, 506 Firefox and 357 webkit-host cases and lost none
 (2026-10-01): the styled sentences went from 5,608 to 6,199 of 6,210 in Chrome through the pair halt, and none moved
-in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. What it
+in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. Three more probes
+of 39,547 cases that looked for what breaks at these edges (a collapsible space before or after the run, a start
+that takes no room before a tab or spaces, a soft hyphen after a split pair, sentences that use U+3000 as a
+separator, and 5,000 seeded draws) fixed 2,838 Chrome, 1,063 Firefox and 231 webkit-host cases and lost 41 Chrome
+and 14 Firefox cases that main passed: in Chrome 13 where the pair halt gives the right widths and a soft hyphen's
+hyphen then doesn't fit, 17 that score a collapsible space after the run, and 11 through U+3000 hangs the
+plain-text walker gets wrong, which main's own errors hid; in Firefox 13 at 16-20px and one of those hangs. What it
 leaves is in ENGINE_FOLLOWUPS.md (Line edges; Rich-inline item edges, CJK at an item's edge). A Chrome that stops
 halting across spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
 
