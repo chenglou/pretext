@@ -4763,6 +4763,53 @@ describe('layout invariants', () => {
     expect(measureNaturalWidth(prepared)).toBe(measureWidth('wide line', FONT))
   })
 
+  test('the WebKit profile floors the width to its layout unit before the fit, from the float CSS stores', () => {
+    // Safari's available width is the block's width as a LayoutUnit, the CSS width cut down to
+    // 1/64px, plus one unit (EngineProfile.lineFitUnit), so a line fits a block whose floored
+    // width it overflows by at most that unit.
+    const profile = getEngineProfile()
+    const previous = { lineFitEpsilon: profile.lineFitEpsilon, lineFitUnit: profile.lineFitUnit }
+    const unit = 1 / 64
+    const text = 'aaaa bbbb'
+    const width = measureWidth(text, FONT)
+    const grid = Math.floor(width / unit) * unit
+    // The text is wider than `grid`, by under a unit.
+    expect(width - grid).toBeGreaterThan(0)
+    expect(width - grid).toBeLessThan(unit * 255 / 256)
+    const lineCounts = (maxWidth: number): number[] => {
+      const prepared = prepareWithSegments(text, FONT)
+      const first = layoutNextLineRange(prepared, { segmentIndex: 0, graphemeIndex: 0 }, maxWidth)!
+      const rich = prepareRichInline([{ text: 'aaaa ', font: FONT }, { text: 'bbbb', font: FONT }])
+      return [
+        layout(prepare(text, FONT), maxWidth, LINE_HEIGHT).lineCount,
+        measureLineStats(prepared, maxWidth).lineCount,
+        walkLineRanges(prepared, maxWidth, () => {}),
+        layoutWithLines(prepared, maxWidth, LINE_HEIGHT).lineCount,
+        layoutNextLineRange(prepared, first.end, maxWidth) === null ? 1 : 2,
+        measureRichInlineStats(prepareRichInline([{ text, font: FONT }]), maxWidth).lineCount,
+        measureRichInlineStats(rich, maxWidth).lineCount,
+        walkRichInlineLineRanges(rich, maxWidth, () => {}),
+      ]
+    }
+    const all = (count: number): number[] => Array.from({ length: 8 }, () => count)
+    try {
+      profile.lineFitEpsilon = unit
+      profile.lineFitUnit = unit
+      clearCache()
+      expect(lineCounts(grid)).toEqual(all(1))
+      // A width a hair under the grid floors to the unit below, where the text overflows by more than a unit.
+      expect(lineCounts(grid - unit / 256)).toEqual(all(2))
+      // A double that rounds to the float `grid`, as a sum in JavaScript leaves one, is `grid`.
+      expect(lineCounts(grid - 1e-9)).toEqual(all(1))
+      // Without a unit the width counts as given.
+      profile.lineFitUnit = 0
+      expect(lineCounts(grid - unit / 256)).toEqual(all(1))
+    } finally {
+      Object.assign(profile, previous)
+      clearCache()
+    }
+  })
+
   test('countPreparedLines stays aligned with the walked line counter', () => {
     const epsilon = getEngineProfile().lineFitEpsilon
     const texts = [

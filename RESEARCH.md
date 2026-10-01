@@ -420,8 +420,13 @@ while the position is at most that plus one unit (`line_breaker.h:307-317`), a 1
 the width truncated to 1/64 px plus 1/64 px, ignoring DPR (`InlineLineBuilder.cpp:1172-1183`, webkit-7625.1.29.11.27),
 which reproduced Core Text's widths on all but 17 of 2.6 million items (emulation study, Safari 26.5.2). Firefox fits in
 integer app units, 60 per px, rounded per glyph: 16px Courier New `aaaa bbbb` is one line at 86.4px, two at 86.38px. The
-WebKit profile fits with WebKit's 1/64 px, without truncating the width first, the Blink and Gecko profiles with
-0.005px, no engine's arithmetic; Chrome's grid needs a DPR `layout()` doesn't read (ENGINE_FOLLOWUPS.md).
+WebKit profile fits with Safari's arithmetic, a width cut down to 1/64 px from the float CSS stores
+(`LayoutUnit.h:83-86`; webkit-host lays a block of `width: 302.51px` out 302.5px wide and one of 299.99999999999994px
+300px wide, as 13 of 13 widths read back) plus 1/64 px: before the profile floored the width (#TBD), it fit a line up to
+1/64 px wider than Safari at a width off that grid, and flooring fixed 13 of the 25 failures on 180 rich probe layouts
+at widths within 5/256 px of where a prefix just fits, and one real-usage draw, a 302.51px paragraph, of webkit-host's
+44,142 pinned cases, and lost none (2026-09-30). The Blink and Gecko profiles fit with 0.005px, no engine's arithmetic;
+Chrome's grid needs a DPR `layout()` doesn't read (ENGINE_FOLLOWUPS.md).
 
 Emergency breaks follow each engine's loop: Chrome lays the line out again with a break allowed between any two
 graphemes (`line_breaker.cc:4258-4330`), Firefox takes a cluster start only while the line has no ordinary break

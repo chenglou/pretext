@@ -47,6 +47,12 @@ export type EngineProfile = {
   // adds (InlineLineBuilder.cpp:1172-1183). Blink and Gecko fit exactly in their own units, so their
   // 0.005 px is a named gap (ENGINE_FOLLOWUPS.md, Fitting arithmetic).
   lineFitEpsilon: number
+  // The unit the engine floors a container's width to before the fit (getFitWidth), in CSS px, or 0
+  // where the profile's fit isn't the engine's arithmetic. WebKit's available width is the block's
+  // width as a LayoutUnit, 1/64 px, which the float CSS stores is cut down to (LayoutUnit.h:83-86):
+  // webkit-host lays a block of `width: 302.51px` out 302.5px wide, and one of
+  // 299.99999999999994px, which rounds to the float 300, 300px wide.
+  lineFitUnit: number
   // Where an emergency break falls inside a segment. WebKit measures the word's grapheme
   // prefixes (TextUtil::breakWord), and Gecko adds the advances of the word shaped whole
   // (gfxTextRun::BreakAndMeasureText), which prefixes follow in joined scripts where
@@ -441,6 +447,7 @@ export function getEngineProfile(): EngineProfile {
     lineBreakScan: engine,
     graphemeTable: engine === 'webkit' ? 'apple/char' : engine === 'gecko' ? 'gecko/char' : 'chromium/char',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
+    lineFitUnit: engine === 'webkit' ? 1 / 64 : 0,
     prefixFitMinWidth: engine === 'webkit' ? 0 : engine === 'gecko' ? 80 : Infinity,
     measureTextWithFollowingSpace: engine === 'webkit',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
@@ -463,6 +470,13 @@ export function getEngineProfile(): EngineProfile {
   }
   cachedEngineProfile = profile
   return profile
+}
+
+// A container's width as the engine's fit takes it: floored to the engine's layout unit, where the
+// profile has one (EngineProfile.lineFitUnit).
+export function getFitWidth(maxWidth: number): number {
+  const unit = getEngineProfile().lineFitUnit
+  return unit === 0 ? maxWidth : Math.floor(Math.fround(maxWidth) / unit) * unit
 }
 
 export function parseFontSize(font: string): number {

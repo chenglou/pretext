@@ -3295,9 +3295,6 @@ sample-863aac68305946bb breaks
 ## Real usage: Roboto and Inter, served as web fonts; one word lands on the other line (main before #340 too)
 sample-2f7ddc63b335c886 breaks
 
-## Real usage: a word longer than the line (URLs, message placeholders, long Cyrillic or Armenian words), broken between characters; WebKit fits one character more or fewer than the library's character widths allow (main before #340 too)
-sample-53c686eca38a7ced breaks
-
 ## Real usage: soft hyphens; WebKit takes fewer soft-hyphen breaks than the library, moving the syllable before the hyphen to the next line (main before #340 too)
 sample-16a3704504259e8b breaks
 sample-2fb48a3ad067e670 breaks
