@@ -3087,10 +3087,11 @@ describe('rich-inline invariants', () => {
     const width = (parts: readonly string[]) => measureRichInlineStats(prepareRichInline(parts.map(text => ({ text, font: FONT }))), Infinity).maxLineWidth
     const space = measureWidth(' ', FONT)
     const profile = getEngineProfile()
-    const previous = profile.lineBreakScan
+    const previous = { lineBreakScan: profile.lineBreakScan, transformsSegmentBreaksAcrossItems: profile.transformsSegmentBreaksAcrossItems }
     try {
       for (const scan of ['blink', 'webkit', 'gecko'] as const) {
         profile.lineBreakScan = scan
+        profile.transformsSegmentBreaksAcrossItems = scan === 'blink'
         clearCache()
         // Gecko collapses a run of white space with the soft hyphens and bidi controls after it,
         // whichever item holds it, so white space that starts the next item collapses into it:
@@ -3106,7 +3107,7 @@ describe('rich-inline invariants', () => {
         expect(width(['see ', '\u00AD ', ' this word'])).toBeCloseTo(width(['see ', '\u00AD ', 'this word']), 9)
       }
     } finally {
-      profile.lineBreakScan = previous
+      Object.assign(profile, previous)
       clearCache()
     }
   })
@@ -3473,6 +3474,26 @@ describe('rich-inline invariants', () => {
       expect(sources([{ text: ' \u202A /-\u201Cq', font: FONT }, { text: 'uote\u201D', font: FONT }], {}, Infinity)).toEqual([[[0, '\u202A/-\u201Cq', '\u202A /-\u201Cq'], [1, 'uote\u201D', 'uote\u201D']]])
     } finally {
       profile.lineBreakScan = previous
+      clearCache()
+    }
+  })
+
+  test('the Gecko profile cuts a run of white space at every item that starts with a soft hyphen or bidi control, however many', () => {
+    const profile = getEngineProfile()
+    const previous = { lineBreakScan: profile.lineBreakScan, transformsSegmentBreaksAcrossItems: profile.transformsSegmentBreaksAcrossItems }
+    try {
+      profile.lineBreakScan = 'gecko'
+      profile.transformsSegmentBreaksAcrossItems = false
+      clearCache()
+      // One pass over the run, with no call per item: 4,000 such items overflowed the stack.
+      for (const dropped of ['\u00AD', '\u200F']) {
+        const items = [{ text: 'ab ', font: FONT }]
+        for (let i = 0; i < 20000; i++) items.push({ text: `${dropped} `, font: FONT })
+        items.push({ text: 'cd', font: FONT })
+        expect(measureRichInlineStats(prepareRichInline(items), Infinity).lineCount).toBe(1)
+      }
+    } finally {
+      Object.assign(profile, previous)
       clearCache()
     }
   })

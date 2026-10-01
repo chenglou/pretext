@@ -158,24 +158,41 @@ const whiteSpaceThroughBidiControlsRe = /(?<![ \t\n\r\f])[ \t\n\r\f]+(?:[\u061C\
 // nsTextFrameUtils.cpp:32-49): Firefox lays out `ab`, ` \u00AD \u00AD`, `cd` in 16px Arial in one 39.15px line at 40px.
 // A rich-inline paragraph's analysis takes it; a text's doesn't yet (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
 const whiteSpaceThroughDroppedRe = /(?<![ \t\n\r\f])[ \t\n\r\f]+(?:[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+[ \t\n\r\f]*)+/g
-// `itemStarts`, for a rich-inline paragraph, has where each item starts in the text: the run goes on from one text
-// frame to the next (INCOMING_WHITESPACE), so white space that starts an item collapses into it, but one of the dropped
-// characters that follows no white space in its own frame ends it (nsTextFrameUtils.cpp:286-386). Firefox fits
+// `itemStarts`, for a rich-inline paragraph, has where each item starts in the text, in order: the run goes on from one
+// text frame to the next (INCOMING_WHITESPACE), so white space that starts an item collapses into it, but one of the
+// dropped characters that follows no white space in its own frame ends it (nsTextFrameUtils.cpp:286-386). Firefox fits
 // `see this` of items `see`, ` \u00AD`, ` this word` in 16px Arial at 56px on a 55.15px line, and not of `see `,
-// `\u00AD `, `this word`.
+// `\u00AD `, `this word`. So a run is cut at each dropped character that starts an item, and each part collapses apart.
 function collapseWhiteSpaceThroughBidiControls(text: string, re: RegExp, itemStarts: number[] | null): string {
-  return text.replace(re, (run: string, at: number) => collapseWhiteSpaceRun(text, re, run, at, itemStarts))
+  // The first item start past the last run's start: the runs come in order too.
+  let next = 0
+  return text.replace(re, (run: string, at: number) => {
+    if (itemStarts === null) return collapseWhiteSpaceRun(text, run, at)
+    let result = ''
+    let from = 0
+    while (next < itemStarts.length && itemStarts[next]! <= at) next++
+    for (; next < itemStarts.length && itemStarts[next]! < at + run.length; next++) {
+      const cut = itemStarts[next]! - at
+      if (cut === from || isCollapsibleSpaceCode(run.charCodeAt(cut))) continue
+      result += collapseWhiteSpaceRunPart(text, run.slice(from, cut), at + from)
+      from = cut
+    }
+    return result + collapseWhiteSpaceRunPart(text, run.slice(from), at + from)
+  })
 }
 
-function collapseWhiteSpaceRun(text: string, re: RegExp, run: string, at: number, itemStarts: number[] | null): string {
-  if (itemStarts !== null) {
-    for (let k = 1; k < run.length; k++) {
-      if (isCollapsibleSpaceCode(run.charCodeAt(k)) || !itemStarts.includes(at + k)) continue
-      const head = run.slice(0, k)
-      const tail = run.slice(k).replace(re, (rest: string, restAt: number) => collapseWhiteSpaceRun(text, re, rest, at + k + restAt, itemStarts))
-      return (head.trim() === '' ? head : collapseWhiteSpaceRun(text, re, head, at, null)) + tail
-    }
+// A part of a run, from a dropped character that starts an item or from the run's start: the white space after the
+// dropped characters it starts with is a run with the dropped characters after it, where it has some.
+function collapseWhiteSpaceRunPart(text: string, part: string, at: number): string {
+  let start = 0
+  while (start < part.length && !isCollapsibleSpaceCode(part.charCodeAt(start))) start++
+  for (let k = start; k < part.length; k++) {
+    if (!isCollapsibleSpaceCode(part.charCodeAt(k))) return part.slice(0, start) + collapseWhiteSpaceRun(text, part.slice(start), at + start)
   }
+  return part
+}
+
+function collapseWhiteSpaceRun(text: string, run: string, at: number): string {
   if (at + run.length === text.length) return run.replace(collapsibleWhitespaceRunRe, '')
   let last = run.length - 1
   while (!isCollapsibleSpaceCode(run.charCodeAt(last))) last--
