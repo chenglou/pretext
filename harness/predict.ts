@@ -291,9 +291,10 @@ const DROPPED = /^[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]$/
 // normal white space each run of white space is one space, or nothing where the engine removes it: at either end, where
 // it can collapse into white space outside the stretch; where it holds a line feed, which the segment break
 // transformation can remove, as Firefox does between two ideographs; and next to a soft hyphen or a bidi control, which
-// Firefox's white-space run reads through.
+// Firefox's white-space run reads through. In pre-wrap the bidi controls that end the stretch after a line feed paint
+// nothing either: the Gecko analysis keeps those that end a paragraph in its last line feed's segment.
 function paints(source: string, text: string, whiteSpace: 'normal' | 'pre-wrap'): boolean {
-  if (whiteSpace === 'pre-wrap') return text.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '') === source.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '')
+  if (whiteSpace === 'pre-wrap') return text.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '') === source.replace(/([\n\r\f\u2028\u2029])[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/, '$1').replace(/[\u00AD\u2028\u2029\n\r\f]/g, '')
   const painted = text.replace(UNPAINTED, '')
   let t = 0
   for (let s = 0; s < source.length;) {
