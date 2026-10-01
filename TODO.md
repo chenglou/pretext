@@ -13,7 +13,7 @@ Held until the current work is done, and all before the first release.
 - The API discussion, a review of the public API: today's API stays, and alternatives are additions (RESEARCH.md, Caching And API Design; the studies are in RESEARCH.md, Dead Ends, Caching, State And API Designs). On its list:
   - layout that takes the text itself, with no handle for the app to keep, and gives the same answer every call, perhaps with an optional warm-up like `prepare()`;
   - who owns and bounds the per-font width cache, which grows with each new segment until `clearCache()`;
-  - parked speed-ups: the width memo, where a handle remembers which widths gave its last lines (drag-resize frames 2.9-4.2× faster, new widths up to 26% slower in Chrome, 2026-09-26); the font given at `layout()` instead of `prepare()`; a Firefox cache of Thai word boundaries;
+  - parked speed-ups: the width memo, where a handle remembers which widths gave its last lines (drag-resize frames 2.9-4.2× faster, new widths up to 26% slower in Chrome, 2026-09-26); a one-line limit on handles, proposed with it and not built; the font given at `layout()` instead of `prepare()`; a Firefox cache of Thai word boundaries;
   - an element's own language and `Content-Language` as inputs (ENGINE_FOLLOWUPS.md, Language and generic families);
   - the emoji-width correction in a worker, where the DOM span it reads doesn't exist (#292, PR #346; PLATFORM_BUGS.md);
   - a paragraph direction, and the device pixel ratio for Chrome's fit grid, the 1/64 device px Chrome fits lines on (RESEARCH.md, Measurement Model; decisions 3 and 4 of issue #321, a study of offline engine emulators);

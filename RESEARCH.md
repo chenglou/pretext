@@ -1982,8 +1982,12 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
 - **The width memo** (2026-09-26), handles that remember the range of widths their last lines hold for: exact over 137
   million fuzzed checks, and alone it drag-resized 10,000 messages under 1 ms, but new widths ran up to 26% slower in
   Chrome, more than the slight worst-case regression allowed (Part 1, Engineering; Decisions Log, 2026-09-26), and it
-  cost about 155 lines and immutable handles. Reopens as the untried variant that keeps a memo only for multi-line
-  texts, if the worst case stays flat.
+  cost about 155 lines and immutable handles. Reopens if a memo leaves layout at new widths within noise; one kept only
+  for texts that wrap is untried.
+- **A one-line limit on handles** (2026-09-26), which the same study proposed in place of the memo and didn't build:
+  each handle keeps the narrowest width at which its text is one line, found once in `prepare()`, so `layout()` at or
+  above it is one comparison and the worst case stays flat. Untimed; it helps only the texts that fit a line at the
+  width asked (TODO.md).
 - **Width ranges in the chat** (draft #280, branch `exact-height-intervals`, 2026-09-14): 1 px drags at 10k went 3.5 →
   0.3 ms, but ranges are 3-7 px wide, so random jumps got about 10% slower, for 440 more lines; and line counts needn't
   fall as width grows. Reopens if small drags at large histories matter.
