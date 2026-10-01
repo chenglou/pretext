@@ -547,9 +547,10 @@ const selectedCharacterRe = /.[\uFE0E\uFE0F]?/gsu
 
 // The glyphs of the emoji font in a text: what the correction is subtracted for, once
 // each. Font fallback decides which font draws an emoji character, and Canvas shows what
-// it decided, at one cached Canvas call per distinct grapheme of a font. For a character
-// with no selector, the named font's own glyph comes before the emoji font's
-// (CheckCandidate, gfxTextRun.cpp:3350-3359; FontFallbackIterator::Next,
+// it decided, at one cached Canvas call per distinct stretch and grapheme of a font, and
+// one per character of a stretch that isn't all emoji glyphs. For a character with no
+// selector, the named font's own glyph comes before the emoji font's (CheckCandidate,
+// gfxTextRun.cpp:3350-3359; FontFallbackIterator::Next,
 // font_fallback_iterator.cc:166-178), and U+FE0E asks for a text font
 // (gfxTextRun.cpp:3270-3273; SymbolsIterator::Consume, symbols_iterator.cc:67-71). So a
 // grapheme with a glyph of another font measures as the page draws it: Menlo's own
@@ -560,7 +561,9 @@ const selectedCharacterRe = /.[\uFE0E\uFE0F]?/gsu
 //
 // A grapheme can mix fonts. Firefox matches a font character by character, a character
 // that extends a cluster taking the font before it only where that font has it
-// (gfxFontGroup::FindFontForChar, gfxTextRun.cpp:3178-3194), and each font shapes its own
+// (gfxFontGroup::FindFontForChar, gfxTextRun.cpp:3178-3194), Chrome ends a run where
+// emoji give way to text before it shapes (RunSegmenter::Consume, run_segmenter.cc:44-73,
+// over SymbolsIterator::Consume, symbols_iterator.cc:34-79), and each font shapes its own
 // characters together. So each stretch of emoji characters is asked apart from the rest
 // of its grapheme: a ZWJ sequence, a skin-toned emoji or a flag before a combining mark
 // of another script is still one glyph. A stretch that isn't all emoji glyphs is asked
