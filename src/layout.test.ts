@@ -3173,6 +3173,29 @@ describe('rich-inline invariants', () => {
     })
   })
 
+  test('letterSpacing leaves no gap after a rich-inline object', () => {
+    // Letter spacing follows each character (CSS Text 3, letter-spacing), and a chip or a box is none: the character
+    // before one keeps its gap, and nothing comes between the object and the text after it.
+    const spacing = 3
+    const text = { text: 'CD', font: FONT, letterSpacing: spacing }
+    const chip = { text: 'ab', font: FONT, break: 'never' as const }
+    const box = { width: 10 }
+    const textWidth = measureWidth('CD', FONT) + spacing * 2
+    const chipWidth = measureWidth('ab', FONT)
+    const paragraphs: Array<[Array<RichInlineItem | RichInlineBox>, number[]]> = [
+      [[chip, text], [chipWidth, textWidth]],
+      [[box, box, text], [10, 10, textWidth]],
+      [[text, box, text, chip], [textWidth, 10, textWidth, chipWidth]],
+    ]
+    for (const [items, widths] of paragraphs) {
+      const prepared = prepareRichInline(items)
+      const line = layoutNextRichInlineLineRange(prepared, 500)!
+      expect(line.fragments.map(fragment => fragment.occupiedWidth)).toEqual(widths)
+      expect(line.width).toBe(widths.reduce((sum, width) => sum + width, 0))
+      expect(measureRichInlineStats(prepared, 500)).toEqual({ lineCount: 1, maxLineWidth: line.width })
+    }
+  })
+
   test('a rich line starts after the collapsible space its start removes, as the joined text\'s line does', () => {
     // Under negative letter spacing a line whose last word just fits can end before the
     // space after it (ENGINE_FOLLOWUPS.md), and the next line starts after that space, as

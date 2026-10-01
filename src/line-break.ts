@@ -162,8 +162,9 @@ function getTerminalLetterSpacing(
     const flags = segmentFlags[i]!
     const kind = flags & KIND_BITS
     // Segments that take no letter spacing, such as zero-width glue or marks
-    // shaped on the grapheme before them, leave that grapheme's gap last.
-    if (kind === SPACE || (kind !== CONTROL && (flags & SPACED) === 0)) continue
+    // shaped on the grapheme before them, leave that grapheme's gap last. An
+    // object leaves none after itself.
+    if (kind === SPACE || (kind !== CONTROL && kind !== OBJECT && (flags & SPACED) === 0)) continue
 
     if (i === startSegmentIndex && startGraphemeIndex > 0) return letterSpacing
 
@@ -545,10 +546,11 @@ function walkPreparedComplexLines(
           const startGraphemeIndex = i === lineStartSegmentIndex ? lineStartGraphemeIndex : 0
           // The gap before a segment belongs to the grapheme before it. A control
           // that takes no letter spacing still follows that gap but adds none
-          // after itself; other segments that take none leave it as it was.
+          // after itself, and so does an object, which is no character (CSS Text 3,
+          // letter-spacing); other segments that take none leave it as it was.
           const gap = letterSpacing !== 0 && hasContent && !zeroWidthPrefix && !afterUnspacedControl ? letterSpacing : 0
           let leadingSpacing = 0
-          if (letterSpacing !== 0 && (spaced || kind === CONTROL)) {
+          if (letterSpacing !== 0 && (spaced || kind === CONTROL || kind === OBJECT)) {
             leadingSpacing = gap
             afterUnspacedControl = !spaced
           }
