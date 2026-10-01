@@ -8,7 +8,6 @@ import {
   SOFT_HYPHEN,
   SPACE,
   SPACED,
-  STARTS_ITEM,
   TAB,
   TEXT,
   UNBROKEN,
@@ -61,13 +60,15 @@ export type PreparedLineBreakData = {
   items?: ParagraphSegmentData
 }
 
-// Per segment of a rich-inline paragraph, what its item gives it, each null where no item differs: the hyphen a soft
-// hyphen paints and the advance between a tab's stops, in the item's font; the item's extraWidth where a line that
-// starts inside the segment pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`),
-// as a line that starts with the whole segment pays lineStartExtras; and the width of a segment that is the edge of a
-// padded item's opening where the engine fits none of it (getOpeningFit in src/rich-inline.ts): it takes no room in
-// the run of preserved spaces and tabs it is in, and a line that ends in that run still paints it (`hangingEdges`).
+// What a rich-inline paragraph's items give its segments. `itemSegments` has each item's first segment, then the
+// segment count. The rest is per segment, each null where no item differs: the hyphen a soft hyphen paints and the
+// advance between a tab's stops, in the item's font; the item's extraWidth where a line that starts inside the segment
+// pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`), as a line that starts
+// with the whole segment pays lineStartExtras; and the width of a segment that is the edge of a padded item's opening
+// where the engine fits none of it (getOpeningFit in src/rich-inline.ts): it takes no room in the run of preserved
+// spaces and tabs it is in, and a line that ends in that run still paints it (`hangingEdges`).
 export type ParagraphSegmentData = {
+  itemSegments: number[]
   hyphenWidths: number[] | null
   tabStopAdvances: number[] | null
   insideExtras: number[] | null
@@ -114,6 +115,19 @@ function getTabAdvance(lineWidth: number, tabStopAdvance: number, minimumAdvance
   if (Math.abs(remainder) <= 1e-6) return tabStopAdvance
   const advance = tabStopAdvance - remainder
   return advance < minimumAdvance ? advance + tabStopAdvance : advance
+}
+
+// The item a segment of a rich-inline paragraph is in: the last one that starts at or before it, so an item with no
+// segments of its own, as an empty one, is never one's.
+export function getItemIndex(itemSegments: number[], segmentIndex: number): number {
+  let low = 0
+  let high = itemSegments.length - 1
+  while (low < high) {
+    const middle = (low + high + 1) >> 1
+    if (itemSegments[middle]! <= segmentIndex) low = middle
+    else high = middle - 1
+  }
+  return low
 }
 
 // The advance of tab segment `index` of a rich-inline paragraph, which the line reaches at `lineWidth`: to the next
@@ -409,12 +423,11 @@ function returnsFromUnfitHyphen(
     // `the `, `inter`, `na\u00ADtion\u00ADal` in 16px Arial at 84px as `the` / `interna-tion-` / `al`. So the
     // line returns only to the break before a run that reaches the soft hyphen past the start of a rich-inline
     // item, with no break between (src/rich-inline.ts gives such a paragraph its contexts).
-    let crossesItems = (segmentFlags[softHyphenIndex]! & STARTS_ITEM) !== 0 && softHyphenIndex > targetSegmentIndex
     for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
       if (breaksAfterKind(segmentFlags[i]! & KIND_BITS) || (i > targetSegmentIndex && (segmentFlags[i]! & UNBROKEN) === 0)) return false
-      if (i > targetSegmentIndex && (segmentFlags[i]! & STARTS_ITEM) !== 0) crossesItems = true
     }
-    return crossesItems
+    const itemSegments = prepared.items === undefined ? null : prepared.items.itemSegments
+    return itemSegments !== null && itemSegments[getItemIndex(itemSegments, softHyphenIndex)]! > targetSegmentIndex
   }
   const overflow = breakWidth - fitLimit
   let narrowing = 0

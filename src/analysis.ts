@@ -47,9 +47,6 @@ export const RETURNABLE = 0x40
 // The engine's clusters don't split the segment, so no emergency break splits it
 // either. Measurement clears it.
 export const ONE_CLUSTER = 0x80
-// In a rich-inline paragraph's handle, whose flags measurement has cleared ONE_CLUSTER from, the same bit marks the
-// segment each item after the first starts at (src/rich-inline.ts).
-export const STARTS_ITEM = 0x80
 export type SegmentKindCode = typeof TEXT | typeof SPACE | typeof ZERO_WIDTH_BREAK | typeof SOFT_HYPHEN |
   typeof PRESERVED_SPACE | typeof TAB | typeof ZERO_WIDTH_GLUE | typeof CONTROL | typeof HARD_BREAK
 // Each kind's name by its code, as prepareWithSegments() gives them.

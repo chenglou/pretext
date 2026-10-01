@@ -11,7 +11,6 @@ import {
   SOFT_HYPHEN,
   SPACE,
   SPACED,
-  STARTS_ITEM,
   TAB,
   TEXT,
   UNBROKEN,
@@ -22,6 +21,7 @@ import {
 import { getSegmentEntryWidth, type SegmentEntryGeometry } from './entry-geometry.js'
 import { buildLineTextFromRange, getGraphemeEnds, type PreparedSegments } from './line-text.js'
 import {
+  getItemIndex,
   getItemTabAdvance,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
@@ -327,7 +327,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // Gecko places an object of width 0 otherwise than the simple walker does (walkPreparedComplexLines).
       if (width === 0) simple = false
       widths.push(width)
-      flags.push(widths.length > 1 ? OBJECT | STARTS_ITEM : OBJECT)
+      flags.push(OBJECT)
       segments.push(text)
       breakableFitAdvances.push(null)
       sourceStarts.push(textStart)
@@ -340,10 +340,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     if (to === from + 1 && analysis.flags[from] === SPACE && analysis.texts[from] === ' ') {
       // An item of only collapsible white space, as between two styled words: its one space, as measureAnalysis()
       // measures one.
-      const at = widths.length
       if (letterSpacing !== 0) simple = false
       widths.push(getTextWidth(' ', getFontMeasurement(item.font, language), 0) + (spacingsDiffer ? letterSpacing : 0))
-      flags.push(SPACE | (letterSpacing !== 0 ? SPACED : 0) | (at > 0 ? STARTS_ITEM : 0))
+      flags.push(SPACE | (letterSpacing !== 0 ? SPACED : 0))
       segments.push(' ')
       breakableFitAdvances.push(null)
       sourceStarts.push(offset - starts[index]!)
@@ -392,7 +391,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // past it, and a line that ends in that white space still paints it (ParagraphSegmentData,
         // hangingEdges). Else it is an object: the white space after it stays on its line, as the line keeps
         // the opening it took.
-        flags.push((fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN) | (at > 0 ? STARTS_ITEM : 0))
+        flags.push(fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN)
         if (fit === 0) hangingEdges = setAt(hangingEdges, at, extraWidth, 0)
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         segments.push('')
@@ -419,7 +418,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (spaced) width += letterSpacing
       if (holdsExtra) width += extraWidth
       widths.push(width)
-      flags.push(i === from && at > 0 && first >= from ? sub.segmentFlags[s]! | STARTS_ITEM : sub.segmentFlags[s]!)
+      flags.push(sub.segmentFlags[s]!)
       breakableFitAdvances.push(advances)
       const normalizedStart = analysis.starts[i]!
       const normalizedEnd = i + 1 < count ? analysis.starts[i + 1]! : analysis.normalized.length
@@ -492,7 +491,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       }
     }
   }
-  data.items = { hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), hangingEdges: setAt(hangingEdges, segmentCount, 0, 0) }
+  data.items = {
+    itemSegments, hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances,
+    insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), hangingEdges: setAt(hangingEdges, segmentCount, 0, 0),
+  }
   let onlyItem = -1
   for (let index = 0; index < items.length && !paddedOrObject; index++) {
     if (itemSegments[index] === itemSegments[index + 1]) continue
@@ -568,19 +570,6 @@ function getOpeningFit(segmentFlags: Uint8Array, extraWidth: number, afterObject
     return onlyOpening ? extraWidth : extraWidth / 2
   }
   return extraWidth
-}
-
-// The item a segment of the paragraph is in: the last one that starts at or before it, so an
-// item with no segments of its own, as an empty one, is never one's.
-function getItemIndex(itemSegments: number[], segmentIndex: number): number {
-  let low = 0
-  let high = itemSegments.length - 1
-  while (low < high) {
-    const middle = (low + high + 1) >> 1
-    if (itemSegments[middle]! <= segmentIndex) low = middle
-    else high = middle - 1
-  }
-  return low
 }
 
 // A line of the paragraph from the text walkers' line: its segments cut into fragments where the
