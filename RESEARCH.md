@@ -865,11 +865,20 @@ widths, 200 to 368px (6,380 pairs), wrong line counts went from 14 to 4 in 16px 
 Mincho ProN and 17 to 11 in Yu Gothic, the rest being paragraphs a line shorter than Chrome's for other reasons, which
 PingFang SC, without kerning, has too; and of their first 20 characters laid out on one line, 146 measured more than
 0.1px wider than painted in Hiragino Sans (45 by more than 1px, at most 4.63px), 158 in Hiragino Mincho ProN and 142
-in Yu Gothic, and none does now. The cost is a Canvas call for each distinct pair of kana in a font: those paragraphs
-hold 9,844 kana pairs among 25,347 characters, 1,142 of them distinct (781 after the first 100 paragraphs), and
-preparing them in one font takes 2,368 calls where it took 1,362. The harness's sample, mostly not Japanese, takes
-2.1% more calls and 1.2% more submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas
-doesn't shape whole, words broken between characters, and fonts of other systems.
+in Yu Gothic, and none does now. Of 60 other Japanese texts at 13 widths in 24 font specs (18,720 layouts), 923 were
+wrong and 68 are, none lost, all 68 in lists that start with Helvetica Neue or Verdana, which the second context
+doesn't shape whole.
+
+The cost is a Canvas call for each distinct pair of kana in a font, whether the font kerns kana or not, and pairs
+repeat less than characters do: the two Japanese corpora hold 727 distinct characters and 784 distinct pairs in 8,576
+characters. The 290 paragraphs hold 9,844 kana pairs among 25,347 characters, 1,142 of them distinct (781 after the
+first 100 paragraphs), and preparing them in one font takes 2,368 calls where it took 1,362, 1.7 times. Short text
+that is mostly kana costs more of what it cost: 40 chat and interface sentences prepared in order in 16px Hiragino
+Sans take 959 calls where they took 287, 3.3 times (the first 10, 356 for 172), each of them alone in a new font 1.5
+times the calls and 1.8 times the units, and 60 more such texts 1,849 for 369. PingFang SC, which kerns none, pays
+the same. The harness's sample, mostly not Japanese, takes 2.1% more calls (289,683 to 295,631) and 1.2% more
+submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas doesn't shape whole, words broken
+between characters, kana across a ZWSP or a ZWJ, and fonts of other systems.
 
 Where a pair's adjustment sits decides what a break inside the pair leaves on each side: GPOS pair positioning puts it
 all on the first glyph, the legacy `kern` table half on each (`hb-kern.hh:102-106`). On macOS, Times New Roman, Verdana,
