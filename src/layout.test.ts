@@ -3498,6 +3498,50 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('white space after a rich object that overflows is walked in work that grows with its length', () => {
+    const profile = getEngineProfile()
+    const previous = { lineBreakScan: profile.lineBreakScan, hangTabs: profile.hangTabs }
+    // How many times a walk of the paragraph's lines at 40px reads a segment's flags.
+    const flagReads = (items: Parameters<typeof prepareRichInline>[0]): number => {
+      const data = (prepareRichInline(items, { whiteSpace: 'pre-wrap' }) as unknown as { data: Parameters<typeof walkPreparedLinesRaw>[0] }).data
+      let reads = 0
+      const counted = new Proxy(data.segmentFlags, {
+        get(target, key) {
+          if (typeof key === 'string' && key !== 'length') reads++
+          return Reflect.get(target, key) as unknown
+        },
+      })
+      walkPreparedLinesRaw({ ...data, segmentFlags: counted }, 40)
+      return reads
+    }
+    // Preserved white space after an object that overflows stays on its line, however many items
+    // hold it: the walk asks once per run whether it stays, not once per segment.
+    const spaces = (count: number) => {
+      const items: Parameters<typeof prepareRichInline>[0] = [{ text: '@alice-with-a-long-name', font: FONT, break: 'never' }]
+      for (let i = 0; i < count; i++) items.push({ text: ' ', font: FONT })
+      items.push({ text: 'cd', font: FONT })
+      return items
+    }
+    const tabs = (count: number) => {
+      const items: Parameters<typeof prepareRichInline>[0] = [{ width: 500 }]
+      for (let i = 0; i < count; i++) items.push({ text: i % 2 === 0 ? ' ' : '\t', font: FONT })
+      items.push({ text: 'cd', font: FONT })
+      return items
+    }
+    try {
+      for (const scan of ['blink', 'webkit', 'gecko'] as const) {
+        profile.lineBreakScan = scan
+        profile.hangTabs = scan !== 'gecko'
+        clearCache()
+        expect(flagReads(spaces(2000))).toBeLessThan(5 * flagReads(spaces(500)))
+        expect(flagReads(tabs(2000))).toBeLessThan(5 * flagReads(tabs(500)))
+      }
+    } finally {
+      Object.assign(profile, previous)
+      clearCache()
+    }
+  })
+
   test('rich line counts do not go up where a soft hyphen line fits only without its hyphen', () => {
     const lineTexts = (items: Parameters<typeof prepareRichInline>[0], maxWidth: number): string[] => {
       const prepared = prepareRichInline(items)

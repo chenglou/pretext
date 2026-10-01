@@ -362,21 +362,19 @@ function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): n
   return count
 }
 
-// Whether the run of preserved spaces and tabs that hang, which segment `index` is in, follows an object on its line,
-// an atomic rich-inline item or a box (OBJECT): such white space stays on the object's line however far the line
-// overflows, as no break comes before it in the text (UAX #14 LB7). Blink takes it as trailing items after the break
-// after an atomic inline (HandleTrailingSpaces, line_breaker.cc:2426-2534), trailing on into the next item where an
-// item's spaces reach its end (:2518-2533); WebKit gives a soft wrap opportunity after each white-space item
-// (isAtSoftWrapOpportunity, InlineFormattingUtils.cpp:408-413) and keeps each as content that hangs
-// (InlineContentBreaker.cpp:181-182); and Gecko lets an empty frame past the line's end (CanPlaceFrame,
-// nsLineLayout.cpp:1217-1270). After text that overflows, the engine's retry between graphemes breaks before the white
-// space instead. But Gecko breaks only after a run of spaces and tabs (nsLineBreaker.cpp:323, :586) and doesn't hang a
-// tab, so where the white space runs into a tab, Firefox moves all of it to the next line with the tab.
-function hangsAfterObject(segmentFlags: Uint8Array, lineStartSegmentIndex: number, index: number, hangingKinds: number): boolean {
-  let before = index - 1
-  while (before >= lineStartSegmentIndex && (1 << (segmentFlags[before]! & KIND_BITS) & hangingKinds) !== 0) before--
-  if (before < lineStartSegmentIndex || (segmentFlags[before]! & KIND_BITS) !== OBJECT) return false
-  let after = index + 1
+// Whether the run of preserved spaces and tabs that hang, which starts at segment `start` right after an object on
+// its line, an atomic rich-inline item or a box (OBJECT), stays there however far the line overflows, as no break comes
+// before it in the text (UAX #14 LB7). Blink takes it as trailing items after the break after an atomic inline
+// (HandleTrailingSpaces, line_breaker.cc:2426-2534), trailing on into the next item where an item's spaces reach its end
+// (:2518-2533); WebKit gives a soft wrap opportunity after each white-space item (isAtSoftWrapOpportunity,
+// InlineFormattingUtils.cpp:408-413) and keeps each as content that hangs (InlineContentBreaker.cpp:181-182); and
+// Gecko lets an empty frame past the line's end (CanPlaceFrame, nsLineLayout.cpp:1217-1270). After text that
+// overflows, the engine's retry between graphemes breaks before the white space instead. But Gecko breaks only after a
+// run of spaces and tabs (nsLineBreaker.cpp:323, :586) and doesn't hang a tab, so where the white space runs into a
+// tab, Firefox moves all of it to the next line with the tab. The walker asks once per run, so a long run costs one
+// pass.
+function staysAfterObject(segmentFlags: Uint8Array, start: number, hangingKinds: number): boolean {
+  let after = start + 1
   while (after < segmentFlags.length && (1 << (segmentFlags[after]! & KIND_BITS) & hangingKinds) !== 0) after++
   return after === segmentFlags.length || (segmentFlags[after]! & KIND_BITS) !== TAB
 }
@@ -497,9 +495,11 @@ function walkPreparedComplexLines(
     let fitBreakPaintWidth = 0
     // The latest run of preserved spaces and tabs: the segment after it, and the
     // line's width before it, less the line-end trim of the text it follows, with
-    // the gap after the glyph before it.
+    // the gap after the glyph before it. In a rich-inline paragraph, the run can
+    // stay on its line after an object however far it overflows (staysAfterObject).
     let hangEndSegmentIndex = -1
     let hangStartWidth = 0
+    let hangStays = false
     // The line-end trim of the last whole segment, where only that trim let it fit, kept
     // past segments after it that take no room at the line end, as spaces. Every later
     // segment that takes room overflows, so the line ends before it and paints that much less.
@@ -591,7 +591,10 @@ function walkPreparedComplexLines(
           }
           const hangs = (1 << kind & hangingKinds) !== 0
           if (hangs) {
-            if (hangEndSegmentIndex !== i) hangStartWidth = lineW - lineEndTrimmed + leadingSpacing
+            if (hangEndSegmentIndex !== i) {
+              hangStartWidth = lineW - lineEndTrimmed + leadingSpacing
+              hangStays = items !== undefined && i > lineStartSegmentIndex && (segmentFlags[i - 1]! & KIND_BITS) === OBJECT && staysAfterObject(segmentFlags, i, hangingKinds)
+            }
             hangEndSegmentIndex = i + 1
           }
           // Where glue can't hold a line, glue at a line start isn't the line's content:
@@ -639,14 +642,15 @@ function walkPreparedComplexLines(
             }
           } else {
             // A run of preserved spaces and tabs fits where the text before it fits, and after an
-            // object however far the line overflows (hangsAfterObject). Gecko places an empty frame
-            // wherever it falls (CanPlaceFrame, nsLineLayout.cpp:1264-1269), so there an object of
-            // width 0 stays on a line that already overflows, where Blink and WebKit move it to the
-            // next line as any other.
+            // object however far the line overflows (staysAfterObject). Gecko places a frame by
+            // CanPlaceFrame, which fits a frame's whole width (EngineProfile, paddedOpeningFit) and
+            // lets an empty one stay wherever it falls (nsLineLayout.cpp:1264-1269), so there an
+            // object of width 0 stays on a line that already overflows, where Blink and WebKit move
+            // it to the next line as any other.
             const newFitW = hangs ? hangStartWidth : lineW + fitAdvance
             if (
               newFitW - endTrim > fitLimit &&
-              !(hangs && hangsAfterObject(segmentFlags, lineStartSegmentIndex, i, hangingKinds)) &&
+              !(hangs && hangStays) &&
               !(kind === OBJECT && w === 0 && engineProfile.paddedOpeningFit === 'both')
             ) {
               // A break segment hangs with the gap before it, after the content before
