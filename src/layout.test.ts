@@ -5105,6 +5105,46 @@ describe('layout invariants', () => {
           expect(layoutWithLines(prepareWithSegments(text, font), width, LINE_HEIGHT).lines.map(line => line.text.trimEnd())).toEqual(expected)
         }
       }
+      // A pair that two items split halts as in one text: a closing mark before the next item's
+      // closing mark or middle dot, wherever the line ends, and an opening mark after the mark
+      // that ends the item before, but for where it starts a line. Each takes its own item's
+      // font, so the pair halts across a change of weight or size too. From 56px, where no
+      // line fills a pair's unit grapheme by grapheme, the lines and their widths are the text's.
+      const richLines = (items: Array<{ text: string, font?: string }>, width: number): string[] => {
+        const rich = prepareRichInline(items.map(item => ({ font, ...item })))
+        const lines: string[] = []
+        walkRichInlineLineRanges(rich, width, range => {
+          lines.push(`${range.fragments.map(fragment => materializeRichInlineLineRange(rich, { ...range, fragments: [fragment] }).fragments[0]!.text).join('')}:${Math.round(range.width * 100) / 100}`)
+        })
+        expect(measureRichInlineStats(rich, width).lineCount).toBe(lines.length)
+        return lines
+      }
+      const pairs: [string, string][] = [['中中」', '。中中'], ['中中」', '「中中'], ['中中）', '、中中'], ['中中「', '「中中'], ['中中」', '」中中'], ['中中。', '「中中'], ['中「中」', '。中'], ['中」', '·中']]
+      for (const [first, second] of pairs) {
+        const text = first + second
+        const prepared = prepareWithSegments(text, font)
+        for (let width = 56; width <= 104; width += 8) {
+          const flat = layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => `${line.text}:${Math.round(line.width * 100) / 100}`)
+          expect({ first, second, width, lines: richLines([{ text: first }, { text: second }], width) }).toEqual({ first, second, width, lines: flat })
+          expect({ first, second, width, lines: richLines([{ text: first, font: `700 ${font}` }, { text: second }], width) }).toEqual({ first, second, width, lines: flat })
+        }
+      }
+      expect(richLines([{ text: '中中」' }, { text: '。中中' }], 88)).toEqual(['中中」。中中:88'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中' }], 88)).toEqual(['中中」「中中:88'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中' }], 71)).toEqual(['中中」:48', '「中中:48'])
+      // The halted mark takes the trim of its own item's font: 10px at 20px.
+      expect(richLines([{ text: '中中」', font: '20px Halt Test Sans' }, { text: '。中中' }], 1e5)).toEqual(['中中」。中中:98'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中', font: '20px Halt Test Sans' }], 1e5)).toEqual(['中中」「中中:98'])
+      // No pair crosses an atomic item, a box or a collapsed space.
+      expect(measureRichInlineStats(prepareRichInline([{ text: '中」', font }, { width: 0 }, { text: '。中', font }]), 1e5).maxLineWidth).toBe(64)
+      expect(measureRichInlineStats(prepareRichInline([{ text: '中」', font }, { text: '。', font, break: 'never' }, { text: '中', font }]), 1e5).maxLineWidth).toBe(64)
+      // A closing mark that Blink halts at its item's end, where the item doesn't fit otherwise,
+      // stays halted, and the line goes on after it, where one text node ends the line: `中中」`
+      // and a 5px box take one 45px line at 46px.
+      const halted = prepareRichInline([{ text: '中中」', font }, { width: 5 }])
+      expect(measureRichInlineStats(halted, 46)).toEqual({ lineCount: 1, maxLineWidth: 45 })
+      expect(measureRichInlineStats(halted, 53)).toEqual({ lineCount: 1, maxLineWidth: 53 })
+      expect(measureRichInlineStats(halted, 52)).toEqual({ lineCount: 2, maxLineWidth: 48 })
     } finally {
       Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
     }
