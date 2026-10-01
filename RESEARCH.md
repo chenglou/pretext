@@ -1602,6 +1602,30 @@ repin` shows what), and a fact read in source needs reading again.
   PLATFORM_BUGS.md); a first character that doesn't fit keeps the following ones that can't start a line
   (`InlineContentBreaker.cpp:124-158`). What following 27 alone costs 26 is in the Decisions Log (2026-09-16). (Safari
   26.5.2 against 27.0, 2026-09-16.)
+- **Safari 26's rules, and how a page tells.** The WebKit profile's scan is `'webkit'`, Safari 27's, or
+  `'webkit-safari-26'`, the same port by the rules above as Safari 26 has them (#TBD): the four files they live in hold
+  the same rules from tag WebKit-7623.1.5 to 7624.5.1.11.3, the newest Safari 26 tag, and release tags from
+  WebKit-7625.1.29 on have Safari 27's. A page and its workers tell the releases apart by `ReadableStream.from()` and
+  `WebAssembly.Suspending`: every release tag from 7625.1.29 has both and none from 7622.1.7 through 7624.5.1.11.3 has
+  either. Either one reads as Safari 27, since Safari 27 can be without one: `ReadableStream` where a page's polyfill
+  replaces it or its feature flag is off, WebAssembly in Lockdown Mode. On an older WebKit a page that polyfills
+  `from()` reads as Safari 27, and its worker doesn't unless it loads the polyfill too. A stream's `values()` doesn't
+  tell: WebKit has it from 7624.1.16, behind a flag that is off before 7625. Safari 26.0.1 and 17.5 have neither API and
+  webkit-host's WebKit 22625.1.29.11.27 both, on a page and in a module worker (2026-10-01). The APIs are older than the
+  rules, so a trunk build between them reads as Safari 27 while breaking by Safari 26's rules, wholly or in part: both
+  were on in WebKit's trunk by 2026-02-12, and the break changes landed on 2026-03-22 (U+2028 and U+2029), 2026-04-13
+  (keep-all punctuation, line start) and 2026-06-09 (U+201D). Playwright's WebKit 2272 (625.1.11+, user agent
+  `Version/26.4`) has both APIs and none of the changes: headless, it fails 48 of the real-usage sample's 10,345 draws
+  inside the claims as the profile reads it, and 21 with the two APIs removed before the page's scripts run
+  (2026-10-01). No feature flag in JavaScriptCore's options or the web preferences turned on between the last change and
+  tag 7625.1.29, so no flagged API dates the rules more closely. In Safari 26.0.1 (WebKit 7622.1.22.10.11, the iOS 26.0
+  simulator, 2026-09-30), with the sample (harness/README.md, Two kinds of set) recorded and predicted in the same page,
+  49 of those draws failed under Safari 27's scan, 0.294% by weight, and 22 under Safari 26's, 0.068%, each of the 22
+  also accepted for webkit-host, which has 24 (0.080%); 26 of the 27 it fixes are keep-all, 19 of them Chinese or
+  Japanese and 10 a wrong line count. Safari 17.5 fails 48 and 21 (the iOS 17.5 simulator, 2026-10-01). A simulator's
+  page needs a viewport and `text-size-adjust: 100%`, or iOS enlarges the text of 28 of the sample's paragraphs 736 px
+  and wider. What the scan leaves open, what guards it without a pinned browser and when it goes are in
+  ENGINE_FOLLOWUPS.md, Safari 26.
 - **Page history (WebKit's caches).** The process-wide `TextBreakingPositionCache` keys breaks by text, origin and a
   style context that doesn't tell pre-wrap from break-spaces, never font, direction or storage, and fills as a block's
   line layout is torn down: `break-spaces` text after the same text in pre-wrap keeps six spaces on one overflowing

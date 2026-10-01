@@ -54,7 +54,7 @@ Measured on macOS at a device pixel ratio of 2 unless an entry says otherwise; W
 
 - **Reports:** [WebKit #312099](https://bugs.webkit.org/show_bug.cgi?id=312099), fixed in 311090@main for Safari 27; [WebKit #298022](https://bugs.webkit.org/show_bug.cgi?id=298022), the broader punctuation report, `NEW` (2026-09-27). Exact.
 - **Behavior:** CSS Text says `word-break` doesn't change punctuation break opportunities ([WPT `word-break-keep-all-006`](https://wpt.fyi/results/css/css-text/word-break/word-break-keep-all-006.html)). Safari 26 breaks `keep-all` text only at spaces; Safari 27 after every punctuation character but the text's last, `(` included, though only in text holding a character above U+00FF.
-- **Pretext:** the WebKit scan follows Safari 27, Latin-1 test included; Safari 26 is a known gap.
+- **Pretext:** the WebKit scan follows Safari 27, Latin-1 test included, and Safari 26's rule on a WebKit older than Safari 27's (`lineBreakScan` in `src/measurement.ts`).
 - **Unfiled follow-ups**, with pages (WebKit 22625.1.29.11.27, 2026-09-18): the fix breaks Korean text inside `1,000,000`, `3.14`, `U.S.A.` and `12:30` and after `(`, and it follows a string's storage, not its characters (`RESEARCH.md`, "Engine Facts"), which Pretext can't see.
 
 ### Safari: wheel scrolling after a page's `scrollTo()`
