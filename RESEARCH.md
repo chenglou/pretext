@@ -425,7 +425,7 @@ WebKit profile fits with Safari's arithmetic, a width cut down to 1/64 px from t
 300px wide, as 13 of 13 widths read back) plus 1/64 px: before the profile floored the width (#TBD), it fit a line up to
 1/64 px wider than Safari at a width off that grid. Flooring fixed 32 of the 35 failures on 153 box layouts at the width
 a prefix through a box just fits and 1/64 px under it, 13 of the 25 on 180 rich layouts at widths within 5/256 px of
-such an edge, and one real-usage draw, a 302.51px paragraph, of webkit-host's 44,176 pinned cases. It lost 4 of the 153,
+such an edge, and one real-usage draw, a 302.51px paragraph, of webkit-host's 44,187 pinned cases. It lost 4 of the 153,
 each right by luck, and nothing else: three hold boxes 19.2px and 33.33px wide, which Safari cuts down to its unit and
 Pretext adds as given (ENGINE_FOLLOWUPS.md, Rich-inline item edges), so the width's own fraction made up for them, and
 one line is as wide as the floored limit, which its Canvas widths add up to with a rounding error (webkit-host,
@@ -934,28 +934,35 @@ than the line, moves to the next line in Chrome and Safari, as any atomic item d
 (`CanPlaceFrame`, `nsLineLayout.cpp:1264-1269`) without counting the break after it as one that fits (`:1260`,
 `:1506-1513`), so a frame with a width that comes next, text, a span with padding or white space in a text node of its
 own, sends the line back to its last break that fit, and the empty frame starts the next line with it; it stays where
-the line ends without that (`keepsEmptyAtomic()` in `src/rich-inline.ts` has the cases). `ab `, a 0px box and `cd` in
+the line ends without that (`getKeptEmptyEnd()` in `src/rich-inline.ts` has the cases). `ab `, a 0px box and `cd` in
 16px Arial at 20.25px are `ab` and then the box with `cd`, and with ` cd` the box stays after `ab`. Under pre-wrap the
-space hangs, and Gecko ends its text frame at the line's end whatever follows the frame (`nsTextFrame.cpp:11216-11229`),
-so the box is inside the line and stays, as does a second box, a space or a node of a soft hyphen after it: in the Gecko
-profile the line's run of hanging spaces goes on past an item that takes no room, where Blink's ends at one
-(`ComputeTrailingSpaceWidth`, `line_info.cc:289-415`). The Gecko profile ports this for any atomic item of width 0, a
-chip of only a ZWSP too. Of 95,507 layouts in Firefox 156.0.1 (sentences with a 0px box, or two, after every space at
-120-600px in seven fonts, in normal white space and pre-wrap and at eleven letter spacings, two-word shapes at 2-80px,
-Japanese, Arabic, Hebrew and keep-all Korean), 9,184 pass that failed and 124 fail that passed; 585 of the 9,184 are a
-padded span after spaces that hang (Box Edges And Pre-wrap). In each of the 124 Firefox has the box inside a line and
-Pretext's widths put it past the line's end, and they passed only while the profile kept the box wherever it fell: 59
-under letter spacing off Firefox's 1/60px grid, 31 after a pre-wrap space that a soft hyphen follows in its item, 31
-before a span with 0.004px of padding and 3 after a synthetic bold span (2026-10-01, #TBD; ENGINE_FOLLOWUPS.md,
-Rich-inline item edges, has them and the gaps left; the harness now records a box of width 0 by its top). That reopens
-if a Firefox build changes `CanPlaceFrame`, how a text frame trims the white space it breaks after or where it ends the
-white space that hangs (`nsTextFrame.cpp:11202-11229`). A negative width is refused, as one that isn't finite is. An
-inline-block of width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and
-webkit-host, but Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the
-box, where the negative width would bring the line back within its width, and fits a word after it that rich inline
-moves to the next line (`one two`, a -15px box, `three four five` in 16px Arial, `one two three` at 77.5px): 51 of 884
-layouts of four shapes at 10-120px differ in Chrome and none in the others (2026-09-30). No app was found that needs
-one; the negative values apps pass are `extraWidth`s relative to a stand-in character. That reopens if one does.
+space hangs, and Gecko's text frame leaves out of its width the spaces that overflow the line, whatever follows the
+frame (`nsTextFrame.cpp:11216-11229`), so the box is inside the line, at its end, and stays, as does a second box, a
+space or a node of a soft hyphen after it, while a span with padding after it starts the next line: in the Gecko profile
+the line's run of hanging spaces goes on past an item that takes no room with the spaces that overflow, where Blink's
+ends at one (`ComputeTrailingSpaceWidth`, `line_info.cc:289-415`). The spaces that fit keep their width, so the box is
+at the line's end or right after them (`ab `, a 0px box and a tab with `cd` in pre-wrap 16px Arial make a first line as
+wide as the paragraph at 18-22px in Firefox 156.0.1, and 22.25px wide above that). The Gecko profile ports this for any
+atomic item of width 0, a chip of only a ZWSP too. Of 95,507 layouts in Firefox 156.0.1 (sentences with a 0px box, or
+two, after every space at 120-600px in seven fonts, in normal white space and pre-wrap and at eleven letter spacings,
+two-word shapes at 2-80px, Japanese, Arabic, Hebrew and keep-all Korean), 8,599 pass that failed and 124 fail that
+passed, and the line count is right in 1,458 where it was wrong and wrong in 56 where it was right. In each of the 124
+Firefox has the box inside a line and Pretext's widths put it past the line's end, and they passed only while the
+profile kept the box wherever it fell: 59 under letter spacing off Firefox's 1/60px grid, 31 after a pre-wrap space that
+a soft hyphen follows in its item, 31 before a span with 0.004px of padding and 3 after a synthetic bold span. The 56
+are 28 of those before that padding, 14 of those after that soft hyphen, and 14 before a chip of only a space, which had
+the right count with the box on the wrong line. With 56,928 more layouts of other sentences, padded spans and
+soft-hyphen items, 8,175 lines changed their width in layouts that pass before and after: 7,898 are within 0.1px of
+Firefox's width, where 168 were, and none was that isn't now (2026-10-01, #TBD; ENGINE_FOLLOWUPS.md, Rich-inline item
+edges, has them and the gaps left; the harness now records a box of width 0 by its top). That reopens if a Firefox build
+changes `CanPlaceFrame`, how a text frame trims the white space it breaks after or where it ends the white space that
+hangs (`nsTextFrame.cpp:11202-11229`). A negative width is refused, as one that isn't finite is. An inline-block of
+width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and webkit-host, but
+Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the box, where the
+negative width would bring the line back within its width, and fits a word after it that rich inline moves to the next
+line (`one two`, a -15px box, `three four five` in 16px Arial, `one two three` at 77.5px): 51 of 884 layouts of four
+shapes at 10-120px differ in Chrome and none in the others (2026-09-30). No app was found that needs one; the negative
+values apps pass are `extraWidth`s relative to a stand-in character. That reopens if one does.
 
 Heights stay the app's (Limits), and with `vertical-align: top` or `bottom` on every box a line is as tall as the
 paragraph's line-height or its tallest box, whichever is taller, to within one layout unit: about 13,000 lines with
@@ -1077,14 +1084,7 @@ fits only the start edge of a padded span that starts with white space after tex
 chip's `white-space: nowrap` box does: the rebuild's premise, the chip's max-content width with its preserved spaces, is
 6.6px wider than all three browsers lay out the 12px chip ` @bob ` in 15px Helvetica Neue prose (2026-09-29).
 Of 500 real-usage pre-wrap paragraphs split into same-font spans, each one that fails fails in one node too; what's left
-is at padded span edges and tab stops across fonts (ENGINE_FOLLOWUPS.md, Rich-inline item edges). After spaces that
-hang, a padded span that starts with spaces stays on their line in the WebKit profile where its padding fits after the
-text before them, as WebKit leaves content that hangs out of the fit. Gecko's hang is its text frame's own: the frame
-ends after its spaces where they fit and at the line's end where they don't, and the span after it is a frame with a
-width, which fits only after that, so the Gecko profile counts those spaces (#TBD). `ab ` and a span ` cd` with 3px of
-padding on each side in pre-wrap 16px Arial keep the span's space on the first line from 28.25px in Firefox 156.0.1, the
-22.25px of `ab ` and the padding, where the profile kept it from 23.8px; of 5,059 pre-wrap layouts of such spans after a
-word, spaces in a node of their own, a chip or a box, 585 pass that failed and none fails that passed (2026-10-01).
+is at padded span edges and tab stops across fonts (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
 
 #### Painting Lines
 

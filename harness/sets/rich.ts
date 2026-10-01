@@ -62,7 +62,7 @@
 //   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and
 //   a box of width 0 past a line's end, after a space that doesn't fit and after a box wider than the line, which
 //   Chrome and Safari move to the next line and Firefox keeps unless text comes right after it, not after a space
-//   (keepsEmptyAtomic in src/rich-inline.ts), and two of them after a pre-wrap space that hangs, which Firefox has
+//   (getKeptEmptyEnd in src/rich-inline.ts), and two of them after a pre-wrap space that hangs, which Firefox has
 //   inside the line.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'

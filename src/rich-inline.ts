@@ -960,39 +960,43 @@ function retreatsBefore(flow: InternalPreparedRichInline, itemIndex: number): bo
   return (kind === TEXT && (advances === null || advances.length === 1)) || (kind === PRESERVED_SPACE && segments[0]!.length === 1)
 }
 
-// Whether Gecko keeps the empty atomic item `itemIndex`, which it places though it sticks out of
-// the line (CanPlaceFrame, nsLineLayout.cpp:1264-1269), on that line, where the line has a break
-// before the item. The break after a frame that sticks out doesn't count as one that fits (:1260),
-// and the line remembers its last break that fits, or with none its first
+// Where Gecko's line stops keeping empty atomic items from item `itemIndex` on, one it places
+// though it sticks out of the line (CanPlaceFrame, nsLineLayout.cpp:1264-1269), where the line has
+// a break before the item: the index of the item that keeps it there, the item count where that is
+// the paragraph's end, or -1 where the line goes back to before the item. The items before that
+// index take no room, so each empty atomic item among them stays for the same reason, and the
+// stepper keeps a run of them after one scan (keptEmptyEnd), where a scan from each made a line of
+// N of them N²/2 steps. The break after a frame that sticks out doesn't count as one that fits
+// (:1260), and the line remembers its last break that fits, or with none its first
 // (NotifyOptionalBreakPosition, :1506-1513). A text frame or a span with a width that comes next
 // sticks out too and sends the line back there (:1323-1334; nsBlockFrame.cpp:5361-5379), to before
-// the empty item. The line keeps the item where it ends without going back: at the paragraph's
-// end, before an atomic item with a width, which moves down whole (:1337-1341), and before
-// unpadded text whose first piece has no width, an empty frame too. That piece is a ZWSP, a hard
-// break, preserved spaces, which hang (nsTextFrame.cpp:11216-11229), or the collapsible space that
-// starts the text's own node, trimmed where the frame breaks after it (:11202-11213). Padding is
-// its span's width whatever the text starts with. White space in a node of its own, before an
-// atomic item or other text, is a whole frame, which keeps its width (gapItemIndex names the
-// node), as is a node of white space and soft hyphens, which Gecko discards before it collapses
-// the space. An item of soft hyphens alone takes no room and is passed over, and so is white
-// space that ends the paragraph, which gets no frame as a text node of the paragraph's own
-// (nsCSSFrameConstructor.cpp:5278-5286), though it gets one in a span (ENGINE_FOLLOWUPS.md).
-function keepsEmptyAtomic(flow: InternalPreparedRichInline, itemIndex: number): boolean {
+// the empty item. The line keeps the item where it ends without going back: at the paragraph's end,
+// before an atomic item with a width, which moves down whole (:1337-1341), and before unpadded text
+// whose first piece has no width, an empty frame too. That piece is a ZWSP, a hard break, preserved
+// spaces, which hang (nsTextFrame.cpp:11216-11229), or the collapsible space that starts the text's
+// own node, trimmed where the frame breaks after it (:11202-11213). Padding is its span's width
+// whatever the text starts with. White space in a node of its own, before an atomic item or other
+// text, is a whole frame, which keeps its width (gapItemIndex names the node), as is a node of
+// white space and soft hyphens, which Gecko discards before it collapses the space. An item of soft
+// hyphens alone takes no room and is passed over, and so is white space that ends the paragraph,
+// which gets no frame as a text node of the paragraph's own (nsCSSFrameConstructor.cpp:5278-5286),
+// though it gets one in a span (ENGINE_FOLLOWUPS.md).
+function getKeptEmptyEnd(flow: InternalPreparedRichInline, itemIndex: number): number {
   for (let k = itemIndex + 1; k < flow.items.length; k++) {
     const next = flow.items[k]
     if (next === undefined) continue
-    if (next.gapItemIndex >= 0 && next.gapItemIndex !== k) return false
+    if (next.gapItemIndex >= 0 && next.gapItemIndex !== k) return -1
     if (next.break === 'never') {
       if (next.naturalWidth + next.extraWidth === 0) continue
-      return true
+      return k
     }
-    if (next.extraWidth > 0) return false
-    if (next.gapItemIndex === k) return next.establishesLine
+    if (next.extraWidth > 0) return -1
+    if (next.gapItemIndex === k) return next.establishesLine ? k : -1
     if (!next.establishesLine) continue
     const kind = next.lineData.segmentFlags[0]! & KIND_BITS
-    return kind === ZERO_WIDTH_BREAK || kind === HARD_BREAK || kind === PRESERVED_SPACE
+    return kind === ZERO_WIDTH_BREAK || kind === HARD_BREAK || kind === PRESERVED_SPACE ? k : -1
   }
-  return true
+  return flow.items.length
 }
 
 // The line state a walked item takes and leaves, one for every walk.
@@ -1024,12 +1028,13 @@ function stepRichInlineLine(
   let lineWidth = 0
   let remainingWidth = safeWidth
   // The width of the run of preserved spaces and tabs the line ends with, which hangs past
-  // its end (ItemLine). An item that takes no room, an atomic item of width 0 or one of soft
-  // hyphens alone, ends the run, as Blink's walk back over the line's items stops at one
-  // (ComputeTrailingSpaceWidth, line_info.cc:289-415), but not in Gecko ('both'), where the
-  // spaces that hang end their own text frame at the line's end whatever follows the frame
-  // (nsTextFrame.cpp:11216-11229): an empty frame after them is inside the line, and white space
-  // after that hangs with them.
+  // its end (ItemLine). An atomic item, or an item of soft hyphens alone, which takes no room,
+  // ends the run, as Blink's walk back over the line's items stops at one
+  // (ComputeTrailingSpaceWidth, line_info.cc:289-415). In Gecko ('both') a text frame's width
+  // leaves out the spaces that overflow the line and keeps those that fit, whatever follows the
+  // frame (nsTextFrame.cpp:11216-11229), so there the run goes on past such an item with what
+  // overflows, which only an item that takes no room leaves: it is inside the line, at its end,
+  // white space after it hangs too, and the padding of a span after it finds no room.
   let lineHangWidth = 0
   // Whether the line ends at a hard break.
   let endsAtHardBreak = false
@@ -1049,6 +1054,9 @@ function stepRichInlineLine(
   let breakHangWidth = 0
   let breakFits = false
   let returnsToBreak = false
+  // In Gecko, the item up to which the line keeps the empty atomic items that stick out of it
+  // (getKeptEmptyEnd); -1 before the first of them.
+  let keptEmptyEnd = -1
   // Whether an item a line start consumes followed content on the line (below).
   let consumedAfterContent = false
   // Where the walk of an item ends its part of the line (below), one for every walk.
@@ -1111,7 +1119,7 @@ function stepRichInlineLine(
       if (hasContent) consumedAfterContent = true
       lineWidth += gapBefore
       remainingWidth = safeWidth - lineWidth
-      if (paddedOpeningFit !== 'both') lineHangWidth = 0
+      lineHangWidth = paddedOpeningFit === 'both' ? Math.min(lineHangWidth, Math.max(0, -remainingWidth)) : 0
       continue
     }
     const atItemStart = isLineStartCursor(cursor)
@@ -1130,7 +1138,7 @@ function stepRichInlineLine(
       // already past the line's end breaks the line after itself (:11443-11456), so the item starts
       // the next line. Else the line has a break before the item after white space, after an atomic
       // item (nsLineLayout.cpp:1057-1069) and after a soft hyphen that ends the text before it
-      // (nsTextFrame.cpp:11432-11439), and may go back to it (keepsEmptyAtomic); other text leaves
+      // (nsTextFrame.cpp:11432-11439), and may go back to it (getKeptEmptyEnd); other text leaves
       // no break at its end, so the line's first break is the one after the item, which stays.
       if (hasContent && totalWidth > remainingWidth + lineFitEpsilon) {
         if (paddedOpeningFit !== 'both' || occupiedWidth !== 0) break
@@ -1142,7 +1150,10 @@ function stepRichInlineLine(
           let before = itemIndex - 1
           while (flow.items[before] === undefined) before--
           const breakBefore = afterWhiteSpace || item.hyphenBefore > 0 || flow.items[before]!.break === 'never'
-          if (breakBefore && !keepsEmptyAtomic(flow, itemIndex)) break
+          if (breakBefore && itemIndex >= keptEmptyEnd) {
+            keptEmptyEnd = getKeptEmptyEnd(flow, itemIndex)
+            if (keptEmptyEnd < 0) break
+          }
         }
       }
 
@@ -1150,7 +1161,7 @@ function stepRichInlineLine(
       hasContent = true
       lineWidth += totalWidth
       remainingWidth = safeWidth - lineWidth
-      if (paddedOpeningFit !== 'both' || totalWidth !== 0) lineHangWidth = 0
+      lineHangWidth = paddedOpeningFit === 'both' ? Math.min(lineHangWidth, Math.max(0, -remainingWidth)) : 0
       continue
     }
 
@@ -1171,10 +1182,7 @@ function stepRichInlineLine(
     // the run the line ends with, so the reserved width of an item that starts with them fits
     // where the line's content before that run fits, as WebKit fits a box's edge
     // (InlineContentBreaker, hangingContentWidth), though WebKit leaves out only the last
-    // white-space item's (ENGINE_FOLLOWUPS.md). Gecko fits a span's whole frame, its padding too,
-    // after the frame of the spaces before it, which ends after them where they fit and at the
-    // line's end where they hang (CanPlaceFrame, 'both'), so there only unpadded white space goes
-    // on the run.
+    // white-space item's (ENGINE_FOLLOWUPS.md).
     const reservedWidth = gapBefore + item.extraWidth
     if (hasContent && reservedWidth > remainingWidth + lineFitEpsilon && (item.establishesLine || reservedWidth > 0) &&
       !fitsOpening(flow, itemIndex, lineWidth, lineHangWidth, safeWidth + lineFitEpsilon, paddedOpeningFit, startItemIndex, startSegmentIndex)) {
@@ -1202,8 +1210,7 @@ function stepRichInlineLine(
           breakOccupiedWidth = fragments === null ? 0 : fragments[breakFragmentCount - 1]!.occupiedWidth - retreat
         }
       }
-      const hangs = (firstKind === PRESERVED_SPACE || (firstKind === TAB && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon &&
-        (paddedOpeningFit !== 'both' || item.extraWidth <= 0)
+      const hangs = (firstKind === PRESERVED_SPACE || (firstKind === TAB && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon
       if (!keepsHardBreak && !hangs) {
         returnsToBreak = !item.breakBefore
         break
