@@ -396,6 +396,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         flags.push(fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN)
         openingEdges = setAt(openingEdges, at, extraWidth, 0)
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
+        // Where the engine ends a line inside the preserved spaces before a padded hard break that doesn't fit
+        // (hardBreakItemRetreat), those spaces get an advance each, as text a line can end inside has.
+        if (firstKind === HARD_BREAK && !breaksBefore && profile.hardBreakItemRetreat !== 'item' && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && segments[at - 1] !== '') {
+          const count = segments[at - 1]!.length
+          const advances: number[] = []
+          for (let g = 0; g < count; g++) advances.push(widths[at - 1]! / count)
+          breakableFitAdvances[at - 1] = advances
+        }
         // The simple walkers take every boundary for a break and a line-end trim out of the line's width.
         simple = false
         segments.push('')

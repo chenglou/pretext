@@ -681,8 +681,11 @@ function walkPreparedComplexLines(
               // (src/rich-inline.ts). Blink's line trails once the preserved spaces it ends with overflow: it
               // takes the white space after them, the tags of spans that open among it and a forced break
               // with no fit (HandleTrailingSpaces, line_breaker.cc:2426-2534), so an edge right after such a
-              // run joins it, taking no room.
-              if (kind === OBJECT && unbroken && hangEndSegmentIndex === i && lineW > fitLimit && engineProfile.paddedOpeningFit === 'start') {
+              // run joins it, taking no room. WebKit fits the content it places without the white space that
+              // hangs before it (hangingContentWidth, InlineContentBreaker.cpp:181-182), so there the edge
+              // joins the run where it fits after the content before the run.
+              if (kind === OBJECT && unbroken && hangEndSegmentIndex === i && (engineProfile.paddedOpeningFit === 'start' ? lineW > fitLimit
+                : engineProfile.paddedOpeningFit === 'placed' && hangStartWidth - hangEdgesWidth + w - endTrim <= fitLimit)) {
                 hangEndSegmentIndex = i + 1
                 hangStartWidth += w
                 hangEdgesWidth += w
@@ -713,10 +716,23 @@ function walkPreparedComplexLines(
               // Where the line of such an edge has no break to return to, the line ends before it, but
               // before a hard break only in Blink, whose retry breaks between any two graphemes: WebKit and
               // Gecko end the line before the last grapheme of the text before the edge, and keep the edge on
-              // a line that grapheme starts (EngineProfile, hardBreakItemRetreat).
+              // a line that grapheme starts (EngineProfile, hardBreakItemRetreat). Of preserved spaces there,
+              // whose advances rich inline gives, Gecko moves the last and WebKit those that don't fit, at
+              // least one, and the ones the line keeps hang.
               if (kind === OBJECT && engineProfile.hardBreakItemRetreat !== 'item' && (segmentFlags[i + 1]! & KIND_BITS) === HARD_BREAK) {
                 const beforeFlags = segmentFlags[i - 1]!
                 const beforeKind = beforeFlags & KIND_BITS
+                const spaceAdvances = beforeKind === PRESERVED_SPACE ? breakableFitAdvances[i - 1]! : null
+                if (spaceAdvances !== null) {
+                  const count = spaceAdvances.length
+                  const moved = engineProfile.hardBreakItemRetreat === 'fit' ? Math.min(count, Math.max(1, Math.ceil((lineW - fitLimit) / spaceAdvances[0]!))) : 1
+                  if (i - 1 > lineStartSegmentIndex || count - moved > lineStartGraphemeIndex) {
+                    endSegmentIndex = i - 1
+                    endGraphemeIndex = count - moved
+                    endWidth = hangStartWidth
+                    break decided
+                  }
+                }
                 const beforeAdvances = beforeKind === TEXT || beforeKind === CONTROL ? breakableFitAdvances[i - 1]! : null
                 const spacing = (beforeFlags & SPACED) !== 0 ? letterSpacing : 0
                 if (beforeAdvances !== null && (i - 1 > lineStartSegmentIndex || beforeAdvances.length - 1 > lineStartGraphemeIndex)) {
@@ -731,7 +747,7 @@ function walkPreparedComplexLines(
                   endWidth = lineW - widths[i - 1]! - spacing
                   break decided
                 }
-                if (beforeKind !== PRESERVED_SPACE && beforeKind !== TAB) {
+                if (spaceAdvances !== null || (beforeKind !== PRESERVED_SPACE && beforeKind !== TAB)) {
                   lineW += advance
                   lineEndSegmentIndex = i + 1
                   lineEndGraphemeIndex = 0

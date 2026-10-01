@@ -4066,14 +4066,14 @@ describe('rich-inline invariants', () => {
     } finally {
       profile.hardBreakItemRetreat = previous
     }
-    // After preserved spaces that follow text, Chrome's line trails the spaces and the span's
-    // opening with them, fitting no edge, so it keeps the line feed wherever the text fits.
-    // Safari fits the span's start edge and Firefox both edges, after the spaces, else the line
-    // ends before the span (ENGINE_FOLLOWUPS.md has what each does with the spaces there).
-    const previousFit = profile.paddedOpeningFit
+    // After preserved spaces, which hang, Chrome keeps the line feed where the text before them
+    // fits; Safari fits the span's start edge without them, else keeps the spaces that fit but
+    // for the last, and Firefox fits both edges with them, else moves the last space.
+    const previousFit = { hardBreakItemRetreat: profile.hardBreakItemRetreat, paddedOpeningFit: profile.paddedOpeningFit }
     try {
       const space = measureWidth(' ', FONT)
-      for (const fit of ['start', 'placed', 'both'] as const) {
+      for (const [retreat, fit] of [['item', 'start'], ['fit', 'placed'], ['last-grapheme', 'both']] as const) {
+        profile.hardBreakItemRetreat = retreat
         profile.paddedOpeningFit = fit
         // The lines up to the one the padded span's line feed ends.
         const head = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
@@ -4082,12 +4082,18 @@ describe('rich-inline invariants', () => {
           return out.slice(0, end + 1).map(line => line.fragments.map(f => f[1]).join('|'))
         }
         const feed = (width: number) => head([{ text: 'foo   ', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 40 }], width)
-        expect(feed(foo + 0.5 * space)).toEqual(fit === 'start' ? ['foo   |'] : ['foo   ', ''])
-        expect(feed(foo + 3 * space + 1)).toEqual(fit === 'start' ? ['foo   |'] : ['foo   ', ''])
-        expect(feed(foo + 3 * space + 21)).toEqual(fit === 'both' ? ['foo   ', ''] : ['foo   |'])
+        expect(feed(foo + 0.5 * space)).toEqual(fit === 'start' ? ['foo   |'] : fit === 'placed' ? ['foo', '   |'] : ['foo  ', ' |'])
+        expect(feed(foo + 1.5 * space)).toEqual(fit === 'start' ? ['foo   |'] : fit === 'placed' ? ['foo ', '  |'] : ['foo  ', ' |'])
+        // The spaces the line keeps hang, from its width and its fragment's.
+        if (fit !== 'start') expect(lines([{ text: 'foo   ', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 40 }], foo + 1.5 * space)[0]).toEqual({ width: round(foo), fragments: [[0, fit === 'placed' ? 'foo ' : 'foo  ', round(foo)]] })
+        expect(feed(foo + 3 * space + 1)).toEqual(fit === 'start' ? ['foo   |'] : ['foo  ', ' |'])
+        expect(feed(foo + 21)).toEqual(fit === 'both' ? ['foo  ', ' |'] : ['foo   |'])
         expect(feed(foo + 3 * space + 41)).toEqual(['foo   |'])
-        // The spaces the line ends with hang, from its width and its fragment's.
-        if (fit !== 'start') expect(lines([{ text: 'foo   ', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 40 }], foo + 1.5 * space)[0]).toEqual({ width: round(foo), fragments: [[0, 'foo   ', round(foo)]] })
+        // A space that is all of its item moves with the span; Chrome's return finds no break before
+        // it, so there it keeps the line feed only where that space overflows.
+        const spaceItem = [{ text: 'foo', font: FONT }, { text: ' ', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 40 }]
+        expect(head(spaceItem, foo + space + 1)).toEqual(fit === 'start' ? ['foo| ', ''] : ['foo', ' |'])
+        expect(head(spaceItem, foo + 0.5 * space)).toEqual(fit === 'start' ? ['foo| |'] : ['foo', ' |'])
         // Blink gives every run of preserved tabs an item of its own (inline_items_builder.cc:1098-1110),
         // so a tab follows no text: where the tab fits and the span's start edge doesn't, Chrome
         // ends the line before the span, whose line feed and padding make a line of their own.
@@ -4101,6 +4107,10 @@ describe('rich-inline invariants', () => {
         expect(first([{ text: 'foo   ', font: FONT }, { text: '  bar', font: FONT, extraWidth: 40 }], foo + 1)).toBe(fit === 'start' ? 'foo   |  ' : 'foo   ')
         expect(first([{ text: 'foo', font: FONT }, { text: '  bar', font: FONT, extraWidth: 40 }], foo + 21)).toBe(fit === 'start' ? 'foo|  ' : 'foo')
         expect(first([{ text: 'foo', font: FONT }, { text: '  bar', font: FONT, extraWidth: 40 }], foo + 19)).toBe('foo')
+      }
+      profile.hardBreakItemRetreat = previousFit.hardBreakItemRetreat
+      for (const fit of ['start', 'placed', 'both'] as const) {
+        profile.paddedOpeningFit = fit
         // Chrome and Safari fit the start edge only of a span that starts with a line feed, and
         // Safari its end edge too where the span ends at its line feed; Firefox fits both.
         expect(texts([{ text: 'foofoo', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 10)).toEqual(fit === 'both' ? ['foofoo', '', 'bar'] : ['foofoo|', 'bar'])
@@ -4110,7 +4120,7 @@ describe('rich-inline invariants', () => {
       profile.paddedOpeningFit = 'start'
       expect(lines([{ text: 'foofoo', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 10)[0]).toEqual({ width: round(foofoo + 15), fragments: [[0, 'foofoo', round(foofoo)], [1, '', 15]] })
     } finally {
-      profile.paddedOpeningFit = previousFit
+      Object.assign(profile, previousFit)
     }
     // A blank line is the next item's line feed, and the line feed that ends the paragraph makes
     // no line: its item gives the last line an empty fragment.
@@ -4142,7 +4152,7 @@ describe('rich-inline invariants', () => {
       for (const scan of ['blink', 'webkit', 'gecko'] as const) {
         profile.lineBreakScan = scan
         profile.hangTabs = scan !== 'gecko'
-        profile.hardBreakItemRetreat = scan === 'blink' ? 'item' : 'last-grapheme'
+        profile.hardBreakItemRetreat = scan === 'blink' ? 'item' : scan === 'webkit' ? 'fit' : 'last-grapheme'
         profile.paddedOpeningFit = scan === 'blink' ? 'start' : scan === 'webkit' ? 'placed' : 'both'
         clearCache()
         // No break comes before them (UAX #14 LB6, LB7), and the break after a chip takes them

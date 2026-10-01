@@ -16,12 +16,6 @@ rich-2790c70764cd3f97 breaks
 rich-7962779980684a5b breaks
 rich-efb55136c738e312 breaks
 
-## A padded rich pre-wrap span that starts with a line feed after a word that ends with preserved spaces, at 80 px and wider: where the span's padding doesn't fit, Firefox moves the last space to the span's line, where the library ends the line after the spaces, before the span (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
-rich-3c8faa9d5e59f7f6 breaks
-rich-993bb5fb527a5ccf breaks
-rich-c65e6813f5328448 breaks
-rich-e91f4f44d49025c6 breaks
-
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Firefox breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-4635ddffedd43c84 breaks
 rich-8736e842495c21ea count
@@ -3184,7 +3178,6 @@ rich-58d9dba217656aa8 count
 rich-676951c3e7b42eca count
 rich-7ed410c8998dbb4a count
 rich-7f95b373e8da09c3 breaks
-rich-81926e46654c3d06 breaks
 rich-d5b65aa2a4d131a5 count
 rich-dcfaf1298b58bfa4 count
 rich-fb77b1bfbe1c8a96 breaks

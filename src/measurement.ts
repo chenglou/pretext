@@ -134,15 +134,16 @@ export type EngineProfile = {
   // fit its padding as the engine fits it there (paddedOpeningFit) and the line has no break to return to. Blink's
   // retry of an overflowing line breaks between any two graphemes (kBreakCharacter, line_breaker.cc:4258-4264,
   // 4620-4622), so the line ends before the item ('item'). Gecko's wrap opportunities come before each cluster inside
-  // a text frame, none at its end (gfxTextRun.cpp:1046-1101), and WebKit breaks the last run of the content that
-  // doesn't fit where that run fits, TextUtil::breakWord in an overflowing run, else before the last character of one
-  // that no text run follows (InlineContentBreaker.cpp:611-651), so there the line ends before the last grapheme of the
-  // text before the item, and keeps the item where that grapheme starts the line ('last-grapheme'). `Unbreakable`,
-  // then a span with 20px of padding that starts with a line feed, in 15px Helvetica Neue at 93px, and `Unbreakabl`,
-  // a bold `e` and that span at 86-106px, which moves the `e`. Where that text ends with preserved spaces, Firefox moves
-  // the last space and Safari the spaces that don't fit, which the profiles don't model: the line ends before the item
-  // (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
-  hardBreakItemRetreat: 'item' | 'last-grapheme'
+  // a text frame, none at its end (gfxTextRun.cpp:1046-1101), so the line ends before the last grapheme of the text
+  // before the item, a preserved space too, and keeps the item where that grapheme starts the line ('last-grapheme').
+  // WebKit breaks the last run of the content that doesn't fit where that run fits, TextUtil::breakWord in an
+  // overflowing run, else before the last character of one that no text run follows (InlineContentBreaker.cpp:611-651),
+  // so it ends the line there too, but after the preserved spaces that fit where the spaces that end the text
+  // overflow the line, as spaces that hang can ('fit'). `Unbreakable`, then a span with 20px of padding that starts
+  // with a line feed, in 15px Helvetica Neue at 93px; `Unbreakabl`, a bold `e` and that span at 86-106px, which moves
+  // the `e`; and `Unbreakable   ` and that span at 86-103px, which moves the last space in Firefox and in Safari the
+  // spaces that don't fit, all three at 86px.
+  hardBreakItemRetreat: 'item' | 'last-grapheme' | 'fit'
   // Which edges of a padded rich-inline item a line fits where the line takes the item's opening and no more of it:
   // the white space, hard break or zero-width space that starts it (getOpeningFit in src/rich-inline.ts has each
   // engine's rule and source); the line paints both edges whatever it fitted. Blink fits its start edge, and no edge
@@ -405,7 +406,7 @@ export function getEngineProfile(): EngineProfile {
     hangsIdeographicSpace: engine !== 'webkit',
     laysOutUnderDefaultLocale: engine === 'blink',
     namesGenericFamiliesByLanguage: engine === 'webkit',
-    hardBreakItemRetreat: engine === 'blink' ? 'item' : 'last-grapheme',
+    hardBreakItemRetreat: engine === 'blink' ? 'item' : engine === 'webkit' ? 'fit' : 'last-grapheme',
     paddedOpeningFit: engine === 'blink' ? 'start' : engine === 'webkit' ? 'placed' : 'both',
     transformsSegmentBreaksAcrossItems: engine === 'blink',
   }

@@ -1,16 +1,6 @@
 ## A padded rich pre-wrap span that starts on the line it ends inside, at a line feed or after spaces that hang, at 24 px and wider: Safari fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-f7c605f19ec5d469 breaks
 
-## A padded rich pre-wrap span that starts with a line feed after a word that ends with preserved spaces, at 80 px and wider: Safari fits the span's start edge without those spaces, which hang, and where it doesn't fit moves the spaces that don't fit to the span's line, where the library counts the spaces and ends the line after them, before the span (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
-rich-04f0598ec195fb34 breaks
-rich-08dfff76129fca74 breaks
-rich-aa9a900cbc4b3d3c count
-rich-ab18f5ea1fbc6f41 breaks
-rich-b1052010b61c8112 breaks
-rich-d370bdeca9eb8f52 breaks
-rich-ea8cda2bc2afccb6 count
-rich-f093932606d94509 breaks
-
 ## A padded rich pre-wrap span that starts with spaces after a word that ends with spaces, at 24 px and wider: Safari fits the span's start edge with the word's spaces, as it leaves only the span's own out of the fit (its last white-space item's width, hangingContentWidth), where the library leaves the word's spaces out and fits both edges (ENGINE_FOLLOWUPS.md)
 rich-5e1adef196a86585 breaks
 rich-a3217381ee65daac breaks
