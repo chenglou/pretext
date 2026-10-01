@@ -845,9 +845,14 @@ describe('boundary-policy regressions', () => {
     // A separator that ICU's fast-forward passes stays inside a text item and ends no line.
     const passed = analyzeText('か中？\u2028b', webkit)
     expect({ texts: passed.texts, kinds: kindsOf(passed) }).toEqual({ texts: ['か', '中？', '\u2028', 'b'], kinds: ['text', 'text', 'text', 'text'] })
-    // NEL is text in the Blink profile and a control in the WebKit profile.
+    // NEL is text in the Blink profile and a control in the WebKit profile, under Safari 27's
+    // scan or Safari 26's, where a collapsed space also keeps the character it came from.
     expect(kindsOf(analyzeText('ab\u0085cd', blink))).toEqual(['text', 'text', 'text'])
-    expect(kindsOf(analyzeText('ab\u0085cd', webkit))).toEqual(['text', 'control', 'text'])
+    expect(analyzeText('ab\t cd', blink).spaceSources).toBeNull()
+    for (const profile of [webkit, { ...baseProfile, lineBreakScan: 'webkit-safari-26' as const }]) {
+      expect(kindsOf(analyzeText('ab\u0085cd', profile))).toEqual(['text', 'control', 'text'])
+      expect(analyzeText('ab\t cd', profile).spaceSources?.[2]).toBe(0x09)
+    }
   })
 
   test('the Gecko profile gives control characters no advance, only letter spacing', () => {
@@ -1200,9 +1205,9 @@ describe('boundary-policy regressions', () => {
     const profile = getEngineProfile()
     const previous = { lineBreakScan: profile.lineBreakScan, breaksFromItemText: profile.breaksFromItemText, transformsSegmentBreaksAcrossItems: profile.transformsSegmentBreaksAcrossItems }
     try {
-      for (const [scan, column] of [['webkit', 1], ['blink', 2], ['gecko', 3]] as const) {
+      for (const [scan, column] of [['webkit', 1], ['webkit-safari-26', 1], ['blink', 2], ['gecko', 3]] as const) {
         profile.lineBreakScan = scan
-        profile.breaksFromItemText = scan === 'webkit'
+        profile.breaksFromItemText = column === 1
         profile.transformsSegmentBreaksAcrossItems = scan === 'blink'
         // Source, then the normalized text in Safari, Chrome and Firefox.
         for (const shape of [
@@ -2472,49 +2477,45 @@ describe('prepare invariants', () => {
   })
 
   test("the WebKit profile takes Safari 26's rules on a WebKit with neither ReadableStream.from() nor WebAssembly.Suspending", async () => {
-    // What a row removes, and puts back: the two APIs, and the globals that hold them.
-    const holders: ReadonlyArray<readonly [string, object, string]> = [
-      ['from', ReadableStream, 'from'],
-      ['Suspending', WebAssembly, 'Suspending'],
-      ['ReadableStream', globalThis, 'ReadableStream'],
-      ['WebAssembly', globalThis, 'WebAssembly'],
-    ]
-    const saved = holders.map(([, holder, key]) => Object.getOwnPropertyDescriptor(holder, key)!)
-    const restore = (): void => {
-      for (let i = holders.length - 1; i >= 0; i--) Object.defineProperty(holders[i]![1], holders[i]![2], saved[i]!)
+    // Each row gives the page its own ReadableStream and WebAssembly, so the test doesn't lean on the
+    // runner's having both APIs.
+    const globals = ['navigator', 'ReadableStream', 'WebAssembly'] as const
+    const saved = globals.map(key => Object.getOwnPropertyDescriptor(globalThis, key))
+    const setGlobal = (key: string, value: unknown): void => {
+      if (value === undefined) Reflect.deleteProperty(globalThis, key)
+      else Object.defineProperty(globalThis, key, { value, configurable: true, writable: true })
     }
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
     // An app's web view on an iPhone names no Safari version, on Safari 26's WebKit or 27's.
     const webView = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
     const chrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
+    const from = { from: (): void => {} }
+    const suspending = { Suspending: (): void => {} }
     try {
       // Safari 27's WebKit has both APIs and Safari 26's neither. One is enough for Safari 27's
       // rules: a polyfill that replaces ReadableStream may lack from(), and Lockdown Mode has
       // no WebAssembly. Other engines never take Safari 26's.
-      const rows: ReadonlyArray<readonly [string, readonly string[], AnalysisProfile['lineBreakScan']]> = [
-        [webView, [], 'webkit'],
-        [webView, ['from', 'Suspending'], 'webkit-safari-26'],
-        [webView, ['ReadableStream', 'WebAssembly'], 'webkit-safari-26'],
-        [webView, ['from'], 'webkit'],
-        [webView, ['Suspending'], 'webkit'],
-        [webView, ['WebAssembly'], 'webkit'],
-        [webView, ['ReadableStream'], 'webkit'],
-        [chrome, ['from', 'Suspending'], 'blink'],
+      const rows: ReadonlyArray<readonly [string, object | undefined, object | undefined, AnalysisProfile['lineBreakScan']]> = [
+        [webView, from, suspending, 'webkit'],
+        [webView, {}, {}, 'webkit-safari-26'],
+        [webView, undefined, undefined, 'webkit-safari-26'],
+        [webView, {}, suspending, 'webkit'],
+        [webView, from, {}, 'webkit'],
+        [webView, from, undefined, 'webkit'],
+        [webView, undefined, suspending, 'webkit'],
+        [chrome, {}, {}, 'blink'],
       ]
       for (let i = 0; i < rows.length; i++) {
-        const [userAgent, missing, scan] = rows[i]!
-        Object.defineProperty(globalThis, 'navigator', { value: { userAgent }, configurable: true })
-        for (let k = 0; k < holders.length; k++) if (missing.includes(holders[k]![0])) Reflect.deleteProperty(holders[k]![1], holders[k]![2])
+        const [userAgent, stream, wasm, scan] = rows[i]!
+        setGlobal('navigator', { userAgent })
+        setGlobal('ReadableStream', stream)
+        setGlobal('WebAssembly', wasm)
         const measurement = await import(`./measurement.ts?safari-26=${i}`) as MeasurementModule
-        expect({ userAgent, missing, scan: measurement.getEngineProfile().lineBreakScan }).toEqual({ userAgent, missing, scan })
-        restore()
+        expect({ row: i, scan: measurement.getEngineProfile().lineBreakScan }).toEqual({ row: i, scan })
       }
     } finally {
-      restore()
-      if (descriptor === undefined) {
-        Reflect.deleteProperty(globalThis, 'navigator')
-      } else {
-        Object.defineProperty(globalThis, 'navigator', descriptor)
+      for (let i = 0; i < globals.length; i++) {
+        if (saved[i] === undefined) Reflect.deleteProperty(globalThis, globals[i]!)
+        else Object.defineProperty(globalThis, globals[i]!, saved[i]!)
       }
     }
   })
@@ -2688,6 +2689,18 @@ describe('prepare invariants', () => {
         expect({ source, lines: lines(source, width, options) }).toEqual({ source, lines: [...safari27] })
         profile.lineBreakScan = 'webkit-safari-26'
         expect({ source, safari26: lines(source, width, options) }).toEqual({ source, safari26: [...safari26] })
+      }
+      // Between a rich paragraph's items too: Safari 27 breaks before the guillemet.
+      profile.breaksFromItemText = true
+      for (const [scan, expected] of [['webkit', ['中文', '«中文']], ['webkit-safari-26', ['中', '文«中', '文']]] as const) {
+        profile.lineBreakScan = scan
+        clearCache()
+        const rich = prepareRichInline([{ text: '中文', font: FONT }, { text: '«中文', font: FONT }])
+        const texts: string[] = []
+        walkRichInlineLineRanges(rich, measureWidth('文«中', FONT) + 0.1, range => {
+          texts.push(materializeRichInlineLineRange(rich, range).fragments.map(fragment => fragment.text).join(''))
+        })
+        expect({ scan, texts }).toEqual({ scan, texts: [...expected] })
       }
     } finally {
       Object.assign(profile, previous)
