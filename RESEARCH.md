@@ -1238,7 +1238,17 @@ units to the em), so "exactly as wide as an emoji" below means equal but for tha
 
 What it still gets wrong, and the mixes it newly gets wrong, are in ENGINE_FOLLOWUPS.md, Emoji correction. Text fonts
 whose glyphs are exactly as wide as an emoji's, beyond the two found there, or a platform with the gap whose emoji
-font varies its advances would reopen it. The rebuild's DOM-free formulas, W being Canvas's width at a size: Chrome's
+font varies its advances would reopen it. Two of the count's steps serve only graphemes that two fonts draw: asking a
+stretch that isn't all emoji glyphs character by character, and bounding the count by the emoji widths that fit in
+the grapheme. Without them, 13 runtime lines fewer, every harness prediction is the same (42,890 in Chrome, 43,997 in
+Firefox), as is every line count of 417,820 layouts of realistic chat paragraphs, with the same `measureText` calls;
+over the six probe sets of widths here and in ENGINE_FOLLOWUPS.md, the widths that were right under one correction
+per grapheme and are wrong go from 604 to 2,518 in Chrome and from 451 to 3,867 in Firefox, nearly all in shapes only
+fuzzing produces (a text font's pictograph joined by a ZWJ to an emoji, a skin tone after a combining mark). In
+emoji-test.txt, Firefox alone differs: three ZWJ sequences written with no U+FE0F after their first character
+(`2764 200D 1F525`, `2764 200D 1FA79`, `26D3 200D 1F4A5`), which it draws as a text font's glyph and an emoji, need
+the first step, and `26F9 200D 2640 FE0F` and `26F9 200D 2642 FE0F`, which a text font draws whole, are right only
+without it (the PR, #TBD, has both tables). The rebuild's DOM-free formulas, W being Canvas's width at a size: Chrome's
 DOM width is `Math.ceil(64 × W(size × DPR)) / (64 × DPR)` at DPR 2 and `W(size)` at DPR 1, Firefox's
 `W(size × DPR) / DPR`, Safari's `W(size)` (September 2026). They'd retire the DOM exception and work in workers, but
 make prepared widths depend on the DPR at prepare time, which the API discussion planned before a release decides
