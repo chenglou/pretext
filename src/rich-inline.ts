@@ -507,7 +507,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // holds that. There the halt an item's own text gives the mark it ends with is the one only a
   // line broken between graphemes takes (overflowLineEndTrims), as in one text: in 16px
   // Hiragino Sans, Chrome 154 fits `文字）` in 40-47px before a span `i`, and before a span that
-  // starts with a space it breaks before `字`.
+  // starts with a space, or a space and a box, it breaks before `字`. An atomic item's own
+  // leading space is none: its inline-block trims it (ownsWhiteSpace), a break comes right
+  // after the mark, and Chrome fits `設定）` in 40-47px before a chip ` @a `.
   function leaveEndHaltToOverflow(item: PreparedRichInlineItem): void {
     const { prepared } = item
     const last = prepared.widths.length - 1
@@ -584,6 +586,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // The white space takes no letter spacing, and one that isn't finite is refused as any item's.
       if (item.text !== undefined) readLetterSpacing(item.letterSpacing)
       finishJoinedText()
+      if (pendingGapWidth !== null && previousItem !== null) leaveEndHaltToOverflow(previousItem)
       const box: PreparedRichInlineItem = {
         break: 'never', breakBefore: pendingGapWidth !== null || previousItem !== null, continued: false, walked: false,
         establishesLine: true, extraWidth: width, gapBefore: pendingGapWidth ?? 0, gapItemIndex: pendingGapWidth === null ? -1 : pendingGapItemIndex,
@@ -772,7 +775,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 
     if (previousItem === null || whitespaceBefore || preparedItem.break === 'never' || previousItem.break === 'never') {
       finishJoinedText()
-      if (whitespaceBefore && previousItem !== null) leaveEndHaltToOverflow(previousItem)
+      if (previousItem !== null && (pendingGapWidth !== null || (hasLeadingWhitespace && ownsWhiteSpace))) leaveEndHaltToOverflow(previousItem)
       preparedItem.breakBefore = whitespaceBefore || (previousItem !== null && breaksAfterAtomic)
     }
     if (preparedItem.break === 'never') {

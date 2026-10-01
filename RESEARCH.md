@@ -943,7 +943,9 @@ none of its cases moved.
   3.81px. Rich inline did this before #TBD, and still does. Chrome halts the mark only where a break comes right
   after it (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:342-363`), and its scan gives none before a
   space, a tab or a line feed: `文字）` before a span that starts with a space, or with that space ending its own
-  span, or before a span that starts with a line feed in pre-wrap, breaks before `字` at 40-47px, as in one node.
+  span, or before a span that starts with a line feed in pre-wrap, breaks before `字` at 40-47px, as in one node,
+  and so does `設定）` before a space and a box or a chip. A chip's own leading space is no such space, since its
+  inline-block trims it: a break comes right after the mark, and `設定）` before a chip ` @a ` fits 40-47px halted.
   Rich inline had kept `文字）` halted on one line there, since an item's own text ends at the mark: 8 of the 49
   widths from 28px to 76px for each of 12 such shapes, and 50 of 726 widths for six styled sentences with a space
   after a bold or linked closing bracket, which all pass since #TBD but 32 widths of two sentences that fail for

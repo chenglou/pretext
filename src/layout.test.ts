@@ -5218,8 +5218,8 @@ describe('layout invariants', () => {
       // that ends the item before, but for where it starts a line. Each takes its own item's
       // font, so the pair halts across a change of weight or size too. From 56px, where no
       // line fills a pair's unit grapheme by grapheme, the lines and their widths are the text's.
-      const richLines = (items: Array<{ text: string, font?: string }>, width: number): string[] => {
-        const rich = prepareRichInline(items.map(item => ({ font, ...item })))
+      const richLines = (items: Array<{ text: string, font?: string, break?: 'never', extraWidth?: number } | RichInlineBox>, width: number): string[] => {
+        const rich = prepareRichInline(items.map(item => (item.text === undefined ? item : { font, ...item })))
         const lines: string[] = []
         walkRichInlineLineRanges(rich, width, range => {
           lines.push(`${range.fragments.map(fragment => materializeRichInlineLineRange(rich, { ...range, fragments: [fragment] }).fragments[0]!.text).join('')}:${Math.round(range.width * 100) / 100}`)
@@ -5264,6 +5264,17 @@ describe('layout invariants', () => {
         expect(richLines(items, 46)).toEqual(['中:16', '中」:32', '中:16'])
       }
       expect(richLines([{ text: '中中」' }, { text: '中' }], 46)).toEqual(['中中」:40', '中:16'])
+      // A space before a box or a chip is such a space too, in its own item or the mark's. A
+      // chip's own leading space is none: its box trims it, so a break comes right after the
+      // mark, which halts as before a chip without one.
+      for (const items of [[{ text: '中中」 ' }, { width: 5 }], [{ text: '中中」' }, { text: ' ' }, { width: 5 }], [{ text: '中中」 ' }, { text: ' ', break: 'never' as const, extraWidth: 5 }]]) {
+        expect({ items, lines: richLines(items, 46) }).toEqual({ items, lines: ['中:16', '中」:42.28'] })
+        expect({ items, lines: richLines(items, 48) }).toEqual({ items, lines: ['中中」:48', ':5'] })
+      }
+      expect(richLines([{ text: '中中」' }, { width: 5 }], 46)).toEqual(['中中」:45'])
+      for (const text of [' @a ', ' @a', '@a']) {
+        expect({ text, lines: richLines([{ text: '中中」' }, { text, break: 'never', extraWidth: 8 }, { text: '中' }], 46) }).toEqual({ text, lines: ['中中」:40', '@a中:43.2'] })
+      }
     } finally {
       Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
     }
