@@ -3774,12 +3774,23 @@ describe('rich-inline invariants', () => {
       return out
     }
     const round = (value: number) => Math.round(value * 1e6) / 1e6
-    // Where the line wraps, all of the run hangs, and so do the edges of a padded item of only
-    // white space, none of which Blink fits (getOpeningFit in rich-inline.ts); the extraWidth of
-    // an item with text on the line doesn't.
+    // Where the line wraps, all of the run hangs, and a padded item's extraWidth doesn't: the line
+    // paints the edges of a padded item of only white space, or of one that starts with white space
+    // after a word's own, though Blink fits none of them (getOpeningFit in rich-inline.ts), so the
+    // run hangs past a line they overflow.
     expect(lines([{ text: 'foo  ', font: FONT }, { text: '  ', font: BOLD, extraWidth: 6 }, { text: 'bar', font: FONT }], foo + 7)).toEqual([
-      { width: round(foo), fragments: [['foo  ', round(foo)], ['  ', 0]] },
+      { width: round(foo + 6), fragments: [['foo  ', round(foo)], ['  ', 6]] },
       { width: round(measureWidth('bar', FONT)), fragments: [['bar', round(measureWidth('bar', FONT))]] },
+    ])
+    expect(lines([{ text: 'foo  ', font: FONT }, { text: '  ', font: BOLD, extraWidth: 6 }, { text: 'bar', font: FONT }], foo + 1)[0]).toEqual(
+      { width: round(foo + 6), fragments: [['foo  ', round(foo)], ['  ', 6]] },
+    )
+    expect(lines([{ text: 'foo  ', font: FONT }, { text: ' x', font: BOLD, extraWidth: 6 }, { text: ' bar', font: FONT }], foo + 7)[0]).toEqual(
+      { width: round(foo + 6), fragments: [['foo  ', round(foo)], [' ', 6]] },
+    )
+    // Where the line goes on into the item, the edges count once, with the white space after them.
+    expect(lines([{ text: 'foo  ', font: FONT }, { text: ' x', font: BOLD, extraWidth: 6 }], Infinity)).toEqual([
+      { width: round(foo + 2 * space + 6 + measureWidth(' x', BOLD)), fragments: [['foo  ', round(foo + 2 * space)], [' x', round(6 + measureWidth(' x', BOLD))]] },
     ])
     expect(lines([{ text: 'foo  ', font: FONT, extraWidth: 6 }, { text: '  ', font: BOLD }, { text: 'bar', font: FONT }], foo + 7)[0]).toEqual(
       { width: round(foo + 6), fragments: [['foo  ', round(foo + 6)], ['  ', 0]] },

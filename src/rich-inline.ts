@@ -278,6 +278,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   let retreatsFromUnfitHyphen = profile.unfitHyphenRetreat === 'none' && source.includes('\u00AD')
   let insideExtras: number[] | null = null
   let fillExtras: number[] | null = null
+  let hangingEdges: number[] | null = null
   // Each text item's hyphen width and tab stop advance, and whether two items differ in one.
   const hyphenWidths: number[] = zeros(items.length)
   const tabStopAdvances: number[] = zeros(items.length)
@@ -387,9 +388,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // too (nextWrapOpportunity, :469-475).
         const breaksBefore = at === 0 || (profile.lineBreakScan === 'webkit' ? firstKind !== HARD_BREAK : afterObject)
         widths.push(extraWidth)
-        // An opening no edge of which is fitted hangs with the white space around it. Else it is an object:
-        // the white space after it stays on its line, as the line keeps the opening it took.
+        // An opening no edge of which is fitted takes no room among the white space around it, which hangs
+        // past it, and a line that ends in that white space still paints it (ParagraphSegmentData,
+        // hangingEdges). Else it is an object: the white space after it stays on its line, as the line keeps
+        // the opening it took.
         flags.push((fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN) | (at > 0 ? STARTS_ITEM : 0))
+        if (fit === 0) hangingEdges = setAt(hangingEdges, at, extraWidth, 0)
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         segments.push('')
         breakableFitAdvances.push(null)
@@ -488,7 +492,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       }
     }
   }
-  data.items = { hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0) }
+  data.items = { hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), hangingEdges: setAt(hangingEdges, segmentCount, 0, 0) }
   let onlyItem = -1
   for (let index = 0; index < items.length && !paddedOrObject; index++) {
     if (itemSegments[index] === itemSegments[index + 1]) continue
@@ -681,10 +685,14 @@ function createLine(
 
   let rest = lineW - width
   if (rest < 0 && fragments.length > 0) fragments[fragments.length - 1]!.occupiedWidth -= rest
+  const hangingEdges = items === undefined ? null : items.hangingEdges
   for (let k = fragments.length - 1; k >= 0 && rest > 0; k--) {
     const last = fragments[k]!
-    if (last.occupiedWidth > 0) {
-      const part = Math.min(rest, last.occupiedWidth)
+    // The edge of a padded opening stays painted where the white space around it hangs: it is the
+    // first segment of its item, so of a fragment.
+    const edge = hangingEdges === null || last.start.graphemeIndex > 0 ? 0 : hangingEdges[itemSegments[last.itemIndex]! + last.start.segmentIndex]!
+    if (last.occupiedWidth > edge) {
+      const part = Math.min(rest, last.occupiedWidth - edge)
       last.occupiedWidth -= part
       rest -= part
     }

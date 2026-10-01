@@ -62,14 +62,17 @@ export type PreparedLineBreakData = {
 }
 
 // Per segment of a rich-inline paragraph, what its item gives it, each null where no item differs: the hyphen a soft
-// hyphen paints and the advance between a tab's stops, in the item's font, and the item's extraWidth where a line
-// that starts inside the segment pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme
-// (`fillExtras`); a line that starts with the whole segment pays lineStartExtras.
+// hyphen paints and the advance between a tab's stops, in the item's font; the item's extraWidth where a line that
+// starts inside the segment pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`),
+// as a line that starts with the whole segment pays lineStartExtras; and the width of a segment that is the edge of a
+// padded item's opening where the engine fits none of it (getOpeningFit in src/rich-inline.ts): it takes no room in
+// the run of preserved spaces and tabs it is in, and a line that ends in that run still paints it (`hangingEdges`).
 export type ParagraphSegmentData = {
   hyphenWidths: number[] | null
   tabStopAdvances: number[] | null
   insideExtras: number[] | null
   fillExtras: number[] | null
+  hangingEdges: number[] | null
 }
 
 type InternalLineVisitor = (
@@ -457,6 +460,7 @@ function walkPreparedComplexLines(
   const hyphenWidths = items === undefined ? null : items.hyphenWidths
   const insideExtras = items === undefined ? null : items.insideExtras
   const fillExtras = items === undefined ? null : items.fillExtras
+  const hangingEdges = items === undefined ? null : items.hangingEdges
   const engineProfile = getEngineProfile()
   // Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
   // §4.1.2), so they take no room when fitting and don't size the line (§8.2).
@@ -496,10 +500,13 @@ function walkPreparedComplexLines(
     // The latest run of preserved spaces and tabs: the segment after it, and the
     // line's width before it, less the line-end trim of the text it follows, with
     // the gap after the glyph before it. In a rich-inline paragraph, the run can
-    // stay on its line after an object however far it overflows (staysAfterObject).
+    // stay on its line after an object however far it overflows (staysAfterObject),
+    // and that width also has the edges in the run that a line ending in it paints,
+    // which are hangEdgesWidth wide (ParagraphSegmentData).
     let hangEndSegmentIndex = -1
     let hangStartWidth = 0
     let hangStays = false
+    let hangEdgesWidth = 0
     // The line-end trim of the last whole segment, where only that trim let it fit, kept
     // past segments after it that take no room at the line end, as spaces. Every later
     // segment that takes room overflows, so the line ends before it and paints that much less.
@@ -594,8 +601,13 @@ function walkPreparedComplexLines(
             if (hangEndSegmentIndex !== i) {
               hangStartWidth = lineW - lineEndTrimmed + leadingSpacing
               hangStays = items !== undefined && i > lineStartSegmentIndex && (segmentFlags[i - 1]! & KIND_BITS) === OBJECT && staysAfterObject(segmentFlags, i, hangingKinds)
+              hangEdgesWidth = 0
             }
             hangEndSegmentIndex = i + 1
+            if (hangingEdges !== null) {
+              hangStartWidth += hangingEdges[i]!
+              hangEdgesWidth += hangingEdges[i]!
+            }
           }
           // Where glue can't hold a line, glue at a line start isn't the line's content:
           // the segment after it starts the line, however wide.
@@ -647,7 +659,7 @@ function walkPreparedComplexLines(
             // lets an empty one stay wherever it falls (nsLineLayout.cpp:1264-1269), so there an
             // object of width 0 stays on a line that already overflows, where Blink and WebKit move
             // it to the next line as any other.
-            const newFitW = hangs ? hangStartWidth : lineW + fitAdvance
+            const newFitW = hangs ? hangStartWidth - hangEdgesWidth : lineW + fitAdvance
             if (
               newFitW - endTrim > fitLimit &&
               !(hangs && hangStays) &&
