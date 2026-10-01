@@ -43,11 +43,13 @@ import {
 // What a scan marks at a position of its text, as bits. A line may start at a BREAK. The WebKit
 // scan marks a FORCED_BREAK after a U+2028 or U+2029 that starts an item; the Gecko scan marks a
 // CLUSTER_START where a cluster starts without a break, and a SOFT_HYPHEN_BREAK with the BREAK
-// right after a soft hyphen.
+// right after a soft hyphen. A rich-inline paragraph's analysis marks an ITEM_START where one of its
+// items starts, which starts a segment whether or not a line may start there.
 export const BREAK = 1
 export const CLUSTER_START = 2
 export const FORCED_BREAK = 4
 export const SOFT_HYPHEN_BREAK = 8
+export const ITEM_START = 16
 
 // Page languages whose line-break rules differ in some engine. Every other
 // language, an empty or missing one, and no document read as root.

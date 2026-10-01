@@ -125,89 +125,35 @@ export type EngineProfile = {
   // space (CanvasRenderingContext2D.cpp:4634-4637) and other controls as a hexbox. Chrome and
   // Safari give most controls an advance on the page, as their Canvas does.
   hidesControlCharacters: boolean
-  // Where collapsible white space before soft hyphens that end a rich-inline line hangs, as
-  // white space that ends a line does, where the line doesn't end at a soft hyphen with its
-  // hyphen. Gecko discards soft hyphens from a text frame's text (IsDiscardable,
-  // nsTextFrameUtils.cpp:32-49), so the white space ends the line wherever it ends
-  // ('line-end'): rich items `see`, ` \u00AD` in 16px Arial take one 25.8px line in Firefox
-  // at 26px. Blink hangs it where the line breaks before more content ('break') and lays a
-  // soft hyphen that ends the paragraph out after it, where it takes room: Chrome gives
-  // that soft hyphen a line of its own at 26px. WebKit does too, and also keeps a soft
-  // hyphen on a line that ends at white space after it, so it hangs the white space
-  // before a soft hyphen only where the line breaks there ('own-break'): items `see`,
-  // ` \u00AD `, `this word` end their first line at 30.24px in Safari at 45px, and at
-  // 25.80px in Chrome and Firefox.
-  spaceBeforeSoftHyphenHangs: 'line-end' | 'break' | 'own-break'
-  // Gecko drops soft hyphens and bidi controls before it collapses white space, so white
-  // space after one collapses with the white space before it, in a run that goes on from one
-  // text frame to the next (nsTextFrameUtils::TransformText): Firefox lays out items `ab`,
-  // ` \u00AD \u00AD`, `cd` in 16px Arial in one 39.15px line at 40px, where Chrome and Safari
-  // give 2 lines, as they do for one text node. Rich-inline takes it across items and after an
-  // item's leading white space (whitespaceRunOpen in src/rich-inline.ts); the Gecko profile's
-  // analysis does only through bidi controls, inside a text past its first white space
-  // (ENGINE_FOLLOWUPS.md).
-  collapsesSpaceAcrossSoftHyphens: boolean
-  // Where rich-inline finds break opportunities next to an item boundary. Blink runs one
-  // line-break iterator over the text of the whole inline formatting context, and Gecko
-  // collects a word across text frames until a space and breaks it in one pass, so every
-  // break fact near a boundary comes from the text the items join. WebKit finds breaks
-  // inside each inline box from that box's own text, and decides a boundary between boxes
-  // from the previous box's last two characters (TextUtil.cpp:374-396). Its soft wrap index
-  // loop ends the content it places after a line break item, so no break comes before one
-  // at any boundary, after an atomic item too (nextWrapOpportunity, InlineFormattingUtils.cpp:469-475).
-  breaksFromItemText: boolean
-  // Where a rich line that has no break to return to ends when an item that starts with a
-  // hard break, with none before it, doesn't fit its padding. Blink's retry of an overflowing
-  // line breaks between any two graphemes (kBreakCharacter, line_breaker.cc:4258-4264,
-  // 4620-4622), so the line ends before the item ('item'). Gecko's wrap opportunities come
-  // before each cluster inside a text frame, none at its end (gfxTextRun.cpp:1046-1101), so the
-  // line ends before the last grapheme of the text before the item, a preserved space too,
-  // before that grapheme's item where it is all of that item, and keeps the item where that
-  // grapheme starts the line ('last-grapheme'). WebKit breaks the last run of the content that
-  // doesn't fit where that run fits, TextUtil::breakWord in an overflowing run, else before the
-  // last character of one that no text run follows (InlineContentBreaker.cpp:611-651), so it
-  // ends the line there too, but after the preserved spaces that fit where the spaces that end
-  // the text overflow the line, as spaces that hang can ('fit'). `Unbreakable`, then a span with
-  // 20px of padding that starts with a line feed, in 15px Helvetica Neue at 93px; `Unbreakabl`,
-  // a bold `e` and that span at 86-106px, which moves the `e`; and `Unbreakable   ` and that span
-  // at 86-103px, which moves the last space in Firefox and in Safari the spaces that don't fit,
-  // all three at 86px.
-  hardBreakItemRetreat: 'item' | 'last-grapheme' | 'fit'
-  // Which edges of a padded item a line fits where the line takes the item's opening and no
-  // more of it: a hard break that starts the item, or white space that starts it after an
-  // atomic item, and in Blink anywhere (openingEdge, prepareRichInline). Blink adds a span's
-  // start edge to the line when it opens (HandleOpenTag, line_breaker.cc:3957-3976), and only a
-  // test-only flag narrows the line for its cloned end edge (BoxDecorationBreakCloneLineBreaking,
-  // :454-461); the text or forced break after it finds the line overflowing and returns to the
-  // line's latest break (HandleText, HandleForcedLineBreak, :1355-1372, 2856-2860), and the close
-  // tags after a forced break trail it (:2912-2929): 'start'. The items a line takes after the
-  // break it returns to stay on it where they are all trailable, white space with the tags of
-  // spans that open and close among it (RewindOverflow, :4332-4424), so after any content Blink
-  // fits no edge of a span of only white space. Where the line ends with preserved spaces
-  // that overflow it, or that follow text in one item, which Blink's return breaks before them
-  // (HandleOverflow, :4163-4185, at the run's start that ShapingLineBreaker::ShapeLine breaks at,
-  // shaping_line_breaker.cc:490-495), the line trails them, taking the open tag and white space or
-  // a forced break after them with no fit (HandleTrailingSpaces, :2426-2534), so Blink fits no
-  // edge where the content before the spaces fits; after spaces that start an item, before which
-  // no break comes (UAX #14 LB7), it fits the start edge with them. WebKit fits a box that opens
-  // in the content it places without its cloned end edge (placedClonedDecorationWidth,
-  // InlineLineBuilder.cpp:1501-1523), but that content runs on past the inline box ends after a
-  // line break or white space (nextWrapOpportunity, InlineFormattingUtils.cpp:470-475, 530-538),
-  // so it fits the end edge too of an item of white space that ends there, and leaves white space
-  // that hangs before the box out of the fit (hangingContentWidth, InlineContentBreaker.cpp:
-  // 183-186, 956-958): 'placed'. Gecko fits a frame's whole width, its cloned end edge too, and
-  // lets only an empty frame past the line's end (CanPlaceFrame, nsLineLayout.cpp:1217-1270),
-  // wherever it falls, so an atomic item of width 0 stays on a line that already overflows: 'both'. In 15px Helvetica Neue, `Unbreakable` and a span with 20px padding that starts with a
-  // line feed keep the line feed from 107px in Chrome and Safari, from 127px in Firefox, and
-  // `Unbreakable   ` and that span from 86px in Chrome, 105px in Safari and 138px in Firefox;
-  // `Ping `, the chip `@alice` and a span with 12px padding that starts with two spaces keep them
-  // on the chip's line from 71px in Chrome and Safari and from 83px in Firefox, and one of only
-  // two spaces at every width in Chrome and from 117px in Safari and Firefox.
+  // Where a rich-inline line ends when a padded item that starts with a hard break, with no break before it, doesn't
+  // fit its padding as the engine fits it there (paddedOpeningFit) and the line has no break to return to. Blink's
+  // retry of an overflowing line breaks between any two graphemes (kBreakCharacter, line_breaker.cc:4258-4264,
+  // 4620-4622), so the line ends before the item ('item'). Gecko's wrap opportunities come before each cluster inside
+  // a text frame, none at its end (gfxTextRun.cpp:1046-1101), and WebKit breaks the last run of the content that
+  // doesn't fit where that run fits, TextUtil::breakWord in an overflowing run, else before the last character of one
+  // that no text run follows (InlineContentBreaker.cpp:611-651), so there the line ends before the last grapheme of the
+  // text before the item, and keeps the item where that grapheme starts the line ('last-grapheme'). `Unbreakable`,
+  // then a span with 20px of padding that starts with a line feed, in 15px Helvetica Neue at 93px, and `Unbreakabl`,
+  // a bold `e` and that span at 86-106px, which moves the `e`. Where that text ends with preserved spaces, Firefox moves
+  // the last space and Safari the spaces that don't fit, which the profiles don't model: the line ends before the item
+  // (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
+  hardBreakItemRetreat: 'item' | 'last-grapheme'
+  // Which edges of a padded rich-inline item a line fits where the line takes the item's opening and no more of it:
+  // the white space or hard break that starts it (getOpeningFit in src/rich-inline.ts has each engine's rule and
+  // source). Blink fits its start edge, and no edge of an item of only white space, or after preserved spaces that
+  // follow text: 'start'. WebKit fits its start edge where a hard break starts it, or white space does after an atomic
+  // item, and its end edge too where the item is all opening: 'placed'. Gecko fits a frame's whole width, its cloned
+  // end edge too, and lets only an empty frame past the line's end (CanPlaceFrame, nsLineLayout.cpp:1217-1270),
+  // wherever it falls, so an object of width 0 stays on a line that already overflows: 'both'. In 15px Helvetica
+  // Neue, `Unbreakable` and a span with 20px padding that starts with a line feed keep the line feed from 107px in
+  // Chrome and Safari, from 127px in Firefox; `Ping `, the chip `@alice` and a span with 12px padding that starts
+  // with two spaces keep them on the chip's line from 71px in Chrome and Safari and from 83px in Firefox, and one of
+  // only two spaces at every width in Chrome and from 117px in Safari and Firefox.
   paddedOpeningFit: 'start' | 'placed' | 'both'
   // Blink transforms segment breaks in the text of the whole inline formatting context
   // (ShouldRemoveNewline and RemoveTrailingCollapsibleNewlineIfNeeded, inline_items_builder.cc).
-  // Gecko transforms each text frame's own text (nsTextFrameUtils::TransformText), as
-  // rich-inline transforms an item's, and WebKit turns segment breaks into spaces.
+  // Gecko transforms each text frame's own text (nsTextFrameUtils::TransformText), as a rich-inline
+  // paragraph's analysis transforms each item's, and WebKit turns segment breaks into spaces.
   transformsSegmentBreaksAcrossItems: boolean
 }
 
@@ -452,10 +398,7 @@ export function getEngineProfile(): EngineProfile {
     hangsIdeographicSpace: engine !== 'webkit',
     laysOutUnderDefaultLocale: engine === 'blink',
     namesGenericFamiliesByLanguage: engine === 'webkit',
-    spaceBeforeSoftHyphenHangs: engine === 'gecko' ? 'line-end' : engine === 'webkit' ? 'own-break' : 'break',
-    collapsesSpaceAcrossSoftHyphens: engine === 'gecko',
-    breaksFromItemText: engine === 'webkit',
-    hardBreakItemRetreat: engine === 'blink' ? 'item' : engine === 'webkit' ? 'fit' : 'last-grapheme',
+    hardBreakItemRetreat: engine === 'blink' ? 'item' : 'last-grapheme',
     paddedOpeningFit: engine === 'blink' ? 'start' : engine === 'webkit' ? 'placed' : 'both',
     transformsSegmentBreaksAcrossItems: engine === 'blink',
   }

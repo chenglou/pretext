@@ -862,7 +862,7 @@ describe('the library through the adapter', () => {
   test('measureRichInlineStats giving another widest line than the rich walk blocks: a rich bubble shrink-wrapped to it would be too narrow', async () => {
     const c = spans(['A message ', 'long enough ', 'to wrap at a few widths'], 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('rich-stats', 'rich-inline.ts', /if \(lineWidth > maxLineWidth\) maxLineWidth = lineWidth/, '')
+    const stats = await planted('rich-stats', 'rich-inline.ts', /(walkPreparedLinesRaw\(getInternalPreparedRichInline\(prepared\)\.data, maxWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: 0 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureRichInlineStats gives')
   })
 
@@ -872,10 +872,10 @@ describe('the library through the adapter', () => {
     expect(disagreement(moved.predict(c))).toStartWith('materializeRichInlineLineRange of line 0 changes')
   })
 
-  test('a rich fragment whose text isn\'t its item\'s text over the fragment\'s cursors blocks: a word broken across lines in a span would paint its start again', async () => {
+  test('a rich fragment whose text isn\'t its item\'s text between the fragment\'s source offsets blocks: a word broken across lines in a span would paint its start again', async () => {
     const c = spans(['A ', 'Supercalifragilistic', ' word'], 60)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const text = await planted('rich-fragment-text', 'rich-inline.ts', /fragment\.start\.segmentIndex,\n(\s*)fragment\.start\.graphemeIndex,/, 'fragment.start.segmentIndex,\n$10,')
+    const text = await planted('rich-fragment-text', 'rich-inline.ts', /buildLineTextFromRange\(data, startSegmentIndex, startGraphemeIndex, endSegmentIndex/, 'buildLineTextFromRange(data, startSegmentIndex, 0, endSegmentIndex')
     expect(disagreement(text.predict(c))).toMatch(/^materializeRichInlineLineRange line \d+ fragment \d+ is /)
   })
 
@@ -894,7 +894,7 @@ describe('the library through the adapter', () => {
 
   test('walkRichInlineLineRanges giving line ends that stepping doesn\'t blocks: a rich list resuming from a walked line\'s end would skip to the paragraph\'s end', async () => {
     const c = spans(['A message ', 'long enough ', 'to wrap at a few widths'], 120)
-    const walk = await planted('rich-walk-end', 'rich-inline.ts', /onLine\(line\)/, 'onLine({ ...line, end: cursor })')
+    const walk = await planted('rich-walk-end', 'rich-inline.ts', /onLine\((createLine\(flow, width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex\))\)/, 'onLine({ ...$1, end: { itemIndex: flow.itemSegments.length - 1, segmentIndex: 0, graphemeIndex: 0 } })')
     expect(disagreement(walk.predict(c))).toStartWith('layoutNextRichInlineLineRange line 0 differs')
   })
 

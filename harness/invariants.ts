@@ -36,7 +36,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { LayoutCursor, LayoutLine, LayoutLineRange, PrepareOptions, PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
 import type { PreparedRichInline, RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineLineRange, RichInlineOptions } from '../src/rich-inline.ts'
-import { BOX_SEGMENTS, canvasFont, cursorOffsets, isRich, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
+import { canvasFont, cursorOffsets, fragmentProblem, isRich, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
 import { createRng } from './sets/build.ts'
 import type { Case } from './types.ts'
 
@@ -135,8 +135,11 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   const gecko = profile === 'gecko'
   const unpaintedNormal = gecko ? /^[ \u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[ \u00AD\u200B]*$/
   const unpaintedPreWrap = gecko ? /^[\n\u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\u00AD\u200B]*$/
-  const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0): string | null => {
-    const unpainted = whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
+  // The same in a rich item's own text, which white space hasn't been normalized in.
+  const unpaintedSourceNormal = gecko ? /^[ \t\n\r\f\u00AD\u200B\u2028\u2029\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[ \t\n\r\f\u00AD\u200B\u2028\u2029]*$/
+  const unpaintedSourcePreWrap = gecko ? /^[\n\r\f\u00AD\u200B\u2028\u2029\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\r\f\u00AD\u200B\u2028\u2029]*$/
+  const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0, source = false): string | null => {
+    const unpainted = source ? (whiteSpace === 'normal' ? unpaintedSourceNormal : unpaintedSourcePreWrap) : whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
     let end = from
     for (let i = 0; i < spans.length; i++) {
       const [s, e] = spans[i]!
@@ -221,12 +224,12 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
 
   const rich = (label: string, items: Array<RichInlineItem | RichInlineBox>, width: number, options: RichInlineOptions = {}): void => {
     const at = `${label} at ${width}`
-    // Everything prepared first, so what follows asks Canvas nothing: the paragraph, each item alone (whose own
-    // prepared text the fragments' cursors index; a box's fragment spans one empty segment), the paragraph after an
-    // empty item, and without extraWidth.
+    // Everything prepared first, so what follows asks Canvas nothing: the paragraph, the paragraph after an empty
+    // item, and without extraWidth.
     const prepared = api.prepareRichInline(items, options)
-    const segmentsOf = items.map(item => item.text === undefined ? BOX_SEGMENTS : api.prepareWithSegments(item.text, item.font, itemOptions(item, options)).segments)
-    const atomic = items.map(item => item.text === undefined || item.break === 'never')
+    const whiteSpace = options.whiteSpace ?? 'normal'
+    // An atomic item of only white space is no object (src/rich-inline.ts).
+    const atomic = items.map(item => item.text !== undefined && item.break === 'never' && item.text.trim() !== '')
     const shiftedPrepared = api.prepareRichInline([{ text: '', font: '16px Test' }, ...items], options)
     const extraOf = (item: RichInlineItem | RichInlineBox): number => item.text === undefined ? 0 : item.extraWidth ?? 0
     const extra = items.some(item => extraOf(item) !== 0)
@@ -242,8 +245,7 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
     try {
       const walked: RichInlineLineRange[] = []
       const count = api.walkRichInlineLineRanges(prepared, width, line => { if (walked.push(line) > steps) throw new Error(`walkRichInlineLineRanges gives more than ${steps} lines`) })
-      const offsets = segmentsOf.map(segments => cursorOffsets(segments))
-      const disagreement = richDisagreement(api, prepared, walked, count, width, steps, i => offsets[i])
+      const disagreement = richDisagreement(api, prepared, walked, count, width, steps)
       if (disagreement !== null) return fail('agreement', at, disagreement)
       const lines: RichInlineLineRange[] = []
       let cursor: RichInlineCursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
@@ -263,17 +265,17 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
         lines.push(range)
         cursor = { ...range.end }
       }
-      // Each item's fragments cover its own prepared text.
+      // Each item's fragments cover its text, and each one's text is its item's between sourceStart and sourceEnd.
       const spans: Array<Array<[number, number]>> = items.map(() => [])
       const whole = items.map(() => 0)
       for (let i = 0; i < lines.length; i++) {
         let occupied = 0
-        for (const f of lines[i]!.fragments) {
+        for (const f of api.materializeRichInlineLineRange(prepared, lines[i]!).fragments) {
           occupied += f.gapBefore + f.occupiedWidth
-          spans[f.itemIndex]!.push([offsets[f.itemIndex]!(f.start), offsets[f.itemIndex]!(f.end)])
-          // A gap is the SPACE of the item whose white space made it, or none where Gecko's run of
-          // white space took that white space in (whitespaceRunOpen in src/rich-inline.ts). Nothing
-          // collapses in pre-wrap.
+          const problem = fragmentProblem(items[f.itemIndex]!, f, whiteSpace)
+          if (problem !== null) fail('rich lines', at, `line ${i}'s fragment of item ${f.itemIndex} ${problem}`)
+          spans[f.itemIndex]!.push([f.sourceStart, f.sourceEnd])
+          // A gap is the SPACE of the item whose white space made it. Nothing collapses in pre-wrap.
           if (options.whiteSpace === 'pre-wrap' && (f.gapBefore !== 0 || f.gapItemIndex !== -1)) fail('rich lines', at, `line ${i} has a gap of ${f.gapBefore} before item ${f.itemIndex} in pre-wrap`)
           if (f.gapItemIndex >= 0) {
             const gapItem = items[f.gapItemIndex]!
@@ -281,21 +283,23 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
               fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is box ${f.gapItemIndex}'s, which holds no white space`)
             } else {
               const space = standInWidth(' ', gapItem.font, gapItem.letterSpacing ?? 0)
-              if (Math.abs(f.gapBefore - space) > 1e-6 && !(profile === 'gecko' && f.gapBefore === 0)) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}`)
+              if (Math.abs(f.gapBefore - space) > 1e-6) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}`)
             }
           }
-          const segments = segmentsOf[f.itemIndex]!.length
-          if (atomic[f.itemIndex]! && segments > 0) {
+          if (atomic[f.itemIndex]!) {
             whole[f.itemIndex]!++
-            if (!same(f.start, START) || !same(f.end, { segmentIndex: segments, graphemeIndex: 0 })) fail('rich lines', at, `atomic item ${f.itemIndex} is split at ${JSON.stringify(f.start)}-${JSON.stringify(f.end)}`)
+            const text = (items[f.itemIndex] as RichInlineItem).text
+            if (text.slice(f.sourceStart, f.sourceEnd) !== text.trim()) fail('rich lines', at, `atomic item ${f.itemIndex} is split at ${f.sourceStart}-${f.sourceEnd}`)
           }
         }
         if (Math.abs(lines[i]!.width - Math.max(0, occupied)) > 1e-6) fail('rich lines', at, `line ${i} is ${lines[i]!.width} wide; its fragments' gaps and widths add up to ${occupied}`)
       }
       for (let k = 0; k < items.length; k++) {
-        const coverage = covers(segmentsOf[k]!.join(''), spans[k]!, atomic[k]! ? 'normal' : options.whiteSpace ?? 'normal')
+        const text = items[k]!.text
+        if (text === undefined) continue
+        const coverage = covers(text, spans[k]!, atomic[k]! ? 'normal' : whiteSpace, 0, true)
         if (coverage !== null) fail('coverage', `${at}, item ${k}`, coverage)
-        if (atomic[k]! && segmentsOf[k]!.length > 0 && whole[k] !== 1) fail('rich lines', at, `atomic item ${k} is in ${whole[k]} fragments`)
+        if (atomic[k]! && whole[k] !== 1) fail('rich lines', at, `atomic item ${k} is in ${whole[k]} fragments`)
       }
       const visited: RichInlineLineRange[] = []
       api.walkRichInlineLineRanges(prepared, width, range => {

@@ -1,6 +1,6 @@
 import { getGeckoLineBreaks, isClusterExtender, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail } from './gecko-line-breaks.js'
 import { isBidiControl, type GraphemeTable } from './graphemes.js'
-import { BREAK, CLUSTER_START, FORCED_BREAK, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
+import { BREAK, CLUSTER_START, FORCED_BREAK, ITEM_START, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitBreakBetweenItems, getWebKitLineBreaks } from './line-breaks.js'
 
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
 export type WordBreakMode = 'normal' | 'keep-all'
@@ -32,6 +32,10 @@ export const ZERO_WIDTH_GLUE = 6
 export const CONTROL = 7
 // Ends its chunk: a line's walk stops there, and the next line starts after it.
 export const HARD_BREAK = 8
+// In a rich-inline paragraph's handle (src/rich-inline.ts), an atomic item or a box: one object, with a break on both
+// sides and none inside, which lays out as text does otherwise. No analysis makes one. The start edge of a padded item
+// that opens with white space or a hard break is one too, with no break before it where the text has none there.
+export const OBJECT = 9
 export const KIND_BITS = 0x0F
 // The segment takes letter spacing after its graphemes. Set by measurement.
 export const SPACED = 0x10
@@ -71,6 +75,19 @@ export type AnalysisProfile = {
   graphemeTable: GraphemeTable
 }
 
+// The items of a rich-inline paragraph in its text (src/rich-inline.ts): where each starts there, whether it is atomic,
+// one U+FFFC in the text, as Blink and Gecko put an atomic inline in a paragraph's text (inline_node.cc:408-422,
+// nsBidiPresUtils.cpp:1385-1396), and whether the engine transforms segment breaks in each item's text apart
+// (EngineProfile, transformsSegmentBreaksAcrossItems). Every item starts a segment, and an atomic item is a segment with
+// a break on both sides. The analysis leaves in `sourceOffsets` the offset in the text that each unit of its
+// normalized text comes from.
+export type ParagraphItems = {
+  starts: number[]
+  atomic: boolean[]
+  ownSegmentBreaks: boolean
+  sourceOffsets: Int32Array | null
+}
+
 const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
 const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
 
@@ -90,9 +107,8 @@ function isSegmentBreakRunSpace(code: number, scan: AnalysisProfile['lineBreakSc
 // - Gecko: SPACE, TAB and LF, continuing through the characters Gecko discards
 //   (SHY and bidi controls) without ending on one, and leaving out a last SPACE
 //   before a combining sequence tail. Text holding a ZWSP is 16-bit in Gecko.
-// Characters outside the run, such as FF, keep the ordinary collapse. `removed`, when given,
-// takes the index of each unit removed, in order.
-export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProfile, language: string | null = null, removed: number[] | null = null): string {
+// Characters outside the run, such as FF, keep the ordinary collapse.
+export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProfile, language: string | null = null): string {
   const scan = profile.lineBreakScan
   if (scan === 'webkit' || !text.includes('\n')) return text
   const eastAsian = scan === 'gecko' && maybeEastAsianRe.test(text)
@@ -123,7 +139,6 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
     result += text.slice(copied, start)
     for (let member = start; member < end; member++) {
       if (!isSegmentBreakRunSpace(text.charCodeAt(member), scan)) result += text[member]
-      else removed?.push(member)
     }
     copied = end
   }
@@ -136,31 +151,35 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
 // base (TransformText, nsTextFrameUtils.cpp:319-345). So the run's other white space goes, and so
 // does white space before only bidi controls at the end, which the line end trims.
 const whiteSpaceThroughBidiControlsRe = /(?<![ \t\n\r\f])[ \t\n\r\f]+(?:[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+[ \t\n\r\f]*)+/g
-function collapseWhiteSpaceThroughBidiControls(text: string): string {
-  return text.replace(whiteSpaceThroughBidiControlsRe, (run: string, at: number) => {
-    if (at + run.length === text.length) return run.replace(collapsibleWhitespaceRunRe, '')
-    let last = run.length - 1
-    while (!isCollapsibleSpaceCode(run.charCodeAt(last))) last--
-    const base = last > 0 && run.charCodeAt(last) === 0x20 && isSpaceCombiningSequenceTail(text, at + last + 1)
-    const kept = Math.max(run.indexOf('\n'), 0)
-    const end = base ? last : run.length
-    return run.slice(0, kept).replace(collapsibleWhitespaceRunRe, '') + run[kept] + run.slice(kept + 1, end).replace(collapsibleWhitespaceRunRe, '') + (base ? run.slice(last) : '')
-  })
+// The same run through soft hyphens too, which Gecko's text run drops as it drops bidi controls (IsDiscardable,
+// nsTextFrameUtils.cpp:32-49): Firefox lays out `ab`, ` \u00AD \u00AD`, `cd` in 16px Arial in one 39.15px line at 40px.
+// A rich-inline paragraph's analysis takes it; a text's doesn't yet (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
+const whiteSpaceThroughDroppedRe = /(?<![ \t\n\r\f])[ \t\n\r\f]+(?:[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+[ \t\n\r\f]*)+/g
+// `itemStarts`, for a rich-inline paragraph, has where each item starts in the text: the run goes on from one text
+// frame to the next (INCOMING_WHITESPACE), so white space that starts an item collapses into it, but one of the dropped
+// characters that follows no white space in its own frame ends it (nsTextFrameUtils.cpp:286-386). Firefox fits
+// `see this` of items `see`, ` \u00AD`, ` this word` in 16px Arial at 56px on a 55.15px line, and not of `see `,
+// `\u00AD `, `this word`.
+function collapseWhiteSpaceThroughBidiControls(text: string, re: RegExp, itemStarts: number[] | null): string {
+  return text.replace(re, (run: string, at: number) => collapseWhiteSpaceRun(text, re, run, at, itemStarts))
 }
 
-// Where the collapsible white space that ends text[from, text.length) starts, which the analysis
-// leaves out and a line end trims, or the text's length where none ends it. Gecko's white-space
-// run reads through the bidi controls in it and after it (TransformText, nsTextFrameUtils.cpp:
-// 319-345), so there it is the first white space after the last character that is neither, and
-// the controls stay.
-export function getTrailingCollapsibleStart(text: string, from: number, profile: AnalysisProfile): number {
-  let start = text.length
-  for (let i = text.length - 1; i >= from; i--) {
-    const code = text.charCodeAt(i)
-    if (isCollapsibleSpaceCode(code)) start = i
-    else if (!(profile.lineBreakScan === 'gecko' && isBidiControl(code))) break
+function collapseWhiteSpaceRun(text: string, re: RegExp, run: string, at: number, itemStarts: number[] | null): string {
+  if (itemStarts !== null) {
+    for (let k = 1; k < run.length; k++) {
+      if (isCollapsibleSpaceCode(run.charCodeAt(k)) || !itemStarts.includes(at + k)) continue
+      const head = run.slice(0, k)
+      const tail = run.slice(k).replace(re, (rest: string, restAt: number) => collapseWhiteSpaceRun(text, re, rest, at + k + restAt, itemStarts))
+      return (head.trim() === '' ? head : collapseWhiteSpaceRun(text, re, head, at, null)) + tail
+    }
   }
-  return start
+  if (at + run.length === text.length) return run.replace(collapsibleWhitespaceRunRe, '')
+  let last = run.length - 1
+  while (!isCollapsibleSpaceCode(run.charCodeAt(last))) last--
+  const base = last > 0 && run.charCodeAt(last) === 0x20 && isSpaceCombiningSequenceTail(text, at + last + 1)
+  const kept = Math.max(run.indexOf('\n'), 0)
+  const end = base ? last : run.length
+  return run.slice(0, kept).replace(collapsibleWhitespaceRunRe, '') + run[kept] + run.slice(kept + 1, end).replace(collapsibleWhitespaceRunRe, '') + (base ? run.slice(last) : '')
 }
 
 // Every East Asian wide, fullwidth or halfwidth character is at or above U+1100.
@@ -262,18 +281,17 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // mode, and a SOFT_HYPHEN_BREAK makes a soft hyphen a zero-width break: the line can end there
 // without a hyphen. One with only soft hyphens before it on its chunk stays a soft hyphen, since
 // a zero-width break there holds a line and Firefox, which drops soft hyphens from its text runs,
-// gives it none. Text that continues a line with content before it, as a rich-inline window
-// after a collapsible space does, has content before its start.
-function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], afterContent: boolean): SegmentKindCode {
+// gives it none.
+function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if ((code === 0x2028 || code === 0x2029) && (breaks[i + 1]! & FORCED_BREAK) !== 0) return HARD_BREAK
-  if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i, afterContent)) return ZERO_WIDTH_BREAK
+  if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
   return classifySegmentBreakCode(code, whiteSpace, scan)
 }
 
-function followsChunkContent(normalized: string, i: number, afterContent: boolean): boolean {
+function followsChunkContent(normalized: string, i: number): boolean {
   let j = i - 1
   while (j >= 0 && normalized.charCodeAt(j) === 0x00AD) j--
-  return j >= 0 ? normalized.charCodeAt(j) !== 0x0A : afterContent
+  return j >= 0 && normalized.charCodeAt(j) !== 0x0A
 }
 
 // Characters of these kinds share a segment when no break falls between them. Each
@@ -290,7 +308,7 @@ function isControlSegmentCode(code: number): boolean {
 }
 
 // Segments are the text between an engine's break opportunities, split where the
-// break kind changes, and a control stays alone. A ZWSP or soft hyphen that the scan
+// break kind changes and where a rich-inline paragraph's item starts, and a control stays alone. A ZWSP or soft hyphen that the scan
 // doesn't break after, as at the start of a WebKit scan, before a combining mark or a
 // closing bracket, or under keep-all, is zero-width glue: it stays its own zero-width
 // segment, takes no letter spacing and doesn't end a line.
@@ -314,7 +332,7 @@ function isControlSegmentCode(code: number): boolean {
 // profile's graphemes look past these characters (src/graphemes.ts), so a cluster extender after
 // them joins the cluster before, unless a bidi level run starts at it, where the scan starts a
 // cluster (gfxTextRun.cpp:2828-2835) and the extender starts a segment.
-function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], afterContent: boolean, dropsBidiControl: boolean): TextAnalysis {
+function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], dropsBidiControl: boolean): TextAnalysis {
   const oneCluster = scan === 'gecko' ? ONE_CLUSTER : 0
   const starts: number[] = []
   // A plain array, which measurement copies into the prepared handle's bytes: a Uint8Array for
@@ -328,7 +346,14 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let lastKind = -1
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
-    if (dropsBidiControl && i < droppedEnd) continue
+    if (dropsBidiControl && i < droppedEnd) {
+      // A rich-inline item that starts inside the run starts a segment of it.
+      if ((breaks[i]! & ITEM_START) !== 0) {
+        starts.push(i)
+        flags.push(TEXT | oneCluster)
+      }
+      continue
+    }
     if (dropsBidiControl && isDiscardable(code, false) && (i === 0 || !isDiscardable(normalized.charCodeAt(i - 1), false))) {
       // The run of what the text run drops from here, and where its last bidi control ends.
       let j = i
@@ -337,14 +362,14 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       if (controlEnd > 0) {
         const chunkStart = lastKind < 0 || lastKind === HARD_BREAK
         if (chunkStart) {
-          const endsChunk = j === normalized.length || classifySegmentUnit(normalized, breaks, j, normalized.charCodeAt(j), whiteSpace, scan, afterContent) === HARD_BREAK
+          const endsChunk = j === normalized.length || classifySegmentUnit(normalized, breaks, j, normalized.charCodeAt(j), whiteSpace, scan) === HARD_BREAK
           if (!endsChunk) breaks[j] = breaks[j]! & ~(BREAK | SOFT_HYPHEN_BREAK)
           droppedEnd = j
           if (endsChunk && lastKind >= 0) continue
         } else {
           droppedEnd = controlEnd
         }
-        if (chunkStart || lastAlone || markRun) {
+        if (chunkStart || lastAlone || markRun || (breaks[i]! & ITEM_START) !== 0) {
           starts.push(i)
           flags.push(TEXT | oneCluster)
           lastKind = TEXT
@@ -354,13 +379,13 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
         continue
       }
     }
-    const kind = classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan, afterContent)
+    const kind = classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan)
     const alone = kind === TEXT && isControlSegmentCode(code)
     const unbroken = (breaks[i]! & BREAK) === 0
     const levelRunExtender = dropsBidiControl && i === droppedEnd && (breaks[i]! & CLUSTER_START) !== 0 && isBidiControl(normalized.charCodeAt(i - 1)) &&
       isClusterExtender(normalized.codePointAt(i)!)
     if (
-      unbroken && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
+      (breaks[i]! & (BREAK | ITEM_START)) === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
       !levelRunExtender && kind === lastKind && gathersKind(kind)
     ) {
       if ((breaks[i]! & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~ONE_CLUSTER
@@ -405,12 +430,16 @@ export function analyzeText(
   // line tables, WebKit's quotation remap and Gecko's rule for newlines next to East
   // Asian punctuation.
   language: string | null = null,
-  // Whether the text continues a line that has content before it (classifySegmentUnit).
-  afterContent = false,
+  // The items of the rich-inline paragraph whose text this is, else null.
+  paragraph: ParagraphItems | null = null,
 ): TextAnalysis {
   const preserve = whiteSpace === 'pre-wrap'
   // The source a text node's engine scans, after the segment break transformation.
-  let source = preserve ? text : removeSkippableSegmentBreaks(text, profile, language)
+  // Where each of a paragraph's items starts in that source.
+  const scanStarts: number[] | null = paragraph === null ? null : []
+  let source = preserve ? text
+    : paragraph !== null && paragraph.ownSegmentBreaks ? removeItemsSkippableSegmentBreaks(text, paragraph.starts, profile, language, scanStarts!)
+    : removeSkippableSegmentBreaks(text, profile, language)
   let normalized = preserve ? normalizeWhitespacePreWrap(text) : collapseWhitespaceNormal(source)
   const keepAll = wordBreak === 'keep-all'
   let breaks: Uint8Array
@@ -422,13 +451,16 @@ export function analyzeText(
     // WebKit and Gecko scan the source. Gecko's scan collapses its white space as Firefox does.
     let sourceBreaks: Uint8Array
     if (profile.lineBreakScan === 'webkit') {
-      sourceBreaks = getWebKitLineBreaks(source, preserve, keepAll, language)
+      sourceBreaks = paragraph === null ? getWebKitLineBreaks(source, preserve, keepAll, language) : getWebKitParagraphBreaks(source, paragraph, preserve, keepAll, language)
     } else {
       let gecko = getGeckoLineBreaks(source, preserve, keepAll, profile.graphemeTable)
       dropsBidiControl = gecko.dropsBidiControl
       // Where that collapse drops white space, the scan runs again: its text run is the same, but
       // its offsets move.
-      const collapsed = dropsBidiControl && !preserve ? collapseWhiteSpaceThroughBidiControls(source) : source
+      const collapsed = preserve ? source
+        : paragraph !== null && (dropsBidiControl || source.includes('\u00AD')) ? collapseWhiteSpaceThroughBidiControls(source, whiteSpaceThroughDroppedRe, scanStarts)
+        : dropsBidiControl ? collapseWhiteSpaceThroughBidiControls(source, whiteSpaceThroughBidiControlsRe, null)
+        : source
       if (collapsed !== source) {
         source = collapsed
         normalized = collapseWhitespaceNormal(source)
@@ -439,5 +471,84 @@ export function analyzeText(
     if (profile.lineBreakScan === 'webkit' && !preserve && source !== normalized) spaceSources = new Uint16Array(normalized.length)
     breaks = source === normalized ? sourceBreaks : mapSourceLineBreaks(source, normalized.length, sourceBreaks, whiteSpace, spaceSources)
   }
-  return segmentAtLineBreaks(normalized, spaceSources, breaks, whiteSpace, profile.lineBreakScan, afterContent, dropsBidiControl)
+  if (paragraph !== null) markItemStarts(text, normalized, breaks, paragraph)
+  return segmentAtLineBreaks(normalized, spaceSources, breaks, whiteSpace, profile.lineBreakScan, dropsBidiControl)
+}
+
+// A paragraph's text after each item's own segment break transformation, where the engine transforms segment breaks in
+// each text frame's text apart (ParagraphItems), and where each item starts in it.
+function removeItemsSkippableSegmentBreaks(text: string, starts: number[], profile: AnalysisProfile, language: string | null, resultStarts: number[]): string {
+  if (profile.lineBreakScan === 'webkit' || !text.includes('\n')) {
+    for (let k = 0; k < starts.length; k++) resultStarts.push(starts[k]!)
+    return text
+  }
+  let result = ''
+  for (let k = 0; k < starts.length; k++) {
+    resultStarts.push(result.length)
+    result += removeSkippableSegmentBreaks(text.slice(starts[k], k + 1 < starts.length ? starts[k + 1] : text.length), profile, language)
+  }
+  return result
+}
+
+// The offset in `source` that each unit of `normalized` comes from. Normalization only removes collapsible white space,
+// turns a run of it into one space, which comes from the run's first unit, and turns CR, CRLF and FF into LF, so a
+// greedy walk aligns the two.
+export function alignToSource(source: string, normalized: string): Int32Array {
+  const offsets = new Int32Array(normalized.length)
+  let i = 0
+  for (let j = 0; j < normalized.length; j++) {
+    const unit = normalized.charCodeAt(j)
+    while (i < source.length) {
+      const code = source.charCodeAt(i)
+      if (code === unit || (isCollapsibleSpaceCode(code) && (unit === 0x20 || unit === 0x0A))) break
+      i++
+    }
+    offsets[j] = i++
+    // CRLF became one LF.
+    if (unit === 0x0A && source.charCodeAt(i - 1) === 0x0D && source.charCodeAt(i) === 0x0A) i++
+  }
+  return offsets
+}
+
+// Marks where each item of a paragraph starts in its normalized text (ITEM_START), at the first unit that comes from
+// the item or from one after it, and a break on both sides of an atomic item, under keep-all too: Blink breaks after an
+// atomic inline and before one (CanBreakAfterAtomicInline and CanBreakAfter, line_breaker.cc:1168-1263 in
+// core/layout/inline), WebKit finds a soft wrap opportunity on either side of one (InlineFormattingUtils.cpp:445-449),
+// and Gecko records a break after one and breaks before one that doesn't fit (nsLineLayout.cpp:1057-1068, 1339-1340).
+function markItemStarts(text: string, normalized: string, breaks: Uint8Array, paragraph: ParagraphItems): void {
+  const offsets = paragraph.sourceOffsets = alignToSource(text, normalized)
+  const { starts, atomic } = paragraph
+  for (let k = 0, j = 0; k < starts.length; k++) {
+    while (j < normalized.length && offsets[j]! < starts[k]!) j++
+    if (j === normalized.length) break
+    breaks[j] = breaks[j]! | ITEM_START
+    if (atomic[k] && offsets[j] === starts[k]) {
+      breaks[j] = breaks[j]! | BREAK
+      breaks[j + 1] = breaks[j + 1]! | BREAK | ITEM_START
+    }
+  }
+}
+
+// Where a line may start in a paragraph's source, in WebKit: it finds breaks inside each inline box from that box's own
+// text, and at a boundary between boxes from the scan over the next box's text with the last two characters before it
+// as prior context (TextUtil.cpp:374-396), so a paragraph's breaks are each item's own scan, joined by that check
+// (getWebKitBreakBetweenItems). Collapsible white space on either side of a boundary breaks there, as inside a text.
+function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, preserve: boolean, keepAll: boolean, language: string | null): Uint8Array {
+  const { starts, atomic } = paragraph
+  const breaks = new Uint8Array(source.length + 1)
+  let previous = -1
+  for (let k = 0; k < starts.length; k++) {
+    const start = starts[k]!
+    const end = k + 1 < starts.length ? starts[k + 1]! : source.length
+    if (start === end) continue
+    const itemText = source.slice(start, end)
+    const itemBreaks = getWebKitLineBreaks(itemText, preserve, keepAll, language)
+    for (let i = 1; i <= end - start; i++) breaks[start + i] = itemBreaks[i]!
+    if (previous >= 0 && !atomic[k] && !atomic[previous]) {
+      const collapses = !preserve && (isCollapsibleSpaceCode(source.charCodeAt(start)) || isCollapsibleSpaceCode(source.charCodeAt(start - 1)))
+      if (collapses || getWebKitBreakBetweenItems(source.slice(Math.max(starts[previous]!, start - 2), start), itemText, keepAll, language)) breaks[start] = breaks[start]! | BREAK
+    }
+    previous = k
+  }
+  return breaks
 }

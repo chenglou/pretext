@@ -299,13 +299,6 @@ function getLevels(source: string, start: number, end: number): Uint8Array {
   return getParagraphLevels(paragraph)
 }
 
-// A left-to-right block resolves bidi only where its text has right-to-left characters (Resolve
-// :790-854, ChildListMayRequireBidi :1467-1475): the levels of its paragraph in white-space: normal
-// there, else null.
-export function getGeckoParagraphLevels(source: string): Uint8Array | null {
-  return hasRtlChars(source) ? getLevels(source, 0, source.length) : null
-}
-
 // Raw indices where a logical level run starts (ResolveParagraph :877-1110, EnsureBidiContinuation
 // :1043-1053, Bidi::GetLogicalRun intl/components/src/Bidi.cpp:165-183).
 function getBidiRunStarts(source: string, preserveWhiteSpace: boolean): number[] {

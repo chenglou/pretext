@@ -4,11 +4,10 @@ import { isDiscretionaryLineEnd, type PreparedLineBreakData } from './line-break
 import { getEngineProfile } from './measurement.js'
 
 // A handle with each segment's text, which line text is built from: prepareWithSegments()'s, or
-// a rich-inline item's.
+// a rich-inline paragraph's.
 export type PreparedSegments = PreparedLineBreakData & { segments: string[] }
 
-// Per handle, the grapheme ends of each segment a line or a rich item's break has
-// started or ended inside.
+// Per handle, the grapheme ends of each segment a line has started or ended inside.
 const graphemeEndCaches = new WeakMap<PreparedSegments, Map<number, Int32Array>>()
 
 // The offsets in a segment's text where its graphemes end, in order, then zeros.
@@ -33,16 +32,15 @@ function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, grap
   return graphemeIndex === 0 ? 0 : getGraphemeEnds(prepared, segmentIndex)[graphemeIndex - 1]!
 }
 
-// A line's text from `prepared`'s segments, with a hyphen where the line ends at a soft
-// hyphen in `walkedFlags`, the flags it was walked on, whose width counted it: `prepared`'s
-// own, or a rich item's copy with the joined text's breaks (rich-inline.ts, lineData).
+// The text of a range of `prepared`'s segments: a line's, with a hyphen where it ends at a soft hyphen, whose width
+// counted it, or with `endsLine` false that of a rich-inline fragment its line goes on after.
 export function buildLineTextFromRange(
   prepared: PreparedSegments,
   startSegmentIndex: number,
   startGraphemeIndex: number,
   endSegmentIndex: number,
   endGraphemeIndex: number,
-  walkedFlags: Uint8Array = prepared.segmentFlags,
+  endsLine = true,
 ): string {
   const { segmentFlags } = prepared
   // A range kept from a longer text, such as one prepared again since, can end
@@ -72,5 +70,5 @@ export function buildLineTextFromRange(
     )
   }
 
-  return isDiscretionaryLineEnd(walkedFlags, endSegmentIndex, endGraphemeIndex) ? text + '-' : text
+  return endsLine && isDiscretionaryLineEnd(segmentFlags, endSegmentIndex, endGraphemeIndex) ? text + '-' : text
 }
