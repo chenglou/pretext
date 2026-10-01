@@ -11,6 +11,10 @@ rich-9a2f1d48d54592d8 count
 rich-ad4cfe8561fad751 count
 rich-c9040bfe99878c7a count
 
+## A chip without text alone on a line, at width 1: the recording reads a paragraph's lines from its text, so it sees no line for a chip of no text or of only white space, where the library gives the chip its line (src/layout.test.ts, rich-inline invariants)
+rich-83790250eafc6a06 count
+rich-9bcfa3fc39a9f991 count
+
 ## A collapsed space before an item of only a soft hyphen or a bidi control, where the line ends, at 24 px and wider: Firefox counts the space on the line, where the library's line ends before the space that hangs, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-2790c70764cd3f97 breaks
 rich-7962779980684a5b breaks

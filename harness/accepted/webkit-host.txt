@@ -1,3 +1,7 @@
+## A chip without text alone on a line, at width 1: the recording reads a paragraph's lines from its text, so it sees no line for a chip of no text or of only white space, where the library gives the chip its line (src/layout.test.ts, rich-inline invariants)
+rich-83790250eafc6a06 count
+rich-9bcfa3fc39a9f991 count
+
 ## A padded rich pre-wrap span that starts on the line it ends inside, at a line feed or after spaces that hang, at 24 px and wider: Safari fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-f7c605f19ec5d469 breaks
 
@@ -2696,6 +2700,7 @@ rich-4fb2c56ec3a40ccb count
 rich-5591e87036a36b35 count
 rich-61a0d94181d91eec count
 rich-62a3fc75836c636c count
+rich-6321d26c96bf7ef7 count
 rich-650f9c1a169f4811 count
 rich-668d6722303f2370 count
 rich-6a71666ed4d69cb1 count
@@ -3346,6 +3351,9 @@ catalog-2b41de9231a38d2c count
 catalog-72db93461df86981 count
 catalog-e12579ca01f5be5f count
 catalog-ff75b2be4ff8b7a5 count
+
+## Spaces in spans of their own before a padded rich pre-wrap span that starts with a space, 1/64 px from where Safari's lines change: Safari fits the span's start edge alone after them, where the library fits both edges, as after a word (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-199a6fec8b1ce557 breaks
 
 ## Spaces other than U+0020 (U+3000, U+2007, U+202F, NBSP) beside marks, brackets or other spaces, at 24 px and wider: WebKit breaks or hangs them where the library doesn't
 catalog-0cf7eff70525faff breaks

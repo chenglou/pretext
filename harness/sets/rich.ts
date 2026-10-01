@@ -9,7 +9,8 @@
 // - styles changing at run boundaries (weight, size, family, italic, letter spacing) over src/test-data.ts's texts, as
 //   the rebuild's runs families do, and spaces at span edges;
 // - chips and code spans as the demos write them: an atomic mention chip with padding, and inline code with padding
-//   that can break (pages/demos/rich-note.model.ts, markdown-chat.model.ts);
+//   that can break (pages/demos/rich-note.model.ts, markdown-chat.model.ts); and, cut on its own, chips of only white
+//   space and with no text, padded and bare, which are boxes in their line as any chip;
 // - the shapes whose lines changed when items began to continue the line instead of starting one, each beside a
 //   neighbour, cut on their own since the other templates' widths were searched in older browser builds: a soft hyphen
 //   that starts an item after other text, after an ideograph or emoji, before a combining mark or after a space, two
@@ -30,7 +31,10 @@
 //   space in the item or a collapsed one before it, which Firefox's scan of the joined text takes as text, and after
 //   other text; and, cut on its own too, a padded span that starts with a line separator after a word, before which
 //   WebKit's check at an item boundary gives no break (getWebKitBreakBetweenItems in src/line-breaks.ts), so a line
-//   that can't fit its padding breaks the word (hardBreakItemRetreat in src/measurement.ts);
+//   that can't fit its padding breaks the word (hardBreakItemRetreat in src/measurement.ts); and, cut on their own
+//   too, soft hyphens in a text beside a bold word that holds more, from whose hyphen that doesn't fit Safari's line
+//   returns in a paragraph with spans (returnsFromUnfitHyphen in src/line-break.ts), and padded spans that start with
+//   a ZWSP, before which their start edge has to fit;
 // - cut on their own too, a line that ends at a space inside an item under negative letter spacing, whose next line the
 //   browsers start after the space, beside a break at the collapsed space between items;
 // - keep-all paragraphs, cut on their own: a Korean chat message with a mention chip, a bold run inside a word and a
@@ -57,7 +61,9 @@
 //   Safari keeps the spaces that fit and Firefox all but the last (hardBreakItemRetreat); and, cut on their own too, a
 //   chip before preserved spaces split across spans, which all stay on its line however far it overflows, before text
 //   and before the paragraph's own text that starts with more of them, and before a tab, which Firefox doesn't hang and
-//   moves to the next line with them;
+//   moves to the next line with them; and, cut on their own too, a chip of only white space, and spaces in two spans
+//   of their own before a padded span that starts with one, a run no line ends inside in Chrome and Firefox and which
+//   Chrome's line trails, with the padded span's opening, once it overflows;
 // - boxes (RichInlineBox), cut on their own: custom emoji at the line height between words with spaces on both sides,
 //   before punctuation and at the paragraph's end; boxes inside words, of width 0 and beside U+00A0; adjacent boxes, a
 //   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; and in pre-wrap,
@@ -162,6 +168,8 @@ export function richTemplates(): Template[] {
     out.push(template(chip ? 'chips' : 'code-spans', chip ? 'an atomic mention chip with padding (pages/demos/rich-note.model.ts)' : 'inline code with padding (pages/demos/rich-note.model.ts)',
       HELVETICA, [...(before === '' ? [] : [before]), run, after], lang))
   }
+  out.push(template('chips-without-text', 'atomic items of only white space and of no text (src/layout.test.ts, rich-inline invariants)', HELVETICA,
+    ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review ', span('', CHIP, { atomic: true, padding: 11 }), 'merging', span('', CHIP, { atomic: true }), 'now']))
   const continued: ReadonlyArray<readonly [string, readonly Part[], string?]> = [
     ['soft-hyphen-start', ['Pre', '\u{AD}text lays out text']], ['soft-hyphen-start', ['na', '\u{AD}tion', 'al parks']],
     ['soft-hyphen-after-ideograph', ['漢字', '\u{AD}ab', 'cd'], 'zh'], ['soft-hyphen-after-ideograph', ['\u{1F60A}', '\u{AD}ab cd']],
@@ -196,6 +204,8 @@ export function richTemplates(): Template[] {
     ['soft-hyphen-before-bidi-control', ['\u{AD}', '\u{202B}more words']], ['soft-hyphen-before-bidi-control', ['see \u{AD}', '\u{2066}this word']],
     ['soft-hyphen-before-bidi-control', ['word ', '\u{AD}', '\u{200F}more text']], ['soft-hyphen-before-bidi-control', ['see', '\u{AD}', '\u{2066}this word']],
     ['separator-starts-padded-item', ['Unbreakable', span('\u{2028}next line', CODE, { padding: 20 }), ' after']],
+    ['soft-hyphens-beside-a-span', ['the inter\u{AD}na\u{AD}tion\u{AD}al ', span('or\u{AD}gan\u{AD}i\u{AD}za\u{AD}tion', BOLD(ARIAL)), ' of stan\u{AD}dards']],
+    ['zwsp-starts-padded-item', ['some ', span('\u{200B}padded words', CODE, { padding: 8 }), ' then ', span('\u{200B}more', CODE, { padding: 8 }), ' text']],
   ]
   for (let i = 0; i < continued.length; i++) {
     const [family, parts, lang] = continued[i]!
@@ -244,6 +254,8 @@ export function richTemplates(): Template[] {
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  ', BOLD(HELVETICA)), 'next words']],
     ['chip-before-split-spaces', HELVETICA, [span('@alice', CHIP, { atomic: true, padding: 11 }), span(' ', BOLD(HELVETICA)), '  next words']],
     ['chip-before-split-spaces', HELVETICA, ['Ping ', span('@alice', CHIP, { atomic: true, padding: 11 }), ' ', span('  \t', BOLD(HELVETICA)), 'next words']],
+    ['chip-without-text', HELVETICA, ['Thanks', span('  ', CHIP, { atomic: true, padding: 11 }), 'for the review']],
+    ['spaces-in-spans-before-padded-span', HELVETICA, ['Some words', span('  ', BOLD(HELVETICA)), span(' ', ITALIC(HELVETICA)), span(' x y', CODE, { padding: 8 }), ' tail']],
   ]
   for (let i = 0; i < preWrap.length; i++) {
     const [family, base, parts] = preWrap[i]!

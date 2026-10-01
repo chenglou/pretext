@@ -6,6 +6,10 @@ report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
 
+## A chip without text alone on a line, at width 1: the recording reads a paragraph's lines from its text, so it sees no line for a chip of no text or of only white space, where the library gives the chip its line (src/layout.test.ts, rich-inline invariants)
+rich-83790250eafc6a06 count
+rich-9bcfa3fc39a9f991 count
+
 ## A padded rich pre-wrap span whose line ends inside it, at a line feed or after spaces that hang, at 24 px and wider: Chrome fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-75dcc33f88f9804f count
 rich-9b04cbd2a170ff51 count
@@ -3246,6 +3250,7 @@ rich-5727b8e7e3526aec count
 rich-5a97ab786f3e057e count
 rich-61a0d94181d91eec count
 rich-62a3fc75836c636c count
+rich-6321d26c96bf7ef7 count
 rich-668d6722303f2370 count
 rich-7207dfa4e9dfe793 count
 rich-807cbc79ec3f2948 count
@@ -3259,6 +3264,7 @@ rich-91260660c787313b count
 rich-9b8ab32bccc7a1a6 count
 rich-9caad05a8d6ec08d count
 rich-a09d53bd7aff382c count
+rich-a2437f63889e64bc count
 rich-a560650dfbeafe72 count
 rich-a5ad960782eb9128 count
 rich-ab169565a9c0a88b count
