@@ -778,8 +778,9 @@ Since #TBD (2026-10-01) `prepareRichInline()` joins the items' texts, an atomic 
 that text once with a segment starting wherever an item does, measures each item's segments in its font, and hands the
 text walkers one handle. It replaced each item's own analysis patched toward the joined text and an item stepper
 (Continuing The Line has what those cost and the facts they were built on). What spans have of their own sits on that
-handle: an atomic item or a box is an object segment with a break on both sides, an atomic item of only white space or
-of no text too, as an inline-block is a box whatever its text; an item's `extraWidth` is in the width of its first
+handle: an atomic item or a box is an object segment with a break on both sides, an atomic item of only white space
+too, as an inline-block is a box whatever its text, while an item whose text is empty, atomic or not, stays dropped
+(Objects Inside A Line); an item's `extraWidth` is in the width of its first
 segment, and a line that starts later in the item pays it there; a padded item that opens with preserved white space, a
 hard break or a zero-width space has a start edge of its own, fitted by the edges the engine fits (`paddedOpeningFit`,
 `hardBreakItemRetreat`) and painted whole by a line that takes it, and where the engine fits none, the edge takes no
@@ -804,29 +805,32 @@ inputs), with measureText calls within 0.04% of main's. Of the rich set's cases 
 character (the shapes are in ENGINE_FOLLOWUPS.md, Rich-inline item edges, and on the accepted lists). The rest are
 Firefox's 6 of bidi levels that end its white-space run and one webkit-host case of spaces in spans of their own before
 a padded span. On probes recorded fresh in the three browsers and not kept, 4,807 cases of realistic paragraphs, span
-edges, padded pre-wrap openings, soft hyphens and chips without text at 24-587px, Chrome passes 4,574 where main's build
-passes 4,348, Firefox 4,682 against 4,379 and webkit-host 4,706 against 4,353; Chrome loses 1 case main passes, Firefox
-none and webkit-host 63, all padded pre-wrap spans that open with white space or a line feed after preserved spaces,
-and the 1,690 realistic ones move in no browser. Same-font items without chips, padding or boxes take the text walkers' line count in all but 52 of
+edges, padded pre-wrap openings, soft hyphens and chips of only white space or of no text at 24-587px, Chrome passes
+4,458 where main's build passes 4,348, Firefox 4,566 against 4,379 and webkit-host 4,590 against 4,353; Chrome loses 1
+case main passes, Firefox none and webkit-host 63, all padded pre-wrap spans that open with white space or a line feed
+after preserved spaces, and the 1,690 realistic ones move in no browser. On a second set, 12,718 cases, the 8,007
+realistic paragraphs at 120-600px move in no browser either; of its 1,436 cases of soft hyphens in and beside spans
+webkit-host passes 1,435 against 1,052, and of all its soft-hyphen and edge cases Chrome fails 68 that main's build
+passes and passes 83 that it fails, Firefox none and 71, and webkit-host 27 and 420, the losses padded pre-wrap spans
+but one soft-hyphen case each in Chrome and webkit-host (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has the shapes).
+Same-font items without chips, padding or boxes take the text walkers' line count in all but 52 of
 6,012 offline layouts in the Blink profile (Skia's Canvas; main 195), the rest words measured in two parts and the
-paragraph's return from an unfit hyphen. `src/`'s runtime code went from 5,104 lines to 4,791 (`src/rich-inline.ts`
-1,027 to 653, `src/line-break.ts` 758 to 737, `src/analysis.ts` 296 to 386), and the engine profile from 23 fields to
-20.
+paragraph's return from an unfit hyphen. `src/`'s runtime code went from 5,104 lines to 4,794 (`src/rich-inline.ts`
+1,027 to 653, `src/line-break.ts` 758 to 740, `src/analysis.ts` 296 to 386), and the engine profile from 23 fields to
+20: `spaceBeforeSoftHyphenHangs` went with the rule it switched, and what `breaksFromItemText` and
+`collapsesSpaceAcrossSoftHyphens` switched now reads `lineBreakScan`, whose doc says so.
 
 Not carried over, each a rule that read the items: the collapsed space before an item of only soft hyphens that hung per
 engine (Items Of Soft Hyphens And White Space), the bidi levels that end Firefox's white-space run (Firefox's White-Space
 Run Across Items), and a ZWSP or separator item that took a line of its own after a character that overflows (under
 24px). Two costs are open (TODO.md): an item that starts inside a word cuts a segment with no break before it, which
 sends the whole paragraph to the full walker, where the stepper walked only the items that needed it (95 of the
-real-usage sample's 233 rich draws take the full walker); and every item is measured in a pass of its own, so a
-paragraph of an item per word prepares text seen before in about 1.6 times main's time offline in Bun, with the same
-Canvas calls. Keeping a word two unpadded items share as one segment, and measuring items in one font as one run, would
-take both back, and would reopen this if the bench's rich rows read slower than main's. Two more readings from the same offline runs are hypotheses for
-the bench: `layoutNextRichInlineLineRange()` line by line (the `rich-stream` row) takes 1.0 to 1.4 times main's time on
-multi-item paragraphs, where stats take about a quarter and a walk 0.7 to 1.1 times; and a one-item paragraph, which
-costs what main's does in a process that lays out nothing else, takes 1.1 to 1.6 times main's for stats and a walk once
-multi-item paragraphs have been laid out in the same process, as the text walkers then see two kinds of handle. The
-bench has no row for the second.
+real-usage sample's 233 rich draws take the full walker); and every item is measured in a pass of its own, with the
+same Canvas calls, so a paragraph of an item per word takes more work to prepare from text seen before than main's.
+Keeping a word two unpadded items share as one segment, and measuring items in one font as one run, would take both
+back, and would reopen this if the bench's rich rows read slower than main's. No timing is recorded here: the bench
+hasn't run on this design, and it has no row for a one-item paragraph laid out after multi-item ones in the same
+process, where the text walkers see two kinds of handle (#TBD's description has the offline readings to check).
 
 The rich-inline counts below from 2026-09-26 to 28 are of *probes*: cases generated for one change, each beside the
 same text in one text node, recorded in Chrome, Firefox and webkit-host and not checked in, and counted against the

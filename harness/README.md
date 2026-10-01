@@ -242,7 +242,7 @@ lines when another is used (the stand-in Canvas gives the same widths to every w
 bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an
 emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter writes as plain
 text, so `src/layout.test.ts` checks its line functions against the same item with an empty item after it and against
-the text walkers; which line holds a box of width 0, which has no rectangle, or a chip without text, which has none for a recording to read, but through the text around them; Chrome's UI
+the text walkers; which line holds a box of width 0, which has no rectangle, or a chip of only white space, which has no text for a recording to read, but through the text around them; Chrome's UI
 language, and so its `zh` table for pages without a `lang`; rendering other than macOS's, though Android and Windows are
 65% of page views (`weights.json`); text chat users wrote (the sample's chat draws are stand-ins); or the demos' painted
 layout. No planted defect guards the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the
