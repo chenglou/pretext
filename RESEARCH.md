@@ -765,41 +765,27 @@ Helvetica, Times New Roman, Trebuchet MS, Roboto, Gill Sans, Didot or Optima is 
 fixed 64 Chrome cases, 11 of them among the 49 real-usage failures inside what Pretext claims (99.51% to 99.63% of real
 paragraphs right), and lost none.
 
-Outside the harness, paragraphs recorded fresh and not kept (pinned Chrome 154.0.8037.57, 2026-10-01):
-
-| Texts | Layouts | Wrong before | Wrong with it | Right before, wrong with it |
-| --- | --- | --- | --- | --- |
-| 135 Latin, Cyrillic and Greek paragraphs at 13 widths in 56 font specs | 98,280 | 2,834 | 42 | 0 |
-| The same in pre-wrap, 4 fonts | 7,020 | 382 | 2 | 0 |
-| The same at letter spacing +0.5 and −0.3px, 8 fonts | 14,040 | 728 | 9 | 0 |
-| 58 interface texts at 10 widths in 80 font specs (11 to 48px, bold, italic, font lists) | 46,400 | 2,086 | 90 | 2 |
-| The same in pre-wrap, 8 fonts | 4,640 | 276 | 2 | 0 |
-| The same at letter spacing −0.2 and +1.5px, 10 fonts | 5,800 | 577 | 6 | 2 |
-| 31 texts that mix scripts at 10 widths in 28 font specs | 8,680 | 630 | 292 | 0 |
-| The same in pre-wrap, 6 fonts | 1,860 | 139 | 66 | 1 |
-
-The five it loses are four Avenir Next layouts of Russian text with a Latin word in guillemets, where Canvas kerns the
-opening quote with the letter after it and the page doesn't, which the wide spaces hid before, and one pre-wrap line of
-ZWNJs at word edges (ENGINE_FOLLOWUPS.md, Kerning with spaces). Of the first set's 22,680 single lines, 5,936 measured
-more than 0.1px wider than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word
-stays on the first line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by
-up to 3.61px, and 4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179
-multi-line layouts in 18 font specs, where main's does in none of 8,006, and in 6 of 23,041 in 12 common ones at 34
-widths, where main's does in 11 of 22,726; all eight are the guillemet text in 14px Avenir Next. Boxes more than 1px
-wider than Chrome's widest line go from 11,322 to 17 in the second set.
+Outside the harness, of 186,720 layouts recorded fresh and not kept, 7,652 were wrong before and 509 are with it:
+Latin, Cyrillic and Greek paragraphs and interface texts in 56 and 80 font specs, texts that mix scripts in 28, and the
+same in pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Five that were right
+went wrong: four Avenir Next layouts of Russian text with a Latin word in guillemets, where Canvas kerns the opening
+quote with the letter after it and the page doesn't, which the wide spaces hid before, and one pre-wrap line of ZWNJs
+at word edges (ENGINE_FOLLOWUPS.md, Kerning with spaces). Of 22,680 single lines, 5,936 measured more than 0.1px wider
+than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word stays on the first
+line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by up to 3.61px, and
+4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179 multi-line
+layouts in 18 font specs, where main's does in none of 8,006, and in 6 of 23,041 in 12 common ones at 34 widths, where
+main's does in 11 of 22,726; all eight are the guillemet text in 14px Avenir Next.
 
 The cost is Canvas calls while a font is new, for each distinct first and last character of its words. Each of the 1,904
 cards prepared alone in a new font, 15px Arial, makes 1.51 times main's `measureText` calls (97,271 to 147,169 in all;
 the median card 1.53 times, from 1.23 to 1.75) and 1.39 times its submitted units. The first 10 prepared in order make
-24% more calls (287 to 355), the first 100 9% more (1,186 to 1,289) and all of them 1.4% more (11,810 to 11,981). The
-harness's sample, 11,901 paragraphs in 272 fonts, makes 18% more calls (232,954 to 275,073) and 10% more units. A font
-that doesn't kern the space pays the same calls, less one, for no change: Helvetica Neue's counts are Arial's. By
-script, each set prepared in order in one 16px font: 120 Gatsby paragraphs 1,960 to 2,042 calls, 94 Hindi paragraphs
-2,203 to 2,288, 99 Thai ones 1,643 to 1,726, 96 Chinese ones 1,388 to 1,393, 35 Japanese ones 710 to 713, 150 Korean
-ones 616 to 626, and 31 texts that mix scripts 27% more over 28 font specs (18,612 to 23,671). Each alone in a new font,
-the Gatsby paragraphs make 1.37 times the calls, the Hindi ones 1.21, the Thai ones 1.14 and the Korean ones 1.06.
-Korean's figure rests on a premise (below): asked about, its syllables made 2.30 times main's calls in order, 3.16 times
-the units and 2.04 times the calls alone.
+24% more calls (287 to 355), the first 100 9% more and all of them 1.4% more (11,810 to 11,981). The harness's sample,
+11,901 paragraphs in 272 fonts, makes 18% more calls (232,954 to 275,073) and 10% more units. A font that doesn't kern
+the space pays the same calls, less one, for no change. Alone in a new font, Gatsby paragraphs make 1.37 times the
+calls, Hindi ones 1.21 and Thai ones 1.14; Chinese, Japanese and Korean ones stay within 2% in order and 6% alone,
+since ideographs, kana and Hangul syllables aren't asked about. Korean's figure rests on a premise (below): asked about,
+its syllables made 2.30 times main's calls in order and 3.16 times the units.
 
 Canvas gives the kerning where U+2028 stands for the space: Blink draws U+2028 with the space glyph and its Canvas
 doesn't cut there. A word measured with U+2028 after it, and before it, less the word and a space, equals what the

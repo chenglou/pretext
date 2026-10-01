@@ -518,7 +518,7 @@ function splitsSpaceKerning(character: string, kerning: number, measurement: Fon
 
 // The kerning Blink's layout gives a text segment's edges with a U+0020 beside them, which its
 // Canvas, cutting words at U+0020, doesn't report (EngineProfile.kerningReach). Blink draws
-// U+2028 with the space glyph (HarfBuzzGetNominalGlyph, harfbuzz_face.cc:103-113) and its Canvas
+// U+2028 with the space glyph (HarfBuzzGetGlyph, harfbuzz_face.cc:103-113) and its Canvas
 // doesn't cut there, so a string with U+2028 for the space is shaped whole, legacy `kern` tables
 // included, which the Canvas kerning settings leave out: `fontKerning = 'normal'` and
 // `textRendering = 'optimizeLegibility'` shape a string whole only where GPOS or GSUB lookups
