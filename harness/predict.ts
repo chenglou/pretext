@@ -284,12 +284,35 @@ export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prep
   }
 }
 
-// What a fragment's text leaves out of its item's text: soft hyphens and what ends a line, and in normal white space
-// all but one space of each run of white space, and that one too at either end, where it can collapse into white space
-// outside the fragment, in Firefox through the soft hyphens it drops.
-function paintedText(text: string, whiteSpace: 'normal' | 'pre-wrap'): string {
-  const kept = text.replace(/[\u00AD\u2028\u2029]/g, '')
-  return whiteSpace === 'pre-wrap' ? kept.replace(/[\n\r\f]/g, '') : kept.replace(/[ \t\n\r\f]+/g, ' ').trim()
+const UNPAINTED = /[\u00AD\u2028\u2029]/g
+const DROPPED = /^[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]$/
+
+// Whether `text` is `source`, a stretch of an item's text, as painted: without soft hyphens and what ends a line. In
+// normal white space each run of white space is one space, or nothing where the engine removes it: at either end, where
+// it can collapse into white space outside the stretch; where it holds a line feed, which the segment break
+// transformation can remove, as Firefox does between two ideographs; and next to a soft hyphen or a bidi control, which
+// Firefox's white-space run reads through.
+function paints(source: string, text: string, whiteSpace: 'normal' | 'pre-wrap'): boolean {
+  if (whiteSpace === 'pre-wrap') return text.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '') === source.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '')
+  const painted = text.replace(UNPAINTED, '')
+  let t = 0
+  for (let s = 0; s < source.length;) {
+    const ch = source[s]!
+    if (COLLAPSIBLE.test(ch)) {
+      let end = s + 1
+      while (end < source.length && COLLAPSIBLE.test(source[end]!)) end++
+      if (painted[t] === ' ') t++
+      else if (s > 0 && end < source.length && !source.slice(s, end).includes('\n') && !DROPPED.test(source[s - 1]!) && !DROPPED.test(source[end]!)) return false
+      s = end
+      continue
+    }
+    if (ch !== '\u00AD' && ch !== '\u2028' && ch !== '\u2029') {
+      if (painted[t] !== ch) return false
+      t++
+    }
+    s++
+  }
+  return t === painted.length
 }
 
 // How a materialized fragment disagrees with its item's text between its sourceStart and sourceEnd, or null: its text is
@@ -300,8 +323,7 @@ export function fragmentProblem(item: RichInlineItem | RichInlineBox, f: RichInl
   if (!(Number.isInteger(f.sourceStart) && Number.isInteger(f.sourceEnd) && 0 <= f.sourceStart && f.sourceStart <= f.sourceEnd && f.sourceEnd <= item.text.length)) return `is ${f.sourceStart}-${f.sourceEnd}, outside its item's text`
   const source = item.text.slice(f.sourceStart, f.sourceEnd)
   const mode = item.break === 'never' ? 'normal' : whiteSpace
-  const text = paintedText(source, mode)
-  if (paintedText(f.text, mode) === text || (f.text.endsWith('-') && source.endsWith('\u00AD') && paintedText(f.text.slice(0, -1), mode) === text)) return null
+  if (paints(source, f.text, mode) || (f.text.endsWith('-') && source.endsWith('\u00AD') && paints(source, f.text.slice(0, -1), mode))) return null
   return `is ${JSON.stringify(f.text)}; its item's text there ${JSON.stringify(source)}`
 }
 

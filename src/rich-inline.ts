@@ -142,10 +142,13 @@ type InternalPreparedRichInline = PreparedRichInline & {
   // Per item, its first segment in the paragraph, then the segment count: an item's segments are
   // those up to the next item's first.
   itemSegments: number[]
-  // Per segment, where its text starts and ends in its item's text. A paragraph of one text item
-  // finds them when a line is first materialized, from `text`, the item's.
+  // Per segment, where its text starts and ends in its item's text, and, for a segment whose text
+  // isn't one stretch of its item's, as where white space inside it was removed, where each of
+  // its units is there, else null (null too where no segment has any). A paragraph of one text
+  // item finds them when a line is first materialized, from `text`, the item's.
   sourceStarts: number[] | null
   sourceEnds: number[] | null
+  sourceUnits: (number[] | null)[] | null
   text: string
 }
 
@@ -198,7 +201,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   if (only !== undefined && only.text !== undefined && only.break !== 'never' && (only.extraWidth ?? 0) === 0) {
     const analysis = analyzeText(only.text, profile, whiteSpace, wordBreak, language)
     const data = measureAnalysis(analysis, only.font, true, readLetterSpacing(only.letterSpacing), profile, language, true) as PreparedSegments
-    return findWholeLine({ data, onlyItem: 0, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments: [0, data.segmentFlags.length], sourceStarts: null, sourceEnds: null, text: only.text } as InternalPreparedRichInline)
+    return findWholeLine({ data, onlyItem: 0, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments: [0, data.segmentFlags.length], sourceStarts: null, sourceEnds: null, sourceUnits: null, text: only.text } as InternalPreparedRichInline)
   }
 
   // The paragraph's text: the items' texts joined, an atomic item or a box as one U+FFFC. An atomic
@@ -259,6 +262,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const breakableFitAdvances: (number[] | null)[] = []
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
+  let sourceUnits: (number[] | null)[] | null = null
   const itemSegments: number[] = []
   // What only some segments have, each made at the first one that does (setAt).
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
@@ -416,20 +420,22 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       const normalizedStart = analysis.starts[i]!
       const normalizedEnd = i + 1 < count ? analysis.starts[i + 1]! : analysis.normalized.length
       const sourceEnd = offsets[normalizedEnd - 1]! + 1
+      // Where the segment's text ends in the normalized text.
+      let textEnd = normalizedEnd
       sourceStarts.push(offsets[normalizedStart]! - starts[index]!)
       if (sourceEnd > itemEnd) {
         // The Gecko analysis keeps the soft hyphens and bidi controls Firefox's text run drops with the
         // segment before them, across items: the segment's text here is its own item's part, and the rest,
         // which paints nothing, is in no fragment.
-        let end = normalizedEnd
-        while (offsets[end - 1]! >= itemEnd) end--
-        segments.push(analysis.normalized.slice(normalizedStart, end))
+        while (offsets[textEnd - 1]! >= itemEnd) textEnd--
+        segments.push(analysis.normalized.slice(normalizedStart, textEnd))
         sourceEnds.push(itemEnd - starts[index]!)
       } else {
         segments.push(analysis.texts[i]!)
         // CRLF is one line feed, which ends with the item where the next item holds the line feed.
         sourceEnds.push((preserve && sourceEnd < itemEnd && source.charCodeAt(sourceEnd - 1) === 0x0D && source.charCodeAt(sourceEnd) === 0x0A ? sourceEnd + 1 : sourceEnd) - starts[index]!)
       }
+      sourceUnits = setAt(sourceUnits, at, getSourceUnits(offsets, normalizedStart, textEnd, starts[index]!), null)
       if (sub.entryGeometry !== null) entryGeometry = setAt(entryGeometry, at, sub.entryGeometry[s]!, null)
       if (sub.lineStartProhibitions !== null) lineStartProhibitions = setAt(lineStartProhibitions, at, sub.lineStartProhibitions[s]!, null)
       const startExtra = (sub.lineStartExtras === null ? 0 : sub.lineStartExtras[s]!) + (i > first ? extraWidth : 0)
@@ -492,7 +498,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
     onlyItem = index
   }
-  return findWholeLine({ data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, sourceStarts, sourceEnds, text: '' } as InternalPreparedRichInline)
+  return findWholeLine({ data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, sourceStarts, sourceEnds, sourceUnits: setAt(sourceUnits, segmentCount, null, null), text: '' } as InternalPreparedRichInline)
 }
 
 // Finds the paragraph's line where nothing wraps it. A paragraph that fits its line whole takes it without a
@@ -714,19 +720,38 @@ export function layoutNextRichInlineLineRange(
   return width === null ? null : createLine(flow, width, startSegmentIndex, startGraphemeIndex, lineEnd.segmentIndex, lineEnd.graphemeIndex)
 }
 
+// Where units [from, to) of a paragraph's normalized text are in the text of the item that starts at `itemStart`,
+// from the offset in the paragraph's text each unit comes from, where they aren't one stretch of it: Gecko removes a
+// line feed between two ideographs, and white space after a bidi control that follows white space. Else null.
+function getSourceUnits(offsets: Int32Array, from: number, to: number, itemStart: number): number[] | null {
+  if (to <= from || offsets[to - 1]! - offsets[from]! === to - 1 - from) return null
+  const units: number[] = []
+  for (let unit = from; unit < to; unit++) units.push(offsets[unit]! - itemStart)
+  return units
+}
+
 // Per segment of a paragraph of one text item, where its text starts and ends in the item's.
 function findSegmentSources(flow: InternalPreparedRichInline): void {
   const { segments } = flow.data
   const offsets = alignToSource(flow.text, segments.join(''))
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
+  const sourceUnits: (number[] | null)[] = []
   for (let i = 0, at = 0; i < segments.length; at += segments[i++]!.length) {
     const end = offsets[at + segments[i]!.length - 1]! + 1
     sourceStarts.push(offsets[at]!)
     sourceEnds.push(flow.text.charCodeAt(end - 1) === 0x0D && flow.text.charCodeAt(end) === 0x0A && segments[i] === '\n' ? end + 1 : end)
+    sourceUnits.push(getSourceUnits(offsets, at, at + segments[i]!.length, 0))
   }
   flow.sourceStarts = sourceStarts
   flow.sourceEnds = sourceEnds
+  flow.sourceUnits = sourceUnits
+}
+
+// Where unit `unit` of a segment's text is in its item's text.
+function getSourceOffset(flow: InternalPreparedRichInline, segmentIndex: number, unit: number): number {
+  const units = flow.sourceUnits === null ? null : flow.sourceUnits[segmentIndex]!
+  return units === null ? flow.sourceStarts![segmentIndex]! + unit : units[unit]!
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
@@ -757,9 +782,9 @@ export function materializeRichInlineLineRange(
     // Only the fragment a line ends with shows the hyphen of a soft hyphen it ends at.
     const endsLine = i === line.fragments.length - 1 && endSegmentIndex === lineEndSegmentIndex && endGraphemeIndex === line.end.graphemeIndex
     let sourceStart = startSegmentIndex < itemEnd ? sourceStarts[startSegmentIndex]! : startSegmentIndex > first ? sourceEnds[startSegmentIndex - 1]! : 0
-    if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart += getGraphemeEnds(data, startSegmentIndex)[startGraphemeIndex - 1]!
+    if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart = getSourceOffset(flow, startSegmentIndex, getGraphemeEnds(data, startSegmentIndex)[startGraphemeIndex - 1]!)
     let sourceEnd = sourceStart
-    if (endGraphemeIndex > 0) sourceEnd = sourceStarts[endSegmentIndex]! + getGraphemeEnds(data, endSegmentIndex)[endGraphemeIndex - 1]!
+    if (endGraphemeIndex > 0) sourceEnd = getSourceOffset(flow, endSegmentIndex, getGraphemeEnds(data, endSegmentIndex)[endGraphemeIndex - 1]! - 1) + 1
     else if (endSegmentIndex > startSegmentIndex) sourceEnd = sourceEnds[endSegmentIndex - 1]!
     fragments.push({
       itemIndex: fragment.itemIndex,

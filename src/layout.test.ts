@@ -3426,6 +3426,57 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('a rich fragment\'s sourceStart and sourceEnd name its text in its item where white space inside a segment was removed', () => {
+    const BOLD = '700 16px Test Sans'
+    // Each line's fragments as their items, their texts, and their items' texts from sourceStart to sourceEnd.
+    const sources = (items: RichInlineItem[], options: Parameters<typeof prepareRichInline>[1], maxWidth: number) => {
+      const prepared = prepareRichInline(items, options)
+      const lines: Array<Array<[number, string, string]>> = []
+      walkRichInlineLineRanges(prepared, maxWidth, range => {
+        lines.push(materializeRichInlineLineRange(prepared, range).fragments.map(f => [f.itemIndex, f.text, items[f.itemIndex]!.text.slice(f.sourceStart, f.sourceEnd)]))
+      })
+      return lines
+    }
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    try {
+      profile.lineBreakScan = 'gecko'
+      clearCache()
+      // Firefox removes a line feed between two ideographs, so under keep-all the ideographs around
+      // it are one segment, which a narrow line breaks between graphemes. A fragment that starts or
+      // ends inside the segment is its item's text there: with the line feed where the fragment
+      // spans it, without it where the fragment starts or ends at it.
+      const ideographs = '\u6F22\u5B57\u6F22\u5B57\n\u6F22\u5B57\u6F22\u5B57\u6F22\u5B57'
+      const wide = measureWidth('\u6F22', FONT)
+      expect(sources([{ text: ideographs, font: FONT }, { text: ' x', font: BOLD }], { wordBreak: 'keep-all' }, 3 * wide)).toEqual([
+        [[0, '\u6F22\u5B57\u6F22', '\u6F22\u5B57\u6F22']],
+        [[0, '\u5B57\u6F22\u5B57', '\u5B57\n\u6F22\u5B57']],
+        [[0, '\u6F22\u5B57\u6F22', '\u6F22\u5B57\u6F22']],
+        [[0, '\u5B57', '\u5B57'], [1, 'x', 'x']],
+      ])
+      expect(sources([{ text: ideographs, font: FONT }, { text: ' x', font: BOLD }], { wordBreak: 'keep-all' }, 4 * wide)).toEqual([
+        [[0, '\u6F22\u5B57\u6F22\u5B57', '\u6F22\u5B57\u6F22\u5B57']],
+        [[0, '\u6F22\u5B57\u6F22\u5B57', '\u6F22\u5B57\u6F22\u5B57']],
+        [[0, '\u6F22\u5B57', '\u6F22\u5B57'], [1, 'x', 'x']],
+      ])
+      // The same in a paragraph of one item, which finds its segments in the item's text when a
+      // line is first materialized.
+      expect(sources([{ text: ideographs, font: FONT }], { wordBreak: 'keep-all' }, 3 * wide)).toEqual([
+        [[0, '\u6F22\u5B57\u6F22', '\u6F22\u5B57\u6F22']],
+        [[0, '\u5B57\u6F22\u5B57', '\u5B57\n\u6F22\u5B57']],
+        [[0, '\u6F22\u5B57\u6F22', '\u6F22\u5B57\u6F22']],
+        [[0, '\u5B57', '\u5B57']],
+      ])
+      // And where Firefox's run of white space goes on past a bidi control: the white space after
+      // the control is inside the segment the control and the solidus make, and in neither's text.
+      expect(sources([{ text: ' \u202A /-\u201Cq', font: FONT }, { text: 'uote\u201D', font: FONT }], {}, 9).slice(0, 2)).toEqual([[[0, '\u202A', '\u202A']], [[0, '/', '/']]])
+      expect(sources([{ text: ' \u202A /-\u201Cq', font: FONT }, { text: 'uote\u201D', font: FONT }], {}, Infinity)).toEqual([[[0, '\u202A/-\u201Cq', '\u202A /-\u201Cq'], [1, 'uote\u201D', 'uote\u201D']]])
+    } finally {
+      profile.lineBreakScan = previous
+      clearCache()
+    }
+  })
+
   test('rich line counts do not go up where a soft hyphen line fits only without its hyphen', () => {
     const lineTexts = (items: Parameters<typeof prepareRichInline>[0], maxWidth: number): string[] => {
       const prepared = prepareRichInline(items)
