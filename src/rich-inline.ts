@@ -270,11 +270,12 @@ function getItemLevels(items: Array<RichInlineItem | RichInlineBox>, texts: stri
 // Moves `start` past what a rich line start consumes: what normalizePreparedLineStart()
 // consumes, and a discarded break (isDiscardedBreak), where normalization stops only at a
 // chunk's start. The Gecko analysis makes one only of the last soft hyphen of white space and
-// soft hyphens, before other source, so a ZWSP or a hard break after it still holds the line.
-// False where that is all of the item.
+// soft hyphens, before other source, so the item goes on after it, and a ZWSP or a hard break
+// after it still holds the line. False where a line start consumes all of the item.
 function normalizeItemLineStart(data: PreparedSegments, start: LayoutCursor): boolean {
   if (!normalizePreparedLineStart(data, start)) return false
-  return !(isDiscardedBreak(data, start.segmentIndex) && ++start.segmentIndex === data.segmentFlags.length)
+  if (isDiscardedBreak(data, start.segmentIndex)) start.segmentIndex++
+  return true
 }
 
 function createItemLine(continues: boolean): ItemLine {
@@ -1298,11 +1299,11 @@ function stepRichInlineLine(
       collectItemRest(fragments, itemIndex, item, cursor, 0, -1, 0)
       continue
     }
+    // Only a walk that continues a line takes nothing: one from a line's start takes a grapheme.
     if (
       cursor.segmentIndex === lineEnd.segmentIndex &&
       cursor.graphemeIndex === lineEnd.graphemeIndex
     ) {
-      if (!hasContent) continue
       returnsToBreak = !item.breakBefore
       break
     }
