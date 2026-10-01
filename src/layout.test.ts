@@ -3392,11 +3392,11 @@ describe('rich-inline invariants', () => {
       // and not one after an ideograph and a mark, a zero-width break there.
       expect(texts(['ab', '\u00AD\u0650cd'], 30)).toEqual([[[0, 'ab'], [1, '-']], [[1, '\u0650cd']]])
       expect(texts(['\u6F22', '\u0301\u00ADab'], 32)).toEqual([[[0, '\u6F22'], [1, '\u0301']], [[1, 'ab']]])
-      // The fragment's text is otherwise its item's. A soft hyphen that ends an item at the
-      // text's start or after white space is text in Gecko's scan before a bidi control, as
-      // `\u00AD\u202B` is in one text, where it paints no hyphen: Firefox draws neither.
-      expect(texts(['\u00AD', '\u202B-'], Infinity)).toEqual([[[0, '\u00AD'], [1, '\u202B-']]])
-      expect(texts(['ab \u00AD', '\u2066cd'], Infinity)).toEqual([[[0, 'ab \u00AD'], [1, '\u2066cd']]])
+      // The fragment's text is otherwise its item's. An item that starts with a bidi control
+      // starts a segment there, so the control stays in its fragment, and a soft hyphen that
+      // ends the item before it shows in no fragment.
+      expect(texts(['\u00AD', '\u202B-'], Infinity)).toEqual([[[0, ''], [1, '\u202B-']]])
+      expect(texts(['ab \u00AD', '\u2066cd'], Infinity)).toEqual([[[0, 'ab '], [1, '\u2066cd']]])
     } finally {
       profile.lineBreakScan = previous
       clearCache()

@@ -408,13 +408,24 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (holdsExtra) width += extraWidth
       widths.push(width)
       flags.push(i === from && at > 0 && first >= from ? sub.segmentFlags[s]! | STARTS_ITEM : sub.segmentFlags[s]!)
-      segments.push(analysis.texts[i]!)
       breakableFitAdvances.push(advances)
+      const normalizedStart = analysis.starts[i]!
       const normalizedEnd = i + 1 < count ? analysis.starts[i + 1]! : analysis.normalized.length
       const sourceEnd = offsets[normalizedEnd - 1]! + 1
-      sourceStarts.push(offsets[analysis.starts[i]!]! - starts[index]!)
-      // CRLF is one line feed, which ends with the item where the next item holds the line feed.
-      sourceEnds.push((preserve && sourceEnd < itemEnd && source.charCodeAt(sourceEnd - 1) === 0x0D && source.charCodeAt(sourceEnd) === 0x0A ? sourceEnd + 1 : sourceEnd) - starts[index]!)
+      sourceStarts.push(offsets[normalizedStart]! - starts[index]!)
+      if (sourceEnd > itemEnd) {
+        // The Gecko analysis keeps the soft hyphens and bidi controls Firefox's text run drops with the
+        // segment before them, across items: the segment's text here is its own item's part, and the rest,
+        // which paints nothing, is in no fragment.
+        let end = normalizedEnd
+        while (offsets[end - 1]! >= itemEnd) end--
+        segments.push(analysis.normalized.slice(normalizedStart, end))
+        sourceEnds.push(itemEnd - starts[index]!)
+      } else {
+        segments.push(analysis.texts[i]!)
+        // CRLF is one line feed, which ends with the item where the next item holds the line feed.
+        sourceEnds.push((preserve && sourceEnd < itemEnd && source.charCodeAt(sourceEnd - 1) === 0x0D && source.charCodeAt(sourceEnd) === 0x0A ? sourceEnd + 1 : sourceEnd) - starts[index]!)
+      }
       if (sub.entryGeometry !== null) entryGeometry = setAt(entryGeometry, at, sub.entryGeometry[s]!, null)
       if (sub.lineStartProhibitions !== null) lineStartProhibitions = setAt(lineStartProhibitions, at, sub.lineStartProhibitions[s]!, null)
       const startExtra = (sub.lineStartExtras === null ? 0 : sub.lineStartExtras[s]!) + (i > first ? extraWidth : 0)
@@ -433,7 +444,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const segmentCount = widths.length
   while (itemSegments.length <= items.length) itemSegments.push(segmentCount)
   const segmentFlags = Uint8Array.from(flags)
-  if (marksReturnable) for (let i = 0; i < segmentCount; i++) if ((segmentFlags[i]! & UNBROKEN) === 0) segmentFlags[i] = segmentFlags[i]! | RETURNABLE
+  // A line returns from an unfit hyphen to a break the scan gives before text too (walkPreparedComplexLines),
+  // so a paragraph whose lines return marks each one.
+  if (marksReturnable || (retreatsFromUnfitHyphen && !analysis.hasUnbroken)) for (let i = 0; i < segmentCount; i++) if ((segmentFlags[i]! & UNBROKEN) === 0) segmentFlags[i] = segmentFlags[i]! | RETURNABLE
   if (retreatsFromUnfitHyphen) discretionaryHyphenContexts ??= []
 
   const data = {

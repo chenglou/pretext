@@ -387,7 +387,8 @@ function hangsAfterObject(segmentFlags: Uint8Array, lineStartSegmentIndex: numbe
 // opportunity. The soft hyphens on the line may measure narrower joined than apart by
 // less than the overflow, and nothing after the target may be text after text, which
 // can hold an opportunity that segment kinds don't mark, unless the scan gives no break
-// before it, as where a rich-inline item starts inside a word.
+// before it. A rich-inline paragraph marks every break the scan gives before text
+// (src/rich-inline.ts), so its target is the latest opportunity that leaves the room.
 function returnsFromUnfitHyphen(
   prepared: PreparedLineBreakData,
   unfitHyphenRetreat: EngineProfile['unfitHyphenRetreat'],
@@ -419,7 +420,7 @@ function returnsFromUnfitHyphen(
   if (narrowing >= overflow) return false
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
     if (breaksAfterKind(segmentFlags[i]! & KIND_BITS)) continue
-    if (i > targetSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) && (segmentFlags[i]! & UNBROKEN) === 0) return false
+    if (i > targetSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) && (segmentFlags[i]! & UNBROKEN) === 0 && prepared.items === undefined) return false
   }
   return true
 }

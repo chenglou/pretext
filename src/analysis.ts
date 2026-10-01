@@ -311,7 +311,8 @@ function isControlSegmentCode(code: number): boolean {
 }
 
 // Segments are the text between an engine's break opportunities, split where the
-// break kind changes and where a rich-inline paragraph's item starts, and a control stays alone. A ZWSP or soft hyphen that the scan
+// break kind changes and where a rich-inline paragraph's item starts, and a control stays alone.
+// A run of what Gecko's text run drops (below) isn't split where an item starts inside it. A ZWSP or soft hyphen that the scan
 // doesn't break after, as at the start of a WebKit scan, before a combining mark or a
 // closing bracket, or under keep-all, is zero-width glue: it stays its own zero-width
 // segment, takes no letter spacing and doesn't end a line.
@@ -349,30 +350,31 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let lastKind = -1
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
-    if (dropsBidiControl && i < droppedEnd) {
-      // A rich-inline item that starts inside the run starts a segment of it.
-      if ((breaks[i]! & ITEM_START) !== 0) {
-        starts.push(i)
-        flags.push(TEXT | oneCluster)
-      }
-      continue
-    }
-    if (dropsBidiControl && isDiscardable(code, false) && (i === 0 || !isDiscardable(normalized.charCodeAt(i - 1), false))) {
-      // The run of what the text run drops from here, and where its last bidi control ends.
+    if (dropsBidiControl && i < droppedEnd) continue
+    if (dropsBidiControl && isDiscardable(code, false) && (i === 0 || (breaks[i]! & ITEM_START) !== 0 || !isDiscardable(normalized.charCodeAt(i - 1), false))) {
+      // The run of what the text run drops from here, up to where a rich-inline item starts inside it, and
+      // where its last bidi control ends.
       let j = i
       let controlEnd = -1
-      for (; j < normalized.length && isDiscardable(normalized.charCodeAt(j), false); j++) if (isBidiControl(normalized.charCodeAt(j))) controlEnd = j + 1
+      for (; j < normalized.length && isDiscardable(normalized.charCodeAt(j), false) && (j === i || (breaks[j]! & ITEM_START) === 0); j++) if (isBidiControl(normalized.charCodeAt(j))) controlEnd = j + 1
       if (controlEnd > 0) {
-        const chunkStart = lastKind < 0 || lastKind === HARD_BREAK
+        // A rich-inline item that starts with the run starts a text segment with the text after it, as a
+        // chunk does, so its fragments keep the controls it starts with, after the break the scan gives
+        // at the run.
+        const startsItem = lastKind >= 0 && lastKind !== HARD_BREAK && (breaks[i]! & ITEM_START) !== 0
+        const chunkStart = lastKind < 0 || lastKind === HARD_BREAK || startsItem
         if (chunkStart) {
           const endsChunk = j === normalized.length || classifySegmentUnit(normalized, breaks, j, normalized.charCodeAt(j), whiteSpace, scan) === HARD_BREAK
-          if (!endsChunk) breaks[j] = breaks[j]! & ~(BREAK | SOFT_HYPHEN_BREAK)
+          if (!endsChunk) {
+            if (startsItem) breaks[i] = breaks[i]! | (breaks[j]! & BREAK)
+            breaks[j] = breaks[j]! & ~(BREAK | SOFT_HYPHEN_BREAK)
+          }
           droppedEnd = j
           if (endsChunk && lastKind >= 0) continue
         } else {
           droppedEnd = controlEnd
         }
-        if (chunkStart || lastAlone || markRun || (breaks[i]! & ITEM_START) !== 0) {
+        if (chunkStart || lastAlone || markRun) {
           starts.push(i)
           flags.push(TEXT | oneCluster)
           lastKind = TEXT
