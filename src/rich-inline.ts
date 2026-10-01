@@ -21,7 +21,6 @@ import {
 import { getSegmentEntryWidth, type SegmentEntryGeometry } from './entry-geometry.js'
 import { buildLineTextFromRange, getGraphemeEnds, type PreparedSegments } from './line-text.js'
 import {
-  getItemIndex,
   getItemTabAdvance,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
@@ -266,9 +265,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   let overflowLineEndTrims: number[] | null = null
   let discretionaryHyphenContexts: number[] | null = null
   // Whether a line returns from a soft hyphen whose hyphen doesn't fit, which the walker does on a
-  // handle with soft-hyphen contexts: where an item's measurement made some, and, where the engine
-  // keeps an unfit hyphen in one text, where a run can reach a soft hyphen across items, as the
-  // line then returns to the break before that run (returnsFromUnfitHyphen in src/line-break.ts).
+  // handle with soft-hyphen contexts: where an item's measurement made some, and, where Pretext
+  // keeps an unfit hyphen in one text, in any paragraph with a soft hyphen, as WebKit's line
+  // returns in a paragraph with inline boxes (returnsFromUnfitHyphen in src/line-break.ts).
   let retreatsFromUnfitHyphen = profile.unfitHyphenRetreat === 'none' && source.includes('\u00AD')
   let insideExtras: number[] | null = null
   let fillExtras: number[] | null = null
@@ -487,7 +486,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
   }
   data.items = {
-    itemSegments, hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances,
+    hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances,
     insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), openingEdges: setAt(openingEdges, segmentCount, 0, 0),
   }
   let onlyItem = -1
@@ -536,6 +535,19 @@ function setAt<T>(list: T[] | null, index: number, value: T, empty: T): T[] | nu
   while (list.length < index) list.push(empty)
   if (list.length === index && value !== empty) list.push(value)
   return list
+}
+
+// The item a paragraph's segment is in: the last one that starts at or before it, so an item with no segments of its
+// own, as an empty one, is never one's.
+function getItemIndex(itemSegments: number[], segmentIndex: number): number {
+  let low = 0
+  let high = itemSegments.length - 1
+  while (low < high) {
+    const middle = (low + high + 1) >> 1
+    if (itemSegments[middle]! <= segmentIndex) low = middle
+    else high = middle - 1
+  }
+  return low
 }
 
 // How much of a padded item's extraWidth a line fits where it takes the item's opening, the

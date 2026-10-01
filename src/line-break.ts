@@ -61,16 +61,14 @@ export type PreparedLineBreakData = {
   items?: ParagraphSegmentData
 }
 
-// What a rich-inline paragraph's items give its segments. `itemSegments` has each item's first segment, then the
-// segment count. The rest is per segment, each null where no item differs: the hyphen a soft hyphen paints and the
-// advance between a tab's stops, in the item's font; the item's extraWidth where a line that starts inside the segment
-// pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`), as a line that starts
-// with the whole segment pays lineStartExtras; and the width of a segment that is the start edge of a padded item's
-// opening (getOpeningFit in src/rich-inline.ts), which a line that takes it paints whole, whatever of it the line
-// fitted: an object's line-end trim is the part its line doesn't fit, and an edge the engine fits none of is a
-// preserved space, which takes no room in the run of preserved spaces and tabs it is in (`openingEdges`).
+// What a rich-inline paragraph's items give its segments, per segment, each null where no item differs: the hyphen a
+// soft hyphen paints and the advance between a tab's stops, in the item's font; the item's extraWidth where a line that
+// starts inside the segment pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`),
+// as a line that starts with the whole segment pays lineStartExtras; and the width of a segment that is the start edge
+// of a padded item's opening (getOpeningFit in src/rich-inline.ts), which a line that takes it paints whole, whatever
+// of it the line fitted: an object's line-end trim is the part its line doesn't fit, and an edge the engine fits none
+// of is a preserved space, which takes no room in the run of preserved spaces and tabs it is in (`openingEdges`).
 export type ParagraphSegmentData = {
-  itemSegments: number[]
   hyphenWidths: number[] | null
   tabStopAdvances: number[] | null
   insideExtras: number[] | null
@@ -117,19 +115,6 @@ function getTabAdvance(lineWidth: number, tabStopAdvance: number, minimumAdvance
   if (Math.abs(remainder) <= 1e-6) return tabStopAdvance
   const advance = tabStopAdvance - remainder
   return advance < minimumAdvance ? advance + tabStopAdvance : advance
-}
-
-// The item a segment of a rich-inline paragraph is in: the last one that starts at or before it, so an item with no
-// segments of its own, as an empty one, is never one's.
-export function getItemIndex(itemSegments: number[], segmentIndex: number): number {
-  let low = 0
-  let high = itemSegments.length - 1
-  while (low < high) {
-    const middle = (low + high + 1) >> 1
-    if (itemSegments[middle]! <= segmentIndex) low = middle
-    else high = middle - 1
-  }
-  return low
 }
 
 // The advance of tab segment `index` of a rich-inline paragraph, which the line reaches at `lineWidth`: to the next
@@ -419,18 +404,13 @@ function returnsFromUnfitHyphen(
   const { discretionaryHyphenContexts, segmentFlags } = prepared
   const softHyphenIndex = breakSegmentIndex - 1
   if (softHyphenIndex < lineStartSegmentIndex || (segmentFlags[softHyphenIndex]! & KIND_BITS) !== SOFT_HYPHEN || breakWidth <= fitLimit) return false
-  if (unfitHyphenRetreat === 'none') {
-    // WebKit keeps an unfit hyphen in one text, but moves a run that continues across inline boxes to the next
-    // line whole where its first break is a soft hyphen whose hyphen doesn't fit: Safari 27 lays out the spans
-    // `the `, `inter`, `na\u00ADtion\u00ADal` in 16px Arial at 84px as `the` / `interna-tion-` / `al`. So the
-    // line returns only to the break before a run that reaches the soft hyphen past the start of a rich-inline
-    // item, with no break between (src/rich-inline.ts gives such a paragraph its contexts).
-    for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
-      if (breaksAfterKind(segmentFlags[i]! & KIND_BITS) || (i > targetSegmentIndex && (segmentFlags[i]! & UNBROKEN) === 0)) return false
-    }
-    const itemSegments = prepared.items === undefined ? null : prepared.items.itemSegments
-    return itemSegments !== null && itemSegments[getItemIndex(itemSegments, softHyphenIndex)]! > targetSegmentIndex
-  }
+  // Pretext keeps an unfit hyphen in a text in the WebKit profile (EngineProfile, unfitHyphenRetreat), but WebKit lays
+  // a paragraph with inline boxes out with LineBuilder, whose line reverts from a soft hyphen whose hyphen doesn't
+  // fit to the last wrap opportunity where the hyphen fits or none is needed (InlineContentBreaker.cpp:114-119;
+  // rebuildLineForTrailingSoftHyphen, InlineLineBuilder.cpp:1862-1887): Safari 27 lays out the spans `the `,
+  // `inter`, `na\u00ADtion\u00ADal` in 16px Arial at 84px as `the` / `interna-tion-` / `al`. So a rich-inline
+  // paragraph's line returns there (src/rich-inline.ts gives such a paragraph its contexts).
+  if (unfitHyphenRetreat === 'none') return prepared.items !== undefined
   const overflow = breakWidth - fitLimit
   let narrowing = 0
   if (discretionaryHyphenContexts !== null) for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) narrowing += discretionaryHyphenContexts[i]!

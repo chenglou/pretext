@@ -3631,15 +3631,18 @@ describe('rich-inline invariants', () => {
         expect(lineTexts([{ text: 'T', font: FONT }, { text: 'p\u00ADd', font: FONT }], 12)).toEqual(['T', 'p-', 'd'])
       }
 
-      // As in plain text, only the Chromium profile returns from the unfit hyphen
-      // to a break before the item, here the space.
+      // A text keeps an unfit hyphen in the WebKit profile and returns from it to the space in the
+      // Chromium one. A paragraph of several items returns in both: WebKit's line builder for a
+      // paragraph with inline boxes reverts to the last wrap opportunity where the hyphen fits or
+      // none is needed, wherever the soft hyphen is in its item.
       const width = measureWidth('a po', FONT) + 0.1
       for (const [unfitHyphenRetreat, expected] of [
         ['none', ['a po-', 'd']],
         ['reduced-width', ['a', 'pod']],
       ] as const) {
         profile.unfitHyphenRetreat = unfitHyphenRetreat
-        expect(lineTexts([{ text: 'a ', font: FONT }, { text: 'po\u00ADd', font: FONT }], width)).toEqual([...expected])
+        expect(lineTexts([{ text: 'a ', font: FONT }, { text: 'po\u00ADd', font: FONT }], width)).toEqual(['a', 'pod'])
+        expect(lineTexts([{ text: 'a', font: FONT }, { text: ' po\u00ADd', font: FONT }], width)).toEqual(['a', 'pod'])
         expect(layoutWithLines(prepareWithSegments('a po\u00ADd', FONT), width, LINE_HEIGHT).lines.map(line => line.text.trimEnd()))
           .toEqual([...expected])
       }

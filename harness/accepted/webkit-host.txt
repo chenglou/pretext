@@ -27,6 +27,10 @@ rich-6db6bdca4194c83a count
 rich-8490e462072dcf97 count
 rich-a7a9f028222bb391 breaks
 
+## A soft hyphen after only a bidi control where a line starts, before a chip that doesn't fit, under 24 px: Safari keeps the chip on that line, where the library's line, having returned from the hyphen before it that didn't fit, ends at the soft hyphen with its hyphen (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-2dd0e1271e5d832e count
+rich-b9b1ad3d4f89821f count
+
 ## A soft hyphen and a space that start a span after a ZWSP, at 24 px and wider: Safari ends the line after the ZWSP and keeps the space visible after the soft hyphen at the start of the next line, as it doesn't consume a soft hyphen at a line start, where the library consumes both (ENGINE_FOLLOWUPS.md)
 rich-a2a218c7d76d7837 breaks
 rich-b3cc002481d0d29b breaks

@@ -80,9 +80,11 @@ export type EngineProfile = {
   // Gecko records a soft-hyphen break only where its hyphen fits, and any other
   // break where its line fits (gfxTextRun.cpp:1086-1101), so the line returns to
   // the latest opportunity that fits at the full width. WebKit also returns, but
-  // that is not modeled: its installed losses come from letter spacing on
-  // invisibles and from marks after a soft hyphen, which isolated widths do not
-  // show. It keeps the overflowing hyphen.
+  // that is not modeled for a text: its installed losses come from letter spacing
+  // on invisibles and from marks after a soft hyphen, which isolated widths do not
+  // show. A text keeps the overflowing hyphen; a rich-inline paragraph of several
+  // items returns, as WebKit's line builder for a paragraph with inline boxes does
+  // (returnsFromUnfitHyphen in src/line-break.ts).
   unfitHyphenRetreat: 'reduced-width' | 'full-width' | 'none'
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
