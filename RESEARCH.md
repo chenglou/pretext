@@ -1290,6 +1290,24 @@ time (the PRs hold the per-row tables):
   Firefox, so `layout()` of chat-like messages would take 2-7 times as long (#340, 2026-09-24).
 - **A count starting a line's width from its first segment**, not 0: 1.4-1.7 on chat-like messages in Firefox 156
   (#340, 2026-09-23).
+- **`layout()` counting with the simple stepper**, with no loop of its own, which would leave one copy of the simple
+  fit rules (branch `count-with-stepper`, 90 fewer lines in `src/line-break.ts`): not timed in a browser. The counter's
+  one timing against a simple walker is #338's, 3 times faster in Chrome 153 and Safari 27 than the walker main had
+  then, which #340 replaced with today's leaner stepper. Offline (2026-09-30; the bench's bundles and texts on a
+  stand-in Canvas, both builds timed in each round of one process, in Node 23's V8 and in Bun 1.4's and Safari 27's
+  JavaScriptCore, on a busy machine; hypotheses), the stepper counts chat messages at a new width each pass, as a drag
+  gives and the bench's new-width rows time, at 1.24-1.30 of the counter's time in V8 and 1.46-1.58 in JavaScriptCore.
+  Of the bench's worst cases it counts long breakable runs at 1.96-2.11 in both, a book-length Arabic paragraph at
+  1.49-1.65 and keep-all CJK brackets at 3.2 in V8 and 1.9 in JavaScriptCore: a line that breaks between graphemes, and
+  each line of a long text, costs the stepper a call the counter's loop doesn't make. At three widths laid out again
+  and again, as the bench's "widths seen before" rows are, chat messages read 0.85-1.06 in V8, 0.74-0.80 by each
+  build's least time, and 1.22-1.49 in JavaScriptCore; a run of one build per process the same day read those widths
+  0.60-0.67 in V8 and 0.76-1.03 in JavaScriptCore, so repeated widths flatter the stepper by an amount that moves with
+  the machine, likely as the branch predictor learns each text's lines. The stepper also allocates a cursor and a stats
+  object per call, where the counter allocates nothing. The bench's rows only hint, since they differ in texts, widths
+  and handles: mixed `layout()` against mixed stats reads 0.6 against 0.4 µs per 1,000 units in Chrome 154, 0.7 against
+  0.6 in Safari 27 and 0.8 against 1.7 in Firefox 156.0.1 (#387). Reopens with `bun harness bench main` of that branch,
+  which lands only if no row reads slower in any browser.
 - **The full walker stepping one line per call**, redoing its setup each line: 1.07-1.40 on short lines in Chrome 154,
   Firefox 156 and Safari 27 (#359, 2026-09-26).
 - **One loop for both walkers**: 1.06-1.10 on chat-like messages in Chrome, 1.18-1.32 in Firefox (#359).
@@ -2058,7 +2076,8 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   numbers) each lost speed in more than one engine or added too much code; of a walker that stepped exactly one line per
   call, only its cleanup of line text landed (2026-09-26), and a private copy of the stepper was rejected as duplication
   for a small JIT gain (2026-09-25; Part 1, Engineering). They reopen when the full walker's cost per segment nears the
-  counter's.
+  counter's. Counting `layout()`'s lines with the simple stepper, in place of the counter, waits for a bench (The
+  Walkers' Shapes).
 - **Removing the prefix-measurement cache**: 79% more cold Canvas calls.
 - **A growing bracket, then bisection, in the line counter** (in the rebuild): 59% faster than a global binary search
   at narrow widths, 17% slower at wide ones; one counter was kept.

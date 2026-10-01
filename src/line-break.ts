@@ -264,6 +264,11 @@ export function walkPreparedLinesRaw(
 // a break, so an overflowing space or ZWSP ends its line and any other segment
 // starts the next one. The full walker costs three to five times as much per
 // segment, so one walker for all text was rejected (RESEARCH.md, Decisions Log).
+// Counting with the simple stepper itself would leave one copy of these fit
+// rules. Offline it counts a text at a width it wasn't laid out at before a
+// quarter to a half slower than this loop, and long breakable runs twice as
+// slow; no browser has timed it (RESEARCH.md, Keeping Work Bounded, The
+// Walkers' Shapes).
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   // The loop takes no overflow trims, which the stepper takes for a line's first segment.
   if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
