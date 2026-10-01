@@ -29,8 +29,8 @@
 //   too, a soft hyphen that ends an item before a bidi control that starts the next, at the paragraph's start, after a
 //   space in the item or a collapsed one before it, which Firefox's scan of the joined text takes as text, and after
 //   other text; and, cut on its own too, a padded span that starts with a line separator after a word, before which
-//   WebKit's check at an item boundary gives no break (getWebKitBreakBetweenItems in src/line-breaks.ts), so a line
-//   that can't fit its padding breaks the word (hardBreakItemRetreat in src/measurement.ts);
+//   WebKit's check at an item boundary gives no break (getWebKitBreakBetweenItems in src/line-breaks.ts), so Safari's
+//   line that can't fit its padding breaks the word, which rich inline doesn't model (ENGINE_FOLLOWUPS.md);
 // - cut on their own too, a line that ends at a space inside an item under negative letter spacing, whose next line the
 //   browsers start after the space, beside a break at the collapsed space between items;
 // - keep-all paragraphs, cut on their own: a Korean chat message with a mention chip, a bold run inside a word and a
@@ -44,15 +44,16 @@
 //   paragraph's end; tabs after a wider bold span and split across items, and after and inside padded code spans in
 //   prose, whose stops count from the line's start; and chips beside preserved spaces and holding their own; then, cut on
 //   their own too, a chip before a line feed and one before spaces, which stay on its line however far it overflows,
-//   and a padded span that starts with a line feed after a word, whose line breaks the word where the padding doesn't
-//   fit (hardBreakItemRetreat in src/measurement.ts); and, cut on their own too, that span after a word whose last
-//   letter is a bold span of its own, which moves with it, a padded span of only a line feed, whose end edge Safari
-//   fits too, and a padded span that starts with a line feed or spaces after a chip, whose opening each engine fits
-//   its way (paddedOpeningFit in src/measurement.ts); and, cut on their own too, a padded span of only spaces after a
-//   chip, which Chrome keeps on the chip's line however far it overflows, one of spaces and a line feed, whose end edge
-//   Safari fits too, and a padded span that starts with a line feed or spaces after a word that ends with spaces,
-//   whose opening Chrome's line takes with no padding, and before whose line feed, where its padding doesn't fit,
-//   Safari keeps the spaces that fit and Firefox all but the last (hardBreakItemRetreat); and, cut on their own too, a
+//   and a padded span that starts with a line feed after a word, whose line Firefox and Safari break inside the word
+//   where the padding doesn't fit; and, cut on their own too, that span after a word whose last letter is a bold span
+//   of its own, which moves with it, a padded span of only a line feed, whose end edge Safari fits too, and a padded
+//   span that starts with a line feed or spaces after a chip, whose opening each engine fits its way; and, cut on
+//   their own too, a padded span of only spaces after a chip, which Chrome keeps on the chip's line however far it
+//   overflows, one of spaces and a line feed, whose end edge Safari fits too, and a padded span that starts with a line
+//   feed or spaces after a word that ends with spaces, whose opening Chrome's line takes with no padding, and before
+//   whose line feed, where its padding doesn't fit, Safari keeps the spaces that fit and Firefox all but the last
+//   (these padded openings record what the engines do, where rich inline takes the ordinary fit of the span's whole
+//   padding: ENGINE_FOLLOWUPS.md, Rich-inline item edges); and, cut on their own too, a
 //   chip before preserved spaces split across spans, which all stay on its line however far it overflows, before text
 //   and before the paragraph's own text that starts with more of them, and before a tab, which Firefox doesn't hang and
 //   moves to the next line with them;

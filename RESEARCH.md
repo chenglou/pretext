@@ -920,7 +920,8 @@ rest of the object's width (#201), which lays out as the box does in every engin
 stand-in Canvas fuzz of 220,000 layouts found no difference, 2026-09-30). A box of width 0 is a box, with a break on
 both sides, as an empty inline-block of width 0 is; Firefox places one wherever it falls, even on a line that already
 overflows (`CanPlaceFrame`, `nsLineLayout.cpp:1264-1269`), as the Gecko profile does for any atomic item of width 0
-(`paddedOpeningFit`, whose `'both'` ports that function), where Chrome and Safari move it to the next line. A negative width is refused, as one that isn't finite is. An
+(`emptyAtomicAlwaysFits`), where Chrome and Safari move it to the next line. A negative width is refused, as one that
+isn't finite is. An
 inline-block of width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and
 webkit-host, but Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the
 box, where the negative width would bring the line back within its width, and fits a word after it that rich inline
@@ -1009,19 +1010,16 @@ walks back over item results (`ComputeTrailingSpaceWidth`, `line_info.cc:289-415
 item's hanging width from the fit (`InlineContentBreaker`) and Gecko hangs each frame's trailing white space
 (`nsTextFrame.cpp:11214-11229`). Tab stops count from the line's start, never an item's (Blink's
 `line_breaker.cc:2963-2971`, WebKit's pen position, Gecko's `CalcTabWidths`, `nsTextFrame.cpp:4298-4378`). No break
-comes before a hard break (UAX #14 LB6). A padded span that starts with one fits its padding there as each engine fits a
-span whose line ends as it opens: Chrome its start edge, as Blink adds that edge when the span opens and a forced break's
-close tags trail it, and no edge after preserved spaces that overflow or follow text in one span, as its return breaks
-that text before them and the line then trails the spaces, the open tag and the forced break (a run of tabs is an item
-of its own there, so a tab, and spaces after one, follow no text); Safari its end edge too
-where the span holds only white space up to the break, as WebKit's content runs on past the box ends after a line break,
-with white space that hangs before the span left out; Firefox both, as Gecko fits a frame's cloned end edge
-(`paddedOpeningFit`, `src/measurement.ts`). Where it doesn't fit, all three engines return the line to its latest break;
-without one, Chrome ends the line before the span, as its retry of an overflowing line breaks between any two graphemes,
-and Firefox and Safari before the last grapheme of the text before it, a preserved space too, whose wrap opportunities
-lie inside it, and before that grapheme's span where the grapheme is all of one; Safari keeps the preserved spaces that
-fit of ones that overflow, as WebKit breaks the run that overflows where it fits (`hardBreakItemRetreat`). A break the
-walk of an item gives after its preserved spaces is the next item's, which the text the items join decides. WebKit's
+comes before a hard break (UAX #14 LB6). A padded span that starts with one, or with white space, takes the ordinary
+fit of its whole `extraWidth` where a line with content would take that opening and no more of the span, and where it
+doesn't fit the line returns to the latest break it holds, or without one ends before the span. That is Firefox's fit,
+as Gecko fits a frame's cloned end edge, and Chrome's line end, as its retry of an overflowing line breaks between any
+two graphemes. Chrome fits fewer edges, the span's start edge or none, Safari the start edge and sometimes the end edge,
+and without a break Firefox and Safari end the line before the last grapheme of the text before the span; rich inline
+models none of that, since no real-usage draw has such a span, of the few that could (Decisions Log, 2026-09-30;
+ENGINE_FOLLOWUPS.md, Rich-inline item edges, has each engine's rule and its source). A break the walk of an item gives
+after its preserved spaces is the next item's, which the text the items join decides; after such text the line doesn't
+hold the break before its last word, which Firefox returns to (ENGINE_FOLLOWUPS.md). WebKit's
 soft wrap index loop ends the content it places after a line break item (`InlineFormattingUtils.cpp:456-475`), so no
 break comes before a line feed that starts a box there either, after an atomic item too, and allows wrapping next to a
 white-space item (`:406-418`). A carriage return that ends one item and a
@@ -1039,12 +1037,8 @@ first item's white space there: of 10,991 probe inputs in 77 shapes at 20-200px,
 webkit-host inputs pass since that change that failed before, and 72 Chrome and 43 Firefox ones that passed by luck fail
 (Chrome 154, Firefox 156.0.1, webkit-host, 2026-09-30; the shapes are in ENGINE_FOLLOWUPS.md). A way to tell a span from
 the paragraph's own text would reopen the Chrome ones. A padded span that starts with such white space or a hard break
-after a chip stays where the engine fits its opening, and in Chrome one of only white space stays however far the line
-overflows, as Blink's return keeps the trailable items after the break it returns to, white space and the tags of spans
-that close among it (`RewindOverflow`, `line_breaker.cc:4332-4424`), which keeps such a span after any content; else the
-line ends at the break after the chip, or in Safari, before a line feed, returns to the break before the chip. Blink
-fits only the start edge of a padded span that starts with white space after text too, where rich inline takes the whole
-`extraWidth` in Safari and Firefox (ENGINE_FOLLOWUPS.md). An atomic item lays its text out in normal white space, as a
+after a chip stays where the line fits all of its padding; else the line ends at the break after the chip, or in the
+WebKit profile, before a line feed, returns to the break before the chip. An atomic item lays its text out in normal white space, as a
 chip's `white-space: nowrap` box does: the rebuild's premise, the chip's max-content width with its preserved spaces, is
 6.6px wider than all three browsers lay out the 12px chip ` @bob ` in 15px Helvetica Neue prose (2026-09-29).
 Of 500 real-usage pre-wrap paragraphs split into same-font spans, each one that fails fails in one node too; what's left
@@ -1394,9 +1388,10 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
 - **A 25th field on the engine profile**: one more boolean on `getEngineProfile()`'s object, at any position and
   read by nothing, made Chrome 154's plain line APIs 11-18% slower (mixed stats, walk and stream) and two worst-case
   `layout()` rows 3-7%, with identical work, in two bench sessions of each of three builds; Node 23's V8 keeps the
-  object's properties fast either way (2026-09-30). So the Gecko profile's rule for an atomic item of width 0 reads
-  `paddedOpeningFit`, whose `'both'` already ports the function it comes from (`CanPlaceFrame`), and a new profile
-  field is benched before it lands.
+  object's properties fast either way (2026-09-30). So a new profile field is benched before it lands. The Gecko
+  profile's rule for an atomic item of width 0 read `paddedOpeningFit` for that reason, whose `'both'` ported the
+  function it comes from (`CanPlaceFrame`), and got a field of its own, `emptyAtomicAlwaysFits`, when that field and
+  `hardBreakItemRetreat` went (#TBD), which left the profile a field fewer.
 - **Class fields in Firefox**: any class field seems to make Firefox 156 compile the whole bundle up front, 4.5-4.8ms on
   a fresh page against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors; V8 and
   JavaScriptCore didn't care (#340, 2026-09-23).
@@ -1422,7 +1417,9 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   hang bookkeeping, the retreat check before continued items, and the hang at the line's start and end), rich stats
   still read 7-11% slower, and with the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%;
   main with those three values kept alive read 2% slower. So it's how the JITs allocate the bigger loop's state, not
-  work, and it was accepted as a regression JIT placement alone explains in live code (#381, 2026-09-29).
+  work, and it was accepted as a regression JIT placement alone explains in live code (#381, 2026-09-29). The check of
+  a padded item's opening, the retreat check and the line's start went with the rules that read them (#TBD; Decisions
+  Log, 2026-09-30).
 - **Inline caches**: once `layout()` has stepped such text, Chrome's `walkLineRanges()` of simple text, sharing the
   simple stepper, takes 2-4% longer than a second copy of main, by a mechanism not found. V8's caches turn polymorphic
   over the two handle kinds (`--log-ic`), but one shape for both didn't help Chrome and cost Firefox up to 14%; a
@@ -2406,3 +2403,24 @@ decisions for the maintainer.
   with no fragment. A box's width is final, fixed when it's prepared and at least 0, and heights stay the app's, with the
   README's `vertical-align: top` rule (Rich Inline Boundaries, Objects Inside A Line, has the evidence and what reopens
   negative widths and widths given at layout).
+- **2026-09-30: a padded span's opening takes the ordinary fit, as a named gap** (#TBD). Where a line with content would
+  take only the white space or hard break that starts a padded rich-inline item, each engine fits its own choice of the
+  item's edges, and without a break to return to Firefox and Safari end the line inside the text before the item. #381
+  ported each engine's rule: 116 runtime lines of 1,362 in `src/rich-inline.ts` and `src/measurement.ts`, the profile
+  fields `paddedOpeningFit` and `hardBreakItemRetreat`, and the line's start kept in the rich stepper for them. They
+  went as a trade of correctness for simplicity (Part 1, Merge Bars And Landing), in a shape no real-usage draw has: of
+  the sample's 241 rich draws, 48 are `pre-wrap`, one of those holds a padded span (99 of the 241 do), and none starts
+  with white space or a line break, so no sample prediction moves in Chrome 154.0.8037.57, Firefox 156.0.1 or
+  webkit-host, nor does any of 150 fresh chat-like rich cases'. It costs 27 Chrome, 26 Firefox and 50 webkit-host cases
+  of the rich set, all in templates #381 added, each listed under one reason per browser, and one more webkit-host case,
+  which failed already by another gap, comes out a line too tall; 7 webkit-host cases under 24px pass again. Where an
+  app does write the shape, from none to a tenth of a paragraph's widths go wrong in Chrome and Safari that the rules
+  got right, mostly a line too tall, and up to a fifth where the text before the span ends with a space or a tab;
+  Firefox loses 3 of 3,419 fresh cases (ENGINE_FOLLOWUPS.md has the counts). Most of that is the opening fit's, about 43
+  of the lines: with only the retreat gone (#381's code with `hardBreakItemRetreat` at Chrome's value in every profile,
+  measured and not built), Chrome loses nothing, Firefox the same 26 cases of the rich set, none of them a line count at
+  24px and wider, and webkit-host 29, 3 of them a line count at 24px and wider. Now every profile fits the item's whole
+  `extraWidth` there, which is Firefox's fit, and ends a line with no break before the item, which is Chrome's. White
+  space after a chip without padding keeps its rule, which 18 sample draws reach. A user whose padded spans start with
+  white space or a newline in `pre-wrap` reopens it; ENGINE_FOLLOWUPS.md (Rich-inline item edges) keeps each engine's
+  rule with its source, and #381's `fitsOpening()` and `getEndRetreat()` are the port to take back.

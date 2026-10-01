@@ -9,6 +9,34 @@ rich-426a9dc0f93dbfdb breaks
 ## A newline, soft hyphen and newline that start a span, at 24 px and wider: Firefox collapses them into one space, as it collapses white space across the characters it discards, where the library keeps a space on each side of the soft hyphen, as it does in one text (ENGINE_FOLLOWUPS.md)
 rich-90126064978ae3b0 breaks
 
+## A padded rich pre-wrap span that starts with a line feed after text with no break, whose padding doesn't fit: Firefox ends the line before the last grapheme of that text, a preserved space too, and keeps the line feed on the line that grapheme starts, where the library ends the line before the span and gives the line feed a line of the span's padding, as Chrome does; narrower than 24 px, where that grapheme has a line to itself, that is a line more than Firefox's (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-11c49eccf08f18c8 count
+rich-1e310e1aa5f44bd6 count
+rich-31ac712e6bce1e12 breaks
+rich-31ddf4b29ff31fe7 count
+rich-3c8faa9d5e59f7f6 breaks
+rich-3cc38742f4964ac0 breaks
+rich-3f3d63d252d84be6 breaks
+rich-72685a1d811a38dc count
+rich-7638bc6d57faacb3 breaks
+rich-81926e46654c3d06 breaks
+rich-952979e45b1956df count
+rich-993bb5fb527a5ccf breaks
+rich-9a6c8f8bef7dcd2a count
+rich-b6b0d2ee917d12fc breaks
+rich-b7f16b4cf35dbc95 breaks
+rich-b82f77bebeefdd02 breaks
+rich-c21573c6011be7be breaks
+rich-c65e6813f5328448 breaks
+rich-c7cfa88d8a212348 count
+rich-ce822b3484589dc7 breaks
+rich-d916a0d03e0a32ae breaks
+rich-daa070f22030dba7 breaks
+rich-dfab00d01a250264 breaks
+rich-e751454f3af2ff09 breaks
+rich-e91f4f44d49025c6 breaks
+rich-f3cb5f4f05c077e0 breaks
+
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Firefox breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-4635ddffedd43c84 breaks
 rich-8736e842495c21ea count
