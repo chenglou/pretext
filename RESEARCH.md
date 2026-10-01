@@ -921,8 +921,8 @@ first 100 paragraphs; 125 a hiragana with a katakana), and preparing them in one
 1,288, 1.9 times. Short text that is mostly kana costs more of what it cost: 40 chat and interface sentences prepared in
 order in 16px Hiragino Sans take 1,053 calls where they took 287, 3.7 times (the first 10, 374 for 172), each of them
 alone in a new font 1.6 times the calls and 1.9 times the units, and 60 more such texts 1,959 for 369. PingFang SC,
-which kerns none, pays the same. The harness's sample, mostly not Japanese, takes 2.2% more calls (275,073 to 281,021)
-and 1.3% more submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas doesn't shape whole,
+which kerns none, pays the same. The harness's sample, mostly not Japanese, takes 2.3% more calls (275,073 to 281,360)
+and 1.4% more submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas doesn't shape whole,
 words broken between characters, kana across a ZWSP or a ZWJ, and fonts of other systems.
 
 Where a pair's adjustment sits decides what a break inside the pair leaves on each side: GPOS pair positioning puts it
