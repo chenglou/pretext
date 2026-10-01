@@ -922,9 +922,11 @@ function firstSegmentOverflows(item: PreparedRichInlineItem, fitLimit: number): 
 // Where WebKit and Gecko end a line before the end of the text an item ends with, which the line
 // holds from (startSegmentIndex, startGraphemeIndex) to the item's end (hardBreakItemRetreat):
 // before its last grapheme, or, in WebKit, where it ends with preserved spaces and the line
-// overflows by `overflow`, after the spaces that fit. That position goes in `at`, and the width
-// the line gives up there, with the letter spacing after it, or null where the item is atomic or
-// doesn't end with text or preserved spaces, or that position is the line's start or the item's.
+// overflows by `overflow`, after the spaces that fit: none of them where a negative letter
+// spacing leaves a space no advance, so that giving one up gives no overflow back. That
+// position goes in `at`, and the width the line gives up there, with the letter spacing after
+// it, or null where the item is atomic or doesn't end with text or preserved spaces, or that
+// position is the line's start or the item's.
 // Where the last grapheme is all of the item, the line ends before the item (retreatsBefore),
 // and here only that grapheme starting the line is left.
 function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, startGraphemeIndex: number, overflow: number, keepsFit: boolean, at: LayoutCursor): number | null {
@@ -941,7 +943,7 @@ function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, 
   } else {
     const count = segments[s]!.length
     const advance = getSpaceAdvance(item.lineData, s)
-    const given = keepsFit && overflow > 0 ? Math.min(count, Math.ceil(overflow / advance)) : 1
+    const given = keepsFit && overflow > 0 ? (advance > 0 ? Math.min(count, Math.ceil(overflow / advance)) : count) : 1
     at.graphemeIndex = count - given
     retreat = given * advance
   }

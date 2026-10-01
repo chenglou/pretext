@@ -3974,6 +3974,17 @@ describe('rich-inline invariants', () => {
         expect(texts(foo + 3 * space + 1)).toEqual(fit === 'start' ? ['foo   |'] : ['foo  ', ' |'])
         expect(texts(foo + 21)).toEqual(fit === 'both' ? ['foo  ', ' |'] : ['foo   |'])
         expect(texts(foo + 3 * space + 41)).toEqual(['foo   |'])
+        // Under a letter spacing more negative than a space is wide, the spaces have no advance to
+        // give back: Safari's fit gives up all of them, and the walk ends.
+        const tight = prepareRichInline([{ text: 'foo   ', font: FONT, letterSpacing: -space - 2, extraWidth: 40 }, { text: '\nbar', font: FONT, extraWidth: 40 }], { whiteSpace: 'pre-wrap' })
+        for (const width of [1, 20, 60]) {
+          const out: string[] = []
+          walkRichInlineLineRanges(tight, width, range => {
+            if (out.length === 20) throw new Error(`the walk goes on past 20 lines at ${width}px`)
+            out.push(materializeRichInlineLineRange(tight, range).fragments.map(f => f.text).join('|'))
+          })
+          if (fit === 'placed' && width < 60) expect(out).toEqual(['f', 'o', 'o', '   |', 'b', 'a', 'r'])
+        }
         // A space that is all of its item moves with the span; Chrome's return finds no break before
         // it, so there it keeps the line feed only where that space overflows.
         const spaceItem = [{ text: 'foo', font: FONT }, { text: ' ', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 40 }]
