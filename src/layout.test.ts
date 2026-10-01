@@ -3483,6 +3483,47 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('a run of U+3000 that ends a rich item takes its room before the next item and hangs where the line ends after it', () => {
+    // `中中` and U+3000 are 48px and fit a 40px line only without the run, which hangs. The next
+    // item starts after the run, not after `中中`, so `a`, 9.6px, a 5px box or a chip moves to the
+    // next line, as in one text node, in the Chromium and Gecko profiles alike.
+    const lines = (items: Array<RichInlineItem | RichInlineBox>, maxWidth: number, options: { whiteSpace?: 'pre-wrap' } = {}) => {
+      const prepared = prepareRichInline(items, options)
+      const out: string[] = []
+      const count = walkRichInlineLineRanges(prepared, maxWidth, range => {
+        const line = materializeRichInlineLineRange(prepared, range)
+        expect(line.fragments.reduce((sum, fragment) => sum + fragment.gapBefore + fragment.occupiedWidth, 0)).toBeCloseTo(line.width, 9)
+        out.push(`${line.fragments.map(fragment => fragment.text).join('|')}:${Math.round(line.width * 100) / 100}`)
+      })
+      expect(measureRichInlineStats(prepared, maxWidth).lineCount).toBe(count)
+      return out
+    }
+    const item = (text: string, more: Partial<RichInlineItem> = {}): RichInlineItem => ({ text, font: FONT, ...more })
+    const flat = (text: string, maxWidth: number) => layoutWithLines(prepareWithSegments(text, FONT), maxWidth, LINE_HEIGHT).lines.map(line => `${line.text}:${Math.round(line.width * 100) / 100}`)
+    for (const maxWidth of [20, 33, 40, 47, 48, 57, 58]) {
+      expect({ maxWidth, lines: lines([item('中中\u3000'), item('a')], maxWidth).map(line => line.replace('|', '')) }).toEqual({ maxWidth, lines: flat('中中\u3000a', maxWidth) })
+    }
+    expect(lines([item('中中\u3000'), item('a')], 40)).toEqual(['中中\u3000:32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), item('a', { font: `700 ${FONT}` })], 40)).toEqual(['中中\u3000:32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), { width: 5 }], 40)).toEqual(['中中\u3000:32', ':5'])
+    expect(lines([item('中中\u3000'), item('a', { break: 'never' })], 40)).toEqual(['中中\u3000:32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), item('a', { extraWidth: 2 })], 40)).toEqual(['中中\u3000:32', 'a:11.6'])
+    // The run as an item of its own, and split across two items, where it goes on in the next.
+    expect(lines([item('中中'), item('\u3000'), item('a')], 40)).toEqual(['中中|\u3000:32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), item('\u3000a')], 40)).toEqual(['中中\u3000|\u3000:32', 'a:9.6'])
+    // An item a line start consumes passes it on, and at the paragraph's end it stays out of the width.
+    expect(lines([item('中中\u3000'), item('\u00AD'), item('a')], 40)).toEqual(['中中\u3000|:32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), item('\u00AD', { extraWidth: 12 }), item('a')], 40)).toEqual(['中中\u3000|:32', 'a:9.6'])
+    // A line that returns to the break before such an item leaves the run out of its fragment too.
+    expect(lines([item('中中\u3000 '), item('\u00AD'), item('\u00AD\u3001', { extraWidth: 4 })], 40)).toEqual(['中中\u3000:32', '|\u3001:20'])
+    expect(lines([item('中中\u3000'), item('')], 40)).toEqual(['中中\u3000:32'])
+    // A line that takes the run whole goes on after it.
+    expect(lines([item('中中\u3000'), item('a')], 58)).toEqual(['中中\u3000|a:57.6'])
+    // In pre-wrap, preserved spaces that start the next item hang with the run, and text doesn't follow it.
+    expect(lines([item('中中\u3000'), item('  a')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|  :32', 'a:9.6'])
+    expect(lines([item('中中\u3000'), item('a')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000:32', 'a:9.6'])
+  })
+
   test('a rich fragment shows its item\'s own text, and the hyphen of a soft hyphen it ends at where its line\'s width counts one', () => {
     // Each line's fragments as their items and texts.
     const texts = (parts: readonly string[], maxWidth: number) => {

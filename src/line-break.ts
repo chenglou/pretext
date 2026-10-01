@@ -68,7 +68,8 @@ export type PreparedLineBreakData = {
 // the latest break end: where the walk takes the item's end or a hard break, the whole run
 // it ends with, which its width includes; where it or the break ends right after a run that
 // goes on from before the item, the run's part before the item, which the width, 0 there,
-// leaves out, as the item's own part hangs; else 0.
+// leaves out, as the item's own part hangs; else 0. Out, `endTrim`: the line-end trim the
+// walk's width leaves out (lineEndTrims), 0 without one.
 export type ItemLine = {
   continues: boolean
   breakBefore: boolean
@@ -80,6 +81,7 @@ export type ItemLine = {
   breakWidth: number
   breakHangWidth: number
   hangWidth: number
+  endTrim: number
 }
 
 type InternalLineVisitor = (
@@ -882,6 +884,7 @@ function walkPreparedComplexLines(
           const wrapsAfterRunFromBefore = !hangsWhereUnfit && hangsFromBefore && endGraphemeIndex === 0 && endSegmentIndex === hangEndSegmentIndex && endSegmentIndex > lineStartSegmentIndex
           item.hangWidth = hangsWhereUnfit ? paintWidth - hangStartWidth : wrapsAfterRunFromBefore ? -hangStartWidth : 0
           if (wrapsAfterRunFromBefore) lineWidth = 0
+          item.endTrim = lineEndTrimmed
           // The line's latest break, as a line that returns to it ends: inside a segment,
           // at a segment start or before the item, or where that is a soft hyphen that
           // doesn't fit, the opportunity the line returns to from it.

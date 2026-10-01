@@ -158,6 +158,10 @@ type PreparedRichInlineItem = {
   // The width of the preserved spaces that end the item and hang where a line wraps after
   // it (ItemLine); 0 without them.
   hangWidth: number
+  // Whether the item ends with a run of U+3000 that hangs where a line ends after it
+  // (addIdeographicSpaceHangs in src/prepare.ts): the line-end trim of its last segment is
+  // that run's, where another is a closing mark's halt (stepRichInlineLine).
+  endHangs: boolean
   // Where the item starts with a line feed after a carriage return that ends the item
   // before, which make one hard break, as CRLF in one text does (normalizeWhitespacePreWrap).
   lineFeedAfterReturn: boolean
@@ -272,7 +276,7 @@ function normalizeItemLineStart(data: PreparedSegments, start: LayoutCursor): bo
 }
 
 function createItemLine(continues: boolean): ItemLine {
-  return { continues, breakBefore: false, fitsBreakBefore: false, innerBreaks: null, lineOffset: 0, breakSegmentIndex: -1, breakGraphemeIndex: 0, breakWidth: 0, breakHangWidth: 0, hangWidth: 0 }
+  return { continues, breakBefore: false, fitsBreakBefore: false, innerBreaks: null, lineOffset: 0, breakSegmentIndex: -1, breakGraphemeIndex: 0, breakWidth: 0, breakHangWidth: 0, hangWidth: 0, endTrim: 0 }
 }
 
 // The item's width on a line of its own, from `start`, which it moves past what a line
@@ -488,7 +492,11 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         for (let i = 0, j = 0; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           while (j < joined.starts.length && joined.starts[j]! < portion.start) j++
-          if (i > 0) portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & KIND_BITS) !== HARD_BREAK
+          if (i > 0) {
+            portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & KIND_BITS) !== HARD_BREAK
+            // A run of U+3000 that goes on in this item doesn't end with the item before.
+            if (joinedText.charCodeAt(portion.start) === 0x3000) joinedPortions[i - 1]!.item.endHangs = false
+          }
           recordJoinedBreaks(portion, joined, j, i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length, walkedFlags)
         }
       }
@@ -511,7 +519,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       const box: PreparedRichInlineItem = {
         break: 'never', breakBefore: pendingGapWidth !== null || previousItem !== null, continued: false, walked: false,
         establishesLine: true, extraWidth: item.width, gapBefore: pendingGapWidth ?? 0, gapItemIndex: pendingGapWidth === null ? -1 : pendingGapItemIndex,
-        hyphenBefore: 0, innerBreaks: null, naturalWidth: 0, hangWidth: 0, lineFeedAfterReturn: false, openingEdge: -1, prepared: BOX_HANDLE, lineData: BOX_HANDLE,
+        hyphenBefore: 0, innerBreaks: null, naturalWidth: 0, hangWidth: 0, endHangs: false, lineFeedAfterReturn: false, openingEdge: -1, prepared: BOX_HANDLE, lineData: BOX_HANDLE,
       }
       preparedItems[index] = previousItem = box
       previousBreak = 'never'
@@ -659,6 +667,11 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         (whiteSpaceEnd === segmentFlags.length - 1 && (segmentFlags[whiteSpaceEnd]! & KIND_BITS) === HARD_BREAK)
       openingEdge = onlyOpening ? extraWidth : extraWidth / 2
     }
+    // The full walker tells a line that it left the run out (ItemLine), so the item walks on
+    // a handle of its own (getWalkedHandle).
+    const endTrims = prepared.lineEndTrims
+    const endHangs = itemBreak !== 'never' && endTrims !== null && endTrims[endTrims.length - 1]! > 0 && text.charCodeAt(end - 1) === 0x3000
+    if (endHangs) walkedFlags[index] = segmentFlags.slice()
     // A tab's advance depends on where it lands on the line, and the preserved spaces of an
     // item that holds nothing else go on the run of them the line ends with, so a line walks
     // such an item.
@@ -675,6 +688,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       innerBreaks: null,
       naturalWidth: wholeWidth ?? (walksConsumed ? measureAfterContent(prepared) : 0),
       hangWidth: wholeLine === null ? 0 : wholeLine.hangWidth,
+      endHangs,
       lineFeedAfterReturn,
       openingEdge,
       prepared,
@@ -993,6 +1007,22 @@ function stepRichInlineLine(
   let lineHangWidth = 0
   // Whether the line ends at a hard break.
   let endsAtHardBreak = false
+  // The width of the run of U+3000 that ends the line's last item, where the item fits only
+  // without it, so its walk left it out (endHangs). Blink and Gecko take such a run as the
+  // line's trailing white space, which takes its room before whatever follows: Blink's line
+  // is then trailing, and ends before the next item that isn't white space (HandleTrailingSpaces,
+  // line_breaker.cc:2447-2456 and 2518-2533, and :1099-1105 before an atomic inline, Chromium
+  // 153), and Gecko trims a text frame's trailing white space from its width only where the
+  // frame itself breaks, so the next frame starts after it (nsTextFrame.cpp:11202-11214,
+  // Firefox 156). So where the line goes on to another item, the run counts, as white space
+  // the line ends with, which hangs (lineHangWidth): in 16px Hiragino Sans, Chrome 154 and
+  // Firefox 156 end the first line of `文字\u3000` and a span `i` after the run at 36-47px,
+  // where `i` would fit after `文字`. At the paragraph's end it stays out, as in one text.
+  // Chrome ends that line whatever the next item starts with, where a line here returns to its
+  // latest break if no break comes before that item (ENGINE_FOLLOWUPS.md). A closing mark
+  // Blink halts at an item's end stays halted, and the line goes on from there: Chrome lays
+  // out `文字」` and a span `i` in one 43.81px line at 44-47px, where one text node takes two.
+  let endHang = 0
   let itemIndex = cursor.itemIndex
   // The line's latest break before the item where no break comes before the item, where
   // a line that can't take the item's start ends, as the flat walker returns to its last
@@ -1042,6 +1072,20 @@ function stepRichInlineLine(
   for (; itemIndex < flow.items.length; itemIndex++, cursor.segmentIndex = 0, cursor.graphemeIndex = 0) {
     const item = flow.items[itemIndex]
     if (item === undefined) continue
+    // The run takes its room (endHang) before an item that takes part in the line, or that the
+    // line can end before (below), in its own item's fragment: the last one of an item that
+    // isn't one a line start consumes.
+    if (endHang > 0 && (item.establishesLine || item.walked || item.continued)) {
+      lineWidth += endHang
+      remainingWidth = safeWidth - lineWidth
+      lineHangWidth = endHang
+      if (fragments !== null) {
+        let k = fragments.length - 1
+        while (!flow.items[fragments[k]!.itemIndex]!.establishesLine) k--
+        fragments[k]!.occupiedWidth += endHang
+      }
+      endHang = 0
+    }
 
     // The line can end before a continued item that follows a break, as the run the next
     // item continues can move to the next line, and, where it has no break yet, before one that
@@ -1259,6 +1303,7 @@ function stepRichInlineLine(
           isDiscretionaryLineEnd(item.lineData.segmentFlags, breakSegmentIndex, breakGraphemeIndex) ? 0 : getHyphenRoom(item, unfitHyphenRetreat)
         ) <= safeWidth + lineFitEpsilon
       }
+      if (item.endHangs) endHang = itemLine.endTrim
       continue
     }
 

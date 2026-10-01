@@ -765,7 +765,8 @@ Rich inline (`prepareRichInline()` and its walkers, `src/rich-inline.ts`) measur
 paragraph's joined text. Measuring alone is a premise whose gap is out of scope for now, since rich inline with kerning
 between sibling spans is left for later (Part 1, The Per-Engine Rebuild And What Counts As Done): Chrome and Firefox
 kern across same-font spans, so Arial `community` + `,` fits about 1px earlier than its two widths, and Safari doesn't
-(2026-09-12). Where Pretext's plain-text walkers, given the joined text as one string, and the browser's lines for the
+(2026-09-12). The one width read across items is the halt Chrome gives a pair of fullwidth marks (CJK At An Item's
+Edge). Where Pretext's plain-text walkers, given the joined text as one string, and the browser's lines for the
 same text in one text node disagree, rich inline follows the plain-text walkers. It takes the premise that a browser
 lays spans out as it lays out their text in one text node; where browsers don't, mostly at soft hyphens, bidi controls
 and separators beside white space at a span's edge, is in ENGINE_FOLLOWUPS.md, Rich-inline item edges.
@@ -905,6 +906,31 @@ object (Blink's, WebKit's and Gecko's sources are cited at the rule in `prepareR
 On three probes that fixed 1,845 Chrome, 818 Firefox and 1,884 webkit-host cases and lost 76, 81 and 101, 241 of the
 258 losses holding a soft hyphen or bidi control beside the atomic item's white space, where the gap had made up for
 white space Pretext gets wrong there. In Firefox an atomic item's leading white space also collapses into an open run.
+
+#### CJK At An Item's Edge
+
+Three facts about span edges, in Chrome 154.0.8037.57 and Firefox 156.0.1 on macOS 27.0 at DPR 2, in 16px Hiragino Sans
+and PingFang SC (2026-09-30), which rich inline follows since #TBD. webkit-host hangs no U+3000 and halts no mark, and
+none of its cases moved.
+- A run of U+3000 that ends a span is the line's trailing white space. Where the span fits only without it, Chrome and
+  Firefox end the line after it, so a narrow letter, a box or a chip in the next span starts the next line, as in one
+  text node: `文字`, U+3000 and a span `i` take two lines at 36-47px, where `i` would fit after `文字` (Blink's
+  `HandleTrailingSpaces`, `line_breaker.cc:2447-2456` and `2518-2533`, Chromium 153; Gecko trims a frame's trailing
+  white space only where the frame itself breaks, `nsTextFrame.cpp:11202-11214`). Rich inline had kept the item's
+  width without the run and put the next item over it.
+- Chrome's `text-spacing-trim` halts a pair of fullwidth marks that a span edge splits as in one text node, whatever
+  the two spans' weights, sizes or families and with padding between them, each mark by the font of its own span, since
+  `HanKerning::Compute` reads the paragraph's text on both sides of each shaped run (`han_kerning.cc:262-320`): `文字」`
+  and a span `。文字` are 88px wide, where the two measured apart take 96px, and a 20px `「引用」` before a 16px `。` halts
+  `」` by 10px. Measured apart, `これは`, a bold `「引用」` and `。と言った` wrapped otherwise than Chrome at 68 of 142
+  widths from 60 to 200px.
+- A closing mark that Chrome halts at a span's end, where the span fits only so, stays halted where the line goes on:
+  `文字」` and a span `i` take one 43.81px line at 44-47px, where their text in one node takes two, of 40px and
+  3.81px. Rich inline did this before #TBD, and still does.
+
+On two probes of 4,212 and 2,866 cases the change fixed 1,642 Chrome and 303 Firefox cases and lost none; what it
+leaves is in ENGINE_FOLLOWUPS.md (Rich-inline item edges, CJK at an item's edge). A Chrome that stops halting across
+spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
 
 #### Objects Inside A Line
 
