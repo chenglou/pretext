@@ -36,7 +36,9 @@
 // - keep-all paragraphs, cut on their own: a Korean chat message with a mention chip, a bold run inside a word and a
 //   code span a particle follows, beside the same message without keep-all; a mention chip inside a Korean word; and
 //   Japanese whose bold run ends with a full stop, after which WebKit's check at an item boundary finds no break where
-//   one text node breaks (getWebKitBreakBetweenItems in src/line-breaks.ts);
+//   one text node breaks (getWebKitBreakBetweenItems in src/line-breaks.ts); and, cut on its own too, Japanese with a
+//   line feed between ideographs inside an item, which Firefox removes, so that under keep-all the ideographs around it
+//   are one word, which a narrow line breaks between characters, beside the same paragraph without keep-all;
 // - pre-wrap paragraphs, cut on their own: preserved spaces at an item's end and start and over three fonts, which hang
 //   across the style change, and before a padded span's end and after its start; line feeds at an item's end and start,
 //   a blank line across items and a carriage return that ends an item before a line feed that starts the next; a line
@@ -209,10 +211,12 @@ export function richTemplates(): Template[] {
     out.push(template('negative-letter-spacing', 'a line that ends at a space inside an item under negative letter spacing (src/layout.test.ts)', f, parts.map(part => span(part, f, { letterSpacing }))))
   }
   const message: Part[] = ['민수 씨, ', span('@지훈', BOLD(KOREAN_CHIP), { atomic: true, padding: 11 }), ' 오늘 ', span('회의', BOLD(KOREAN)), '는 세 시에 시작합니다. 자료는 ', span('notes.md', CODE, { padding: 7 }), '에 있어요']
+  const lineFeeds: Part[] = ['東京都渋谷区\n神南一丁目', span('営業時間\n午前十時', BOLD(JAPANESE)), '開店']
   const keepAll: ReadonlyArray<readonly [string, CssFont, readonly Part[], string, Paragraph['wordBreak']]> = [
     ['chat', KOREAN, message, 'ko', 'keep-all'], ['chat', KOREAN, message, 'ko', 'normal'],
     ['chip-in-word', KOREAN, ['안녕하세요', span('@민수', BOLD(KOREAN_CHIP), { atomic: true, padding: 11 }), '님, 반가워요'], 'ko', 'keep-all'],
     ['stop-ends-item', JAPANESE, ['日本語の', span('テキストです。', BOLD(JAPANESE)), span('次の文', ITALIC(JAPANESE)), 'は続きます'], 'ja', 'keep-all'],
+    ['line-feed-between-ideographs', JAPANESE, lineFeeds, 'ja', 'keep-all'], ['line-feed-between-ideographs', JAPANESE, lineFeeds, 'ja', 'normal'],
   ]
   for (let i = 0; i < keepAll.length; i++) {
     const [family, base, parts, lang, wordBreak] = keepAll[i]!
