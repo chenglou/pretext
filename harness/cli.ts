@@ -21,8 +21,9 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import {
-  accept, attribute, buildChange, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, observable, outsideClaims, pinning, reverseOrder, score,
-  SEED, shown, shrinkWrapShort, widthBand, type Outcome,
+  accept, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline, judge,
+  observable, outsideClaims, percent, pinning, reverseOrder, score, SEED, shown, shrinkWrapShort, tableLines, weightedShare, WIDTH_STEPS, widthBand, widthShares,
+  type Behaviour, type Draw, type Outcome, type Stratum, type WidthTally,
 } from './score.ts'
 import { bench, ROWS } from './bench/run.ts'
 import { srcOf } from './bench/lib.ts'
@@ -88,10 +89,6 @@ function loadCases(files: readonly string[]): { cases: Case[]; sets: Map<string,
 
 function applies(c: Case, browser: BrowserKind): boolean {
   return c.browsers === undefined || c.browsers.includes(browser) || c.browsers.includes(BROWSER[browser].cases)
-}
-
-function percent(part: number, whole: number): string {
-  return whole === 0 ? '-' : `${(100 * part / whole).toFixed(2)}%`
 }
 
 function describe(c: Case, outcome: Outcome): string {
@@ -194,15 +191,18 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   const counts = { pass: 0, count: 0, breaks: 0, error: 0 }
   const outcomes = new Map<string, Outcome>()
   const byId = new Map<string, Case>()
-  const draws: Array<{ group: string; weight: number; pass: boolean }> = []
-  const drawsInClaims: Array<{ group: string; weight: number; pass: boolean }> = []
+  const draws: Draw[] = []
+  const table = new Map<string, Stratum>()
+  const outsideReasons = new Set<string>()
   let sampleWeight = 0
   let standInWeight = 0
-  let outsideWeight = 0
-  // Per set of the behaviour catalog (catalog, facts, rich): whether each behaviour passes at every width away from the
-  // edges where its lines change, and at the edges.
-  const behaviours = new Map<string, Map<string, { inside: boolean; edges: boolean }>>()
+  // The behaviours of each set of the behaviour catalog (catalog, facts, rich).
+  const behaviours = new Map<string, Map<string, Behaviour>>()
   let shortBubbles = 0
+  // Line widths against the recorded ones, over the lines of passing cases: of the sample's draws inside the claims, and
+  // of every case.
+  const sampleWidths: WidthTally = { lines: 0, over: WIDTH_STEPS.map(() => 0), inexact: 0 }
+  const allWidths: WidthTally = { lines: 0, over: WIDTH_STEPS.map(() => 0), inexact: 0 }
   let calls = 0
   let units = 0
   for (let i = 0; i < pinned.length; i++) {
@@ -213,28 +213,32 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
     const outcome = score(recording, prediction)
     outcomes.set(c.id, outcome)
     counts[outcome.status]++
+    const text = caseText(c)
     if ('lines' in prediction) {
       calls += prediction.prepareCalls
-      units += caseText(c).length
+      units += text.length
     }
+    const pass = outcome.status === 'pass'
+    const wrapped = 'lines' in recording && recording.lines.length > 1
+    const short = pass && shrinkWrapShort(recording, prediction)
+    if (short) shortBubbles++
+    const wholePixels = BROWSER[browser].wholePixelBoxes ? text : null
+    if (pass) countWidths(allWidths, recording, prediction, wholePixels)
     if (c.sample !== undefined) {
-      const draw = { group: c.sample.group, weight: c.sample.weight, pass: outcome.status === 'pass' }
-      draws.push(draw)
+      const outside = outsideClaims(c, prediction)
+      draws.push({ group: c.sample.group, weight: c.sample.weight, pass, inClaims: outside === null, wrapped, height: pass || outcome.status === 'breaks' })
       sampleWeight += c.sample.weight
       if (c.sample.standIn === true) standInWeight += c.sample.weight
-      if (outsideClaims(c, prediction)) outsideWeight += c.sample.weight
-      else drawsInClaims.push(draw)
+      countDraw(table, drawRows(c, outside), pass, wrapped, short)
+      if (outside !== null) outsideReasons.add(outside)
+      else if (pass) countWidths(sampleWidths, recording, prediction, wholePixels)
     }
     if (c.behaviour !== undefined) {
       const set = c.family.split('/')[0]!
       let list = behaviours.get(set)
       if (list === undefined) behaviours.set(set, list = new Map())
-      const entry = list.get(c.behaviour) ?? { inside: true, edges: true }
-      if (c.edge === true) entry.edges &&= outcome.status === 'pass'
-      else entry.inside &&= outcome.status === 'pass'
-      list.set(c.behaviour, entry)
+      countBehaviour(list, c, wrapped, pass)
     }
-    if (outcome.status === 'pass' && shrinkWrapShort(recording, prediction)) shortBubbles++
   }
   const verdict = judge(outcomes, accepted, varying, ids, o.partial)
   const updated = o.accept !== ''
@@ -251,19 +255,22 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   let runs = 0
   for (const entry of varying.values()) if (entry.kind === 'runs') runs++
   if (varying.size > 0) out.push(`  varying (harness/varying): ${runs} that vary between runs, predicted but not judged (${verdict.varying.pass} pass, ${verdict.varying.fail} fail); ${varying.size - runs} that move with what was predicted before, judged, and skipped by the gate's reverse-order check`)
+  // The sample: the weighted share right over every draw and over those inside the claims, always together; the same
+  // where the browser wraps, since a paragraph of one line nearly always passes; the share with a wrong height; then
+  // the table, which counts draws one each.
   const head = headline(draws)
-  const inClaims = headline(drawsInClaims)
-  if (head !== null) out.push(`  real-usage sample: ${(100 * head.share).toFixed(2)}% of real paragraphs right, 95% interval ${(100 * head.low).toFixed(2)}-${(100 * head.high).toFixed(2)}% (${draws.length} draws, ${percent(standInWeight, sampleWeight)} of their weight stand-ins; macOS rendering only)`)
-  if (inClaims !== null && outsideWeight > 0) out.push(`    ${percent(outsideWeight, sampleWeight)} of the weight is outside what Pretext claims (break-all, system-ui); ${(100 * inClaims.share).toFixed(2)}% right without it, 95% interval ${(100 * inClaims.low).toFixed(2)}-${(100 * inClaims.high).toFixed(2)}%`)
-  for (const [set, list] of [...behaviours].sort((x, y) => (x[0] < y[0] ? -1 : 1))) {
-    let modelled = 0
-    let exact = 0
-    for (const entry of list.values()) {
-      if (entry.inside) modelled++
-      if (entry.inside && entry.edges) exact++
-    }
-    out.push(`  ${set}: ${modelled} of ${list.size} behaviours modelled, ${exact} of them also 1/64 px either side of where the lines change`)
+  if (head !== null) {
+    const claimed = headline(draws.filter(draw => draw.inClaims))
+    const interval = (h: { low: number; high: number }): string => `95% interval ${(100 * h.low).toFixed(2)}-${(100 * h.high).toFixed(2)}%`
+    const outside = weightedShare(draws, () => true, draw => !draw.inClaims)
+    out.push(`  real-usage sample: ${percent(head.share, 1)} of real paragraphs right, ${interval(head)} (${draws.length} draws, ${percent(standInWeight, sampleWeight)} of their weight stand-ins; macOS rendering only; the intervals cover sampling error alone, not the guesses among weights.json's shares)`)
+    out.push(`    in claims: ${claimed === null ? '-' : `${percent(claimed.share, 1)} right, ${interval(claimed)}`}; ${outside} of the weight is outside what Pretext claims${outsideReasons.size === 0 ? '' : ` (${[...outsideReasons].sort().join(', ')})`}`)
+    out.push(`    where the browser wraps, ${weightedShare(draws, () => true, draw => draw.wrapped)} of the weight: ${weightedShare(draws, draw => draw.wrapped, draw => draw.pass)} right, ${weightedShare(draws, draw => draw.wrapped && draw.inClaims, draw => draw.pass)} in claims`)
+    out.push(`    a wrong line count or no prediction, so a wrong height: ${weightedShare(draws, () => true, draw => !draw.height)} of real paragraphs, ${weightedShare(draws, draw => draw.inClaims, draw => !draw.height)} in claims`)
+    out.push('    draws counted one each, whatever their weight (wrapped: the browser lays the draw out on more than one line; narrow: it passes, and a box as wide as its widest predicted line, rounded up, is narrower than the browser\'s widest line):')
+    out.push(...tableLines(table).map(line => `      ${line}`))
   }
+  for (const [set, list] of [...behaviours].sort((x, y) => (x[0] < y[0] ? -1 : 1))) out.push(`  ${behaviourLine(set, list)}`)
   const reasons = [...verdict.byReason].sort((x, y) => y[1].length - x[1].length)
   for (let i = 0; i < reasons.length; i++) {
     const [reason, list] = reasons[i]!
@@ -273,6 +280,8 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   }
   if (verdict.changed.length > 0) out.push(`  ${verdict.changed.length} accepted failures changed kind (not blocking): ${shown(verdict.changed)}`)
   out.push(`  shrink-wrap, report only: ${shortBubbles} passing cases predict a widest line narrower than the browser's`)
+  const inexact = allWidths.inexact === 0 ? '' : `; left out, ${head === null ? '' : `${sampleWidths.inexact} and `}${allWidths.inexact} lines that end in a space, recorded in whole pixels`
+  out.push(`  line widths, report only: more than ${WIDTH_STEPS.join(' / ')} px from the recorded width are ${head === null ? '' : `${widthShares(sampleWidths)} of the sample's passing draws in claims, and `}${widthShares(allWidths)} of every passing case${inexact}`)
   out.push(`  Canvas: ${units === 0 ? '-' : (1000 * calls / units).toFixed(1)} measureText calls per 1,000 units while preparing`)
   const blocks = checkBlocks(browser, job.results, plan.unrecorded, verdict, updated, id => describe(byId.get(id)!, outcomes.get(id)!))
   for (let i = 0; i < blocks.length; i++) out.push(`  ${blocks[i]}`)

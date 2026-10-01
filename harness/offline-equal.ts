@@ -21,7 +21,8 @@ import type { LayoutCursor, PrepareOptions } from '../src/layout.ts'
 import type { RichInlineBox, RichInlineCursor, RichInlineItem } from '../src/rich-inline.ts'
 import { labels, MESSAGE_FAMILIES, reader, richItems as benchItems, shapes, STYLE } from './bench/texts.ts'
 import { drawCases, PROFILES, standInBrowser, standInWidth, type Profile } from './invariants.ts'
-import { canvasFont, isRich, prepareOptions, richItems, richOptions } from './predict.ts'
+import { canvasFont, prepareOptions, richItems, richOptions } from './predict.ts'
+import { isRich } from './types.ts'
 
 const flag = (name: string): string | undefined => process.argv.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
 const profile = flag('profile') as Profile

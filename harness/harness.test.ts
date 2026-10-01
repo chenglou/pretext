@@ -12,8 +12,9 @@ import { groupLines, recordedLines, scanLineEnds, searchLineEnds, type RectsAt }
 import { bundle, documents, LIB, type Job } from './run.ts'
 import { box } from './sets/build.ts'
 import {
-  accept, attribute, buildChange, checkBlocks, freshRecordings, gateBlocks, gateSample, headline, judge, libraryFaults, pinning, predictionChange, reverseOrder, score, SEED,
-  type Outcome, type Verdict,
+  accept, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline, judge,
+  libraryFaults, outsideClaims, pinning, predictionChange, reverseOrder, score, SEED, strata, tableLines, weightedShare, widthShares,
+  type Behaviour, type Draw, type Outcome, type Stratum, type Verdict, type WidthTally,
 } from './score.ts'
 import {
   acceptedPath, assertSameEnvironment, caseProblem, historyPath, parseRecording, readAccepted, readHistory, readRecordings, readVarying, recordingsPath, recordingText,
@@ -178,6 +179,101 @@ describe('the pass rule', () => {
     for (let i = 0; i < 9; i++) draws.push({ group: 'soft hyphens', weight: 0.1 / 9, pass: false })
     const head = headline(draws)!
     expect([head.share, head.low, head.high].map(x => x.toFixed(9))).toEqual(['0.900000000', '0.900000000', '0.900000000'])
+  })
+})
+
+describe('what check prints beside the headline', () => {
+  test('the share right where the browser wraps, and the share with a wrong height, weigh draws as the headline does: paragraphs of one line, half the sample, would halve the rate at which wrapped text fails', () => {
+    const draw = (weight: number, wrapped: boolean, status: Outcome['status'], inClaims = true): Draw => ({ group: 'chat', weight, pass: status === 'pass', inClaims, wrapped, height: status === 'pass' || status === 'breaks' })
+    const draws = [draw(0.5, false, 'pass'), draw(0.3, true, 'pass'), draw(0.05, true, 'breaks'), draw(0.05, true, 'count'), draw(0.1, true, 'error', false)]
+    expect(weightedShare(draws, () => true, d => d.pass)).toBe('80.00%')
+    expect(weightedShare(draws, d => d.wrapped, d => d.pass)).toBe('60.00%')
+    expect(weightedShare(draws, d => d.wrapped && d.inClaims, d => d.pass)).toBe('75.00%')
+    // A break on the wrong line keeps the height; a wrong count or no prediction loses it.
+    expect(weightedShare(draws, () => true, d => !d.height)).toBe('15.00%')
+    expect(weightedShare(draws, d => d.inClaims, d => !d.height)).toBe('5.56%')
+    expect(weightedShare([], () => true, d => d.pass)).toBe('-')
+  })
+
+  test('a draw counts once in its script\'s row and in each of its styles\', whatever its weight, and one outside the claims under the reason it is: a script failing one wrapped paragraph in fifteen would vanish under its 4% share', () => {
+    const plain = { ...paragraphCase(TEXT), family: 'sample/chat/text/en' }
+    const font = plain.paragraph.font
+    const styled: Case = {
+      ...plain, family: 'sample/documents/soft-hyphens/ja',
+      paragraph: {
+        ...plain.paragraph, whiteSpace: 'pre-wrap', wordBreak: 'keep-all', letterSpacing: 0.5,
+        runs: [{ text: '日本\u00AD語 \u2764\uFE0F', node: 'text', font, letterSpacing: 0.5, wordSpacing: 0, lang: null }, { text: 'code', node: 'span', font, letterSpacing: 0, wordSpacing: 0, lang: null, padding: 6 }],
+      },
+    }
+    expect(strata(plain)).toEqual(['script en'])
+    expect(strata(styled)).toEqual(['script ja', 'letter spacing', 'soft hyphens', 'pre-wrap', 'keep-all', 'rich inline', 'emoji'])
+    // A text-presentation character such as (c) isn't emoji; a flag is.
+    expect(strata({ ...plain, paragraph: { ...plain.paragraph, runs: [{ ...plain.paragraph.runs[0]!, text: '\u00A9 \u{1F1EF}\u{1F1F5}' }] } })).toEqual(['script en', 'emoji'])
+    // The adapter's own reason names what is outside the claims, and a system-ui font list is outside whatever it predicts.
+    const systemUi = { ...plain, paragraph: { ...plain.paragraph, font: { ...font, family: 'system-ui, sans-serif' } } }
+    expect(outsideClaims(plain, predicted(TEXT, STARTS))).toBeNull()
+    expect(outsideClaims(plain, { unsupported: 'word-break break-all' })).toBe('word-break break-all')
+    expect(outsideClaims(systemUi, predicted(TEXT, STARTS))).toBe('a system-ui font list')
+    const table = new Map<string, Stratum>()
+    for (let i = 0; i < 14; i++) countDraw(table, drawRows(styled, null), true, true, i === 0)
+    countDraw(table, drawRows(styled, null), false, true, false)
+    for (let i = 0; i < 30; i++) countDraw(table, drawRows(plain, null), true, false, false)
+    countDraw(table, drawRows(systemUi, 'a system-ui font list'), false, true, false)
+    expect(tableLines(table)).toEqual([
+      '                                       draws  wrong            wrapped  wrong            narrow',
+      'in claims                                 45      1    2.22%       15      1    6.67%       1    2.22%',
+      'script en                                 30      0    0.00%        0      0        -       0    0.00%',
+      'script ja                                 15      1    6.67%       15      1    6.67%       1    6.67%',
+      'letter spacing                            15      1    6.67%       15      1    6.67%       1    6.67%',
+      'soft hyphens                              15      1    6.67%       15      1    6.67%       1    6.67%',
+      'pre-wrap                                  15      1    6.67%       15      1    6.67%       1    6.67%',
+      'keep-all                                  15      1    6.67%       15      1    6.67%       1    6.67%',
+      'rich inline                               15      1    6.67%       15      1    6.67%       1    6.67%',
+      'emoji                                     15      1    6.67%       15      1    6.67%       1    6.67%',
+      'outside claims: a system-ui font list      1      1  100.00%        1      1  100.00%       0    0.00%',
+    ])
+  })
+
+  test('a passing case\'s line widths are counted by how far each is from the recorded one, but for a line that ends in a space where the browser gives the space\'s box in whole pixels: a build a pixel off on every line would report as the one before it, or WebKit\'s pre-wrap lines, recorded up to a pixel short, as the library\'s error', () => {
+    const { recording } = layOut(TEXT, STARTS)
+    const prediction = predicted(TEXT, STARTS)
+    if (!('lines' in prediction)) throw new Error('unreachable')
+    // Recorded 68, 68, 76 and 88 px; each line but the last ends in a space, which the recorder took off.
+    const widths = [68.04, 67.7, 77.5, 88]
+    for (let i = 0; i < widths.length; i++) prediction.lines[i]!.width = widths[i]!
+    const tally: WidthTally = { lines: 0, over: [0, 0, 0], inexact: 0 }
+    countWidths(tally, recording, prediction, null)
+    expect(tally).toEqual({ lines: 4, over: [2, 1, 1], inexact: 0 })
+    expect(widthShares(tally)).toBe('50.00% / 25.00% / 25.00% of the 4 lines')
+    const wholePixels: WidthTally = { lines: 0, over: [0, 0, 0], inexact: 0 }
+    countWidths(wholePixels, recording, prediction, TEXT)
+    expect(wholePixels).toEqual({ lines: 1, over: [0, 0, 0], inexact: 3 })
+    expect(widthShares({ lines: 0, over: [0, 0, 0], inexact: 0 })).toBe('- / - / - of the 0 lines')
+  })
+
+  test('a behaviour counts at 24 px and wider only where the browser wraps one of its cases there, and at the edges only where its lines change there: two thirds of the catalog would count as modelled at real widths on one line at 100,000 px', () => {
+    const list = new Map<string, Behaviour>()
+    const count = (behaviour: string, width: number, edge: boolean, wrapped: boolean, pass: boolean): void => {
+      const c = paragraphCase(TEXT)
+      countBehaviour(list, { ...c, behaviour, paragraph: { ...c.paragraph, width }, ...(edge ? { edge: true as const } : {}) }, wrapped, pass)
+    }
+    // Wrapped only under 24 px, where it fails; on one line at 100,000 px.
+    count('one line', 1, false, true, false)
+    count('one line', 100000, false, false, true)
+    // Fails under 24 px and passes where it wraps above, edges included.
+    count('wraps', 12, false, true, false)
+    count('wraps', 40, false, true, true)
+    count('wraps', 60.015625, true, false, true)
+    count('wraps', 100000, false, false, true)
+    // A hard break: two lines at any width, so no edge at 24 px or wider.
+    count('hard break', 100000, false, true, true)
+    // Right inside both layouts, wrong 1/64 px from where the lines change.
+    count('edge fails', 40, false, true, true)
+    count('edge fails', 59.984375, true, true, false)
+    // Wrong where it wraps.
+    count('fails', 40, false, true, false)
+    count('fails', 59.984375, true, true, true)
+    expect(behaviourLine('catalog', list)).toBe('catalog: 2 of 5 behaviours modelled, 1 of them also 1/64 px either side of where the lines change; at 24 px and wider, 3 modelled of the 4 the browser wraps there, 1 also at the edges of the 3 whose lines change there')
   })
 })
 
@@ -525,6 +621,45 @@ describe('the commands, with a stand-in browser', () => {
     expect(again.printed()).toContain('\n  accepted 1 (25.00% of real paragraphs): a written reason\n')
   })
 
+  test('check prints the share right over every draw and inside the claims together, the same where the browser wraps, the table, and behaviours over their cases at 24 px and wider: one blended number would hide break-all, a failing script and the widths no layout has', async () => {
+    const root = folder('report', { pass: laidOut, fail: laidOut, outside: laidOut, narrow: laidOut, wide: laidOut, edge: laidOut }, { accepted: '## why\nfail breaks\noutside error\nnarrow breaks\n' })
+    const sample = (id: string, weight: number): Case => ({ ...cases([id])[0]!, family: 'sample/chat/text/en', sample: { group: 'chat', weight } })
+    const behaviour = (id: string, width: number, edge: boolean): Case => {
+      const c = cases([id])[0]!
+      return { ...c, family: 'catalog/spaces', behaviour: 'a space', paragraph: { ...c.paragraph, width }, ...(edge ? { edge: true as const } : {}) }
+    }
+    const list = [sample('pass', 0.5), sample('fail', 0.25), sample('outside', 0.25), behaviour('narrow', 1, false), behaviour('wide', 100, false), behaviour('edge', 50, true)]
+    const predict = (c: Case): Prediction => (c.id === 'fail' || c.id === 'narrow' ? wrong : c.id === 'outside' ? { unsupported: 'word-break break-all' } : right)
+    const io = browser(root, predict)
+    expect((await check('chrome', list, options, io)).blocked).toBe(false)
+    const printed = io.printed()
+    expect(printed).toContain('  real-usage sample: 50.00% of real paragraphs right, 95% interval ')
+    expect(printed).toContain('\n    in claims: 66.67% right, 95% interval ')
+    expect(printed).toContain('; 25.00% of the weight is outside what Pretext claims (word-break break-all)\n')
+    expect(printed).toContain('\n    where the browser wraps, 100.00% of the weight: 50.00% right, 66.67% in claims\n')
+    expect(printed).toContain('\n    a wrong line count or no prediction, so a wrong height: 25.00% of real paragraphs, 0.00% in claims\n')
+    expect(printed).toContain('\n      in claims                                 2      1   50.00%        2      1   50.00%       1   50.00%\n')
+    expect(printed).toContain('\n      outside claims: word-break break-all      1      1  100.00%        1      1  100.00%       0    0.00%\n')
+    expect(printed).toContain('\n  catalog: 0 of 1 behaviours modelled, 0 of them also 1/64 px either side of where the lines change; at 24 px and wider, 1 modelled of the 1 the browser wraps there, 1 also at the edges of the 1 whose lines change there\n')
+    // The stand-in predicts every width as 0, on the four lines of each of the three passing cases, one of them a draw.
+    expect(printed).toContain('\n  line widths, report only: more than 0.05 / 0.5 / 1 px from the recorded width are 100.00% / 100.00% / 100.00% of the 4 lines of the sample\'s passing draws in claims, and 100.00% / 100.00% / 100.00% of the 12 lines of every passing case\n')
+    // With nothing outside the claims, both shares still print.
+    const inside = browser(root, c => (c.id === 'fail' || c.id === 'narrow' || c.id === 'outside' ? wrong : right))
+    await check('chrome', list, options, inside)
+    expect(inside.printed()).toContain('\n    in claims: 50.00% right, 95% interval 0.00-100.00%; 0.00% of the weight is outside what Pretext claims\n')
+    // Without a draw, as under --cases, the widths line has no sample half.
+    const noDraws = browser(root, () => right)
+    await check('chrome', list.slice(3), options, noDraws)
+    expect(noDraws.printed()).toContain('\n  line widths, report only: more than 0.05 / 0.5 / 1 px from the recorded width are 100.00% / 100.00% / 100.00% of the 12 lines of every passing case\n')
+    expect(noDraws.printed()).not.toContain('real-usage sample')
+    // webkit-host's recorded widths are in whole pixels on the three lines of each case that end in a space.
+    writeRecordings(recordingsPath(root, 'webkit-host'), { env: 'test', recordings: new Map(list.map(c => [c.id, laidOut])) })
+    writeFileSync(acceptedPath(root, 'webkit-host'), '## why\nfail breaks\noutside error\nnarrow breaks\n')
+    const webkit = browser(root, predict)
+    await check('webkit-host', list, options, webkit)
+    expect(webkit.printed()).toContain('\n  line widths, report only: more than 0.05 / 0.5 / 1 px from the recorded width are 100.00% / 100.00% / 100.00% of the 1 lines of the sample\'s passing draws in claims, and 100.00% / 100.00% / 100.00% of the 3 lines of every passing case; left out, 3 and 9 lines that end in a space, recorded in whole pixels\n')
+  })
+
   test('check predicts every case, and blocks on a line API that disagrees where nothing is pinned and on a case with no recording: a virtualized list would size rows for lines it doesn\'t paint', async () => {
     const root = folder('unpinned', { pinned: laidOut, blank: { lines: [{ first: -1, last: -1, width: 0 }], height: 20 } }, { history: ['history'] })
     const disagrees = { ...right, disagreement: 'layout() gives 3 lines, height 60; walkLineRanges 4 lines' } as Prediction
@@ -640,18 +775,18 @@ describe('the commands, with a stand-in browser', () => {
     expect(again.printed()).toContain('chrome drift against harness/recordings (same environment): 0 cases laid out otherwise, 0 new page history, 0 newly recorded, 0 no longer recorded')
   })
 
-  test('equal counts a moved line, other line text, another disagreement and another Canvas call after preparing as a difference, and lists a case that varies between runs apart: a change to src/ or the adapter would show nothing, or main against itself differ', async () => {
+  test('equal counts a moved line, a line width a hundredth of a pixel off, other line text, another disagreement and another Canvas call after preparing as a difference, and lists a case that varies between runs apart: a change to src/ or the adapter would show nothing, or main against itself differ', async () => {
     const root = folder('equal', {}, { varying: '## system-ui\nlabel runs\n' })
     // This tree's build is "here"; the ref, a src/ directory, predicts `right` for every case.
     const here: Record<string, Prediction> = {
       line: wrong, text: { ...right, textHash: 1 } as Prediction, disagrees: { ...right, disagreement: 'measureLineStats gives 3 lines' } as Prediction,
-      measures: { ...right, lineCalls: 2 } as Prediction, label: wrong,
+      measures: { ...right, lineCalls: 2 } as Prediction, label: wrong, width: { ...right, lines: 'lines' in right ? right.lines.map(line => ({ ...line, width: 0.01 })) : [] } as Prediction,
     }
     const io = browser(root, (c, job) => (job.lib === 'here' ? here[c.id] ?? right : right))
     const list = cases(['same', ...Object.keys(here)])
     expect(await equal('chrome', list, new Map(list.map(c => [c.id, 'smoke'])), LIB, { ...options, lib: 'here' }, io)).toBe(true)
-    expect(io.printed()).toContain(`chrome: 4 of 6 predictions differ from ${LIB}`)
-    for (const line of ['line  test  lines', 'text  test  text', 'disagrees  test  disagreement', 'measures  test  Canvas calls after preparing']) expect(io.printed()).toContain(`\n  ${line}`)
+    expect(io.printed()).toContain(`chrome: 5 of 7 predictions differ from ${LIB}`)
+    for (const line of ['line  test  lines', 'text  test  text', 'disagrees  test  disagreement', 'measures  test  Canvas calls after preparing', 'width  test  widths']) expect(io.printed()).toContain(`\n  ${line}`)
     expect(io.printed()).toContain('  and 1 that vary between runs (harness/varying), not counted: label  test  lines')
     const same = browser(root, () => right)
     expect(await equal('chrome', list, new Map(list.map(c => [c.id, 'smoke'])), LIB, { ...options, lib: 'here' }, same)).toBe(false)

@@ -60,7 +60,7 @@ judgement; one outside them needs the maintainer first.
 ### Implementation notes
 
 - Plain objects and functions, not classes; a line walker's state in its own locals, with integer loop bounds: a class
-  field doubles Firefox 156's compile time for the whole bundle, V8 boxes a captured number, and JavaScriptCore types an
+  field doubles Firefox 156's time to evaluate the bundle, V8 boxes a captured number, and JavaScriptCore types an
   infinite bound as a double (`RESEARCH.md`, Keeping Work Bounded).
 - `layout()` is the resize hot path: no Canvas calls, no string work, no gratuitous allocations. `prepare()` stays the
   opaque fast handle, paying for nothing `layout()` doesn't read. The per-segment break kinds (`SegmentBreakKind`) aren't
