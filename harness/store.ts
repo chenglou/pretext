@@ -9,6 +9,8 @@
 // - harness/varying/<browser>.txt: the cases whose predictions move with the browser's state, under `## <reason>`
 //   headings, one `<id> <kind>` per line: `runs` for one that moves between runs, predicted and printed but never
 //   judged, and `order` for one that moves only with what was predicted before it, judged like any other.
+// - harness/widths/<browser>.txt: the passing cases with a line whose predicted width is more than 0.05 px from the
+//   recorded one, under `## <reason>` headings, one `<id> <px>` per line: the largest such distance, to two places.
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { BrowserKind, Case, Failure, Recording, RecordedLine } from './types.ts'
 
@@ -47,6 +49,7 @@ export const recordingsPath = (root: string, browser: BrowserKind): string => `$
 export const historyPath = (root: string, browser: BrowserKind): string => `${root}/recordings/${browser}.history.txt`
 export const acceptedPath = (root: string, browser: BrowserKind): string => `${root}/accepted/${browser}.txt`
 export const varyingPath = (root: string, browser: BrowserKind): string => `${root}/varying/${browser}.txt`
+export const widthsPath = (root: string, browser: BrowserKind): string => `${root}/widths/${browser}.txt`
 
 function readLines(path: string): string[] | null {
   try {
@@ -156,17 +159,47 @@ export function readVarying(path: string): Varying {
   return varying
 }
 
-export function writeAccepted(path: string, accepted: Accepted): void {
+// A list's lines, `<id> <word>`, under their reasons, both sorted.
+function writeUnderReasons(path: string, entries: Iterable<[string, { reason: string; word: string }]>): void {
   const byReason = new Map<string, string[]>()
-  for (const [id, entry] of accepted) {
+  for (const [id, entry] of entries) {
     let list = byReason.get(entry.reason)
     if (list === undefined) byReason.set(entry.reason, list = [])
-    list.push(`${id} ${entry.status}`)
+    list.push(`${id} ${entry.word}`)
   }
   const reasons = sortedById([...byReason.keys()])
   let text = ''
   for (let i = 0; i < reasons.length; i++) text += `${i > 0 ? '\n' : ''}## ${reasons[i]}\n${sortedById(byReason.get(reasons[i]!)!).join('\n')}\n`
   writeFileSync(path, text)
+}
+
+export function writeAccepted(path: string, accepted: Accepted): void {
+  const entries: Array<[string, { reason: string; word: string }]> = []
+  for (const [id, entry] of accepted) entries.push([id, { reason: entry.reason, word: entry.status }])
+  writeUnderReasons(path, entries)
+}
+
+// A listed width: the largest distance between a passing case's predicted line widths and its recorded ones, in px to
+// two places as the file holds it, and the reason it was accepted under.
+export type Widths = Map<string, { reason: string; gap: string }>
+
+// null without a file: that browser's widths aren't judged.
+export function readWidths(path: string): Widths | null {
+  if (readLines(path) === null) return null
+  const widths: Widths = new Map()
+  const entries = readUnderReasons(path, 2)
+  for (let i = 0; i < entries.length; i++) {
+    const [id, gap] = entries[i]!.words as [string, string]
+    if (!/^\d+\.\d\d$/.test(gap)) throw new Error(`${path}: ${id} has width ${gap}, not px to two places`)
+    widths.set(id, { reason: entries[i]!.reason, gap })
+  }
+  return widths
+}
+
+export function writeWidths(path: string, widths: Widths): void {
+  const entries: Array<[string, { reason: string; word: string }]> = []
+  for (const [id, entry] of widths) entries.push([id, { reason: entry.reason, word: entry.gap }])
+  writeUnderReasons(path, entries)
 }
 
 // ---- Cases ----

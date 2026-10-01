@@ -29,7 +29,8 @@ wrong line count), `breaks` (the right count with a character on the wrong line)
 check, whether a bubble sized to the predicted widest line, rounded up, is at least as wide as the browser's widest
 line, and the share of lines whose predicted width is more than 0.05, 0.5 and 1 px from the recorded one. Between two
 builds widths are compared exactly: to `equal <ref>` a line width that differs at all is a difference, on every case
-(Proving "no change"). The library's consistency blocks on every case, recorded or not: the line APIs (`layout()`,
+(Proving "no change"), and the gate holds each passing case's widths to where they stand against its recording (Line
+widths). The library's consistency blocks on every case, recorded or not: the line APIs (`layout()`,
 `measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`, `layoutNextLine()`, `layoutWithLines()`,
 `materializeLineRange()` and their rich-inline counterparts) must agree on lines, widths and text, and none may call
 `measureText` after preparing. A rich fragment's text is `materializeLineRange()`'s over its cursors in its item's own
@@ -157,10 +158,11 @@ reasons that cite a `layout.test.ts` line point at the files of main before #340
 
 AGENTS.md's Validation says when to run `repin`, `check`, `gate` and `bench`. `gate` adds a prediction in reverse order
 (a paragraph mustn't wrap differently because of what was prepared before it), 1,000 seeded cases recorded again (the
-recordings must still describe the browser), and each new failure recorded and predicted alone, to attribute it.
-`record --only-new` records new cases, `check --accept="<reason>"` puts the new failures on the accepted list under that
-reason and drops the entries that pass again, and `explain` shows one case, or a paragraph given with `--text`, line by
-line against the browser.
+recordings must still describe the browser), each new failure recorded and predicted alone, to attribute it, and the
+passing cases' line widths against the widths list (Line widths). `record --only-new` records new cases,
+`check --accept="<reason>"` puts the new failures on the accepted list under that reason and drops the entries that pass
+again, `gate --accept-widths="<reason>"` rewrites the widths list, and `explain` shows one case, or a paragraph given
+with `--text`, line by line against the browser.
 
 ## Accepted and varying lists
 
@@ -188,6 +190,30 @@ with page history, `recordings/<browser>.history.txt`, are kept across every rec
 webkit-host's 87 (2026-09-24), and without the carried list 33 cases would have blocked when Firefox went to 156.0.1
 (2026-09-25).
 
+## Line widths
+
+`check` passes a change that leaves every line where it was and moves its width, so the gate holds the passing cases'
+widths where they stand. `widths/<browser>.txt` lists each passing case with a line whose predicted width is more than
+0.05 px from the recorded one, with the largest such distance in px, under a written reason. The gate blocks on a
+passing case further from its recording than listed, and on one closer, until `gate --accept-widths="<reason>"` rewrites
+the list: the cases further off go under the new reason, the closer ones keep their own, and the diff shows each
+distance before and after. A planted defect that kept a collapsed space's width on the lines it ends left `check`'s
+counts as they were and blocked the gate on 7,247 Chrome cases (2026-09-30).
+
+The list began as where main stood, 4,383 cases in Chrome, 3,548 in Firefox and 4,557 in webkit-host of the 37,000 to
+40,000 judged, under one reason that names no cause: a baseline, not an explanation. Part of it is the recording's, not
+the library's (Bounds and blind spots): a padded span's padding at a line's end, and in webkit-host the lines that end
+in a space, recorded in whole pixels, which alone put 1,878 of its cases on the list. The gate judges those lines like
+any other, since a case is held to where it stands, whatever put it there.
+
+Only a prediction that comes out the same in every run is judged. A case on the varying list isn't, nor one whose
+prediction differs at all in the gate's reverse order, nor one outside what Pretext claims: Canvas resolves a
+`system-ui` font list otherwise in some runs, and webkit-host gave one or both of two Amharic draws other widths in 3 of
+9 runs. Over six fresh runs in check's order and four in reverse, every pairing gave each judged case the same widths in
+all three browsers, and three fresh gates per browser held (2026-09-30). A browser with no list, as installed Safari,
+isn't judged. Like the recordings, a list counts only on the machine setup it was made under: rewrite it after
+`repin --write`, and on another Mac.
+
 ## Proving "no change"
 
 A cleanup changes nothing only when every tool says so, run on old and new with the same inputs: `equal main`
@@ -196,7 +222,8 @@ harness/invariants.test.ts`) and the bench's floors.
 
 - `equal` compares each case's predictions in the two builds, pinned or not: the lines, each line's width exactly, the
   line text, the line APIs' disagreements and the Canvas calls after preparing. So a change that moves only widths,
-  which `check` never fails on, still shows there.
+  which `check` never fails on, still shows there. In webkit-host it can also show one of two `system-ui` draws,
+  `sample-19fdc5774f8f01ab` and `sample-6ca83f78f802bc2a`, as `widths` between two runs of one build (Line widths).
 - An offline replay detects change but isn't an oracle: its stand-in Canvas gives each character a width from a
   formula, moved a little by each pair of neighbouring characters (`offline-equal.ts`), so it can't fail on shaping,
   painting or string storage.

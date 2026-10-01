@@ -5,7 +5,7 @@
 // character (observe.ts). A right count with a wrong break is a failure of its own kind, 'breaks': main before #340
 // passed 4.5-8.1% of its census cases that way by accident.
 import { createRng } from './sets/build.ts'
-import { caseText, recordingText, type Varying } from './store.ts'
+import { caseText, recordingText, type Varying, type Widths } from './store.ts'
 import { BROWSER, isRich, type BrowserKind, type Case, type Failure, type Prediction, type Recording, type Status } from './types.ts'
 
 export type Outcome = { status: Status; line: number; detail: string }
@@ -354,6 +354,52 @@ export function behaviourLine(set: string, list: ReadonlyMap<string, Behaviour>)
   return `${set}: ${modelled} of ${list.size} behaviours modelled, ${exact} of them also 1/64 px either side of where the lines change; at 24 px and wider, ${wide} modelled of the ${wraps} the browser wraps there, ${wideExact} also at the edges of the ${edged} whose lines change there`
 }
 
+// ---- Line widths in the gate ----
+//
+// check judges no width, so a change that leaves every line where it was and moves its width passes it. The gate holds
+// each passing case's widths to where they stand: harness/widths lists the cases with a line more than 0.05 px from its
+// recording, with that distance, and a case further from its recording than listed, or closer, blocks until the list
+// says so. A build's predictions of the judged cases come out the same in every run: six fresh runs of each pinned
+// browser gave every one of them the same widths (2026-09-30), once the predictions that move with the browser's state
+// are left out (cli.ts).
+
+// A passing case's largest distance between a predicted line width and the recorded one as the list holds it, px to
+// two places, or null within the smallest of WIDTH_STEPS. Every line counts, the ones a browser records in whole pixels
+// too (countWidths): the list holds a case to where it stands, whatever put it there.
+export function widestGap(recording: Recording, prediction: Prediction): string | null {
+  if ('error' in recording || !('lines' in prediction)) return null
+  let most = 0
+  for (let i = 0; i < recording.lines.length; i++) most = Math.max(most, Math.abs(prediction.lines[i]!.width - recording.lines[i]!.width))
+  return most > WIDTH_STEPS[0]! ? most.toFixed(2) : null
+}
+
+// What the widths list makes of the judged cases' gaps (`gaps`: null for one within tolerance): the cases further from
+// their recordings than listed, which block as a new failure does, and those closer, which block as a fixed one does, so
+// a regression can't hide in an entry grown loose. Each as `<id> <listed> -> <now>`. An entry of a case not judged in
+// this run says nothing.
+export function judgeWidths(gaps: ReadonlyMap<string, string | null>, listed: Widths): { worse: string[]; better: string[] } {
+  const out = { worse: [] as string[], better: [] as string[] }
+  for (const [id, gap] of gaps) {
+    const was = listed.get(id)?.gap ?? null
+    if (gap !== was) out[Number(gap ?? 0) > Number(was ?? 0) ? 'worse' : 'better'].push(`${id} ${was ?? 'unlisted'} -> ${gap ?? 'within tolerance'}`)
+  }
+  return out
+}
+
+// The list after `gate --accept-widths=<reason>`: every judged case over the tolerance with its gap, under that reason
+// when it is new or further off than listed and under its own otherwise. Entries of cases not judged go, but those of
+// cases outside a run over some case files only (`partial`).
+export function acceptWidths(gaps: ReadonlyMap<string, string | null>, listed: Widths, reason: string, cases: ReadonlySet<string>, partial: boolean): Widths {
+  const next: Widths = new Map()
+  for (const [id, entry] of listed) if (partial && !cases.has(id)) next.set(id, entry)
+  for (const [id, gap] of gaps) {
+    if (gap === null) continue
+    const was = listed.get(id)
+    next.set(id, { reason: was !== undefined && Number(gap) <= Number(was.gap) ? was.reason : reason, gap })
+  }
+  return next
+}
+
 // What the accepted-failures list makes of the pinned cases' outcomes. A failure off the list is new and blocks. An
 // entry whose case passes, is no longer pinned or names no case is fixed and blocks until it leaves the list, so accepted
 // losses never go silent. An accepted case that fails another way is printed, not blocked. A case that varies between
@@ -477,12 +523,15 @@ export function checkBlocks(browser: BrowserKind, predictions: ReadonlyMap<strin
 }
 
 // Why the gate blocks besides check: breaks that move in reverse order (but on the varying list), line APIs that
-// disagree or measure in reverse order, and fresh recordings that differ from the stored ones every time.
-export function gateBlocks(order: { moved: readonly string[] }, reverse: ReadonlyMap<string, Prediction>, fresh: { stale: readonly string[] }): string[] {
+// disagree or measure in reverse order, fresh recordings that differ from the stored ones every time, and line widths
+// that left where the widths list holds them (unless --accept-widths rewrote it).
+export function gateBlocks(order: { moved: readonly string[] }, reverse: ReadonlyMap<string, Prediction>, fresh: { stale: readonly string[] }, widths: { worse: readonly string[]; better: readonly string[] }): string[] {
   const out: string[] = []
   if (order.moved.length > 0) out.push(`BLOCKS: ${order.moved.length} predictions break differently in reverse order: ${shown(order.moved)}`)
   out.push(...faultLines(' in reverse order', libraryFaults(reverse)))
   if (fresh.stale.length > 0) out.push(`BLOCKS: ${fresh.stale.length} laid out differently from the recordings every time, alone too: ${shown(fresh.stale)}`)
+  if (widths.worse.length > 0) out.push(`BLOCKS: ${widths.worse.length} passing cases have a line width further from its recording than harness/widths lists, in px (accept them with gate --accept-widths="<reason>"): ${widths.worse.slice(0, 10).join('; ')}${widths.worse.length > 10 ? ' ...' : ''}`)
+  if (widths.better.length > 0) out.push(`BLOCKS: ${widths.better.length} passing cases' line widths are closer to their recordings than harness/widths lists, in px; write them with gate --accept-widths="<reason>": ${widths.better.slice(0, 10).join('; ')}${widths.better.length > 10 ? ' ...' : ''}`)
   return out
 }
 

@@ -2,7 +2,7 @@
 // says what an app developer would see if the fault went unseen.
 import './watchdog.ts'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { srcOf } from './bench/lib.ts'
 import { fontsKey, keyOf, type Environment } from './browsers.ts'
@@ -12,13 +12,13 @@ import { groupLines, recordedLines, scanLineEnds, searchLineEnds, type RectsAt }
 import { bundle, documents, LIB, type Job } from './run.ts'
 import { box } from './sets/build.ts'
 import {
-  accept, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline, judge,
-  libraryFaults, outsideClaims, pinning, predictionChange, reverseOrder, score, SEED, strata, tableLines, weightedShare, widthShares,
+  accept, acceptWidths, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline,
+  judge, judgeWidths, libraryFaults, outsideClaims, pinning, predictionChange, reverseOrder, score, SEED, strata, tableLines, weightedShare, widestGap, widthShares,
   type Behaviour, type Draw, type Outcome, type Stratum, type Verdict, type WidthTally,
 } from './score.ts'
 import {
-  acceptedPath, assertSameEnvironment, caseProblem, historyPath, parseRecording, readAccepted, readHistory, readRecordings, readVarying, recordingsPath, recordingText,
-  splitHistory, varyingPath, writeAccepted, writeHistory, writeRecordings, type Varying,
+  acceptedPath, assertSameEnvironment, caseProblem, historyPath, parseRecording, readAccepted, readHistory, readRecordings, readVarying, readWidths, recordingsPath,
+  recordingText, splitHistory, varyingPath, widthsPath, writeAccepted, writeHistory, writeRecordings, writeWidths, type Varying, type Widths,
 } from './store.ts'
 import type { Case, Failure, Prediction, Recording, Rect, TextRun } from './types.ts'
 
@@ -444,6 +444,23 @@ describe('the accepted-failures and varying lists', () => {
     expect([...readVarying(path)]).toEqual([['a', { reason: 'system-ui', kind: 'runs' }]])
   })
 
+  test('the widths list reads back as written, sorted under its reasons, and one that is missing isn\'t an empty one: a browser with no list would block on every case off it', () => {
+    const dir = join(import.meta.dir, '../.artifacts/harness-test-lists')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, 'widths.txt')
+    rmSync(path, { force: true })
+    expect(readWidths(path)).toBeNull()
+    writeWidths(path, new Map([['b', { reason: 'spacing', gap: '1.25' }], ['a', { reason: 'spacing', gap: '0.06' }], ['c', { reason: 'padding', gap: '12.00' }]]))
+    expect(readFileSync(path, 'utf8')).toBe('## padding\nc 12.00\n\n## spacing\na 0.06\nb 1.25\n')
+    expect([...readWidths(path)!.keys()]).toEqual(['c', 'a', 'b'])
+    writeFileSync(path, '')
+    expect(readWidths(path)!.size).toBe(0)
+    for (const text of ['a 1.25\n', '## spacing\na 1.2\n', '## spacing\na wide\n']) {
+      writeFileSync(path, text)
+      expect(() => readWidths(path)).toThrow()
+    }
+  })
+
   test('an entry of either list that names no case blocks: a list would keep reasons for cases that are gone', () => {
     const outcomes = new Map<string, Outcome>([['kept', fail('count')]])
     const accepted = new Map<string, { reason: string; status: Failure }>([['kept', { reason: 'r', status: 'count' }], ['renamed', { reason: 'r', status: 'count' }]])
@@ -496,11 +513,46 @@ describe('what blocks', () => {
 
   test('the gate blocks on breaks that move in reverse order, on line APIs that disagree or measure in reverse order, and on fresh recordings that differ every time: a message would wrap differently after other messages', () => {
     const right = new Map([['a', predicted(TEXT, STARTS)]])
-    expect(gateBlocks({ moved: [] }, right, { stale: [] })).toEqual([])
-    expect(gateBlocks({ moved: ['a'] }, right, { stale: [] })[0]).toStartWith('BLOCKS: 1 predictions break differently in reverse order')
+    const held = { worse: [], better: [] }
+    expect(gateBlocks({ moved: [] }, right, { stale: [] }, held)).toEqual([])
+    expect(gateBlocks({ moved: ['a'] }, right, { stale: [] }, held)[0]).toStartWith('BLOCKS: 1 predictions break differently in reverse order')
     const disagrees = new Map([['a', { ...predicted(TEXT, STARTS), disagreement: 'measureLineStats gives 3 lines' } as Prediction]])
-    expect(gateBlocks({ moved: [] }, disagrees, { stale: [] })[0]).toStartWith('BLOCKS: 1 cases in reverse order where another line API disagrees')
-    expect(gateBlocks({ moved: [] }, right, { stale: ['a'] })[0]).toStartWith('BLOCKS: 1 laid out differently from the recordings every time')
+    expect(gateBlocks({ moved: [] }, disagrees, { stale: [] }, held)[0]).toStartWith('BLOCKS: 1 cases in reverse order where another line API disagrees')
+    expect(gateBlocks({ moved: [] }, right, { stale: ['a'] }, held)[0]).toStartWith('BLOCKS: 1 laid out differently from the recordings every time')
+  })
+
+  test('a passing case further from its recording than the widths list holds blocks the gate, and one closer blocks until the list says so: a change that moves no line and narrows every bubble would pass, or a later one hide in a loose entry', () => {
+    const { recording } = layOut(TEXT, STARTS)
+    // Recorded 68, 68, 76 and 88 px.
+    const at = (widths: number[]): Prediction => {
+      const prediction = predicted(TEXT, STARTS)
+      if ('lines' in prediction) for (let i = 0; i < widths.length; i++) prediction.lines[i]!.width = widths[i]!
+      return prediction
+    }
+    expect(widestGap(recording, at([68, 68, 76, 88]))).toBeNull()
+    expect(widestGap(recording, at([68.04, 68, 76, 87.96]))).toBeNull()
+    expect(widestGap(recording, at([68, 67.4, 76, 89.25]))).toBe('1.25')
+    const listed: Widths = new Map([
+      ['further', { reason: 'spacing', gap: '1.25' }], ['closer', { reason: 'spacing', gap: '2.00' }], ['fixed', { reason: 'spacing', gap: '0.30' }],
+      ['steady', { reason: 'spacing', gap: '4.00' }], ['unjudged', { reason: 'spacing', gap: '9.00' }], ['elsewhere', { reason: 'spacing', gap: '9.00' }],
+    ])
+    const gaps = new Map<string, string | null>([['further', '3.00'], ['closer', '0.50'], ['fixed', null], ['steady', '4.00'], ['new', '0.06'], ['exact', null]])
+    const verdict = judgeWidths(gaps, listed)
+    expect(verdict).toEqual({ worse: ['further 1.25 -> 3.00', 'new unlisted -> 0.06'], better: ['closer 2.00 -> 0.50', 'fixed 0.30 -> within tolerance'] })
+    const blocks = gateBlocks({ moved: [] }, new Map(), { stale: [] }, verdict)
+    expect(blocks[0]).toStartWith('BLOCKS: 2 passing cases have a line width further from its recording than harness/widths lists')
+    expect(blocks[0]).toEndWith(': further 1.25 -> 3.00; new unlisted -> 0.06')
+    expect(blocks[1]).toStartWith('BLOCKS: 2 passing cases\' line widths are closer to their recordings than harness/widths lists')
+    // The further ones go under the new reason, the closer one keeps its own, and an entry of a case not judged goes,
+    // but one of a case outside a run over some case files only.
+    const cases = new Set(['further', 'closer', 'fixed', 'steady', 'new', 'exact', 'unjudged'])
+    const next = acceptWidths(gaps, listed, 'ligatures off', cases, true)
+    expect([...next]).toEqual([
+      ['elsewhere', { reason: 'spacing', gap: '9.00' }], ['further', { reason: 'ligatures off', gap: '3.00' }], ['closer', { reason: 'spacing', gap: '0.50' }],
+      ['steady', { reason: 'spacing', gap: '4.00' }], ['new', { reason: 'ligatures off', gap: '0.06' }],
+    ])
+    expect(acceptWidths(gaps, listed, 'ligatures off', cases, false).has('elsewhere')).toBe(false)
+    expect(judgeWidths(gaps, next)).toEqual({ worse: [], better: [] })
   })
 
   test('the gate\'s sample is the same in every run with the default seed, and moves by one case when one leaves the pinned cases: the gate would be green or red by the clock', () => {
@@ -587,6 +639,7 @@ describe('the commands, with a stand-in browser', () => {
   function folder(name: string, recordings: Record<string, Recording>, lists: { history?: string[]; accepted?: string; varying?: string } = {}): string {
     const root = join(import.meta.dir, '../.artifacts/harness-test-commands', name)
     for (const sub of ['recordings', 'accepted', 'varying']) mkdirSync(join(root, sub), { recursive: true })
+    rmSync(widthsPath(root, 'chrome'), { force: true })
     writeRecordings(recordingsPath(root, 'chrome'), { env: 'test', recordings: new Map(Object.entries(recordings)) })
     writeHistory(historyPath(root, 'chrome'), { env: 'test', cases: new Map((lists.history ?? []).map(id => [id, [laidOut, other]])) })
     writeFileSync(acceptedPath(root, 'chrome'), lists.accepted ?? '')
@@ -704,6 +757,34 @@ describe('the commands, with a stand-in browser', () => {
     expect([...readRecordings(recordingsPath(root, 'chrome'))!.recordings.keys()]).toEqual(['first', 'measures', 'moves', 'stale'])
     expect(readAccepted(acceptedPath(root, 'chrome')).size).toBe(0)
     expect((await check('chrome', list, options, io)).blocked).toBe(false)
+  })
+
+  test('the gate judges line widths only with a widths list, writes one when asked, and then blocks on a passing case whose widths moved either way, but not on one that moves in reverse order or has a system-ui font list: a build that leaves every line and narrows every bubble would pass the gate, or the gate block at random', async () => {
+    const root = folder('gate-widths', { steady: laidOut, shifts: laidOut, order: laidOut, system: laidOut, fails: laidOut }, { accepted: '## why\nfails breaks\n' })
+    const list = cases(['steady', 'shifts', 'order', 'system', 'fails']).map(c => (c.id === 'system' ? { ...c, paragraph: { ...c.paragraph, font: { ...c.paragraph.font, family: 'system-ui, sans-serif' } } } : c))
+    // Each line predicted `width` px wide, where the recording has 68, 68, 76 and 88; "order" predicts other widths when
+    // the job runs in reverse, which starts with "fails".
+    const wide = (width: number): Prediction => ({ ...right, lines: 'lines' in right ? right.lines.map(line => ({ ...line, width })) : [] }) as Prediction
+    const build = (shifts: number) => (c: Case, job: Job): Prediction => (c.id === 'fails' ? wrong : c.id === 'shifts' ? wide(shifts) : c.id === 'order' && job.cases[0]!.id === 'fails' ? wide(5) : wide(0))
+    const unlisted = browser(root, build(0))
+    expect(await gate('chrome', list, options, unlisted)).toBe(false)
+    expect(unlisted.printed()).toContain('  line widths not judged: no harness/widths/chrome.txt')
+    const writes = browser(root, build(0))
+    expect(await gate('chrome', list, { ...options, acceptWidths: 'where main stood' }, writes)).toBe(false)
+    expect(writes.printed()).toContain('  line widths: 2 passing cases judged against harness/widths/chrome.txt; 2 further from their recordings than listed, 0 closer')
+    expect(readFileSync(widthsPath(root, 'chrome'), 'utf8')).toBe('## where main stood\nshifts 88.00\nsteady 88.00\n')
+    const same = browser(root, build(0))
+    expect(await gate('chrome', list, options, same)).toBe(false)
+    expect(same.printed()).toContain('; 0 further from their recordings than listed, 0 closer')
+    const closer = browser(root, build(1))
+    expect(await gate('chrome', list, options, closer)).toBe(true)
+    expect(closer.printed()).toContain('BLOCKS: 1 passing cases\' line widths are closer to their recordings than harness/widths lists, in px; write them with gate --accept-widths="<reason>": shifts 88.00 -> 87.00')
+    const further = browser(root, build(-2))
+    expect(await gate('chrome', list, options, further)).toBe(true)
+    expect(further.printed()).toContain('BLOCKS: 1 passing cases have a line width further from its recording than harness/widths lists, in px (accept them with gate --accept-widths="<reason>"): shifts 88.00 -> 90.00')
+    expect(await gate('chrome', list, { ...options, acceptWidths: 'kerning dropped before a space' }, browser(root, build(-2)))).toBe(false)
+    expect(readFileSync(widthsPath(root, 'chrome'), 'utf8')).toBe('## kerning dropped before a space\nshifts 90.00\n\n## where main stood\nsteady 88.00\n')
+    expect(await gate('chrome', list, options, browser(root, build(-2)))).toBe(false)
   })
 
   test('a new failure the fresh recording finds to be page history is attributed as page history and moved: the gate crashed attributing it after a pin bump', async () => {

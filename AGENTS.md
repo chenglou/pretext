@@ -80,7 +80,7 @@ judgement; one outside them needs the maintainer first.
   pins).
 - Keep `bun test`, `bun run check` and `bun harness check` (Chrome, Firefox, webkit-host) green; run `bun harness gate`
   before landing a change to `src/` or `harness/`. Record new cases with `bun harness record --only-new`, and commit
-  changed recordings and accepted or varying lists with the change that caused them.
+  changed recordings and accepted, varying or widths lists with the change that caused them.
 - Before landing a change to `src/` other than `layout.test.ts`, or to `harness/bench/`, paste `bun harness bench main`'s
   table, every row, into the PR. A row slower in every session needs a sentence, as does growth over 5% in the
   `measureText` calls or submitted units `bun harness equal main` prints.

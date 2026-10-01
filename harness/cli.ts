@@ -2,7 +2,8 @@
 //   record [--only-new]      record the browser's layout of every case (or the new ones), sorted and shuffled, in fresh short documents;
 //                            --sample=N --seed=S records N of them, drawn from every set
 //   check [--accept=<why>]   predict every pinned case in the browser and score it against the recordings
-//   gate [--sample=N]        check, plus a prediction in reverse order, N cases recorded again, and attribution
+//   gate [--sample=N] [--accept-widths=<why>]   check, plus a prediction in reverse order, N cases recorded again,
+//                            attribution, and passing cases' line widths against harness/widths
 // record and gate draw with --seed=S (default 20260924).
 //   equal <ref>              whether this tree's build (src/ and the adapter) and <ref>'s predict the same lines, widths
 //                            and line text for every case, with the same line APIs' disagreements and Canvas calls after
@@ -21,8 +22,9 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import {
-  accept, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline, judge,
-  observable, outsideClaims, percent, pinning, reverseOrder, score, SEED, shown, shrinkWrapShort, tableLines, weightedShare, WIDTH_STEPS, widthBand, widthShares,
+  accept, acceptWidths, attribute, behaviourLine, buildChange, checkBlocks, countBehaviour, countDraw, countWidths, drawRows, freshRecordings, gateBlocks, gateSample, headline,
+  judge, judgeWidths, observable, outsideClaims, percent, pinning, predictionChange, reverseOrder, score, SEED, shown, shrinkWrapShort, tableLines, weightedShare, widestGap,
+  WIDTH_STEPS, widthBand, widthShares,
   type Behaviour, type Draw, type Outcome, type Stratum, type WidthTally,
 } from './score.ts'
 import { bench, ROWS } from './bench/run.ts'
@@ -33,7 +35,7 @@ import { LIB, runJob, type Job, type JobResult, type Mode } from './run.ts'
 import { createRng, makeCase, paragraph, parseFont } from './sets/build.ts'
 import {
   acceptedPath, assertSameEnvironment, caseText, historyPath, readAccepted, readCases, readHistory, readRecordings, readVarying, recordingText,
-  recordingsPath, splitHistory, varyingPath, writeAccepted, writeHistory, writeRecordings, type Accepted, type Varying,
+  readWidths, recordingsPath, splitHistory, varyingPath, widthsPath, writeAccepted, writeHistory, writeRecordings, writeWidths, type Accepted, type Varying,
 } from './store.ts'
 import { BROWSER, BROWSERS, type BrowserKind, type Case, type Paragraph, type Prediction, type Recording } from './types.ts'
 
@@ -45,7 +47,7 @@ const ATTRIBUTE_AT_MOST = 200
 
 // What the flags ask for. `sample`: --sample's count, or null. `partial`: the run covers some case files only (--cases),
 // so it leaves the other cases' entries alone.
-export type Options = { lib: string; seed: number; sample: number | null; accept: string; partial: boolean; onlyNew: boolean }
+export type Options = { lib: string; seed: number; sample: number | null; accept: string; acceptWidths: string; partial: boolean; onlyNew: boolean }
 export type Args = { command: string | undefined; positional: string[]; browsers: BrowserKind[]; cases: string | null; options: Options; flags: Map<string, string> }
 
 export function parseArgs(args: readonly string[]): Args {
@@ -62,7 +64,7 @@ export function parseArgs(args: readonly string[]): Args {
   for (let i = 0; i < browsers.length; i++) if (!BROWSERS.includes(browsers[i]!)) throw new Error(`Unknown browser ${browsers[i]}`)
   const options: Options = {
     lib: resolve(flags.get('lib') ?? LIB), seed: Number(flags.get('seed') ?? SEED), sample: flags.has('sample') ? Number(flags.get('sample')) : null,
-    accept: flags.get('accept') ?? '', partial: flags.has('cases'), onlyNew: flags.has('only-new'),
+    accept: flags.get('accept') ?? '', acceptWidths: flags.get('accept-widths') ?? '', partial: flags.has('cases'), onlyNew: flags.has('only-new'),
   }
   return { command, positional, browsers, cases: flags.get('cases') ?? null, options, flags }
 }
@@ -161,6 +163,8 @@ export async function record(browser: BrowserKind, cases: Case[], o: Options, io
 type Scored = {
   browser: BrowserKind
   env: string
+  // The ids of the cases this browser takes in the run.
+  ids: Set<string>
   pinned: Case[]
   // Every case this browser takes, the pinned ones first.
   predicted: Case[]
@@ -289,7 +293,7 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   const newFailures: Case[] = []
   for (let i = 0; !updated && i < verdict.newFailures.length; i++) newFailures.push(byId.get(verdict.newFailures[i]!)!)
   return {
-    browser, env: recorded.env, pinned, predicted: plan.predicted, varying, accepted, recordings: recorded.recordings, history, predictions: job.results, outcomes, newFailures,
+    browser, env: recorded.env, ids, pinned, predicted: plan.predicted, varying, accepted, recordings: recorded.recordings, history, predictions: job.results, outcomes, newFailures,
     blocked: blocks.length > 0,
   }
 }
@@ -337,7 +341,32 @@ export async function gate(browser: BrowserKind, cases: Case[], o: Options, io: 
     if (unaccepted.length > 0) writeAccepted(acceptedPath(io.root, browser), scored.accepted)
     out.push(`  ${moved.size} moved to recordings/${browser}.history.txt as page history, ${unaccepted.length} of them off accepted/${browser}.txt (not blocking; commit it): ${shown(fresh.history)}`)
   }
-  const blocks = gateBlocks(order, reverse, fresh)
+  // Line widths, which check only reports: each passing case's largest distance from its recording against the widths
+  // list. A prediction that moves with the browser's state isn't judged: a case on the varying list, one whose
+  // prediction differs at all in reverse order, and one outside the claims, since Canvas resolves a system-ui font list
+  // otherwise in some runs (in 3 of 9 runs webkit-host gave one of two Amharic draws other widths, 2026-09-30). Nor is
+  // a case just found to be page history, or a browser without a list.
+  const listed = readWidths(widthsPath(io.root, browser))
+  let widths = { worse: [] as string[], better: [] as string[] }
+  if (listed !== null || o.acceptWidths !== '') {
+    const gaps = new Map<string, string | null>()
+    for (let i = 0; i < scored.pinned.length; i++) {
+      const c = scored.pinned[i]!
+      const prediction = scored.predictions.get(c.id)!
+      if (scored.outcomes.get(c.id)!.status !== 'pass' || outsideClaims(c, prediction) !== null || scored.varying.has(c.id) || moved.has(c.id)) continue
+      if (predictionChange(reverse.get(c.id)!, prediction) === 'same') gaps.set(c.id, widestGap(scored.recordings.get(c.id)!, prediction))
+    }
+    widths = judgeWidths(gaps, listed ?? new Map())
+    out.push(`  line widths: ${gaps.size} passing cases judged against harness/widths/${browser}.txt; ${widths.worse.length} further from their recordings than listed, ${widths.better.length} closer`)
+    if (o.acceptWidths !== '') {
+      const next = acceptWidths(gaps, listed ?? new Map(), o.acceptWidths, scored.ids, o.partial)
+      mkdirSync(join(io.root, 'widths'), { recursive: true })
+      writeWidths(widthsPath(io.root, browser), next)
+      out.push(`  wrote harness/widths/${browser}.txt: ${next.size} cases with a line more than ${WIDTH_STEPS[0]} px from its recording, the further ones as "${o.acceptWidths}"`)
+      widths = { worse: [], better: [] }
+    }
+  } else out.push(`  line widths not judged: no harness/widths/${browser}.txt (gate --accept-widths="<reason>" writes one)`)
+  const blocks = gateBlocks(order, reverse, fresh, widths)
   for (let i = 0; i < blocks.length; i++) out.push(`  ${blocks[i]}`)
   // Each new failure recorded alone, and predicted alone twice, each in a fresh document of its own; one the fresh
   // recording just moved to page history is page history already.
