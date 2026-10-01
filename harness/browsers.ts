@@ -9,7 +9,8 @@
 // launch, after which macOS keeps other apps from writing inside it. WebKit runs as webkit-host, the system
 // WebKit.framework that installed Safari runs, in a background window (harness/webkit-host/build.sh); installed Safari
 // opens one window of its own. None of them takes focus, but the bench's foreground runs, where Chrome, Firefox
-// and Safari come to the front. 'ios' is Safari in an iOS simulator, which has no window at all.
+// and Safari come to the front. 'ios' is Safari in an iOS simulator and 'android' Chrome in an Android emulator, which
+// have no window at all.
 import { dlopen, FFIType } from 'bun:ffi'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,7 +26,8 @@ export const pins: Record<keyof typeof PINNED, string> = { ...PINNED }
 // What a run asks of its browsers besides the pins, which cli.ts sets from its flags:
 // - `scale`: the device scale factor Chrome and Firefox lay out at, in place of the display's (--scale).
 // - `zoom`: Chrome's page zoom, which multiplies it (--zoom).
-// - `runtime`: the simulator runtime 'ios' boots, by the name `xcrun simctl list runtimes` prints (--runtime).
+// - `runtime`: the simulator runtime 'ios' boots, by the name `xcrun simctl list runtimes` prints, or the virtual
+//   device 'android' boots, by the name `emulator -list-avds` prints (--runtime).
 export const setup: { scale: number | null; zoom: number | null; runtime: string | null } = { scale: null, zoom: null, runtime: null }
 const ROOT = resolve(import.meta.dir, '..')
 const PROFILES = join(ROOT, '.artifacts/harness-profiles')
@@ -43,6 +45,7 @@ export function appPath(browser: BrowserKind): string {
     case 'webkit-host':
     case 'safari': return '/Applications/Safari.app'
     case 'ios': return join(simulatorRuntime().runtimeRoot, 'Applications/MobileSafari.app')
+    case 'android': throw new Error('Chrome in an emulator has no bundle on the Mac')
   }
 }
 
@@ -124,15 +127,18 @@ export function fontsKey(dir: string): string {
 }
 
 // A simulator's Safari, WebKit, fonts and ICU are its runtime's, whose bundles keep Info.plist at their root, and a new
-// device takes the Mac's languages.
+// device takes the Mac's languages. An emulator's Chrome, OS build and language are read from the device as it boots.
 export function environmentKey(browser: BrowserKind, env: PageEnv): string {
   const runtime = browser === 'ios' ? simulatorRuntime() : null
+  const languages = (): string => command('defaults', ['read', '-g', 'AppleLanguages']).replace(/[\s"()]/g, '')
   return keyOf({
     browser,
-    version: bundleVersion(join(appPath(browser), runtime === null ? 'Contents/Info.plist' : 'Info.plist')),
-    webkit: !BROWSER[browser].systemWebKit ? null : bundleVersion(runtime === null ? '/System/Library/Frameworks/WebKit.framework/Resources/Info.plist' : join(runtime.runtimeRoot, 'System/Library/Frameworks/WebKit.framework/Info.plist'), 'CFBundleVersion'),
-    os: runtime === null ? command('sw_vers', ['-buildVersion']) : runtime.buildversion,
-    osLanguages: command('defaults', ['read', '-g', 'AppleLanguages']).replace(/[\s"()]/g, ''),
+    ...(browser === 'android' ? emulated! : {
+      version: bundleVersion(join(appPath(browser), runtime === null ? 'Contents/Info.plist' : 'Info.plist')),
+      webkit: !BROWSER[browser].systemWebKit ? null : bundleVersion(runtime === null ? '/System/Library/Frameworks/WebKit.framework/Resources/Info.plist' : join(runtime.runtimeRoot, 'System/Library/Frameworks/WebKit.framework/Info.plist'), 'CFBundleVersion'),
+      os: runtime === null ? command('sw_vers', ['-buildVersion']) : runtime.buildversion,
+      osLanguages: languages(),
+    }),
     pageLanguages: env.languages,
     devicePixelRatio: env.devicePixelRatio,
     zoom: browser === 'chrome' ? setup.zoom : null,
@@ -443,6 +449,55 @@ async function launchSimulator(url: string, jobId: string): Promise<Launched> {
   return launched
 }
 
+// Chrome in an Android emulator, the one its system image ships: the virtual device `--runtime` names, started without
+// a window and read-only, so every job starts from the same device. The screen stays on, since jobs went silent part
+// way without it. Chrome's welcome screens would hold the page, and a release Chrome reads its command line from
+// /data/local/tmp only as the debug app. `adb reverse` gives the device the job's port, and `am start` opens the page.
+// The guest's memory is the emulator process's, which held 4 GB for a guest of 2 GB during a job, so its bound is 8 GB.
+const ANDROID_SDK = process.env['ANDROID_HOME'] ?? join(homedir(), 'Library/Android/sdk')
+let emulated: Pick<Environment, 'version' | 'webkit' | 'os' | 'osLanguages'> | null = null
+
+async function launchEmulator(url: string): Promise<Launched> {
+  if (setup.runtime === null) throw new Error('android needs --runtime=<name>, one that emulator -list-avds prints')
+  // An emulator takes an even port, and adb names the device by it.
+  const port = 5554 + 2 * Math.floor(Math.random() * 64)
+  const emulator = Bun.spawn([join(ANDROID_SDK, 'emulator/emulator'), '-avd', setup.runtime, '-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot', '-read-only', '-port', String(port)], { stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' })
+  const launched = own<Launched>({
+    roots: rows => emulator.exitCode !== null || emulator.signalCode !== null ? `exited with ${emulator.exitCode ?? emulator.signalCode}` : rows.filter(row => row.pid === emulator.pid),
+    async stop() {
+      emulator.kill('SIGTERM')
+      if (await Promise.race([emulator.exited.then(() => false), Bun.sleep(20_000).then(() => true)])) emulator.kill('SIGKILL')
+      await emulator.exited
+    },
+    cleanup() {},
+  })
+  const adb = (...args: string[]): string => execFileSync(join(ANDROID_SDK, 'platform-tools/adb'), ['-s', `emulator-${port}`, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60_000 }).trim()
+  try {
+    let booted = false
+    for (let i = 0; i < 300 && !booted && emulator.exitCode === null; i++) {
+      await Bun.sleep(1000)
+      try {
+        booted = adb('shell', 'getprop', 'sys.boot_completed') === '1'
+      } catch {
+        // adb hasn't found the device yet.
+      }
+    }
+    if (!booted) throw new Error(`The emulator ${setup.runtime} did not boot in 5 minutes`)
+    const version = /versionName=(\S+)/.exec(adb('shell', 'dumpsys', 'package', 'com.android.chrome'))?.[1]
+    if (version === undefined) throw new Error(`The emulator ${setup.runtime} has no Chrome`)
+    emulated = { version, webkit: null, os: adb('shell', 'getprop', 'ro.build.fingerprint'), osLanguages: adb('shell', 'getprop', 'ro.product.locale') }
+    adb('shell', 'svc', 'power', 'stayon', 'true')
+    adb('shell', 'am', 'set-debug-app', '--persistent', 'com.android.chrome')
+    adb('shell', 'echo "chrome --disable-fre --no-first-run --no-default-browser-check" > /data/local/tmp/chrome-command-line')
+    adb('reverse', `tcp:${new URL(url).port}`, `tcp:${new URL(url).port}`)
+    adb('shell', `am start -n com.android.chrome/com.google.android.apps.chrome.Main -a android.intent.action.VIEW -d '${url}'`)
+  } catch (error) {
+    await release(launched)
+    throw error
+  }
+  return launched
+}
+
 function appleScript(lines: string[]): string {
   return command('osascript', lines.flatMap(line => ['-e', line]))
 }
@@ -500,5 +555,6 @@ export async function launch(browser: BrowserKind, url: string, jobId: string, o
     case 'webkit-host': return watch(browser, await launchWebKitHost(url), fail, boundMb)
     case 'safari': return watch(browser, await launchSafari(url, jobId, owns, foreground), fail, boundMb)
     case 'ios': return watch(browser, await launchSimulator(url, jobId), fail, boundMb)
+    case 'android': return watch(browser, await launchEmulator(url), fail, Math.max(boundMb, 8192))
   }
 }

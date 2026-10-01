@@ -1,4 +1,4 @@
-// bun harness <command> [--browser=chrome|firefox|webkit-host|safari|ios|all] [--cases=<file.ndjson>]
+// bun harness <command> [--browser=chrome|firefox|webkit-host|safari|ios|android|all] [--cases=<file.ndjson>]
 //   record [--only-new]      record the browser's layout of every case (or the new ones), sorted and shuffled, in fresh short documents;
 //                            --sample=N --seed=S records N of them, drawn from every set
 //   check [--accept=<why>]   predict every pinned case in the browser and score it against the recordings
@@ -21,6 +21,7 @@
 // Outside the checked-in setup (harness/README.md, Other ratios and phones), for record, check, gate and explain:
 //   --scale=<n>              Chrome and Firefox at device scale factor n; --zoom=<n>: Chrome at page zoom n
 //   --browser=ios --runtime="iOS 26.0"   Safari in a simulator of that runtime, booted for each job, deleted after it
+//   --browser=android --runtime=<virtual device>   the Chrome of that Android emulator, started for each job
 //   --store=<dir>            the folder these runs keep recordings and lists in, .artifacts/harness-store by default
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
@@ -263,7 +264,7 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   if (varying.size > 0) out.push(`  varying (harness/varying): ${runs} that vary between runs, predicted but not judged (${verdict.varying.pass} pass, ${verdict.varying.fail} fail); ${varying.size - runs} that move with what was predicted before, judged, and skipped by the gate's reverse-order check`)
   const head = headline(draws)
   const inClaims = headline(drawsInClaims)
-  if (head !== null) out.push(`  real-usage sample: ${(100 * head.share).toFixed(2)}% of real paragraphs right, 95% interval ${(100 * head.low).toFixed(2)}-${(100 * head.high).toFixed(2)}% (${draws.length} draws, ${percent(standInWeight, sampleWeight)} of their weight stand-ins; ${BROWSER[browser].phone ? 'a simulator\'s' : 'macOS'} rendering only)`)
+  if (head !== null) out.push(`  real-usage sample: ${(100 * head.share).toFixed(2)}% of real paragraphs right, 95% interval ${(100 * head.low).toFixed(2)}-${(100 * head.high).toFixed(2)}% (${draws.length} draws, ${percent(standInWeight, sampleWeight)} of their weight stand-ins; ${BROWSER[browser].phone ? 'a simulated phone\'s' : 'macOS'} rendering only)`)
   if (inClaims !== null && outsideWeight > 0) out.push(`    ${percent(outsideWeight, sampleWeight)} of the weight is outside what Pretext claims (break-all, system-ui); ${(100 * inClaims.share).toFixed(2)}% right without it, 95% interval ${(100 * inClaims.low).toFixed(2)}-${(100 * inClaims.high).toFixed(2)}%`)
   for (const [set, list] of [...behaviours].sort((x, y) => (x[0] < y[0] ? -1 : 1))) {
     let modelled = 0

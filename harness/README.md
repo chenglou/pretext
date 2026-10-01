@@ -223,7 +223,7 @@ first document until 15 s.
 
 The checked-in recordings are one setup, macOS at device pixel ratio 2. A run outside it keeps its recordings and lists
 in a store, a harness folder outside git (`--store=<dir>`, `.artifacts/harness-store` by default), and the environment
-key carries the ratio, Chrome's zoom and a simulator's builds, so a store holds one setup per browser and `check`
+key carries the ratio, Chrome's zoom and a phone's builds, so a store holds one setup per browser and `check`
 refuses to score another. A new store has no accepted list, so every failure reads as new; copy `accepted/` and
 `varying/` into it first and `check` blocks on what differs from the checked-in setup: the new failures fail there only,
 and the accepted cases that pass, pass there only. These runs are evidence; nothing gates on them.
@@ -243,6 +243,16 @@ and the accepted cases that pass, pass there only. These runs are evidence; noth
   failing there only, 29 are `keep-all` paragraphs and one has a curly quote beside Hangul (2026-09-30; the WebKit
   profile follows Safari 27 only, `RESEARCH.md`, Decisions Log). No iOS 27 runtime was installed, so iPhone Safari 27
   has no number yet.
+- **`--browser=android --runtime=<virtual device>`** runs the Chrome an Android emulator's image ships. Each job starts
+  the device without a window and read-only, so every job starts from the same device, gives it the job's port with
+  `adb reverse` and opens the page with `am start`; a job of 3,000 cases took 11 minutes on a busy Mac. Chrome
+  124.0.6367.219 in the API 35 image was wrong on 2.12% of 2,616 sample draws inside what Pretext claims, where macOS
+  Chrome 154 is wrong on 0.50% of the same draws: 1.50% against 0.30% on the 779 with served web fonts, 0.95% against
+  0.60% on the 589 whose first family Android maps to a font of its own (Arial, Verdana, Georgia, Times New Roman,
+  Courier New), and 3.24% against 0.61% on the rest, which name fonts Android lacks. Most of the cases failing there
+  only are Hebrew, Korean, Chinese and Arabic (2026-10-01). That Chrome is 30 versions behind the one the Blink
+  profile's tables come from, so the figure mixes Chrome's version with Android's fonts; a current Chrome needs an
+  image that ships it.
 
 ## Bounds and blind spots
 
@@ -251,11 +261,12 @@ copy of `src/` run to prove a check catches it, is exactly the input that makes 
 orphaned test processes running such defects, with no timeout, held 42-49 GB each and froze a 36 GB Mac. A job's browser
 is capped too (`browsers.ts`). The harness closes its browsers when it exits or is interrupted, but a SIGKILL leaves
 them running: find them by their profiles (`pgrep -fl .artifacts/harness-profiles`, and `pgrep -fl webkit-host`) and
-quit them, and delete a simulator device it left (`xcrun simctl list devices | grep pretext-harness`). Long paragraphs
-are recorded by binary search over DOM `Range` rectangles for each line's end, not by reading every character's
-rectangle (`observe.ts`): reading them all took 31-74 s natively on a 256,837-unit Arabic paragraph while building the
-per-engine rebuild (branch `rebuild-20260916`, a from-scratch port of each engine's line breaking, kept as the
-plain-text correctness reference; September 2026). Tools delete their own scratch files with `rmSync`.
+quit them, delete a simulator device it left (`xcrun simctl list devices | grep pretext-harness`), and stop an emulator
+(`adb devices`, then `adb -s <device> emu kill`). Long paragraphs are recorded by binary search over DOM `Range`
+rectangles for each line's end, not by reading every character's rectangle (`observe.ts`): reading them all took 31-74 s
+natively on a 256,837-unit Arabic paragraph while building the per-engine rebuild (branch `rebuild-20260916`, a
+from-scratch port of each engine's line breaking, kept as the plain-text correctness reference; September 2026). Tools
+delete their own scratch files with `rmSync`.
 
 The harness can't see the hyphen drawn at a soft-hyphen break: recordings keep no glyphs, and a rule over the boxes
 found 93-358 mismatches per browser, some the recording's (2026-09-24), so it's left to `src/layout.test.ts`. Nor does
@@ -265,8 +276,8 @@ bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGI
 emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter writes as plain
 text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box of width 0,
 which has no rectangle, but through the text around it; Chrome's UI language, and so its `zh` table for pages without a
-`lang`; rendering other than macOS's and an iOS simulator's (Other ratios and phones), though Android and Windows are
-65% of page views (`weights.json`); text chat users wrote (the sample's chat draws are stand-ins); or the demos' painted
-layout. No planted defect guards the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the
-library compiled in a module of its own), Firefox's start-up hold, the page passing the browser's name to the recorder,
-or the cap on a job's browser.
+`lang`; rendering other than macOS's, an iOS simulator's and an Android emulator's with an old Chrome (Other ratios and
+phones), though Android and Windows are 65% of page views (`weights.json`); text chat users wrote (the sample's chat
+draws are stand-ins); or the demos' painted layout. No planted defect guards the watchdog's kill, the bench's shuffle
+and its separate compiles (each copy of the library compiled in a module of its own), Firefox's start-up hold, the page
+passing the browser's name to the recorder, or the cap on a job's browser.

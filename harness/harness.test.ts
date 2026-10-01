@@ -283,7 +283,7 @@ describe('the stored recordings', () => {
     const harness = parseArgs(['record']).root
     expect(harness).toBe(import.meta.dir)
     expect(parseArgs(['record']).browsers).toEqual(['chrome', 'firefox', 'webkit-host'])
-    const away = [['--browser=chrome,firefox', '--scale=1.5'], ['--browser=chrome', '--zoom=1.25'], ['--browser=ios']]
+    const away = [['--browser=chrome,firefox', '--scale=1.5'], ['--browser=chrome', '--zoom=1.25'], ['--browser=ios'], ['--browser=android']]
     for (let i = 0; i < away.length; i++) {
       expect(parseArgs(['record', ...away[i]!]).root).toBe(join(import.meta.dir, '../.artifacts/harness-store'))
       expect(parseArgs(['record', ...away[i]!, '--store=/tmp/store']).root).toBe('/tmp/store')

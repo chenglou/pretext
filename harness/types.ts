@@ -3,9 +3,10 @@
 // case sets load as they are.
 
 // 'webkit-host' is the system WebKit.framework that installed Safari runs, in a background window (harness/webkit-host).
-// 'ios' is Safari in an iOS simulator the harness boots for the job (browsers.ts).
-export type BrowserKind = 'chrome' | 'firefox' | 'webkit-host' | 'safari' | 'ios'
-export const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-host', 'safari', 'ios']
+// 'ios' is Safari in an iOS simulator and 'android' Chrome in an Android emulator, which the harness boots for the job
+// (browsers.ts).
+export type BrowserKind = 'chrome' | 'firefox' | 'webkit-host' | 'safari' | 'ios' | 'android'
+export const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-host', 'safari', 'ios', 'android']
 
 // What each browser is to the harness:
 // - `cases`: the browser whose cases it takes as well as its own; webkit-host runs installed Safari's engine.
@@ -30,6 +31,7 @@ export const BROWSER: Record<BrowserKind, {
   'webkit-host': { cases: 'safari', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, background: true, foreground: false, phone: false },
   safari: { cases: 'safari', sample: 2000, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, background: false, foreground: true, phone: false },
   ios: { cases: 'safari', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, background: false, foreground: false, phone: true },
+  android: { cases: 'chrome', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: true, systemWebKit: false, background: false, foreground: false, phone: true },
 }
 
 export type CssFont = { family: string; size: number; weight: number; style: 'normal' | 'italic' }
