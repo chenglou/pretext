@@ -5388,8 +5388,9 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
   // space glyph after it, past a word joiner, and a space glyph -2px with a Latin
   // or Cyrillic T after it, and a mark after a space glyph sits on it, 3px narrower.
   // Under fontKerning 'normal' Canvas doesn't cut at U+0020, as for a font whose GPOS
-  // has the space, but for `16px Halves`, whose kerning is in a kern table. In
-  // `16px Glyph` U+2028 has a glyph of its own, 8px.
+  // has the space, but for the `Halves` fonts, whose kerning is in a kern table. In
+  // `16px Glyph` U+2028 has a glyph of its own, 8px. Widths are float32, as Canvas's are,
+  // and W is 253 + 1/65536 px, so W with a space glyph, past 256px, loses its last bit.
   const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
@@ -5407,9 +5408,9 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
         if (whole && !this.font.includes('Halves')) text = text.replaceAll(' ', '\\u2028')
         const glyph = this.font.includes('Glyph')
         let width = 0
-        for (const ch of text) width += ch === ' ' ? 4 : ch === '\\u2028' ? (glyph ? 8 : 4) : /[\\u2060\\u0301]/.test(ch) ? 0 : ch === 'A' ? 10 : 8
+        for (const ch of text) width += ch === ' ' ? 4 : ch === '\\u2028' ? (glyph ? 8 : 4) : /[\\u2060\\u0301]/.test(ch) ? 0 : ch === 'A' ? 10 : ch === 'W' ? 253 + 1 / 65536 : 8
         if (glyph) return { width }
-        return { width: width - (text.match(/A\\u2060*\\u2028/g) ?? []).length - 2 * (text.match(/\\u2028[T\\u0422]/g) ?? []).length - 3 * (text.match(/\\u2028\\u0301/g) ?? []).length }
+        return { width: Math.fround(width - (text.match(/A\\u2060*\\u2028/g) ?? []).length - 2 * (text.match(/\\u2028[T\\u0422]/g) ?? []).length - 3 * (text.match(/\\u2028\\u0301/g) ?? []).length) }
       }
     }
     globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
@@ -5428,6 +5429,7 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
       ['TT\\u3002 TT', '16px Test', {}], ['TT \\u00B7 TT', '16px Test', {}], ['\\u03B1\\u03B1 \\u00B7 TT', '16px Test', {}],
       ['TT \\uFF08TT\\uFF09 TT', '16px Test', {}],
       ['AA TT', '16px Halves', {}], ['AA  TT', '16px Halves', { whiteSpace: 'pre-wrap' }],
+      ['xW y', '16px Halves Wide', {}], ['y Wx', '16px Halves Wide', {}], ['AA TT', '16px Halves Wide', {}],
     ]) widths.push(prepareWithSegments(text, font, options).widths)
     const lines = []
     for (const [text, width, font] of [['AA TT', 19.5, '16px Test'], ['AA TT', 37, '16px Test'], ['AAA TT', 10.5, '16px Test'], ['AA TT', 19.5, '16px Halves'], ['AA TT', 19.4, '16px Halves']]) {
@@ -5501,6 +5503,11 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     // The kern table puts half of a word's kerning with the space on the space.
     [19.5, 1.5, 16],
     [19.5, 5.5, 16],
+    // What float32 rounding leaves between a pair's width and its parts' is no kerning, and
+    // doesn't decide where a font's kerning sits: the next pair, which kerns, does.
+    [261, 4, 8],
+    [8, 4, 261],
+    [19.5, 1.5, 16],
   ])
   expect(lines).toEqual([
     // The kerned word fits, and the space hangs with what it took.

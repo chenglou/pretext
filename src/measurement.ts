@@ -457,6 +457,22 @@ function isHangulSyllable(code: number): boolean {
   return code >= 0xac00 && code <= 0xd7a3
 }
 
+// The kerning in a pair's Canvas width, given the widths of its two parts measured alone, and 0
+// where the three differ by no more than their rounding. Blink adds a run's advances up in
+// 1/65536 px and keeps the sum as a float32 (ShapeResult::ComputeGlyphPositions,
+// shape_result.cc:1539-1576; InlineLayoutUnit, layout_unit.h:70-76), which from 256px up is
+// coarser than that: a float32 near w is a multiple of at most w / 2^23, so each width can be
+// half of that off and the difference one and a half. The bound is the pair's width / 2^22, two
+// to four such steps. A font's least kerning, one unit of an em of at most 16,384, is 256 times
+// the bound for a pair one em wide. Counted as kerning, a rounding could be a font's first and
+// decide where its kerning sits (splitsSpaceKerning), so widths depended on what was prepared
+// first: from 160px up, in Hoefler Text, Didot and Chalkduster (RESEARCH.md, Kerning At Line
+// Edges).
+function getPairKerning(pairWidth: number, firstWidth: number, secondWidth: number): number {
+  const kerning = pairWidth - firstWidth - secondWidth
+  return Math.abs(kerning) <= pairWidth / 0x400000 ? 0 : kerning
+}
+
 // A character's kerning with a space glyph after it, or before it, asked of Canvas when a
 // segment first has the character at that edge.
 function getCharacterSpaceKerning(character: string, measurement: FontMeasurement, spaceWidth: number, after: boolean): number {
@@ -471,12 +487,12 @@ function getCharacterSpaceKerning(character: string, measurement: FontMeasuremen
   }
   if (after) {
     if (Number.isNaN(kerning.after)) {
-      kerning.after = getSegmentMetrics(character + '\u2028', measurement).width - getSegmentMetrics(character, measurement).width - spaceWidth
+      kerning.after = getPairKerning(getSegmentMetrics(character + '\u2028', measurement).width, getSegmentMetrics(character, measurement).width, spaceWidth)
     }
     return kerning.after
   }
   if (Number.isNaN(kerning.before)) {
-    kerning.before = getSegmentMetrics('\u2028' + character, measurement).width - getSegmentMetrics(character, measurement).width - spaceWidth
+    kerning.before = getPairKerning(getSegmentMetrics('\u2028' + character, measurement).width, getSegmentMetrics(character, measurement).width, spaceWidth)
   }
   return kerning.before
 }

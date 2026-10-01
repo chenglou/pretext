@@ -872,6 +872,17 @@ vocabulary. The premises and their gaps:
   Gothic wasn't measured.
 - **U+2028 measures as the space.** Where it doesn't, as in another engine's Canvas under the Chromium profile, no
   kerning is taken.
+- **A difference no larger than float32 rounding is no kerning.** Blink adds a run's advances up in 1/65536 px and
+  keeps the sum as a float32 (`ShapeResult::ComputeGlyphPositions`, `shape_result.cc:1539-1576`), which from 256px up
+  is coarser than that, so a pair's width and its parts' can differ where the font kerns nothing: from 160px up, for
+  25,769 of the pairs of 303 characters with U+2028 in 28 families at 11 sizes, 144 to 1,600px, by 0.000015 to
+  0.00012px. Taken as kerning, such a difference was a font's first and made its `kern` decision: in 200px Hoefler Text,
+  `xÆ y` prepared before `xA y` left 10px of kerning on `xA` where Chrome leaves 5px, and so in Didot and Chalkduster,
+  205 of 526 such orders tried. The profile takes a difference of at most the pair's width / 2^22 as none, two to four
+  float32 steps there, where three rounded widths can be one and a half apart: every rounding measured was at most a
+  quarter of that bound, and the least of the 3,916 kernings 41,596 times it (pinned Chrome 154.0.8037.57,
+  2026-10-01). A font's least kerning, one unit of an em of at most 16,384, is 256 times the bound for a pair one em
+  wide.
 
 Kerning across a ZWSP or a soft hyphen before a space, across a rich item's edge and across the gap between two items
 stays missing (ENGINE_FOLLOWUPS.md). Letter-spaced text takes the kerning too, as Blink turns off only ligatures under
