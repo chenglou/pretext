@@ -1058,7 +1058,9 @@ function stepRichInlineLine(
   // Firefox 156). So where the line goes on to another item, the run counts, as white space
   // the line ends with, which hangs (lineHangWidth): in 16px Hiragino Sans, Chrome 154 and
   // Firefox 156 end the first line of `文字\u3000` and a span `i` after the run at 36-47px,
-  // where `i` would fit after `文字`. At the paragraph's end it stays out, as in one text.
+  // where `i` would fit after `文字`. At the paragraph's end, and before a hard break that
+  // starts the next item, which ends the line with nothing after the run, it stays out, as in
+  // one text.
   // Chrome ends that line whatever the next item starts with, where a line here returns to its
   // latest break if no break comes before that item (ENGINE_FOLLOWUPS.md). A closing mark
   // Blink halts at an item's end stays halted, and the line goes on from there: Chrome lays
@@ -1114,9 +1116,9 @@ function stepRichInlineLine(
     const item = flow.items[itemIndex]
     if (item === undefined) continue
     // The run takes its room (endHang) before an item that takes part in the line, or that the
-    // line can end before (below), in its own item's fragment: the last one of an item that
-    // isn't one a line start consumes.
-    if (endHang > 0 && (item.establishesLine || item.walked || item.continued)) {
+    // line can end before (below), but for one that starts with a hard break, in its own item's
+    // fragment: the last one of an item that isn't one a line start consumes.
+    if (endHang > 0 && (item.establishesLine || item.walked || item.continued) && (item.lineData.segmentFlags[0]! & KIND_BITS) !== HARD_BREAK) {
       lineWidth += endHang
       remainingWidth = safeWidth - lineWidth
       lineHangWidth = endHang

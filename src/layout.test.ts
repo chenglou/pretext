@@ -3514,7 +3514,7 @@ describe('rich-inline invariants', () => {
       return out
     }
     const item = (text: string, more: Partial<RichInlineItem> = {}): RichInlineItem => ({ text, font: FONT, ...more })
-    const flat = (text: string, maxWidth: number) => layoutWithLines(prepareWithSegments(text, FONT), maxWidth, LINE_HEIGHT).lines.map(line => `${line.text}:${Math.round(line.width * 100) / 100}`)
+    const flat = (text: string, maxWidth: number, options: { whiteSpace?: 'pre-wrap' } = {}) => layoutWithLines(prepareWithSegments(text, FONT, options), maxWidth, LINE_HEIGHT).lines.map(line => `${line.text}:${Math.round(line.width * 100) / 100}`)
     for (const maxWidth of [20, 33, 40, 47, 48, 57, 58]) {
       expect({ maxWidth, lines: lines([item('中中\u3000'), item('a')], maxWidth).map(line => line.replace('|', '')) }).toEqual({ maxWidth, lines: flat('中中\u3000a', maxWidth) })
     }
@@ -3537,6 +3537,14 @@ describe('rich-inline invariants', () => {
     // In pre-wrap, preserved spaces that start the next item hang with the run, and text doesn't follow it.
     expect(lines([item('中中\u3000'), item('  a')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|  :32', 'a:9.6'])
     expect(lines([item('中中\u3000'), item('a')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000:32', 'a:9.6'])
+    // Before a line feed that starts the next item, nothing follows the run on its line, so it
+    // stays out of the width, as in one text and at the paragraph's end.
+    for (const maxWidth of [33, 40, 47, 48, 57]) {
+      const want = flat('中中\u3000\na', maxWidth, { whiteSpace: 'pre-wrap' })
+      expect({ maxWidth, lines: lines([item('中中\u3000'), item('\na')], maxWidth, { whiteSpace: 'pre-wrap' }).map(line => line.replace('|', '')) }).toEqual({ maxWidth, lines: want })
+      expect({ maxWidth, lines: lines([item('中中'), item('\u3000'), item('\n'), item('a')], maxWidth, { whiteSpace: 'pre-wrap' }).map(line => line.replaceAll('|', '')) }).toEqual({ maxWidth, lines: want })
+    }
+    expect(lines([item('中中\u3000'), item('\na')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|:32', 'a:9.6'])
   })
 
   test('a rich fragment shows its item\'s own text, and the hyphen of a soft hyphen it ends at where its line\'s width counts one', () => {
@@ -5324,12 +5332,15 @@ test('ordinary text split into same-font items lays out as its text in one node,
   // around them, cut anywhere, take the lines of their text in one node, and the widths, on a
   // Canvas that adds up each character's advance. A seeded draw checks that for chat-like text:
   // Latin words with their punctuation, numbers, a URL, emoji, CJK, Hangul, Thai and U+3000
-  // between words, under normal and keep-all word breaking, each paragraph cut at random into
-  // items and laid out at nine widths. The engine profile is computed once per process, so each
-  // runs in a child process. Left out, as text whose spans the browsers or rich inline lay out
-  // otherwise than one node (ENGINE_FOLLOWUPS.md): a newline next to CJK, which Firefox removes
-  // inside one text frame only; U+3000 inside a unit that fills a line grapheme by grapheme,
-  // which only an item's end hangs there; and Chrome's text-spacing-trim, which this Canvas
+  // between words, under normal and keep-all word breaking, in normal white space and, for
+  // three paragraphs in ten, in pre-wrap, with double spaces, line feeds and U+3000 before a
+  // line feed, each paragraph cut at random into items and laid out at nine widths. The engine
+  // profile is computed once per process, so each runs in a child process. Left out, as text
+  // whose spans the browsers or rich inline lay out otherwise than one node
+  // (ENGINE_FOLLOWUPS.md): a collapsible newline next to CJK, which Firefox removes inside one
+  // text frame only; U+3000 inside a unit that fills a line grapheme by grapheme, which only an
+  // item's end hangs there; U+3000 before a preserved space, which hang together across items;
+  // letter spacing, tabs and soft hyphens; and Chrome's text-spacing-trim, which this Canvas
   // doesn't show. WebKit breaks inside an item from that item's text alone.
   const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
@@ -5365,15 +5376,17 @@ test('ordinary text split into same-font items lays out as its text in one node,
       const LATIN = ['a', 'I', 'an', 'the', 'word', 'hello', 'Pretext', 'layout', 'e-mail', 'state-of-the-art', 'https://example.com/a/b?c=d', '@maya', '#42', '3.14', '50%', '$20', '(note)', '"quoted"', 'don\u2019t', 'wait\u2026', 'so\u2014then', 'yes!', 'why?', 'first,', 'end.', 'key:', 'x', '10:30', 'A/B', '\u{1F600}', '\u{1F44D}\u{1F3FD}', 'caf\u00E9', 'nai\u0308ve']
       const CJK = ['\u4E2D', '\u6587', '\u5B57', '\u65E5\u672C\u8A9E', '\u3067\u3059', '\u3053\u308C\u306F', '\u300C\u5F15\u7528\u300D', '\u6771\u4EAC\u3002', '\u306F\u3044\u3001', '\uD55C\uAD6D\uC5B4', '\uAE00', '\uFF08\u6CE8\uFF09', '\u30FC', '\u3041', '\u5B57\u3000\u6587', '\u6771\u4EAC\u3000x', '\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22', '\u0E44\u0E17\u0E22']
       const GAPS = [' ', ' ', ' ', ' ', '', '  ', '\\n', ' \\n ']
-      function paragraph(keepAll) {
+      const PRESERVED_GAPS = [' ', ' ', ' ', '', '  ', '\\n', '\\n']
+      function paragraph(keepAll, preserve) {
         let text = ''
         let afterCjk = false
         for (let i = 0, n = 2 + Math.floor(random() * 12); i < n; i++) {
           const cjk = random() < 0.3
           let token = pick(cjk ? CJK : LATIN)
+          if (cjk && preserve && !keepAll && random() < 0.15) token = '\u6587\u5B57\u3000'
           if (keepAll && token.includes('\u3000')) token = '\u5B57'
-          let gap = i === 0 ? '' : afterCjk && cjk && random() < 0.7 ? '' : pick(GAPS)
-          if ((gap.includes('\\n') && (afterCjk || cjk)) || (i > 0 && token.includes('\u3000'))) gap = ' '
+          let gap = i === 0 ? '' : text.endsWith('\u3000') ? '\\n' : afterCjk && cjk && random() < 0.7 ? '' : pick(preserve ? PRESERVED_GAPS : GAPS)
+          if (preserve ? i > 0 && token.includes('\u3000') && !gap.includes('\\n') : (gap.includes('\\n') && (afterCjk || cjk)) || (i > 0 && token.includes('\u3000'))) gap = ' '
           text += gap + token
           afterCjk = cjk
         }
@@ -5384,7 +5397,8 @@ test('ordinary text split into same-font items lays out as its text in one node,
       let compared = 0
       for (let p = 0; p < 300; p++) {
         const wordBreak = random() < 0.15 ? 'keep-all' : 'normal'
-        const text = paragraph(wordBreak === 'keep-all')
+        const whiteSpace = random() < 0.3 ? 'pre-wrap' : 'normal'
+        const text = paragraph(wordBreak === 'keep-all', whiteSpace === 'pre-wrap')
         const points = Array.from(text)
         const parts = []
         let part = ''
@@ -5396,9 +5410,9 @@ test('ordinary text split into same-font items lays out as its text in one node,
           }
         }
         parts.push(part)
-        const flatHandle = prepareWithSegments(text, font, { wordBreak })
-        const prepared = prepareRichInline(parts.map(text => ({ text, font })), { wordBreak })
-        const natural = layoutWithLines(flatHandle, 1e6, 20).lines[0].width
+        const flatHandle = prepareWithSegments(text, font, { wordBreak, whiteSpace })
+        const prepared = prepareRichInline(parts.map(text => ({ text, font })), { wordBreak, whiteSpace })
+        const natural = layoutWithLines(flatHandle, 1e6, 20).lines.reduce((max, line) => Math.max(max, line.width), 0)
         for (const width of [30, 47, 60, 85, 120, 16 + natural * random(), 16 + natural * random(), natural, natural + 1]) {
           compared++
           const flat = layoutWithLines(flatHandle, width, 20)
@@ -5409,7 +5423,7 @@ test('ordinary text split into same-font items lays out as its text in one node,
             rich.push([line.fragments.map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd(), Math.round(line.width * 1e6) / 1e6])
           })
           if (JSON.stringify(rich) !== JSON.stringify(want) || measureRichInlineStats(prepared, width).lineCount !== flat.lineCount) {
-            if (differ.length < 3) differ.push({ parts, width, wordBreak, want, rich })
+            if (differ.length < 3) differ.push({ parts, width, wordBreak, whiteSpace, want, rich })
           }
         }
       }
