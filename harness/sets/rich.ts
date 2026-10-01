@@ -59,7 +59,12 @@
 // - boxes (RichInlineBox), cut on their own: custom emoji at the line height between words with spaces on both sides,
 //   before punctuation and at the paragraph's end; boxes inside words, of width 0 and beside U+00A0; adjacent boxes, a
 //   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; and in pre-wrap,
-//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one.
+//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one;
+// - CJK at an item's edge, cut on their own: a run of U+3000 that ends an item before a short word in another weight
+//   and before a box, which Chrome and Firefox hang and end the line after; a pair of fullwidth marks that a bold
+//   span's edge splits, a closing mark before a full stop and a colon before an opening bracket, which Chrome's
+//   text-spacing-trim halts as in one text node; and a closing bracket that ends an item before a short word, which
+//   Chrome keeps halted where the line goes on.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -257,6 +262,16 @@ export function richTemplates(): Template[] {
   for (let i = 0; i < boxes.length; i++) {
     const [family, base, parts, lang, wordBreak, whiteSpace] = boxes[i]!
     out.push(template(`boxes/${family}`, 'boxes as an app writes an image or custom emoji, an empty inline-block of its width (#201; src/layout.test.ts, rich-inline invariants)', base, parts, lang, wordBreak, whiteSpace))
+  }
+  const edges: ReadonlyArray<readonly [string, readonly Part[]]> = [
+    ['ideographic-space', ['東京\u{3000}', span('is', BOLD(JAPANESE)), ' big\u{3000}', box(12, 12, JAPANESE), 'です']],
+    ['punctuation-pair', ['これは', span('「引用」', BOLD(JAPANESE)), '。と言った']],
+    ['punctuation-pair', [span('注意：', BOLD(JAPANESE)), '「これは引用」です']],
+    ['closing-mark', ['文字」', span('is', BOLD(JAPANESE)), 'です']],
+  ]
+  for (let i = 0; i < edges.length; i++) {
+    const [family, parts] = edges[i]!
+    out.push(template(`item-edges/${family}`, 'CJK white space and punctuation at an item\'s edge (src/layout.test.ts, rich-inline invariants)', JAPANESE, parts, 'ja'))
   }
   return out
 }
