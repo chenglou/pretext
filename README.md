@@ -228,6 +228,8 @@ Other helpers:
 ```ts
 clearCache(): void // clears Pretext's shared internal caches used by prepare(), prepareWithSegments() and prepareRichInline(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache. After a web font loads, call it and prepare that font's text again: widths measured earlier are the fallback font's
 setLocale(locale?: string): void // optional (by default we use the page language, from `<html lang>`). Sets locale for future prepare(), prepareWithSegments() and prepareRichInline(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepared states (no mutations to them). A worker has no `<html lang>`, so call it there with the page's `document.documentElement.lang` to give the worker the page's language. Pretext corrects emoji widths by measuring one DOM element, which a worker doesn't have, so in a worker small emoji measure too wide in Chrome and Firefox on macOS
+getEmojiCorrection(font: string): number // reads the per-font emoji correction prepare() probes for: the pixels to subtract from each emoji grapheme's canvas width, or 0 where there's no inflation. The probe needs a document, so this reads 0 inside a Web Worker
+setEmojiCorrection(font: string, correction: number): void // hands the page's correction to a document-less worker: read it with getEmojiCorrection(font) on the main thread, postMessage the number, and call this there with the same font string before preparing emoji text. Without it, a worker measures Apple Color Emoji wider than the page paints them
 ```
 
 Notes:

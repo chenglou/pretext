@@ -18,8 +18,10 @@ import {
   clearMeasurementCaches,
   getEngineProfile,
   getPreparationLanguage,
+  readEmojiCorrection,
   readLetterSpacing,
   setLocaleLanguage,
+  writeEmojiCorrection,
 } from './measurement.js'
 import { measureAnalysis } from './prepare.js'
 import {
@@ -350,4 +352,21 @@ export function clearCache(): void {
 export function setLocale(locale?: string): void {
   setLocaleLanguage(locale)
   clearCache()
+}
+
+// The per-font emoji correction prepare() probes for: the pixels to subtract
+// from each emoji grapheme's canvas width, or 0 on platforms and font sizes
+// without the canvas inflation. The probe needs a document, so this reads 0
+// inside a Web Worker even where the page's own canvas is inflated.
+export function getEmojiCorrection(font: string): number {
+  return readEmojiCorrection(font)
+}
+
+// Applies a page's measured correction in a document-less worker. Read the
+// value with getEmojiCorrection(font) on the main thread, postMessage the
+// number, and call this there with the same font string before preparing
+// emoji text (#292). The value is pixels, so only a same-renderer handoff is
+// exact; a worker primed with another GPU's number inherits that GPU's gap.
+export function setEmojiCorrection(font: string, correction: number): void {
+  writeEmojiCorrection(font, correction)
 }
