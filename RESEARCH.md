@@ -1282,32 +1282,27 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
 
 #### The Walkers' Shapes
 
-The plain-text walkers are in `src/line-break.ts`: `layout()`'s counter (`countPreparedLines()`), the simple stepper
-(`stepPreparedSimpleLineGeometry()`) that the line APIs share with it, and the full walker
-(`walkPreparedComplexLines()`) for text the simple ones don't cover. Designs measured and lost, as multiples of main's
-time (the PRs hold the per-row tables):
+The plain-text walkers are in `src/line-break.ts`: the simple stepper (`stepPreparedSimpleLineGeometry()`), which
+`layout()`'s count and the line APIs share, and the full walker (`walkPreparedComplexLines()`) for text the stepper
+doesn't cover. Until #TBD `layout()` counted the stepper's text with a loop of its own, the counter of the entries
+below. Designs measured and lost, as multiples of main's time (the PRs hold the per-row tables):
 - **One walker for all text**: the full walker costs about 3 times the counter per segment in Chrome and Safari and 5 in
   Firefox, so `layout()` of chat-like messages would take 2-7 times as long (#340, 2026-09-24).
 - **A count starting a line's width from its first segment**, not 0: 1.4-1.7 on chat-like messages in Firefox 156
   (#340, 2026-09-23).
-- **`layout()` counting with the simple stepper**, with no loop of its own, which would leave one copy of the simple
-  fit rules (branch `count-with-stepper`, 90 fewer lines in `src/line-break.ts`): not timed in a browser. The counter's
-  one timing against a simple walker is #338's, 3 times faster in Chrome 153 and Safari 27 than the walker main had
-  then, which #340 replaced with today's leaner stepper. Offline (2026-09-30; the bench's bundles and texts on a
-  stand-in Canvas, both builds timed in each round of one process, in Node 23's V8 and in Bun 1.4's and Safari 27's
-  JavaScriptCore, on a busy machine; hypotheses), the stepper counts chat messages at a new width each pass, as a drag
-  gives and the bench's new-width rows time, at 1.24-1.30 of the counter's time in V8 and 1.46-1.58 in JavaScriptCore.
-  Of the bench's worst cases it counts long breakable runs at 1.96-2.11 in both, a book-length Arabic paragraph at
-  1.49-1.65 and keep-all CJK brackets at 3.2 in V8 and 1.9 in JavaScriptCore: a line that breaks between graphemes, and
-  each line of a long text, costs the stepper a call the counter's loop doesn't make. At three widths laid out again
-  and again, as the bench's "widths seen before" rows are, chat messages read 0.85-1.06 in V8, 0.74-0.80 by each
-  build's least time, and 1.22-1.49 in JavaScriptCore; a run of one build per process the same day read those widths
-  0.60-0.67 in V8 and 0.76-1.03 in JavaScriptCore, so repeated widths flatter the stepper by an amount that moves with
-  the machine, likely as the branch predictor learns each text's lines. The stepper also allocates a cursor and a stats
-  object per call, where the counter allocates nothing. The bench's rows only hint, since they differ in texts, widths
-  and handles: mixed `layout()` against mixed stats reads 0.6 against 0.4 µs per 1,000 units in Chrome 154, 0.7 against
-  0.6 in Safari 27 and 0.8 against 1.7 in Firefox 156.0.1 (#387). Reopens with `bun harness bench main` of that branch,
-  which lands only if no row reads slower in any browser.
+- **A counter of `layout()`'s own**, the simple fit rules a second time as one numeric loop with no cursor and no
+  call per line (#338; 90 lines of `src/line-break.ts`, removed in #TBD): the bench read no row slower without it in
+  Chrome, Firefox or Safari (#TBD). #338 had timed it 3 times faster in Chrome 153 and Safari 27 than the simple walker
+  main had then, which #340 replaced with today's leaner stepper. Offline the stepper read slower (2026-09-30; the
+  bench's bundles and texts on a stand-in Canvas, both builds timed in each round of one process, in Node 23's V8 and
+  in Bun 1.4's and Safari 27's JavaScriptCore, on a busy machine): chat messages at a new width each pass at 1.24-1.30
+  of the counter's time in V8 and 1.46-1.58 in JavaScriptCore, long breakable runs at 1.96-2.11 in both, a book-length
+  Arabic paragraph at 1.49-1.65 and keep-all CJK brackets at 3.2 and 1.9; chat messages at three widths laid out again
+  and again read 0.85-1.06 in V8 and 1.22-1.49 in JavaScriptCore, where a run of one build per process the same day
+  read 0.60-0.67 and 0.76-1.03. So offline readings of the walkers move with the machine, and repeated widths flatter
+  the stepper, likely as the branch predictor learns each text's lines. The stepper allocates a cursor and a stats
+  object per call, where the counter allocated nothing. Reopens if `layout()` at new widths, or of text that breaks
+  between graphemes, reads slower than a build with the counter back.
 - **The full walker stepping one line per call**, redoing its setup each line: 1.07-1.40 on short lines in Chrome 154,
   Firefox 156 and Safari 27 (#359, 2026-09-26).
 - **One loop for both walkers**: 1.06-1.10 on chat-like messages in Chrome, 1.18-1.32 in Firefox (#359).
@@ -1385,15 +1380,15 @@ Engines.
 Data shapes: a `Uint8Array` of flags per text made one-word `prepareWithSegments()` a third slower in Node 23's V8 and
 rich-inline preparation 12% slower in Chrome 154, so the analysis builds a plain array; slicing segment texts where
 measurement reads them, not once in the analysis, made Firefox 156 prepare rich items 11-19% slower (#360, 2026-09-26).
-`Array.from({ length }, fn)` cost Chrome 154 5.7% preparing CJK it had measured before, so per-segment arrays that
-start at zero are pushed in a loop (`zeros()`), while lists of records or null keep `Array.from`: one helper pushing
-both made Node 23's V8 store each zero as a boxed double (#366, #370). Overflow trims read in `countPreparedLines()`'s
-loop cost Firefox 156 13-26% counting long breakable runs, so `layout()` counts a handle with overflow trims through
-the simple stepper, and its line APIs keep the simple walk, without which Chrome 154's line APIs ran 62-108% slower on
-CJK messages (#366, 2026-09-27). `measureAnalysis()` keeps its helpers as closures: hoisted, they
-measured the same in offline replays of all four profiles the replay runs (Blink, WebKit, Gecko and an unrecognized
-engine's) but took 16 more lines, and a hoist lands only if it removes lines and the bench shows a gain, so they weren't
-timed (2026-09-26). AGENTS.md's locals rule is for line walkers.
+`Array.from({ length }, fn)` cost Chrome 154 5.7% preparing CJK it had measured before, so per-segment arrays that start
+at zero are pushed in a loop (`zeros()`), while lists of records or null keep `Array.from`: one helper pushing both made
+Node 23's V8 store each zero as a boxed double (#366, #370). Overflow trims read in the loop `layout()` counted with
+until #TBD cost Firefox 156 13-26% counting long breakable runs, so `layout()` counted a handle with overflow trims
+through the simple stepper, as it now counts every such text, and its line APIs keep the simple walk, without which
+Chrome 154's line APIs ran 62-108% slower on CJK messages (#366, 2026-09-27). `measureAnalysis()` keeps its helpers as
+closures: hoisted, they measured the same in offline replays of all four profiles the replay runs (Blink, WebKit, Gecko
+and an unrecognized engine's) but took 16 more lines, and a hoist lands only if it removes lines and the bench shows a
+gain, so they weren't timed (2026-09-26). AGENTS.md's locals rule is for line walkers.
 
 #### JavaScript Engines
 
@@ -1417,10 +1412,9 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   field is benched before it lands.
 - **Class fields in Firefox**: any class field seems to make Firefox 156 compile the whole bundle up front, 4.5-4.8ms on
   a fresh page against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors; V8 and
-  JavaScriptCore didn't care (#340, 2026-09-23).
-- **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
-  full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
-  nothing (#350, 2026-09-26).
+  JavaScriptCore didn't care (#340, 2026-09-23). - **A loop slows once a check in it has held**: a check in the loop
+  `layout()` counted with until #TBD that handed unbroken-boundary lines to the full walker slowed counting all other
+  text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost nothing (#350, 2026-09-26).
 - **A block that never runs**: since rich items continue their lines, Firefox 156 measured the bench's rich stats about
   6% slower, and its rich walk and stream about 2%. It isn't the full walker, as #369 supposed (sending items on
   fast-path handles back to the simple stepper read +0.2%): without the block at the top of the rich stepper's item loop
@@ -2076,8 +2070,7 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   numbers) each lost speed in more than one engine or added too much code; of a walker that stepped exactly one line per
   call, only its cleanup of line text landed (2026-09-26), and a private copy of the stepper was rejected as duplication
   for a small JIT gain (2026-09-25; Part 1, Engineering). They reopen when the full walker's cost per segment nears the
-  counter's. Counting `layout()`'s lines with the simple stepper, in place of the counter, waits for a bench (The
-  Walkers' Shapes).
+  simple stepper's.
 - **Removing the prefix-measurement cache**: 79% more cold Canvas calls.
 - **A growing bracket, then bisection, in the line counter** (in the rebuild): 59% faster than a global binary search
   at narrow widths, 17% slower at wide ones; one counter was kept.
@@ -2360,8 +2353,9 @@ decisions for the maintainer.
   Paths; PLATFORM_BUGS.md), which was rejected as DOM access on 2026-09-12.
 - **2026-09-24: the full walker got engineering, not heuristics.** The full walker, the line walker for text the simple
   walkers don't cover, was sped up by data layout, fewer allocations, smaller representations and plain indexed code,
-  not new shortcuts. It still costs three to five times as much per segment as the counter `layout()` runs
-  (`countPreparedLines()`), so one walker for all text was rejected (Keeping Work Bounded).
+  not new shortcuts. It still costs three to five times as much per segment as the counter `layout()` ran then
+  (a loop of `countPreparedLines()`'s own, removed in #TBD), so one walker for all text was rejected (Keeping Work
+  Bounded).
 - **2026-09-25: a prepared handle needn't survive a JSON round trip.** Its per-segment flags are a `Uint8Array`, which
   `JSON.stringify()` turns into an object without a `length`, so the line walkers never finish on a JSON copy;
   `structuredClone()` and `postMessage()` copies work, and README calls the handle opaque. Cursors and ranges are plain

@@ -4720,7 +4720,7 @@ describe('layout invariants', () => {
     expect(measureNaturalWidth(prepared)).toBe(measureWidth('wide line', FONT))
   })
 
-  test('countPreparedLines stays aligned with the walked line counter', () => {
+  test('the simple stepper counts the lines the full walker counts', () => {
     const epsilon = getEngineProfile().lineFitEpsilon
     const texts = [
       'The quick brown fox jumps over the lazy dog.',
@@ -4734,11 +4734,12 @@ describe('layout invariants', () => {
       '\u6625\u7720\u4E0D\u89C9\u6653\uFF0C\u5904\u5904\u95FB\u557C\u9E1F\u3002',
     ]
 
-    // The count-only walker must agree with the simple walker at every width,
-    // including emergency widths and widths around each segment end. At the
-    // end minus the fit epsilon, the text up to there fits with nothing to spare.
+    // layout() counts with the simple stepper, which must agree with the full walker
+    // at every width, including emergency widths and widths around each segment end.
+    // At the end minus the fit epsilon, the text up to there fits with nothing to spare.
     for (let textIndex = 0; textIndex < texts.length; textIndex++) {
       const prepared = prepareWithSegments(texts[textIndex]!, FONT)
+      const complex = { ...prepared, simpleLineWalkFastPath: false, simpleLineCountFastPath: false } as typeof prepared
       const { widths: segmentWidths } = prepared as unknown as { widths: number[] }
       const widths = [-5, 0]
       for (let width = 1; width <= 400; width += 0.5) widths.push(width)
@@ -4749,9 +4750,7 @@ describe('layout invariants', () => {
       }
       for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
         const width = widths[widthIndex]!
-        const counted = countPreparedLines(prepared, width)
-        const walked = walkPreparedLinesRaw(prepared, width)
-        expect(counted).toBe(walked)
+        expect({ width, count: countPreparedLines(prepared, width) }).toEqual({ width, count: walkPreparedLinesRaw(complex, width) })
       }
     }
   })

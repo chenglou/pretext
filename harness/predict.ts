@@ -7,8 +7,8 @@
 // UTF-16 source offsets. `run.ts --lib` bundles another build in place of src/.
 //
 // The prediction is walkLineRanges' lines (walkRichInlineLineRanges' for a rich case). Every other line API runs on the
-// same case too, and the first way one disagrees with the walk is kept: layout() on prepare()'s handle (the resize path,
-// with its own line counter), measureLineStats, layoutNextLineRange, layoutNextLine, layoutWithLines and
+// same case too, and the first way one disagrees with the walk is kept: layout() on prepare()'s handle (the resize
+// path), measureLineStats, layoutNextLineRange, layoutNextLine, layoutWithLines and
 // materializeLineRange; for rich cases measureRichInlineStats, layoutNextRichInlineLineRange and
 // materializeRichInlineLineRange, whose fragments' text is checked against their items' own text. The lines' text (the
 // fragments' for a rich case) goes out as a hash, for `equal` to compare builds by. measureText calls are

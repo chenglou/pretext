@@ -8,7 +8,6 @@ import {
   SPACE,
   SPACED,
   TAB,
-  TEXT,
   UNBROKEN,
   ZERO_WIDTH_BREAK,
   ZERO_WIDTH_GLUE,
@@ -25,8 +24,7 @@ export type PreparedLineBreakData = {
   // Per segment, its flags byte, e.g. [TEXT, SPACE, TEXT]. A JSON copy of the handle turns it into an
   // object with no length, on which the walkers never finish (RESEARCH.md, Decisions Log)
   segmentFlags: Uint8Array
-  // Normal text can use the simple line stepper across all layout APIs, and layout()
-  // counts it with one numeric loop where it has no overflow trims
+  // Normal text can use the simple line stepper across all layout APIs
   simpleLineWalkFastPath: boolean
   // Normal text, or text of its kinds where the scan gives no break at some segment
   // boundary, which layout() counts with the simple stepper
@@ -259,108 +257,15 @@ export function walkPreparedLinesRaw(
   }
 }
 
-// layout()'s count: the simple stepper's lines as one numeric loop, with no
-// cursor and no per-line call. Every segment boundary of a fast-path handle is
-// a break, so an overflowing space or ZWSP ends its line and any other segment
-// starts the next one. The full walker costs three to five times as much per
-// segment, so one walker for all text was rejected (RESEARCH.md, Decisions Log).
-// Counting with the simple stepper itself would leave one copy of these fit
-// rules. Offline it counts a text at a width it wasn't laid out at before a
-// quarter to a half slower than this loop, and long breakable runs twice as
-// slow; no browser has timed it (RESEARCH.md, Keeping Work Bounded, The
-// Walkers' Shapes).
+// layout()'s count: the line walkers' lines, with no visitor. Text of the simple
+// walkers' kinds where the scan gives no break at some segment boundary, as before
+// NEL, takes the simple stepper's lines, except that the full walker steps a line
+// again where the stepper ended it at such a boundary, before the segment or after
+// the space before it, returning the line to its last break. The line APIs keep the
+// full walker for this text, since the stepper's widths can differ from its in the
+// last bits (RESEARCH.md, Keeping Work Bounded).
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  // The loop takes no overflow trims, which the stepper takes for a line's first segment.
-  if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
-    return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
-  }
-  const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
-  const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
-  const segmentCount = widths.length
-  let count = 0
-  // Every line starts at 0 and adds its content's widths. Firefox runs this loop
-  // about 1.6 times as long when a line's width is set from a segment's width
-  // instead (RESEARCH.md, Keeping Work Bounded).
-  let lineW = 0
-  let hasContent = false
-
-  // A ZWSP at the start of the text starts the first line.
-  for (let i = 0; i < segmentCount; i++) {
-    const kind = segmentFlags[i]! & KIND_BITS
-    const w = widths[i]!
-    const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
-    if (hasContent) {
-      // A segment that fits only by its line-end trim ends the line, as the full
-      // width it adds leaves no room after it.
-      if (lineW + w - endTrim <= fitLimit) {
-        lineW += w
-        continue
-      }
-      count++
-      lineW = 0
-      hasContent = false
-      if (kind !== TEXT) continue
-    } else if (kind === SPACE || (kind === ZERO_WIDTH_BREAK && i > 0)) {
-      continue
-    }
-
-    const startW = lineStartExtras === null ? w : w + lineStartExtras[i]!
-    const advances = breakableFitAdvances[i] as number[] | null
-    if (startW - endTrim <= fitLimit || advances === null) {
-      lineW += startW
-      hasContent = true
-      continue
-    }
-    // An overflowing breakable segment fills lines grapheme by grapheme. A line
-    // holding only an overflowing grapheme keeps the graphemes after it that
-    // can't start a line. A line that starts inside it where it has fresh-line
-    // geometry takes the tail or its fresh prefixes.
-    const prohibitions = lineStartProhibitions?.[i] ?? null
-    const entry = entryGeometry === null ? null : entryGeometry[i]!
-    let g = 0
-    while (g < advances.length) {
-      if (g > 0 && entry !== null && entry.entries[g] !== null) {
-        const end = getFreshLineEnd(entry, g, advances.length, fitLimit)
-        if (end > advances.length) {
-          lineW += getSegmentEntryWidth(entry, g, advances.length)!
-          hasContent = true
-          break
-        }
-        count++
-        g = end
-        continue
-      }
-      lineW += advances[g++]!
-      if (prohibitions !== null && lineW > fitLimit) {
-        const kept = g
-        while (g < advances.length && prohibitions.includes(g)) lineW += advances[g++]!
-        if (g > kept) {
-          count++
-          lineW = 0
-          continue
-        }
-      }
-      while (g < advances.length && lineW + advances[g]! <= fitLimit) lineW += advances[g++]!
-      if (g < advances.length) {
-        count++
-        lineW = 0
-      } else {
-        hasContent = true
-      }
-    }
-  }
-  return count + (hasContent ? 1 : 0)
-}
-
-// layout()'s count of text of the simple walkers' kinds where the scan gives no
-// break at some segment boundary, as before NEL: the simple stepper's lines, except
-// that the full walker steps a line again where the stepper ended it at such a
-// boundary, before the segment or after the space before it, returning the line to
-// its last break. Checking for that inside the counter's loop slowed Firefox's and
-// Chrome's count of all other text once the check had ever held, and the line APIs
-// keep the full walker for this text, since the stepper's widths can differ from
-// its in the last bits (RESEARCH.md, Keeping Work Bounded).
-function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
+  if (prepared.simpleLineWalkFastPath || !prepared.simpleLineCountFastPath) return walkPreparedLinesRaw(prepared, maxWidth)
   const { segmentFlags } = prepared
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   let count = 0

@@ -783,7 +783,7 @@ describe('the library through the adapter', () => {
     expect(score(oneLine, adapter.predict(paragraph(text, fit - 1 / 64))).status).toBe('count')
   })
 
-  test('layout() counting other lines than the walk blocks: a virtualized list would size a row for lines it doesn\'t paint (the review\'s D1: an overflowing space starts the next line in layout()\'s counter)', async () => {
+  test('layout() counting other lines than the walk blocks: a virtualized list would size a row for lines it doesn\'t paint', async () => {
     const text = 'aaaa bbbb cccc'
     // "aaaa" fits exactly, so each space overflows and must hang.
     const c = paragraph(text, library.measureNaturalWidth(library.prepareWithSegments('aaaa', '16px Harness Test')))
@@ -791,8 +791,8 @@ describe('the library through the adapter', () => {
     if (!('lines' in right)) throw new Error('unreachable')
     expect(right.disagreement).toBeNull()
     expect(right.lines.length).toBe(3)
-    // Drop the counter's `continue` after an overflow ends a line, so the overflowing space opens the next one.
-    const d1 = await planted('d1-counter', 'line-break.ts', /(export function countPreparedLines\([\s\S]*?hasContent = false\n(?:\s*\/\/[^\n]*\n)*)\s*if \([^\n]*\) continue\n/, '$1')
+    // layout() counts the walk's lines, so only a defect in the count itself parts them: count one line more.
+    const d1 = await planted('d1-count', 'layout.ts', /(const lineCount = countPreparedLines\(getInternalPrepared\(prepared\), maxWidth\))\n/, '$1 + 1\n')
     const wrong = d1.predict(c)
     if (!('lines' in wrong)) throw new Error('unreachable')
     expect(wrong.lines).toEqual(right.lines)
