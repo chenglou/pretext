@@ -4214,7 +4214,7 @@ rich-62e4228d958cf44e breaks
 rich-8058c8ea44ac27f5 breaks
 rich-c84427ff3e354b1e count
 
-## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, and what a line start consumes or a line end hangs is in no fragment (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-49f015c20c562738 breaks
 rich-64a76c11090a01ae breaks
 rich-729b900c377fd1bd breaks

@@ -15,7 +15,7 @@ rich-c9040bfe99878c7a count
 rich-83790250eafc6a06 count
 rich-9bcfa3fc39a9f991 count
 
-## A collapsed space before an item of only a soft hyphen or a bidi control, where the line ends, at 24 px and wider: Firefox counts the space on the line, where the library's line ends before the space that hangs, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+## A collapsed space before an item of only a soft hyphen or a bidi control, where the line ends, at 24 px and wider: Firefox counts the space on the line, where the library's line ends before the space that hangs, and what a line start consumes or a line end hangs is in no fragment (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-2790c70764cd3f97 breaks
 rich-7962779980684a5b breaks
 rich-efb55136c738e312 breaks

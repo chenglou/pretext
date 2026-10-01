@@ -3401,7 +3401,7 @@ rich-62e4228d958cf44e breaks
 rich-8058c8ea44ac27f5 breaks
 rich-ad4e0796eaaec403 breaks
 
-## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Safari keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Safari keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, and what a line start consumes or a line end hangs is in no fragment (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-14f68f3cc6f7140c breaks
 rich-49f015c20c562738 breaks
 rich-64a76c11090a01ae breaks

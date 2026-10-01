@@ -778,11 +778,12 @@ Since #TBD (2026-10-01) `prepareRichInline()` joins the items' texts, an atomic 
 that text once with a segment starting wherever an item does, measures each item's segments in its font, and hands the
 text walkers one handle. It replaced each item's own analysis patched toward the joined text and an item stepper
 (Continuing The Line has what those cost and the facts they were built on). What spans have of their own sits on that
-handle: an atomic item or a box is an object segment with a break on both sides; an item's `extraWidth` is in the width
-of its first segment, and a line that starts later in the item pays it there; a padded item that opens with preserved
-white space or a hard break has a start edge of its own, fitted by the edges the engine fits (`paddedOpeningFit`,
-`hardBreakItemRetreat`), and where the engine fits none, the edge takes no room in the white space around it, which
-hangs, and a line that ends there still paints it, so the walker keeps such edges' width apart from the width it fits the
+handle: an atomic item or a box is an object segment with a break on both sides, an atomic item of only white space or
+of no text too, as an inline-block is a box whatever its text; an item's `extraWidth` is in the width of its first
+segment, and a line that starts later in the item pays it there; a padded item that opens with preserved white space, a
+hard break or a zero-width space has a start edge of its own, fitted by the edges the engine fits (`paddedOpeningFit`,
+`hardBreakItemRetreat`) and painted whole by a line that takes it, and where the engine fits none, the edge takes no
+room in the white space around it, which hangs, so the walker keeps such edges' width apart from the width it fits the
 run at; each item keeps its font's hyphen and tab stops; and where text items differ in letter spacing, each segment's
 width holds its own. A paragraph of one text item is that text's own handle, and a paragraph that fits its line whole
 takes it without a walk, a premise with a gap under negative advances (ENGINE_FOLLOWUPS.md, Negative letter spacing and
@@ -797,26 +798,30 @@ the rich set's `keep-all/line-feed-between-ideographs` cases held one).
 
 Against main at 8e88756b in Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host (macOS 27.0, 26A428, 2026-10-01): no
 real-usage draw moves in any browser, and `bun harness equal main --offline` moves no text input in any profile (21,251
-inputs), with measureText calls within 0.03% of main's. Of the rich set's pinned cases, Chrome loses 18 and gains 11,
-Firefox loses 29 and gains 9, and webkit-host loses 28 and gains none; 14, 16 and 16 of the losses are under 24px, and of
-the 4, 13 and 12 wider ones, 4, 3 and 4 have main's lines and differ only in which line holds an invisible character,
-which the item stepper's empty fragments had put in the browser's (the shapes are in ENGINE_FOLLOWUPS.md, Rich-inline
-item edges, and on the accepted lists). Same-font items without chips, padding or boxes take the text walkers' line
-count in all but 52 of 6,012 offline layouts in the Blink profile (Skia's Canvas; main 195), the rest words measured in
-two parts and the paragraph's return from an unfit hyphen. `src/`'s runtime code went from 5,104 lines to 4,764
-(`src/rich-inline.ts` 1,027 to 631, `src/line-break.ts` 758 to 732, `src/analysis.ts` 296 to 386), and the engine profile
-from 23 fields to 20.
+inputs), with measureText calls within 0.04% of main's. Of the rich set's cases that main's build passes, Chrome fails
+19, Firefox 26 and webkit-host 25, and of those it fails they pass 22, 15 and 11; 15, 17 and 20 of the losses are under
+24px, and of the 4, 9 and 5 wider ones, 4, 3 and 4 have main's lines and differ only in which line holds an invisible
+character (the shapes are in ENGINE_FOLLOWUPS.md, Rich-inline item edges, and on the accepted lists). The rest are
+Firefox's 6 of bidi levels that end its white-space run and one webkit-host case of spaces in spans of their own before
+a padded span. On probes recorded fresh in the three browsers and not kept, 4,807 cases of realistic paragraphs, span
+edges, padded pre-wrap openings, soft hyphens and chips without text at 24-587px, Chrome passes 4,574 where main's build
+passes 4,348, Firefox 4,682 against 4,379 and webkit-host 4,706 against 4,353; Chrome loses 1 case main passes, Firefox
+none and webkit-host 63, all padded pre-wrap spans that open with white space or a line feed after preserved spaces,
+and the 1,690 realistic ones move in no browser. Same-font items without chips, padding or boxes take the text walkers' line count in all but 52 of
+6,012 offline layouts in the Blink profile (Skia's Canvas; main 195), the rest words measured in two parts and the
+paragraph's return from an unfit hyphen. `src/`'s runtime code went from 5,104 lines to 4,791 (`src/rich-inline.ts`
+1,027 to 653, `src/line-break.ts` 758 to 737, `src/analysis.ts` 296 to 386), and the engine profile from 23 fields to
+20.
 
 Not carried over, each a rule that read the items: the collapsed space before an item of only soft hyphens that hung per
 engine (Items Of Soft Hyphens And White Space), the bidi levels that end Firefox's white-space run (Firefox's White-Space
-Run Across Items), a ZWSP or separator item that took a line of its own after a character that overflows (under 24px),
-and the preserved spaces Firefox and Safari move before a padded span that starts with a hard break. Two costs are
-open (TODO.md): an item that starts inside a word cuts a segment with no break before it, which sends the whole
-paragraph to the full walker, where the stepper walked only the items that needed it (95 of the real-usage sample's 233
-rich draws take the full walker); and every item is measured in a pass of its own, so a paragraph of an item per word
-prepares text seen before in about 1.6 times main's time offline in Bun, with the same Canvas calls. Keeping a word two
-unpadded items share as one segment, and measuring items in one font as one run, would take both back, and would reopen
-this if the bench's rich rows read slower than main's. Two more readings from the same offline runs are hypotheses for
+Run Across Items), and a ZWSP or separator item that took a line of its own after a character that overflows (under
+24px). Two costs are open (TODO.md): an item that starts inside a word cuts a segment with no break before it, which
+sends the whole paragraph to the full walker, where the stepper walked only the items that needed it (95 of the
+real-usage sample's 233 rich draws take the full walker); and every item is measured in a pass of its own, so a
+paragraph of an item per word prepares text seen before in about 1.6 times main's time offline in Bun, with the same
+Canvas calls. Keeping a word two unpadded items share as one segment, and measuring items in one font as one run, would
+take both back, and would reopen this if the bench's rich rows read slower than main's. Two more readings from the same offline runs are hypotheses for
 the bench: `layoutNextRichInlineLineRange()` line by line (the `rich-stream` row) takes 1.0 to 1.4 times main's time on
 multi-item paragraphs, where stats take about a quarter and a walk 0.7 to 1.1 times; and a one-item paragraph, which
 costs what main's does in a process that lays out nothing else, takes 1.1 to 1.6 times main's for stats and a walk once
@@ -1043,10 +1048,14 @@ backward ranges, so the item was walked again to the soft hyphen, cutting the fl
 lines as the width grows from 43-60 to 7-14 per profile (#327, 2026-09-15; ENGINE_FOLLOWUPS.md). Since #TBD the text
 walkers decide whether the text before the hyphen fits and which earlier break a return takes
 (`returnsFromUnfitHyphen()` in `src/line-break.ts`). A run that continues across items moves to the next line whole in
-every profile where its first break is a soft hyphen whose hyphen doesn't fit: Safari 27 moves it too, though WebKit
-keeps an overflowing hyphen in one text (`the `, `inter`, `na\u00ADtion\u00ADal` at 84px in 16px Arial, #323's cases),
-so the WebKit profile returns from an unfit hyphen only to a break before such a run. Fit with the width you report, or
-text laid out at its widest line wraps differently (#308, 2026-09-15).
+every profile where its first break is a soft hyphen whose hyphen doesn't fit: Safari 27 moves it too (`the `, `inter`,
+`na\u00ADtion\u00ADal` at 84px in 16px Arial, #323's cases). WebKit lays a paragraph with inline boxes out with its
+line builder, whose line reverts from a soft hyphen whose hyphen doesn't fit to the last wrap opportunity where the
+hyphen fits or none is needed (`rebuildLineForTrailingSoftHyphen`, `InlineLineBuilder.cpp:1862-1887`), wherever the soft
+hyphen sits in its span or text node, so in the WebKit profile a paragraph of several items returns from every unfit
+hyphen, where a text keeps it (`unfitHyphenRetreat`): of 360 probe cases of soft hyphens in and beside spans at
+40-243px, webkit-host passes 360 and main's build 236 (2026-10-01; #TBD). Fit with the width you report, or text laid
+out at its widest line wraps differently (#308, 2026-09-15).
 
 #### Box Edges And Pre-wrap
 
@@ -1080,7 +1089,9 @@ fit of ones that overflow, as WebKit breaks the run that overflows where it fits
 walk of an item gives after its preserved spaces is the next item's, which the text the items join decides. WebKit's
 soft wrap index loop ends the content it places after a line break item (`InlineFormattingUtils.cpp:456-475`), so no
 break comes before a line feed that starts a box there either, after an atomic item too, and allows wrapping next to a
-white-space item (`:406-418`). A carriage return that ends one item and a
+white-space item (`:406-418`), where in Blink and Gecko no line ends inside a run of preserved spaces and tabs that goes
+on from one item to the next (UAX #14 LB7): Chrome and Firefox lay out `Some words`, a bold `  `, an italic ` `, an
+8px-padded ` x y` and ` tail` in 16px Arial at 103px as `Some `, then `words` through `y` (2026-10-01). A carriage return that ends one item and a
 line feed that starts the next make one break, as CRLF in one text does. Preserved spaces, tabs that hang and a hard
 break after an atomic item, without padding, stay on its line however far the line overflows, and so do they after items
 of only such white space after it, whatever items it spans: no break comes before them, Blink takes them as trailing
