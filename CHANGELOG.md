@@ -23,6 +23,8 @@
 - Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, from smaller Safari kerning data (#311).
 - `setLocale(locale)` now sets the language that later `prepare()`, `prepareWithSegments()` and `prepareRichInline()` calls break lines and measure under, in place of the page's `<html lang>`, which a worker doesn't have; `setLocale()` without a locale goes back to `<html lang>`. It no longer passes the locale to `Intl.Segmenter`, whose word boundaries Pretext now reads only inside Thai, Lao, Khmer and Myanmar text, where no locale changes them (#340, #356).
 - `prepare()`, `prepareWithSegments()` and `prepareRichInline()` now throw a `RangeError` for a `letterSpacing` that isn't finite, such as `NaN` or `Infinity`, which gave lines of width `NaN`, or a line per grapheme (#356).
+- `prepareRichInline()` now throws a `RangeError` that names the item for an `extraWidth` that isn't finite, such as `NaN` or `Infinity`, which gave lines of that width. Its options no longer type-check with a `letterSpacing`, as an object typed as `prepare()`'s options can hold: rich inline ignored it, since letter spacing is each item's own (#TBD).
+- A rich-inline atomic item (`break: 'never'`) whose text is only white space is now dropped, as an item with empty text is: it gave a gap that named it, though an atomic item's own white space gives none, and in `pre-wrap` it took its `extraWidth` after other content on a line and nothing at a line's start. For an empty object that takes room, pass a box, `{ width }` (#TBD).
 
 ### Removed
 

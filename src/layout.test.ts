@@ -2972,6 +2972,21 @@ describe('rich-inline invariants', () => {
     expect(gapItems([{ text: 'Tag' }, { text: ' @maya', break: 'never' }])).toEqual([[[0, -1], [1, -1]]])
     expect(gapItems([{ text: '@maya ', break: 'never' }, { text: 'Tag' }])).toEqual([[[0, -1], [1, -1]]])
     expect(gapItems([{ text: '@maya ', break: 'never' }, { text: ' Tag' }])).toEqual([[[0, -1], [1, 1]]])
+    // An atomic item of only white space has no text left, so it makes no gap and no fragment,
+    // as an empty item, with or without extraWidth, in pre-wrap too.
+    for (const options of [{}, { whiteSpace: 'pre-wrap' }] as const) {
+      for (const extraWidth of [0, 20]) {
+        const blank = prepareRichInline([{ text: 'a', font: FONT }, { text: ' \n ', font: FONT, break: 'never', extraWidth }, { text: 'b', font: FONT }], options)
+        const line = layoutNextRichInlineLineRange(blank, Infinity)!
+        expect(line.fragments.map(fragment => [fragment.itemIndex, fragment.gapItemIndex, fragment.gapBefore])).toEqual([[0, -1, 0], [2, -1, 0]])
+        expect(line.width).toBe(measureWidth('ab', FONT))
+      }
+    }
+    expect(gapItems([{ text: ' ', break: 'never' }, { text: 'b' }])).toEqual([[[1, -1]]])
+    // One that isn't atomic makes the gap, and its extraWidth goes with its fragment.
+    const padded = layoutNextRichInlineLineRange(prepareRichInline([{ text: 'a', font: FONT }, { text: ' ', font: FONT, extraWidth: 20 }, { text: 'b', font: FONT }]), Infinity)!
+    expect(padded.fragments.map(fragment => [fragment.itemIndex, fragment.gapItemIndex])).toEqual([[0, -1], [2, 1]])
+    expect(padded.width).toBe(measureWidth('a b', FONT))
     // A gap of zero or negative advance still names its item.
     for (const letterSpacing of [-measureWidth(' ', FONT), -measureWidth(' ', FONT) - 2]) {
       expect(gapItems([{ text: 'A' }, { text: ' B', letterSpacing }])).toEqual([[[0, -1], [1, 1]]])
@@ -4167,6 +4182,21 @@ describe('rich-inline invariants', () => {
     // A width that isn't finite, or is negative, throws, naming the item.
     for (const width of [Number.NaN, Infinity, -Infinity, -10]) expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { width }])).toThrow(RangeError)
     expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { width: -10 }])).toThrow('Item 1 has no text')
+  })
+
+  test('a rich item\'s extraWidth that isn\'t finite throws at preparation, naming the item', () => {
+    for (const extraWidth of [NaN, Infinity, -Infinity]) {
+      expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth }])).toThrow(RangeError)
+      // An item that gets no fragment is checked too.
+      expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, extraWidth }])).toThrow(RangeError)
+    }
+    expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth: NaN }])).toThrow('Item 1\'s extraWidth')
+    // A negative one is the app's, as chrome narrower than the text it stands for.
+    expect(measureRichInlineStats(prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth: -3 }]), 1e5).maxLineWidth).toBeCloseTo(measureWidth('abcd', FONT) - 3, 9)
+    // prepare()'s options aren't prepareRichInline()'s: letter spacing is each item's own.
+    const options: Parameters<typeof prepare>[2] = { whiteSpace: 'pre-wrap', letterSpacing: 2 }
+    // @ts-expect-error A letterSpacing among the options would be ignored.
+    expect(prepareRichInline([{ text: 'ab', font: FONT }], options)).toBeDefined()
   })
 
   test('split CJK rich inline items stay inside the line width', () => {

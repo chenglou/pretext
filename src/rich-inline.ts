@@ -72,6 +72,7 @@ export type RichInlineBox = {
 export type RichInlineOptions = {
   whiteSpace?: WhiteSpaceMode // `pre-wrap`: CSS `white-space: pre-wrap`, as prepare() takes it
   wordBreak?: WordBreakMode // `keep-all`: CSS `word-break: keep-all`, as prepare() takes it
+  letterSpacing?: never // Each item's own, so prepare()'s options aren't these
 }
 
 export type PreparedRichInline = {
@@ -558,12 +559,21 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       continue
     }
     const letterSpacing = readLetterSpacing(item.letterSpacing)
+    // An extraWidth that isn't finite would give lines of width NaN or Infinity. A negative one
+    // stands for chrome narrower than the text it replaces.
+    const extraWidth = item.extraWidth ?? 0
+    if (!Number.isFinite(extraWidth)) throw new RangeError(`Item ${index}'s extraWidth must be a finite number of CSS px, not ${extraWidth}`)
     const text = texts[index]!
     let start = 0
     while (!preserve && start < text.length && isCollapsibleSpaceCode(text.charCodeAt(start))) start++
 
+    // An item with no text gets no fragment, and its extraWidth goes with it: apps pass an
+    // empty item to hide a run. One of only white space makes the gap between the items around
+    // it, but for an atomic item, whose white space is its own (ownsWhiteSpace, below): its box
+    // trims it and is then empty, which a box (RichInlineBox) stands for where it should take
+    // room (ENGINE_FOLLOWUPS.md).
     if (start === text.length) {
-      if (start > 0 && (pendingGapWidth === null || !whitespaceRunOpen)) {
+      if (start > 0 && item.break !== 'never' && (pendingGapWidth === null || !whitespaceRunOpen)) {
         pendingGapWidth = whitespaceRunOpen ? 0 : getCollapsedSpaceWidth(item.font, letterSpacing, language)
         pendingGapItemIndex = index
         whitespaceRunOpen = true
@@ -605,6 +615,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // chip ` @bob ` 6.6px narrower than the chip's text with its spaces.
     const itemBreak = item.break ?? 'normal'
     const analysis = analyzeText(item.text, profile, itemBreak === 'never' ? 'normal' : whiteSpace, wordBreak, language)
+    // Under pre-wrap too, an atomic item of only white space has no text (above).
+    if (analysis.flags.length === 0) continue
     const prepared = measureAnalysis(analysis, item.font, true, letterSpacing, profile, language, itemBreak !== 'never') as PreparedSegments
     const { segmentFlags } = prepared
     // A collapsible space before a hard break goes with the line's end (CSS Text 3
@@ -679,7 +691,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // but Blink keeps an item of only white space however far the line overflows, after any
     // content, and WebKit fits the end edge too of an item whose opening is all of it; else the
     // ordinary fit takes the item's whole extraWidth.
-    const extraWidth = item.extraWidth ?? 0
     const opensWithWhiteSpace = firstKind === PRESERVED_SPACE || (firstKind === TAB && profile.hangTabs)
     let openingSpaceEnd = 0
     while (openingSpaceEnd < segmentFlags.length && (segmentFlags[openingSpaceEnd]! & KIND_BITS) === PRESERVED_SPACE) openingSpaceEnd++

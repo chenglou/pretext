@@ -18,7 +18,7 @@
 import './watchdog.ts'
 import { join, resolve } from 'node:path'
 import type { LayoutCursor, PrepareOptions } from '../src/layout.ts'
-import type { RichInlineBox, RichInlineCursor, RichInlineItem } from '../src/rich-inline.ts'
+import type { RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineOptions } from '../src/rich-inline.ts'
 import { labels, MESSAGE_FAMILIES, reader, richItems as benchItems, shapes, STYLE } from './bench/texts.ts'
 import { drawCases, PROFILES, standInWidth, type Profile } from './invariants.ts'
 import { canvasFont, isRich, prepareOptions, richItems, richOptions } from './predict.ts'
@@ -57,13 +57,15 @@ const load = async (dir: string): Promise<Api> => ({ ...await import(join(dir, '
 if (resolve(flag('a')!) === resolve(flag('b')!)) throw new Error('--a and --b name one src/ directory')
 const builds = [await load(flag('a')!), await load(flag('b')!)]
 
-type Input = { id: string; lang: string; width: number; text: string; font: string; options: PrepareOptions; items: Array<RichInlineItem | RichInlineBox> | null }
+type Input = { id: string; lang: string; width: number; text: string; font: string } &
+  ({ options: PrepareOptions; items: null } | { options: RichInlineOptions; items: Array<RichInlineItem | RichInlineBox> })
 const inputs: Input[] = []
 const start = performance.now()
 for (const c of drawCases(join(import.meta.dir, 'cases'), 'offline-equal', Number(flag('draws') ?? 15000), Number(flag('rich') ?? 1500))) {
   const runs = c.paragraph.runs
   const rich = isRich(runs)
-  inputs.push({ id: c.id, lang: c.pageLang, width: c.paragraph.width, text: runs.map(run => run.text).join(''), font: canvasFont(runs[0]!.font), options: rich ? richOptions(c) : prepareOptions(c), items: rich ? richItems(runs) : null })
+  const input = { id: c.id, lang: c.pageLang, width: c.paragraph.width, text: runs.map(run => run.text).join(''), font: canvasFont(runs[0]!.font) }
+  inputs.push(rich ? { ...input, options: richOptions(c), items: richItems(runs) } : { ...input, options: prepareOptions(c), items: null })
 }
 const bench = (id: string, lang: string, texts: readonly string[], font: string, options: PrepareOptions = {}): void => {
   for (let i = 0; i < texts.length; i++) inputs.push({ id: `${id} ${i}`, lang, width: 320, text: texts[i]!, font, options, items: null })
