@@ -14,6 +14,7 @@ import {
   TAB,
   TEXT,
   UNBROKEN,
+  ZERO_WIDTH_BREAK,
   type ParagraphItems,
   type TextAnalysis,
   type WhiteSpaceMode,
@@ -362,19 +363,20 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // (box-decoration-break: clone). The first of its segments whose width a line counts, after
     // the collapsed space before its text, holds it for a line that comes into the item or starts
     // with it, and a line that starts later in the item pays it there (ParagraphSegmentData). An
-    // item that opens with preserved white space or a hard break, which a line can end with after
-    // content that fills it, gets a start edge of its own before them: an empty segment as wide as
-    // the extraWidth, which fits by the edges the engine fits where a line takes the item's
-    // opening and no more of it (getOpeningFit), and no break comes before it, as none comes
-    // before white space or a hard break in the text (UAX #14 LB6, LB7), but after an object in
-    // Blink and Gecko.
+    // item that opens with preserved white space, a hard break or a zero-width space, which a line
+    // can end with after content that fills it, gets a start edge of its own before them: an empty
+    // segment as wide as the extraWidth, which fits by the edges the engine fits where a line takes
+    // the item's opening and no more of it (getOpeningFit), and no break comes before it, as none
+    // comes before white space, a hard break or a zero-width space in the text (UAX #14 LB6, LB7),
+    // but after an object in Blink and Gecko, and before a zero-width space after an object or
+    // white space, where the browsers break.
     const extraWidth = item.extraWidth ?? 0
     let first = to
     if (extraWidth !== 0) {
       first = from
       while (first < to && ((sub.segmentFlags[first - from]! & KIND_BITS) === SOFT_HYPHEN || (first === from && (sub.segmentFlags[0]! & KIND_BITS) === SPACE))) first++
       const firstKind = first < to ? sub.segmentFlags[first - from]! & KIND_BITS : TEXT
-      if (firstKind === PRESERVED_SPACE || firstKind === TAB || firstKind === HARD_BREAK) {
+      if (firstKind === PRESERVED_SPACE || firstKind === TAB || firstKind === HARD_BREAK || (firstKind === ZERO_WIDTH_BREAK && first === from)) {
         const at = widths.length
         const afterObject = at > 0 && (flags[at - 1]! & KIND_BITS) === OBJECT
         // Whether the item follows preserved spaces that follow text in their own item: Blink gives every run
@@ -384,7 +386,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         const fit = getOpeningFit(sub.segmentFlags, extraWidth, afterObject, afterTextSpaces, profile)
         // In WebKit a break comes before white space that starts an item (whiteSpaceItemBreaks), and none
         // before a hard break, after an object too (nextWrapOpportunity, InlineFormattingUtils.cpp:469-475).
-        const breaksBefore = at === 0 || (whiteSpaceItemBreaks ? firstKind !== HARD_BREAK : afterObject)
+        const breaksBefore = at === 0 || (firstKind === ZERO_WIDTH_BREAK ? afterObject || (1 << (flags[at - 1]! & KIND_BITS) & (1 << SPACE | PRESERVED_WHITE_SPACE)) !== 0
+          : whiteSpaceItemBreaks ? firstKind !== HARD_BREAK : afterObject)
         widths.push(extraWidth)
         // A line that takes the opening paints the whole edge, whatever of it the line fitted (ParagraphSegmentData,
         // openingEdges). An opening no edge of which is fitted takes no room among the white space around it,
@@ -393,6 +396,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         flags.push(fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN)
         openingEdges = setAt(openingEdges, at, extraWidth, 0)
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
+        // The simple walkers take every boundary for a break and a line-end trim out of the line's width.
+        simple = false
         segments.push('')
         breakableFitAdvances.push(null)
         // The edge comes before the item's segments, so before the space or soft hyphens that lead them.
@@ -564,8 +569,8 @@ function getItemIndex(itemSegments: number[], segmentIndex: number): number {
 }
 
 // How much of a padded item's extraWidth a line fits where it takes the item's opening, the
-// white space or hard break that starts it, and no more of it; a line that goes on into the item
-// fits all of it. Blink adds a span's start edge to the line when it opens (HandleOpenTag,
+// white space, hard break or zero-width space that starts it, and no more of it; a line that goes
+// on into the item fits all of it. Blink adds a span's start edge to the line when it opens (HandleOpenTag,
 // line_breaker.cc:3957-3976), and only a test-only flag narrows the line for its cloned end edge
 // (BoxDecorationBreakCloneLineBreaking, :454-461), so it fits half: the extraWidth isn't split by
 // side (ENGINE_FOLLOWUPS.md). The items a line takes after the break it returns to stay on it
@@ -585,10 +590,11 @@ function getOpeningFit(segmentFlags: Uint8Array, extraWidth: number, afterObject
   const fit = profile.paddedOpeningFit
   const firstKind = segmentFlags[0]! & KIND_BITS
   const opensWithWhiteSpace = firstKind === PRESERVED_SPACE || (firstKind === TAB && profile.hangTabs)
+  const opensWithBreak = firstKind === HARD_BREAK || firstKind === ZERO_WIDTH_BREAK
   let whiteSpaceEnd = 0
   while (whiteSpaceEnd < segmentFlags.length && ((segmentFlags[whiteSpaceEnd]! & KIND_BITS) === PRESERVED_SPACE || (segmentFlags[whiteSpaceEnd]! & KIND_BITS) === TAB)) whiteSpaceEnd++
-  if (fit === 'start' && (opensWithWhiteSpace || firstKind === HARD_BREAK)) return afterTextSpaces || whiteSpaceEnd === segmentFlags.length ? 0 : extraWidth / 2
-  if (fit === 'placed' && ((afterObject && opensWithWhiteSpace) || firstKind === HARD_BREAK)) {
+  if (fit === 'start' && (opensWithWhiteSpace || opensWithBreak)) return afterTextSpaces || whiteSpaceEnd === segmentFlags.length ? 0 : extraWidth / 2
+  if (fit === 'placed' && ((afterObject && opensWithWhiteSpace) || opensWithBreak)) {
     const onlyOpening = whiteSpaceEnd === segmentFlags.length || (whiteSpaceEnd === segmentFlags.length - 1 && (segmentFlags[whiteSpaceEnd]! & KIND_BITS) === HARD_BREAK)
     return onlyOpening ? extraWidth : extraWidth / 2
   }

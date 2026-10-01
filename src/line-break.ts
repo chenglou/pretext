@@ -663,10 +663,12 @@ function walkPreparedComplexLines(
               // A break segment hangs with the gap before it, after the content before
               // it, which fits without its line-end trim. A collapsible space or ZWSP
               // hangs even after overflowing content that started the line, as the
-              // simple stepper does; a preserved space there starts the next line.
+              // simple stepper does; a preserved space there starts the next line. A ZWSP
+              // also hangs right after an object, which its line took by the part it fits.
               const contentW = lineW - lineEndTrimmed
               if (breakAfter && (contentW <= fitLimit ||
-                (pendingBreakSegmentIndex < 0 && (kind === SPACE || kind === ZERO_WIDTH_BREAK)))) {
+                (pendingBreakSegmentIndex < 0 && (kind === SPACE || kind === ZERO_WIDTH_BREAK)) ||
+                (kind === ZERO_WIDTH_BREAK && (segmentFlags[i - 1]! & KIND_BITS) === OBJECT))) {
                 endWidth = hangs ? hangStartWidth : kind === TAB ? lineW + advance : contentW
                 lineW += advance
                 endSegmentIndex = i + 1

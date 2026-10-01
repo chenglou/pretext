@@ -144,11 +144,12 @@ export type EngineProfile = {
   // (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
   hardBreakItemRetreat: 'item' | 'last-grapheme'
   // Which edges of a padded rich-inline item a line fits where the line takes the item's opening and no more of it:
-  // the white space or hard break that starts it (getOpeningFit in src/rich-inline.ts has each engine's rule and
-  // source); the line paints both edges whatever it fitted. Blink fits its start edge, and no edge of an item of only
-  // white space, or after preserved spaces that follow text or overflow the line, which its line trails
-  // (walkPreparedComplexLines in src/line-break.ts): 'start'. WebKit fits its start edge where a hard break starts it,
-  // or white space does after an atomic item, and its end edge too where the item is all opening: 'placed'. Gecko fits a frame's whole width, its cloned
+  // the white space, hard break or zero-width space that starts it (getOpeningFit in src/rich-inline.ts has each
+  // engine's rule and source); the line paints both edges whatever it fitted. Blink fits its start edge, and no edge
+  // of an item of only white space, or after preserved spaces that follow text or overflow the line, which its line
+  // trails (walkPreparedComplexLines in src/line-break.ts): 'start'. WebKit fits its start edge where a hard break or
+  // a zero-width space starts it, or white space does after an atomic item, and its end edge too where the item is all
+  // opening: 'placed'. Gecko fits a frame's whole width, its cloned
   // end edge too, and lets only an empty frame past the line's end (CanPlaceFrame, nsLineLayout.cpp:1217-1270),
   // wherever it falls, so an object of width 0 stays on a line that already overflows: 'both'. In 15px Helvetica
   // Neue, `Unbreakable` and a span with 20px padding that starts with a line feed keep the line feed from 107px in

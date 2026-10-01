@@ -3951,6 +3951,51 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('a padded rich item that starts with a zero-width space fits its start edge before it', () => {
+    const round = (value: number) => Math.round(value * 1e6) / 1e6
+    const lines = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
+      const prepared = prepareRichInline(items)
+      const out: Array<{ width: number; fragments: Array<[number, string, number]> }> = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        const line = materializeRichInlineLineRange(prepared, range)
+        out.push({ width: round(line.width), fragments: line.fragments.map(f => [f.itemIndex, f.text, round(f.occupiedWidth)]) })
+      })
+      expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
+      return out
+    }
+    const some = measureWidth('some', FONT)
+    const space = measureWidth(' ', FONT)
+    const pad = measureWidth('pad', FONT)
+    const items = [{ text: 'some ', font: FONT }, { text: '\u200Bpad', font: FONT, extraWidth: 16 }]
+    const profile = getEngineProfile()
+    const previous = profile.paddedOpeningFit
+    try {
+      for (const fit of ['start', 'placed', 'both'] as const) {
+        profile.paddedOpeningFit = fit
+        // A line that takes the zero-width space and no more of the item fits the edges the engine fits
+        // there, half the extraWidth in Chrome and Safari and all of it in Firefox, and paints all of it:
+        // in 16px Arial, `some ` and an 8px-padded U+200B `padded words` at 54px keep the zero-width
+        // space on the first line in Chrome and Safari, and Firefox gives it a line of its padding.
+        const edge = fit === 'both' ? 16 : 8
+        expect(lines(items, some + space + edge)).toEqual([
+          { width: round(some + space + 16), fragments: [[0, 'some', round(some)], [1, '\u200B', 16]] },
+          { width: round(pad + 16), fragments: [[1, 'pad', round(pad + 16)]] },
+        ])
+        // Where that edge doesn't fit, the line ends before the item.
+        expect(lines(items, some + space + edge - 1)).toEqual([
+          { width: round(some), fragments: [[0, 'some', round(some)]] },
+          { width: round(pad + 16), fragments: [[1, '\u200Bpad', round(pad + 16)]] },
+        ])
+        // A line that goes on into the item counts the extraWidth once.
+        expect(lines(items, some + space + 16 + pad)).toEqual([
+          { width: round(some + space + 16 + pad), fragments: [[0, 'some', round(some)], [1, '\u200Bpad', round(16 + pad)]] },
+        ])
+      }
+    } finally {
+      profile.paddedOpeningFit = previous
+    }
+  })
+
   test('a padded rich item that starts with a line feed returns its line to a break, or else starts the next line, and a blank line is one empty fragment', () => {
     const round = (value: number) => Math.round(value * 1e6) / 1e6
     const lines = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
