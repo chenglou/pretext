@@ -181,12 +181,6 @@ function sliceAnalysis(analysis: TextAnalysis, from: number, to: number): TextAn
   }
 }
 
-// Whether a text holds anything but collapsible white space.
-function hasContent(text: string): boolean {
-  for (let i = 0; i < text.length; i++) if (!isCollapsibleSpaceCode(text.charCodeAt(i))) return true
-  return false
-}
-
 export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, options?: RichInlineOptions): PreparedRichInline {
   const whiteSpace = options?.whiteSpace ?? 'normal'
   const wordBreak = options?.wordBreak ?? 'normal'
@@ -213,8 +207,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // lines collapse leading white space (Line::appendText, InlineLine.cpp:348-373) and remove
   // trailing (InlineLineBuilder.cpp:646); Gecko's text run stops at the box
   // (BuildTextRunsScanner::ScanFrame, nsTextFrame.cpp:2248-2254), and its own lines skip leading
-  // white space (nsTextFrame.cpp:10935-10944) and trim trailing (nsBlockFrame.cpp:5844). An atomic
-  // item of only white space is no object: in normal white space it is that white space.
+  // white space (nsTextFrame.cpp:10935-10944) and trim trailing (nsBlockFrame.cpp:5844). So an
+  // atomic item of only white space, or of no text, is still an object, as wide as its extraWidth.
   let source = ''
   const starts: number[] = []
   const atomic: boolean[] = []
@@ -237,11 +231,11 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       paddedOrObject = true
       continue
     }
-    const isAtomic = item.break === 'never' && hasContent(item.text)
+    const isAtomic = item.break === 'never'
     atomic.push(isAtomic)
     if (isAtomic) {
       source += '\uFFFC'
-    } else if (item.break !== 'never' || !preserve) {
+    } else {
       source += item.text
       if (item.text !== '') {
         const letterSpacing = readLetterSpacing(item.letterSpacing)
@@ -278,7 +272,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   let retreatsFromUnfitHyphen = profile.unfitHyphenRetreat === 'none' && source.includes('\u00AD')
   let insideExtras: number[] | null = null
   let fillExtras: number[] | null = null
-  let hangingEdges: number[] | null = null
+  let openingEdges: number[] | null = null
   // Each text item's hyphen width and tab stop advance, and whether two items differ in one.
   const hyphenWidths: number[] = zeros(items.length)
   const tabStopAdvances: number[] = zeros(items.length)
@@ -322,7 +316,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         text = buildLineTextFromRange(own, 0, 0, own.segments.length, 0)
         while (isCollapsibleSpaceCode(item.text.charCodeAt(textStart))) textStart++
         textEnd = item.text.length
-        while (isCollapsibleSpaceCode(item.text.charCodeAt(textEnd - 1))) textEnd--
+        while (textEnd > textStart && isCollapsibleSpaceCode(item.text.charCodeAt(textEnd - 1))) textEnd--
       }
       // Gecko places an object of width 0 otherwise than the simple walker does (walkPreparedComplexLines).
       if (width === 0) simple = false
@@ -387,17 +381,18 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // too (nextWrapOpportunity, :469-475).
         const breaksBefore = at === 0 || (profile.lineBreakScan === 'webkit' ? firstKind !== HARD_BREAK : afterObject)
         widths.push(extraWidth)
-        // An opening no edge of which is fitted takes no room among the white space around it, which hangs
-        // past it, and a line that ends in that white space still paints it (ParagraphSegmentData,
-        // hangingEdges). Else it is an object: the white space after it stays on its line, as the line keeps
-        // the opening it took.
+        // A line that takes the opening paints the whole edge, whatever of it the line fitted (ParagraphSegmentData,
+        // openingEdges). An opening no edge of which is fitted takes no room among the white space around it,
+        // which hangs past it. Else it is an object, whose line-end trim is what the line doesn't fit: the white
+        // space after it stays on its line, as the line keeps the opening it took.
         flags.push(fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN)
-        if (fit === 0) hangingEdges = setAt(hangingEdges, at, extraWidth, 0)
+        openingEdges = setAt(openingEdges, at, extraWidth, 0)
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         segments.push('')
         breakableFitAdvances.push(null)
-        sourceStarts.push(offsets[analysis.starts[first]!]! - starts[index]!)
-        sourceEnds.push(offsets[analysis.starts[first]!]! - starts[index]!)
+        // The edge comes before the item's segments, so before the space or soft hyphens that lead them.
+        sourceStarts.push(offset - starts[index]!)
+        sourceEnds.push(offset - starts[index]!)
         if (fit !== 0) lineEndTrims = setAt(lineEndTrims, at, extraWidth - fit, 0)
         first = from - 1
       }
@@ -493,7 +488,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   }
   data.items = {
     itemSegments, hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances,
-    insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), hangingEdges: setAt(hangingEdges, segmentCount, 0, 0),
+    insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0), openingEdges: setAt(openingEdges, segmentCount, 0, 0),
   }
   let onlyItem = -1
   for (let index = 0; index < items.length && !paddedOrObject; index++) {
@@ -580,9 +575,9 @@ function getOpeningFit(segmentFlags: Uint8Array, extraWidth: number, afterObject
 // before the next fragment on the line, as that item's white space made it. Each fragment's width
 // is its segments' on this line, and the fragments add up to the line's width: what the line's
 // width leaves out at its end comes out of the last fragments and the gaps before them, from the
-// line's end back, as white space that hangs there and the edge of a padded item's opening that
-// the line kept without fitting (getOpeningFit), and what it adds, the hyphen of a soft hyphen the
-// line ends at, goes to the last one.
+// line's end back, as white space that hangs there, but never out of the edge of a padded item's
+// opening, which the line paints whole (getOpeningFit), and what it adds, the hyphen of a soft
+// hyphen the line ends at, goes to the last one.
 function createLine(
   flow: InternalPreparedRichInline,
   width: number,
@@ -677,12 +672,11 @@ function createLine(
 
   let rest = lineW - width
   if (rest < 0 && fragments.length > 0) fragments[fragments.length - 1]!.occupiedWidth -= rest
-  const hangingEdges = items === undefined ? null : items.hangingEdges
+  const openingEdges = items === undefined ? null : items.openingEdges
   for (let k = fragments.length - 1; k >= 0 && rest > 0; k--) {
     const last = fragments[k]!
-    // The edge of a padded opening stays painted where the white space around it hangs: it is the
-    // first segment of its item, so of a fragment.
-    const edge = hangingEdges === null || last.start.graphemeIndex > 0 ? 0 : hangingEdges[itemSegments[last.itemIndex]! + last.start.segmentIndex]!
+    // The edge of a padded opening stays painted: it is the first segment of its item, so of a fragment.
+    const edge = openingEdges === null || last.start.graphemeIndex > 0 ? 0 : openingEdges[itemSegments[last.itemIndex]! + last.start.segmentIndex]!
     if (last.occupiedWidth > edge) {
       const part = Math.min(rest, last.occupiedWidth - edge)
       last.occupiedWidth -= part

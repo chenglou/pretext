@@ -228,8 +228,7 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
     // item, and without extraWidth.
     const prepared = api.prepareRichInline(items, options)
     const whiteSpace = options.whiteSpace ?? 'normal'
-    // An atomic item of only white space is no object (src/rich-inline.ts).
-    const atomic = items.map(item => item.text !== undefined && item.break === 'never' && item.text.trim() !== '')
+    const atomic = items.map(item => item.text !== undefined && item.break === 'never')
     const shiftedPrepared = api.prepareRichInline([{ text: '', font: '16px Test' }, ...items], options)
     const extraOf = (item: RichInlineItem | RichInlineBox): number => item.text === undefined ? 0 : item.extraWidth ?? 0
     const extra = items.some(item => extraOf(item) !== 0)

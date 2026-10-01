@@ -42,7 +42,8 @@ export type PreparedLineBreakData = {
   // Null without any.
   lineStartExtras: number[] | null
   // Per segment, width it drops where a line ends after it and it doesn't fit otherwise,
-  // as Blink's line-end halt of a closing mark. Null without any.
+  // as Blink's line-end halt of a closing mark; an object's is width its line doesn't fit
+  // there and still paints (ParagraphSegmentData). Null without any.
   lineEndTrims: number[] | null
   // Per segment, width it drops in place of that where it overflows a line that has no break
   // before it and the line ends after it: Blink retries such a line with a break after every
@@ -64,16 +65,17 @@ export type PreparedLineBreakData = {
 // segment count. The rest is per segment, each null where no item differs: the hyphen a soft hyphen paints and the
 // advance between a tab's stops, in the item's font; the item's extraWidth where a line that starts inside the segment
 // pays it (`insideExtras`), or starts at it and fills it grapheme by grapheme (`fillExtras`), as a line that starts
-// with the whole segment pays lineStartExtras; and the width of a segment that is the edge of a padded item's opening
-// where the engine fits none of it (getOpeningFit in src/rich-inline.ts): it takes no room in the run of preserved
-// spaces and tabs it is in, and a line that ends in that run still paints it (`hangingEdges`).
+// with the whole segment pays lineStartExtras; and the width of a segment that is the start edge of a padded item's
+// opening (getOpeningFit in src/rich-inline.ts), which a line that takes it paints whole, whatever of it the line
+// fitted: an object's line-end trim is the part its line doesn't fit, and an edge the engine fits none of is a
+// preserved space, which takes no room in the run of preserved spaces and tabs it is in (`openingEdges`).
 export type ParagraphSegmentData = {
   itemSegments: number[]
   hyphenWidths: number[] | null
   tabStopAdvances: number[] | null
   insideExtras: number[] | null
   fillExtras: number[] | null
-  hangingEdges: number[] | null
+  openingEdges: number[] | null
 }
 
 type InternalLineVisitor = (
@@ -473,7 +475,7 @@ function walkPreparedComplexLines(
   const hyphenWidths = items === undefined ? null : items.hyphenWidths
   const insideExtras = items === undefined ? null : items.insideExtras
   const fillExtras = items === undefined ? null : items.fillExtras
-  const hangingEdges = items === undefined ? null : items.hangingEdges
+  const openingEdges = items === undefined ? null : items.openingEdges
   const engineProfile = getEngineProfile()
   // Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
   // §4.1.2), so they take no room when fitting and don't size the line (§8.2).
@@ -617,9 +619,9 @@ function walkPreparedComplexLines(
               hangEdgesWidth = 0
             }
             hangEndSegmentIndex = i + 1
-            if (hangingEdges !== null) {
-              hangStartWidth += hangingEdges[i]!
-              hangEdgesWidth += hangingEdges[i]!
+            if (openingEdges !== null) {
+              hangStartWidth += openingEdges[i]!
+              hangEdgesWidth += openingEdges[i]!
             }
           }
           // Where glue can't hold a line, glue at a line start isn't the line's content:
@@ -651,7 +653,7 @@ function walkPreparedComplexLines(
                 lineEndSegmentIndex = i + 1
                 lineEndGraphemeIndex = 0
                 lineW = w + startExtra
-                lineEndTrimmed = fitAdvance + startExtra > fitLimit ? startTrim : 0
+                lineEndTrimmed = fitAdvance + startExtra > fitLimit && kind !== OBJECT ? startTrim : 0
                 // The break segment hangs with the gap before it, a run of preserved
                 // spaces and tabs hangs whole, and a tab that doesn't hang counts whole.
                 if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
@@ -692,10 +694,24 @@ function walkPreparedComplexLines(
                 break decided
               }
 
+              const unbroken = (flags & UNBROKEN) !== 0
+              // An object with no break before it is the start edge of a padded rich-inline item's opening
+              // (src/rich-inline.ts). Blink's line trails once the preserved spaces it ends with overflow: it
+              // takes the white space after them, the tags of spans that open among it and a forced break
+              // with no fit (HandleTrailingSpaces, line_breaker.cc:2426-2534), so an edge right after such a
+              // run joins it, taking no room.
+              if (kind === OBJECT && unbroken && hangEndSegmentIndex === i && lineW > fitLimit && engineProfile.paddedOpeningFit === 'start') {
+                hangEndSegmentIndex = i + 1
+                hangStartWidth += w
+                hangEdgesWidth += w
+                lineW += advance
+                lineEndSegmentIndex = i + 1
+                lineEndGraphemeIndex = 0
+                continue
+              }
               // Where the scan gives no break before the segment, as before NEL (UAX #14
               // LB6), the line returns to its last break. Without one, Blink and WebKit retry
               // between graphemes, so the segment's graphemes fill it.
-              const unbroken = (flags & UNBROKEN) !== 0
               if (unbroken && pendingBreakSegmentIndex >= 0) {
                 lineEndSegmentIndex = pendingBreakSegmentIndex
                 lineEndGraphemeIndex = 0
@@ -712,11 +728,10 @@ function walkPreparedComplexLines(
                 lineEndTrimmed = overflowLineEndTrims[i]!
                 continue
               }
-              // An object with no break before it is the start edge of a padded rich-inline item that opens
-              // with white space or a hard break (src/rich-inline.ts). Where its line has no break to return
-              // to, the line ends before it, but before a hard break only in Blink, whose retry breaks between
-              // any two graphemes: WebKit and Gecko end the line before the last grapheme of the text before
-              // the edge, and keep the edge on a line that grapheme starts (EngineProfile, hardBreakItemRetreat).
+              // Where the line of such an edge has no break to return to, the line ends before it, but
+              // before a hard break only in Blink, whose retry breaks between any two graphemes: WebKit and
+              // Gecko end the line before the last grapheme of the text before the edge, and keep the edge on
+              // a line that grapheme starts (EngineProfile, hardBreakItemRetreat).
               if (kind === OBJECT && engineProfile.hardBreakItemRetreat !== 'item' && (segmentFlags[i + 1]! & KIND_BITS) === HARD_BREAK) {
                 const beforeFlags = segmentFlags[i - 1]!
                 const beforeKind = beforeFlags & KIND_BITS
@@ -738,7 +753,7 @@ function walkPreparedComplexLines(
                   lineW += advance
                   lineEndSegmentIndex = i + 1
                   lineEndGraphemeIndex = 0
-                  lineEndTrimmed = endTrim
+                  lineEndTrimmed = 0
                   continue
                 }
               }
@@ -771,7 +786,7 @@ function walkPreparedComplexLines(
               lineEndGraphemeIndex = 0
               // A segment that takes no room at the line end, as a space, leaves the glyph
               // before it last on the line, with its trim.
-              if (fitAdvance !== 0 && !hangs) lineEndTrimmed = newFitW > fitLimit ? endTrim : 0
+              if (fitAdvance !== 0 && !hangs) lineEndTrimmed = newFitW > fitLimit && kind !== OBJECT ? endTrim : 0
               if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
                 pendingBreakSegmentIndex = i + 1
                 pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance - lineEndTrimmed

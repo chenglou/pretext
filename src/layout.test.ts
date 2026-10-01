@@ -3238,6 +3238,34 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('an atomic rich item of only white space, or of no text, is an object as wide as its extraWidth', () => {
+    // An inline-block is a box in its line whatever its text: its own white space collapses away inside
+    // it, and a line can break on both sides of it. Chrome, Firefox and Safari lay out `ab`, a chip of two
+    // spaces with 5px padding and `cd` in 16px Arial at 40px as `ab` and the chip, then `cd`, in normal
+    // white space and in pre-wrap.
+    const ab = measureWidth('ab', FONT)
+    const round = (value: number) => Math.round(value * 1e6) / 1e6
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      for (const text of ['  ', '\n', '']) {
+        const items = [{ text: 'ab', font: FONT }, { text, font: FONT, break: 'never', extraWidth: 10 } as const, { text: 'cd', font: FONT }]
+        const prepared = prepareRichInline(items, { whiteSpace })
+        const lines = (width: number) => {
+          const out: Array<Array<[number, string, number, number, number]>> = []
+          walkRichInlineLineRanges(prepared, width, range => {
+            out.push(materializeRichInlineLineRange(prepared, range).fragments.map(f => [f.itemIndex, f.text, round(f.occupiedWidth), f.sourceStart, f.sourceEnd]))
+          })
+          expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
+          return out
+        }
+        const chip: [number, string, number, number, number] = [1, '', 10, text.length, text.length]
+        expect(lines(Infinity)).toEqual([[[0, 'ab', round(ab), 0, 2], chip, [2, 'cd', round(ab), 0, 2]]])
+        expect(measureRichInlineStats(prepared, Infinity).maxLineWidth).toBeCloseTo(2 * ab + 10, 6)
+        expect(lines(ab + 10)).toEqual([[[0, 'ab', round(ab), 0, 2], chip], [[2, 'cd', round(ab), 0, 2]]])
+        expect(lines(ab + 9)).toEqual([[[0, 'ab', round(ab), 0, 2]], [chip], [[2, 'cd', round(ab), 0, 2]]])
+      }
+    }
+  })
+
   test('rich inline item boundaries do not accept forced-progress overflow', () => {
     const maxWidth = measureWidth('A', FONT) + 1
     const prepared = prepareRichInline([
@@ -3475,6 +3503,38 @@ describe('rich-inline invariants', () => {
     } finally {
       profile.lineBreakScan = previous
       clearCache()
+    }
+  })
+
+  test('a rich fragment\'s sourceStart never passes its sourceEnd where a padded item\'s start edge comes before the space or soft hyphens that lead it', () => {
+    // The start edge of a padded item's opening is the item's first segment, before a collapsed space
+    // or soft hyphens that lead its text, so a fragment that holds the edge and that space starts at
+    // the item's start.
+    const ranges = (items: RichInlineItem[], options: Parameters<typeof prepareRichInline>[1], maxWidth: number) => {
+      const prepared = prepareRichInline(items, options)
+      const out: Array<[number, number, number]> = []
+      walkRichInlineLineRanges(prepared, maxWidth, range => {
+        const fragments = materializeRichInlineLineRange(prepared, range).fragments
+        for (let i = 0; i < fragments.length; i++) out.push([fragments[i]!.itemIndex, fragments[i]!.sourceStart, fragments[i]!.sourceEnd])
+      })
+      return out
+    }
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    try {
+      // U+2028 ends a line in the WebKit profile, so an item of spaces and U+2028 opens with a hard break.
+      profile.lineBreakScan = 'webkit'
+      clearCache()
+      expect(ranges([{ text: 'ab', font: FONT }, { text: '  \u2028', font: FONT, extraWidth: 5 }, { text: 'cd', font: FONT }], {}, 0)).toEqual([
+        [0, 0, 1], [0, 1, 2], [1, 0, 1], [2, 0, 1], [2, 1, 2],
+      ])
+    } finally {
+      profile.lineBreakScan = previous
+      clearCache()
+    }
+    for (const width of [0, 20, 1000]) {
+      const all = ranges([{ text: 'ab', font: FONT }, { text: '\u00AD\u00AD  x', font: FONT, extraWidth: 5 }], { whiteSpace: 'pre-wrap' }, width)
+      for (let i = 0; i < all.length; i++) expect(all[i]![1]).toBeLessThanOrEqual(all[i]![2])
     }
   })
 
@@ -3809,6 +3869,48 @@ describe('rich-inline invariants', () => {
     )
   })
 
+  test('a line that trails overflowing spaces takes a padded opening after them with no fit in the Chromium profile', () => {
+    const BOLD = '700 16px Test Sans'
+    const foo = measureWidth('foo', FONT)
+    const boldSpace = measureWidth(' ', BOLD)
+    const round = (value: number) => Math.round(value * 1e6) / 1e6
+    const lines = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
+      const prepared = prepareRichInline(items, { whiteSpace: 'pre-wrap' })
+      const out: Array<{ width: number; fragments: Array<[string, number]> }> = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        const line = materializeRichInlineLineRange(prepared, range)
+        out.push({ width: round(line.width), fragments: line.fragments.map(f => [f.text, round(f.occupiedWidth)]) })
+      })
+      expect(measureRichInlineStats(prepared, width).lineCount).toBe(out.length)
+      return out
+    }
+    const texts = (items: Parameters<typeof prepareRichInline>[0], width: number) => lines(items, width).map(line => line.fragments.map(f => f[0]).join('|'))
+    const profile = getEngineProfile()
+    const previous = profile.paddedOpeningFit
+    try {
+      // Spaces that are a span of their own follow no text in their item, so Chrome fits the start edge
+      // of a padded span after them where they fit. Once they overflow, its line trails: it takes the
+      // white space after them and the tags that open among it with no fit, and still paints the edge.
+      // Chrome lays out `Some words`, a bold `  `, an 8px-padded `  indented code` and ` tail` in 16px
+      // Arial at 92px as 3 lines, the first one through the padded span's spaces.
+      const padded = [{ text: 'foo', font: FONT }, { text: '  ', font: BOLD }, { text: '  bar', font: FONT, extraWidth: 40 }]
+      profile.paddedOpeningFit = 'start'
+      expect(lines(padded, foo + 1)[0]).toEqual({ width: round(foo + 40), fragments: [['foo', round(foo)], ['  ', 0], ['  ', 40]] })
+      expect(lines(padded, foo + 2 * boldSpace - 1)[0]).toEqual({ width: round(foo + 40), fragments: [['foo', round(foo)], ['  ', 0], ['  ', 40]] })
+      expect(texts(padded, foo + 2 * boldSpace + 19)[0]).toBe('foo|  ')
+      expect(lines(padded, foo + 2 * boldSpace + 21)[0]).toEqual({ width: round(foo + 2 * boldSpace + 40), fragments: [['foo', round(foo)], ['  ', round(2 * boldSpace)], ['  ', 40]] })
+      // The same before a padded line feed, which ends the line.
+      expect(texts([{ text: 'foo', font: FONT }, { text: '  ', font: BOLD }, { text: '\nbar', font: FONT, extraWidth: 40 }], foo + 1)[0]).toBe('foo|  |')
+      // Safari and Firefox fit the edges they fit after the spaces, however far those overflow.
+      for (const fit of ['placed', 'both'] as const) {
+        profile.paddedOpeningFit = fit
+        expect(texts(padded, foo + 1)[0]).toBe('foo|  ')
+      }
+    } finally {
+      profile.paddedOpeningFit = previous
+    }
+  })
+
   test('a padded rich item that starts with a line feed returns its line to a break, or else starts the next line, and a blank line is one empty fragment', () => {
     const round = (value: number) => Math.round(value * 1e6) / 1e6
     const lines = (items: Parameters<typeof prepareRichInline>[0], width: number) => {
@@ -3919,9 +4021,9 @@ describe('rich-inline invariants', () => {
         expect(texts([{ text: 'foofoo', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 10)).toEqual(fit === 'both' ? ['foofoo', '', 'bar'] : ['foofoo|', 'bar'])
         expect(texts([{ text: 'foofoo', font: FONT }, { text: '\n', font: FONT, extraWidth: 15 }, { text: 'bar', font: FONT }], foofoo + 10)).toEqual(fit === 'start' ? ['foofoo|', 'bar'] : ['foofoo', '', 'bar'])
       }
-      // A line that keeps the opening by the start edge alone leaves the end edge out of its width.
+      // A line that keeps the opening by the start edge alone still paints the whole extraWidth, past the line's width.
       profile.paddedOpeningFit = 'start'
-      expect(lines([{ text: 'foofoo', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 10)[0]).toEqual({ width: round(foofoo + 7.5), fragments: [[0, 'foofoo', round(foofoo)], [1, '', 7.5]] })
+      expect(lines([{ text: 'foofoo', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 10)[0]).toEqual({ width: round(foofoo + 15), fragments: [[0, 'foofoo', round(foofoo)], [1, '', 15]] })
     } finally {
       profile.paddedOpeningFit = previousFit
     }
