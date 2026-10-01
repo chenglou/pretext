@@ -171,10 +171,13 @@ function spaceSharesScriptRun(text: string, at: number, end: number, runs: Scrip
   for (let i = at - 1; i >= 0; i--) {
     const character = text[i]!
     const before = getKerningScripts(character)
-    if (before === ANY_SCRIPT ? character !== ' ' && closingBracketRe.test(character) : (before & (before - 1)) !== 0) {
-      return (readScriptRuns(text, at, runs) & scripts) !== 0
+    if (before === ANY_SCRIPT) {
+      if (character === ' ' || !closingBracketRe.test(character)) continue
+    } else if ((before & (before - 1)) === 0) {
+      return (before & scripts) !== 0
     }
-    if (before !== ANY_SCRIPT) return (before & scripts) !== 0
+    // A closing bracket, or a character of several scripts.
+    return (readScriptRuns(text, at, runs) & scripts) !== 0
   }
   return true
 }
