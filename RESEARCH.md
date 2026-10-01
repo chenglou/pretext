@@ -809,7 +809,12 @@ paragraph to the full walker, where the stepper walked only the items that neede
 rich draws take the full walker); and every item is measured in a pass of its own, so a paragraph of an item per word
 prepares text seen before in about 1.6 times main's time offline in Bun, with the same Canvas calls. Keeping a word two
 unpadded items share as one segment, and measuring items in one font as one run, would take both back, and would reopen
-this if the bench's rich rows read slower than main's.
+this if the bench's rich rows read slower than main's. Two more readings from the same offline runs are hypotheses for
+the bench: `layoutNextRichInlineLineRange()` line by line (the `rich-stream` row) takes 1.0 to 1.4 times main's time on
+multi-item paragraphs, where stats take about a quarter and a walk 0.7 to 1.1 times; and a one-item paragraph, which
+costs what main's does in a process that lays out nothing else, takes 1.1 to 1.6 times main's for stats and a walk once
+multi-item paragraphs have been laid out in the same process, as the text walkers then see two kinds of handle. The
+bench has no row for the second.
 
 The rich-inline counts below from 2026-09-26 to 28 are of *probes*: cases generated for one change, each beside the
 same text in one text node, recorded in Chrome, Firefox and webkit-host and not checked in, and counted against the
