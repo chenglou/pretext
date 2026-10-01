@@ -11,6 +11,7 @@ import {
   SOFT_HYPHEN,
   SPACE,
   SPACED,
+  STARTS_ITEM,
   TAB,
   TEXT,
   UNBROKEN,
@@ -276,6 +277,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Whether an item's start edge added a segment with no break before it (below), in a paragraph
   // whose analysis found none, so its other segments aren't marked as breaks to return to.
   let marksReturnable = false
+  // Where the item at hand starts among the paragraph's segments.
+  let itemStart = 0
 
   for (let from = 0; from < count;) {
     // The item this segment starts in, and the segments that start in it.
@@ -287,6 +290,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     let to = from + 1
     while (to < count && offsets[analysis.starts[to]!]! < itemEnd) to++
     const item = items[index]!
+    const previousItemStart = itemStart
+    itemStart = widths.length
 
     if (item.text === undefined || atomic[index]) {
       // One object: a box's width, or the width of the item's text on a line of its own, laid out
@@ -311,7 +316,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // Gecko places an object of width 0 otherwise than the simple walker does (walkPreparedComplexLines).
       if (width === 0) simple = false
       widths.push(width)
-      flags.push(OBJECT)
+      flags.push(widths.length > 1 ? OBJECT | STARTS_ITEM : OBJECT)
       segments.push(text)
       breakableFitAdvances.push(null)
       sourceStarts.push(textStart)
@@ -344,20 +349,19 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       first = from
       while (first < to && ((sub.segmentFlags[first - from]! & KIND_BITS) === SOFT_HYPHEN || (first === from && (sub.segmentFlags[0]! & KIND_BITS) === SPACE))) first++
       const firstKind = first < to ? sub.segmentFlags[first - from]! & KIND_BITS : TEXT
-      if (first < to) simple = false
       if (firstKind === PRESERVED_SPACE || firstKind === TAB || firstKind === HARD_BREAK) {
         const at = widths.length
-        const afterObject = at > 0 && flags[at - 1] === OBJECT
+        const afterObject = at > 0 && (flags[at - 1]! & KIND_BITS) === OBJECT
         // Whether the item follows preserved spaces that follow text in their own item: Blink gives every run
         // of preserved tabs a control item of its own (inline_items_builder.cc:1098-1110), so a tab, and spaces
         // after one, follow no text.
-        const afterTextSpaces = at > 1 && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && at - 1 > itemSegments[itemSegments.length - 2]! && (flags[at - 2]! & KIND_BITS) !== TAB
+        const afterTextSpaces = at - 1 > previousItemStart && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && (flags[at - 2]! & KIND_BITS) !== TAB
         const fit = getOpeningFit(sub.segmentFlags, extraWidth, afterObject, afterTextSpaces, profile)
         const breaksBefore = at === 0 || (afterObject && !(firstKind === HARD_BREAK && profile.lineBreakScan === 'webkit'))
         widths.push(extraWidth)
         // An opening no edge of which is fitted hangs with the white space around it. Else it is an object:
         // the white space after it stays on its line, as the line keeps the opening it took.
-        flags.push(fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN)
+        flags.push((fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN) | (at > 0 ? STARTS_ITEM : 0))
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         segments.push('')
         breakableFitAdvances.push(null)
@@ -383,7 +387,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (spaced) width += letterSpacing
       if (holdsExtra) width += extraWidth
       widths.push(width)
-      flags.push(sub.segmentFlags[s]!)
+      flags.push(i === from && at > 0 && first >= from ? sub.segmentFlags[s]! | STARTS_ITEM : sub.segmentFlags[s]!)
       segments.push(analysis.texts[i]!)
       breakableFitAdvances.push(advances)
       const normalizedEnd = i + 1 < count ? analysis.starts[i + 1]! : analysis.normalized.length
@@ -429,21 +433,19 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     tabStopAdvance: firstTextItem < 0 ? 0 : tabStopAdvances[firstTextItem]!,
     segments,
   } as PreparedSegments
-  if (fontsDiffer || insideExtras !== null) {
-    let segmentHyphenWidths: number[] | null = null
-    let segmentTabStopAdvances: number[] | null = null
-    if (fontsDiffer) {
-      segmentHyphenWidths = []
-      segmentTabStopAdvances = []
-      for (let index = 0; index < items.length; index++) {
-        for (let i = itemSegments[index]!; i < itemSegments[index + 1]!; i++) {
-          segmentHyphenWidths.push(hyphenWidths[index]!)
-          segmentTabStopAdvances.push(tabStopAdvances[index]!)
-        }
+  let segmentHyphenWidths: number[] | null = null
+  let segmentTabStopAdvances: number[] | null = null
+  if (fontsDiffer) {
+    segmentHyphenWidths = []
+    segmentTabStopAdvances = []
+    for (let index = 0; index < items.length; index++) {
+      for (let i = itemSegments[index]!; i < itemSegments[index + 1]!; i++) {
+        segmentHyphenWidths.push(hyphenWidths[index]!)
+        segmentTabStopAdvances.push(tabStopAdvances[index]!)
       }
     }
-    data.items = { hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0) }
   }
+  data.items = { hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, insideExtras: setAt(insideExtras, segmentCount, 0, 0), fillExtras: setAt(fillExtras, segmentCount, 0, 0) }
   let onlyItem = -1
   for (let index = 0; index < items.length && !paddedOrObject; index++) {
     if (itemSegments[index] === itemSegments[index + 1]) continue

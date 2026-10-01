@@ -8,6 +8,7 @@ import {
   SOFT_HYPHEN,
   SPACE,
   SPACED,
+  STARTS_ITEM,
   TAB,
   TEXT,
   UNBROKEN,
@@ -55,7 +56,8 @@ export type PreparedLineBreakData = {
   // keeps an unfit hyphen.
   discretionaryHyphenContexts: number[] | null
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
-  // What a rich-inline paragraph's segments have of their own (src/rich-inline.ts); a text's handle has none.
+  // What the segments of a rich-inline paragraph of several items have of their own (src/rich-inline.ts); a text's
+  // handle has none.
   items?: ParagraphSegmentData
 }
 
@@ -402,12 +404,14 @@ function returnsFromUnfitHyphen(
     // WebKit keeps an unfit hyphen in one text, but moves a run that continues across inline boxes to the next
     // line whole where its first break is a soft hyphen whose hyphen doesn't fit: Safari 27 lays out the spans
     // `the `, `inter`, `na\u00ADtion\u00ADal` in 16px Arial at 84px as `the` / `interna-tion-` / `al`. So the
-    // line returns only to the break before a run that reaches the soft hyphen across a segment boundary with
-    // no break, as a rich-inline item's start is (src/rich-inline.ts gives such a paragraph its contexts).
+    // line returns only to the break before a run that reaches the soft hyphen past the start of a rich-inline
+    // item, with no break between (src/rich-inline.ts gives such a paragraph its contexts).
+    let crossesItems = (segmentFlags[softHyphenIndex]! & STARTS_ITEM) !== 0 && softHyphenIndex > targetSegmentIndex
     for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
       if (breaksAfterKind(segmentFlags[i]! & KIND_BITS) || (i > targetSegmentIndex && (segmentFlags[i]! & UNBROKEN) === 0)) return false
+      if (i > targetSegmentIndex && (segmentFlags[i]! & STARTS_ITEM) !== 0) crossesItems = true
     }
-    return softHyphenIndex - targetSegmentIndex > 1
+    return crossesItems
   }
   const overflow = breakWidth - fitLimit
   let narrowing = 0
@@ -713,10 +717,18 @@ function walkPreparedComplexLines(
               fillStart = 0
               fillSpacing = leadingSpacing
             } else {
-              // A break the scan gives before text is one the line can return to.
+              // A break the scan gives before text is one the line can return to. A rich-inline
+              // paragraph's line returns to it from an unfit hyphen too, where it leaves the room the
+              // engine's return needs: Chrome lays out the spans `\u6F22\u5B57`, `\u00ADab`, `cd` in 16px
+              // Arial at 34.7px as `\u6F22` / `\u5B57-` / `abcd`. A text's line doesn't yet
+              // (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
               if ((flags & RETURNABLE) !== 0 && !breakAfter && pendingBreakSegmentIndex !== i) {
                 pendingBreakSegmentIndex = i
                 pendingBreakWidth = lineW
+                if (items !== undefined && retreatsFromUnfitHyphen && lineW + reservedHyphenWidth <= fitLimit) {
+                  fitBreakSegmentIndex = i
+                  fitBreakPaintWidth = lineW
+                }
               }
               if (retreatsAtFullWidth && !breakAfter && (flags & UNBROKEN) === 0 && i > lineStartSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) {
                 fitBreakSegmentIndex = i
@@ -902,6 +914,9 @@ function stepPreparedSimpleLineGeometry(
     const fitAdvances = startAdvances!
     let g = cursor.graphemeIndex + 1
     lineW = fitAdvances[g - 1]!
+    // A line that starts inside a padded rich-inline item pays its extraWidth (ParagraphSegmentData).
+    const items = prepared.items
+    if (items !== undefined && (g > 1 ? items.insideExtras !== null : items.fillExtras !== null)) lineW += g > 1 ? items.insideExtras![start]! : items.fillExtras![start]!
     // A line that holds only an overflowing grapheme keeps the graphemes after it
     // that can't start a line, and ends.
     const overflowEnd = lineW > fitLimit ? getOverflowingFirstGraphemeEnd(prepared, start, g - 1, fitAdvances.length) : g

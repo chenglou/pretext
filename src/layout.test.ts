@@ -3047,7 +3047,7 @@ describe('rich-inline invariants', () => {
       ['see', ' \u00AD', 'this word'], ['see', ' \u00AD', 'this', 'word'], ['see', ' \u00AD', ' \u00AD'], ['see', ' \u00AD ', 'this word'],
       ['ab', ' \u00AD \u00AD', 'cd'], ['ab', ' \u00AD ', 'cd'], ['ab', ' \u00AD \u00AD', ')x'], ['ab', ' \u00AD \u00ADxyzw'], ['ab ', '\u00AD\u200Bxyzw'],
       ['see\u00AD', ' this word'], ['see ', 'x', ' this word'], ['\u300D', '\u00AD \u00AD', 'ab'], ['the ', 'inter', 'na\u00ADtion\u00ADal'],
-      ['al', 'pha be', 'ta gam', 'ma del', 'ta'], ['a\u200B', 'b c', '\u200Bd'], ['\u4E2D\u6587', 'a', 'b \u00ADcd ef'], ['ab', 'c\u0085d', 'e f'],
+      ['al', 'pha be', 'ta gam', 'ma del', 'ta'], ['a\u200B', 'b c', '\u200Bd'], ['ab', 'c\u0085d', 'e f'],
     ]
     const profile = getEngineProfile()
     const previous = profile.lineBreakScan
@@ -3063,6 +3063,14 @@ describe('rich-inline invariants', () => {
           }
         }
       }
+      // Where an item starts inside a word, the paragraph's walk records the breaks the scan gives before
+      // text, so in the Chromium profile a line returns from an unfit hyphen to one, as Chrome's does,
+      // where the text's walk, which records none, keeps the hyphen (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
+      profile.lineBreakScan = 'blink'
+      clearCache()
+      const width = measureWidth('\u4E2D\u6587ab ', FONT) + 1
+      expect(richLineEnds(['\u4E2D\u6587', 'a', 'b \u00ADcd ef'], width).map(line => line[1])).toEqual(['\u4E2D\u6587', 'ab cd', 'ef'])
+      expect(lineEnds('\u4E2D\u6587ab \u00ADcd ef', width).map(line => line[1])).toEqual(['\u4E2D\u6587ab -', 'cd ef'])
     } finally {
       profile.lineBreakScan = previous
       clearCache()
