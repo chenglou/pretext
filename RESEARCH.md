@@ -781,12 +781,19 @@ text walkers one handle. It replaced each item's own analysis patched toward the
 handle: an atomic item or a box is an object segment with a break on both sides; an item's `extraWidth` is in the width
 of its first segment, and a line that starts later in the item pays it there; a padded item that opens with preserved
 white space or a hard break has a start edge of its own, fitted by the edges the engine fits (`paddedOpeningFit`,
-`hardBreakItemRetreat`); each item keeps its font's hyphen and tab stops; and where text items differ in letter spacing,
-each segment's width holds its own. A paragraph of one text item is that text's own handle, and a paragraph that fits
-its line whole takes it without a walk. A line's fragments are its segments cut where the item changes, and their
-widths add up to the line's. Fragment cursors index the item's part of the paragraph's segments; before, they indexed
+`hardBreakItemRetreat`), and where the engine fits none, the edge takes no room in the white space around it, which
+hangs, and a line that ends there still paints it, so the walker keeps such edges' width apart from the width it fits the
+run at; each item keeps its font's hyphen and tab stops; and where text items differ in letter spacing, each segment's
+width holds its own. A paragraph of one text item is that text's own handle, and a paragraph that fits its line whole
+takes it without a walk, a premise with a gap under negative advances (ENGINE_FOLLOWUPS.md, Negative letter spacing and
+hanging spaces). A line's fragments are its segments cut where the item changes, and their widths add up to the line's.
+Fragment cursors index the item's part of the paragraph's segments; before, they indexed
 `prepareWithSegments(item.text)`, which a caller could read only by preparing every item a second time, so a
-materialized fragment now carries `sourceStart` and `sourceEnd`, its place in its item's text.
+materialized fragment now carries `sourceStart` and `sourceEnd`, its place in its item's text. A segment's text isn't
+always one stretch of its item's: Firefox removes a line feed between two ideographs, and white space after a bidi
+control that follows white space, so such a segment keeps where each of its units is, or a fragment that starts or ends
+inside it names the wrong stretch (13 of 32 probe cases of a line feed between ideographs failed so in Firefox before
+the rich set's `keep-all/line-feed-between-ideographs` cases held one).
 
 Against main at 8e88756b in Chrome 154.0.8037.57, Firefox 156.0.1 and webkit-host (macOS 27.0, 26A428, 2026-10-01): no
 real-usage draw moves in any browser, and `bun harness equal main --offline` moves no text input in any profile (21,251
@@ -796,8 +803,8 @@ the 4, 13 and 12 wider ones, 4, 3 and 4 have main's lines and differ only in whi
 which the item stepper's empty fragments had put in the browser's (the shapes are in ENGINE_FOLLOWUPS.md, Rich-inline
 item edges, and on the accepted lists). Same-font items without chips, padding or boxes take the text walkers' line
 count in all but 52 of 6,012 offline layouts in the Blink profile (Skia's Canvas; main 195), the rest words measured in
-two parts and the paragraph's return from an unfit hyphen. Runtime code went from 4,292 lines to 3,910
-(`src/rich-inline.ts` 1,027 to 619, `src/line-break.ts` 758 to 714, `src/analysis.ts` 296 to 374), and the engine profile
+two parts and the paragraph's return from an unfit hyphen. `src/`'s runtime code went from 5,104 lines to 4,764
+(`src/rich-inline.ts` 1,027 to 631, `src/line-break.ts` 758 to 732, `src/analysis.ts` 296 to 386), and the engine profile
 from 23 fields to 20.
 
 Not carried over, each a rule that read the items: the collapsed space before an item of only soft hyphens that hung per
@@ -1284,7 +1291,10 @@ units (`eb3bbbe`, `f0a326d`); measuring every growing Canvas prefix (`fcf9c62`);
 start for every streamed line (`2c52171`); retrying white-space and font-size suffix regexes, and restarting
 preferred-hyphen searches (#221); measuring each run of a combining-mark chain after the whole chain before it (#351);
 looking for a bidi control after each soft hyphen of a run, which made Firefox prepare the bench's invisible tails 44%
-slower until each run was scanned once, at its start (#368).
+slower until each run was scanned once, at its start (#368); and, in a rich paragraph of many items, scanning the run of
+white space after an object again for each of its segments (1.8 s for 32,000 one-space items after a chip wider than the
+line, offline), and a call per item start in Gecko's run of white space, which overflowed the stack at 4,000 items
+(#TBD).
 
 The regex traps needed internal white space before content, or digit runs without `px`; the hyphen one, a long
 hyphenated run over many lines. A continuation from anywhere must seek its starting boundary; a positioned scan can

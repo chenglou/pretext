@@ -507,11 +507,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   return findWholeLine({ data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, sourceStarts, sourceEnds, sourceUnits: setAt(sourceUnits, segmentCount, null, null), text: '' } as InternalPreparedRichInline)
 }
 
-// Finds the paragraph's line where nothing wraps it. A paragraph that fits its line whole takes it without a
-// walk, as Blink takes a text item whole where its shaped width fits (ShapingLineBreaker::ShapeLine,
-// shaping_line_breaker.cc:281-297, Chromium 153), even where negative advances bring the width back under the
-// line's after a break that overflows, where the text walkers end the line (ENGINE_FOLLOWUPS.md). Most paragraphs
-// of a chat are one line.
+// Finds the paragraph's line where nothing wraps it, which is taken without a walk at any width it fits: most
+// paragraphs of a chat are one line. That is a premise. Where no advance is negative, a line's width only grows along
+// it, so the walkers take the same line. Blink takes one text item whole where its shaped width fits
+// (ShapingLineBreaker::ShapeLine, shaping_line_breaker.cc:281-297, Chromium 153); for a paragraph of several items, and
+// in WebKit and Gecko, no source was read. Its gap: under negative letter spacing or a negative extraWidth, a line
+// can overflow at a break and come back under the line's width after it, where the text walkers end the line at the
+// break and the paragraph takes it whole, so a paragraph of one item can take fewer lines than layoutWithLines()
+// gives its text (ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces, has the counts).
 function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichInline {
   const lineCount = walkPreparedLinesRaw(flow.data, Number.POSITIVE_INFINITY, (width, startSegmentIndex, _startGraphemeIndex, endSegmentIndex) => {
     flow.wholeWidth = width
