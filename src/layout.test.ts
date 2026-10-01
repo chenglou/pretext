@@ -2902,12 +2902,18 @@ describe('rich-inline invariants', () => {
     }
     // A paragraph of one text item lays out as that text: its lines are the text walkers'.
     for (const text of texts) {
-      for (const letterSpacing of [0, -6, 2]) {
+      for (const letterSpacing of [0, 2]) {
         const one = prepareRichInline([{ text, font: FONT, letterSpacing }])
         const plain = prepareWithSegments(text, FONT, { letterSpacing })
         for (const maxWidth of widths) expect({ text, letterSpacing, maxWidth, ...measureRichInlineStats(one, maxWidth) }).toEqual({ text, letterSpacing, maxWidth, ...measureLineStats(plain, maxWidth) })
       }
     }
+    // But for its whole fit: at -6px, `A B` fits whole at 8px, where the text walkers break at
+    // the space after `A`, and the paragraph takes it (findWholeLine in rich-inline.ts), as Blink
+    // takes a text item whole where its width fits.
+    const whole = prepareRichInline([{ text: 'A B', font: FONT, letterSpacing: -6 }])
+    expect(measureRichInlineStats(whole, 8).lineCount).toBe(1)
+    expect(measureLineStats(prepareWithSegments('A B', FONT, { letterSpacing: -6 }), 8).lineCount).toBe(2)
   })
 
   test('a rich item with a negative advance takes the room its paragraph\'s line has, as in one text', () => {

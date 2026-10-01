@@ -862,7 +862,7 @@ describe('the library through the adapter', () => {
   test('measureRichInlineStats giving another widest line than the rich walk blocks: a rich bubble shrink-wrapped to it would be too narrow', async () => {
     const c = spans(['A message ', 'long enough ', 'to wrap at a few widths'], 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('rich-stats', 'rich-inline.ts', /(walkPreparedLinesRaw\(getInternalPreparedRichInline\(prepared\)\.data, maxWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: 0 }')
+    const stats = await planted('rich-stats', 'rich-inline.ts', /(walkPreparedLinesRaw\(flow\.data, maxWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: 0 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureRichInlineStats gives')
   })
 

@@ -27,7 +27,7 @@ import {
   stepPreparedLineGeometryFromStart,
   walkPreparedLinesRaw,
 } from './line-break.js'
-import { getEngineProfile, getPreparationLanguage, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
+import { getEngineProfile, getFontMeasurement, getPreparationLanguage, getTextWidth, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
 import { measureAnalysis } from './prepare.js'
 
 // Helper for rich-text inline flow under `white-space: normal` or `pre-wrap`: one paragraph's text
@@ -133,6 +133,12 @@ type InternalPreparedRichInline = PreparedRichInline & {
   // The only item with segments, where it has no extraWidth, so that every line is one fragment
   // of it, as wide as the line; else -1.
   onlyItem: number
+  // The paragraph's line where nothing wraps it, which is its only one at any width it fits:
+  // its width, null where it has no line or several, as with a hard break, and its start and end
+  // segments (findWholeLine).
+  wholeWidth: number | null
+  wholeStart: number
+  wholeEnd: number
   // Per item, its first segment in the paragraph, then the segment count: an item's segments are
   // those up to the next item's first.
   itemSegments: number[]
@@ -192,7 +198,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   if (only !== undefined && only.text !== undefined && only.break !== 'never' && (only.extraWidth ?? 0) === 0) {
     const analysis = analyzeText(only.text, profile, whiteSpace, wordBreak, language)
     const data = measureAnalysis(analysis, only.font, true, readLetterSpacing(only.letterSpacing), profile, language, true) as PreparedSegments
-    return { data, onlyItem: 0, itemSegments: [0, data.segmentFlags.length], sourceStarts: null, sourceEnds: null, text: only.text } as InternalPreparedRichInline
+    return findWholeLine({ data, onlyItem: 0, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments: [0, data.segmentFlags.length], sourceStarts: null, sourceEnds: null, text: only.text } as InternalPreparedRichInline)
   }
 
   // The paragraph's text: the items' texts joined, an atomic item or a box as one U+FFFC. An atomic
@@ -326,6 +332,20 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
 
     const letterSpacing = readLetterSpacing(item.letterSpacing)
+    if (to === from + 1 && analysis.flags[from] === SPACE && analysis.texts[from] === ' ') {
+      // An item of only collapsible white space, as between two styled words: its one space, as measureAnalysis()
+      // measures one.
+      const at = widths.length
+      if (letterSpacing !== 0) simple = false
+      widths.push(getTextWidth(' ', getFontMeasurement(item.font, language), 0) + (spacingsDiffer ? letterSpacing : 0))
+      flags.push(SPACE | (letterSpacing !== 0 ? SPACED : 0) | (at > 0 ? STARTS_ITEM : 0))
+      segments.push(' ')
+      breakableFitAdvances.push(null)
+      sourceStarts.push(offset - starts[index]!)
+      sourceEnds.push(offset + 1 - starts[index]!)
+      from = to
+      continue
+    }
     const sub = measureAnalysis(sliceAnalysis(analysis, from, to), item.font, false, letterSpacing, profile, language, true)
     simple &&= sub.simpleLineCountFastPath
     // The gap before the hyphen is the letter spacing after the grapheme before it.
@@ -455,7 +475,27 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
     onlyItem = index
   }
-  return { data, onlyItem, itemSegments, sourceStarts, sourceEnds, text: '' } as InternalPreparedRichInline
+  return findWholeLine({ data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, sourceStarts, sourceEnds, text: '' } as InternalPreparedRichInline)
+}
+
+// Finds the paragraph's line where nothing wraps it. A paragraph that fits its line whole takes it without a
+// walk, as Blink takes a text item whole where its shaped width fits (ShapingLineBreaker::ShapeLine,
+// shaping_line_breaker.cc:281-297, Chromium 153), even where negative advances bring the width back under the
+// line's after a break that overflows, where the text walkers end the line (ENGINE_FOLLOWUPS.md). Most paragraphs
+// of a chat are one line.
+function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichInline {
+  const lineCount = walkPreparedLinesRaw(flow.data, Number.POSITIVE_INFINITY, (width, startSegmentIndex, _startGraphemeIndex, endSegmentIndex) => {
+    flow.wholeWidth = width
+    flow.wholeStart = startSegmentIndex
+    flow.wholeEnd = endSegmentIndex
+  })
+  if (lineCount !== 1) flow.wholeWidth = null
+  return flow
+}
+
+// Whether the paragraph's whole line fits `maxWidth`, as the walkers fit a line.
+function fitsWhole(flow: InternalPreparedRichInline, maxWidth: number): boolean {
+  return flow.wholeWidth !== null && flow.wholeWidth <= Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
 }
 
 // `list` with `value` at `index`, where the segments before it that set none hold `empty`: a list
@@ -645,6 +685,7 @@ export function layoutNextRichInlineLineRange(
 ): RichInlineLineRange | null {
   const flow = getInternalPreparedRichInline(prepared)
   const { data, itemSegments } = flow
+  if (start.itemIndex === 0 && start.segmentIndex === 0 && start.graphemeIndex === 0 && fitsWhole(flow, maxWidth)) return createLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0)
   const lineEnd: LayoutCursor = {
     segmentIndex: start.itemIndex < itemSegments.length ? itemSegments[start.itemIndex]! + start.segmentIndex : data.segmentFlags.length,
     graphemeIndex: start.graphemeIndex,
@@ -729,6 +770,10 @@ export function walkRichInlineLineRanges(
   onLine: (line: RichInlineLineRange) => void,
 ): number {
   const flow = getInternalPreparedRichInline(prepared)
+  if (fitsWhole(flow, maxWidth)) {
+    onLine(createLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0))
+    return 1
+  }
   return walkPreparedLinesRaw(flow.data, maxWidth, (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
     onLine(createLine(flow, width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex))
   })
@@ -738,7 +783,9 @@ export function measureRichInlineStats(
   prepared: PreparedRichInline,
   maxWidth: number,
 ): RichInlineStats {
+  const flow = getInternalPreparedRichInline(prepared)
+  if (fitsWhole(flow, maxWidth)) return { lineCount: 1, maxLineWidth: Math.max(0, flow.wholeWidth!) }
   const stats = { lineCount: 0, maxLineWidth: 0 }
-  walkPreparedLinesRaw(getInternalPreparedRichInline(prepared).data, maxWidth, undefined, stats)
+  walkPreparedLinesRaw(flow.data, maxWidth, undefined, stats)
   return stats
 }
