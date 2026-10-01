@@ -5416,6 +5416,9 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
       ['AA\\u2060 \\u2060TT', '16px Test', {}], ['AA \\u0301T', '16px Test', {}], ['AA TT', '16px Test', { letterSpacing: 1 }],
       ['\\u0436\\u0436 TT', '16px Test', {}], ['\\u0436\\u0436 \\u0422\\u0422', '16px Test', {}], ['TT \\u0436\\u0436, TT', '16px Test', {}],
       ['12 TT', '16px Test', {}], ['AA TT', '16px Glyph', {}],
+      ['  TT\\n TT', '16px Test', { whiteSpace: 'pre-wrap' }], ['\\u0436\\u0436 \\u2060TT', '16px Test', {}],
+      ['\\u0436\\u0436 (TT) TT', '16px Test', {}], ['TT (\\u0436\\u0436) TT', '16px Test', {}], ['(TT) \\u0422\\u0422', '16px Test', {}],
+      ['(12) TT', '16px Test', {}], ['\\u05D0 AA TT AA \\u05D1', '16px Test', {}], ['\\u202AAA TT', '16px Test', {}],
     ]) widths.push(prepareWithSegments(text, font, options).widths)
     const lines = []
     for (const [text, width] of [['AA TT', 19.5], ['AA TT', 37], ['AAA TT', 10.5]]) {
@@ -5454,6 +5457,22 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     [16, 2, 16],
     // Where U+2028 doesn't measure as the space, no kerning is taken.
     [20, 4, 16],
+    // Preserved spaces that start the text or follow a line feed are an item of their own.
+    [8, 16, 0, 4, 16],
+    // The script is read at the letter whose kerning is taken, past a word joiner.
+    [16, 4, 16],
+    // A closing bracket takes the script of the run its opening bracket is in, so the space
+    // after it kerns with a word of that script only. A bracket that starts the text is in
+    // the run of the first letter after it, or of the word past the space when none comes.
+    [16, 4, 32, 4, 16],
+    [16, 4, 32, 2, 16],
+    [32, 4, 16],
+    [32, 2, 16],
+    // Which spaces share a level with a word depends on the paragraph's direction once a
+    // text holds a right-to-left letter or an explicit bidi control, so such a text takes no
+    // kerning.
+    [8, 4, 20, 4, 16, 4, 20, 4, 8],
+    [28, 4, 16],
   ])
   expect(lines).toEqual([
     // The kerned word fits, and the space hangs with what it took.

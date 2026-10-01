@@ -26,6 +26,7 @@ import {
   type BreakableFitMode,
   type EngineProfile,
   type FontMeasurement,
+  defaultIgnorableRe,
   getCorrectedSegmentWidth,
   getEmojiCorrection,
   getFollowingSpaceMetrics,
@@ -36,7 +37,6 @@ import {
   getSpaceKerning,
   getTextWidth,
   measureWithLetterSpacing,
-  spaceSharesScriptRun,
   textMayContainEmoji,
   type SegmentFit,
   type SegmentMetrics,
@@ -113,6 +113,24 @@ const letterAfterSpacesRe = / (?: |(?![\u200E\u200F\u061C])\p{Cf})*([0-9\p{Lu}\p
 
 function isSpaceKind(kind: number): boolean {
   return kind === SPACE || kind === PRESERVED_SPACE
+}
+
+// Half of a surrogate pair counts with Common: nearly every character past the BMP that text
+// holds beside a space is an emoji.
+const kerningScriptRe = /(\p{sc=Latn})|(\p{sc=Cyrl})|(\p{sc=Grek})|[\p{sc=Zyyy}\p{sc=Zinh}\p{Cs}]/u
+// General categories Ps and Pe, which hold every opening and closing paired bracket
+// (Bidi_Paired_Bracket_Type) and a few characters more, such as the low quotation marks.
+const openingBracketRe = /\p{Ps}/u
+const closingBracketRe = /\p{Pe}/u
+
+// A character's script as far as kerning with a space goes: 0 for Common and Inherited, which
+// take the script of the run they sit in, 1 Latin, 2 Cyrillic, 3 Greek, 4 any other.
+function getKerningScript(character: string): number {
+  // ASCII letters are Latin and the rest of ASCII is Common.
+  const code = character.charCodeAt(0)
+  if (code < 0x80) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? 1 : 0
+  const match = kerningScriptRe.exec(character)
+  return match === null ? 4 : match[1] !== undefined ? 1 : match[2] !== undefined ? 2 : match[3] !== undefined ? 3 : 0
 }
 
 // Bidi class B: the characters that end a bidi paragraph.
@@ -225,6 +243,68 @@ export function measureAnalysis(
       !spaceParagraphHasExplicitBidiControls(spaceStart)
   }
 
+  // Blink shapes text items together only where their resolved direction is the same
+  // (ShouldBreakShapingBeforeText, inline_node.cc:472-490, over the items SegmentBidiRuns
+  // splits by level, :1333), and HarfBuzz shapes a right-to-left item in visual order, where
+  // Canvas shows a pair only left to right. Which spaces share a level with the word beside
+  // them depends on the paragraph's direction, which preparation cannot see, so text that
+  // holds a right-to-left letter or an explicit bidi control takes no kerning with spaces. A
+  // text is scanned once, when a word of it first kerns with a space.
+  let oneDirection: boolean | null = null
+  function isOneDirection(): boolean {
+    return oneDirection ??= !rightToLeftLetterRe.test(normalized) && !explicitBidiControlRe.test(normalized)
+  }
+
+  // Whether the space before the text segment at `at` is in the script run of the character it
+  // kerns with there, the segment's first past default ignorables (getSpaceKerning). Blink
+  // shapes each script run in a call of its own (HarfBuzzShaper::Shape,
+  // harfbuzz_shaper.cc:1063-1104), and a Common character such as a space joins the run of the
+  // text before it (ScriptRunIterator::MergeSets, script_run_iterator.cc:490-510), so a space
+  // kerns with a word after it only where that word goes on in the same script. The search back
+  // ends at the nearest character with a script, which every word that asks starts with, so a
+  // text's searches together read it once. A closing bracket takes its opening bracket's script
+  // instead, which only reading the runs from the text's start gives (readScriptRuns).
+  function spaceSharesScriptRun(at: number, end: number): boolean {
+    while (at + 1 < end && defaultIgnorableRe.test(normalized[at]!)) at++
+    const script = getKerningScript(normalized[at]!)
+    if (script === 0) return true
+    for (let i = at - 1; i >= 0; i--) {
+      const character = normalized[i]!
+      const before = getKerningScript(character)
+      if (before !== 0) return before === script
+      if (closingBracketRe.test(character)) {
+        const run = readScriptRuns(at)
+        return run === 0 || run === script
+      }
+    }
+    return true
+  }
+  // The script of the run that ends before `to`, 0 before any character with a script, read on
+  // from where the last call stopped as ScriptRunIterator::Consume reads it
+  // (script_run_iterator.cc:325-429): a run takes the script of its first character that has
+  // one and ends before the next character of another. A closing bracket takes the script of
+  // the run its opening bracket is in, once that run has ended (CloseBracket, :443-489, and
+  // FixupStack, :574-595). Any opening bracket pairs with any closing one here: Blink pairs them
+  // by Bidi_Paired_Bracket, on a stack that keeps a matched opening bracket, so with one kind
+  // of bracket it too matches the last one opened.
+  let runsRead = 0
+  let runScript = 0
+  let bracketScript = -1 // The last opening bracket's script: -1 before one, 0 while its run goes on
+  function readScriptRuns(to: number): number {
+    for (; runsRead < to; runsRead++) {
+      const character = normalized[runsRead]!
+      let script = getKerningScript(character)
+      if (script === 0) {
+        if (openingBracketRe.test(character)) bracketScript = 0
+        else if (bracketScript > 0 && closingBracketRe.test(character)) script = bracketScript
+      }
+      if (script === 0 || script === runScript) continue
+      if (runScript !== 0 && bracketScript === 0) bracketScript = runScript
+      runScript = script
+    }
+    return runScript
+  }
+
   // The source a run of combining marks shapes after when only zero-width glue,
   // controls or other such runs, with no break, separate the run from the grapheme
   // before it: that grapheme and what separates them. Without the separators, Canvas
@@ -279,6 +359,16 @@ export function measureAnalysis(
     }
     if (markChainKept === markChainStart) return normalized.slice(baseStart, start)
     return normalized.slice(baseStart, starts[markChainStart]) + normalized.slice(starts[markChainKept], start)
+  }
+
+  // Blink makes preserved spaces that start the text or follow a forced break an item of their
+  // own, with a break opportunity after it that it shapes nothing across
+  // (InsertBreakOpportunityAfterLeadingPreservedSpaces, inline_items_builder.cc:988-1034;
+  // InlineNode::ShapeText, inline_node.cc:1639-1643), so they don't kern with the word after
+  // them.
+  function spacesStartLine(analysisIndex: number): boolean {
+    return (flags[analysisIndex]! & KIND_BITS) === PRESERVED_SPACE &&
+      (analysisIndex === 0 || (flags[analysisIndex - 1]! & KIND_BITS) === HARD_BREAK)
   }
 
   const widths: number[] = []
@@ -381,10 +471,12 @@ export function measureAnalysis(
           const beforeSpace = mi + 1 < segmentCount && isSpaceKind(flags[mi + 1]! & KIND_BITS)
           if (afterSpace || beforeSpace) {
             const kerning = textMetrics.spaceKerning ?? getSpaceKerning(text, textMetrics, fontMeasurement, spaceWidth)
-            if (beforeSpace) followingSpaceKerning = kerning.after
-            // The space hangs where a line ends at it, and what it took with it.
-            if (afterSpace && kerning.before !== 0 && spaceSharesScriptRun(normalized, starts[mi]!)) {
-              widths[mi - 1] = widths[mi - 1]! + kerning.before
+            if ((kerning.after !== 0 || kerning.before !== 0) && isOneDirection()) {
+              if (beforeSpace) followingSpaceKerning = kerning.after
+              // The space hangs where a line ends at it, and what it took with it.
+              if (afterSpace && kerning.before !== 0 && !spacesStartLine(mi - 1) && spaceSharesScriptRun(starts[mi]!, starts[mi]! + text.length)) {
+                widths[mi - 1] = widths[mi - 1]! + kerning.before
+              }
             }
           }
         }

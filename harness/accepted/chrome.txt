@@ -423,6 +423,7 @@ catalog-fc2fc27d218a91d8 count
 catalog-fd594b58acf26a45 count
 catalog-fea6dfc2813a4bbb count
 facts-011dd10c32907aad breaks
+facts-0813a82f5b36d627 count
 facts-1fe27e7853d9044e breaks
 facts-2464e56e85f810a3 count
 facts-25a8722c305b4f97 count
@@ -437,6 +438,7 @@ facts-992ad3e2cac24507 breaks
 facts-b0d939ba4135eb20 count
 facts-b346a98dcaf21070 breaks
 facts-bdd0486cdef5c133 breaks
+facts-cb726fe075c99028 count
 facts-d586e19a99606fb9 count
 facts-e91e5851773432a4 count
 facts-f540d48e169bdde8 breaks
@@ -632,9 +634,6 @@ catalog-13327218ea16077c count
 catalog-97cd971f46155b13 count
 catalog-b530bfcdd337fb4e breaks
 catalog-d5273aeae7cb64af breaks
-
-## Narrower than real layouts: " A B" in 16 px Arial at -6 px letter-spacing, pre-wrap, at 5 px; with A's kerning against the spaces beside it the library keeps B on the first line, where Chrome ends the line after the second space. Before the kerning it passed with a first line 0.67 px narrower than Chrome's
-catalog-57b326c33bfd8ae7 count
 
 ## Narrower than real layouts: 2-23 px, where most lines break inside a word; the narrowest real-usage draw is 25 px
 catalog-00656c2cd69fa2fc count
@@ -1913,6 +1912,7 @@ facts-0a55be5ca3c3340a count
 facts-0ada435d9aaf16cc count
 facts-102c4910da308ebf count
 facts-10e2e2922c26dfec count
+facts-125df7c318a3efbc count
 facts-157604473b495628 count
 facts-160dd589a58b5910 count
 facts-1ea1b28ea2d577e6 count
@@ -1953,7 +1953,10 @@ facts-65cab2f4057d95a2 count
 facts-69ace5a565348b7f count
 facts-6b871d8dbe8153b0 count
 facts-6d6532d2d5f6cd87 count
+facts-70022a1dd88914fb count
+facts-70428d03d165302c count
 facts-745c3d1bc4636ece count
+facts-783a0bbeffdafa40 count
 facts-7c57190dd3b4785f count
 facts-7dedb53730ee948c count
 facts-7e94694baede319a count
@@ -1965,6 +1968,7 @@ facts-9105b4e1d4620ef2 count
 facts-9160f773987bfb15 count
 facts-938968da72eb5f04 count
 facts-9cb688eb72634c9d count
+facts-9daebdb1b4aed7be count
 facts-a6eeb97138dc0f9c count
 facts-a823c76a4a38b8f5 count
 facts-aa32154a7d0b6b0b count
@@ -1973,16 +1977,20 @@ facts-acff6ebdfde01da1 count
 facts-b2634728b080d777 count
 facts-b47cb9b23e8cedaa count
 facts-b560b11eed4540d4 count
+facts-b5a970140a926fc0 count
 facts-b64e43041feb4875 count
 facts-b946956aab9a799e count
+facts-be686966b35ec0a2 count
 facts-c52233fb2f78fa2b count
 facts-c60a1e2d04080f61 count
 facts-c6aa71339c9857dd count
 facts-cc958466bac186aa count
 facts-ceb2743d8c8e0136 count
+facts-cf6147d4954ea1eb count
 facts-d27d03468a32c9ed count
 facts-d28653e1fa046885 count
 facts-d519b0de207f8fe4 count
+facts-d593af392654f5b3 count
 facts-d7e802d4e4f6775b count
 facts-d8ce1ab5cf43d8e6 count
 facts-da3753237d1ed6ff count
@@ -1995,9 +2003,11 @@ facts-eeb3d2171b9be1b7 count
 facts-ef131adffaf28c88 count
 facts-f19ba30b65824de8 count
 facts-f3338f559327923f count
+facts-f5481e33af0ddcdc count
 facts-f5e4d6f99e664ddf breaks
 facts-f8b095bc5316218f count
 facts-f9df0d5891e85c49 count
+facts-fab3273f4ee132ac count
 facts-fde8645b96d0255d count
 facts-fef088c479c829e9 count
 oracle-6ef7f131436695ac count
@@ -4129,6 +4139,7 @@ catalog-1351735796b2be63 count
 catalog-14fb74122d3ed668 breaks
 catalog-170b25e4fbdee88a count
 catalog-227d08791a4249e3 count
+catalog-2857745be266a421 count
 catalog-29ce9f4f691a9e06 count
 catalog-41394cb635c6503c count
 catalog-48dc03636c1cd6bb count
@@ -4136,6 +4147,7 @@ catalog-4b62a9992782c7e2 count
 catalog-4d3b1e5225d1d7a6 count
 catalog-513cd8560f67fdc6 count
 catalog-581b5276ab3d4400 count
+catalog-5e523d9d7bf2ac2f count
 catalog-66fb7b4cc8a8f315 count
 catalog-69fafadff79e6558 count
 catalog-6f428f9e5e78847e breaks
@@ -4168,6 +4180,7 @@ catalog-cdc5ffca96b834f8 count
 catalog-d6bf8e20c3c1d490 count
 catalog-dbe3c0b23a54090c count
 catalog-e240c469477e3059 breaks
+catalog-e417b572f1090482 count
 catalog-e4cc26500491364f count
 catalog-e78f2cb1559e0b18 count
 catalog-eb94625eb1fe2a23 count
@@ -4180,13 +4193,23 @@ catalog-fb26335fe0175947 count
 catalog-fea5d6099bf15fe3 count
 facts-01b2f58f86a4ce3d count
 facts-050fa7e9a81d6b5f count
+facts-0c61f924384c2bcb count
 facts-115aa5301a218a7c count
+facts-12a1f789e686cada breaks
 facts-14febb15f782e1dd breaks
+facts-2b5e2b7ec8d01235 count
+facts-2d5c7cb8ae40664a breaks
 facts-475f73b78f35d53d count
+facts-5e523d9d7bf2ac2f count
+facts-6a15ddc3941672bd count
+facts-95bb3e0426c7a801 breaks
 facts-b8485914d68eddf6 count
 facts-c309045f0579e048 count
+facts-d5ba828b44bfb4e1 count
 facts-d5e7daf0e9f37a5d breaks
+facts-d6c085ad7370de25 count
 facts-edd23560d2da1d6f count
+facts-ee6c9de0a47bba8c count
 facts-f2fdc78825bafd73 count
 rich-062275947464fe0e breaks
 rich-0a31a9051300c943 breaks
