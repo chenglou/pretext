@@ -548,7 +548,11 @@ for (let m = 0; m < classMapNames.length; m++) {
 
 // State tables, as unpackStateRows in src/line-breaks.ts reads them. The line tables come from
 // nearly the same rules, and so do the character tables, so each ships as its differences from the
-// earlier table of its kind and shape that makes it shortest, or alone where none does.
+// earlier table of its kind that makes it shortest, or alone where none does. A table of another
+// shape is tried too: ICU's rule compiler numbers categories and states in the order it makes
+// them, so a rule added to a table inserts some and renumbers the rest, as line_normal_cj.brk's
+// does to line_normal.brk's. findTransform looks for that; where it finds none, the table ships
+// against the tables of its own shape or alone.
 const ruleTableKinds: readonly (readonly string[])[] = [lineTableSources.map(([name]) => name), charTableNames]
 
 // unpackStateRows's differences from `start`, the rows it has before it reads any, to `rows`.
@@ -575,7 +579,74 @@ function findRowDifferences(rows: Uint16Array, width: number, start: Uint16Array
   return out
 }
 
-type PackedRuleTable = [number, number, number, number, string | null, string]
+// unpackStateRows's transform from `base` to a table with categories or states inserted, or null.
+// States are paired by running both tables from their start states over every category at once:
+// the states each lands in pair up. That needs each category's base category first, so it is the
+// one most of its code points have in the base, or its own number if it has no code point; then,
+// with the states paired, the base category whose column differs from its own in the fewest
+// rows, since a category split off another keeps that one's code points but may take a third's
+// transitions: line_normal_cj.brk's category of U+301C and U+30A0 ($NSX, ICU's
+// source/data/brkitr/rules/line_normal_cj.txt:63-64), nonstarters in line_normal.brk, is nearest
+// the column of U+00B4's category there. It is a transform when every base state is paired, in
+// the base's order.
+function findTransform(baseName: string, name: string): number[] | null {
+  const base = engineRuleTables[baseName]!
+  const rules = engineRuleTables[name]!
+  const baseClasses = engineClassMaps[baseName]!
+  const classes = engineClassMaps[name]!
+  const baseStates = base.rows.length / base.rowWidth
+  const shared = Array.from({ length: rules.catCount }, () => new Array<number>(base.catCount).fill(0))
+  for (let c = 0; c < 0x110000; c++) shared[classes[c]!]![baseClasses[c]!]!++
+  const columns: number[] = []
+  for (let category = 0; category < rules.catCount; category++) {
+    const counts = shared[category]!
+    const most = counts.reduce((best, count, i) => count > counts[best]! ? i : best, 0)
+    columns.push(counts[most]! > 0 ? most : Math.min(category, base.catCount - 1))
+  }
+  const moved = new Array<number>(baseStates)
+  const pairStates = () => {
+    moved.fill(-1)
+    moved[0] = 0
+    moved[1] = 1
+    const queue = [0, 1]
+    for (let q = 0; q < queue.length; q++) {
+      const baseState = queue[q]!
+      for (let category = 0; category < rules.catCount; category++) {
+        const baseNext = base.rows[baseState * base.rowWidth + 3 + columns[category]!]!
+        if (moved[baseNext] !== -1) continue
+        moved[baseNext] = rules.rows[moved[baseState]! * rules.rowWidth + 3 + category]!
+        queue.push(baseNext)
+      }
+    }
+  }
+  pairStates()
+  for (let category = 0; category < rules.catCount; category++) {
+    const differing = (baseCategory: number): number => {
+      let count = 0
+      for (let baseState = 0; baseState < baseStates; baseState++) {
+        if (moved[baseState] === -1) continue
+        const baseNext = moved[base.rows[baseState * base.rowWidth + 3 + baseCategory]!]!
+        if (baseNext !== rules.rows[moved[baseState]! * rules.rowWidth + 3 + category]) count++
+      }
+      return count
+    }
+    let fewest = differing(columns[category]!)
+    for (let baseCategory = 0; baseCategory < base.catCount; baseCategory++) {
+      const count = differing(baseCategory)
+      if (count < fewest) { fewest = count; columns[category] = baseCategory }
+    }
+  }
+  pairStates()
+  const inserted: number[] = []
+  for (let baseState = 0; baseState < baseStates; baseState++) {
+    if (moved[baseState] === -1 || (baseState > 0 && moved[baseState]! <= moved[baseState - 1]!)) return null
+    for (let state = baseState === 0 ? 0 : moved[baseState - 1]! + 1; state < moved[baseState]!; state++) inserted.push(state)
+  }
+  for (let state = moved[baseStates - 1]! + 1; state < rules.rows.length / rules.rowWidth; state++) inserted.push(state)
+  return [base.catCount, ...columns, ...inserted]
+}
+
+type PackedRuleTable = [number, number, number, number, string | null, string | null, string]
 const ruleTables: Record<string, PackedRuleTable> = {}
 for (const ruleTableNames of ruleTableKinds) for (let t = 0; t < ruleTableNames.length; t++) {
   const name = ruleTableNames[t]!
@@ -585,14 +656,23 @@ for (const ruleTableNames of ruleTableKinds) for (let t = 0; t < ruleTableNames.
   for (let r = -1; r < t; r++) {
     const baseName = r < 0 ? null : ruleTableNames[r]!
     const base = baseName === null ? null : engineRuleTables[baseName]!
-    if (base !== null && (base.rowWidth !== rules.rowWidth || base.rows.length !== rules.rows.length)) continue
-    const unpack = (differences: Int32Array) => unpackStateRows(rules.rowWidth, states, base === null ? null : base.rows, differences)
-    const differences = packVarints(findRowDifferences(rules.rows, rules.rowWidth, unpack(new Int32Array(0))))
-    const unpacked = unpack(unpackVarints(differences))
-    if (unpacked.length !== rules.rows.length || unpacked.some((cell, i) => cell !== rules.rows[i])) throw new Error(`${name}'s state rows unpack otherwise`)
-    if (best === null || differences.length < best[5].length) {
-      best = [rules.catCount, rules.dictCategoriesStart, rules.lookAheadResultsSize, states, baseName, differences]
+    let transform: number[] | null = null
+    if (base !== null && (base.rowWidth !== rules.rowWidth || base.rows.length !== rules.rows.length)) {
+      transform = findTransform(baseName!, name)
+      if (transform === null) continue
     }
+    const unpack = (differences: Int32Array) => unpackStateRows(
+      rules.rowWidth, states, base === null ? null : base.rows, transform === null ? null : Int32Array.from(transform), differences,
+    )
+    const differences = findRowDifferences(rules.rows, rules.rowWidth, unpack(new Int32Array(0)))
+    const packed: PackedRuleTable = [
+      rules.catCount, rules.dictCategoriesStart, rules.lookAheadResultsSize, states,
+      baseName, transform === null ? null : packVarints(transform), packVarints(differences),
+    ]
+    const unpacked = unpack(unpackVarints(packed[6]))
+    if (unpacked.length !== rules.rows.length || unpacked.some((cell, i) => cell !== rules.rows[i])) throw new Error(`${name}'s state rows unpack otherwise`)
+    const size = (table: PackedRuleTable) => table[6].length + (table[5] === null ? 0 : table[5].length)
+    if (best === null || size(packed) < size(best)) best = packed
   }
   ruleTables[name] = best!
 }
@@ -745,9 +825,9 @@ export const classRunsVarints = '${classRunsVarints}'
 export const classRemapsPacked = '${classRemapsPacked}'
 
 // Each rule table's forward state table: its categories, first dictionary category, look-ahead
-// slots and states, then the table its rows start from, if any, and the rows' differences
-// (unpackStateRows in src/line-breaks.ts).
-export const ruleTables: Record<RuleTable, readonly [number, number, number, number, RuleTable | null, string]> = ${ruleTablesJson}
+// slots and states, then the table its rows start from, if any, the transform of that table's
+// rows, if any, and the rows' differences (unpackStateRows in src/line-breaks.ts).
+export const ruleTables: Record<RuleTable, readonly [number, number, number, number, RuleTable | null, string | null, string]> = ${ruleTablesJson}
 
 // Chromium's generated kFastLineBreakTable, a bit per U+0021..U+00FF pair where a line may
 // start between them (character_property_data_generator.cc:422-551).
@@ -776,7 +856,10 @@ export const geckoBidiPairsVarints = '${geckoBidiPairsVarints}'
 const summary = [
   `${jointRuns.length} runs of ${jointClassCount} joint classes for ${classMapNames.length} class maps, ${classRunsVarints.length} B in base64, remaps ${classRemapsPacked.length} B`,
   `class table blocks ${classMapNames.map(name => `${name} ${classMaps[name]![1]}`).join(', ')}`,
-  `state tables ${Object.keys(ruleTables).map(name => `${name} ${ruleTables[name]![5].length} B${ruleTables[name]![4] === null ? '' : ` from ${ruleTables[name]![4]}`}`).join(', ')}`,
+  `state tables ${Object.keys(ruleTables).map(name => {
+    const [, , , , base, transform, differences] = ruleTables[name]!
+    return `${name} ${differences.length + (transform === null ? 0 : transform.length)} B${base === null ? '' : ` from ${base}${transform === null ? '' : ', transformed'}`}`
+  }).join(', ')}`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
   `Firefox break states packed ${geckoLineBreakStatesPacked.length} B, bracket pairs ${geckoBidiPairsVarints.length} B`,

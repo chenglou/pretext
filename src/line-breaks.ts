@@ -255,14 +255,37 @@ export type BreakRules = {
   classes: ClassTable
 }
 
-// A state table ships as its rows' differences from rows it repeats. The rows start as zeros or
-// as `base`, another table's rows of the same shape. Then, for each row that differs from how it
-// starts: the rows skipped since the last such row, how many rows back the row it copies is, or 0
-// for none, how many cells differ after that, and for each the cells skipped since the last one
-// and its value.
-export function unpackStateRows(width: number, states: number, base: Uint16Array | null, differences: Int32Array): Uint16Array {
+// A state table ships as its rows' differences from rows it repeats. The rows start as zeros, as
+// `base`, another table's rows of the same shape, or as `base` under `transform`: how many
+// categories the base has, for each category here the base's category whose column it takes, then
+// the states here that the base lacks, so the base's rows move to their states' new numbers and
+// name next states by them. Then, for each row that differs from how it starts: the rows skipped
+// since the last such row, how many rows back the row it copies is, or 0 for none, how many cells
+// differ after that, and for each the cells skipped since the last one and its value.
+export function unpackStateRows(
+  width: number,
+  states: number,
+  base: Uint16Array | null,
+  transform: Int32Array | null,
+  differences: Int32Array,
+): Uint16Array {
   const rows = new Uint16Array(states * width)
-  if (base !== null) rows.set(base)
+  if (base !== null && transform === null) {
+    rows.set(base)
+  } else if (base !== null && transform !== null) {
+    const baseWidth = transform[0]! + 3
+    const moved = new Uint16Array(base.length / baseWidth)
+    for (let state = 0, baseState = 0, inserted = width - 2; state < states; state++) {
+      if (transform[inserted] === state) inserted++
+      else moved[baseState++] = state
+    }
+    for (let baseState = 0; baseState < moved.length; baseState++) {
+      const from = baseState * baseWidth
+      const to = moved[baseState]! * width
+      rows.set(base.subarray(from, from + 3), to)
+      for (let c = 3; c < width; c++) rows[to + c] = moved[base[from + 3 + transform[c - 2]!]!]!
+    }
+  }
   for (let i = 0, row = -width; i < differences.length;) {
     row += (differences[i++]! + 1) * width
     const back = differences[i++]! * width
@@ -278,8 +301,11 @@ export function unpackStateRows(width: number, states: number, base: Uint16Array
 
 // A table's rows. The rows of the table they start from are unpacked for it and not kept.
 function unpackTableRows(table: RuleTable): Uint16Array {
-  const [catCount, , , states, base, differences] = ruleTables[table]
-  return unpackStateRows(catCount + 3, states, base === null ? null : unpackTableRows(base), unpackVarints(differences))
+  const [catCount, , , states, base, transform, differences] = ruleTables[table]
+  return unpackStateRows(
+    catCount + 3, states, base === null ? null : unpackTableRows(base),
+    transform === null ? null : unpackVarints(transform), unpackVarints(differences),
+  )
 }
 
 const breakRules: Partial<Record<RuleTable, BreakRules>> = {}

@@ -543,17 +543,22 @@ any earlier position and matches lazily took the layout entry from 56.2 to 53.6 
 the same unpacked bytes (#TBD, 2026-09-30); the parse with the fewest bytes would save 0.5 KB more and take the
 generator from 2 s to 10 or more, so it wasn't taken.
 
-Since #TBD (2026-09-30) the module holds what the tables say in place of their bytes, and the layout entry is 40.3 KB
-gzipped and 95.3 KB minified, 13.3 KB and 13.4 KB less. Every code point's class in the ten maps the scans read (the
+Since #TBD (2026-09-30) the module holds what the tables say in place of their bytes, and the layout entry is 38.0 KB
+gzipped and 90.4 KB minified, 15.6 KB and 18.2 KB less. Every code point's class in the ten maps the scans read (the
 categories of ICU's five line and two character tables, and Firefox's Line_Break, Bidi_Class and East_Asian_Width)
 ships as one list of 4,487 runs of joint classes, the 250 classes the maps together tell apart, with a byte per joint
 class for each map: engines class most code points alike, and so do one engine's tables. From the list the library
 builds a table for each map its engine reads, blocks of 256 code points behind an index, so a class is two loads for
 any code point, where ICU's trie takes four above U+FFFF and Firefox's above U+0FFF. Each state table ships as its
-rows' differences from rows it repeats, starting from an earlier table's rows where one has its shape: libicucore's
-line tables differ from Chrome's root table in 8 rows. Chrome's Chinese table has a category and two states more than
-the root table, so it ships alone. The class maps are most of what is saved. The generator checks every class of every
-code point and every state row against the engine files, and a test checks the shipped module the same way.
+rows' differences from rows it repeats, starting from an earlier table's rows: libicucore's line tables differ from
+Chrome's root table in 8 rows. Chrome's Chinese table has another shape, since the rule that sets `〜` and `゠` apart
+adds a category and two states and ICU's compiler renumbers the rest. The generator finds that by running both tables
+from their start states over every category at once and pairing the states they land in, and ships the table as the
+root's with category 51 inserted, taking category 23's column (U+00B4's, break-before), states 230 and 302 inserted,
+and 153 rows' differences: 0.3 KB gzipped where the table alone takes 2.6, for 26 lines of `src/line-breaks.ts`.
+Where a refresh's tables don't pair up that way it ships the table alone. The class maps are most of what is saved.
+The generator checks every class of every code point and every state row against the engine files, and a test checks
+the shipped module the same way.
 
 An LZ pass over these lists saved nothing once the bundle is gzipped and cost a decoding pass. The blocks cover every
 code point, so a class above U+FFFF costs what one below does; a table per code unit with a search above U+FFFF would
@@ -562,8 +567,11 @@ profile's 147-207 against 39-113), 36 KB of it the decoded run list. The times w
 Node 23, fresh processes on a busy machine, 2026-10-01), so they are hypotheses until the browsers are timed:
 unpacking an engine's tables before the first `prepare()` took 2.0-2.9 ms against 1.2-2.1 (the lower quartile of 60
 processes; two copies of main's bundle differed by up to 0.2 ms), and the first `prepare()` 0.3-0.8 ms more than
-main's 3.2-4.5 (of 40; the copies by up to 0.3). Scan times after that weren't told apart from the noise, in which the
-copies differed by up to a quarter. One bundle serves every engine (Decisions Log, 2026-09-26).
+main's 3.2-4.5 (of 40; the copies by up to 0.3). On a Chinese page in the Blink profile, whose table is built from the
+root's rows, each of their 24,820 cells renumbered, the tables took 3.3-3.5 ms against 1.9-2.0, and 2.1-2.9 with the
+table shipped alone; the first `prepare()` there took 1.3-1.5 ms more than main's 4.5-4.7, and 0.1-0.5 more with the
+table alone. Scan times after that weren't told apart from the noise, in which the copies differed by up to a quarter.
+One bundle serves every engine (Decisions Log, 2026-09-26).
 
 In Line_Break=SA runs (Thai, Lao, Khmer, Myanmar, and in the Blink and WebKit scans also Tai Le, New Tai Lue, Tai Tham,
 Tai Viet and Ahom), `Intl.Segmenter` words stand in for the engines' dictionaries. Chrome 153's equal those of
@@ -1978,9 +1986,9 @@ below 256 px, Canvas totals are exact (Engine Facts, Chrome).
   Data). Reopens only if table size and per-engine bundles both return.
 - **One bundle per engine** (372-788 KB minified, measured on the rebuild), ruled out on 2026-09-26 (Decisions Log).
   Reopens if apps ship per-browser builds.
-- **Tables shrunk by computation**: remapping onto base classes fails for Chrome's Chinese table (`〜` and `゠` need a
-  class the base lacks), and runtime state machines mean porting ICU's rule compiler, where today's tables need no
-  upkeep between refreshes. Reopens with the table-size question.
+- **Tables shrunk by computation**: remapping onto base classes alone fails for Chrome's Chinese table (`〜` and `゠`
+  need a class the base lacks, and two states more; #TBD inserts them instead), and runtime state machines mean porting
+  ICU's rule compiler, where today's tables need no upkeep between refreshes. Reopens with the table-size question.
 - **Dictionaries or ICU4X's LSTM model** for Thai, Lao, Khmer and Burmese (2026-09-25): hundreds of KB each, and slower
   in JavaScript than in Firefox. Reopens for runtimes without `Intl.Segmenter`.
 - **`Intl.v8BreakIterator` for Chrome's breaks** (the emulation study, 2026-09-16 to 09-20) drops `-u-lb-*` keywords,
@@ -2342,8 +2350,8 @@ decisions for the maintainer.
 - **2026-09-23: the Blink scan uses Chromium's Chinese line table**, `line_normal_cj.brk`, on `zh` pages and on pages
   without a language under a Chinese UI, as Chrome does (Content Language And Fonts has what it changes). Issue #321's
   eighth decision advised recording the gap instead; main kept the table when the engine tables landed (#340), 46 test
-  cases for 8.6 KB gzipped and 16 lines (Chrome 153). It was never decided on its own: the acceptance of the tables'
-  bundle that day covers it.
+  cases for 8.6 KB gzipped and 16 lines (Chrome 153), 0.3 KB since #TBD derives it from the root table. It was never
+  decided on its own: the acceptance of the tables' bundle that day covers it.
 - **2026-09-23: a new harness replaces the old test suite, and what must not regress is decided afresh**, since main's
   tests were old: the engine tables (#340), the harness (#341), then the suite's removal (#348) (harness/README.md, "Why
   the old suite went").
@@ -2413,7 +2421,7 @@ decisions for the maintainer.
   burden, and it wasn't worth it (Dead Ends, Tables, Bundles And Data). It reopens only if table size and per-engine
   bundles both return. The options weighed were keeping the tables, that format, a bundle per engine and classes from
   Unicode properties; the same pinned data in a shorter form wasn't among them. #TBD (2026-09-30) is that: run lists
-  for the classes and row differences for the state tables, generated and checked at each refresh, 13.3 KB less
+  for the classes and row differences for the state tables, generated and checked at each refresh, 15.6 KB less
   gzipped than the packed tables' 53.6, for a slower first unpacking and larger tables in memory (Break Opportunities
   From Engine Data has the numbers). The tables still say what each browser's build says, on every code point and
   state row.

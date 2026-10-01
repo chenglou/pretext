@@ -22,7 +22,7 @@
 - `layout()` is two to three times faster in Chrome and Safari on text without letter spacing, preserved spaces, tabs, hard breaks, soft hyphens or invisible controls other than zero-width spaces, which covers most prose (#338).
 - Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, from smaller Safari kerning data (#311).
 - Bundles that import Pretext are about 2.6 KB smaller gzipped and 6 KB smaller minified, from tighter packing of the browsers' line-break and grapheme tables (#TBD).
-- Bundles that import Pretext are about 13.3 KB smaller gzipped and 13.4 KB smaller minified again, from a shorter form of the browsers' line-break, grapheme and bidi tables (#TBD).
+- Bundles that import Pretext are about 15.6 KB smaller gzipped and 18.2 KB smaller minified again, from a shorter form of the browsers' line-break, grapheme and bidi tables (#TBD).
 - `setLocale(locale)` now sets the language that later `prepare()`, `prepareWithSegments()` and `prepareRichInline()` calls break lines and measure under, in place of the page's `<html lang>`, which a worker doesn't have; `setLocale()` without a locale goes back to `<html lang>`. It no longer passes the locale to `Intl.Segmenter`, whose word boundaries Pretext now reads only inside Thai, Lao, Khmer and Myanmar text, where no locale changes them (#340, #356).
 - `prepare()`, `prepareWithSegments()` and `prepareRichInline()` now throw a `RangeError` for a `letterSpacing` that isn't finite, such as `NaN` or `Infinity`, which gave lines of width `NaN`, or a line per grapheme (#356).
 
