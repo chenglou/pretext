@@ -29,7 +29,6 @@ rich-9881c81d4b5f26ca breaks
 rich-a4b44edb3de875c2 breaks
 rich-af15c89ce4d5d9a8 breaks
 rich-b0c830aec8fcea25 breaks
-rich-befcad2d664c96dc count
 rich-c71a21ddc6fa35ca breaks
 rich-d7ac0a6af37a56bf count
 rich-dc1f44c993d80708 breaks
@@ -42,18 +41,6 @@ rich-9fb830f3b14af5c6 breaks
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Chrome breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-d5e8ab54da9c767a breaks
 rich-d95b699e131357ec breaks
-
-## A span of a soft hyphen before a span that starts with a bidi control, at the paragraph's start or after a word or a collapsed space, at 24 px and wider: Chrome breaks after the control, as for the text in one node, where the library can't end a line inside the next item's first segment, which holds the control and so takes fresh-line geometry, and ends the line at the space before the soft hyphen or, without one, inside the word after the control (main too; ENGINE_FOLLOWUPS.md)
-rich-05d465f9481322f1 breaks
-rich-158f360c052c7452 count
-rich-20c085be5cdd75ad breaks
-rich-441b269859b5762d breaks
-rich-58d40529eee407eb count
-rich-735197c68f7df397 breaks
-rich-9eb6da49941cc4f6 breaks
-rich-ab47c1d99a186b6d count
-rich-baf150bfd1f499c5 breaks
-rich-cab7a1cf42268d8d breaks
 
 ## A span of a soft hyphen between spaces after a word, at 24 px and wider: Chrome keeps the space after the soft hyphen visible at the start of the next line, as it doesn't consume a soft hyphen at a line start, where the library consumes both, as it does in one text (main and c09d264b too; ENGINE_FOLLOWUPS.md)
 rich-ed1f76e1c1bff59b count
@@ -1131,7 +1118,7 @@ catalog-5df47476a69dd62b count
 catalog-5df68c6fdfca530e count
 catalog-5e05d9d4425459a4 breaks
 catalog-5e4319b9e5db2df7 count
-catalog-5f07074a700d604b breaks
+catalog-5f07074a700d604b count
 catalog-5fae03a988402a31 count
 catalog-5fed323601f6a123 count
 catalog-6004c6ba9c73e4cd count
@@ -3986,6 +3973,22 @@ sample-78c75e7e120daf03 count
 sample-aa5df1d0b23661a0 count
 sample-b178e456f685db2e count
 
+## Rich items narrower than real layouts, under 24 px: a ZWSP, a separator or soft hyphens in an item of their own, or a padded line feed, beside a character that overflows the line; Chrome gives the ZWSP or separator a line of its own or moves a character, where the library lays the items out as their text in one node (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-14eba924d604608e count
+rich-19e866488d756c8e count
+rich-4b7d153ff81b0f68 count
+rich-7ed410c8998dbb4a count
+rich-96c42e63c2a158e1 count
+rich-a55f33376400f2f4 count
+rich-a889c7e59cf41cad count
+rich-aea8421d55051672 count
+rich-d5874c9d718554c2 count
+rich-dcfaf1298b58bfa4 count
+rich-e7a3eb32859cfd67 count
+rich-f3094dad03fc3dc4 count
+rich-f42418c66dcadfef breaks
+rich-fcfac9060093667e breaks
+
 ## Soft hyphens alone after the last line feed of a pre-wrap paragraph: Chrome gives them a line of their own, the library none (main before #340 too; ENGINE_FOLLOWUPS.md)
 catalog-6eee548463a90026 count
 catalog-887921f266e411d6 count
@@ -4200,10 +4203,16 @@ catalog-fcaddf2e30bed338 count
 ## White space and soft hyphens before a ZWSP where a line starts, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible there, as it doesn't consume a soft hyphen at a line start, where the library consumes both, as it does in one text; main passed these only because its first fragment started before the space its line start consumed (ENGINE_FOLLOWUPS.md)
 rich-11a3923c1b2e930a breaks
 rich-1e4eb256d9bee7b8 breaks
-rich-5b60c65e1f4531a1 breaks
+rich-5b60c65e1f4531a1 count
 rich-62e4228d958cf44e breaks
 rich-8058c8ea44ac27f5 breaks
-rich-c84427ff3e354b1e breaks
+rich-c84427ff3e354b1e count
+
+## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-49f015c20c562738 breaks
+rich-64a76c11090a01ae breaks
+rich-729b900c377fd1bd breaks
+rich-eb73803ffd58f47c breaks
 
 ## Within 1/64 px of where the browser's lines change, at 24 px and wider: the library's fit lands on the other side there, while the whole-pixel widths inside both layouts pass
 catalog-0264013048297716 breaks

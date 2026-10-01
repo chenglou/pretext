@@ -19,7 +19,8 @@ Held until the current work is done, and all before the first release.
   - a paragraph direction, and the device pixel ratio for Chrome's fit grid, the 1/64 device px Chrome fits lines on (RESEARCH.md, Measurement Model; decisions 3 and 4 of issue #321, a study of offline engine emulators);
   - `getTextClusters()` once Chrome ships it, no help for Firefox;
   - `extraWidth` on a rich item split across lines: today every piece is charged all of it, as CSS `box-decoration-break: clone` pads, where browsers default to `slice`, which pads only the outer ends; perhaps CSS's names at the release, `paddingInline: [start, end]` with `boxDecorationBreak`, so neither meaning is silent (#382);
-  - rich inline as one analysis of the paragraph cut at item boundaries, in place of each item's own analysis patched toward the joined text, which needs fragment cursors that don't index each item's own prepared text (RESEARCH.md, Rich Inline Boundaries, Continuing The Line; not prototyped);
+  - what rich inline's fragment cursors are, now that it is one analysis of the paragraph cut at its items (#TBD): today they index the item's part of the paragraph's segments, opaque to a caller, and a materialized fragment carries `sourceStart` and `sourceEnd`; cursors into the whole paragraph, or offsets on range fragments too, are the alternatives (RESEARCH.md, Rich Inline Boundaries, One Paragraph, Cut At Its Items);
+  - words that two unpadded items share kept as one segment, so that a paragraph with a style change inside a word keeps the simple walker, and items in one font measured as one run (RESEARCH.md, Rich Inline Boundaries, One Paragraph, Cut At Its Items);
   - how a browser whose Canvas lacks what its profile needs degrades, still laying text out rather than showing nothing.
 - Then a release, not before.
 - License notices for the ported engine code and data.

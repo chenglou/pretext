@@ -29,9 +29,10 @@ Widths aren't judged. The shrink-wrap check, whether a bubble sized to the predi
 least as wide as the browser's widest line, prints but never fails a run. The library's consistency blocks on every
 case, recorded or not: the line APIs (`layout()`, `measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`,
 `layoutNextLine()`, `layoutWithLines()`, `materializeLineRange()` and their rich-inline counterparts) must agree on
-lines, widths and text, and none may call `measureText` after preparing. A rich fragment's text is
-`materializeLineRange()`'s over its cursors in its item's own prepared text, but for the hyphen of a soft hyphen it ends
-at, which the text the items join decides.
+lines, widths and text, and none may call `measureText` after preparing. A rich fragment's text is its item's text
+between the fragment's `sourceStart` and `sourceEnd`, as painted: without soft hyphens and what ends a line, in normal
+white space with one space for each run of white space, and with the hyphen of a soft hyphen its line ends at. A rich
+line runs from its first fragment's start in the source to its last one's end.
 
 A recording counts only under the environment that made it, the key in its file's first line: browser build, OS build,
 OS languages, page languages, device pixel ratio and a hash of the served fonts. `check` refuses to score under any

@@ -1,6 +1,16 @@
 ## A padded rich pre-wrap span that starts on the line it ends inside, at a line feed or after spaces that hang, at 24 px and wider: Safari fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-f7c605f19ec5d469 breaks
 
+## A padded rich pre-wrap span that starts with a line feed after a word that ends with preserved spaces, at 80 px and wider: Safari fits the span's start edge without those spaces, which hang, and where it doesn't fit moves the spaces that don't fit to the span's line, where the library counts the spaces and ends the line after them, before the span (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-04f0598ec195fb34 breaks
+rich-08dfff76129fca74 breaks
+rich-aa9a900cbc4b3d3c count
+rich-ab18f5ea1fbc6f41 breaks
+rich-b1052010b61c8112 breaks
+rich-d370bdeca9eb8f52 breaks
+rich-ea8cda2bc2afccb6 count
+rich-f093932606d94509 breaks
+
 ## A padded rich pre-wrap span that starts with spaces after a word that ends with spaces, at 24 px and wider: Safari fits the span's start edge with the word's spaces, as it leaves only the span's own out of the fit (its last white-space item's width, hangingContentWidth), where the library leaves the word's spaces out and fits both edges (ENGINE_FOLLOWUPS.md)
 rich-5e1adef196a86585 breaks
 rich-a3217381ee65daac breaks
@@ -3318,6 +3328,24 @@ sample-da2e5a0e849969a1 breaks
 ## Real usage: table cells 25-125 px wide holding IDs, phone numbers and formulas; WebKit breaks at hyphens, brackets and between digits otherwise than the library (main before #340 too)
 sample-db62d90b64149427 breaks
 
+## Rich items narrower than real layouts, under 24 px: a ZWSP, a separator or soft hyphens in an item of their own, or a padded line feed, beside a character that overflows the line; Safari gives the ZWSP or separator a line of its own or moves a character, where the library lays the items out as their text in one node (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-099f76bfffda5693 count
+rich-0dcbb8cd15ea334e count
+rich-0ff6bd7dbf62940e breaks
+rich-14eba924d604608e count
+rich-18c8c76538599828 count
+rich-19e866488d756c8e count
+rich-1cf16d131d7a3916 count
+rich-2e0b42e4cf20058f count
+rich-3f7623a4b4dd94eb count
+rich-4b7d153ff81b0f68 count
+rich-4bd4fbdb2b90da52 count
+rich-7ed410c8998dbb4a count
+rich-a889c7e59cf41cad count
+rich-cb273776ca332c30 breaks
+rich-dcfaf1298b58bfa4 count
+rich-f3094dad03fc3dc4 count
+
 ## Soft hyphens alone after the last line feed of a pre-wrap paragraph: WebKit gives them a line of their own, the library none (main before #340 too; ENGINE_FOLLOWUPS.md)
 catalog-1a998e612e9484af count
 catalog-2b41de9231a38d2c count
@@ -3370,6 +3398,12 @@ rich-1e4eb256d9bee7b8 breaks
 rich-62e4228d958cf44e breaks
 rich-8058c8ea44ac27f5 breaks
 rich-ad4e0796eaaec403 breaks
+
+## White space and soft hyphens that start a paragraph before a ZWSP, in items of their own, at 24 px and wider: Safari keeps the space after the first soft hyphen visible where the line starts, where the library's line starts after what a line start consumes, with the lines it gave before; an empty fragment's range used to hold that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-14f68f3cc6f7140c breaks
+rich-49f015c20c562738 breaks
+rich-64a76c11090a01ae breaks
+rich-729b900c377fd1bd breaks
 
 ## Within 1/64 px of where the browser's lines change, at 24 px and wider: the library's fit lands on the other side there, while the whole-pixel widths inside both layouts pass
 catalog-08343c18c4be4ee9 count
