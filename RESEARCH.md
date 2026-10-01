@@ -799,6 +799,42 @@ Kerning across a ZWSP or a soft hyphen before a space, across a rich item's edge
 stays missing (ENGINE_FOLLOWUPS.md). Letter-spaced text takes the kerning too, as Blink turns off only ligatures
 under spacing (Engine Facts, Chrome).
 
+The Chromium profile also takes the kerning between two kana (#TBD; `getKanaKerning()` in `src/measurement.ts`,
+`addKanaKerning()` in `src/prepare.ts`). The Japanese fonts of macOS pair kana: of the 14,285 pairs of 83 hiragana and
+of 86 katakana, Chrome's layout kerns 2,149 in 17px Hiragino Sans and Hiragino Kaku Gothic ProN, by up to 3.73px,
+2,637 in Hiragino Mincho ProN, 2,023 in Hiragino Maru Gothic ProN, 2,721 in Yu Gothic, 826 in Yu Mincho and 1,519 in
+Toppan Bunkyu Gothic, and none in Osaka or PingFang SC. It kerns no hiragana with a katakana (15,480 pairs), which
+are two scripts and two shaping runs, no kana with an ideograph (52,800), no ideograph with another (22,500) and no
+kana with a Latin letter. Canvas cuts a string before each kana or ideograph that follows another and shapes the
+pieces apart, so it reported none of the kana pairs, only a kana's kerning with a mark such as `ー` or a full stop
+that it keeps in the kana's word, and the profile, which also measures each kana as a segment of its own, lost both.
+Its lines of Japanese came out 1 to 7px too wide, and Chrome fit one more character: all 15 failures under the
+harness's "Real usage: Japanese and Chinese lines" were this, none of them Chinese.
+
+Under `textRendering = 'optimizeLegibility'` Canvas shapes a string whole where the lookups of the list's first font
+with a space cover the space glyph (Engine Facts, Chrome), which those of all seven kerning families do: a second
+context under it gave the layout's width, to 0.01px, for every one of the 28,561 pairs of 169 kana in each family and
+for 181 whole sentences of the two Japanese corpora, where the default context was off for 80 to 130 of the
+sentences, by up to 5.77px. A kana alone measures the same on both contexts. Nothing else tried made Canvas shape two
+kana together: `fontKerning = 'normal'`, which needs the space in GPOS; a ZWJ, a word joiner or U+034F between the
+two; `direction = 'rtl'`; or a letter spacing of 0.001px (pinned Chrome 154.0.8037.57, 2026-10-01).
+
+A pair's kerning goes on the segment of its second kana, and a line that starts there gives it back, as Blink shapes
+a line's end again without the next line's first character where the break isn't safe (`ShapingLineBreaker::ShapeLine`,
+`shaping_line_breaker.cc:511-584`), and tests that width against the line. On the harness it fixed 29 Chrome cases and
+lost none: the sample's 15, which takes the share of real paragraphs right inside what Pretext claims from 99.63% to
+99.81%, two more of its Japanese paragraphs in `system-ui` lists, and 12 engine facts and rich cases
+(`わかって`, `日本ァア`, `ちょっと待ってください`). Over 290 Japanese paragraphs of the sample and the corpora at 22
+widths, 200 to 368px (6,380 pairs), wrong line counts went from 14 to 4 in 16px Hiragino Sans, 9 to 4 in Hiragino
+Mincho ProN and 17 to 11 in Yu Gothic, the rest being paragraphs a line shorter than Chrome's for other reasons, which
+PingFang SC, without kerning, has too; and of their first 20 characters laid out on one line, 146 measured more than
+0.1px wider than painted in Hiragino Sans (45 by more than 1px, at most 4.63px), 158 in Hiragino Mincho ProN and 142
+in Yu Gothic, and none does now. The cost is a Canvas call for each distinct pair of kana in a font: those paragraphs
+hold 9,844 kana pairs among 25,347 characters, 1,142 of them distinct (781 after the first 100 paragraphs), and
+preparing them in one font takes 2,368 calls where it took 1,362. The harness's sample, mostly not Japanese, takes
+2.1% more calls and 1.2% more submitted units. ENGINE_FOLLOWUPS.md has the gaps: lists whose first font Canvas
+doesn't shape whole, words broken between characters, and fonts of other systems.
+
 Where a pair's adjustment sits decides what a break inside the pair leaves on each side: GPOS pair positioning puts it
 all on the first glyph, the legacy `kern` table half on each (`hb-kern.hh:102-106`). On macOS, Times New Roman, Verdana,
 Helvetica Neue, Hoefler Text and 10 more families split it; Arial, Futura, Gill Sans and Avenir Next are among those
@@ -1606,7 +1642,8 @@ repin` shows what), and a fact read in source needs reading again.
   `fontKerning = 'normal'` only where GPOS ones do (`font_fallback_list.cc:264-277`, `harfbuzz_face.cc:341-385`):
   Arial, Times New Roman, PingFang, not Georgia, Helvetica Neue, Verdana (Dead Ends, Kerning). U+2028 for each U+0020
   keeps a string whole, legacy `kern` fonts included, but makes it two-byte and takes no word spacing; the Chromium
-  profile reads kerning with spaces through it (Kerning At Line Edges). Canvas shapes each ICU level run in its own direction, the DOM a group in one; a two-byte RTL group
+  profile reads kerning with spaces through it, and the kerning between kana from a second context under
+  `optimizeLegibility` (Kerning At Line Edges). Canvas shapes each ICU level run in its own direction, the DOM a group in one; a two-byte RTL group
   in U+202E … U+202C is one level run. U+FFFC becomes U+200B (`character.h:167-175`): zero where the DOM draws a 1 em
   fallback glyph. (Chrome 153, 2026-09-16 to 09-23.)
 - **Letter spacing and tabs.** Blink spaces cursive-script runs only at spaces (`shape_result.cc:977-990`), spaces a

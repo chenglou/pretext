@@ -30,6 +30,7 @@ import {
   getEmojiCorrection,
   getFollowingSpaceMetrics,
   getFontMeasurement,
+  getKanaKerning,
   getSegmentFit,
   getSegmentMetrics,
   getSpaceKerning,
@@ -467,6 +468,10 @@ export function measureAnalysis(
     const trims = hanKerning.widthTrims
     if (trims !== null) for (let i = 0; i < trims.length; i++) widths[i] = widths[i]! - trims[i]!
   }
+  let lineStartExtras = hanKerning.lineStartExtras
+  if (engineProfile.kerningReach === 'script-run' && kanaPairRe.test(normalized)) {
+    lineStartExtras = addKanaKerning(lineStartExtras, widths, analysis, fontMeasurement)
+  }
   let lineEndTrims = hanKerning.lineEndTrims
   if (engineProfile.hangsIdeographicSpace && normalized.includes('\u3000')) {
     lineEndTrims = addIdeographicSpaceHangs(lineEndTrims, analysis, fontMeasurement, letterSpacing, discretionaryHyphenWidth)
@@ -482,13 +487,59 @@ export function measureAnalysis(
     discretionaryHyphenWidth,
     discretionaryHyphenContexts,
     lineStartProhibitions,
-    lineStartExtras: hanKerning.lineStartExtras,
+    lineStartExtras,
     lineEndTrims,
     overflowLineEndTrims: hanKerning.overflowLineEndTrims,
     tabStopAdvance,
   } as unknown as PreparedText & PreparedSegments
   if (segments !== null) prepared.segments = segments
   return prepared
+}
+
+// Two characters of the Hiragana and Katakana blocks in a row.
+const kanaPairRe = /[\u3041-\u30FF]{2}/
+
+// A kana letter, which has a script of its own. The blocks' other characters, such as U+30FC,
+// are marks that Canvas keeps in the word of the character before them.
+function isKanaLetter(code: number): boolean {
+  return (code >= 0x3041 && code <= 0x3096) || (code >= 0x30a1 && code <= 0x30fa)
+}
+
+// Blink's layout shapes a run of one script in one call, so a kana kerns with the kana after it
+// in fonts that pair them, as Hiragino and Yu Gothic do: 2,149 of the 14,285 pairs of 83
+// hiragana and of 86 katakana in Hiragino Sans, by up to 3.73px at 17px, and none of a hiragana
+// with a katakana, which are two scripts and two runs. Canvas cuts the two apart
+// (getKanaKerning), and preparation measures segments apart, so each pair's kerning is added
+// here. A pair's adjustment sits on its first glyph, and a line that breaks between the two is
+// shaped again without it (ShapingLineBreaker::ShapeLine, shaping_line_breaker.cc:511-584), so
+// the kerning goes on the segment of the second character, which a line start gives back.
+// An emergency break inside a segment takes none (ENGINE_FOLLOWUPS.md).
+function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement): number[] | null {
+  const { normalized, starts, flags } = analysis
+  for (let i = 0; i < flags.length; i++) {
+    if ((flags[i]! & KIND_BITS) !== TEXT) continue
+    const start = starts[i]!
+    const end = i + 1 < flags.length ? starts[i + 1]! : normalized.length
+    // The segment's first character pairs with the character before it, the last of a segment.
+    for (let k = Math.max(start, 1); k < end; k++) {
+      const before = normalized.charCodeAt(k - 1)
+      const after = normalized.charCodeAt(k)
+      if (before < 0x3041 || before > 0x30ff || after < 0x3041 || after > 0x30ff) continue
+      // Inside a segment Canvas keeps a mark in the word before it, and a hiragana and a
+      // katakana are two runs wherever they meet.
+      const letter = isKanaLetter(after)
+      if (k > start && !letter) continue
+      if (letter && isKanaLetter(before) && (before < 0x30a0) !== (after < 0x30a0)) continue
+      const kerning = getKanaKerning(before, after, measurement)
+      if (kerning === 0) continue
+      widths[i] = widths[i]! + kerning
+      if (k === start) {
+        extras ??= zeros(flags.length)
+        extras[i] = extras[i]! - kerning
+      }
+    }
+  }
+  return extras
 }
 
 // Blink (Chrome 153) hangs a run of U+3000 that ends a line, as it hangs spaces: ShapingLineBreaker

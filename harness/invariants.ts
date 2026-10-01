@@ -6,8 +6,10 @@
 // Each process gives the library a stand-in Canvas: at 16 px a character is 8 px, a space 4, a mark or a format character
 // 0, plus the letter spacing per grapheme. U+2028 measures as the space, whose glyph Chrome draws it with, and kerns 0,
 // 0.5 or 1 px with the character on either side of it, so the Chromium profile's kerning with spaces (getSpaceKerning in
-// src/measurement.ts) is taken here. The Blink and Gecko processes run under a desktop user agent with a string
-// `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
+// src/measurement.ts) is taken here, and a context under text-rendering: optimizeLegibility, where Chrome shapes a string
+// whole, kerns two kana in a row by as much (getKanaKerning). The Blink and Gecko processes run under a desktop user
+// agent with a string `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths
+// those browsers take.
 // The inputs are seeded draws from harness/cases (a failure names its case, at its width, half and 1.5 times it, 1 and
 // Infinity) and a few fixed ones. The checks:
 // - every line API agrees with walkLineRanges (predict.ts's check), and layoutWithLines and layoutNextLine give equal
@@ -53,7 +55,7 @@ type Api = typeof import('../src/layout.ts') & typeof import('../src/rich-inline
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
-export function standInWidth(text: string, font: string, letterSpacing: number): number {
+export function standInWidth(text: string, font: string, letterSpacing: number, wholeRun = false): number {
   const size = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 16) / 16
   let width = 0
   let previous = -1
@@ -61,6 +63,7 @@ export function standInWidth(text: string, font: string, letterSpacing: number):
     const code = ch.codePointAt(0)!
     width += /[\p{M}\p{Cf}]/u.test(ch) ? 0 : code === 0x20 || code === 0x2028 ? 4 : 8
     if (previous >= 0 && (code === 0x2028) !== (previous === 0x2028)) width -= (code === 0x2028 ? previous : code) % 3 / 2
+    if (wholeRun && previous >= 0x3041 && previous <= 0x30ff && code >= 0x3041 && code <= 0x30ff) width -= (previous + code) % 3 / 2
     previous = code
   }
   let count = 0
@@ -72,13 +75,14 @@ export function standInWidth(text: string, font: string, letterSpacing: number):
 const measured = { calls: 0, units: 0 }
 function installStandIn(profile: Profile): void {
   const spaced = profile === 'blink' || profile === 'gecko'
-  const context = (): { font: string; letterSpacing?: string; measureText: (text: string) => { width: number } } => {
+  const context = (): { font: string; textRendering: string; letterSpacing?: string; measureText: (text: string) => { width: number } } => {
     const ctx = {
       font: '10px sans-serif',
+      textRendering: 'auto',
       measureText(text: string): { width: number } {
         measured.calls++
         measured.units += text.length
-        return { width: standInWidth(text, ctx.font, spaced ? Number.parseFloat(ctx.letterSpacing!) : 0) }
+        return { width: standInWidth(text, ctx.font, spaced ? Number.parseFloat(ctx.letterSpacing!) : 0, ctx.textRendering === 'optimizeLegibility') }
       },
       ...(spaced ? { letterSpacing: '0px' } : {}),
     }

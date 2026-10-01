@@ -235,6 +235,10 @@ export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-cont
 type MeasureState = {
   language: string | null
   context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+  // A second context, under text-rendering: optimizeLegibility, made for the first kana pair
+  // asked about (getKanaKerning), and the Canvas font it is set to.
+  wholeRunContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+  wholeRunFont: string
   genericFamilies: string[] | null // The families the language gives the generic keywords, or null
   takesLetterSpacing: boolean // As Chrome's and Firefox's contexts do, as a string of CSS px
   fonts: Map<string, FontMeasurement>
@@ -254,6 +258,9 @@ export type FontMeasurement = {
   // In the Chromium profile, each character's kerning with a space glyph after it and before
   // it, NaN until a segment has the character at that edge (getSpaceKerning).
   characterSpaceKerning: Map<string, SpaceKerning>
+  // In the Chromium profile, the kerning of each pair of kana asked about, keyed by the first
+  // code unit times 0x10000 plus the second (getKanaKerning).
+  kanaKerning: Map<number, number>
   emojiCorrection: number | null // Probed for the first text that may hold emoji
   hanKerning: HanKerningFontData | null | undefined // Read for the first text that may kern
 }
@@ -504,6 +511,37 @@ export function getSpaceKerning(seg: string, metrics: SegmentMetrics, measuremen
   return metrics.spaceKerning = after === 0 && before === 0 ? noSpaceKerning : { after, before }
 }
 
+// The kerning Blink's layout gives two kana side by side, which its Canvas doesn't report: Canvas
+// starts a word at each kana or ideograph that follows another (NextWordEndIndex,
+// plain_text_node.cc:129-153) and shapes each word alone. Under text-rendering: optimizeLegibility
+// it shapes a string whole where the font's GPOS or GSUB lookups cover the space glyph
+// (FontFallbackList::ComputeCanShapeWordByWord, font_fallback_list.cc:264-277), as those of
+// Hiragino Sans, Hiragino Mincho ProN and Yu Gothic do, so a second context under it measures the
+// pair as the page shapes it: in each of seven Japanese families its width for every pair of
+// 169 kana was the page's (RESEARCH.md, Kerning At Line Edges). A font it still cuts into words
+// answers no kerning, as the first context does. The first context measures everything else,
+// since it shares the page's font cache key for system-ui (PLATFORM_BUGS.md), and a kana alone
+// measures the same on both.
+export function getKanaKerning(before: number, after: number, measurement: FontMeasurement): number {
+  const key = before * 0x10000 + after
+  let kerning = measurement.kanaKerning.get(key)
+  if (kerning === undefined) {
+    const state = measurement.state
+    if (state.wholeRunContext === null) {
+      state.wholeRunContext = createContext(state.language)
+      state.wholeRunContext.textRendering = 'optimizeLegibility'
+    }
+    if (state.wholeRunFont !== measurement.canvasFont) state.wholeRunContext.font = state.wholeRunFont = measurement.canvasFont
+    const first = String.fromCharCode(before)
+    const second = String.fromCharCode(after)
+    kerning = state.wholeRunContext.measureText(first + second).width - getSegmentMetrics(first, measurement).width - getSegmentMetrics(second, measurement).width
+    // Canvas widths are float32 sums, so two that should agree can differ in their last bits.
+    if (Math.abs(kerning) < 1 / 128) kerning = 0
+    measurement.kanaKerning.set(key, kerning)
+  }
+  return kerning
+}
+
 // A text's width in the font, less the emoji correction.
 export function getTextWidth(text: string, measurement: FontMeasurement, emojiCorrection: number): number {
   return getCorrectedSegmentWidth(text, getSegmentMetrics(text, measurement), emojiCorrection)
@@ -686,14 +724,19 @@ export function getFontMeasurement(font: string, language: string | null): FontM
   let measurement = state.fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), characterSpaceKerning: new Map(), emojiCorrection: null, hanKerning: undefined }
+    measurement = {
+      state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), characterSpaceKerning: new Map(), kanaKerning: new Map(),
+      emojiCorrection: null, hanKerning: undefined,
+    }
     state.fonts.set(font, measurement)
   }
   state.context.font = measurement.canvasFont
   return measurement
 }
 
-function createMeasureState(language: string | null): MeasureState {
+// A context's `lang` follows the page's, and preparation's can be setLocale()'s or Blink's
+// default locale instead.
+function createContext(language: string | null): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
   let context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
   if (typeof OffscreenCanvas !== 'undefined') {
     context = new OffscreenCanvas(1, 1).getContext('2d')!
@@ -702,12 +745,17 @@ function createMeasureState(language: string | null): MeasureState {
   } else {
     throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
   }
-  // A context's `lang` follows the page's, and preparation's can be setLocale()'s or
-  // Blink's default locale instead.
   if (language !== null && 'lang' in context) context.lang = language
+  return context
+}
+
+function createMeasureState(language: string | null): MeasureState {
+  const context = createContext(language)
   return {
     language,
     context,
+    wholeRunContext: null,
+    wholeRunFont: '',
     genericFamilies: language !== null && getEngineProfile().namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, context) : null,
     takesLetterSpacing: typeof context.letterSpacing === 'string',
     fonts: new Map(),

@@ -5473,6 +5473,83 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
 })
 
 
+test('the Chromium profile takes the kerning between two kana', () => {
+  // The engine profile is computed once per process, so Chrome runs in a child
+  // process. Every kana is 16px and a space 4px. Canvas cuts a string before each
+  // kana letter and shapes the pieces apart, keeping a mark such as ー with the
+  // letter before it, where アー kerns -1px. A context under optimizeLegibility
+  // shapes a string whole: there あい kerns -2px, ーア -3px, and あア -5px, which
+  // the page, shaping hiragana and katakana apart, never shows.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const script = `
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
+    } })
+    const measured = []
+    const count = (text, pair) => text.split(pair).length - 1
+    class Context {
+      font = ''
+      letterSpacing = '0px'
+      textRendering = 'auto'
+      measureText(text) {
+        const whole = this.textRendering === 'optimizeLegibility'
+        measured.push((whole ? 'whole ' : '') + text)
+        let width = 0
+        for (const ch of text) width += ch === ' ' ? 4 : 16
+        width -= count(text, 'アー')
+        if (whole) width -= 2 * count(text, 'あい') + 3 * count(text, 'ーア') + 5 * count(text, 'あア')
+        return { width }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepare, prepareWithSegments, layout, layoutWithLines } = await import(${JSON.stringify(layoutUrl)})
+    const { prepareRichInline, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
+    const widths = []
+    for (const [text, options] of [
+      ['あいう', {}], ['アーア', {}], ['あいう', { wordBreak: 'keep-all' }], ['アーア', { wordBreak: 'keep-all' }], ['あア', {}], ['あ い', {}],
+    ]) widths.push(prepareWithSegments(text, '16px Test', options).widths)
+    const lines = []
+    for (const [text, width] of [['あいう', 30.5], ['あいう', 16.5], ['ああい', 32.5]]) {
+      const result = layoutWithLines(prepareWithSegments(text, '16px Test'), width, 20)
+      lines.push({ lines: result.lines.map(line => [line.text, line.width]), lineCount: layout(prepare(text, '16px Test'), width, 20).lineCount })
+    }
+    const rich = [[{ text: 'あい', font: '16px Test' }], [{ text: 'あ', font: '16px Test' }, { text: 'い', font: '16px Test' }]]
+      .map(items => measureRichInlineStats(prepareRichInline(items), 100).maxLineWidth)
+    const crossed = measured.includes('whole あア')
+    measured.length = 0
+    prepare('あいあいあい', '16px Fresh')
+    console.log(JSON.stringify({ widths, lines, rich, crossed, asked: measured.filter(text => text.startsWith('whole ')).sort() }))
+  `
+  const { widths, lines, rich, crossed, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'crossed' | 'asked', unknown>
+  expect(widths).toEqual([
+    // The pair's kerning goes on the second kana's segment.
+    [16, 14, 16],
+    // A mark kerns with the letters on both sides of it.
+    [16, 15, 13],
+    // Inside a keep-all segment Canvas cuts before a letter, and has kept the mark's
+    // kerning with the letter before it.
+    [46],
+    [44],
+    // A hiragana and a katakana are two runs, and a space parts a pair.
+    [16, 16],
+    [16, 4, 16],
+  ])
+  expect(crossed).toBe(false)
+  expect(lines).toEqual([
+    { lines: [['あい', 30], ['う', 16]], lineCount: 2 },
+    // A kana that starts a line has nothing before it to kern with.
+    { lines: [['あ', 16], ['い', 16], ['う', 16]], lineCount: 3 },
+    { lines: [['ああ', 32], ['い', 16]], lineCount: 2 },
+  ])
+  // Kana in one rich item kern as in plain text; across two items they don't
+  // (ENGINE_FOLLOWUPS.md).
+  expect(rich).toEqual([30, 32])
+  // Each pair once per font, on the second context alone.
+  expect(asked).toEqual(['whole あい', 'whole いあ'])
+})
+
+
 test('the Safari profile lets small kana and U+30FC start a line only on Japanese and Korean pages', () => {
   // The engine profile is computed once per process, so Safari runs in a child
   // process. Every character is 16px. Preparation reads <html lang> once.
