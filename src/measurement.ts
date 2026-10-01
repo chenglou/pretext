@@ -38,7 +38,16 @@ export type EngineProfile = {
   // scan the text with their pair tables and ICU line rules (src/line-breaks.ts), Gecko
   // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
   // doesn't recognize take Blink's scan.
-  lineBreakScan: 'blink' | 'webkit' | 'gecko'
+  // 'webkit' is Safari 27's scan (WebKit 7625), and 'webkit-safari-26' the same scan by the
+  // rules Safari 26 keeps, on a WebKit that predates 7625 (isWebKitBefore7625): keep-all
+  // breaks only at spaces, never after punctuation; guillemets and single curly quotes never
+  // break beside East Asian text, and double ones break where ICU does; U+2028 and U+2029
+  // force no break; and a line that holds only an overflowing first character ends after it,
+  // whatever punctuation follows (`safari26` in src/line-breaks.ts cites each). It is a scan
+  // of its own, not a field: a field added to this object has slowed Chrome's line APIs
+  // (RESEARCH.md, JavaScript Engines). So a test for any WebKit names both scans, and
+  // `=== 'webkit'` alone means a rule only Safari 27 has.
+  lineBreakScan: 'blink' | 'webkit' | 'webkit-safari-26' | 'gecko'
   // Where grapheme clusters end: the engine's ICU character rules (src/graphemes.ts).
   // libicucore's add Apple's transcoding hints to Extend. Firefox's ICU4X data gives the
   // clusters Chrome's rules give, over its text run, which leaves out bidi controls.
@@ -412,7 +421,8 @@ export type LayoutEngine = 'blink' | 'webkit' | 'gecko'
 // Engine profiles describe the layout engine, not the browser brand. Chrome,
 // Firefox and Edge on iOS lay out with WebKit whatever their brand token (CriOS/,
 // FxiOS/, EdgiOS/) or desktop-mode user agent, and an app's web view may name no
-// browser at all. The user agent decides alone, so a page and its workers agree.
+// browser at all. The user agent decides the engine alone, so a page and its workers
+// agree on it; which WebKit it is takes two globals as well (isWebKitBefore7625).
 // navigator.vendor is not read: workers don't have it, and jsdom reports WebKit's
 // beside Chromium's frozen AppleWebKit/537.36 token. WebKit froze 605.1.15, so
 // 537.36 names Blink only beside Chrome/ or Chromium/, which Samsung's TV web
@@ -423,6 +433,29 @@ export function getLayoutEngine(userAgent: string): LayoutEngine | null {
     return userAgent.includes('Chrome/') || userAgent.includes('Chromium/') ? 'blink' : null
   }
   return userAgent.includes('AppleWebKit/') ? 'webkit' : null
+}
+
+// Whether this WebKit is a release older than 7625, Safari 27's. No user agent tells: WebKit
+// froze its own version at 605.1.15, and only Safari's names a Safari version, not the other
+// WebKit browsers on iPhone and iPad or an app's web view. Two unrelated APIs that a page and
+// its workers both have tell the releases apart: ReadableStream.from() and
+// WebAssembly.Suspending. Every release tag from WebKit-7625.1.29 has both and none through
+// WebKit-7624.5.1.11.3 has either (ReadableStream.idl, with ReadableStreamFromEnabled in
+// UnifiedWebPreferences.yaml; JSGlobalObject.cpp:2183-2186, with useJSPI in OptionsList.h).
+// Either one reads as Safari 27, since Safari 27 can be without one: ReadableStream where a
+// page's polyfill replaces it or the feature flag is off, WebAssembly in Lockdown Mode
+// (XPCServiceEntryPoint.mm:216). These are the page's globals, unlike the user agent: on an
+// older WebKit a page that polyfills from() reads as Safari 27, and its worker doesn't
+// unless it loads the polyfill too.
+// The gap: the APIs are older than the break rules. Both were on in WebKit's trunk by
+// 2026-02-12, and Safari 27's break changes landed there on 2026-03-22, 04-13 and 06-09, so
+// a trunk build of those months (a Safari Technology Preview, or Playwright's WebKit 2272,
+// whose user agent says Version/26.4) reads as Safari 27 and takes its scan while breaking
+// wholly or partly by Safari 26's rules.
+function isWebKitBefore7625(): boolean {
+  const stream = typeof ReadableStream === 'undefined' ? null : ReadableStream as unknown as { from?: unknown }
+  const wasm = typeof WebAssembly === 'undefined' ? null : WebAssembly as unknown as { Suspending?: unknown }
+  return typeof stream?.from !== 'function' && typeof wasm?.Suspending !== 'function'
 }
 
 export function getEngineProfile(): EngineProfile {
@@ -436,7 +469,7 @@ export function getEngineProfile(): EngineProfile {
 
   const profile: EngineProfile = {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
-    lineBreakScan: engine,
+    lineBreakScan: engine === 'webkit' && isWebKitBefore7625() ? 'webkit-safari-26' : engine,
     graphemeTable: engine === 'webkit' ? 'apple/char' : engine === 'gecko' ? 'gecko/char' : 'chromium/char',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
     prefixFitMinWidth: engine === 'webkit' ? 0 : engine === 'gecko' ? 80 : Infinity,

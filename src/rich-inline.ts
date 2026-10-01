@@ -475,7 +475,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         for (let i = 1; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           const end = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length
-          portion.item.breakBefore = getWebKitBreakBetweenItems(boundaryContexts[joinedPortions[i - 1]!.itemIndex]!, joinedText.slice(portion.start, end), wordBreak === 'keep-all', language)
+          portion.item.breakBefore = getWebKitBreakBetweenItems(boundaryContexts[joinedPortions[i - 1]!.itemIndex]!, joinedText.slice(portion.start, end), wordBreak === 'keep-all', language, profile.lineBreakScan === 'webkit-safari-26')
         }
       } else {
         // Browsers find ordinary break opportunities in the text their inline items

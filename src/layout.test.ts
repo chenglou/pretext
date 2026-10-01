@@ -1566,23 +1566,45 @@ describe('engine break scans', () => {
       ['foo。bar日本語', 'ja', true, false, [4]],
       ['a,b', 'ja', true, false, []],
     ] as const) {
-      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language), text.length) })
+      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language, false), text.length) })
         .toEqual({ text, language, keepAll, breaks: [...expected] })
     }
     // Between inline boxes, the previous box's last two characters are prior context.
-    expect(getWebKitBreakBetweenItems('丙!', 'a', false, 'en')).toBe(false)
-    expect(getWebKitBreakBetweenItems('ex-', 'ample', false, 'en')).toBe(true)
-    expect(getWebKitBreakBetweenItems('a', '-1', false, 'en')).toBe(false)
+    expect(getWebKitBreakBetweenItems('丙!', 'a', false, 'en', false)).toBe(false)
+    expect(getWebKitBreakBetweenItems('ex-', 'ample', false, 'en', false)).toBe(true)
+    expect(getWebKitBreakBetweenItems('a', '-1', false, 'en', false)).toBe(false)
     // Keep-all reads none: a box starts at a break only where it starts with a ZWSP, so
     // not after punctuation that ends the box before, where one 16-bit text breaks.
-    expect(getWebKitBreakBetweenItems('ex-', 'ample', true, 'en')).toBe(false)
-    expect(getWebKitBreakBetweenItems('中。', '文字', true, 'zh')).toBe(false)
-    expect(positions(getWebKitLineBreaks('中。文字', false, true, 'zh'), 4)).toEqual([2])
-    expect(getWebKitBreakBetweenItems('ab', '\u200Bcd', true, 'en')).toBe(true)
+    expect(getWebKitBreakBetweenItems('ex-', 'ample', true, 'en', false)).toBe(false)
+    expect(getWebKitBreakBetweenItems('中。', '文字', true, 'zh', false)).toBe(false)
+    expect(positions(getWebKitLineBreaks('中。文字', false, true, 'zh', false), 4)).toEqual([2])
+    expect(getWebKitBreakBetweenItems('ab', '\u200Bcd', true, 'en', false)).toBe(true)
     // A separator that starts an item forces a break after it, marked FORCED_BREAK (4);
     // one inside a text item doesn't.
-    expect(Array.from(getWebKitLineBreaks('ab\u2028cd', false, false, 'en'))).toEqual([0, 0, 0, 4, 0, 0])
-    expect(Array.from(getWebKitLineBreaks('か中？\u2028b', false, false, 'en'))).toEqual([0, 1, 0, 0, 1, 0])
+    expect(Array.from(getWebKitLineBreaks('ab\u2028cd', false, false, 'en', false))).toEqual([0, 0, 0, 4, 0, 0])
+    expect(Array.from(getWebKitLineBreaks('か中？\u2028b', false, false, 'en', false))).toEqual([0, 1, 0, 0, 1, 0])
+    // Safari 26's rules, as Safari 26.0.1 lays these texts out: keep-all breaks only at
+    // spaces; guillemets and single curly quotes keep the East Asian text beside them;
+    // double curly quotes break where ICU does, after a closing one before a letter too,
+    // and not beside Latin text on a ja page; a separator lets a line end after it, without
+    // forcing it, and not under keep-all.
+    for (const [text, language, keepAll, expected] of [
+      ['(试验前-试验后)/试验前', 'zh', true, []],
+      ['foo。bar日本語', 'ja', true, []],
+      ['A 中文，测试', 'zh', true, [1, 2]],
+      ['中文«abc»中文', 'en', false, [1, 8]],
+      ['中文‘中文’中文', 'en', false, [1, 4, 7]],
+      ['中文“abc”中文', 'en', false, [1, 2, 7, 8]],
+      ['中文“abc”中文', 'ja', false, [1, 8]],
+      ['xyz abc\u201Ddef', 'en', false, [3, 4, 8]],
+      ['ab\u2028cd', 'en', false, [3]],
+      ['中文\u2029中文', 'zh', true, []],
+    ] as const) {
+      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, false, keepAll, language, true), text.length) })
+        .toEqual({ text, language, keepAll, breaks: [...expected] })
+    }
+    expect(getWebKitBreakBetweenItems('中', '«中', false, 'en', false)).toBe(true)
+    expect(getWebKitBreakBetweenItems('中', '«中', false, 'en', true)).toBe(false)
   })
 
   test("Gecko's scan follows its white-space transform, text runs, nsLineBreaker and ICU4X's rules", async () => {
@@ -2449,6 +2471,54 @@ describe('prepare invariants', () => {
     }
   })
 
+  test("the WebKit profile takes Safari 26's rules on a WebKit with neither ReadableStream.from() nor WebAssembly.Suspending", async () => {
+    // What a row removes, and puts back: the two APIs, and the globals that hold them.
+    const holders: ReadonlyArray<readonly [string, object, string]> = [
+      ['from', ReadableStream, 'from'],
+      ['Suspending', WebAssembly, 'Suspending'],
+      ['ReadableStream', globalThis, 'ReadableStream'],
+      ['WebAssembly', globalThis, 'WebAssembly'],
+    ]
+    const saved = holders.map(([, holder, key]) => Object.getOwnPropertyDescriptor(holder, key)!)
+    const restore = (): void => {
+      for (let i = holders.length - 1; i >= 0; i--) Object.defineProperty(holders[i]![1], holders[i]![2], saved[i]!)
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    // An app's web view on an iPhone names no Safari version, on Safari 26's WebKit or 27's.
+    const webView = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+    const chrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
+    try {
+      // Safari 27's WebKit has both APIs and Safari 26's neither. One is enough for Safari 27's
+      // rules: a polyfill that replaces ReadableStream may lack from(), and Lockdown Mode has
+      // no WebAssembly. Other engines never take Safari 26's.
+      const rows: ReadonlyArray<readonly [string, readonly string[], AnalysisProfile['lineBreakScan']]> = [
+        [webView, [], 'webkit'],
+        [webView, ['from', 'Suspending'], 'webkit-safari-26'],
+        [webView, ['ReadableStream', 'WebAssembly'], 'webkit-safari-26'],
+        [webView, ['from'], 'webkit'],
+        [webView, ['Suspending'], 'webkit'],
+        [webView, ['WebAssembly'], 'webkit'],
+        [webView, ['ReadableStream'], 'webkit'],
+        [chrome, ['from', 'Suspending'], 'blink'],
+      ]
+      for (let i = 0; i < rows.length; i++) {
+        const [userAgent, missing, scan] = rows[i]!
+        Object.defineProperty(globalThis, 'navigator', { value: { userAgent }, configurable: true })
+        for (let k = 0; k < holders.length; k++) if (missing.includes(holders[k]![0])) Reflect.deleteProperty(holders[k]![1], holders[k]![2])
+        const measurement = await import(`./measurement.ts?safari-26=${i}`) as MeasurementModule
+        expect({ userAgent, missing, scan: measurement.getEngineProfile().lineBreakScan }).toEqual({ userAgent, missing, scan })
+        restore()
+      }
+    } finally {
+      restore()
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(globalThis, 'navigator')
+      } else {
+        Object.defineProperty(globalThis, 'navigator', descriptor)
+      }
+    }
+  })
+
   test("Safari's scan follows the page language, and Chromium's line rules don't", () => {
     const segments = (text: string, lineBreakScan: 'blink' | 'webkit', language: string) =>
       analyzeText(text, { ...getEngineProfile(), lineBreakScan }, 'normal', 'normal', language).texts.join('|')
@@ -2461,7 +2531,6 @@ describe('prepare invariants', () => {
     }
     // Apple ICU's quotation remap makes curly quotes brackets, except on ja pages. Next to
     // East Asian text, Safari 27's quotation classes decide before ICU on every page.
-    // Safari 26's rules aren't ported (RESEARCH.md, Decisions Log).
     expect(segments('£€£€““tail', 'webkit', 'en')).toBe('£|€|£|€|““tail')
     expect(segments('£€£€““tail', 'webkit', 'ja')).toBe('£|€|£|€““tail')
     expect(segments('中文“abc”中文', 'webkit', 'ja')).toBe('中|文|“abc”|中|文')
@@ -2582,6 +2651,46 @@ describe('prepare invariants', () => {
       }
     } finally {
       profile.lineBreakScan = previous
+    }
+  })
+
+  test("the WebKit profile lays text out by Safari 27's rules, or by Safari 26's under its own scan", () => {
+    const profile = getEngineProfile()
+    const previous = { ...profile }
+    const lines = (source: string, width: number, options?: { wordBreak: 'keep-all' }) => {
+      // A page's profile never changes, so a fit cached under one rule set serves only it.
+      clearCache()
+      const prepared = prepareWithSegments(source, FONT, options)
+      const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+      expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+      expect(layout(prepare(source, FONT, options), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+      return result.lines.map(line => line.text)
+    }
+    const keepAll = { wordBreak: 'keep-all' } as const
+    try {
+      // Each text's lines in Safari 27, then in Safari 26.0.1.
+      for (const [source, width, options, safari27, safari26] of [
+        // Keep-all: Safari 27 breaks after punctuation, and Safari 26 only where the line is full.
+        ['意思，是在討厭', measureWidth('意思，是', FONT) + 0.1, keepAll, ['意思，', '是在討厭'], ['意思，是', '在討厭']],
+        ['한국어(영어)문장', measureWidth('한국어(영', FONT) + 0.1, keepAll, ['한국어(', '영어)문장'], ['한국어(영', '어)문장']],
+        // Safari 27 breaks before an opening guillemet or single quote after East Asian text and
+        // after a closing one before it; Safari 26 keeps them together.
+        ['中文«abc»中文', measureWidth('文«abc»', FONT) + 0.1, undefined, ['中文', '«abc»中', '文'], ['中', '文«abc»', '中文']],
+        ['中文‘中文’中文', measureWidth('文‘中', FONT) + 0.1, undefined, ['中文', '‘中', '文’中', '文'], ['中', '文‘中', '文’中', '文']],
+        // A separator ends Safari 27's line; in Safari 26 a line only may end after it.
+        ['aaa\u2028bbb ccc', 1000, undefined, ['aaa', 'bbb ccc'], ['aaa\u2028bbb ccc']],
+        ['aaa\u2029bbb ccc', measureWidth('aaa\u2029bbb', FONT) + 0.1, undefined, ['aaa', 'bbb ccc'], ['aaa\u2029bbb ', 'ccc']],
+        // Safari 27 keeps punctuation after an overflowing first character in text above
+        // U+00FF; Safari 26 ends the line after the character.
+        ['xb((cā', 1, undefined, ['x', 'b((', 'c', 'ā'], ['x', 'b', '(', '(', 'c', 'ā']],
+      ] as const) {
+        profile.lineBreakScan = 'webkit'
+        expect({ source, lines: lines(source, width, options) }).toEqual({ source, lines: [...safari27] })
+        profile.lineBreakScan = 'webkit-safari-26'
+        expect({ source, safari26: lines(source, width, options) }).toEqual({ source, safari26: [...safari26] })
+      }
+    } finally {
+      Object.assign(profile, previous)
     }
   })
 

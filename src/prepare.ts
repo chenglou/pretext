@@ -288,8 +288,8 @@ export function measureAnalysis(
   // When not even the first character of an overflowing word fits an empty line,
   // WebKit keeps the punctuation, NBSP, U+2010 and U+2013 after that character on the
   // line, in text holding a code unit above U+00FF (InlineContentBreaker.cpp:124-158,
-  // 222-233), by its scan's line-start table. Blink and Gecko end the line after the
-  // first grapheme.
+  // 222-233), by its scan's line-start table. Blink, Gecko and Safari 26's WebKit end the
+  // line after the first grapheme.
   const keepsLineStartPunctuation = engineProfile.lineBreakScan === 'webkit' && /[\u0100-\uFFFF]/.test(normalized)
   const segments = includeSegments ? [] as string[] : null
   const retreatsFromUnfitHyphen = engineProfile.unfitHyphenRetreat !== 'none'
@@ -379,6 +379,7 @@ export function measureAnalysis(
           : numericRunRe.test(text) ? 'pair-context'
           : textMetrics.width >= engineProfile.prefixFitMinWidth ? 'segment-prefixes'
           : 'sum-graphemes'
+        // Line-start prohibitions are Safari 27's alone (keepsLineStartPunctuation above).
         const fit = getSegmentFit(text, textMetrics, fontMeasurement, emojiCorrection, fitMode,
           measuredWithSpace ? spaceWidth : null, engineProfile.lineBreakScan === 'webkit')
         fitAdvances = fit.advances

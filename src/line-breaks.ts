@@ -10,13 +10,19 @@
 // - Blink in Chromium 152, under third_party/blink/renderer/platform/text/:
 //   tbi.cc = text_break_iterator.cc, tbi.h = text_break_iterator.h,
 //   tbi_icu.cc = text_break_iterator_icu.cc, gen.cc = character_property_data_generator.cc.
-// - WebKit safari-7625.1.29.11-branch (Safari 27.0), under Source/. Only Safari 27's rules
-//   are ported, not Safari 26's (RESEARCH.md, Decisions Log):
+// - WebKit safari-7625.1.29.11-branch (Safari 27.0), under Source/:
 //   BP.h = WebCore/rendering/BreakablePositions.h,
 //   IIB = WebCore/layout/formattingContexts/inline/InlineItemsBuilder.cpp,
 //   IFU = WebCore/layout/formattingContexts/inline/InlineFormattingUtils.cpp,
 //   TU = WebCore/layout/formattingContexts/inline/text/TextUtil.cpp,
 //   TBI.h = WTF/wtf/text/TextBreakIterator.h, TBIICU.h = WTF/wtf/text/icu/TextBreakIteratorICU.h.
+//   Where Safari 26's rules differ, the WebKit scan takes them under `safari26`
+//   (EngineProfile.lineBreakScan's 'webkit-safari-26'), cited as BP26.h and IIB26: the same files at tag
+//   WebKit-7624.5.1.11.3, the newest Safari 26 tag (2026-08-12), whose rules are those of
+//   every tag from WebKit-7623.1.5 on. Safari 26.0 and 26.1 (WebKit 7622) differ from them
+//   in one row of the pair table, which isn't ported: no break after `-` before
+//   U+00C0..U+00FF (BreakLines.cpp:56 at WebKit-7622.1.22.10.11), so Safari 26.0.1 keeps
+//   `peut-être` whole where the scan breaks after the hyphen.
 //
 // Deliberate differences:
 // - ICU runs forward from the start of the text, without its boundary cache, reverse
@@ -572,9 +578,16 @@ let webkitPairs: Uint8Array | null = null
 type WebKitLineRules = { readonly rules: BreakRules, readonly overrides: CategoryOverrides }
 const webkitLineRules = new Map<string, WebKitLineRules>()
 
+// Safari 27 ends a line at U+2028 and U+2029: they are breakable spaces (BP.h:131-132) and
+// segment breaks (IIB:954-962). Safari 26 has neither rule (BP26.h:120-133, IIB26:897-904)
+// and leaves them to ICU, which breaks after them without forcing it.
+function isWebKitBreakingSeparator(c: number, safari26: boolean): boolean {
+  return !safari26 && (c === LINE_SEPARATOR || c === PARAGRAPH_SEPARATOR)
+}
+
 // BP.h:125-139 with NoBreakSpaceBehavior::Normal.
-function isWebKitBreakableSpace(c: number): boolean {
-  return c === SPACE || c === LF || c === TAB || c === LINE_SEPARATOR || c === PARAGRAPH_SEPARATOR
+function isWebKitBreakableSpace(c: number, safari26: boolean): boolean {
+  return c === SPACE || c === LF || c === TAB || isWebKitBreakingSeparator(c, safari26)
 }
 
 function isASCIIDigit(c: number): boolean {
@@ -587,8 +600,9 @@ function isASCIIAlpha(c: number): boolean {
 }
 
 // BP.h:330-539. The 0x3000..0x303F switch reads only the low five bits, so it answers for
-// 0x3020..0x303F too.
-function classify(c: number): number {
+// 0x3020..0x303F too. Safari 26 has no opening and closing subclasses: guillemets and the
+// single curly quotes are plain QU, and the double ones go to ICU (BP26.h:376-377, 456-458).
+function classify(c: number, safari26: boolean): number {
   switch (c >> 7) {
     case 0:
       switch (c >> 4) {
@@ -605,8 +619,8 @@ function classify(c: number): number {
       if (c === 0xa0) return GL
       if (c > 0xc0) return AL
       if (c === 0xa1 || c === 0xbf) return OP
-      if (c === 0xab) return QU | PI
-      if (c === 0xbb) return QU | PF
+      if (c === 0xab) return safari26 ? QU : QU | PI
+      if (c === 0xbb) return safari26 ? QU : QU | PF
       return WEIRD
     case 2: case 3: case 4: return AL
     case 5: return c === 0x2c8 || c === 0x2cc || c === 0x2df ? WEIRD : AL
@@ -622,6 +636,7 @@ function classify(c: number): number {
       if (c >= 0x591 && c <= 0x5bd) return CM
       return c === 0x5bf || c === 0x5c1 || c === 0x5c2 || c === 0x5c4 || c === 0x5c5 || c === 0x5c7 ? CM : WEIRD
     case 64:
+      if (safari26) return c === 0x2018 || c === 0x2019 ? QU : WEIRD
       if (c === 0x2018 || c === 0x201c) return QU | PI
       if (c === 0x2019 || c === 0x201d) return QU | PF
       return WEIRD
@@ -697,7 +712,7 @@ function following(f: Factory, location: number): number {
 // BP.h:142-255 for LineBreakRules::Normal, WordBreakBehavior::Normal and
 // NoBreakSpaceBehavior::Normal. During the fast-forward over units where ICU agrees
 // (BP.h:241-249) the characters before are not read again.
-function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number): number {
+function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number, safari26: boolean): number {
   const s = f.text
   const length = s.length
   if (startPosition === 0 && f.priorLength === 0) {
@@ -713,7 +728,7 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
   for (let i = startPosition; i < length; beforeBefore = before, before = after, beforeType = afterType, i++) {
     after = s.charCodeAt(i)
     afterType = 0
-    if (isWebKitBreakableSpace(after)) return i
+    if (isWebKitBreakableSpace(after, safari26)) return i
     // ASCII rapid lookup.
     if (before === 0x2d && isASCIIDigit(after)) {
       if (isASCIIDigit(beforeBefore) || isASCIIAlpha(beforeBefore)) return i
@@ -727,8 +742,8 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
       continue
     }
     // Non-ASCII rapid lookup.
-    if (beforeType === 0) beforeType = classify(before)
-    afterType = classify(after)
+    if (beforeType === 0) beforeType = classify(before, safari26)
+    afterType = classify(after, safari26)
     const pair = beforeType | afterType
     if ((pair & ~(SP | AL | QU | PI | PF)) === 0) continue
     if ((pair | AL) === (ID | AL)) return i
@@ -754,17 +769,17 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
         if (lookahead <= 0xff && !isASCIIAlpha(lookahead)) break
       }
     }
-    if (i === nextBreak && !isWebKitBreakableSpace(before)) return i
+    if (i === nextBreak && !isWebKitBreakableSpace(before, safari26)) return i
   }
   return length
 }
 
 // BP.h:258-274: keep-all breaks at spaces, before ZWSP and after U+3000, and with
 // punctuation breaks after any punctuation but the text's last character.
-function nextBreakableSpace(s: string, startPosition: number, punctuationBreaks: boolean): number {
+function nextBreakableSpace(s: string, startPosition: number, punctuationBreaks: boolean, safari26: boolean): number {
   for (let i = startPosition; i < s.length; i++) {
     const c = s.charCodeAt(i)
-    if (isWebKitBreakableSpace(c) || c === ZWSP) return i
+    if (isWebKitBreakableSpace(c, safari26) || c === ZWSP) return i
     if (c === IDEOGRAPHIC_SPACE) return i + 1
     if (punctuationBreaks && hasProperty(c, PUNCTUATION_BUT_DASH_OR_CONNECTOR) && i + 1 < s.length) return i + 1
   }
@@ -813,28 +828,30 @@ const SOFT_LINE_BREAK = 2
 // makes (IIB:122-130), as the soft wrap index loop finds them (IFU:456-510): every item
 // boundary that isn't next to a forced break. A U+2028 or U+2029 that starts an item
 // forces a break after it, marked FORCED_BREAK; one that ICU's fast-forward passed stays
-// inside a text item and doesn't.
+// inside a text item and doesn't. `safari26` takes Safari 26's rules where they differ.
 export function getWebKitLineBreaks(
   source: string,
   preserveNewlines: boolean,
   keepAll: boolean,
   language: string | null,
+  safari26: boolean,
 ): Uint8Array {
   const pairs = webkitPairs ??= unpackTable(webkitLinePairsPacked)
   const f = createFactory(source, getWebKitLineRules(language))
   const length = source.length
   const breaks = new Uint8Array(length + 1)
   // WebKit stores a text holding a code unit above U+00FF in 16 bits, where keep-all also
-  // breaks after punctuation.
+  // breaks after punctuation (BP.h:292-298). Safari 26's keep-all never does (BP26.h:243-257,
+  // 275-282; WebKit #312099).
   let sixteenBit = false
-  for (let i = 0; keepAll && i < length && !sixteenBit; i++) sixteenBit = source.charCodeAt(i) > 0xff
+  for (let i = 0; keepAll && !safari26 && i < length && !sixteenBit; i++) sixteenBit = source.charCodeAt(i) > 0xff
   let previousKind = -1
   // handleTextContent, IIB:924-1051, for hyphens manual and nbsp-mode normal.
   for (let position = 0; position < length;) {
     let kind = WHITESPACE
     let end = position
     const c = source.charCodeAt(position)
-    if (c === LINE_SEPARATOR || c === PARAGRAPH_SEPARATOR || (preserveNewlines && c === LF)) {
+    if (isWebKitBreakingSeparator(c, safari26) || (preserveNewlines && c === LF)) {
       // handleSegmentBreak, IIB:954-962.
       kind = SOFT_LINE_BREAK
       end++
@@ -851,7 +868,7 @@ export function getWebKitLineBreaks(
         kind = TEXT
         end = length
         for (let p = position; p < length; p++) {
-          const next = keepAll ? nextBreakableSpace(source, p, sixteenBit) : nextBreakablePosition(pairs, f, p)
+          const next = keepAll ? nextBreakableSpace(source, p, sixteenBit, safari26) : nextBreakablePosition(pairs, f, p, safari26)
           if (next !== position) { end = next; break }
         }
       }
@@ -874,23 +891,25 @@ export function getWebKitLineBreaks(
 // (IIB:954-962), so no break comes before one, and wrapping is allowed next to a
 // white-space item (IFU:406-418), which a box's preserved spaces and tabs make
 // (IIB:963-992).
-export function getWebKitBreakBetweenItems(previous: string, next: string, keepAll: boolean, language: string | null): boolean {
+export function getWebKitBreakBetweenItems(previous: string, next: string, keepAll: boolean, language: string | null, safari26: boolean): boolean {
   const last = previous.charCodeAt(previous.length - 1)
   const first = next.charCodeAt(0)
-  if (first === LF || first === LINE_SEPARATOR || first === PARAGRAPH_SEPARATOR) return false
+  if (first === LF || isWebKitBreakingSeparator(first, safari26)) return false
   if (last === SPACE || last === TAB || first === SPACE || first === TAB) return true
-  if (keepAll) return nextBreakableSpace(next, 0, false) === 0
+  if (keepAll) return nextBreakableSpace(next, 0, false, safari26) === 0
   const pairs = webkitPairs ??= unpackTable(webkitLinePairsPacked)
   const f = createFactory(next, getWebKitLineRules(language))
   const n = previous.length
   f.secondToLast = n > 1 ? previous.charCodeAt(n - 2) : 0
   f.last = n > 0 ? previous.charCodeAt(n - 1) : 0
   f.priorLength = f.last === 0 ? 0 : f.secondToLast === 0 ? 1 : 2
-  return nextBreakablePosition(pairs, f, 0) === 0
+  return nextBreakablePosition(pairs, f, 0, safari26) === 0
 }
 
 // canBreakBefore, InlineContentBreaker.cpp:124-137, for line-break auto: whether a line
-// that holds only an overflowing first character ends before this code unit.
+// that holds only an overflowing first character ends before this code unit. Safari 26
+// ends that line after its first character whatever follows (InlineContentBreaker.cpp:
+// 185-213 at WebKit-7624.5.1.11.3), so preparation asks only for Safari 27.
 export function canWebKitLineStartWith(unit: number): boolean {
   return unit === 0x5c || (unit !== 0xa0 && unit !== 0x2010 && unit !== 0x2013 && !hasProperty(unit, PUNCTUATION_BUT_DASH_OR_CONNECTOR))
 }

@@ -67,8 +67,13 @@ export type TextAnalysis = {
 }
 
 export type AnalysisProfile = {
-  lineBreakScan: 'blink' | 'webkit' | 'gecko'
+  lineBreakScan: 'blink' | 'webkit' | 'webkit-safari-26' | 'gecko'
   graphemeTable: GraphemeTable
+}
+
+// WebKit's scan, by Safari 27's rules or Safari 26's (EngineProfile.lineBreakScan).
+function isWebKitScan(scan: AnalysisProfile['lineBreakScan']): boolean {
+  return scan === 'webkit' || scan === 'webkit-safari-26'
 }
 
 const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
@@ -94,7 +99,7 @@ function isSegmentBreakRunSpace(code: number, scan: AnalysisProfile['lineBreakSc
 // takes the index of each unit removed, in order.
 export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProfile, language: string | null = null, removed: number[] | null = null): string {
   const scan = profile.lineBreakScan
-  if (scan === 'webkit' || !text.includes('\n')) return text
+  if (isWebKitScan(scan) || !text.includes('\n')) return text
   const eastAsian = scan === 'gecko' && maybeEastAsianRe.test(text)
   if (!eastAsian && !text.includes('\u200B')) return text
   const japaneseOrChinese = eastAsian && isJapaneseOrChinese(language)
@@ -208,7 +213,7 @@ function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan
   // page's it keeps spacing Safari omits. Blink spaces NEL outside cursive runs, and release
   // Gecko draws NEL with no advance while its Canvas measures a space, so both keep NEL as
   // ordinary text.
-  if (code === 0x0085 && scan === 'webkit') return CONTROL
+  if (code === 0x0085 && isWebKitScan(scan)) return CONTROL
   return TEXT
 }
 
@@ -421,8 +426,8 @@ export function analyzeText(
   } else {
     // WebKit and Gecko scan the source. Gecko's scan collapses its white space as Firefox does.
     let sourceBreaks: Uint8Array
-    if (profile.lineBreakScan === 'webkit') {
-      sourceBreaks = getWebKitLineBreaks(source, preserve, keepAll, language)
+    if (isWebKitScan(profile.lineBreakScan)) {
+      sourceBreaks = getWebKitLineBreaks(source, preserve, keepAll, language, profile.lineBreakScan === 'webkit-safari-26')
     } else {
       let gecko = getGeckoLineBreaks(source, preserve, keepAll, profile.graphemeTable)
       dropsBidiControl = gecko.dropsBidiControl
@@ -436,7 +441,7 @@ export function analyzeText(
       }
       sourceBreaks = gecko.breaks
     }
-    if (profile.lineBreakScan === 'webkit' && !preserve && source !== normalized) spaceSources = new Uint16Array(normalized.length)
+    if (isWebKitScan(profile.lineBreakScan) && !preserve && source !== normalized) spaceSources = new Uint16Array(normalized.length)
     breaks = source === normalized ? sourceBreaks : mapSourceLineBreaks(source, normalized.length, sourceBreaks, whiteSpace, spaceSources)
   }
   return segmentAtLineBreaks(normalized, spaceSources, breaks, whiteSpace, profile.lineBreakScan, afterContent, dropsBidiControl)
