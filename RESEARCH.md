@@ -423,14 +423,14 @@ integer app units, 60 per px, rounded per glyph: 16px Courier New `aaaa bbbb` is
 WebKit profile fits with Safari's arithmetic, a width cut down to 1/64 px from the float CSS stores
 (`LayoutUnit.h:83-86`; webkit-host lays a block of `width: 302.51px` out 302.5px wide and one of 299.99999999999994px
 300px wide, as 13 of 13 widths read back) plus 1/64 px: before the profile floored the width (#TBD), it fit a line up to
-1/64 px wider than Safari at a width off that grid. Flooring fixed 32 of the 35 failures on 153 box layouts at the
-width a prefix through a box just fits and 1/64 px under it, 13 of the 25 on 180 rich layouts at widths within 5/256 px
-of such an edge, and one real-usage draw, a 302.51px paragraph, of webkit-host's 44,176 pinned cases. It lost 4 of the
-153, each right by luck, and nothing else: three hold boxes 19.2px and 33.33px wide, which Safari cuts down to its unit
-and Pretext adds as given (ENGINE_FOLLOWUPS.md, Boxes), so the width's own fraction made up for them, and one line is
-as wide as the floored limit, which its Canvas widths add up to with a rounding error (webkit-host, 2026-10-01). The
-Blink and Gecko profiles fit with 0.005px, no engine's arithmetic; Chrome's grid needs a DPR `layout()` doesn't read
-(ENGINE_FOLLOWUPS.md).
+1/64 px wider than Safari at a width off that grid. Flooring fixed 32 of the 35 failures on 153 box layouts at the width
+a prefix through a box just fits and 1/64 px under it, 13 of the 25 on 180 rich layouts at widths within 5/256 px of
+such an edge, and one real-usage draw, a 302.51px paragraph, of webkit-host's 44,176 pinned cases. It lost 4 of the 153,
+each right by luck, and nothing else: three hold boxes 19.2px and 33.33px wide, which Safari cuts down to its unit and
+Pretext adds as given (ENGINE_FOLLOWUPS.md, Rich-inline item edges), so the width's own fraction made up for them, and
+one line is as wide as the floored limit, which its Canvas widths add up to with a rounding error (webkit-host,
+2026-10-01). The Blink and Gecko profiles fit with 0.005px, no engine's arithmetic; Chrome's grid needs a DPR `layout()`
+doesn't read (ENGINE_FOLLOWUPS.md).
 
 Emergency breaks follow each engine's loop: Chrome lays the line out again with a break allowed between any two
 graphemes (`line_breaker.cc:4258-4330`), Firefox takes a cluster start only while the line has no ordinary break
