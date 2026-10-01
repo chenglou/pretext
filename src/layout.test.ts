@@ -4214,6 +4214,9 @@ describe('rich-inline invariants', () => {
       expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, break: 'never', extraWidth }])).toThrow('Item 1\'s extraWidth')
     }
     expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth: NaN }])).toThrow('Item 1\'s extraWidth')
+    // So is the letter spacing of an atomic item of only white space, which takes none.
+    expect(() => prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, break: 'never', letterSpacing: NaN }])).toThrow(RangeError)
+    expect(measureRichInlineStats(prepareRichInline([{ text: 'ab', font: FONT }, { text: ' ', font: FONT, break: 'never', letterSpacing: 3 }]), 1e5).maxLineWidth).toBe(measureWidth('ab', FONT))
     // A negative one is the app's, as chrome narrower than the text it stands for.
     expect(measureRichInlineStats(prepareRichInline([{ text: 'ab', font: FONT }, { text: 'cd', font: FONT, extraWidth: -3 }]), 1e5).maxLineWidth).toBeCloseTo(measureWidth('abcd', FONT) - 3, 9)
     // prepare()'s options aren't prepareRichInline()'s: letter spacing is each item's own.

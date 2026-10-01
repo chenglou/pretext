@@ -562,6 +562,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // at 46-70px.
       if (item.text === undefined && (!Number.isFinite(item.width) || item.width < 0)) throw new RangeError(`Item ${index} has no text, so it's a box, whose width must be a finite number of CSS px, at least 0, not ${item.width}`)
       const width = item.text === undefined ? item.width : readExtraWidth(item.extraWidth, index)
+      // The white space takes no letter spacing, and one that isn't finite is refused as any item's.
+      if (item.text !== undefined) readLetterSpacing(item.letterSpacing)
       finishJoinedText()
       const box: PreparedRichInlineItem = {
         break: 'never', breakBefore: pendingGapWidth !== null || previousItem !== null, continued: false, walked: false,
