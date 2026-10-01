@@ -135,7 +135,9 @@ function getKerningScript(character: string): number {
 
 // How far a text's script runs were read, the script of the run there, 0 before any character
 // with a script, and the script of the run the last opening bracket is in: -1 before a
-// bracket, 0 while its run goes on (readScriptRuns).
+// bracket, 0 while its run goes on (readScriptRuns). The functions that read it stay apart
+// from measureAnalysis: as its closures they made preparation up to 1.3 times slower where
+// many words kern with the space before them (Node 23's V8, stand-in Canvas, 2026-10-01).
 type ScriptRuns = { read: number, script: number, bracket: number }
 
 // Whether the space before the text segment text[at..end) is in the script run of the character
