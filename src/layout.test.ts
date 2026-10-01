@@ -4074,11 +4074,12 @@ describe('rich-inline invariants', () => {
         // item wider than the line. Chrome and Safari move it to the next line as any other.
         // Firefox places it there (paddedOpeningFit 'both', Gecko's CanPlaceFrame) and keeps it,
         // unless a frame with a width comes next, which sends the line back to its last break that
-        // fit, before the box (keepsEmptyAtomic). Each row matches Firefox 156.0.1 (2026-09-30):
+        // fit, before the box (keepsEmptyAtomic). Each row matches Firefox 156.0.1 (2026-10-01):
         // the items, the options, each line's items in Firefox, and whether the line is narrower
         // than `a` (else `ab` and a pixel wide).
         const zero = { width: 0 }
         const chip: RichInlineItem = { text: 'abcdef', font: FONT, break: 'never' }
+        const padded = (value: string): RichInlineItem => ({ text: value, font: FONT, extraWidth: 1 })
         const preWrap = { whiteSpace: 'pre-wrap' } as const
         type Row = [items: Array<RichInlineItem | RichInlineBox>, options: Parameters<typeof prepareRichInline>[1], lines: number[][], narrow?: true]
         const emptyBoxRows: Row[] = [
@@ -4088,25 +4089,38 @@ describe('rich-inline invariants', () => {
           [[text('ab '), zero, text('\u00ADcd')], {}, [[0], [1, 2]]],
           [[chip, zero, text('cd')], {}, [[0], [1, 2]]],
           [[chip, zero, text('\tcd')], preWrap, [[0], [1, 2], [2]]],
-          // The paragraph's end, an atomic item with a width, or text that starts with a space of its
-          // own node, a ZWSP, a line feed or preserved spaces: the box stays.
+          // The paragraph's end, white space that ends it in a text node of the paragraph's own, an
+          // atomic item with a width, or text that starts with a space of its own node, a ZWSP, a
+          // line feed or preserved spaces: the box stays.
           [[text('ab '), zero], {}, [[0, 1]]],
+          [[text('ab '), zero, text(' ')], {}, [[0, 1]]],
           [[text('ab '), zero, { text: 'cd', font: FONT, break: 'never' }], {}, [[0, 1], [2]]],
           [[text('ab '), zero, text(' cd')], {}, [[0, 1], [2]]],
           [[text('ab '), zero, text('\u200Bcd')], {}, [[0, 1], [2]]],
           [[chip, zero, text(' cd')], {}, [[0, 1], [2]]],
           [[chip, zero, text('\ncd')], preWrap, [[0, 1, 2], [2]]],
           [[chip, zero, text('  cd')], preWrap, [[0, 1, 2], [2]]],
-          // White space in a node of its own after it is a frame with a width: the box moves down.
+          // A span with padding after it is a frame with a width whatever its text starts with: the
+          // box moves down.
+          [[text('ab '), zero, padded(' cd')], {}, [[0], [1], [2]]],
+          [[text('ab '), zero, padded('\u200Bcd')], {}, [[0], [1, 2]]],
+          // So is white space in a node of its own after it, with soft hyphens or without.
           [[text('ab '), zero, text(' '), text('cd')], {}, [[0], [1], [3]]],
           [[text('ab '), zero, text(' '), zero], {}, [[0], [1, 3]]],
           [[text('ab '), zero, text(' '), { width: 5 }], {}, [[0], [1, 3]]],
+          [[text('ab '), zero, text(' \u00AD'), text('cd')], {}, [[0], [1, 2], [3]]],
+          [[text('ab '), zero, text(' \u00AD')], {}, [[0], [1, 2]]],
           // White space before it after content already past the line's end breaks the line itself.
           [[chip, text(' '), zero], {}, [[0], [2]]],
           [[chip, text(' '), zero], preWrap, [[0, 1], [2]]],
           [[chip, zero, text(' '), zero, text('cd')], preWrap, [[0, 1, 2], [3, 4]]],
-          // After text wider than the line the first break is the one after the box, which stays.
+          // After text wider than the line the first break is the one after the box, which stays,
+          // unless a soft hyphen ends that text, in its item or one of its own, which gives a break
+          // before the box, as an atomic item before the soft hyphen does.
           [[text('a'), zero, text('b')], {}, [[0, 1], [2]], true],
+          [[text('a\u00AD'), zero, text('b')], {}, [[0], [1], [2]], true],
+          [[text('a'), text('\u00AD'), zero, text('b')], {}, [[0, 1], [2], [3]], true],
+          [[chip, text('\u00AD'), zero, text('cd')], {}, [[0, 1], [2, 3]]],
           // Preserved spaces that hang leave the box inside the line.
           [[text('ab '), zero, text('cd')], preWrap, [[0, 1], [2]]],
         ]

@@ -961,22 +961,23 @@ function retreatsBefore(flow: InternalPreparedRichInline, itemIndex: number): bo
 }
 
 // Whether Gecko keeps the empty atomic item `itemIndex`, which it places though it sticks out of
-// the line (CanPlaceFrame, nsLineLayout.cpp:1264-1269), on that line. The break after a frame that
-// sticks out doesn't count as one that fits (:1260), and the line remembers its last break that
-// fits, or with none its first (NotifyOptionalBreakPosition, :1506-1513). A text frame with a width
-// that comes next sticks out too and sends the line back there (:1323-1334;
-// nsBlockFrame.cpp:5361-5379): to before the empty item where white space or an atomic item comes
-// before it, whose break the line had, but to after it where text does, which leaves no break at
-// its end (`afterText`). The line keeps the item where it ends without going back: at the
-// paragraph's end, before an atomic item with a width, which moves down whole (:1337-1341), and
-// before text whose first piece has no width, an empty frame too. That piece is a ZWSP, a hard
+// the line (CanPlaceFrame, nsLineLayout.cpp:1264-1269), on that line, where the line has a break
+// before the item. The break after a frame that sticks out doesn't count as one that fits (:1260),
+// and the line remembers its last break that fits, or with none its first
+// (NotifyOptionalBreakPosition, :1506-1513). A text frame or a span with a width that comes next
+// sticks out too and sends the line back there (:1323-1334; nsBlockFrame.cpp:5361-5379), to before
+// the empty item. The line keeps the item where it ends without going back: at the paragraph's
+// end, before an atomic item with a width, which moves down whole (:1337-1341), and before
+// unpadded text whose first piece has no width, an empty frame too. That piece is a ZWSP, a hard
 // break, preserved spaces, which hang (nsTextFrame.cpp:11216-11229), or the collapsible space that
-// starts the text's own node, trimmed where the frame breaks after it (:11202-11213). White space
-// in a node of its own, before an atomic item or other text, is a whole frame, which keeps its
-// width (gapItemIndex names the node). An item that takes no room, as one of soft hyphens, is
-// passed over.
-function keepsEmptyAtomic(flow: InternalPreparedRichInline, itemIndex: number, afterText: boolean): boolean {
-  if (afterText) return true
+// starts the text's own node, trimmed where the frame breaks after it (:11202-11213). Padding is
+// its span's width whatever the text starts with. White space in a node of its own, before an
+// atomic item or other text, is a whole frame, which keeps its width (gapItemIndex names the
+// node), as is a node of white space and soft hyphens, which Gecko discards before it collapses
+// the space. An item of soft hyphens alone takes no room and is passed over, and so is white
+// space that ends the paragraph, which gets no frame as a text node of the paragraph's own
+// (nsCSSFrameConstructor.cpp:5278-5286), though it gets one in a span (ENGINE_FOLLOWUPS.md).
+function keepsEmptyAtomic(flow: InternalPreparedRichInline, itemIndex: number): boolean {
   for (let k = itemIndex + 1; k < flow.items.length; k++) {
     const next = flow.items[k]
     if (next === undefined) continue
@@ -985,7 +986,8 @@ function keepsEmptyAtomic(flow: InternalPreparedRichInline, itemIndex: number, a
       if (next.naturalWidth + next.extraWidth === 0) continue
       return true
     }
-    if (next.gapItemIndex === k) return true
+    if (next.extraWidth > 0) return false
+    if (next.gapItemIndex === k) return next.establishesLine
     if (!next.establishesLine) continue
     const kind = next.lineData.segmentFlags[0]! & KIND_BITS
     return kind === ZERO_WIDTH_BREAK || kind === HARD_BREAK || kind === PRESERVED_SPACE
@@ -1121,8 +1123,10 @@ function stepRichInlineLine(
       // (nsLineLayout.cpp:1017-1020), and without the preserved spaces that hang, which end at the
       // line's end (nsTextFrame.cpp:11216-11229). White space that ends a text run after content
       // already past the line's end breaks the line after itself (:11443-11456), so the item starts
-      // the next line; else the line keeps the item unless it goes back to a break before it
-      // (keepsEmptyAtomic).
+      // the next line. Else the line has a break before the item after white space, after an atomic
+      // item (nsLineLayout.cpp:1057-1069) and after a soft hyphen that ends the text before it
+      // (nsTextFrame.cpp:11432-11439), and may go back to it (keepsEmptyAtomic); other text leaves
+      // no break at its end, so the line's first break is the one after the item, which stays.
       if (hasContent && totalWidth > remainingWidth + lineFitEpsilon) {
         if (paddedOpeningFit !== 'both' || occupiedWidth !== 0) break
         const contentWidth = lineWidth - lineHangWidth
@@ -1132,7 +1136,8 @@ function stepRichInlineLine(
           if (afterWhiteSpace && contentWidth > fitLimit) break
           let before = itemIndex - 1
           while (flow.items[before] === undefined) before--
-          if (!keepsEmptyAtomic(flow, itemIndex, !afterWhiteSpace && flow.items[before]!.break !== 'never')) break
+          const breakBefore = afterWhiteSpace || item.hyphenBefore > 0 || flow.items[before]!.break === 'never'
+          if (breakBefore && !keepsEmptyAtomic(flow, itemIndex)) break
         }
       }
 

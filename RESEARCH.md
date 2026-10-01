@@ -423,10 +423,14 @@ integer app units, 60 per px, rounded per glyph: 16px Courier New `aaaa bbbb` is
 WebKit profile fits with Safari's arithmetic, a width cut down to 1/64 px from the float CSS stores
 (`LayoutUnit.h:83-86`; webkit-host lays a block of `width: 302.51px` out 302.5px wide and one of 299.99999999999994px
 300px wide, as 13 of 13 widths read back) plus 1/64 px: before the profile floored the width (#TBD), it fit a line up to
-1/64 px wider than Safari at a width off that grid, and flooring fixed 13 of the 25 failures on 180 rich probe layouts
-at widths within 5/256 px of where a prefix just fits, and one real-usage draw, a 302.51px paragraph, of webkit-host's
-44,142 pinned cases, and lost none (2026-09-30). The Blink and Gecko profiles fit with 0.005px, no engine's arithmetic;
-Chrome's grid needs a DPR `layout()` doesn't read (ENGINE_FOLLOWUPS.md).
+1/64 px wider than Safari at a width off that grid. Flooring fixed 32 of the 35 failures on 153 box layouts at the
+width a prefix through a box just fits and 1/64 px under it, 13 of the 25 on 180 rich layouts at widths within 5/256 px
+of such an edge, and one real-usage draw, a 302.51px paragraph, of webkit-host's 44,176 pinned cases. It lost 4 of the
+153, each right by luck, and nothing else: three hold boxes 19.2px and 33.33px wide, which Safari cuts down to its unit
+and Pretext adds as given (ENGINE_FOLLOWUPS.md, Boxes), so the width's own fraction made up for them, and one line is
+as wide as the floored limit, which its Canvas widths add up to with a rounding error (webkit-host, 2026-10-01). The
+Blink and Gecko profiles fit with 0.005px, no engine's arithmetic; Chrome's grid needs a DPR `layout()` doesn't read
+(ENGINE_FOLLOWUPS.md).
 
 Emergency breaks follow each engine's loop: Chrome lays the line out again with a break allowed between any two
 graphemes (`line_breaker.cc:4258-4330`), Firefox takes a cluster start only while the line has no ordinary break
@@ -928,13 +932,16 @@ fragment widths: white space that hangs comes out of a stand-in's text width and
 inline-block of width 0 is. One that falls past a line's end, after a space that doesn't fit or an atomic item wider
 than the line, moves to the next line in Chrome and Safari, as any atomic item does. Firefox places an empty frame there
 (`CanPlaceFrame`, `nsLineLayout.cpp:1264-1269`) without counting the break after it as one that fits (`:1260`,
-`:1506-1513`), so a frame with a width that comes next, text or white space in a text node of its own, sends the line
-back to its last break that fit, and the empty frame starts the next line with it; it stays where the line ends without
-that (`keepsEmptyAtomic()` in `src/rich-inline.ts` has the cases). `ab `, a 0px box and `cd` in 16px Arial at 20.25px
-are `ab` and then the box with `cd`, and with ` cd` the box stays after `ab`. The Gecko profile ports this for any
-atomic item of width 0: on 103 layouts of 86 such paragraphs it puts every box on Firefox 156.0.1's line, where it had
-put 52 on another line, 15 of them with another line count (2026-09-30, #TBD; the harness now records a box of width 0
-by its top). That reopens if a Firefox build changes `CanPlaceFrame` or how a text frame trims the white space it breaks
+`:1506-1513`), so a frame with a width that comes next, text, a span with padding or white space in a text node of its
+own, sends the line back to its last break that fit, and the empty frame starts the next line with it; it stays where
+the line ends without that (`keepsEmptyAtomic()` in `src/rich-inline.ts` has the cases). `ab `, a 0px box and `cd` in
+16px Arial at 20.25px are `ab` and then the box with `cd`, and with ` cd` the box stays after `ab`. The Gecko profile
+ports this for any atomic item of width 0, a chip of only a ZWSP too. Of 36,764 layouts in Firefox 156.0.1, sentences
+with a 0px box after every space at 120-600px in three fonts and two-word shapes at 10-34px, it passes 3,280 that failed
+and fails 8 that passed, all at −0.08px letter spacing, where the box is inside Firefox's line and past the end of
+Pretext's, and which passed only while the profile kept the box wherever it fell (2026-10-01, #TBD; ENGINE_FOLLOWUPS.md,
+Letter spacing, and Boxes for white space in a span that ends the paragraph; the harness now records a box of width 0 by
+its top). That reopens if a Firefox build changes `CanPlaceFrame` or how a text frame trims the white space it breaks
 after (`nsTextFrame.cpp:11202-11229`). A negative width is refused, as one that isn't finite is. An inline-block of
 width 0 with a negative right margin lays out as a negative `extraWidth` does in Firefox 156.0.1 and webkit-host, but
 Chrome 154.0.8037.57 ends a line at a space that overflows before it and starts the next line with the box, where the
