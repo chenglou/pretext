@@ -120,13 +120,16 @@ function getTabAdvance(lineWidth: number, tabStopAdvance: number, minimumAdvance
 // The advance of tab segment `index` of a rich-inline paragraph, which the line reaches at `lineWidth`: to the next
 // stop of its item's font. Tab stops count from the line's start in every engine, never from an item's (Blink's
 // line_breaker.cc:2963-2971, WebKit's pen position, Gecko's CalcTabWidths, nsTextFrame.cpp:4298-4378). A padded item's
-// text starts after its start edge, half its extraWidth, all of which the line has counted by then: the other half is
-// the end edge, which follows the item's text on the line.
-export function getItemTabAdvance(items: ParagraphSegmentData | undefined, index: number, lineWidth: number, tabStopAdvance: number, skipNarrowTabStops: boolean): number {
-  const stopAdvance = items === undefined || items.tabStopAdvances === null ? tabStopAdvance : items.tabStopAdvances[index]!
-  const endEdge = items === undefined || items.insideExtras === null ? 0 : items.insideExtras[index]! / 2
+// text starts after its start edge, half its extraWidth, all of which `lineWidth` counts, for a tab that starts the
+// line too (lineStartExtras): the other half is the end edge, which follows the item's text on the line. Where the
+// paragraph's items differ in letter spacing, a tab's width holds the gap after it, as every segment's holds its own
+// (src/rich-inline.ts); else it is 0.
+export function getItemTabAdvance(prepared: PreparedLineBreakData, index: number, lineWidth: number, skipNarrowTabStops: boolean): number {
+  const items = prepared.items!
+  const stopAdvance = items.tabStopAdvances === null ? prepared.tabStopAdvance : items.tabStopAdvances[index]!
+  const endEdge = items.insideExtras === null ? 0 : items.insideExtras[index]! / 2
   // Tab stops are eight spaces apart, so half a space is a sixteenth of one.
-  return getTabAdvance(lineWidth - endEdge, stopAdvance, skipNarrowTabStops ? stopAdvance / 16 : 0)
+  return getTabAdvance(lineWidth - endEdge, stopAdvance, skipNarrowTabStops ? stopAdvance / 16 : 0) + prepared.widths[index]!
 }
 
 // Where a line that holds only an overflowing grapheme ends: after that grapheme and
@@ -153,6 +156,7 @@ function getTerminalLetterSpacing(
 ): number {
   const { letterSpacing, segmentFlags } = prepared
   if (letterSpacing === 0) return 0
+  const openingEdges = prepared.items === undefined ? null : prepared.items.openingEdges
 
   if (endGraphemeIndex > 0) return (segmentFlags[endSegmentIndex]! & SPACED) !== 0 ? letterSpacing : 0
 
@@ -167,8 +171,8 @@ function getTerminalLetterSpacing(
     const kind = flags & KIND_BITS
     // Segments that take no letter spacing, such as zero-width glue or marks
     // shaped on the grapheme before them, leave that grapheme's gap last. An
-    // object leaves none after itself.
-    if (kind === SPACE || (kind !== CONTROL && kind !== OBJECT && (flags & SPACED) === 0)) continue
+    // object leaves none after itself, nor does the edge of a padded opening.
+    if (kind === SPACE || (kind !== CONTROL && kind !== OBJECT && (flags & SPACED) === 0 && (openingEdges === null || openingEdges[i]! === 0))) continue
 
     if (i === startSegmentIndex && startGraphemeIndex > 0) return letterSpacing
 
@@ -519,10 +523,11 @@ function walkPreparedComplexLines(
 
     let lineWidth: number | null = null
     if ((segmentFlags[lineStartSegmentIndex]! & KIND_BITS) === HARD_BREAK) {
-      // A line that starts at a hard break is an empty chunk's (normalizePreparedLineStart).
+      // A line that starts at a hard break is an empty chunk's (normalizePreparedLineStart), as wide as what a line
+      // pays where it starts there: inside a padded rich-inline item, its extraWidth.
       cursor.segmentIndex = lineStartSegmentIndex + 1
       cursor.graphemeIndex = 0
-      lineWidth = 0
+      lineWidth = lineStartExtras === null ? 0 : lineStartExtras[lineStartSegmentIndex]!
     } else {
       decided: {
         // Where the line ends when its source runs out: after the chunk's hard
@@ -549,17 +554,18 @@ function walkPreparedComplexLines(
           // The gap before a segment belongs to the grapheme before it. A control
           // that takes no letter spacing still follows that gap but adds none
           // after itself, and so does an object, which is no character (CSS Text 3,
-          // letter-spacing); other segments that take none leave it as it was.
+          // letter-spacing), as is the edge of a padded opening that hangs as white
+          // space; other segments that take none leave it as it was.
           const gap = letterSpacing !== 0 && hasContent && !zeroWidthPrefix && !afterUnspacedControl ? letterSpacing : 0
           let leadingSpacing = 0
-          if (letterSpacing !== 0 && (spaced || kind === CONTROL || kind === OBJECT)) {
+          if (letterSpacing !== 0 && (spaced || kind === CONTROL || kind === OBJECT || (openingEdges !== null && openingEdges[i]! !== 0))) {
             leadingSpacing = gap
             afterUnspacedControl = !spaced
           }
           if (kind !== ZERO_WIDTH_BREAK && kind !== ZERO_WIDTH_GLUE) zeroWidthPrefix = false
           const w = kind !== TAB ? widths[i]!
             : items === undefined ? getTabAdvance(lineW + leadingSpacing, tabStopAdvance, minimumTabAdvance)
-            : getItemTabAdvance(items, i, lineW + leadingSpacing, tabStopAdvance, skipNarrowTabStops)
+            : getItemTabAdvance(prepared, i, hasContent ? lineW + leadingSpacing : lineStartExtras === null ? 0 : lineStartExtras[i]!, skipNarrowTabStops)
           const advance = leadingSpacing + w
           const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
 
@@ -633,6 +639,8 @@ function walkPreparedComplexLines(
                 lineEndSegmentIndex = i + 1
                 lineEndGraphemeIndex = 0
                 lineW = w + startExtra
+                // What the line pays at its start stays where the white space it starts with hangs.
+                if (hangs) hangStartWidth += startExtra
                 lineEndTrimmed = fitAdvance + startExtra > fitLimit && kind !== OBJECT ? startTrim : 0
                 // The break segment hangs with the gap before it, a run of preserved
                 // spaces and tabs hangs whole, and a tab that doesn't hang counts whole.
@@ -682,7 +690,7 @@ function walkPreparedComplexLines(
               // takes the white space after them, the tags of spans that open among it and a forced break
               // with no fit (HandleTrailingSpaces, line_breaker.cc:2426-2534), so an edge right after such a
               // run joins it, taking no room. WebKit fits the content it places without the white space that
-              // hangs before it (hangingContentWidth, InlineContentBreaker.cpp:181-182), so there the edge
+              // hangs before it (hangingContentWidth, InlineContentBreaker.cpp:183-186), so there the edge
               // joins the run where it fits after the content before the run.
               if (kind === OBJECT && unbroken && hangEndSegmentIndex === i && (engineProfile.paddedOpeningFit === 'start' ? lineW > fitLimit
                 : engineProfile.paddedOpeningFit === 'placed' && hangStartWidth - hangEdgesWidth + w - endTrim <= fitLimit)) {

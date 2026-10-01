@@ -645,7 +645,7 @@ function createLine(
     }
   }
 
-  const { widths, segmentFlags, segments, breakableFitAdvances, entryGeometry, lineStartExtras, letterSpacing, tabStopAdvance, items } = data
+  const { widths, segmentFlags, segments, breakableFitAdvances, entryGeometry, lineStartExtras, letterSpacing, items } = data
   const skipNarrowTabStops = getEngineProfile().skipNarrowTabStops
   const fragments: RichInlineFragmentRange[] = []
   const lastSegmentIndex = endGraphemeIndex > 0 ? endSegmentIndex : endSegmentIndex - 1
@@ -667,8 +667,8 @@ function createLine(
     // fragment's width counts it.
     let w: number
     if (from === 0 && whole) {
-      w = kind !== TAB ? widths[i]! : getItemTabAdvance(items, i, lineW, tabStopAdvance, skipNarrowTabStops)
-      if (i === startSegmentIndex && lineStartExtras !== null) w += lineStartExtras[i]!
+      const startExtra = i === startSegmentIndex && lineStartExtras !== null ? lineStartExtras[i]! : 0
+      w = startExtra + (kind !== TAB ? widths[i]! : getItemTabAdvance(data, i, lineW + startExtra, skipNarrowTabStops))
       if (letterSpacing !== 0 && (segmentFlags[i]! & SPACED) !== 0) w += letterSpacing
     } else {
       const advances = breakableFitAdvances[i]!

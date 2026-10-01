@@ -3821,6 +3821,16 @@ describe('rich-inline invariants', () => {
     expect(lines).toHaveLength(2)
     expect(lines[0]).toBeCloseTo(abc, 9)
     expect(lines[1]).toBeCloseTo(stop + x, 9)
+    // A tab that starts a line inside a padded item comes after the start edge that line paints.
+    const padded = width([{ text: 'x\n\tx', font: FONT, extraWidth: 10 }])
+    expect(padded).toHaveLength(2)
+    expect(padded[1]).toBeCloseTo(stop + x + 5, 9)
+    // A tab has the gap of its item's letter spacing after it, whether the items share one or differ:
+    // the lines differ only by the last item's own gap.
+    const shared = width([{ text: 'x\tx', font: FONT, letterSpacing: 2 }, { text: 'x', font: FONT, letterSpacing: 2 }])
+    const differ = width([{ text: 'x\tx', font: FONT, letterSpacing: 2 }, { text: 'x', font: FONT, letterSpacing: 1 }])
+    expect(shared[0]).toBeCloseTo(stop + 2 + x + 2 + x + 2, 9)
+    expect(differ[0]).toBeCloseTo(shared[0]! - 1, 9)
   })
 
   test('rich pre-wrap lines leave out the spaces that hang at their end, across items, from their fragments too', () => {
@@ -3850,6 +3860,14 @@ describe('rich-inline invariants', () => {
     )
     expect(lines([{ text: 'foo  ', font: FONT }, { text: ' x', font: BOLD, extraWidth: 6 }, { text: ' bar', font: FONT }], foo + 7)[0]).toEqual(
       { width: round(foo + 6), fragments: [['foo  ', round(foo)], [' ', 6]] },
+    )
+    // Such an edge is no character: under letter spacing it follows the gap after the glyph before
+    // it, and leaves none after itself, so none where it starts a line.
+    expect(lines([{ text: 'foo', font: FONT, letterSpacing: 2 }, { text: ' ', font: FONT, letterSpacing: 2, extraWidth: 6 }], foo + 7)).toEqual([
+      { width: round(foo + 3 * 2 + 6), fragments: [['foo', round(foo + 3 * 2)], [' ', 6]] },
+    ])
+    expect(lines([{ text: 'foo\n', font: FONT, letterSpacing: 2 }, { text: '  ', font: FONT, letterSpacing: 2, extraWidth: 6 }], Infinity)[1]).toEqual(
+      { width: round(6 + 2 * space + 2 * 2), fragments: [['  ', round(6 + 2 * space + 2 * 2)]] },
     )
     // Where the line goes on into the item, the edges count once, with the white space after them.
     expect(lines([{ text: 'foo  ', font: FONT }, { text: ' x', font: BOLD, extraWidth: 6 }], Infinity)).toEqual([
@@ -4027,6 +4045,18 @@ describe('rich-inline invariants', () => {
     ])
     expect(texts([{ text: 'foo', font: FONT }, { text: '\nbar', font: FONT }], 1)).toEqual(['f', 'o', 'o|', 'b', 'a', 'r'])
     expect(texts([{ text: 'foofo', font: FONT }, { text: 'o', font: FONT }, { text: '\nbar', font: FONT, extraWidth: 15 }], foofoo + 5)).toEqual(['foofo|o', '', 'bar'])
+    // A blank line inside a padded item is as wide as the item's extraWidth, which its empty
+    // fragment paints, and so is a line that holds only the item's spaces, which hang.
+    expect(lines([{ text: 'foo\n\nbar', font: FONT, extraWidth: 15 }], 1000)).toEqual([
+      { width: round(foo + 15), fragments: [[0, 'foo', round(foo + 15)]] },
+      { width: 15, fragments: [[0, '', 15]] },
+      { width: round(bar + 15), fragments: [[0, 'bar', round(bar + 15)]] },
+    ])
+    expect(lines([{ text: 'foo\n  ', font: FONT, extraWidth: 15 }, { text: 'foofoo', font: FONT }], foofoo + 5)).toEqual([
+      { width: round(foo + 15), fragments: [[0, 'foo', round(foo + 15)]] },
+      { width: 15, fragments: [[0, '  ', 15]] },
+      { width: round(foofoo), fragments: [[1, 'foofoo', round(foofoo)]] },
+    ])
     // WebKit and Gecko end that line before the last grapheme of the text before the span, and
     // keep the span on a line that grapheme starts.
     const profile = getEngineProfile()
