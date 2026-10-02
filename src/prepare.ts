@@ -745,8 +745,10 @@ export function measureAnalysis(
     const trims = hanKerning.widthTrims
     if (trims !== null) for (let i = 0; i < trims.length; i++) widths[i] = widths[i]! - trims[i]!
   }
+  // The loop above has measured every segment in the font, so text in a font that has measured
+  // no kana, as in one that has answered that it kerns none, isn't looked through for kana.
   let lineStartExtras = hanKerning.lineStartExtras
-  if (engineProfile.kernsAcrossCanvasWords && kanaPairRe.test(normalized)) {
+  if (engineProfile.kernsAcrossCanvasWords && fontMeasurement.measuredKana && fontMeasurement.kanaKerning !== null && kanaPairRe.test(normalized)) {
     const kanaKerning = getFontKanaKerning(fontMeasurement)
     if (kanaKerning !== null) lineStartExtras = addKanaKerning(lineStartExtras, widths, analysis, fontMeasurement, kanaKerning)
   }
@@ -789,7 +791,7 @@ const kanaPairRe = /[\u3041-\u30FF]{2}/
 // starts a line. One that widens it stays on the first kana's, since Blink looks for a line's
 // end in the run shaped whole (shaping_line_breaker.cc:325-333), where the first kana has it. An
 // emergency break inside a segment takes none (ENGINE_FOLLOWUPS.md, Kerning between kana).
-function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement, kernings: Map<number, number>): number[] | null {
+function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement, kernings: Float64Array): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = 0; i < flags.length; i++) {
     if ((flags[i]! & KIND_BITS) !== TEXT) continue

@@ -360,10 +360,11 @@ export type FontMeasurement = {
   // In the Chromium profile, the font's kerning with the space glyph, or null where it has
   // none, asked for the first text with a space (getFontSpaceKerning).
   spaceKerning: FontSpaceKerning | null | undefined
-  // In the Chromium profile, the kerning between two kana in a row, by the first's code unit
-  // times 0x10000 plus the second's, once a text has the pair, or null where the font kerns
-  // none, asked for the first text with two kana in a row (getFontKanaKerning).
-  kanaKerning: Map<number, number> | null | undefined
+  measuredKana: boolean // Whether a segment measured in the font holds a kana (addMetrics)
+  // In the Chromium profile, the kerning of each two kana in a row, once a text has the pair
+  // (getKanaKerning), or null where the font kerns none, asked for the first text with two
+  // kana in a row (getFontKanaKerning).
+  kanaKerning: Float64Array | null | undefined
   emojiCorrection: number | null // Probed for the first text that may hold emoji
   emojiWidth: number // Canvas's width of one glyph of the emoji font, measured with the correction
   hyphenText: string | null // Asked for the first text with a soft hyphen (getHyphenText)
@@ -609,8 +610,13 @@ export function getFollowingSpaceMetrics(seg: string, measurement: FontMeasureme
 function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: string, measurement: FontMeasurement): SegmentMetrics {
   const metrics: SegmentMetrics = { width: measurement.state.context.measureText(text).width, emojiCount: -1, fit: null, spaceKerning: null }
   cache.set(seg, metrics)
+  if (!measurement.measuredKana && kanaRe.test(seg)) measurement.measuredKana = true
   return metrics
 }
+
+// A character of the Hiragana and Katakana blocks, U+3041 to U+30FF, and how many they hold.
+const kanaRe = /[\u3041-\u30FF]/
+const KANA_COUNT = 0x30ff - 0x3041 + 1
 
 // The kerning of every segment that takes none.
 export const noSpaceKerning: SpaceKerning = { after: 0, before: 0 }
@@ -716,30 +722,31 @@ function getWholeRunContext(measurement: FontMeasurement): CanvasRenderingContex
 // `fontKerning` turns off). That is also a font Canvas doesn't shape whole, whose kana stay as
 // wide as Canvas measures them apart. Asked once per font. Premise: a font that kerns kana
 // kerns one of the probe's pairs (RESEARCH.md, Kerning At Line Edges, has the fonts measured).
-export function getFontKanaKerning(measurement: FontMeasurement): Map<number, number> | null {
+export function getFontKanaKerning(measurement: FontMeasurement): Float64Array | null {
   if (measurement.kanaKerning === undefined) {
     const context = getWholeRunContext(measurement)
     const kerned = context.measureText(KANA_PROBE).width
     context.fontKerning = 'none'
     const unkerned = context.measureText(KANA_PROBE).width
     context.fontKerning = 'auto'
-    measurement.kanaKerning = kerned === unkerned ? null : new Map()
+    measurement.kanaKerning = kerned === unkerned ? null : new Float64Array(KANA_COUNT * KANA_COUNT).fill(NaN)
   }
   return measurement.kanaKerning
 }
 
 // The kerning Blink's layout gives text[at - 1] and text[at], two kana in a row, which its
 // Canvas, shaping each apart, doesn't report: the two in one string on the context that shapes
-// a string whole, less each alone. Asked of Canvas once per font and pair.
-export function getKanaKerning(text: string, at: number, measurement: FontMeasurement, kernings: Map<number, number>): number {
-  const key = text.charCodeAt(at - 1) * 0x10000 + text.charCodeAt(at)
-  let kerning = kernings.get(key)
-  if (kerning === undefined) {
+// a string whole, less each alone. Asked of Canvas once per font and pair, and kept in the
+// font's table by the two characters, where a pair not asked about yet is NaN.
+export function getKanaKerning(text: string, at: number, measurement: FontMeasurement, kernings: Float64Array): number {
+  const index = (text.charCodeAt(at - 1) - 0x3041) * KANA_COUNT + text.charCodeAt(at) - 0x3041
+  let kerning = kernings[index]!
+  if (Number.isNaN(kerning)) {
     const pairWidth = getWholeRunContext(measurement).measureText(text.slice(at - 1, at + 1)).width
     kerning = pairWidth - getSegmentMetrics(text[at - 1]!, measurement).width - getSegmentMetrics(text[at]!, measurement).width
     // As for a character and a space, up to the pair's width / 2^22 is rounding.
     if (Math.abs(kerning) <= pairWidth / 0x400000) kerning = 0
-    kernings.set(key, kerning)
+    kernings[index] = kerning
   }
   return kerning
 }
@@ -998,7 +1005,7 @@ export function getFontMeasurement(font: string, language: string | null, letter
   let measurement = fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, kanaKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, hanKerning: undefined }
+    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, measuredKana: false, kanaKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, hanKerning: undefined }
     fonts.set(font, measurement)
   }
   state.context.font = measurement.canvasFont
