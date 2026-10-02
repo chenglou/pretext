@@ -275,24 +275,14 @@ catalog-f08088819852e684 count
 catalog-febef7bd179ab49b count
 facts-04480dad4c800769 count
 facts-23b709c78a139ab5 breaks
-facts-2e63890457348372 count
-facts-475238d777f2ad69 count
 facts-48b0a3cb82a7b91b count
-facts-4b792f4f6422cf32 count
 facts-7b80449553cba762 count
-facts-86c80c27107a26c0 count
 facts-a4144110b0178472 breaks
 facts-a4fac3a13606763d count
-facts-b2baf3ba67bf1ddf count
 facts-d54758d7685ccb99 breaks
 facts-d61222b739e375bb count
 facts-f33e071a32361dfd count
-facts-f8485f5ff9868657 count
 facts-fa6a5f5fc1b0615d count
-rich-70e8580e8323a11d count
-rich-8a5e47f77b80c5ab breaks
-rich-8d9c6ebc5ec54982 count
-rich-9d301b38ca872b57 count
 
 ## Devanagari and other Indic scripts beside brackets, at 24 px and wider: Chrome breaks there where the library doesn't
 catalog-04f693fa944f01c8 count
@@ -503,9 +493,7 @@ rich-5e88c18e1e4c5903 breaks
 rich-f9d29965bd729819 breaks
 rich-fb89fcbe2ec753dd count
 
-## Japanese in 16 px Hiragino Sans under keep-all, as spans and in one node alike, at 24 px and wider: Chrome lays the line out up to 1.6 px narrower than the Canvas widths add up to, so it fits one more character
-rich-1753feec3b2a030a count
-rich-1bc5940e590f28ef breaks
+## Japanese in 16 px Hiragino Sans under keep-all, as spans and in one node alike, at 24 px and wider: where a keep-all group wider than its line breaks between characters, Chrome keeps the kerning between the kana of each piece, up to 1.6 px a line, so it fits one more character, and the library gives each piece its characters' own advances (ENGINE_FOLLOWUPS.md, Kerning between kana)
 rich-3326e4c2765ca2ec count
 rich-ce78e7cd89087f29 count
 rich-f75de9201b697ee0 count
@@ -3175,13 +3163,11 @@ rich-bd576120f4886917 breaks
 rich-dc51749039b55b72 count
 
 ## Outside what Pretext claims: system-ui font lists (README.md, Caveats); Chrome's Canvas and DOM pick different SF Pro variants (Chromium #489579956)
-sample-0c1ec78ea4cfbfeb breaks
 sample-0eab24ba03a95ed3 breaks
 sample-27ce1477fe0f0966 count
 sample-29261b6bc0cd56ef breaks
 sample-3f5a5d01804da30c breaks
 sample-47104056a6721f2b breaks
-sample-6107813e4b03aca0 breaks
 sample-6b2222d651648e31 breaks
 sample-9a9cbdb98f3a53bd count
 sample-d3dfc0fa8e8a08b9 count
@@ -3757,23 +3743,6 @@ old-gate-e6f744aeeeb266dd breaks
 old-gate-e88005a6dd970f4e count
 old-gate-f63a66d4cfe640d0 count
 old-gate-fcbb79cc263c0b70 count
-
-## Real usage: Japanese and Chinese lines; Chrome fits one more character than the Canvas widths add up to (main before #340 too)
-sample-1090cad44abeab6a breaks
-sample-28103c44323eb39f count
-sample-48fcd47e9275d21a breaks
-sample-8728c1e20f869993 breaks
-sample-87ef52eeb61e0bb9 breaks
-sample-8919ddfc101caf25 breaks
-sample-8a526288b6661535 breaks
-sample-9b027ab9b51853f6 breaks
-sample-9e60e8b9d7a27d63 breaks
-sample-a6077b3c15ccaae1 breaks
-sample-b6b8e9e135479761 breaks
-sample-bd59f3891ca2338f breaks
-sample-e0b34be5f901a8b2 breaks
-sample-f43dd85d123726ca breaks
-sample-fe4b8ea7070b7c99 breaks
 
 ## Real usage: Khmer and Myanmar; Chrome's dictionary breaks differ from the library's (main before #340 too)
 sample-6f8970d165201513 breaks
