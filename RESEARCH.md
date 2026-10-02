@@ -1208,8 +1208,8 @@ The kerning has no structure that lets fewer questions be asked than a text has 
   B 5, by up to 3.84px (`すノ`). Asking nothing about such pairs would save about a tenth of the questions (125 of the
   1,142 distinct pairs of 290 paragraphs) and leave those pairs as on main in the three faces; the profile asks.
 - **Most pairs kern nothing**: 7% of the 33,489 do in Hiragino Sans, and of the kana pairs of real text 8.7% (852 of
-  9,844 in 290 paragraphs of the sample and the corpora), 109 of their 1,142 distinct ones. That is the structure the
-  profile uses (below).
+  9,844 in 290 paragraphs of the sample and the corpora), 109 of their 1,142 distinct ones. Asking about several new
+  pairs in one string used that, and bought no time (Dead Ends).
 
 Canvas shapes a string whole under `textRendering = 'optimizeLegibility'` where the lookups of the list's first font
 with a space cover the space glyph (Engine Facts, Chrome), so a second context under it measures two kana as the page
@@ -1231,54 +1231,65 @@ same number in the families that kern nothing, and under the lists Canvas doesn'
 as on main. A font whose widths are the same is asked nothing more: 16px PingFang SC makes 4 more `measureText` calls
 than main over 290 paragraphs, two for this question and two for the one about spaces. The premise is that a font that
 kerns kana kerns one of those 11 pairs; one that doesn't would measure as on main. Windows' and Android's fonts weren't
-measured.
+measured. The question waits for a text with two kana in a row, in a font in which a segment measured holds a kana
+(`FontMeasurement.measuredKana`, set where a segment is first measured): by then preparation has measured the text's
+segments, so text in a font that has measured no kana, as most Latin, Chinese or Arabic text is, isn't looked through
+for kana, and neither is text in a font that has answered that it kerns none.
 
 In a font that kerns, each distinct pair is asked about once: the two kana in one string on the second context, less
-each alone. Pairs repeat less than characters do, so text goes on asking after its characters are known: the 290
-paragraphs hold 191 distinct characters and 171 distinct kana pairs after 10 paragraphs, 723 and 781 after 100, and 959
-and 1,142 in all. Since nine pairs in ten kern nothing, a new pair of letters is asked together with the new pairs that
-follow it in the text, up to six (`KANA_STRETCH_PAIRS`): a stretch as wide as its kana alone holds no kerning, for one
-call. A stretch that kerns has its pairs asked one at a time until they add up to its kerning, the rest being none.
-`measureText` calls to prepare texts in order in one new font, 16px Hiragino Sans, on main, with the first candidate
-(branch `chrome-kana-kerning`, one question per pair in every font), with one question per pair, and with stretches
-(pinned Chrome 154.0.8037.57, 2026-10-02):
+each alone. That is exact from a font's first text, in Klee too, whose pairs can widen. Pairs repeat less than
+characters do, so text goes on asking after its characters are known: the 290 paragraphs hold 191 distinct characters
+and 171 distinct kana pairs after 10 paragraphs, 723 and 781 after 100, and 959 and 1,142 in all. `measureText` calls to
+prepare texts in order in one new font, 16px Hiragino Sans, on main, with the first candidate (branch
+`chrome-kana-kerning`, one question per pair in every font), with the profile, and with new pairs asked up to six in one
+string (stretches, tried and dropped; Dead Ends) (pinned Chrome 154.0.8037.57, 2026-10-02):
 
-| | main | first candidate | a question per pair | stretches |
+| | main | first candidate | profile, a question per pair | stretches |
 |---|---|---|---|---|
-| 290 paragraphs of the sample and the corpora, 25,343 characters | 1,247 | 2,419 | 2,382 | 2,089, 1.68 times main |
-| the sample's 336 paragraphs with kana | 1,257 | 2,468 | 2,425 | 2,123, 1.69 |
-| 35 paragraphs of `corpora/ja-rashomon.txt` | 710 | 1,272 | 1,273 | 1,111, 1.56 |
-| 22 messages of an app | 347 | 989 | 983 | 732, 2.11 |
-| 40 chat and interface sentences, mostly kana | 287 | 1,053 | 1,055 | 754, 2.63 |
-| 60 short texts, mostly kana | 369 | 1,959 | 1,963 | 1,312, 3.56 |
+| 290 paragraphs of the sample and the corpora, 25,343 characters | 1,247 | 2,419 | 2,382, 1.91 times main | 2,089 |
+| the sample's 336 paragraphs with kana | 1,257 | 2,468 | 2,425, 1.93 | 2,123 |
+| 35 paragraphs of `corpora/ja-rashomon.txt` | 710 | 1,272 | 1,273, 1.79 | 1,111 |
+| 22 messages of an app | 347 | 989 | 983, 2.83 | 732 |
+| 40 chat and interface sentences, mostly kana | 287 | 1,053 | 1,055, 3.68 | 754 |
+| 60 short texts, mostly kana | 369 | 1,959 | 1,963, 5.32 | 1,312 |
 
-Submitted units grow 2.3 times on the paragraphs and 4.3 to 7.7 times on the three short sets, from a few hundred. Each
-paragraph alone in a new font makes 1.25 times main's calls (21,927 to 27,481; 1.42 times with a question per pair). The
-harness's sample, whose paragraphs are mostly not Japanese, makes 1.4% more calls than before (270,482 to 274,295) and
-0.8% more units, and its books 1.1% more calls.
+Submitted units grow 2.4 times on the paragraphs and 4.6 to 8.2 times on the three short sets, from a few hundred. Each
+paragraph alone in a new font makes 1.42 times main's calls (21,927 to 31,242). The harness's sample, whose paragraphs
+are mostly not Japanese, makes 2.3% more calls than before (270,482 to 276,573) and 0.9% more units, and its books 1.6%
+more calls.
 
-A call for a pair costs less than the calls a new font makes for its characters, so time grows less than calls. As
-hypotheses (the same texts in a font size nothing had measured in, pinned Chrome's own window in the background, medians
-of 9 rounds on a 5µs clock): the 290 paragraphs prepared in 1.17 to 1.19 times main's time (8.7 to 9.0ms on main) where
-a question per pair read 1.18 to 1.22, the 60 short texts in 2.04 to 2.30 times (1.2ms on main) where it read 2.53, and
-the 40 sentences in 1.68 to 1.83 (0.9ms on main) where it read 1.85 to 1.94: a stretch takes Canvas about two to three
-times as long as a pair (1.3 to 2.4µs against 0.75µs in a loop), so a quarter to a third fewer calls read 1 to 19%
-faster. Prepared again, the same texts read 12 to 29% slower than main, the walk over a text's kana and a `Map` read per
-pair; offline they read 17 to 30% slower in Node 23 on a stand-in Canvas with Hiragino Sans's kernings. In PingFang SC
-the paragraphs read within 3% of main and the short sets 15 to 36% slower, which is the font's question: with the second
-context taking the font it cost about 0.1ms for each new font size in Hiragino Sans and 0.15 to 0.4ms in PingFang SC, as
-much as 20 kana or more measured for the first time. Asking with kerning on and off, against the first context's width,
-or against twelve kana measured apart cost the same, so that time is the second context's. The bench's `cjk` rows with a
-Hiragino font are where this shows in a foreground window.
+Calls aren't time: a call for a pair costs Canvas less than the calls a new font makes for its characters. The bench
+timed the fix with stretches against the branch before it, its `cjk` rows as Japanese text (羅生門, 蜘蛛の糸 and
+Chromium's Japanese interface strings) in 16px Hiragino Sans (Chrome 154.0.8037.57, two sessions, load averages 6 to 10,
+2026-10-02): new text prepared 19.8% slower, with quartiles from 7% faster to 107% slower and sessions of +7.9% and
++25.9% (1,365 to 1,885µs per 1,000 characters); text prepared again 11.1% slower in both sessions (104.2 to 116.1µs); a
+fresh page's first batch of 100 characters took 25.55µs a character against 23.55, and its second 2.40 against 1.92.
+Stretches against a question per pair read within noise on every row (new text +2.6%, sessions of -8.5% and +21.2%;
+seen text +0.4%; a fresh page's first batch 23.85 against 23.55), so a question per pair costs the same time. The font's
+question is most of what a fresh page pays: with the second context taking the font it cost about 0.1ms for each new
+font size in Hiragino Sans and 0.15 to 0.4ms in PingFang SC in a background window (a hypothesis), as much as 20 kana or
+more measured for the first time, and asking with kerning on and off, against the first context's width, or against
+twelve kana measured apart cost the same.
 
-The stretches rest on a premise: the kernings of a stretch don't add up to none. That holds where every kerning
-tightens, in 18 of the 19 faces. With stretches the profile's widths were those of a question per pair for every one of
-772 texts, in order and each alone in a new font, in 16 specs of those faces from 12 to 64px; from 37px a stretch is
-wider than the 256px up to which Canvas's float32 widths are exact. Klee widens some pairs, so two pairs of a stretch
-can cancel. A font in which a pair asked about alone has widened therefore has its pairs asked again, each alone, from
-then on (`FontKanaKerning.widens`), and in Klee the 772 texts in order also came out as with a question per pair. What
-is left is a text prepared before its font's first widening pair is found: of the 772 texts each alone in a new font, 9
-in Klee and 18 in bold Klee had two segments up to 0.64px off, their sum right in all but 2.
+In the bench's own fonts, where the `cjk` rows are in PingFang TC, every row read within noise against the branch before
+but three (same build and day): `cjk-brackets-keep-all` prepare 7.3% slower in both sessions, whose font, 20px Hiragino
+Mincho ProN, kerns kana, so that row is text prepared again in a font that kerns; `latin seen` 1.4% slower; and `mixed
+walk` 1.6% slower, a `layout()` row whose code the change doesn't touch. The other seen rows read 0.6 to 1.2% slower.
+That build looked through every text for two kana in a row before it asked the font, 0.4 to 0.8µs per 1,000 characters
+of text without any (d8 15.4.80), which is what those rows read; the question's two conditions (above) replaced it.
+
+What text prepared again pays, offline (hypotheses: `prepare()` over the bench's Japanese row and its keep-all bracket
+row in the d8 shell of Chrome 154's V8, on a stand-in Canvas with Hiragino Sans's and Hiragino Mincho ProN's kernings
+from the census, 4 processes of 60 rounds, 2026-10-02): with a font's pairs in a `Map` keyed by the two code units, 10.7
+to 12.1% and 8.1 to 8.6% slower than the branch before, which is the bench's 11.1% and 7.3%; with them in a table
+indexed by the two kana (`getKanaKerning()`), 8.1 to 9.6% and 6.6 to 8.0%. Of the Japanese row's cost about 6 points are
+the walk, which reads every character of a text to find its pairs; about 3 were the `Map` reads, about 1 with the table;
+and about 2 are the array of what line starts give back (`lineStartExtras`), which a text makes once a pair that kerns
+sits across two segments. The bracket row is nearly all walk. In a font that kerns no kana both rows read level (-0.5 to
++0.5%), as do the bench's Latin, Chinese and mixed rows in fonts that have measured no kana (-1.1 to +1.3%; the method
+doesn't tell 1% apart), which read 0.2 to 3.3% slower with the scan. The table is 191 by 191 float64, 292 KB for each
+font that kerns kana, where a `Map` of the 290 paragraphs' 1,142 pairs took about 60 KB in Node 23. The bench hasn't
+timed the table or the question's conditions.
 
 A pair's adjustment sits on its first glyph (GPOS pair positioning), and a line that breaks between the two is shaped
 again without it at both ends (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:511-584`), where Blink tests
@@ -1291,7 +1302,7 @@ that holds several kana, as a keep-all word or a kana with the small kana after 
 Canvas has cut before a letter where the word before it holds a letter already, and has kept a mark such as `ー` with
 the letter before it and the first letter after marks or CJK punctuation that began a word.
 
-On the harness it fixes 29 Chrome cases and loses none (38,976 to 39,005 of 43,050): the sample's 15, which takes the
+On the harness it fixes 29 Chrome cases and loses none (39,020 to 39,049 of 43,095): the sample's 15, which takes the
 share of real paragraphs right inside what Pretext claims from 99.74% to 99.91% (29 failing to 14 of 10,345), two more
 of its Japanese paragraphs in `system-ui` lists, and 12 engine facts and rich cases (`わかって`, `日本ァア`,
 `ちょっと待ってください`). Of the 508 predictions that differ from before, the other 479 hold two kana in a row too: 476
@@ -1299,7 +1310,8 @@ pass before and after with their furthest line closer to Chrome's, 2 with it as 
 hyphens). Lines of the sample's passing paragraphs more than 0.05, 0.5 and 1px from Chrome's go from 2.88%, 1.89% and
 1.06% to 1.16%, 0.57% and 0.45%. Firefox and webkit-host predict as before. Outside the harness, layouts recorded fresh
 and not kept, wrong on main, with the first candidate and with the profile (a wrong line count or a character on another
-line; pinned Chrome 154.0.8037.57, 2026-10-02):
+line; pinned Chrome 154.0.8037.57, 2026-10-02, before #400 to #405 were merged in; a question per pair and stretches
+gave the same counts):
 
 | | layouts | main | first candidate | profile |
 |---|---|---|---|---|
@@ -2965,20 +2977,30 @@ Mostly on main as it was then, measured with the old suite in installed browsers
 - **A question for every pair of kana in every font** (the first candidate, branch `chrome-kana-kerning`, 2026-10-01):
   PingFang SC and Osaka, which kern no kana, made 1.9 times main's `measureText` calls on Japanese paragraphs for
   nothing, as Hiragino did. It also put every kerning on the pair's second kana, so in Klee, whose pairs can widen, 2 of
-  1,560 layouts took a line fewer than Chrome. The question to the font and the stretches replaced it (Kerning At Line
-  Edges).
-- **Other ways to ask about fewer than every new pair of kana**, on Hiragino Sans's kernings over the same texts
-  (simulated from the census, 2026-10-02; the share of a question per pair's calls that is left, for 290 paragraphs in
-  order and for 60 short texts): a stretch of new pairs asked whole and, where it kerns, every pair of it (77% and 67%);
-  the same, stopping once the pairs add up to the stretch (73% and 59%; taken, 74% and 59% in Chrome); a stretch halved
-  over and over, the second half's kerning being what the first leaves (69% and 50%), whose single pairs would take
-  their value from a difference of two longer strings' widths, inexact past 256px, or one more call each; stretches that
-  run over pairs already known, less their kernings (68% and 54%); and all of a text's new pairs in one string, four to
-  a call with a Latin letter between pairs, which is another script run and kerns with neither (60% and 63%). None comes
-  near asking only the pairs that kern, a tenth of them: a call returns one width, and telling which of a group kerns
-  takes about half a call a pair at that rate. In Chrome a longer string also costs more than a pair, so the calls saved
-  bought 1 to 19% of the time (Kerning At Line Edges). Reopens if Chrome ships `getTextClusters()`, which gives a run's
-  pairs in one call.
+  1,560 layouts took a line fewer than Chrome. The question to the font replaced it (Kerning At Line Edges).
+- **Asking about fewer than every new pair of kana**, on Hiragino Sans's kernings over the same texts (simulated from
+  the census, 2026-10-02; the share of a question per pair's calls that is left, for 290 paragraphs in order and for 60
+  short texts): a stretch of new pairs asked whole and, where it kerns, every pair of it (77% and 67%); the same,
+  stopping once the pairs add up to the stretch (73% and 59%); a stretch halved over and over, the second half's kerning
+  being what the first leaves (69% and 50%), whose single pairs would take their value from a difference of two longer
+  strings' widths, inexact past 256px, or one more call each; stretches that run over pairs already known, less their
+  kernings (68% and 54%); and all of a text's new pairs in one string, four to a call with a Latin letter between pairs,
+  which is another script run and kerns with neither (60% and 63%). None comes near asking only the pairs that kern, a
+  tenth of them: a call returns one width, and telling which of a group kerns takes about half a call a pair at that
+  rate. The stretch that stops was built (up to six pairs a string, commit 9f5b2e8c on branch `chrome-kana-kerning-2`):
+  it made 74% and 59% of the calls in Chrome, and the bench read it within noise of a question per pair on every row
+  (Kerning At Line Edges), since a longer string costs Canvas what the calls save, about two to three times a pair's
+  0.75µs. It took 29 code lines and a premise, that the kernings of a stretch don't add up to none, which Klee's pairs
+  that widen break: of 772 texts each alone in a new font, 9 in Klee and 18 in bold Klee had two segments up to 0.64px
+  off. Dropped. Reopens if Chrome ships `getTextClusters()`, which gives a run's pairs in one call.
+- **Other shapes for reading a prepared text's kana kernings** (offline, d8 15.4.80, the rows and stand-in of Kerning At
+  Line Edges, 2026-10-02; hypotheses). Taking the kerning inside preparation's main loop, with what the kana inside a
+  segment kern by kept with the segment's metrics, so that only a segment's first character is looked at: the keep-all
+  bracket row read 2 to 3% slower than the branch before instead of 7%, but Japanese prose, where nearly every kana is a
+  segment, 12% instead of 8 to 9%, and Japanese and Chinese text in a font that kerns no kana 1 to 3% slower, for two
+  more reads per segment in the loop every text runs. One loop over the text's characters, stepping to the next segment
+  as it goes, instead of a loop over segments and then their characters: 0.7 points of the prose row's 8 to 9 for 2 more
+  lines. Neither was kept.
 - **WebKit letter-spaced ligatures** (in the rebuild, from 2026-09-17; Measurement Model): no separator sets two letters
   unligated in one shaping call (U+200C ends the simple path's call, U+034F doesn't stop the ligature, U+180B brings a
   fallback glyph), and a group heuristic was 1.9 px off; a styled connected `<canvas>` would fix about 721 cases but is
