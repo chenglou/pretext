@@ -247,16 +247,16 @@ shared by every canvas and the DOM, so a fresh canvas doesn't make text new.
   kept CJK handles, 2026-09-26), and would have hidden a real 20-25% slowdown. These floors flag all four slowdowns
   known between main before #340 (6d1d2106) and 217c84b8, a commit of #340: pre-wrap layout and walk at 1.05 of base's
   time in Chrome and 1.18-1.25 in Firefox, and letter-spaced CJK and control layouts at 1.12 and 1.20 in Safari.
-- **The bundle's names.** The bench minifies each library, and a change anywhere in it renames top-level bindings.
-  Firefox 156 read one resize row 13-16% apart on those names alone (`RESEARCH.md`, JavaScript Engines), so a Firefox
-  row that moves with no change on its path is checked under other names before it counts.
 - **WebKit's width cache** samples one Canvas call in 21 after a run of misses, so a prepare that submits n strings
   speeds up only after 21 / gcd(n, 21) repeats: compare submitted text and cold first prepares.
-- **Firefox's `resize: latin layout at new widths`** moves about 16% with the names the bench's minifier gives the
-  bundle's top-level bindings (`RESEARCH.md`, JavaScript Engines; Firefox 156, 2026-10-02), so where it alone reads
-  slower or faster, with Firefox's other `layout()` rows level and no change to code `layout()` runs, it is read as the
-  names and not the change: a build one unused local apart gets other names and settles it. Making the constants that
-  loop reads literals in the emitted code, which would end this, is being tried separately.
+- **The bundle's names.** The bench minifies each library, and a change anywhere in it renames top-level bindings. Until
+  #406, Firefox's `resize: latin layout at new widths` moved about 16% with those names alone (`RESEARCH.md`, JavaScript
+  Engines; Firefox 156, 2026-10-02), so in a table whose base is older than #406, where that row alone reads slower or
+  faster, with Firefox's other `layout()` rows level and no change to code `layout()` runs, it is read as the names and
+  not the change. Since #406 the built code holds the constants that loop read as numbers, and one build under two
+  namings read its Latin rows alike. A Firefox row that moves with no change on its path is still checked under other
+  names before it counts: a build one unused local apart gets other names, and so does the same source built from
+  another directory (Bun 1.4.2, since the kinds are const enums).
 
 A full bench took about 27 minutes (2026-09-26). Nothing timed is checked in.
 

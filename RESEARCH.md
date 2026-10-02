@@ -1752,44 +1752,6 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   a lead only; in Chrome 154 the bench read every row of this build within noise of main in three sessions, the line
   rows included, which the field alone had read 11-18% slower (#391, 2026-10-01). No other function inlined while
   preparing and laying out the bench's mixed and rich texts takes over 374 bytes (`getMarkContext()`, above).
-- **The names a minifier picks**: Firefox 156.0.1 read the bench's "resize: latin layout at new widths" 13-16% slower
-  or faster by nothing but the names Bun's minifier gave the bundle's top-level bindings (2026-10-02, three sessions
-  each against 29562782, main before #394). A branch read +16.4%; main with only that branch's new profile field, and
-  the branch without the field, within noise; that last build with one more local in a function `layout()` never runs,
-  after which the minifier names the bindings as the branch's bundle does, +13.5%; the whole branch under other names,
-  within noise. Main after #394-#399 read +17.6% against main before them, with no change on the row's path. The row
-  times `countPreparedLines()`, whose loop read four `const`s of `src/analysis.ts` (the kind mask and three kinds), on
-  the one resize text with words longer than the line (two rules of 72 hyphens), so the loop's grapheme path runs too.
-  The reading, from SpiderMonkey's source (the `FIREFOX_156_0_RELEASE` tag) and an emulation of it, not seen inside
-  Firefox: the bindings of a function scope that inner functions read get slots in the order of a hash of their names,
-  the first 14 fixed in the environment object and the rest in its dynamic slots (`newFunctionScopeData`,
-  `Parser.cpp`), a bundle's top level is such a scope, and Warp builds one instruction for a load from a fixed slot and
-  two from a dynamic one (`build_GetAliasedVar`, `WarpBuilder.cpp:2101-2108`); every slow bundle had one of the four
-  constants in a fixed slot and no fast one did. The SpiderMonkey shell of 156.0.1 agrees, on a stand-in Canvas, so as
-  a lead only: main +12-24% on that row, four one-local variants of main that keep a constant in a fixed slot +14-18%,
-  one that leaves none within 6%. So the segment kinds and flag bits are const enums (`SegmentKind`, `SegmentFlag`,
-  `SegmentKindSet`; #406), which `tsc` and Bun's bundler write into the code as numbers, and the walkers' loops read no
-  variable for them. In the shell, eleven namings of that build's bundle, five with a function on `layout()`'s path
-  moved into a fixed slot, read alike on both Latin resize rows: new widths within 9% of 29562782, and widths seen
-  before 9-18% slower than it and than main. That second number is the loop as first compiled, for whole-number widths
-  alone; laid out again at whole widths after one fractional width, the build read from 10% faster than 29562782 to 3%
-  slower, where main read 14-24% slower. Main with the four numbers written into `countPreparedLines()` alone read as
-  the const-enum build, and with only some of them written in read other ways again (the mask alone: both rows as
-  29562782, with a kind still in a fixed slot; the text kind alone: new widths 11-16% slower with no constant in a
-  fixed slot). Without the two rules (276 of the text's 278 messages), main, main under other names
-  and the const-enum build read alike on both rows, within 6%: both slowdowns need the loop's grapheme path to have
-  run. With the shell's branch pruning off (`--ion-pruning=off`; `PruneUnusedBranches`, `BranchPruning.cpp`, cuts the
-  blocks that hadn't run when Ion compiled), every build read alike on both rows, at about twice the time. So these
-  are states of how Ion compiles the loop once its unused blocks are cut and the grapheme path isn't one of them, a
-  constant's slot is one of several small things that pick the state, and numbers take the names out of it and
-  nothing else. Chrome 154's V8 (d8
-  15.4.80) read main and the const-enum build alike on both rows. PR #406 has the browser tables. Two traps: `tsc`
-  writes a const enum's members as numbers only without `verbatimModuleSyntax`, which `tsconfig.build.json` turns off
-  and `bun run package-smoke-test` checks, and Bun 1.4.2's bundler writes a member computed from another file's enum
-  as a property read, so `SegmentKindSet` sits beside the kinds; with const enums it also names a bundle's bindings by
-  the directory the source is built from, as it didn't before (the same source at another path: 344 of 410 names
-  differ). When a Firefox row moves and no code on its path changed, build the same code under other names (one more
-  local anywhere renames top-level bindings) before calling it a change.
 - **Class fields in Firefox**: with any class field in the bundle, Firefox 156 took 4.5-4.8ms to evaluate it on a fresh
   page, against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors, seemingly because it
   then compiles the whole bundle up front (the doubling is measured, the cause a guess); V8 and JavaScriptCore didn't
@@ -1817,12 +1779,13 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   still read 7-11% slower, and with the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%;
   main with those three values kept alive read 2% slower. So it's how the JITs allocate the bigger loop's state, not
   work, and it was accepted as a regression JIT placement alone explains in live code (#381, 2026-09-29).
-- **The names a minifier picks, in Firefox**: Firefox 156 reads one bench row, `resize: latin layout at new widths`,
-  about 16% slower or faster by nothing but the names the bench's minifier gives the bundle's top-level bindings. It is
-  the one resize text whose lines hold words longer than the line (two rules of 72 hyphens, each 448px in 16px Helvetica
-  Neue, against widths of 240-460px), so the one where `countPreparedLines()` runs its grapheme loop. The row first read
-  slower on #405, whose code `layout()` never runs. Each build below was timed against main before #394 (29562782), in
-  three sessions of Firefox 156.0.1's resize rows (2026-10-02), and every other resize row read within noise in each:
+- **The names a minifier picks, in Firefox**: until #406, Firefox 156 read one bench row, `resize: latin layout at new
+  widths`, about 16% slower or faster by nothing but the names the bench's minifier gave the bundle's top-level
+  bindings. It is the one resize text whose lines hold words longer than the line (two rules of 72 hyphens, each 448px
+  in 16px Helvetica Neue, against widths of 240-460px), so the one where `countPreparedLines()` runs its grapheme loop.
+  The row first read slower on #405, whose code `layout()` never runs. Each build below was timed against main before
+  #394 (29562782), in three sessions of Firefox 156.0.1's resize rows (2026-10-02), and every other resize row read
+  within noise in each:
 
   | Build | Names of the shared top-level bindings | The row, per session |
   | --- | --- | --- |
@@ -1839,14 +1802,55 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   function, whose some 410 top-level bindings are that function's variables; past 24 names a scope orders its variables
   by a hash of their names (`newFunctionScopeData`, `Parser.cpp`), only the first 14 get a fixed slot on the environment
   object, and Warp compiles a read of a fixed slot and of a dynamic one differently
-  (`WarpBuilder::build_GetAliasedVar`). `countPreparedLines()` reads four module-level constants in its loop
+  (`WarpBuilder::build_GetAliasedVar`). `countPreparedLines()` read four module-level constants in its loop
   (`KIND_BITS`, `TEXT`, `SPACE`, `ZERO_WIDTH_BREAK`); in main's bundle all four fall in dynamic slots, and in the
   branch's `SPACE` falls in a fixed one. Why that would compile a slower loop isn't known, as a fixed slot is one load
   fewer. An app's bundler picks its own names, so the same source can read either way there. So a verdict on this row
-  alone says nothing about a change whose code `layout()` doesn't run (`harness/README.md`, Bench). Making those
-  constants literals in the emitted code would take the names out of it, and is being tried apart from #405. Reopen on a
-  Firefox whose scopes give every binding one kind of slot, or if the row moves between two builds whose minified names
-  are the same.
+  alone says nothing about a change whose code `layout()` doesn't run (`harness/README.md`, Bench). Since #406 the built
+  code holds those constants as numbers, which takes the names out of this loop (the next entry); a table whose base is
+  older than #406 still reads this way. Reopen if the row moves between two builds whose minified names are the same.
+- **Segment kinds as numbers in the built code**: since #406 the segment kinds, their mask and the flag bits are const
+  enums (`SegmentKind`, `SegmentFlag` and `SegmentKindSet`, in `src/analysis.ts`), which `tsc` and Bun's bundler write
+  into the code as numbers, so the walkers' loops read no variable of the module for them and the names of the entry
+  above have nothing to pick between. Firefox 156.0.1 read that build and the same build under other names (one more
+  local in the rich stepper, 119 of 410 names apart) alike, in three sessions each against 29562782, main before #394
+  (2026-10-02): Latin `layout()` at new widths -1.1% and -0.3%, where main at #399 read +17.6% and that main under other
+  names +1.3%. It is a trade in Firefox, the same under both namings. `layout()` reads faster on the three slowest
+  worst-case texts, 4.0-8.6 µs per 1,000 units before: letter-spaced CJK -10.4% and -7.7%, soft hyphens and marks -11.0%
+  and -11.6%, pre-wrap chunks -15.7% and -12.9%, and their walk -10.2% and -11.0%. It reads slower on three of the
+  fastest, 0.6-0.7 µs before: Latin at widths seen before +13.5% and +12.1%, controls +17.2% and +15.4%, invisible tails
+  +9.1% and +8.3%. Two more of the fastest lean slower in all eight sessions of three runs, within the bench's noise in
+  most: Thai at new widths (medians +2.2%, +5.5% and +7.3%) and the keep-all brackets text (+1.8% to +2.6%). Main under
+  either naming read every one of these rows within 3% of 29562782. In two sessions against main at #399, Chrome
+  154.0.8037.57 and Safari 27.0 read every `layout()` and line row within noise but Safari's mixed walk, +2.0% of 0.6
+  µs; Chrome read `prepare()` of new Latin text +10.7% with its control at +5%, on code whose statements didn't change,
+  and that row wasn't run again (the tables are in #406). The reading, not confirmed inside Firefox: the gains are work
+  it no longer does, a load through the module's scope for each kind or flag the full walker tests (the entry above has
+  how Warp compiles one), and the losses are states of how Ion compiles a loop, as the names were. What the SpiderMonkey
+  shell of 156.0.1 showed of those states, on a stand-in Canvas with the bench's Latin resize text, so as a lead only:
+  eleven namings of the build's bundle, five with a function on `layout()`'s path moved into a fixed slot, read alike,
+  new widths within 9% of 29562782 and widths seen before 9-18% slower. That slower state is the loop as first compiled,
+  for whole-number widths alone: laid out again at whole widths after one fractional width, the build read from 10%
+  faster than 29562782 to 3% slower, where main at #399 read 14-24% slower. Main with the four numbers written into
+  `countPreparedLines()` alone read as the build, and with only some of them read other ways again (the mask alone: both
+  rows as 29562782, with a kind still in a fixed slot; the text kind alone: new widths 11-16% slower, with no constant
+  in a fixed slot). Without the text's two rules of 72 hyphens, main, main under other names and the build read alike on
+  both rows, within 6%: the slow states need the loop's grapheme path to have run. With the shell's branch pruning off
+  (`--ion-pruning=off`; `PruneUnusedBranches`, `BranchPruning.cpp`, cuts the blocks that hadn't run when Ion compiled),
+  every build read alike on both rows, at about twice the time. So a constant's slot is one of several small things that
+  pick how the loop is compiled once its unused blocks are cut, and numbers take the names out of it and nothing else.
+  Chrome 154's V8 (d8 15.4.80) read main and the build alike on both rows. With #400 to #405 merged in, in the shell
+  again, main at #405 read both rows as 29562782, its names picking the fast state, and the build under two namings read
+  widths seen before 11-19% slower than it and new widths within 5%: against that main the Latin rows show the cost
+  alone. It was taken for the worst case (Part 1, Engineering): Firefox's slowest `layout()` rows gain 0.4-0.9 µs per
+  1,000 units and its fastest lose about 0.1, and the library is 32 lines shorter. Three traps. `tsc` writes a const
+  enum's members as numbers only without `verbatimModuleSyntax`, which `tsconfig.build.json` turns off and `bun run
+  package-smoke-test` checks; with it on, `tsc` keeps the enum as an object and the loops read its properties. Bun
+  1.4.2's bundler writes a member computed from another file's enum as a property read, so `SegmentKindSet` sits beside
+  the kinds. And with const enums it names a bundle's bindings by the directory the source is built from, as it didn't
+  before (the same source at another path: 344 of 410 names differ). Reopen if an app's Firefox time goes to text of the
+  fast rows' kind, on a Firefox that compiles these loops otherwise, or if the build has to turn `verbatimModuleSyntax`
+  back on.
 - **`%` on numbers that aren't whole** is a call: V8 works a remainder out inline only for two positive whole numbers
   and otherwise calls the C library's `fmod` (`MacroAssembler::Float64Mod`, `macro-assembler-arm64.cc:3028-3081`, V8
   15.3). A tab's advance took one, and it was what a tab's arithmetic cost. With the remainder from a division and a
