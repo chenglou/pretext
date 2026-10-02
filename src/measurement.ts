@@ -24,10 +24,10 @@ export type SpaceKerning = {
 export type SegmentFit = {
   mode: BreakableFitMode
   advances: number[] | null // Per grapheme, or null for one grapheme
-  // With advances in the WebKit profile, the graphemes after the first that WebKit
-  // doesn't start a line with when a line holds only an overflowing first character,
-  // by their first code unit, as ascending grapheme indices. Null without any.
-  lineStartProhibitions: number[] | null
+  // With advances in the WebKit profile, per grapheme, 1 for one after the first that
+  // WebKit doesn't start a line with when a line holds only an overflowing first
+  // character, by its first code unit. Null without any.
+  lineStartProhibitions: Uint8Array | null
   entryGeometry: {
     letterSpacing: number
     emojiCorrection: number
@@ -176,6 +176,12 @@ export type EngineProfile = {
   // its own. Gecko drops soft hyphens from its text run and clusters a ZWSP with the marks
   // after it, so glue at a line start can't hold the line: the segment after it starts it.
   zeroWidthGlueTakesLine: boolean
+  // When not even the first character of an overflowing word fits an empty line, WebKit
+  // keeps the punctuation, NBSP, U+2010 and U+2013 after that character on the line, in
+  // text holding a code unit above U+00FF (InlineContentBreaker.cpp:124-158, 222-233;
+  // canWebKitLineStartWith in src/line-breaks.ts). Blink and Gecko end the line after the
+  // first grapheme.
+  keepsLineStartPunctuation: boolean
   // Blink's HanKerning under text-spacing-trim: normal halts CJK opening and closing marks
   // next to other punctuation and at line ends (src/han-kerning.ts). WebKit and Gecko
   // don't trim them by default.
@@ -286,9 +292,25 @@ export type EngineProfile = {
   paddedOpeningFit: 'start' | 'placed' | 'both'
   // Gecko places a frame whose margin box is empty wherever it falls, on a line that already
   // overflows too ("Empty frames always fit right where they are", CanPlaceFrame,
-  // nsLineLayout.cpp:1264-1269), so an atomic item of width 0 stays on the line it falls on.
-  // Blink and WebKit fit it as any other atomic inline and move it to the next line.
+  // nsLineLayout.cpp:1264-1269), so an atomic item of width 0 stays on the line it falls on,
+  // unless the line ends before it: it breaks after white space that follows text already past
+  // its end (getFrameEndSpace, src/rich-inline.ts), which only a frame that always fits is left
+  // to show, and it goes back to a break before the item where a frame with a width that
+  // continues the text comes next (getKeptEmptyEnd). Blink and WebKit fit it as any other atomic
+  // inline and move it to the next line.
   emptyAtomicAlwaysFits: boolean
+  // Where the preserved spaces that end a pre-wrap line's text and overflow the line still hang
+  // once an item that takes no room follows them on the line, an atomic item of width 0 or an
+  // item of soft hyphens alone. Gecko takes the hang out of each text frame's own width, the
+  // trailing spaces past the line's end and no more, whatever follows the frame (hang =
+  // min(max(0, advance - available), trimmable), nsTextFrame::ReflowText, nsTextFrame.cpp:
+  // 11216-11229), so such an item is inside the line, at its end, and white space after it hangs
+  // too. Blink reads the line's trailing spaces by walking back from its last item and stops at
+  // an atomic inline or at text that doesn't end in a space (ComputeTrailingSpaceWidth,
+  // line_info.cc:289-415), and in WebKit an atomic inline box ends the content that can hang
+  // (ContinuousContent::append, InlineContentBreaker.cpp:943-947), so there the run of spaces
+  // that hang ends at such an item.
+  hangsSpacesPerTextFrame: boolean
   // Blink transforms segment breaks in the text of the whole inline formatting context
   // (ShouldRemoveNewline and RemoveTrailingCollapsibleNewlineIfNeeded, inline_items_builder.cc).
   // Gecko transforms each text frame's own text (nsTextFrameUtils::TransformText), as
@@ -827,6 +849,7 @@ function buildEngineProfile(): EngineProfile {
     tabsInAppUnits: engine === 'gecko',
     hangTabs: engine !== 'gecko',
     zeroWidthGlueTakesLine: engine !== 'gecko',
+    keepsLineStartPunctuation: engine === 'webkit',
     hidesControlCharacters: engine === 'gecko',
     hanKerning: engine === 'blink',
     hangsIdeographicSpace: engine !== 'webkit',
@@ -838,6 +861,7 @@ function buildEngineProfile(): EngineProfile {
     hardBreakItemRetreat: engine === 'blink' ? 'item' : engine === 'webkit' ? 'fit' : 'last-grapheme',
     paddedOpeningFit: engine === 'blink' ? 'start' : engine === 'webkit' ? 'placed' : 'both',
     emptyAtomicAlwaysFits: engine === 'gecko',
+    hangsSpacesPerTextFrame: engine === 'gecko',
     transformsSegmentBreaksAcrossItems: engine === 'blink',
   }
 }
@@ -967,9 +991,9 @@ export function getSegmentFit(
   const ends = new Int32Array(seg.length)
   const count = findGraphemeEnds(getEngineProfile().graphemeTable, seg, 0, seg.length, ends)
   if (count <= 1) return metrics.fit = { mode, advances: null, lineStartProhibitions: null, entryGeometry: null }
-  let prohibitions: number[] | null = null
+  let prohibitions: Uint8Array | null = null
   if (withLineStartProhibitions) {
-    for (let i = 1; i < count; i++) if (!canWebKitLineStartWith(seg.charCodeAt(ends[i - 1]!))) (prohibitions ??= []).push(i)
+    for (let i = 1; i < count; i++) if (!canWebKitLineStartWith(seg.charCodeAt(ends[i - 1]!))) (prohibitions ??= new Uint8Array(count))[i] = 1
   }
   // Prefix widths, or each grapheme alone or after the one before it. Past
   // MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
