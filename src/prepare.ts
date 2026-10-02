@@ -5,7 +5,6 @@
 import { observeSegmentEntries, textMayHaveEntryGeometry, type SegmentEntryGeometry } from './entry-geometry.js'
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
-import { DEFAULT_IGNORABLE, hasProperty } from './line-breaks.js'
 import {
   CONTROL,
   HARD_BREAK,
@@ -147,18 +146,16 @@ function getKerningScripts(character: string): number {
     (greekScriptRe.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
 }
 
-// Whether the space before the text segment text[at..end) is in the script run of the segment's
-// first character past default ignorables, the one it kerns with. Blink shapes each script run
-// apart (HarfBuzzShaper::Shape, harfbuzz_shaper.cc:1063-1104), and a space joins the run of the
-// text before it (ScriptRunIterator::MergeSets, :490-510), which the nearest character with one
-// script before the space names. Premise: where a closing bracket or a character of several
-// scripts comes first, the space is in another run than the word. Blink gives the bracket the
-// script of the run its opening bracket is in (CloseBracket, :443-489), which may be the word's
-// (RESEARCH.md, Kerning At Line Edges, has the gap).
-function spaceSharesScriptRun(text: string, at: number, end: number): boolean {
-  let scripts = getKerningScripts(text[at]!)
-  // A default ignorable with a script of its own, as U+061C, counts as the word's first letter.
-  while (scripts === ANY_SCRIPT && at + 1 < end && hasProperty(text.charCodeAt(at), DEFAULT_IGNORABLE)) scripts = getKerningScripts(text[++at]!)
+// Whether the space before text[at] is in the script run of that character, a text segment's
+// first, which it kerns with. Blink shapes each script run apart (HarfBuzzShaper::Shape,
+// harfbuzz_shaper.cc:1063-1104), and a space joins the run of the text before it
+// (ScriptRunIterator::MergeSets, :490-510), which the nearest character with one script before
+// the space names. Premise: where a closing bracket or a character of several scripts comes
+// first, the space is in another run than the word. Blink gives the bracket the script of the
+// run its opening bracket is in (CloseBracket, :443-489), which may be the word's (RESEARCH.md,
+// Kerning At Line Edges, has the gap).
+function spaceSharesScriptRun(text: string, at: number): boolean {
+  const scripts = getKerningScripts(text[at]!)
   if (scripts === ANY_SCRIPT) return true
   for (let i = at - 1; i >= 0; i--) {
     const character = text[i]!
@@ -454,7 +451,7 @@ export function measureAnalysis(
             // their own (inline_items_builder.cc:988-1034), which kerns with nothing.
             if (afterSpace && kerning.before !== 0 &&
               !((flags[mi - 1]! & KIND_BITS) === PRESERVED_SPACE && (mi === 1 || (flags[mi - 2]! & KIND_BITS) === HARD_BREAK)) &&
-              spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length)) {
+              spaceSharesScriptRun(normalized, starts[mi]!)) {
               widths[mi - 1] = widths[mi - 1]! + kerning.before
             }
           }

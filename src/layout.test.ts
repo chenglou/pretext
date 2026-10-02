@@ -5591,7 +5591,7 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
       ['AA\\u2060 \\u2060TT', '16px Test', {}], ['AA \\u0301T', '16px Test', {}], ['AA TT', '16px Test', { letterSpacing: 1 }],
       ['\\u0436\\u0436 TT', '16px Test', {}], ['\\u0436\\u0436 \\u0422\\u0422', '16px Test', {}], ['TT \\u0436\\u0436, TT', '16px Test', {}],
       ['12 TT', '16px Test', {}], ['AA TT', '16px Glyph', {}],
-      ['  TT\\n TT', '16px Test', { whiteSpace: 'pre-wrap' }], ['\\u0436\\u0436 \\u2060TT', '16px Test', {}],
+      ['  TT\\n TT', '16px Test', { whiteSpace: 'pre-wrap' }],
       ['\\u0436\\u0436 (TT) TT', '16px Test', {}], ['TT (\\u0436\\u0436) TT', '16px Test', {}], ['(12) TT', '16px Test', {}],
       ['\\u05D0 AA TT AA \\u05D1', '16px Test', {}], ['\\u202AAA TT', '16px Test', {}],
       ['AA T\\u0301T', '16px Test', {}],
@@ -5627,8 +5627,10 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     [16, 4, 20],
     // The first and the last of a run of preserved spaces.
     [19, 6, 16],
-    // HarfBuzz's lookups skip a word joiner, on either side.
-    [19, 2, 16],
+    // Premise: a default ignorable at a word's edge kerns nothing with the space. Its gap:
+    // HarfBuzz's lookups pass over a word joiner, so Chrome kerns the letters beside it with
+    // the space, by 1px and 2px.
+    [20, 4, 16],
     // A mark after the space is the space's own cluster, no pair with it.
     [19, 4, 8],
     // Letter spacing keeps the kerning.
@@ -5644,8 +5646,6 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     [20, 4, 16],
     // Preserved spaces that start the text or follow a line feed are an item of their own.
     [8, 16, 0, 4, 16],
-    // The script is read at the letter whose kerning is taken, past a word joiner.
-    [16, 4, 16],
     // Premise: the space after a closing bracket is in another run than the word after it,
     // as after a bracket opened in a Cyrillic run. Its gap: Blink gives the bracket the script
     // of the run its opening bracket is in, so one opened in a Latin run, or before any letter,

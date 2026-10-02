@@ -816,22 +816,22 @@ Didot, against 0 to 4 in Helvetica Neue, Georgia, Verdana and Inter, and a line 
 wider than painted for 580 of 1,904 cards in Arial (53 of them by more than 1px, at most 2.21px). With it those counts
 are 2, 2, 2, 1, 0, 2, 1 and 1, the level of the fonts that don't kern the space, and no six-word line in Arial,
 Helvetica, Times New Roman, Trebuchet MS, Roboto, Gill Sans, Didot or Optima is more than 0.01px off. On the harness it
-fixed 64 Chrome cases, 11 of them among the 49 real-usage failures inside what Pretext claims (99.51% to 99.63% of real
-paragraphs right), and lost none.
+fixes 47 Chrome cases, 11 of them among the 49 real-usage failures inside what Pretext claims (99.51% to 99.63% of real
+paragraphs right), and loses none; 17 more passed while default ignorables at a word's edge were read past (below).
 
-Outside the harness, of 186,720 layouts recorded fresh and not kept, 7,652 were wrong before and 509 are with it:
-Latin, Cyrillic and Greek paragraphs and interface texts in 56 and 80 font specs, texts that mix scripts in 28, and the
-same in pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Those were counted
-with the script runs read forward; the premise about closing brackets (below) gave 38 of the interface texts' 46,400
-layouts back, and the other sets weren't run again. Five that were right went wrong: four Avenir Next layouts of
-Russian text with a Latin word in guillemets, where Canvas kerns the opening quote with the letter after it and the
-page doesn't, which the wide spaces hid before, and one pre-wrap line of ZWNJs at word edges (ENGINE_FOLLOWUPS.md,
-Kerning with spaces). Of 22,680 single lines, 5,936 measured more than 0.1px wider
-than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word stays on the first
-line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by up to 3.61px, and
-4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179 multi-line
-layouts in 18 font specs, where main's does in none of 8,006, and in 6 of 23,041 in 12 common ones at 34 widths, where
-main's does in 11 of 22,726; all eight are the guillemet text in 14px Avenir Next.
+Outside the harness, of 186,720 layouts recorded fresh and not kept, 7,652 were wrong before and 509 are with it: Latin,
+Cyrillic and Greek paragraphs and interface texts in 56 and 80 font specs, texts that mix scripts in 28, and the same in
+pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Those were counted with the
+script runs read forward and default ignorables read past; the two premises below gave back 38 of the interface texts'
+46,400 layouts and 13 of the mixed texts' 8,680, and the other sets weren't run again. Five that were right went wrong: four Avenir Next layouts of Russian text
+with a Latin word in guillemets, where Canvas kerns the opening quote with the letter after it and the page doesn't,
+which the wide spaces hid before (ENGINE_FOLLOWUPS.md, Kerning with spaces), and one pre-wrap line of ZWNJs at word
+edges, which is right again since such an edge takes no kerning (below). Of 22,680 single lines, 5,936 measured more
+than 0.1px wider than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word
+stays on the first line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by
+up to 3.61px, and 4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179
+multi-line layouts in 18 font specs, where main's does in none of 8,006, and in 6 of 23,041 in 12 common ones at 34
+widths, where main's does in 11 of 22,726; all eight are the guillemet text in 14px Avenir Next.
 
 The cost is Canvas calls while a font is new. A font is first asked once whether it kerns anything with the space
 (`getFontSpaceKerning()` in `src/measurement.ts`; the premise is below): one string, U+2028 before, between and after
@@ -874,12 +874,31 @@ vocabulary. The premises and their gaps:
   and a first letter with a combining mark after it, which the font may draw as one glyph. Arial pairs the space with
   `A` and not with `Á`, so decomposed `vu Ávila` (`A`, U+0301) is 56.02px wide in 16px Arial in Chrome, and the bare
   letter's kerning made it 0.88px narrower, as it did in 18 of 26 font specs, by up to 1.60px. The price is a letter
-  with a mark the font has no glyph for, which kerns as the bare letter does: `x T̂ y` stays 2.40px wide in Gill Sans.
-  Default ignorables at a word's edge are passed over, as HarfBuzz's lookups pass over them. A Common edge character, a
-  comma or a full stop, is shaped on the page in the script of the run it sits in, and Canvas shapes it with U+2028 as
-  Common. None of the 21 families kerned the two otherwise in Latin, Cyrillic or Greek text, but some do after other
-  scripts: in `16px Didot, "Times New Roman"` Chrome lays `ไทย, ไทย` out without the 0.88px the comma kerns with a space
-  after Latin, and in 16px Chalkboard SE one Cyrillic line of 405 came out 0.63px narrower than painted.
+  with a mark the font has no glyph for, which kerns as the bare letter does: `x T̂ y` stays 2.40px wide in Gill Sans. A
+  Common edge character, a comma or a full stop, is shaped on the page in the script of the run it sits in, and Canvas
+  shapes it with U+2028 as Common. None of the 21 families kerned the two otherwise in Latin, Cyrillic or Greek text,
+  but some do after other scripts: in `16px Didot, "Times New Roman"` Chrome lays `ไทย, ไทย` out without the 0.88px the
+  comma kerns with a space after Latin, and in 16px Chalkboard SE one Cyrillic line of 405 came out 0.63px narrower than
+  painted.
+- **A word kerns nothing with the space at an edge that is a default ignorable.** A premise, taken for the code it saves
+  (#TBD). HarfBuzz's lookups pass over a default ignorable (`may_skip`, `hb-ot-layout-gsubgpos.hh:558-568`), so in
+  white-space: normal Chrome kerns `A`, word joiner, space as it kerns `A`, space, and such a word stays as wide as on
+  main, by 0.88px in 16px Arial. Reading past them, as the profile did until then, takes 5 more code lines in two
+  places, which must agree on which character is the word's first. On the harness 54 of 42,881 Chrome predictions differ
+  from reading past them, none of them the sample's: 17 engine-fact and catalog cases fail again as on main, all `A`
+  before a word joiner, ZWJ or ZWNJ and a space in 16px Arial in boxes under 36px wide, and 37 keep their lines 0.88px
+  wider. None of the 46,400 layouts of interface texts above moves. Of the 8,680 layouts of texts that mix scripts, 13
+  go wrong again, all of one text made of such edges, in 8 of the 28 font specs, and 77 of their 2,716 single lines are
+  0.28 to 5.73px wider; each is wrong on main the same way. Under pre-wrap the premise is Blink's rule for a ZWNJ: it
+  starts a text item at every ZWNJ there and shapes nothing across it (`inline_items_builder.cc:179-180`, `1112-1118`),
+  so `A`, ZWNJ, space, `T`, which came out 0.88px narrow in 16px Arial with the ZWNJ read past, is exact. Of 1,860
+  pre-wrap layouts of the same texts, the one that was right on main and wrong with the kerning is right again and 2 go
+  wrong again as on main, and the 4 of 594 single lines that measured narrower than painted, by 1.44 to 4.40px, are
+  exact. Canvas is no longer asked about an emoji before U+FE0F or a joiner at a word's edge: 18 fewer calls of 253,798
+  on the sample. Of the sample's 11,901 paragraphs 21 hold a default ignorable other than a variation selector beside a
+  space, 15 of them in right-to-left text, which takes no kerning anyway, and 5 of the others in Khmer, Hindi or Telugu
+  (pinned Chrome 154.0.8037.57, 2026-10-01). Reopens with real text that puts a word joiner or a joiner between a letter
+  and a space in a font that kerns there.
 - **Where the kerning sits.** GPOS pair positioning puts a pair's kerning on its first glyph. HarfBuzz puts one from the
   legacy `kern` table, or from a pair subtable of an AAT `kerx` one, half on each glyph's advance
   (`hb_kern_machine_t::kern`, `hb-kern.hh:100-107`): Chrome's first-word share was 1.00 in Arial, Avenir Next, Gill

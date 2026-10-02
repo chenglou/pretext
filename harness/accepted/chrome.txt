@@ -73,6 +73,25 @@ rich-7f90cee66af55112 breaks
 rich-ab7c458af6c93dbc count
 rich-d1948dbaa742e085 count
 
+## A word joiner, ZWJ or ZWNJ between a letter and a space or a collapsed tab, in 16 px Arial: Chrome kerns the letter with the space across it, since HarfBuzz's lookups pass over default ignorables, where the Chromium profile takes no kerning at an edge that is a default ignorable (a premise; RESEARCH.md, Kerning At Line Edges), so the word is 0.88 px wider, as on main
+catalog-1bf76a99ac1611ca count
+catalog-5f95330b672bcb57 count
+catalog-777055eea5ead1e4 count
+facts-035561cc98fb3a26 count
+facts-03d87908da20bfa7 count
+facts-32536d16819b70eb count
+facts-73a84536ac9d980a count
+facts-7497284da65f843f count
+facts-94dfef49e4d12513 count
+facts-96a6f69654496c6e count
+facts-c91a6bbba8b4c021 count
+facts-d5d196fb5a389f8a count
+facts-ddf4f0f9ee9692b3 count
+facts-dfa5e78095c19924 count
+facts-f64760b85dd20bb7 count
+facts-f83e3df5862ba1c5 count
+facts-fafba038ca0d8ad2 count
+
 ## Arabic and Hebrew beside brackets, controls, U+FFFC or rich-item edges, at 24 px and wider: Chrome breaks there where the library doesn't
 catalog-01ed9a531b7a32b4 count
 catalog-2c2c30ca491d04db breaks

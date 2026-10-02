@@ -440,6 +440,10 @@ export const noSpaceKerning: SpaceKerning = { after: 0, space: 0, before: 0 }
 function takesNoSpaceKerning(code: number): boolean {
   // A combining mark or half of a surrogate pair is part of a longer cluster.
   return hasProperty(code, MARK) || (code & 0xf800) === 0xd800 ||
+    // Premise: a word kerns nothing with the space at an edge that is a default ignorable.
+    // HarfBuzz's lookups pass over one and kern the letter beside it (RESEARCH.md, Kerning At
+    // Line Edges, has the gap).
+    hasProperty(code, DEFAULT_IGNORABLE) ||
     // Canvas shapes each ideograph and kana as a word of its own, so it shows no kerning beside
     // one (NextWordEndIndex, plain_text_node.cc:92-153, over kIsCjkIdeographOrSymbolRanges,
     // character_property_data.h:40-80, of which these are the letters).
@@ -514,8 +518,8 @@ function splitsSpaceKerning(code: number, kerning: number, measurement: FontMeas
 // (EngineProfile.kernsSpacesInScriptRun), read from Canvas with U+2028 for the space: Blink
 // draws U+2028 with the space glyph (HarfBuzzGetGlyph, harfbuzz_face.cc:103-113) and its Canvas
 // doesn't cut there. Premises, with their gaps in RESEARCH.md, Kerning At Line Edges:
-// - The segment's last and first character stand for the word, past default ignorables, which
-//   HarfBuzz's lookups pass over. A first character with a combining mark after it takes none.
+// - The segment's last and first character stand for the word. A first character with a
+//   combining mark after it takes none.
 // - A line that ends at the space after a word keeps the word's share of their kerning, as
 //   Blink keeps it for start-aligned text without a decoration (DontReshapeEndIfAtSpace,
 //   line_breaker.cc:1655-1659). Otherwise Blink shapes the line's end again without the space,
@@ -523,12 +527,8 @@ function splitsSpaceKerning(code: number, kerning: number, measurement: FontMeas
 // - A space's kerning with the word after it goes on the space: a line that breaks between the
 //   two is shaped again without it (shaping_line_breaker.cc:307-324).
 export function getSpaceKerning(seg: string, metrics: SegmentMetrics, measurement: FontMeasurement, font: FontSpaceKerning): SpaceKerning {
-  let first = 0
-  let last = seg.length - 1
-  while (first < last && hasProperty(seg.charCodeAt(first), DEFAULT_IGNORABLE)) first++
-  while (last > first && hasProperty(seg.charCodeAt(last), DEFAULT_IGNORABLE)) last--
-  const lastCode = seg.charCodeAt(last)
-  const before = first < last && hasProperty(seg.charCodeAt(first + 1), MARK) ? 0 : getCharacterSpaceKerning(seg.charCodeAt(first), true, measurement, font)
+  const lastCode = seg.charCodeAt(seg.length - 1)
+  const before = seg.length > 1 && hasProperty(seg.charCodeAt(1), MARK) ? 0 : getCharacterSpaceKerning(seg.charCodeAt(0), true, measurement, font)
   const after = getCharacterSpaceKerning(lastCode, false, measurement, font)
   const space = after !== 0 && splitsSpaceKerning(lastCode, after, measurement, font) ? after / 2 : 0
   return metrics.spaceKerning = after === 0 && before === 0 ? noSpaceKerning : { after: after - space, space, before }
