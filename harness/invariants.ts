@@ -7,8 +7,9 @@
 // 0, plus the letter spacing per grapheme. U+2028 measures as the space, whose glyph Chrome draws it with, and kerns 0,
 // 0.5 or 1 px with the character on either side of it unless the context's `fontKerning` is 'none', so the Chromium
 // profile finds every font kerning the space and takes its kerning with spaces (src/space-kerning.ts); a U+0020 kerns
-// with nothing under any `fontKerning`, so that kerning sits half on each glyph, as a `kern` table's. The Blink and Gecko processes run under a desktop user agent with a string
-// `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
+// with nothing under any `fontKerning`, so that kerning sits half on each glyph, as a `kern` table's. The Blink and
+// Gecko processes run under a desktop user agent with a string `letterSpacing` on the context, as Chrome's and
+// Firefox's have, so preparation takes the paths those browsers take.
 // The inputs are seeded draws from harness/cases (a failure names its case, at its width, half and 1.5 times it, 1 and
 // Infinity) and a few fixed ones. The checks:
 // - every line API agrees with walkLineRanges (predict.ts's check), and layoutWithLines and layoutNextLine give equal

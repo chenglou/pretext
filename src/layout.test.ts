@@ -1139,7 +1139,7 @@ describe('boundary-policy regressions', () => {
       ...measureText,
       value(this: TestCanvasRenderingContext2D, text: string) {
         measured.add(text)
-        // The longest string with a mark: the Chromium profile also asks the font one long string (getFontSpaceKerning).
+        // The longest string with a mark: the Chromium profile also asks the font one long string (space-kerning.ts).
         if (text.includes('\u0301')) longest = Math.max(longest, text.length)
         return { width: measureWidth(text, this.font) }
       },
