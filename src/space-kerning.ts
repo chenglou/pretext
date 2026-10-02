@@ -28,10 +28,10 @@ import { getSegmentMetrics, type FontMeasurement } from './measurement.js'
 
 // What preparation keeps of a font that kerns with the space glyph.
 export type SpaceKerningFontData = {
-  // A character's kerning with a space glyph after it, and with one before it, by code unit,
-  // once a word has the character at that edge beside a space.
-  after: Map<number, number>
-  before: Map<number, number>
+  // A character's kerning with a space glyph after it, and with one before it, in pages of 256
+  // code units: NaN until a word has the character at that edge beside a space.
+  after: Float64Array[]
+  before: Float64Array[]
   // Whether a pair's kerning sits half on each glyph, once a character kerned with a space
   // after it (splitsKerning).
   splits: boolean | null
@@ -57,7 +57,7 @@ function getFontData(measurement: FontMeasurement): SpaceKerningFontData | null 
     const unkerned = context.measureText(fontProbe).width
     context.fontKerning = 'auto'
     // Where U+2028 alone doesn't measure as the space, it doesn't stand for it.
-    measurement.spaceKerning = kerned !== unkerned && context.measureText('\u2028').width === getSegmentMetrics(' ', measurement).width ? { after: new Map(), before: new Map(), splits: null } : null
+    measurement.spaceKerning = kerned !== unkerned && context.measureText('\u2028').width === getSegmentMetrics(' ', measurement).width ? { after: [], before: [], splits: null } : null
   }
   return measurement.spaceKerning
 }
@@ -78,9 +78,10 @@ function takesNoKerning(code: number): boolean {
 // A character's kerning with a space glyph after it, or before it: the two in one string, with
 // U+2028 for the space, less each alone.
 function getKerning(code: number, spaceFirst: boolean, measurement: FontMeasurement, data: SpaceKerningFontData): number {
-  const kernings = spaceFirst ? data.before : data.after
-  let kerning = kernings.get(code)
-  if (kerning === undefined) {
+  const pages = spaceFirst ? data.before : data.after
+  const page = pages[code >> 8] ??= new Float64Array(256).fill(NaN)
+  let kerning = page[code & 0xff]!
+  if (Number.isNaN(kerning)) {
     kerning = 0
     if (!takesNoKerning(code)) {
       const character = String.fromCharCode(code)
@@ -90,7 +91,7 @@ function getKerning(code: number, spaceFirst: boolean, measurement: FontMeasurem
       // width / 2^22 is rounding, not kerning.
       if (Math.abs(kerning) <= pairWidth / 0x400000) kerning = 0
     }
-    kernings.set(code, kerning)
+    page[code & 0xff] = kerning
   }
   return kerning
 }
@@ -202,6 +203,7 @@ export function addSpaceKerning(measurement: FontMeasurement, analysis: TextAnal
   if (data === null || mixedDirectionRe.test(normalized)) return
   const count = flags.length
   const runs: ScriptRuns = { read: 0, scripts: ANY_SCRIPT, bracket: 0 }
+  // No default ignorable is below U+00AD and no combining mark below U+0300.
   for (let i = 0; i < count; i++) {
     const kind = flags[i]! & KIND_BITS
     if (kind !== SPACE && kind !== PRESERVED_SPACE) continue
@@ -209,8 +211,8 @@ export function addSpaceKerning(measurement: FontMeasurement, analysis: TextAnal
     const kindBefore = i > 0 ? flags[i - 1]! & KIND_BITS : HARD_BREAK
     if (kindBefore === TEXT) {
       let last = starts[i]! - 1
-      while (last > starts[i - 1]! && hasProperty(normalized.charCodeAt(last), DEFAULT_IGNORABLE)) last--
-      const code = normalized.charCodeAt(last)
+      let code = normalized.charCodeAt(last)
+      while (code >= 0xad && last > starts[i - 1]! && hasProperty(code, DEFAULT_IGNORABLE)) code = normalized.charCodeAt(--last)
       const kerning = getKerning(code, false, measurement, data)
       if (kerning !== 0) {
         // The word keeps its share where the line ends at the space, and the space takes the rest.
@@ -230,9 +232,11 @@ export function addSpaceKerning(measurement: FontMeasurement, analysis: TextAnal
     if (i + 1 === count || (flags[i + 1]! & KIND_BITS) !== TEXT || (kind === PRESERVED_SPACE && kindBefore === HARD_BREAK)) continue
     const end = i + 2 < count ? starts[i + 2]! : normalized.length
     let first = starts[i + 1]!
-    while (first + 1 < end && hasProperty(normalized.charCodeAt(first), DEFAULT_IGNORABLE)) first++
-    if (first + 1 < end && hasProperty(normalized.charCodeAt(first + 1), MARK)) continue
-    const kerning = getKerning(normalized.charCodeAt(first), true, measurement, data)
+    let code = normalized.charCodeAt(first)
+    while (code >= 0xad && first + 1 < end && hasProperty(code, DEFAULT_IGNORABLE)) code = normalized.charCodeAt(++first)
+    const codeAfter = first + 1 < end ? normalized.charCodeAt(first + 1) : 0
+    if (codeAfter >= 0x300 && hasProperty(codeAfter, MARK)) continue
+    const kerning = getKerning(code, true, measurement, data)
     // The space takes its kerning with the word, and takes it along where it hangs.
     if (kerning !== 0 && spaceSharesScriptRun(normalized, first, runs)) widths[i] = widths[i]! + kerning
   }
