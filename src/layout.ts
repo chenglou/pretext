@@ -8,8 +8,8 @@
 import { clearWordSegmenter } from './line-breaks.js'
 import {
   analyzeText,
-  KIND_BITS,
   SEGMENT_KINDS,
+  SegmentFlag,
   type SegmentBreakKind,
   type WhiteSpaceMode,
   type WordBreakMode as AnalysisWordBreakMode,
@@ -136,7 +136,7 @@ export function prepareWithSegments(text: string, font: string, options?: Prepar
   const prepared = prepareInternal(text, font, true, options) as PreparedTextWithSegments
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
-  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS]!)
+  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & SegmentFlag.KindBits]!)
   prepared.kinds = kinds
   return prepared
 }

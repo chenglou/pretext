@@ -246,6 +246,9 @@ shared by every canvas and the DOM, so a fresh canvas doesn't make text new.
   kept CJK handles, 2026-09-26), and would have hidden a real 20-25% slowdown. These floors flag all four slowdowns
   known between main before #340 (6d1d2106) and 217c84b8, a commit of #340: pre-wrap layout and walk at 1.05 of base's
   time in Chrome and 1.18-1.25 in Firefox, and letter-spaced CJK and control layouts at 1.12 and 1.20 in Safari.
+- **The bundle's names.** The bench minifies each library, and a change anywhere in it renames top-level bindings.
+  Firefox 156 read one resize row 13-16% apart on those names alone (`RESEARCH.md`, JavaScript Engines), so a Firefox
+  row that moves with no change on its path is checked under other names before it counts.
 - **WebKit's width cache** samples one Canvas call in 21 after a run of misses, so a prepare that submits n strings
   speeds up only after 21 / gcd(n, 21) repeats: compare submitted text and cold first prepares.
 

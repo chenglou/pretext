@@ -1,28 +1,12 @@
-import {
-  CONTROL,
-  HARD_BREAK,
-  KIND_BITS,
-  PRESERVED_SPACE,
-  RETURNABLE,
-  SOFT_HYPHEN,
-  SPACE,
-  SPACED,
-  TAB,
-  TEXT,
-  UNBROKEN,
-  ZERO_WIDTH_BREAK,
-  ZERO_WIDTH_GLUE,
-} from './analysis.js'
+import { SegmentFlag, SegmentKind, SegmentKindSet } from './analysis.js'
 import type { LayoutCursor, LineStats } from './layout.js'
 import { getEngineProfile } from './measurement.js'
 import { getFreshLineEnd, getSegmentEntryWidth, type SegmentEntryGeometry } from './entry-geometry.js'
 
-const BREAK_AFTER_KINDS = 1 << SPACE | 1 << ZERO_WIDTH_BREAK | 1 << SOFT_HYPHEN | 1 << PRESERVED_SPACE | 1 << TAB
-
 // The prepared handle's line-break data: parallel arrays per segment.
 export type PreparedLineBreakData = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
-  // Per segment, its flags byte, e.g. [TEXT, SPACE, TEXT]. A JSON copy of the handle turns it into an
+  // Per segment, its flags byte, e.g. [Text, Space, Text]. A JSON copy of the handle turns it into an
   // object with no length, on which the walkers never finish (RESEARCH.md, Decisions Log)
   segmentFlags: Uint8Array
   // Normal text can use the simple line stepper across all layout APIs, and layout()
@@ -91,7 +75,7 @@ type InternalLineVisitor = (
 ) => void
 
 export function breaksAfterKind(kind: number): boolean {
-  return (1 << kind & BREAK_AFTER_KINDS) !== 0
+  return (1 << kind & SegmentKindSet.BreakAfter) !== 0
 }
 
 // Whether a line can end between two segments, from the kind before, the kind
@@ -109,7 +93,7 @@ export function isDiscretionaryLineEnd(
   endGraphemeIndex: number,
 ): boolean {
   return endGraphemeIndex === 0 && endSegmentIndex > 0 && endSegmentIndex < segmentFlags.length &&
-    (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) === SOFT_HYPHEN
+    (segmentFlags[endSegmentIndex - 1]! & SegmentFlag.KindBits) === SegmentKind.SoftHyphen
 }
 
 // At a paragraph or hard-break start, ZWSP is real source: it establishes the
@@ -117,7 +101,7 @@ export function isDiscretionaryLineEnd(
 // ZWSP. After a forced overflow break browsers can still give ZWSP its own line;
 // that start is consumed here, as before.
 function consumesAtLineStart(kind: number, atChunkStart: boolean): boolean {
-  return kind === SPACE || kind === SOFT_HYPHEN || (kind === ZERO_WIDTH_BREAK && !atChunkStart)
+  return kind === SegmentKind.Space || kind === SegmentKind.SoftHyphen || (kind === SegmentKind.ZeroWidthBreak && !atChunkStart)
 }
 
 // A tab's advance from `position` on the line: to the next stop, or to the one after where
@@ -177,25 +161,25 @@ function getTerminalLetterSpacing(
   const { letterSpacing, segmentFlags } = prepared
   if (letterSpacing === 0) return 0
 
-  if (endGraphemeIndex > 0) return (segmentFlags[endSegmentIndex]! & SPACED) !== 0 ? letterSpacing : 0
+  if (endGraphemeIndex > 0) return (segmentFlags[endSegmentIndex]! & SegmentFlag.Spaced) !== 0 ? letterSpacing : 0
 
   if (isDiscretionaryLineEnd(segmentFlags, endSegmentIndex, endGraphemeIndex)) return 0
   // A run of preserved spaces and tabs that hangs where the line wraps already
   // charged the gap after the glyph before it. Gecko doesn't hang tabs.
-  if (endSegmentIndex > startSegmentIndex && endSegmentIndex < segmentFlags.length && (segmentFlags[endSegmentIndex]! & KIND_BITS) !== HARD_BREAK &&
-    (1 << (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) & hangingKinds) !== 0) return 0
+  if (endSegmentIndex > startSegmentIndex && endSegmentIndex < segmentFlags.length && (segmentFlags[endSegmentIndex]! & SegmentFlag.KindBits) !== SegmentKind.HardBreak &&
+    (1 << (segmentFlags[endSegmentIndex - 1]! & SegmentFlag.KindBits) & hangingKinds) !== 0) return 0
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
     const flags = segmentFlags[i]!
-    const kind = flags & KIND_BITS
+    const kind = flags & SegmentFlag.KindBits
     // Segments that take no letter spacing, such as zero-width glue or marks
     // shaped on the grapheme before them, leave that grapheme's gap last. A tab
     // that takes none follows that gap, which its stop counts from.
-    if (kind === SPACE || (kind !== CONTROL && kind !== TAB && (flags & SPACED) === 0)) continue
+    if (kind === SegmentKind.Space || (kind !== SegmentKind.Control && kind !== SegmentKind.Tab && (flags & SegmentFlag.Spaced) === 0)) continue
 
     if (i === startSegmentIndex && startGraphemeIndex > 0) return letterSpacing
 
-    return (flags & SPACED) !== 0 ? letterSpacing : 0
+    return (flags & SegmentFlag.Spaced) !== 0 ? letterSpacing : 0
   }
 
   return 0
@@ -217,10 +201,10 @@ export function normalizePreparedLineStart(
   if (segmentIndex >= segmentCount) return false
   if (cursor.graphemeIndex > 0) return true
 
-  let atChunkStart = segmentIndex === 0 || (segmentFlags[segmentIndex - 1]! & KIND_BITS) === HARD_BREAK
+  let atChunkStart = segmentIndex === 0 || (segmentFlags[segmentIndex - 1]! & SegmentFlag.KindBits) === SegmentKind.HardBreak
   while (true) {
-    const kind = segmentFlags[segmentIndex]! & KIND_BITS
-    if (kind === HARD_BREAK) {
+    const kind = segmentFlags[segmentIndex]! & SegmentFlag.KindBits
+    if (kind === SegmentKind.HardBreak) {
       if (atChunkStart) {
         cursor.segmentIndex = segmentIndex
         cursor.graphemeIndex = 0
@@ -262,7 +246,7 @@ export function walkPreparedLinesRaw(
   while (true) {
     let startSegmentIndex = cursor.segmentIndex
     const atTextStart = startSegmentIndex === 0
-    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & KIND_BITS, atTextStart)) {
+    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & SegmentFlag.KindBits, atTextStart)) {
       startSegmentIndex++
     }
     if (startSegmentIndex >= segmentCount) return stats.lineCount
@@ -297,7 +281,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
 
   // A ZWSP at the start of the text starts the first line.
   for (let i = 0; i < segmentCount; i++) {
-    const kind = segmentFlags[i]! & KIND_BITS
+    const kind = segmentFlags[i]! & SegmentFlag.KindBits
     const w = widths[i]!
     const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
     if (hasContent) {
@@ -310,8 +294,8 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
       count++
       lineW = 0
       hasContent = false
-      if (kind !== TEXT) continue
-    } else if (kind === SPACE || (kind === ZERO_WIDTH_BREAK && i > 0)) {
+      if (kind !== SegmentKind.Text) continue
+    } else if (kind === SegmentKind.Space || (kind === SegmentKind.ZeroWidthBreak && i > 0)) {
       continue
     }
 
@@ -379,7 +363,7 @@ function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): n
     const startSegmentIndex = cursor.segmentIndex
     const startGraphemeIndex = cursor.graphemeIndex
     stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
-    if (cursor.graphemeIndex === 0 && cursor.segmentIndex < segmentFlags.length && (segmentFlags[cursor.segmentIndex]! & UNBROKEN) !== 0) {
+    if (cursor.graphemeIndex === 0 && cursor.segmentIndex < segmentFlags.length && (segmentFlags[cursor.segmentIndex]! & SegmentFlag.Unbroken) !== 0) {
       cursor.segmentIndex = startSegmentIndex
       cursor.graphemeIndex = startGraphemeIndex
       walkPreparedComplexLines(prepared, cursor, maxWidth, undefined, null, true)
@@ -408,14 +392,14 @@ function returnsFromUnfitHyphen(
 ): boolean {
   const { discretionaryHyphenContexts, segmentFlags } = prepared
   const softHyphenIndex = breakSegmentIndex - 1
-  if (softHyphenIndex < lineStartSegmentIndex || (segmentFlags[softHyphenIndex]! & KIND_BITS) !== SOFT_HYPHEN || breakWidth <= fitLimit) return false
+  if (softHyphenIndex < lineStartSegmentIndex || (segmentFlags[softHyphenIndex]! & SegmentFlag.KindBits) !== SegmentKind.SoftHyphen || breakWidth <= fitLimit) return false
   const overflow = breakWidth - fitLimit
   let narrowing = 0
   if (discretionaryHyphenContexts !== null) for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) narrowing += discretionaryHyphenContexts[i]!
   if (narrowing >= overflow) return false
   for (let i = targetSegmentIndex + 1; i < softHyphenIndex; i++) {
     const flags = segmentFlags[i]!
-    if (!breaksAfterKind(flags & KIND_BITS) && (flags & UNBROKEN) === 0 && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) return false
+    if (!breaksAfterKind(flags & SegmentFlag.KindBits) && (flags & SegmentFlag.Unbroken) === 0 && !breaksAfterKind(segmentFlags[i - 1]! & SegmentFlag.KindBits)) return false
   }
   return true
 }
@@ -456,7 +440,7 @@ function walkPreparedComplexLines(
   // Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
   // §4.1.2), so they take no room when fitting and don't size the line (§8.2).
   // Gecko doesn't hang tabs.
-  const hangingKinds = 1 << PRESERVED_SPACE | (engineProfile.hangTabs ? 1 << TAB : 0)
+  const hangingKinds = 1 << SegmentKind.PreservedSpace | (engineProfile.hangTabs ? 1 << SegmentKind.Tab : 0)
   const zeroWidthGlueTakesLine = engineProfile.zeroWidthGlueTakesLine
   const tabsInAppUnits = engineProfile.tabsInAppUnits
   // A rich item's line starts after the line's content before the item, which can
@@ -536,7 +520,7 @@ function walkPreparedComplexLines(
     let returnsFromHyphen = false
 
     let lineWidth: number | null = null
-    if ((segmentFlags[lineStartSegmentIndex]! & KIND_BITS) === HARD_BREAK) {
+    if ((segmentFlags[lineStartSegmentIndex]! & SegmentFlag.KindBits) === SegmentKind.HardBreak) {
       // A line that starts at a hard break is an empty chunk's (normalizePreparedLineStart).
       cursor.segmentIndex = lineStartSegmentIndex + 1
       cursor.graphemeIndex = 0
@@ -556,25 +540,25 @@ function walkPreparedComplexLines(
           let fillStart: number
           let fillSpacing = 0
           const flags = segmentFlags[i]!
-          const kind = flags & KIND_BITS
-          if (kind === HARD_BREAK) {
+          const kind = flags & SegmentFlag.KindBits
+          if (kind === SegmentKind.HardBreak) {
             consumedEndSegmentIndex = i + 1
             break
           }
-          const spaced = (flags & SPACED) !== 0
-          const breakAfter = (1 << kind & BREAK_AFTER_KINDS) !== 0
+          const spaced = (flags & SegmentFlag.Spaced) !== 0
+          const breakAfter = (1 << kind & SegmentKindSet.BreakAfter) !== 0
           const startGraphemeIndex = i === lineStartSegmentIndex ? lineStartGraphemeIndex : 0
           // The gap before a segment belongs to the grapheme before it. A control or
           // a tab that takes no letter spacing still follows that gap but adds none
           // after itself; other segments that take none leave it as it was.
           const gap = letterSpacing !== 0 && hasContent && !zeroWidthPrefix && !afterUnspacedControl ? letterSpacing : 0
           let leadingSpacing = 0
-          if (letterSpacing !== 0 && (spaced || kind === CONTROL || kind === TAB)) {
+          if (letterSpacing !== 0 && (spaced || kind === SegmentKind.Control || kind === SegmentKind.Tab)) {
             leadingSpacing = gap
             afterUnspacedControl = !spaced
           }
-          if (kind !== ZERO_WIDTH_BREAK && kind !== ZERO_WIDTH_GLUE) zeroWidthPrefix = false
-          const w = kind === TAB
+          if (kind !== SegmentKind.ZeroWidthBreak && kind !== SegmentKind.ZeroWidthGlue) zeroWidthPrefix = false
+          const w = kind === SegmentKind.Tab
             ? getTabAdvance(lineOffset + lineW + leadingSpacing, tabStopAdvance, minimumTabAdvance, tabsInAppUnits)
             : widths[i]!
           const advance = leadingSpacing + w
@@ -582,11 +566,11 @@ function walkPreparedComplexLines(
           // The graphemes inside the segment before which the line can end, else null.
           const segmentInner = innerBreaks === null ? null : innerBreaks[i]!
 
-          if (kind === SOFT_HYPHEN && startGraphemeIndex === 0) {
+          if (kind === SegmentKind.SoftHyphen && startGraphemeIndex === 0) {
             if (hasContent) {
               lineEndSegmentIndex = i + 1
               lineEndGraphemeIndex = 0
-              if (i + 1 < segmentCount && (segmentFlags[i + 1]! & KIND_BITS) !== HARD_BREAK) {
+              if (i + 1 < segmentCount && (segmentFlags[i + 1]! & SegmentFlag.KindBits) !== SegmentKind.HardBreak) {
                 pendingBreakSegmentIndex = i + 1
                 pendingBreakWidth = lineW + discretionaryHyphenWidth
                 // A soft hyphen's fit already includes its own hyphen.
@@ -604,9 +588,9 @@ function walkPreparedComplexLines(
           // text owns no gap, though NEL does. Text that takes no letter spacing, such
           // as zero-width glue, fits like the line that still ends with the gap before it.
           let fitAdvance = 0
-          if (letterSpacing !== 0 && !spaced && !breakAfter && kind !== CONTROL) {
+          if (letterSpacing !== 0 && !spaced && !breakAfter && kind !== SegmentKind.Control) {
             fitAdvance = gap + w
-          } else if (breakAfter ? kind === TAB : w !== 0 || kind === CONTROL) {
+          } else if (breakAfter ? kind === SegmentKind.Tab : w !== 0 || kind === SegmentKind.Control) {
             const contribution = w + (spaced ? letterSpacing : 0)
             if (contribution !== 0) fitAdvance = leadingSpacing + contribution
           }
@@ -620,7 +604,7 @@ function walkPreparedComplexLines(
           }
           // Where glue can't hold a line, glue at a line start isn't the line's content:
           // the segment after it starts the line, however wide.
-          if (!hasContent && kind === ZERO_WIDTH_GLUE && !zeroWidthGlueTakesLine) {
+          if (!hasContent && kind === SegmentKind.ZeroWidthGlue && !zeroWidthGlueTakesLine) {
             lineEndSegmentIndex = i + 1
             lineEndGraphemeIndex = 0
             continue
@@ -655,9 +639,9 @@ function walkPreparedComplexLines(
                 }
                 // The break segment hangs with the gap before it, a run of preserved
                 // spaces and tabs hangs whole, and a tab that doesn't hang counts whole.
-                if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
+                if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & SegmentFlag.Unbroken) === 0)) {
                   pendingBreakSegmentIndex = i + 1
-                  pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance
+                  pendingBreakWidth = hangs ? hangStartWidth : kind === SegmentKind.Tab ? lineW : lineW - advance
                 }
                 if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + reservedHyphenWidth <= fitLimit) {
                   fitBreakSegmentIndex = pendingBreakSegmentIndex
@@ -677,8 +661,8 @@ function walkPreparedComplexLines(
               // simple stepper does; a preserved space there starts the next line. A
               // tab that doesn't hang goes to the next line, as text does.
               const contentW = lineW - lineEndTrimmed
-              if (breakAfter && (hangs || kind !== TAB) && (contentW <= fitLimit ||
-                (pendingBreakSegmentIndex < 0 && (kind === SPACE || kind === ZERO_WIDTH_BREAK)))) {
+              if (breakAfter && (hangs || kind !== SegmentKind.Tab) && (contentW <= fitLimit ||
+                (pendingBreakSegmentIndex < 0 && (kind === SegmentKind.Space || kind === SegmentKind.ZeroWidthBreak)))) {
                 endWidth = hangs ? hangStartWidth : contentW
                 lineW += advance
                 endSegmentIndex = i + 1
@@ -689,7 +673,7 @@ function walkPreparedComplexLines(
               // BreakAndMeasureText keeps the last break whose line fits (gfxTextRun.cpp:1086-1101).
               // Without one it wraps before the tab, as break-word lets it before any cluster
               // (:1069-1072), and the spaces before the tab hang.
-              if (kind === TAB && !hangs && pendingBreakSegmentIndex < 0 && innerBreakSegmentIndex < 0) {
+              if (kind === SegmentKind.Tab && !hangs && pendingBreakSegmentIndex < 0 && innerBreakSegmentIndex < 0) {
                 endSegmentIndex = i
                 endGraphemeIndex = 0
                 endWidth = hangEndSegmentIndex === i && i > lineStartSegmentIndex ? hangStartWidth : contentW
@@ -714,7 +698,7 @@ function walkPreparedComplexLines(
                   }
                 }
               }
-              const unbroken = (flags & UNBROKEN) !== 0
+              const unbroken = (flags & SegmentFlag.Unbroken) !== 0
               if (innerBreakSegmentIndex >= 0 && (innerBreakSegmentIndex === i || (unbroken && innerBreakSegmentIndex >= pendingBreakSegmentIndex))) {
                 endSegmentIndex = innerBreakSegmentIndex
                 endGraphemeIndex = innerBreakGraphemeIndex
@@ -745,11 +729,11 @@ function walkPreparedComplexLines(
               fillSpacing = leadingSpacing
             } else {
               // A break the scan gives before text is one the line can return to.
-              if ((flags & RETURNABLE) !== 0 && !breakAfter && pendingBreakSegmentIndex !== i) {
+              if ((flags & SegmentFlag.Returnable) !== 0 && !breakAfter && pendingBreakSegmentIndex !== i) {
                 pendingBreakSegmentIndex = i
                 pendingBreakWidth = lineW
               }
-              if (retreatsAtFullWidth && !breakAfter && (flags & UNBROKEN) === 0 && i > lineStartSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) {
+              if (retreatsAtFullWidth && !breakAfter && (flags & SegmentFlag.Unbroken) === 0 && i > lineStartSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & SegmentFlag.KindBits)) {
                 fitBreakSegmentIndex = i
                 fitBreakPaintWidth = lineW
               }
@@ -765,9 +749,9 @@ function walkPreparedComplexLines(
               // A segment that takes no room at the line end, as a space, leaves the glyph
               // before it last on the line, with its trim.
               if (fitAdvance !== 0 && !hangs) lineEndTrimmed = newFitW > fitLimit ? endTrim : 0
-              if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & UNBROKEN) === 0)) {
+              if (breakAfter && (i + 1 === segmentCount || (segmentFlags[i + 1]! & SegmentFlag.Unbroken) === 0)) {
                 pendingBreakSegmentIndex = i + 1
-                pendingBreakWidth = hangs ? hangStartWidth : kind === TAB ? lineW : lineW - advance - lineEndTrimmed
+                pendingBreakWidth = hangs ? hangStartWidth : kind === SegmentKind.Tab ? lineW : lineW - advance - lineEndTrimmed
               }
               if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + reservedHyphenWidth <= fitLimit) {
                 fitBreakSegmentIndex = pendingBreakSegmentIndex
@@ -896,7 +880,7 @@ function walkPreparedComplexLines(
           endGraphemeIndex === 0 &&
           hangEndSegmentIndex >= 0 &&
           (endSegmentIndex === hangEndSegmentIndex || endSegmentIndex === hangEndSegmentIndex + 1) &&
-          (hangEndSegmentIndex === segmentCount || (segmentFlags[hangEndSegmentIndex]! & KIND_BITS) === HARD_BREAK)
+          (hangEndSegmentIndex === segmentCount || (segmentFlags[hangEndSegmentIndex]! & SegmentFlag.KindBits) === SegmentKind.HardBreak)
         const paintWidth = (hangsWhereUnfit ? lineW - lineEndTrimmed : endWidth) +
           getTerminalLetterSpacing(prepared, hangingKinds, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex)
         lineWidth = hangsWhereUnfit && item === null ? Math.max(hangStartWidth, Math.min(paintWidth, availableWidth)) : paintWidth
@@ -1012,10 +996,10 @@ function stepPreparedSimpleLineGeometry(
     const w = widths[i]!
     const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
     if (lineW + w - endTrim > fitLimit) {
-      const hangs = breaksAfterKind(segmentFlags[i]! & KIND_BITS)
+      const hangs = breaksAfterKind(segmentFlags[i]! & SegmentFlag.KindBits)
       cursor.segmentIndex = hangs ? i + 1 : i
       cursor.graphemeIndex = 0
-      return !hangs && breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) ? lineW - widths[i - 1]! : lineW - endTrimmed
+      return !hangs && breaksAfterKind(segmentFlags[i - 1]! & SegmentFlag.KindBits) ? lineW - widths[i - 1]! : lineW - endTrimmed
     }
     lineW += w
     endTrimmed = lineW > fitLimit ? endTrim : 0

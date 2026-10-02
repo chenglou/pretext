@@ -3,6 +3,9 @@
   "compilerOptions": {
     "noEmit": false,
     "allowImportingTsExtensions": false,
+    // Off for the build alone: with it tsc keeps a const enum as an object and reads its members off it, and
+    // without it writes each member as its number (src/analysis.ts, SegmentKind).
+    "verbatimModuleSyntax": false,
     "types": [],
     "rootDir": "./src",
     "outDir": "./dist",

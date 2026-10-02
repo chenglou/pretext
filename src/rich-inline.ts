@@ -1,22 +1,11 @@
 import type { LayoutCursor, WordBreakMode } from './layout.js'
 import {
   analyzeText,
-  CONTROL,
   getTrailingCollapsibleStart,
-  HARD_BREAK,
   isCollapsibleSpaceCode,
-  KIND_BITS,
-  PRESERVED_SPACE,
   removeSkippableSegmentBreaks,
-  RETURNABLE,
-  SOFT_HYPHEN,
-  SPACE,
-  SPACED,
-  TAB,
-  TEXT,
-  UNBROKEN,
-  ZERO_WIDTH_BREAK,
-  ZERO_WIDTH_GLUE,
+  SegmentFlag,
+  SegmentKind,
   type TextAnalysis,
   type WhiteSpaceMode,
 } from './analysis.js'
@@ -214,7 +203,7 @@ function getCollapsedSpaceWidth(font: string, letterSpacing: number, language: s
 // A zero-width break the Gecko profile makes of a soft hyphen after white space, which
 // Firefox drops from its text (IsDiscardable, nsTextFrameUtils.cpp:32-49).
 function isDiscardedBreak(data: PreparedSegments, segmentIndex: number): boolean {
-  return (data.segmentFlags[segmentIndex]! & KIND_BITS) === ZERO_WIDTH_BREAK && data.segments[segmentIndex]!.charCodeAt(0) === 0x00AD
+  return (data.segmentFlags[segmentIndex]! & SegmentFlag.KindBits) === SegmentKind.ZeroWidthBreak && data.segments[segmentIndex]!.charCodeAt(0) === 0x00AD
 }
 
 // Each item's text after the segment break transformation, and a box's, which is empty. Where the
@@ -290,7 +279,7 @@ function measureAfterContent(prepared: PreparedSegments): number {
 // Whether a line can end before segment `index` of an analysis or a handle, as the line
 // walker reads their flags.
 function breaksBefore(flags: ArrayLike<number>, index: number): boolean {
-  return endsLineBefore(flags[index - 1]! & KIND_BITS, flags[index]! & KIND_BITS, (flags[index]! & UNBROKEN) !== 0)
+  return endsLineBefore(flags[index - 1]! & SegmentFlag.KindBits, flags[index]! & SegmentFlag.KindBits, (flags[index]! & SegmentFlag.Unbroken) !== 0)
 }
 
 // Marks a segment unbroken, as preparation marks one before which the scan gives no
@@ -299,11 +288,11 @@ function breaksBefore(flags: ArrayLike<number>, index: number): boolean {
 // before a ZWSP or soft hyphen there. `before` holds the flags of the segment before
 // it at `beforeIndex`.
 function markUnbroken(flags: Uint8Array, index: number, before: Uint8Array, beforeIndex: number): void {
-  flags[index] = flags[index]! & ~RETURNABLE | UNBROKEN
-  const kind = before[beforeIndex]! & KIND_BITS
-  if (kind !== ZERO_WIDTH_BREAK && kind !== SOFT_HYPHEN) return
-  let glue = before[beforeIndex]! & ~KIND_BITS | ZERO_WIDTH_GLUE
-  if (beforeIndex > 0 && !breaksAfterKind(before[beforeIndex - 1]! & KIND_BITS)) glue = glue & ~RETURNABLE | UNBROKEN
+  flags[index] = flags[index]! & ~SegmentFlag.Returnable | SegmentFlag.Unbroken
+  const kind = before[beforeIndex]! & SegmentFlag.KindBits
+  if (kind !== SegmentKind.ZeroWidthBreak && kind !== SegmentKind.SoftHyphen) return
+  let glue = before[beforeIndex]! & ~SegmentFlag.KindBits | SegmentKind.ZeroWidthGlue
+  if (beforeIndex > 0 && !breaksAfterKind(before[beforeIndex - 1]! & SegmentFlag.KindBits)) glue = glue & ~SegmentFlag.Returnable | SegmentFlag.Unbroken
   before[beforeIndex] = glue
 }
 
@@ -334,14 +323,14 @@ function recordJoinedBreaks(
   let segmentStart = portion.start
   for (let i = portion.startSegmentIndex; i < segments.length && segmentStart < portionEnd; i++) {
     const own = segmentFlags[i]!
-    const kind = own & KIND_BITS
+    const kind = own & SegmentFlag.KindBits
     let flags = own
     const firstInside = j
     if (starts[j] === segmentStart) {
-      if (i > portion.startSegmentIndex) flags = flags & ~UNBROKEN | (joinedFlags[j]! & UNBROKEN)
+      if (i > portion.startSegmentIndex) flags = flags & ~SegmentFlag.Unbroken | (joinedFlags[j]! & SegmentFlag.Unbroken)
       j++
-    } else if (i > portion.startSegmentIndex && (kind === TEXT || kind === CONTROL)) {
-      flags |= UNBROKEN
+    } else if (i > portion.startSegmentIndex && (kind === SegmentKind.Text || kind === SegmentKind.Control)) {
+      flags |= SegmentFlag.Unbroken
     }
     const segmentEnd = segmentStart + segments[i]!.length
     for (; j < starts.length && starts[j]! < segmentEnd; j++) {
@@ -351,8 +340,8 @@ function recordJoinedBreaks(
       const grapheme = getGraphemeEnds(item.prepared, i).indexOf(starts[j]! - segmentStart) + 1
       if (grapheme > 0) ((item.innerBreaks ??= Array.from({ length: segments.length }, () => null))[i] ??= []).push(grapheme)
     }
-    if (j > firstInside && (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN || kind === ZERO_WIDTH_GLUE)) flags = flags & ~KIND_BITS | (joinedFlags[j - 1]! & KIND_BITS)
-    if (flags !== own) (walkedFlags[itemIndex] ??= segmentFlags.slice())[i] = flags & ~RETURNABLE
+    if (j > firstInside && (kind === SegmentKind.ZeroWidthBreak || kind === SegmentKind.SoftHyphen || kind === SegmentKind.ZeroWidthGlue)) flags = flags & ~SegmentFlag.KindBits | (joinedFlags[j - 1]! & SegmentFlag.KindBits)
+    if (flags !== own) (walkedFlags[itemIndex] ??= segmentFlags.slice())[i] = flags & ~SegmentFlag.Returnable
     segmentStart = segmentEnd
   }
 }
@@ -364,7 +353,7 @@ function recordJoinedBreaks(
 // to its latest break, which the walker leaves where the line takes the item's end
 // (ItemLine).
 function getWalkedHandle(prepared: PreparedSegments, flags: Uint8Array): PreparedSegments {
-  for (let i = 0; i < flags.length; i++) if ((flags[i]! & UNBROKEN) === 0) flags[i] = flags[i]! | RETURNABLE
+  for (let i = 0; i < flags.length; i++) if ((flags[i]! & SegmentFlag.Unbroken) === 0) flags[i] = flags[i]! | SegmentFlag.Returnable
   return { ...prepared, segmentFlags: flags, simpleLineWalkFastPath: false }
 }
 
@@ -372,7 +361,7 @@ function getWalkedHandle(prepared: PreparedSegments, flags: Uint8Array): Prepare
 // fragment spans, so that a line starting at the box doesn't take that start for its end
 // (stepRichInlineLine).
 const BOX_HANDLE: PreparedSegments = {
-  segments: [''], widths: [0], segmentFlags: Uint8Array.of(TEXT), simpleLineWalkFastPath: false, simpleLineCountFastPath: false,
+  segments: [''], widths: [0], segmentFlags: Uint8Array.of(SegmentKind.Text), simpleLineWalkFastPath: false, simpleLineCountFastPath: false,
   breakableFitAdvances: [null], entryGeometry: null, lineStartProhibitions: null, lineStartExtras: null, lineEndTrims: null,
   overflowLineEndTrims: null, letterSpacing: 0, discretionaryHyphenWidth: 0, discretionaryHyphenContexts: null, tabStopAdvance: 0, minimumTabAdvance: 0,
 }
@@ -488,7 +477,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         for (let i = 0, j = 0; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           while (j < joined.starts.length && joined.starts[j]! < portion.start) j++
-          if (i > 0) portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & KIND_BITS) !== HARD_BREAK
+          if (i > 0) portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & SegmentFlag.KindBits) !== SegmentKind.HardBreak
           recordJoinedBreaks(portion, joined, j, i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length, walkedFlags)
         }
       }
@@ -572,7 +561,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     const { segmentFlags } = prepared
     // A collapsible space before a hard break goes with the line's end (CSS Text 3
     // §4.1.2), so an item that starts with one has no gap before it.
-    if ((segmentFlags[0]! & KIND_BITS) === HARD_BREAK) {
+    if ((segmentFlags[0]! & SegmentFlag.KindBits) === SegmentKind.HardBreak) {
       gapBefore = 0
       gapItemIndex = -1
     }
@@ -591,13 +580,13 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     let holdsTab = false
     let onlyPreservedSpace = true
     for (let i = 0; i < segmentFlags.length; i++) {
-      const kind = segmentFlags[i]! & KIND_BITS
-      if (kind === SPACE && firstSpace < 0) firstSpace = i
-      if (kind === SPACE) lastSpace = i
-      holdsZeroWidthBreak ||= kind === ZERO_WIDTH_BREAK
-      holdsHardBreak ||= kind === HARD_BREAK
-      holdsTab ||= kind === TAB
-      onlyPreservedSpace &&= kind === PRESERVED_SPACE
+      const kind = segmentFlags[i]! & SegmentFlag.KindBits
+      if (kind === SegmentKind.Space && firstSpace < 0) firstSpace = i
+      if (kind === SegmentKind.Space) lastSpace = i
+      holdsZeroWidthBreak ||= kind === SegmentKind.ZeroWidthBreak
+      holdsHardBreak ||= kind === SegmentKind.HardBreak
+      holdsTab ||= kind === SegmentKind.Tab
+      onlyPreservedSpace &&= kind === SegmentKind.PreservedSpace
     }
     const establishesLine = wholeWidth !== null || holdsZeroWidthBreak
     // Such an item can hold white space between its soft hyphens, which follows a soft
@@ -615,9 +604,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       text.charCodeAt(0) === 0x0A && previousText.charCodeAt(previousText.length - 1) === 0x0D
     // A break comes after an atomic item, but not in WebKit before a hard break, as the content it
     // places runs on from the atomic item to the line break (breaksFromItemText).
-    const firstKind = segmentFlags[0]! & KIND_BITS
+    const firstKind = segmentFlags[0]! & SegmentFlag.KindBits
     const afterAtomic = previousBreak === 'never' && itemBreak !== 'never'
-    const breaksAfterAtomic = !(afterAtomic && profile.breaksFromItemText && firstKind === HARD_BREAK)
+    const breaksAfterAtomic = !(afterAtomic && profile.breaksFromItemText && firstKind === SegmentKind.HardBreak)
     // The line keeps the white space or hard break that starts an item, where it takes no more of
     // the item, as the engine fits the item's padding there (paddedOpeningFit). Without padding,
     // preserved spaces, tabs that hang and a hard break after an atomic item stay on its line
@@ -643,20 +632,20 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // content, and WebKit fits the end edge too of an item whose opening is all of it; else the
     // ordinary fit takes the item's whole extraWidth.
     const extraWidth = item.extraWidth ?? 0
-    const opensWithWhiteSpace = firstKind === PRESERVED_SPACE || (firstKind === TAB && profile.hangTabs)
+    const opensWithWhiteSpace = firstKind === SegmentKind.PreservedSpace || (firstKind === SegmentKind.Tab && profile.hangTabs)
     let openingSpaceEnd = 0
-    while (openingSpaceEnd < segmentFlags.length && (segmentFlags[openingSpaceEnd]! & KIND_BITS) === PRESERVED_SPACE) openingSpaceEnd++
-    const runsIntoTab = !profile.hangTabs && openingSpaceEnd < segmentFlags.length && (segmentFlags[openingSpaceEnd]! & KIND_BITS) === TAB
+    while (openingSpaceEnd < segmentFlags.length && (segmentFlags[openingSpaceEnd]! & SegmentFlag.KindBits) === SegmentKind.PreservedSpace) openingSpaceEnd++
+    const runsIntoTab = !profile.hangTabs && openingSpaceEnd < segmentFlags.length && (segmentFlags[openingSpaceEnd]! & SegmentFlag.KindBits) === SegmentKind.Tab
     if (runsIntoTab && whiteSpaceStart >= 0) for (let k = whiteSpaceStart; k < index; k++) if (preparedItems[k] !== undefined) preparedItems[k]!.openingEdge = -1
     let openingEdge = -1
     if (extraWidth <= 0) {
-      if (preserve && whiteSpaceStart >= 0 && !runsIntoTab && (opensWithWhiteSpace || firstKind === HARD_BREAK)) openingEdge = 0
+      if (preserve && whiteSpaceStart >= 0 && !runsIntoTab && (opensWithWhiteSpace || firstKind === SegmentKind.HardBreak)) openingEdge = 0
     } else if (profile.paddedOpeningFit === 'start') {
-      if (opensWithWhiteSpace || firstKind === HARD_BREAK) openingEdge = getWhiteSpaceEnd(segmentFlags) === segmentFlags.length ? 0 : extraWidth / 2
-    } else if (profile.paddedOpeningFit === 'placed' && ((afterAtomic && opensWithWhiteSpace) || firstKind === HARD_BREAK)) {
+      if (opensWithWhiteSpace || firstKind === SegmentKind.HardBreak) openingEdge = getWhiteSpaceEnd(segmentFlags) === segmentFlags.length ? 0 : extraWidth / 2
+    } else if (profile.paddedOpeningFit === 'placed' && ((afterAtomic && opensWithWhiteSpace) || firstKind === SegmentKind.HardBreak)) {
       const whiteSpaceEnd = getWhiteSpaceEnd(segmentFlags)
       const onlyOpening = whiteSpaceEnd === segmentFlags.length ||
-        (whiteSpaceEnd === segmentFlags.length - 1 && (segmentFlags[whiteSpaceEnd]! & KIND_BITS) === HARD_BREAK)
+        (whiteSpaceEnd === segmentFlags.length - 1 && (segmentFlags[whiteSpaceEnd]! & SegmentFlag.KindBits) === SegmentKind.HardBreak)
       openingEdge = onlyOpening ? extraWidth : extraWidth / 2
     }
     // A tab's advance depends on where it lands on the line, and the preserved spaces of an
@@ -770,7 +759,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     const itemBefore = index > 0 ? preparedItems[index - 1] : undefined
     if (itemBefore !== undefined && itemBefore.break === 'normal' && item.gapItemIndex < 0) {
       const flags = walkedFlags[index - 1] ?? itemBefore.prepared.segmentFlags
-      if ((flags[flags.length - 1]! & KIND_BITS) === SOFT_HYPHEN) item.hyphenBefore = itemBefore.prepared.discretionaryHyphenWidth
+      if ((flags[flags.length - 1]! & SegmentFlag.KindBits) === SegmentKind.SoftHyphen) item.hyphenBefore = itemBefore.prepared.discretionaryHyphenWidth
     }
     if (item.establishesLine) {
       previousIndex = index
@@ -846,10 +835,10 @@ function fitsBreakBefore(item: PreparedRichInlineItem, lineWidth: number, fitLim
 function firstSegmentOverflows(item: PreparedRichInlineItem, fitLimit: number): boolean {
   const { lineData, innerBreaks } = item
   const flags = lineData.segmentFlags[0]!
-  const kind = flags & KIND_BITS
-  if ((kind !== TEXT && kind !== CONTROL) || (flags & UNBROKEN) !== 0 || (innerBreaks !== null && innerBreaks[0] !== null)) return false
+  const kind = flags & SegmentFlag.KindBits
+  if ((kind !== SegmentKind.Text && kind !== SegmentKind.Control) || (flags & SegmentFlag.Unbroken) !== 0 || (innerBreaks !== null && innerBreaks[0] !== null)) return false
   const w = lineData.widths[0]!
-  const fitAdvance = w === 0 && kind !== CONTROL ? 0 : w + ((flags & SPACED) !== 0 ? lineData.letterSpacing : 0)
+  const fitAdvance = w === 0 && kind !== SegmentKind.Control ? 0 : w + ((flags & SegmentFlag.Spaced) !== 0 ? lineData.letterSpacing : 0)
   return fitAdvance - (lineData.lineEndTrims === null ? 0 : lineData.lineEndTrims[0]!) > fitLimit
 }
 
@@ -864,14 +853,14 @@ function firstSegmentOverflows(item: PreparedRichInlineItem, fitLimit: number): 
 function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, startGraphemeIndex: number, overflow: number, keepsFit: boolean, at: LayoutCursor): number | null {
   const { breakableFitAdvances, letterSpacing, segmentFlags, segments, widths } = item.lineData
   const s = segmentFlags.length - 1
-  const kind = segmentFlags[s]! & KIND_BITS
-  if (item.break === 'never' || (kind !== TEXT && kind !== PRESERVED_SPACE)) return null
+  const kind = segmentFlags[s]! & SegmentFlag.KindBits
+  if (item.break === 'never' || (kind !== SegmentKind.Text && kind !== SegmentKind.PreservedSpace)) return null
   let retreat: number
   at.segmentIndex = s
-  if (kind === TEXT) {
+  if (kind === SegmentKind.Text) {
     const advances = breakableFitAdvances[s] ?? null
     at.graphemeIndex = advances === null ? 0 : advances.length - 1
-    retreat = (advances === null ? widths[s]! : advances[at.graphemeIndex]!) + ((segmentFlags[s]! & SPACED) !== 0 ? letterSpacing : 0)
+    retreat = (advances === null ? widths[s]! : advances[at.graphemeIndex]!) + ((segmentFlags[s]! & SegmentFlag.Spaced) !== 0 ? letterSpacing : 0)
   } else {
     const count = segments[s]!.length
     const advance = getSpaceAdvance(item.lineData, s)
@@ -886,7 +875,7 @@ function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, 
 // The first of an item's segments that isn't a preserved space or a tab, or their count.
 function getWhiteSpaceEnd(segmentFlags: Uint8Array): number {
   let i = 0
-  while (i < segmentFlags.length && ((segmentFlags[i]! & KIND_BITS) === PRESERVED_SPACE || (segmentFlags[i]! & KIND_BITS) === TAB)) i++
+  while (i < segmentFlags.length && ((segmentFlags[i]! & SegmentFlag.KindBits) === SegmentKind.PreservedSpace || (segmentFlags[i]! & SegmentFlag.KindBits) === SegmentKind.Tab)) i++
   return i
 }
 
@@ -928,8 +917,8 @@ function spacesFollowText(flow: InternalPreparedRichInline, itemIndex: number, s
     const { segmentFlags } = item.lineData
     const from = k === startItemIndex ? startSegmentIndex : 0
     let s = segmentFlags.length - 1
-    while (s >= from && (segmentFlags[s]! & KIND_BITS) === PRESERVED_SPACE) s--
-    if (s >= from) return s < segmentFlags.length - 1 && (segmentFlags[s]! & KIND_BITS) !== TAB
+    while (s >= from && (segmentFlags[s]! & SegmentFlag.KindBits) === SegmentKind.PreservedSpace) s--
+    if (s >= from) return s < segmentFlags.length - 1 && (segmentFlags[s]! & SegmentFlag.KindBits) !== SegmentKind.Tab
   }
   return false
 }
@@ -938,7 +927,7 @@ function spacesFollowText(flow: InternalPreparedRichInline, itemIndex: number, s
 // spaces, U+0020 each, are one grapheme and one advance each.
 function getSpaceAdvance(data: PreparedSegments, s: number): number {
   const count = data.segments[s]!.length
-  const spacing = (data.segmentFlags[s]! & SPACED) !== 0 ? data.letterSpacing : 0
+  const spacing = (data.segmentFlags[s]! & SegmentFlag.Spaced) !== 0 ? data.letterSpacing : 0
   return (data.widths[s]! - (count - 1) * spacing) / count + spacing
 }
 
@@ -952,12 +941,12 @@ function retreatsBefore(flow: InternalPreparedRichInline, itemIndex: number): bo
   let nextIndex = itemIndex + 1
   while (nextIndex < flow.items.length && flow.items[nextIndex] === undefined) nextIndex++
   const next = flow.items[nextIndex]
-  if (next === undefined || next.breakBefore || (next.prepared.segmentFlags[0]! & KIND_BITS) !== HARD_BREAK) return false
+  if (next === undefined || next.breakBefore || (next.prepared.segmentFlags[0]! & SegmentFlag.KindBits) !== SegmentKind.HardBreak) return false
   const { breakableFitAdvances, segmentFlags, segments } = item.prepared
   if (segmentFlags.length !== 1) return false
-  const kind = segmentFlags[0]! & KIND_BITS
+  const kind = segmentFlags[0]! & SegmentFlag.KindBits
   const advances = breakableFitAdvances[0] ?? null
-  return (kind === TEXT && (advances === null || advances.length === 1)) || (kind === PRESERVED_SPACE && segments[0]!.length === 1)
+  return (kind === SegmentKind.Text && (advances === null || advances.length === 1)) || (kind === SegmentKind.PreservedSpace && segments[0]!.length === 1)
 }
 
 // The line state a walked item takes and leaves, one for every walk.
@@ -1027,7 +1016,7 @@ function stepRichInlineLine(
   // A line that starts inside the preserved spaces that end an item, after those the line before
   // kept (getEndRetreat), takes the rest of them, which hang, and goes on at the next item.
   if (firstItem !== undefined && cursor.graphemeIndex > 0 && cursor.segmentIndex === firstItem.lineData.segmentFlags.length - 1 &&
-    (firstItem.lineData.segmentFlags[cursor.segmentIndex]! & KIND_BITS) === PRESERVED_SPACE) {
+    (firstItem.lineData.segmentFlags[cursor.segmentIndex]! & SegmentFlag.KindBits) === SegmentKind.PreservedSpace) {
     const rest = (firstItem.prepared.segments[cursor.segmentIndex]!.length - cursor.graphemeIndex) * getSpaceAdvance(firstItem.lineData, cursor.segmentIndex)
     collectItemRest(fragments, itemIndex, firstItem, cursor, 0, -1, rest + firstItem.extraWidth)
     hasContent = true
@@ -1114,9 +1103,9 @@ function stepRichInlineLine(
     const reservedWidth = gapBefore + item.extraWidth
     if (hasContent && reservedWidth > remainingWidth + lineFitEpsilon && (item.establishesLine || reservedWidth > 0) &&
       !fitsOpening(flow, itemIndex, lineWidth, lineHangWidth, safeWidth + lineFitEpsilon, paddedOpeningFit, startItemIndex, startSegmentIndex)) {
-      const firstKind = item.lineData.segmentFlags[0]! & KIND_BITS
-      let keepsHardBreak = firstKind === HARD_BREAK && !item.breakBefore && reservedWidth <= 0
-      if (firstKind === HARD_BREAK && !item.breakBefore && !keepsHardBreak && breakItemIndex < 0 && hardBreakItemRetreat !== 'item') {
+      const firstKind = item.lineData.segmentFlags[0]! & SegmentFlag.KindBits
+      let keepsHardBreak = firstKind === SegmentKind.HardBreak && !item.breakBefore && reservedWidth <= 0
+      if (firstKind === SegmentKind.HardBreak && !item.breakBefore && !keepsHardBreak && breakItemIndex < 0 && hardBreakItemRetreat !== 'item') {
         // The line's text ends with the item before, which the line takes to its end.
         let contentItemIndex = itemIndex - 1
         while (flow.items[contentItemIndex] === undefined) contentItemIndex--
@@ -1138,7 +1127,7 @@ function stepRichInlineLine(
           breakOccupiedWidth = fragments === null ? 0 : fragments[breakFragmentCount - 1]!.occupiedWidth - retreat
         }
       }
-      const hangs = (firstKind === PRESERVED_SPACE || (firstKind === TAB && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon
+      const hangs = (firstKind === SegmentKind.PreservedSpace || (firstKind === SegmentKind.Tab && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon
       if (!keepsHardBreak && !hangs) {
         returnsToBreak = !item.breakBefore
         break
@@ -1183,7 +1172,7 @@ function stepRichInlineLine(
     // line before ended before its space under negative letter spacing (ENGINE_FOLLOWUPS.md).
     if (!hasContent) {
       if (atItemStart && (item.lineFeedAfterReturn || (
-        (item.lineData.segmentFlags[0]! & KIND_BITS) === ZERO_WIDTH_BREAK && (item.prepared.segmentFlags[0]! & KIND_BITS) !== ZERO_WIDTH_BREAK && !isDiscardedBreak(item.lineData, 0)
+        (item.lineData.segmentFlags[0]! & SegmentFlag.KindBits) === SegmentKind.ZeroWidthBreak && (item.prepared.segmentFlags[0]! & SegmentFlag.KindBits) !== SegmentKind.ZeroWidthBreak && !isDiscardedBreak(item.lineData, 0)
       ))) lineEnd.segmentIndex = 1
       if (!normalizeItemLineStart(item.lineData, lineEnd)) continue
       cursor.segmentIndex = lineEnd.segmentIndex
@@ -1243,7 +1232,7 @@ function stepRichInlineLine(
     // the text the items join gives or not (breakBefore).
     const segmentCount = item.prepared.segments.length
     const endsAfterHardBreak = lineEnd.graphemeIndex === 0 && lineEnd.segmentIndex > 0 &&
-      (item.prepared.segmentFlags[lineEnd.segmentIndex - 1]! & KIND_BITS) === HARD_BREAK
+      (item.prepared.segmentFlags[lineEnd.segmentIndex - 1]! & SegmentFlag.KindBits) === SegmentKind.HardBreak
     if (lineEnd.segmentIndex === segmentCount && lineEnd.graphemeIndex === 0 && !endsAfterHardBreak) {
       if ((itemLine.breakSegmentIndex > cursor.segmentIndex || itemLine.breakGraphemeIndex > 0) && itemLine.breakSegmentIndex < segmentCount) {
         breakItemIndex = itemIndex

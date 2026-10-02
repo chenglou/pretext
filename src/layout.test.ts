@@ -1,6 +1,6 @@
 import '../harness/watchdog.ts'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import type { AnalysisProfile } from './analysis.ts'
+import { SegmentFlag, type AnalysisProfile } from './analysis.ts'
 import type { RichInlineBox, RichInlineItem } from './rich-inline.ts'
 
 // Keep the permanent suite small and durable. These tests exercise the shipped
@@ -34,16 +34,12 @@ let setLocale: LayoutModule['setLocale']
 let clearCache: LayoutModule['clearCache']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
-let SPACED: AnalysisModule['SPACED']
-let ONE_CLUSTER: AnalysisModule['ONE_CLUSTER']
-let UNBROKEN: AnalysisModule['UNBROKEN']
 let getSegmentFit: MeasurementModule['getSegmentFit']
 let getFontMeasurement: MeasurementModule['getFontMeasurement']
 let getPreparationLanguage: MeasurementModule['getPreparationLanguage']
 let getEngineProfile: MeasurementModule['getEngineProfile']
 let analyzeText: AnalysisModule['analyzeText']
 let SEGMENT_KINDS: AnalysisModule['SEGMENT_KINDS']
-let KIND_BITS: AnalysisModule['KIND_BITS']
 let getBlinkLineBreaks: LineBreaksModule['getBlinkLineBreaks']
 let CLUSTER_START: LineBreaksModule['CLUSTER_START']
 let getGeckoLineBreaks: GeckoLineBreaksModule['getGeckoLineBreaks']
@@ -68,7 +64,7 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme
 // An analysis' segment kinds, as prepareWithSegments() gives them.
 type TextAnalysis = ReturnType<AnalysisModule['analyzeText']>
 function kindsOf(analysis: TextAnalysis): string[] {
-  return Array.from(analysis.flags, flags => SEGMENT_KINDS[flags & KIND_BITS]!)
+  return Array.from(analysis.flags, flags => SEGMENT_KINDS[flags & SegmentFlag.KindBits]!)
 }
 
 type TestLayoutCursor = {
@@ -306,7 +302,7 @@ beforeAll(async () => {
   } = mod)
   ;({ countPreparedLines, walkPreparedLinesRaw } = lineBreakMod)
   ;({ getSegmentFit, getFontMeasurement, getPreparationLanguage, getEngineProfile } = measurementMod)
-  ;({ analyzeText, SEGMENT_KINDS, KIND_BITS, SPACED, ONE_CLUSTER, UNBROKEN } = analysisMod)
+  ;({ analyzeText, SEGMENT_KINDS } = analysisMod)
   ;({ getBlinkLineBreaks, CLUSTER_START } = lineBreaksMod)
   ;({ getGeckoLineBreaks } = geckoLineBreaksMod)
   ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
@@ -606,10 +602,10 @@ describe('boundary-policy regressions', () => {
     for (const text of ['\u05D0', '\u05D0(\u05D1)', '\u0628\u064E']) {
       const { texts, flags } = analyzeText(`${text}\uD83C\uDFFB`, geckoProfile)
       expect(texts).toEqual([text, '\uD83C\uDFFB'])
-      expect(flags[1]! & ONE_CLUSTER).toBe(ONE_CLUSTER)
+      expect(flags[1]! & SegmentFlag.OneCluster).toBe(SegmentFlag.OneCluster)
     }
     // So does a Hebrew letter after U+0D4E, a Prepend character that resolves to level 0.
-    expect(analyzeText('\u0D4E\u05D0', geckoProfile).flags[0]! & ONE_CLUSTER).toBe(0)
+    expect(analyzeText('\u0D4E\u05D0', geckoProfile).flags[0]! & SegmentFlag.OneCluster).toBe(0)
     // A word a level run cuts finds its clusters again in each piece: after the ALM, which the text
     // run leaves out, the vowel killer starts a level run, and the Bengali letter after it a cluster.
     expect(analyzeText('\u0937\u061C\u1B44\u09B0', geckoProfile).texts).toEqual(['\u0937\u061C', '\u1B44', '\u09B0'])
@@ -621,11 +617,11 @@ describe('boundary-policy regressions', () => {
     // A ZWJ that ends the paragraph resolves to level 0 (UAX #9 L1), so after a Hebrew letter it
     // starts one too, and its segment is no longer one cluster. Before more text it keeps the
     // letter's level.
-    expect(analyzeText('\u05D0\u200D', geckoProfile).flags[0]! & ONE_CLUSTER).toBe(0)
-    expect(analyzeText('\u05D0\u200D \u05D1', geckoProfile).flags[0]! & ONE_CLUSTER).toBe(ONE_CLUSTER)
+    expect(analyzeText('\u05D0\u200D', geckoProfile).flags[0]! & SegmentFlag.OneCluster).toBe(0)
+    expect(analyzeText('\u05D0\u200D \u05D1', geckoProfile).flags[0]! & SegmentFlag.OneCluster).toBe(SegmentFlag.OneCluster)
     // A level run can start at white space the scan drops, here the space before the LF, and then
     // splits the text run at the LF, kept as a space inside U+0600's cluster, before the mark.
-    expect(analyzeText('\u0600 \n\u0301', geckoProfile).flags[2]! & UNBROKEN).toBe(0)
+    expect(analyzeText('\u0600 \n\u0301', geckoProfile).flags[2]! & SegmentFlag.Unbroken).toBe(0)
     // In pre-wrap each line is resolved apart and starts a text run, so a mark right after a line
     // feed starts a cluster where Firefox resolves levels. Only the scan's cluster starts show
     // it, as a hard break ends the segment before the mark either way.
@@ -853,7 +849,7 @@ describe('boundary-policy regressions', () => {
       const prepared = prepareWithSegments('ab\u00AD)cd', FONT, { letterSpacing: 2 })
       expect(prepared.kinds).toEqual(['text', 'zero-width-glue', 'text'])
       expect(prepared.widths[1]).toBe(0)
-      expect(prepared.segmentFlags[1]! & SPACED).toBe(0)
+      expect(prepared.segmentFlags[1]! & SegmentFlag.Spaced).toBe(0)
       const whole = lines('ab\u00AD)cd', 1000, 2)
       expect(whole.map(line => line.text)).toEqual(['ab)cd'])
       expect(whole[0]!.width).toBeCloseTo(measureWidth('ab)cd', FONT) + 5 * 2)
@@ -895,7 +891,7 @@ describe('boundary-policy regressions', () => {
         clearCache()
         const hidden = prepareWithSegments(`ab${control}cd`, FONT, { letterSpacing: 2 })
         const index = hidden.segments.indexOf(control)
-        expect({ control, width: hidden.widths[index], spaced: (hidden.segmentFlags[index]! & SPACED) !== 0 }).toEqual({ control, width: 0, spaced: true })
+        expect({ control, width: hidden.widths[index], spaced: (hidden.segmentFlags[index]! & SegmentFlag.Spaced) !== 0 }).toEqual({ control, width: 0, spaced: true })
         profile.hidesControlCharacters = false
         clearCache()
         const shown = prepareWithSegments(`ab${control}cd`, FONT)
@@ -1164,7 +1160,7 @@ describe('boundary-policy regressions', () => {
           const prepared = prepareWithSegments(text, FONT, { letterSpacing: 1 })
           expect(prepared.segments[markIndex]).toBe('\u0301')
           expect(prepared.widths[markIndex]).toBe(0)
-          expect(prepared.segmentFlags[markIndex]! & SPACED).toBe(0)
+          expect(prepared.segmentFlags[markIndex]! & SegmentFlag.Spaced).toBe(0)
         }
         const tail = 'aaaa\u00AD\u0301tail'
         expect(lines(tail, measureWidth('aaaatail', FONT) + 0.1)).toEqual([tail])

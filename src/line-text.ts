@@ -1,5 +1,5 @@
 import { findGraphemeEnds } from './graphemes.js'
-import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
+import { SegmentFlag, SegmentKind } from './analysis.js'
 import { isDiscretionaryLineEnd, type PreparedLineBreakData } from './line-break.js'
 import { getEngineProfile } from './measurement.js'
 
@@ -53,10 +53,10 @@ export function buildLineTextFromRange(
   for (let i = startSegmentIndex; i < segmentEnd; i++) {
     // A soft hyphen shows only as the hyphen of a line that ends at it, and one the
     // Gecko scan takes as a zero-width break never does.
-    const kind = segmentFlags[i]! & KIND_BITS
+    const kind = segmentFlags[i]! & SegmentFlag.KindBits
     if (
-      kind === SOFT_HYPHEN || kind === HARD_BREAK ||
-      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
+      kind === SegmentKind.SoftHyphen || kind === SegmentKind.HardBreak ||
+      ((kind === SegmentKind.ZeroWidthGlue || kind === SegmentKind.ZeroWidthBreak) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
     ) continue
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
       text += prepared.segments[i]!.slice(getGraphemeStart(prepared, i, startGraphemeIndex))

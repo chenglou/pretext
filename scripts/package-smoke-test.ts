@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -49,6 +49,9 @@ async function smokeJavaScriptEsm(tarballPath: string): Promise<void> {
   })
 
   await installTarball(projectDir, tarballPath)
+  // The build writes the const enums of src/analysis.ts as their numbers, so the line loops read no object.
+  const analysis = await readFile(path.join(projectDir, 'node_modules/@chenglou/pretext/dist/analysis.js'), 'utf8')
+  if (analysis.includes('SegmentKind[')) throw new Error('dist/analysis.js holds SegmentKind as an object: tsconfig.build.json needs verbatimModuleSyntax off')
   await writeFile(
     path.join(projectDir, 'index.js'),
     [

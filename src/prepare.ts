@@ -6,23 +6,7 @@ import { observeSegmentEntries, textMayHaveEntryGeometry, type SegmentEntryGeome
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
 import { getBidiBrackets } from './gecko-bidi-levels.js'
-import {
-  CONTROL,
-  HARD_BREAK,
-  KIND_BITS,
-  ONE_CLUSTER,
-  PRESERVED_SPACE,
-  SOFT_HYPHEN,
-  SPACE,
-  SPACED,
-  TAB,
-  TEXT,
-  UNBROKEN,
-  ZERO_WIDTH_BREAK,
-  ZERO_WIDTH_GLUE,
-  type SegmentKindCode,
-  type TextAnalysis,
-} from './analysis.js'
+import { SegmentFlag, SegmentKind, type TextAnalysis } from './analysis.js'
 import {
   type BreakableFitMode,
   type EngineProfile,
@@ -46,8 +30,8 @@ import type { PreparedLineBreakData } from './line-break.js'
 import type { PreparedSegments } from './line-text.js'
 
 // Text and spaces take letter spacing after each grapheme; a ZWSP takes none.
-function countRenderedSpacingGraphemes(text: string, kind: SegmentKindCode, graphemeTable: GraphemeTable): number {
-  return kind === ZERO_WIDTH_BREAK ? 0 : findGraphemeEnds(graphemeTable, text, 0, text.length, null)
+function countRenderedSpacingGraphemes(text: string, kind: SegmentKind, graphemeTable: GraphemeTable): number {
+  return kind === SegmentKind.ZeroWidthBreak ? 0 : findGraphemeEnds(graphemeTable, text, 0, text.length, null)
 }
 
 function addInternalLetterSpacing(width: number, graphemeCount: number, letterSpacing: number): number {
@@ -286,10 +270,10 @@ export function measureAnalysis(
   function getFollowingSpaceTail(analysisIndex: number, text: string): string | null {
     if (!engineProfile.measureTextWithFollowingSpace || hasLetterSpacing) return null
     let next = analysisIndex + 1
-    while (next < segmentCount && (flags[next]! & KIND_BITS) === ZERO_WIDTH_BREAK) next++
+    while (next < segmentCount && (flags[next]! & SegmentFlag.KindBits) === SegmentKind.ZeroWidthBreak) next++
     if (next >= segmentCount) return null
-    const nextKind = flags[next]! & KIND_BITS
-    if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || getSpaceSourceCode(next) !== 0x20) return null
+    const nextKind = flags[next]! & SegmentFlag.KindBits
+    if ((nextKind !== SegmentKind.Space && nextKind !== SegmentKind.PreservedSpace) || getSpaceSourceCode(next) !== 0x20) return null
     const tail = normalized.slice(starts[analysisIndex + 1], starts[next])
     return formatTailStaysWithWord(tail === '' ? text : text + tail, starts[next]!) ? tail : null
   }
@@ -361,16 +345,16 @@ export function measureAnalysis(
   let markChainStart = -1 // the segment after that grapheme
   let markChainKept = -1 // the first segment of the chain the context keeps
   function getMarkContext(analysisIndex: number, text: string): string | null {
-    if ((flags[analysisIndex]! & UNBROKEN) === 0 || !markRunRe.test(text)) return null
+    if ((flags[analysisIndex]! & SegmentFlag.Unbroken) === 0 || !markRunRe.test(text)) return null
     let baseStart = -1
     for (let k = analysisIndex - 1; k >= 0; k--) {
-      const kind = flags[k]! & KIND_BITS
+      const kind = flags[k]! & SegmentFlag.KindBits
       const start = starts[k]!
       const end = starts[k + 1]!
-      if (kind === ZERO_WIDTH_GLUE || ((kind === TEXT || kind === CONTROL) && controlOrMarkRunRe.test(texts[k]!))) {
+      if (kind === SegmentKind.ZeroWidthGlue || ((kind === SegmentKind.Text || kind === SegmentKind.Control) && controlOrMarkRunRe.test(texts[k]!))) {
         if (k !== markRunIndex) continue
         baseStart = markBaseStart
-      } else if (kind === TEXT) {
+      } else if (kind === SegmentKind.Text) {
         const ends = new Int32Array(end - start)
         const count = findGraphemeEnds(engineProfile.graphemeTable, normalized, start, end, ends)
         baseStart = count > 1 ? ends[count - 2]! : start
@@ -437,8 +421,8 @@ export function measureAnalysis(
   function getJoinedNarrowing(analysisIndex: number, before: string | null, beforeMetrics: SegmentMetrics | null): number {
     if (before === null) return 0
     let next = analysisIndex + 1
-    while (next < segmentCount && (flags[next]! & KIND_BITS) === SOFT_HYPHEN) next++
-    if (next >= segmentCount || (flags[next]! & KIND_BITS) !== TEXT) return 0
+    while (next < segmentCount && (flags[next]! & SegmentFlag.KindBits) === SegmentKind.SoftHyphen) next++
+    if (next >= segmentCount || (flags[next]! & SegmentFlag.KindBits) !== SegmentKind.Text) return 0
     const after = texts[next]!
     const apart = getCorrectedSegmentWidth(before, beforeMetrics!, fontMeasurement, emojiCorrection) + getTextWidth(after, fontMeasurement, emojiCorrection)
     const together = getTextWidth(before + after, fontMeasurement, emojiCorrection)
@@ -469,7 +453,7 @@ export function measureAnalysis(
   for (let mi = 0; mi < segmentCount; mi++) {
     const text = texts[mi]!
     const segment = flags[mi]!
-    const kind = (segment & KIND_BITS) as SegmentKindCode
+    const kind = (segment & SegmentFlag.KindBits) as SegmentKind
     let width = 0
     // Graphemes that take letter spacing after them.
     let spacingGraphemeCount = 0
@@ -477,7 +461,7 @@ export function measureAnalysis(
     let entry: SegmentEntryGeometry | null = null
     let prohibitions: number[] | null = null
     switch (kind) {
-      case TEXT: {
+      case SegmentKind.Text: {
         // A control the engine hides takes no advance, only letter spacing.
         if (engineProfile.hidesControlCharacters && controlCharacterRe.test(text)) {
           spacingGraphemeCount = 1
@@ -517,7 +501,7 @@ export function measureAnalysis(
         // (TextUtil::breakWord) and Gecko may wrap before any cluster (gfxTextRun.cpp:1069-1072),
         // so every text segment takes emergency grapheme breaks, unless it is one Gecko cluster
         // or an atomic item's.
-        if (!overflowBreaks || (segment & ONE_CLUSTER) !== 0 || text.length === 1) break
+        if (!overflowBreaks || (segment & SegmentFlag.OneCluster) !== 0 || text.length === 1) break
         const fitMode: BreakableFitMode = letterSpacing !== 0 ? 'segment-prefixes'
           : numericRunRe.test(text) ? 'pair-context'
           : textMetrics.width >= engineProfile.prefixFitMinWidth ? 'segment-prefixes'
@@ -543,17 +527,17 @@ export function measureAnalysis(
         if (keepsLineStartPunctuation) prohibitions = fit.lineStartProhibitions
         break
       }
-      case SPACE:
-      case PRESERVED_SPACE:
-      case ZERO_WIDTH_BREAK:
+      case SegmentKind.Space:
+      case SegmentKind.PreservedSpace:
+      case SegmentKind.ZeroWidthBreak:
         width = getTextWidth(text, fontMeasurement, emojiCorrection)
         if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
         break
-      case TAB:
+      case SegmentKind.Tab:
         if (engineProfile.letterSpaceTabs) spacingGraphemeCount = 1
         if (minimumTabAdvance === 0) minimumTabAdvance = getTextWidth(engineProfile.tabMinimumCharacter, fontMeasurement, emojiCorrection) / 2
         break
-      case CONTROL: {
+      case SegmentKind.Control: {
         width = getTextWidth(text, fontMeasurement, emojiCorrection)
         // NEL shares a WebKit text item with the text before it and with
         // combining marks after it, and the complex text path spaces it. Complex
@@ -561,19 +545,19 @@ export function measureAnalysis(
         // preparation cannot see, so NEL next to complex text keeps its spacing.
         const nextText = mi + 1 < segmentCount ? texts[mi + 1]! : ''
         if (hasLetterSpacing && (
-          (mi > 0 && (flags[mi - 1]! & KIND_BITS) === TEXT && needsComplexTextPath(texts[mi - 1]!)) ||
+          (mi > 0 && (flags[mi - 1]! & SegmentFlag.KindBits) === SegmentKind.Text && needsComplexTextPath(texts[mi - 1]!)) ||
           (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
         )) spacingGraphemeCount = 1
         break
       }
-      case SOFT_HYPHEN:
-      case ZERO_WIDTH_GLUE:
-      case HARD_BREAK:
+      case SegmentKind.SoftHyphen:
+      case SegmentKind.ZeroWidthGlue:
+      case SegmentKind.HardBreak:
         break
     }
-    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) simpleKinds = false
-    if (kind !== TEXT && kind !== SOFT_HYPHEN) previousJoinablePiece = null
-    segmentFlags[mi] = (segment & ~ONE_CLUSTER) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0)
+    if (kind !== SegmentKind.Text && kind !== SegmentKind.Space && kind !== SegmentKind.ZeroWidthBreak) simpleKinds = false
+    if (kind !== SegmentKind.Text && kind !== SegmentKind.SoftHyphen) previousJoinablePiece = null
+    segmentFlags[mi] = (segment & ~SegmentFlag.OneCluster) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SegmentFlag.Spaced : 0)
     widths.push(addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing))
     breakableFitAdvances.push(fitAdvances)
     if (entry !== null && entryGeometry === null) entryGeometry = Array.from({ length: mi }, () => null)
@@ -585,7 +569,7 @@ export function measureAnalysis(
     // where this text's scan gives no break after it, as at the start of a Gecko text, can
     // be a soft hyphen in the text rich inline joins (recordJoinedBreaks), where a line ends
     // with the hyphen measured below.
-    if (kind !== TEXT && text.charCodeAt(0) === 0xAD) {
+    if (kind !== SegmentKind.Text && text.charCodeAt(0) === 0xAD) {
       discretionaryHyphenContexts ??= zeros(mi)
       discretionaryHyphenContexts.push(returnFitsEachSideAlone ? 0 : getJoinedNarrowing(mi, previousJoinablePiece, previousJoinableMetrics))
     } else {
@@ -655,10 +639,10 @@ function addIdeographicSpaceHangs(
   const { normalized, starts, flags } = analysis
   for (let i = 0; i < flags.length; i++) {
     const end = i + 1 < flags.length ? starts[i + 1]! : normalized.length
-    if ((flags[i]! & KIND_BITS) !== TEXT || normalized.charCodeAt(end - 1) !== 0x3000) continue
+    if ((flags[i]! & SegmentFlag.KindBits) !== SegmentKind.Text || normalized.charCodeAt(end - 1) !== 0x3000) continue
     if (i + 1 < flags.length) {
-      const next = flags[i + 1]! & KIND_BITS
-      if (next !== HARD_BREAK && next !== SPACE && !(next === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) continue
+      const next = flags[i + 1]! & SegmentFlag.KindBits
+      if (next !== SegmentKind.HardBreak && next !== SegmentKind.Space && !(next === SegmentKind.Text && (flags[i + 1]! & SegmentFlag.Unbroken) === 0)) continue
     }
     let start = end - 1
     while (start > starts[i]! && normalized.charCodeAt(start - 1) === 0x3000) start--

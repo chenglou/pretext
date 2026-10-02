@@ -20,31 +20,42 @@ export type SegmentBreakKind =
   | 'hard-break'
   | 'control'
 
-// A segment's flags byte: its kind's code in the low four bits, then what else the
-// walkers read of it.
-export const TEXT = 0
-export const SPACE = 1
-export const ZERO_WIDTH_BREAK = 2
-export const SOFT_HYPHEN = 3
-export const PRESERVED_SPACE = 4
-export const TAB = 5
-export const ZERO_WIDTH_GLUE = 6
-export const CONTROL = 7
-// Ends its chunk: a line's walk stops there, and the next line starts after it.
-export const HARD_BREAK = 8
-export const KIND_BITS = 0x0F
-// The segment takes letter spacing after its graphemes. Set by measurement.
-export const SPACED = 0x10
-// The engine's scan gives no break before the segment, so no line ends there.
-export const UNBROKEN = 0x20
-// The scan gives a break before the segment, in text that also has unbroken
-// boundaries, where a line that overflows at one returns to the latest such break.
-export const RETURNABLE = 0x40
-// The engine's clusters don't split the segment, so no emergency break splits it
-// either. Measurement clears it.
-export const ONE_CLUSTER = 0x80
-export type SegmentKindCode = typeof TEXT | typeof SPACE | typeof ZERO_WIDTH_BREAK | typeof SOFT_HYPHEN |
-  typeof PRESERVED_SPACE | typeof TAB | typeof ZERO_WIDTH_GLUE | typeof CONTROL | typeof HARD_BREAK
+// A segment's flags byte holds its kind's code in the low four bits, then what else the
+// walkers read of it. Const enums, so that the built code holds each use as its number:
+// as `const`s they were variables of the module, and Firefox 156 ran layout()'s counting
+// loop up to 16% slower or faster by the names a minifier gave them (RESEARCH.md,
+// JavaScript Engines).
+export const enum SegmentKind {
+  Text = 0,
+  Space = 1,
+  ZeroWidthBreak = 2,
+  SoftHyphen = 3,
+  PreservedSpace = 4,
+  Tab = 5,
+  ZeroWidthGlue = 6,
+  Control = 7,
+  // Ends its chunk: a line's walk stops there, and the next line starts after it.
+  HardBreak = 8,
+}
+export const enum SegmentFlag {
+  KindBits = 0x0F,
+  // The segment takes letter spacing after its graphemes. Set by measurement.
+  Spaced = 0x10,
+  // The engine's scan gives no break before the segment, so no line ends there.
+  Unbroken = 0x20,
+  // The scan gives a break before the segment, in text that also has unbroken
+  // boundaries, where a line that overflows at one returns to the latest such break.
+  Returnable = 0x40,
+  // The engine's clusters don't split the segment, so no emergency break splits it
+  // either. Measurement clears it.
+  OneCluster = 0x80,
+}
+// Sets of kinds, a bit per code. In this file, not beside its uses in src/line-break.ts:
+// Bun's bundler writes a member as its number only where one file gives its value.
+export const enum SegmentKindSet {
+  // A line can end after a segment of these kinds.
+  BreakAfter = 1 << SegmentKind.Space | 1 << SegmentKind.ZeroWidthBreak | 1 << SegmentKind.SoftHyphen | 1 << SegmentKind.PreservedSpace | 1 << SegmentKind.Tab,
+}
 // Each kind's name by its code, as prepareWithSegments() gives them.
 export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
   'text', 'space', 'zero-width-break', 'soft-hyphen', 'preserved-space', 'tab', 'zero-width-glue', 'control', 'hard-break',
@@ -53,10 +64,10 @@ export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
 // `spaceSources` holds, in the WebKit profile where normal white space collapsed, the source
 // unit each normalized unit starts from, such as the TAB or LF a space came from. Null otherwise.
 // `texts` holds each segment's text, `starts` where it starts in `normalized`, and `flags` its
-// flags byte: its kind, UNBROKEN where the engine's scan gives no break before text, zero-width
+// flags byte: its kind, Unbroken where the engine's scan gives no break before text, zero-width
 // glue or a control, other than at a line start, and where tabs don't hang before a tab or
-// the spaces after one, RETURNABLE at the other segments of text with such a boundary, which
-// `hasUnbroken` tells, and ONE_CLUSTER where the scan has clusters of its own.
+// the spaces after one, Returnable at the other segments of text with such a boundary, which
+// `hasUnbroken` tells, and OneCluster where the scan has clusters of its own.
 export type TextAnalysis = {
   normalized: string
   spaceSources: Uint16Array | null
@@ -174,15 +185,15 @@ function normalizeWhitespacePreWrap(text: string): string {
 
 const combiningMarkRe = /\p{M}/u
 
-function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
+function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKind {
   if (whiteSpace === 'pre-wrap') {
-    if (code === 0x20) return PRESERVED_SPACE
-    if (code === 0x09) return TAB
-    if (code === 0x0A) return HARD_BREAK
+    if (code === 0x20) return SegmentKind.PreservedSpace
+    if (code === 0x09) return SegmentKind.Tab
+    if (code === 0x0A) return SegmentKind.HardBreak
   }
-  if (code === 0x20) return SPACE
-  if (code === 0x200B) return ZERO_WIDTH_BREAK
-  if (code === 0x00AD) return SOFT_HYPHEN
+  if (code === 0x20) return SegmentKind.Space
+  if (code === 0x200B) return SegmentKind.ZeroWidthBreak
+  if (code === 0x00AD) return SegmentKind.SoftHyphen
   // NEL (UAX #14 NL) offers a break after itself and no ordinary break before it (LB5, LB6),
   // as the scans find. The WebKit profile gives NEL its own control segment for letter
   // spacing: WebKit's simple text path gives NEL no letter spacing, at either sign, and its
@@ -192,8 +203,8 @@ function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan
   // page's it keeps spacing Safari omits. Blink spaces NEL outside cursive runs, and release
   // Gecko draws NEL with no advance while its Canvas measures a space, so both keep NEL as
   // ordinary text.
-  if (code === 0x0085 && scan === 'webkit') return CONTROL
-  return TEXT
+  if (code === 0x0085 && scan === 'webkit') return SegmentKind.Control
+  return SegmentKind.Text
 }
 
 export function isCollapsibleSpaceCode(code: number): boolean {
@@ -248,9 +259,9 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // a zero-width break there holds a line and Firefox, which drops soft hyphens from its text runs,
 // gives it none. Text that continues a line with content before it, as a rich-inline window
 // after a collapsible space does, has content before its start.
-function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], afterContent: boolean): SegmentKindCode {
-  if ((code === 0x2028 || code === 0x2029) && (breaks[i + 1]! & FORCED_BREAK) !== 0) return HARD_BREAK
-  if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i, afterContent)) return ZERO_WIDTH_BREAK
+function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], afterContent: boolean): SegmentKind {
+  if ((code === 0x2028 || code === 0x2029) && (breaks[i + 1]! & FORCED_BREAK) !== 0) return SegmentKind.HardBreak
+  if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i, afterContent)) return SegmentKind.ZeroWidthBreak
   return classifySegmentBreakCode(code, whiteSpace, scan)
 }
 
@@ -263,7 +274,7 @@ function followsChunkContent(normalized: string, i: number, afterContent: boolea
 // Characters of these kinds share a segment when no break falls between them. Each
 // tab, hard break, ZWSP and NEL control stays its own segment.
 function gathersKind(kind: number): boolean {
-  return kind === TEXT || kind === SPACE || kind === PRESERVED_SPACE || kind === SOFT_HYPHEN
+  return kind === SegmentKind.Text || kind === SegmentKind.Space || kind === SegmentKind.PreservedSpace || kind === SegmentKind.SoftHyphen
 }
 
 // A control character that stays its own text segment, measured alone: the C0 and C1
@@ -280,7 +291,7 @@ function isControlSegmentCode(code: number): boolean {
 // segment, takes no letter spacing and doesn't end a line.
 // Combining marks right after it, or after a control, stay apart from the text after
 // them, since they shape on the grapheme before it (measureAnalysis). Where the Gecko
-// scan marks cluster starts, a segment is ONE_CLUSTER unless one falls inside it.
+// scan marks cluster starts, a segment is OneCluster unless one falls inside it.
 //
 // Firefox leaves soft hyphens and bidi controls out of the text run it breaks and maps a line end
 // past the characters it left out (IsDiscardable, nsTextFrameUtils.cpp:32-49; nsTextFrame.cpp:
@@ -299,7 +310,7 @@ function isControlSegmentCode(code: number): boolean {
 // them joins the cluster before, unless a bidi level run starts at it, where the scan starts a
 // cluster (gfxTextRun.cpp:2828-2835) and the extender starts a segment.
 function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], hangTabs: boolean, afterContent: boolean, dropsBidiControl: boolean): TextAnalysis {
-  const oneCluster = scan === 'gecko' ? ONE_CLUSTER : 0
+  const oneCluster = scan === 'gecko' ? SegmentFlag.OneCluster : 0
   const starts: number[] = []
   // A plain array, which measurement copies into the prepared handle's bytes: a Uint8Array for
   // each text slowed short texts' preparation (RESEARCH.md, Keeping Work Bounded).
@@ -319,9 +330,9 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       let controlEnd = -1
       for (; j < normalized.length && isDiscardable(normalized.charCodeAt(j), false); j++) if (isBidiControl(normalized.charCodeAt(j))) controlEnd = j + 1
       if (controlEnd > 0) {
-        const chunkStart = lastKind < 0 || lastKind === HARD_BREAK
+        const chunkStart = lastKind < 0 || lastKind === SegmentKind.HardBreak
         if (chunkStart) {
-          const endsChunk = j === normalized.length || classifySegmentUnit(normalized, breaks, j, normalized.charCodeAt(j), whiteSpace, scan, afterContent) === HARD_BREAK
+          const endsChunk = j === normalized.length || classifySegmentUnit(normalized, breaks, j, normalized.charCodeAt(j), whiteSpace, scan, afterContent) === SegmentKind.HardBreak
           if (!endsChunk) breaks[j] = breaks[j]! & ~(BREAK | SOFT_HYPHEN_BREAK)
           droppedEnd = j
           if (endsChunk && lastKind >= 0) continue
@@ -330,8 +341,8 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
         }
         if (chunkStart || lastAlone || markRun) {
           starts.push(i)
-          flags.push(TEXT | oneCluster)
-          lastKind = TEXT
+          flags.push(SegmentKind.Text | oneCluster)
+          lastKind = SegmentKind.Text
           lastAlone = false
           markRun = false
         }
@@ -339,7 +350,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       }
     }
     const kind = classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan, afterContent)
-    const alone = kind === TEXT && isControlSegmentCode(code)
+    const alone = kind === SegmentKind.Text && isControlSegmentCode(code)
     const unbroken = (breaks[i]! & BREAK) === 0
     const levelRunExtender = dropsBidiControl && i === droppedEnd && (breaks[i]! & CLUSTER_START) !== 0 && isBidiControl(normalized.charCodeAt(i - 1)) &&
       isClusterExtender(normalized.codePointAt(i)!)
@@ -347,11 +358,11 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       unbroken && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
       !levelRunExtender && kind === lastKind && gathersKind(kind)
     ) {
-      if ((breaks[i]! & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~ONE_CLUSTER
+      if ((breaks[i]! & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~SegmentFlag.OneCluster
       continue
     }
-    markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i]!) &&
-      (lastAlone || lastKind === ZERO_WIDTH_BREAK || lastKind === SOFT_HYPHEN || lastKind === CONTROL)
+    markRun = unbroken && kind === SegmentKind.Text && combiningMarkRe.test(normalized[i]!) &&
+      (lastAlone || lastKind === SegmentKind.ZeroWidthBreak || lastKind === SegmentKind.SoftHyphen || lastKind === SegmentKind.Control)
     starts.push(i)
     flags.push(kind | oneCluster)
     lastKind = kind
@@ -369,20 +380,20 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let hasUnbroken = false
   const count = flags.length
   for (let j = count - 2; j >= 0; j--) {
-    const kind = flags[j]! & KIND_BITS
-    const next = flags[j + 1]! & KIND_BITS
-    if ((breaks[starts[j + 1]!]! & BREAK) !== 0 || kind === HARD_BREAK) continue
-    if (!hangTabs && (next === TAB || (next === PRESERVED_SPACE && kind === TAB))) {
-      if (kind === SOFT_HYPHEN) continue
-    } else if (next === TEXT || next === ZERO_WIDTH_GLUE || next === CONTROL) {
-      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~KIND_BITS | ZERO_WIDTH_GLUE
+    const kind = flags[j]! & SegmentFlag.KindBits
+    const next = flags[j + 1]! & SegmentFlag.KindBits
+    if ((breaks[starts[j + 1]!]! & BREAK) !== 0 || kind === SegmentKind.HardBreak) continue
+    if (!hangTabs && (next === SegmentKind.Tab || (next === SegmentKind.PreservedSpace && kind === SegmentKind.Tab))) {
+      if (kind === SegmentKind.SoftHyphen) continue
+    } else if (next === SegmentKind.Text || next === SegmentKind.ZeroWidthGlue || next === SegmentKind.Control) {
+      if (kind === SegmentKind.ZeroWidthBreak || kind === SegmentKind.SoftHyphen) flags[j] = flags[j]! & ~SegmentFlag.KindBits | SegmentKind.ZeroWidthGlue
     } else {
       continue
     }
-    flags[j + 1] = flags[j + 1]! | UNBROKEN
+    flags[j + 1] = flags[j + 1]! | SegmentFlag.Unbroken
     hasUnbroken = true
   }
-  if (hasUnbroken) for (let j = 0; j < count; j++) if ((flags[j]! & UNBROKEN) === 0) flags[j] = flags[j]! | RETURNABLE
+  if (hasUnbroken) for (let j = 0; j < count; j++) if ((flags[j]! & SegmentFlag.Unbroken) === 0) flags[j] = flags[j]! | SegmentFlag.Returnable
   // Each segment's text, sliced once here for measurement and the neighbours it reads: sliced
   // where measurement reads it, Firefox's rich-inline preparation ran 11-19% slower (RESEARCH.md,
   // Keeping Work Bounded).

@@ -22,7 +22,7 @@
 // Canvas once per font: in `cc` HanKerning halts exactly one of the two, so a character's trim
 // is 2 W(c) - W(cc), and the types of dots, colons, semicolons and quotes follow their ink
 // bounds under the page's Han script (han_kerning.cc:47-168, 400-535).
-import { KIND_BITS, TEXT, UNBROKEN, type TextAnalysis } from './analysis.js'
+import { SegmentFlag, SegmentKind, type TextAnalysis } from './analysis.js'
 import { hasProperty, PUNCTUATION } from './line-breaks.js'
 import { getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
 
@@ -205,7 +205,7 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     out.widthTrims[i] = out.widthTrims[i]! + trim
   }
   for (let i = 0; i < count; i++) {
-    if ((flags[i]! & KIND_BITS) !== TEXT) continue
+    if ((flags[i]! & SegmentFlag.KindBits) !== SegmentKind.Text) continue
     const start = starts[i]!
     const end = i + 1 < count ? starts[i + 1]! : normalized.length
     const first = normalized.charCodeAt(start)
@@ -236,7 +236,7 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     const lastType = getStaticCharType(normalized, end - 1)
     if ((lastType !== CLOSE && lastType !== CLOSE_QUOTE) || getCharType(data, normalized, end - 1) !== CLOSE) continue
     // A break directly after the segment: text after a break, or the end of the text.
-    if (atEnd || ((flags[i + 1]! & KIND_BITS) === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) {
+    if (atEnd || ((flags[i + 1]! & SegmentFlag.KindBits) === SegmentKind.Text && (flags[i + 1]! & SegmentFlag.Unbroken) === 0)) {
       out.lineEndTrims ??= zeros(count)
       out.lineEndTrims[i] = getTrim(data, last, measurement)
     } else {

@@ -1632,6 +1632,37 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   a lead only; in Chrome 154 the bench read every row of this build within noise of main in three sessions, the line
   rows included, which the field alone had read 11-18% slower (#391, 2026-10-01). No other function inlined while
   preparing and laying out the bench's mixed and rich texts takes over 374 bytes (`getMarkContext()`, above).
+- **The names a minifier picks**: Firefox 156.0.1 read the bench's "resize: latin layout at new widths" 13-16% slower
+  or faster by nothing but the names Bun's minifier gave the bundle's top-level bindings (2026-10-02, three sessions
+  each against 29562782, main before #394). A branch read +16.4%; main with only that branch's new profile field, and
+  the branch without the field, within noise; that last build with one more local in a function `layout()` never runs,
+  after which the minifier names the bindings as the branch's bundle does, +13.5%; the whole branch under other names,
+  within noise. Main after #394-#399 read +17.6% against main before them, with no change on the row's path. The row
+  times `countPreparedLines()`, whose loop read four `const`s of `src/analysis.ts` (the kind mask and three kinds), on
+  the one resize text with words longer than the line (two rules of 72 hyphens), so the loop's grapheme path runs too.
+  The reading, from SpiderMonkey's source (the `FIREFOX_156_0_RELEASE` tag) and an emulation of it, not seen inside
+  Firefox: the bindings of a function scope that inner functions read get slots in the order of a hash of their names,
+  the first 14 fixed in the environment object and the rest in its dynamic slots (`newFunctionScopeData`,
+  `Parser.cpp`), a bundle's top level is such a scope, and Warp compiles the two kinds of load differently
+  (`WarpBuilder::build_GetAliasedVar`); every slow bundle had one of the four constants in a fixed slot and no fast
+  one did. The SpiderMonkey shell of 156.0.1 agrees, on a stand-in Canvas, so as a lead only: main +12-24% on that row,
+  four one-local variants of main that keep a constant in a fixed slot +14-18%, one that leaves none within 6%. So
+  the segment kinds and flag bits are const enums (`SegmentKind`, `SegmentFlag`, `SegmentKindSet`; #TBD), which `tsc`
+  and Bun's bundler write into the code as numbers, and the walkers' loops read no variable for them. In the shell,
+  ten namings of that build's bundle, four with a function on `layout()`'s path moved into a fixed slot, read alike on
+  both Latin resize rows: new widths within 9% of 29562782, and widths seen before 9-18% slower than it and than main.
+  That second number is the loop as first compiled, for whole-number widths alone; laid out again at whole widths
+  after one fractional width, the build read from 10% faster than 29562782 to 3% slower, where main read 14-24%
+  slower. Main with the
+  four numbers written into `countPreparedLines()` alone read as the const-enum build, and with only some of them
+  written in read other ways again (the mask alone: both rows as 29562782, with a kind still in a fixed slot; the text
+  kind alone: new widths 11-16% slower with no constant in a fixed slot), so slots are one of several small things
+  that move this loop, and numbers remove that one and no other. Chrome 154's V8 (d8 15.4.80) read main and the
+  const-enum build alike on both rows. PR #TBD has the browser tables. Two traps: `tsc` writes a const enum's members
+  as numbers only without `verbatimModuleSyntax`, which `tsconfig.build.json` turns off and `bun run
+  package-smoke-test` checks, and Bun 1.4.2's bundler writes a member computed from another file's enum as a property
+  read, so `SegmentKindSet` sits beside the kinds. When a Firefox row moves and no code on its path changed, build the
+  same code under other names (one more local anywhere renames top-level bindings) before calling it a change.
 - **Class fields in Firefox**: with any class field in the bundle, Firefox 156 took 4.5-4.8ms to evaluate it on a fresh
   page, against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors, seemingly because it
   then compiles the whole bundle up front (the doubling is measured, the cause a guess); V8 and JavaScriptCore didn't
