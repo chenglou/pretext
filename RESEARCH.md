@@ -1768,7 +1768,7 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   constants in a fixed slot and no fast one did. The SpiderMonkey shell of 156.0.1 agrees, on a stand-in Canvas, so as
   a lead only: main +12-24% on that row, four one-local variants of main that keep a constant in a fixed slot +14-18%,
   one that leaves none within 6%. So the segment kinds and flag bits are const enums (`SegmentKind`, `SegmentFlag`,
-  `SegmentKindSet`; #TBD), which `tsc` and Bun's bundler write into the code as numbers, and the walkers' loops read no
+  `SegmentKindSet`; #406), which `tsc` and Bun's bundler write into the code as numbers, and the walkers' loops read no
   variable for them. In the shell, eleven namings of that build's bundle, five with a function on `layout()`'s path
   moved into a fixed slot, read alike on both Latin resize rows: new widths within 9% of 29562782, and widths seen
   before 9-18% slower than it and than main. That second number is the loop as first compiled, for whole-number widths
@@ -1783,7 +1783,7 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   are states of how Ion compiles the loop once its unused blocks are cut and the grapheme path isn't one of them, a
   constant's slot is one of several small things that pick the state, and numbers take the names out of it and
   nothing else. Chrome 154's V8 (d8
-  15.4.80) read main and the const-enum build alike on both rows. PR #TBD has the browser tables. Two traps: `tsc`
+  15.4.80) read main and the const-enum build alike on both rows. PR #406 has the browser tables. Two traps: `tsc`
   writes a const enum's members as numbers only without `verbatimModuleSyntax`, which `tsconfig.build.json` turns off
   and `bun run package-smoke-test` checks, and Bun 1.4.2's bundler writes a member computed from another file's enum
   as a property read, so `SegmentKindSet` sits beside the kinds; with const enums it also names a bundle's bindings by
