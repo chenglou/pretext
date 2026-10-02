@@ -182,6 +182,9 @@ function getScriptClasses(): ScriptClasses {
 // alone. U+3008-U+301A and U+FF62, of that width too, list their scripts. A bracket
 // under such a mark has the mark's scripts by then, so it isn't made Han.
 const wideOpeningBrackets = '\u2329\uFE59\uFE5B\uFE5D\uFF08\uFF3B\uFF5B\uFF5F'
+// The scripts of each character that has a script of its own, by code point, once asked: they
+// are Unicode's, so they never go stale, and a text's distinct characters bound them.
+const scriptsByCode = new Map<number, number>()
 
 // The scripts of the character at text[i], by Script_Extensions, as Blink reads them
 // (GetScripts, script_run_iterator.cc:118-215).
@@ -189,17 +192,23 @@ function getScripts(text: string, i: number): number {
   // ASCII letters are Latin and the rest of ASCII is Common, unless a mark follows.
   const code = text.charCodeAt(i)
   if (code < 0x80 && !(text.charCodeAt(i + 1) >= 0x300)) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? LATIN_SCRIPT : ANY_SCRIPT
+  const c = text.codePointAt(i)!
+  const kept = scriptsByCode.get(c)
+  if (kept !== undefined) return kept
   const classes = getScriptClasses()
-  let character = String.fromCodePoint(text.codePointAt(i)!)
-  if (classes.neutral.test(character)) {
+  let character = String.fromCodePoint(c)
+  const neutral = classes.neutral.test(character)
+  if (neutral) {
     classes.markedCommon.lastIndex = i
     const marked = classes.markedCommon.exec(text)
     if (marked === null) return wideOpeningBrackets.includes(character) ? OTHER_SCRIPT : ANY_SCRIPT
     character = marked[1]!
   }
-  if (classes.cursive.test(character)) return CURSIVE_SCRIPT
-  return (classes.latin.test(character) ? LATIN_SCRIPT : 0) | (classes.cyrillic.test(character) ? CYRILLIC_SCRIPT : 0) |
-    (classes.greek.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
+  const scripts = classes.cursive.test(character) ? CURSIVE_SCRIPT
+    : (classes.latin.test(character) ? LATIN_SCRIPT : 0) | (classes.cyrillic.test(character) ? CYRILLIC_SCRIPT : 0) |
+      (classes.greek.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
+  if (!neutral) scriptsByCode.set(c, scripts)
+  return scripts
 }
 
 // How far a text's script runs are read, the scripts the run there can be in, and each
