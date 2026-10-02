@@ -1656,10 +1656,13 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   slower, where main read 14-24% slower. Main with the four numbers written into `countPreparedLines()` alone read as
   the const-enum build, and with only some of them written in read other ways again (the mask alone: both rows as
   29562782, with a kind still in a fixed slot; the text kind alone: new widths 11-16% slower with no constant in a
-  fixed slot). With the shell's branch pruning off (`--ion-pruning=off`; `PruneUnusedBranches`, `BranchPruning.cpp`,
-  cuts the blocks that hadn't run when Ion compiled), every build read alike on both rows, at about twice the time. So
-  these are states of how Ion compiles the loop once its unused blocks are cut, a constant's slot is one of several
-  small things that pick the state, and numbers take the names out of it and nothing else. Chrome 154's V8 (d8
+  fixed slot). Without the two rules (276 of the text's 278 messages), main, main under other names
+  and the const-enum build read alike on both rows, within 6%: both slowdowns need the loop's grapheme path to have
+  run. With the shell's branch pruning off (`--ion-pruning=off`; `PruneUnusedBranches`, `BranchPruning.cpp`, cuts the
+  blocks that hadn't run when Ion compiled), every build read alike on both rows, at about twice the time. So these
+  are states of how Ion compiles the loop once its unused blocks are cut and the grapheme path isn't one of them, a
+  constant's slot is one of several small things that pick the state, and numbers take the names out of it and
+  nothing else. Chrome 154's V8 (d8
   15.4.80) read main and the const-enum build alike on both rows. PR #TBD has the browser tables. Two traps: `tsc`
   writes a const enum's members as numbers only without `verbatimModuleSyntax`, which `tsconfig.build.json` turns off
   and `bun run package-smoke-test` checks, and Bun 1.4.2's bundler writes a member computed from another file's enum
