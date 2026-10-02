@@ -119,9 +119,7 @@ function isSpaceKind(kind: number): boolean {
 }
 
 // The scripts a character can be in, for kerning with a space, as bits: Cyrillic, Greek, Latin,
-// and one bit for a character in none of them; a character of any script has all four. The three
-// are in Blink's order for a Common character's extensions, by ICU script code with Latin last
-// (GetScripts, script_run_iterator.cc:191-198), so a run's lowest bit is the script it resolves to.
+// and one bit for a character in none of them; a character of any script has all four.
 const OTHER_SCRIPT = 1
 const CYRILLIC_SCRIPT = 2
 const GREEK_SCRIPT = 4
@@ -149,17 +147,15 @@ function getKerningScripts(character: string): number {
     (greekScriptRe.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
 }
 
-// How far a text's script runs were read, the scripts the run there can be in, and the script of
-// the run the last opening bracket is in: 0 before a bracket, -1 while its run goes on.
-type ScriptRuns = { read: number, scripts: number, bracket: number }
-
 // Whether the space before the text segment text[at..end) is in the script run of the segment's
 // first character past default ignorables, the one it kerns with. Blink shapes each script run
 // apart (HarfBuzzShaper::Shape, harfbuzz_shaper.cc:1063-1104), and a space joins the run of the
-// text before it (ScriptRunIterator::MergeSets, :490-510). The search back ends at the nearest
-// character with one script; a closing bracket, or a character of several scripts, takes its
-// script from the runs before it (readScriptRuns).
-function spaceSharesScriptRun(text: string, at: number, end: number, runs: ScriptRuns): boolean {
+// text before it (ScriptRunIterator::MergeSets, :490-510), which the nearest character with one
+// script before the space names. Premise: where a closing bracket or a character of several
+// scripts comes first, the space is in another run than the word. Blink gives the bracket the
+// script of the run its opening bracket is in (CloseBracket, :443-489), which may be the word's
+// (RESEARCH.md, Kerning At Line Edges, has the gap).
+function spaceSharesScriptRun(text: string, at: number, end: number): boolean {
   let scripts = getKerningScripts(text[at]!)
   // A default ignorable with a script of its own, as U+061C, counts as the word's first letter.
   while (scripts === ANY_SCRIPT && at + 1 < end && hasProperty(text.charCodeAt(at), DEFAULT_IGNORABLE)) scripts = getKerningScripts(text[++at]!)
@@ -167,38 +163,10 @@ function spaceSharesScriptRun(text: string, at: number, end: number, runs: Scrip
   for (let i = at - 1; i >= 0; i--) {
     const character = text[i]!
     const before = getKerningScripts(character)
-    if (before === ANY_SCRIPT) {
-      if (character === ' ' || !closingBracketRe.test(character)) continue
-    } else if ((before & (before - 1)) === 0) {
-      return (before & scripts) !== 0
-    }
-    return (readScriptRuns(text, at, runs) & scripts) !== 0
+    if (before !== ANY_SCRIPT) return (before & (before - 1)) === 0 && (before & scripts) !== 0
+    if (character !== ' ' && closingBracketRe.test(character)) return false
   }
   return true
-}
-
-// The scripts of the run that ends before text[to], read on from the last call as
-// ScriptRunIterator::Consume reads them (:325-429): a run keeps the scripts its characters share
-// and ends before one that shares none. A closing bracket takes the script of the run its opening
-// bracket is in, once that run has ended (CloseBracket, :443-489); any opening bracket pairs
-// with any closing one here, and only the last one opened is remembered.
-function readScriptRuns(text: string, to: number, runs: ScriptRuns): number {
-  for (; runs.read < to; runs.read++) {
-    const character = text[runs.read]!
-    let scripts = getKerningScripts(character)
-    // Brackets are Common or, with extensions, East Asian.
-    const opens = (scripts & OTHER_SCRIPT) !== 0 && openingBracketRe.test(character)
-    if (!opens && runs.bracket > 0 && (scripts & OTHER_SCRIPT) !== 0 && closingBracketRe.test(character)) scripts = runs.bracket
-    if ((runs.scripts & scripts) !== 0) {
-      runs.scripts &= scripts
-    } else {
-      // The run that ends resolves to its first script (ResolveCurrentScript, :639-642).
-      if (runs.bracket === -1) runs.bracket = runs.scripts & -runs.scripts
-      runs.scripts = scripts
-    }
-    if (opens) runs.bracket = -1
-  }
-  return runs.scripts
 }
 
 // Bidi class B: the characters that end a bidi paragraph.
@@ -374,7 +342,6 @@ export function measureAnalysis(
   // right-to-left letter or an explicit bidi control takes none.
   let fontSpaceKerning = engineProfile.kernsSpacesInScriptRun && normalized.includes(' ') ? getFontSpaceKerning(fontMeasurement) : null
   if (fontSpaceKerning !== null && mixedDirectionRe.test(normalized)) fontSpaceKerning = null
-  const scriptRuns: ScriptRuns = { read: 0, scripts: ANY_SCRIPT, bracket: 0 }
   // What the word before a space adds to that space, the next segment (SpaceKerning.space).
   let spaceShare = 0
 
@@ -487,7 +454,7 @@ export function measureAnalysis(
             // their own (inline_items_builder.cc:988-1034), which kerns with nothing.
             if (afterSpace && kerning.before !== 0 &&
               !((flags[mi - 1]! & KIND_BITS) === PRESERVED_SPACE && (mi === 1 || (flags[mi - 2]! & KIND_BITS) === HARD_BREAK)) &&
-              spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length, scriptRuns)) {
+              spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length)) {
               widths[mi - 1] = widths[mi - 1]! + kerning.before
             }
           }

@@ -821,10 +821,12 @@ paragraphs right), and lost none.
 
 Outside the harness, of 186,720 layouts recorded fresh and not kept, 7,652 were wrong before and 509 are with it:
 Latin, Cyrillic and Greek paragraphs and interface texts in 56 and 80 font specs, texts that mix scripts in 28, and the
-same in pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Five that were right
-went wrong: four Avenir Next layouts of Russian text with a Latin word in guillemets, where Canvas kerns the opening
-quote with the letter after it and the page doesn't, which the wide spaces hid before, and one pre-wrap line of ZWNJs
-at word edges (ENGINE_FOLLOWUPS.md, Kerning with spaces). Of 22,680 single lines, 5,936 measured more than 0.1px wider
+same in pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Those were counted
+with the script runs read forward; the premise about closing brackets (below) gave 38 of the interface texts' 46,400
+layouts back, and the other sets weren't run again. Five that were right went wrong: four Avenir Next layouts of
+Russian text with a Latin word in guillemets, where Canvas kerns the opening quote with the letter after it and the
+page doesn't, which the wide spaces hid before, and one pre-wrap line of ZWNJs at word edges (ENGINE_FOLLOWUPS.md,
+Kerning with spaces). Of 22,680 single lines, 5,936 measured more than 0.1px wider
 than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word stays on the first
 line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by up to 3.61px, and
 4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179 multi-line
@@ -926,17 +928,32 @@ vocabulary. The premises and their gaps:
   extensions is in those scripts only, and a run keeps the scripts all its characters share (`MergeSets`, `:490-565`).
   So an ideographic full stop or comma, a katakana middle dot or a corner bracket ends a Latin run, and the space after
   `App。` doesn't kern with `You`; read by the Script property it did, 0.29px narrow in 16px Arial and 2.80px in italic
-  Gill Sans. A middle dot, which Latin and Greek share, goes on a Latin run and ends a Cyrillic one, and so does the
-  narrow no-break space. A closing bracket takes the script of the run its opening bracket is in (`CloseBracket`,
-  `:443-489`), so the space after `на [Yandex]` is in a Cyrillic run and doesn't kern with a Latin `Y`, and the space
-  after `a (б)` kerns with `T`; an opening bracket that is East Asian wide is in the Han scripts
-  (`FixScriptsByEastAsianWidth`, `:83-110`), so neither does the space after `on （Yandex）` or the one in `x （ Tom`.
-  Where a search for the space's run meets a closing bracket or a character of several scripts, the profile reads the
-  runs from the text's start as Blink does (`readScriptRuns()` in `src/prepare.ts`). A run that ends with several
-  scripts left gives its opening bracket the first of them, and Blink orders a Common character's extensions by ICU
-  script code with Latin last (`GetScripts`, `:191-198`): after `(· ж)` the space doesn't kern with a Latin word.
-  Scripts other than Latin, Cyrillic and Greek count as one, half of a surrogate pair as Common, and any opening bracket
-  as the pair of any closing one (ENGINE_FOLLOWUPS.md has what each gets wrong).
+  Gill Sans. An opening bracket that is East Asian wide is in the Han scripts (`FixScriptsByEastAsianWidth`,
+  `:83-110`), so the space in `x （ Tom` doesn't kern either. The profile finds the space's run by searching back from
+  it for the nearest character with one script (`spaceSharesScriptRun()` in `src/prepare.ts`). Scripts other than
+  Latin, Cyrillic and Greek count as one, and half of a surrogate pair as Common (ENGINE_FOLLOWUPS.md has what each
+  gets wrong).
+- **After a closing bracket or a character of several scripts, the space is in another run than the word after it**, and
+  takes no kerning with it. That is a premise, taken for the code it saves (#TBD). Blink gives a closing bracket the
+  script of the run its opening bracket is in (`CloseBracket`, `:443-489`), so the space after `на [Yandex]` is in a
+  Cyrillic run and doesn't kern with a Latin `Y`, while the space after `a (б)` kerns with `T`; and a middle dot or a
+  narrow no-break space, which Latin and Greek share, goes on a Latin run and ends a Cyrillic one. Telling the two apart
+  takes reading the runs from the text's start and keeping the run of the last opening bracket, which the profile did
+  until then, in 22 more code lines and a record per text. The gap is where Blink leaves the space in the word's run:
+  after a bracket opened in the word's script or before any letter, with or without punctuation after it (`(see above)
+  The`, `(see above). The`), and after a middle dot in text of the word's script. Such a line stays as wide as on main,
+  by one kerning: `(T) Table it.` measures wider than Chrome lays it out in 34 of 80 font specs, by 0.20px in 11px
+  Arial, 0.25px in 14px Arial, 0.87px in 48px Arial and 1.75 to 2.52px in Gill Sans, and in 16px Gill Sans `Tom · We` is
+  2.00px wide and `see (above). The (x) Tom` 4.00px. On the harness 3 of 42,881 Chrome predictions differ from those of
+  the runs read forward, all among the sample's 11,901 paragraphs: one line of each is 0.25 to 0.31px wider than
+  Chrome's (`(IPPS) Trocar` and `(k) Tạo` in Roboto, `height). The` in 14px `"Segoe UI", sans-serif`), and no line count
+  or break moves. Of the 46,400 layouts of interface texts above, 128 are wrong where 90 were; the 38 are layouts of
+  four of the 58 texts in 19 of the 80 font specs, and each is wrong on main the same way. Of their 17,200 single lines,
+  234 measure 0.16 to 2.80px wider than painted, so 270 are more than 0.1px wide where 36 were and 6,121 are on main. Of
+  the 8,680 layouts of texts that mix scripts none moves, and 9 of their 2,716 single lines are 0.19 to 2.00px wider,
+  all `Ta） Wu`, a fullwidth closing bracket with none opened, which is Common in Blink (pinned Chrome 154.0.8037.57,
+  2026-10-01). Reopens if such lines matter in a font whose capitals kern much with the space, as Gill Sans's do; the
+  forward reader is `readScriptRuns()` in the history of #TBD.
 - **A space kerns with a word only inside one item.** Blink shapes nothing across a control item or a change of
   direction. Preserved spaces that start the text or follow a forced break are an item of their own with a break
   opportunity after it (`inline_items_builder.cc:988-1034`), so under pre-wrap they don't kern with the word after them,

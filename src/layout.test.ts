@@ -5592,11 +5592,10 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
       ['\\u0436\\u0436 TT', '16px Test', {}], ['\\u0436\\u0436 \\u0422\\u0422', '16px Test', {}], ['TT \\u0436\\u0436, TT', '16px Test', {}],
       ['12 TT', '16px Test', {}], ['AA TT', '16px Glyph', {}],
       ['  TT\\n TT', '16px Test', { whiteSpace: 'pre-wrap' }], ['\\u0436\\u0436 \\u2060TT', '16px Test', {}],
-      ['\\u0436\\u0436 (TT) TT', '16px Test', {}], ['TT (\\u0436\\u0436) TT', '16px Test', {}], ['(TT) \\u0422\\u0422', '16px Test', {}],
-      ['(12) TT', '16px Test', {}], ['\\u05D0 AA TT AA \\u05D1', '16px Test', {}], ['\\u202AAA TT', '16px Test', {}],
+      ['\\u0436\\u0436 (TT) TT', '16px Test', {}], ['TT (\\u0436\\u0436) TT', '16px Test', {}], ['(12) TT', '16px Test', {}],
+      ['\\u05D0 AA TT AA \\u05D1', '16px Test', {}], ['\\u202AAA TT', '16px Test', {}],
       ['AA T\\u0301T', '16px Test', {}],
-      ['TT\\u3002 TT', '16px Test', {}], ['TT \\u00B7 TT', '16px Test', {}], ['\\u03B1\\u03B1 \\u00B7 TT', '16px Test', {}],
-      ['TT \\uFF08TT\\uFF09 TT', '16px Test', {}], ['TT \\uFF08 TT', '16px Test', {}], ['(\\u00B7 \\u0436\\u0436) TT', '16px Test', {}],
+      ['TT\\u3002 TT', '16px Test', {}], ['TT \\uFF08 TT', '16px Test', {}], ['TT \\u00B7 TT', '16px Test', {}],
       ['AA TT', '16px Halves', {}], ['AA  TT', '16px Halves', { whiteSpace: 'pre-wrap' }],
       ['xW y', '16px Halves Wide', {}], ['y Wx', '16px Halves Wide', {}], ['AA TT', '16px Halves Wide', {}],
       ['AA TT', '16px Plain', {}], ['\\u0436\\u0436 \\u0422\\u0422', '16px Cyrillic', {}],
@@ -5647,13 +5646,13 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     [8, 16, 0, 4, 16],
     // The script is read at the letter whose kerning is taken, past a word joiner.
     [16, 4, 16],
-    // A closing bracket takes the script of the run its opening bracket is in, so the space
-    // after it kerns with a word of that script only. A bracket that starts the text is in
-    // the run of the first letter after it, or of the word past the space when none comes.
+    // Premise: the space after a closing bracket is in another run than the word after it,
+    // as after a bracket opened in a Cyrillic run. Its gap: Blink gives the bracket the script
+    // of the run its opening bracket is in, so one opened in a Latin run, or before any letter,
+    // leaves the space in the Latin word's run, and Chrome kerns the two by 2px.
     [16, 4, 32, 4, 16],
-    [16, 4, 32, 2, 16],
+    [16, 4, 32, 4, 16],
     [32, 4, 16],
-    [32, 2, 16],
     // Which spaces share a level with a word depends on the paragraph's direction once a
     // text holds a right-to-left letter or an explicit bidi control, so such a text takes no
     // kerning.
@@ -5663,19 +5662,14 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     // bare letter's kerning with the space says nothing about.
     [19, 4, 16],
     // Script_Extensions: an ideographic full stop is in East Asian scripts only, so it ends a
-    // Latin run and the space after it is in its run. A middle dot is in Latin and Greek among
-    // others: it goes on a Latin run, and after Greek it leaves the run Greek.
+    // Latin run and the space after it is in its run. A fullwidth opening bracket is in the Han
+    // scripts, a run of its own, which the space after it is in.
     [24, 4, 16],
-    [16, 4, 8, 2, 16],
     [16, 4, 8, 4, 16],
-    // A fullwidth opening bracket is in the Han scripts, a run of its own, which its closing
-    // bracket takes, and which the space after it is in.
-    [16, 4, 32, 4, 16],
+    // Premise: the space after a character of several scripts is in another run than the word
+    // after it. Its gap: a middle dot, in Latin and Greek among others, goes on a Latin run, and
+    // Chrome kerns the space after it with a Latin word by 2px.
     [16, 4, 8, 4, 16],
-    // A bracket opened in a run that ends with several scripts left takes the first of them, and
-    // Latin is the last: after a middle dot, which Latin and Greek share, the run is Greek, so
-    // the space after the closing bracket doesn't kern with a Latin word.
-    [16, 4, 24, 4, 16],
     // The kern table puts half of a word's kerning with the space on the space.
     [19.5, 1.5, 16],
     [19.5, 5.5, 16],
