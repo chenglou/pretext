@@ -1288,8 +1288,17 @@ and about 2 are the array of what line starts give back (`lineStartExtras`), whi
 sits across two segments. The bracket row is nearly all walk. In a font that kerns no kana both rows read level (-0.5 to
 +0.5%), as do the bench's Latin, Chinese and mixed rows in fonts that have measured no kana (-1.1 to +1.3%; the method
 doesn't tell 1% apart), which read 0.2 to 3.3% slower with the scan. The table is 191 by 191 float64, 292 KB for each
-font that kerns kana, where a `Map` of the 290 paragraphs' 1,142 pairs took about 60 KB in Node 23. The bench hasn't
-timed the table or the question's conditions.
+font that kerns kana, where a `Map` of the 290 paragraphs' 1,142 pairs took about 60 KB in Node 23.
+
+The bench then timed the build with the table and the question's conditions against the branch before (Chrome
+154.0.8037.57, two sessions, load averages 4 to 6, 2026-10-02). In 16px Hiragino Sans text prepared again read 8.7%
+slower (sessions of +9.1% and +8.0%; 103.2 to 112.5µs per 1,000 characters), 2.4 points under the build with the `Map`,
+which is about what the table read offline; the two builds weren't benched against each other. New text read within
+noise (+13.6%, sessions of +23.2% and +2.9%, where a second copy of the branch before read +9.1% and -4.6%), and a fresh
+page's first batch took 24.08µs a character against 21.70 and its second 2.28 against 1.95, where the second copy took
+22.00 and 1.70. In the bench's own fonts `cjk-brackets-keep-all` prepare read 6.7% slower (+6.3% and +6.9%) and no other
+new, seen or worst row slower: `latin seen` read -0.9% and the other seen rows 0.0 to +0.8%, so the question's
+conditions took the scan's cost away.
 
 A pair's adjustment sits on its first glyph (GPOS pair positioning), and a line that breaks between the two is shaped
 again without it at both ends (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:511-584`), where Blink tests
