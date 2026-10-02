@@ -220,8 +220,9 @@ harness/invariants.test.ts`) and the bench's floors.
   which `check` never fails on, still shows there.
 - An offline replay detects change but isn't an oracle: its stand-in Canvas gives each character a width from a
   formula, moved a little by each pair of neighbouring characters (`offline-equal.ts`), so it can't fail on shaping,
-  painting or string storage. Every stand-in font kerns the space, so offline the Chromium profile never takes the
-  path of a font that kerns nothing with it, which `src/layout.test.ts` and the browsers run.
+  painting or string storage. Every stand-in font kerns the space, and kana on a context under `optimizeLegibility`,
+  so offline the Chromium profile never takes the path of a font that kerns nothing with either, which
+  `src/layout.test.ts` and the browsers run.
 - Without the invariants' desktop user agent and string `letterSpacing` (`invariants.ts`), a planted defect in reusing
   a prepared handle went unseen in 500 draws.
 - Canvas-call counts before #355 aren't comparable with later ones: the harness's adapter (`run.ts`) stopped calling
