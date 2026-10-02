@@ -3139,13 +3139,30 @@ decisions for the maintainer.
   text loops and to 1 in rich inline's four places, and that clamp was a `Math.max`. `clampLineWidth()`
   (`src/line-break.ts`) is the clamp written as two comparisons, `maxWidth > least ? +maxWidth : maxWidth <= least ?
   least : Infinity`: a valid width takes one comparison where `Math.max` made one, a width that fails both is unbounded,
-  and a string of digits is still made a number, as `Math.max` made it. No API checks its width at its entry. PROBE
-  Three forms that added work to valid input's path came first, each timed in Chrome 154.0.8037.57. With `layout()`'s
-  two fit tests negated into overflow tests, `layout()` of the bench's Arabic book read 3.4-4.8% slower in each of three
-  sessions (2026-10-01). With a comparison at the entry of all nine line APIs, the mixed stream row, which paid it for
-  each line, read 1.7% and 3.4% slower in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three. With that
-  comparison in the six APIs called once for a paragraph only (`normalizeMaxWidth()`, #401), the three streams, called
-  once for each line, took their width as given and differed from `Infinity` in three places: a pre-wrap line ending in
-  hanging spaces reported a `NaN` width, a line starting inside a segment with fresh-line geometry ended after one
-  grapheme, and in the Gecko profile a rich fragment started after its item's leading soft hyphens. BENCH Whether such a
-  width should throw, as a `letterSpacing` that isn't finite does (#356), is on the API discussion's list (TODO.md).
+  and a string of digits is still made a number, as `Math.max` made it. No API checks its width at its entry. No line
+  API's result at `NaN` or `undefined` differs from the one at `Infinity`, the three streams included, from the text's
+  start or from a start inside a segment or an item, over 5,932 plain and 2,068 rich cases drawn from the sets in each
+  of the four profiles on the stand-in Canvas (2026-10-02), and no prediction at a number moved in any browser. Rich
+  inline's three clamps for a paragraph of one item make no difference at `NaN`, since the walker they hand the width to
+  clamps it again; they use the same function so that every clamp of a width reads alike. Three forms that added work to
+  valid input's path came first, each timed in Chrome 154.0.8037.57. With `layout()`'s two fit tests negated into
+  overflow tests, `layout()` of the bench's Arabic book read 3.4-4.8% slower in each of three sessions (2026-10-01).
+  With a comparison at the entry of all nine line APIs, the mixed stream row, which paid it for each line, read 1.7% and
+  3.4% slower in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three. With that comparison in the six APIs
+  called once for a paragraph only (`normalizeMaxWidth()`, #401), the three streams, called once for each line, took
+  their width as given and differed from `Infinity` in three places: a pre-wrap line ending in hanging spaces reported a
+  `NaN` width, a line starting inside a segment with fresh-line geometry ended after one grapheme, and in the Gecko
+  profile a rich fragment started after its item's leading soft hyphens. The clamp has one known cost. Against the tree
+  before #401, over three sessions of Chrome's `lines`, `resize` and `worst` rows (2026-10-02), no row has a verdict,
+  and one reads the same way in every session with its control level: `layout()` of the Arabic book, 0.9-1.5% slower
+  with the second copy of the base 0.0-0.2% faster, under that row's 2% floor. `layout()` clamps once a call there, for
+  106,576 characters, so it isn't the clamp's own work; the count loop (`countPreparedLines()`) runs slower after it.
+  Offline, as hypotheses, the d8 shell of that Chrome read the row 1.7-2.7% slower than #401's form in four runs of 20
+  to 24 processes and the SpiderMonkey shell of Firefox 156.0.1 3.2%, with the clamp in that loop alone 3.5% slower in
+  d8 and `Math.max` there alone within noise; `Math.max` around the clamp there still read 1.2% slower, so it isn't what
+  the compiler knows of the limit, and the cause wasn't found. d8 read `layout()` of chat messages, of the soft-hyphen
+  text and of the long breakable runs level. #401's form, timed the same way on the `lines` and `resize` rows, has no
+  verdict either, and reads `layout()` at widths seen before above the base in every session for four of the five
+  families (0.1-4.0%, under their 5% floor). A bench that reads the Arabic book's `layout()` slower than its floor in
+  every session reopens #401's form for `layout()`. Whether such a width should throw, as a `letterSpacing` that isn't
+  finite does (#356), is on the API discussion's list (TODO.md).
