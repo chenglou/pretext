@@ -25,9 +25,9 @@ import { getWebKitBreakBetweenItems } from './line-breaks.js'
 import { buildLineTextFromRange, getGraphemeEnds, type PreparedSegments } from './line-text.js'
 import {
   breaksAfterKind,
+  clampLineWidth,
   endsLineBefore,
   isDiscretionaryLineEnd,
-  normalizeMaxWidth,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
   walkPreparedLinesRaw,
@@ -984,7 +984,7 @@ function stepRichInlineLine(
   // The line's fragments go here, unless it is null.
   fragments: RichInlineFragmentRange[] | null,
 ): number | null {
-  const safeWidth = Math.max(1, maxWidth)
+  const safeWidth = clampLineWidth(1, maxWidth)
   const { emptyAtomicAlwaysFits, hangTabs, hardBreakItemRetreat, lineFitEpsilon, paddedOpeningFit, spaceBeforeSoftHyphenHangs, unfitHyphenRetreat } = getEngineProfile()
   let hasContent = false
   let lineWidth = 0
@@ -1382,7 +1382,7 @@ export function layoutNextRichInlineLineRange(
   const flow = getInternalPreparedRichInline(prepared)
   const only = flow.onlyItem
   if (only !== null && start.itemIndex === 0) {
-    const safeWidth = Math.max(1, maxWidth)
+    const safeWidth = clampLineWidth(1, maxWidth)
     if (isLineStartCursor(start) && onlyItemFits(only, safeWidth)) return createOnlyItemLine(only, only.naturalWidth, 0, 0, only.prepared.segments.length, 0)
     const lineEnd = { segmentIndex: start.segmentIndex, graphemeIndex: start.graphemeIndex }
     if (!normalizePreparedLineStart(only.prepared, lineEnd)) return null
@@ -1460,10 +1460,9 @@ export function walkRichInlineLineRanges(
   maxWidth: number,
   onLine: (line: RichInlineLineRange) => void,
 ): number {
-  maxWidth = normalizeMaxWidth(maxWidth)
   const only = getInternalPreparedRichInline(prepared).onlyItem
   if (only !== null) {
-    const safeWidth = Math.max(1, maxWidth)
+    const safeWidth = clampLineWidth(1, maxWidth)
     if (onlyItemFits(only, safeWidth)) {
       onLine(createOnlyItemLine(only, only.naturalWidth, 0, 0, only.prepared.segments.length, 0))
       return 1
@@ -1490,11 +1489,10 @@ export function measureRichInlineStats(
   prepared: PreparedRichInline,
   maxWidth: number,
 ): RichInlineStats {
-  maxWidth = normalizeMaxWidth(maxWidth)
   const flow = getInternalPreparedRichInline(prepared)
   const only = flow.onlyItem
   if (only !== null) {
-    const safeWidth = Math.max(1, maxWidth)
+    const safeWidth = clampLineWidth(1, maxWidth)
     if (onlyItemFits(only, safeWidth)) return { lineCount: 1, maxLineWidth: Math.max(0, only.naturalWidth) }
     const stats = { lineCount: 0, maxLineWidth: 0 }
     walkPreparedLinesRaw(only.prepared, safeWidth, undefined, stats)

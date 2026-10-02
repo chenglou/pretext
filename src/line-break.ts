@@ -204,14 +204,15 @@ function getTerminalLetterSpacing(
   return 0
 }
 
-// The width a paragraph is laid out at: one that isn't a number, such as the `undefined`
-// of a container not measured yet, is unbounded. Every comparison fails at `NaN`, and the
-// line loops ask some whether a segment fits and others whether it overflows, so the line
-// APIs called once for a paragraph pass their width through here and the loops stay
-// written for numbers. The streams, called once for each line, take their width as given
+// The width a line's content fits in: `least` where the given width is smaller, and
+// unbounded where it isn't a number, such as the `undefined` of a container not measured
+// yet. Every comparison fails at `NaN`, and the line loops ask some whether a segment
+// fits and others whether it overflows, so each loop clamps its width here and stays
+// written for numbers. A width over `least` takes one comparison, as the `Math.max` this
+// stands for did, and a string of digits is still made a number, as `Math.max` made it
 // (RESEARCH.md, Decisions Log, 2026-10-02).
-export function normalizeMaxWidth(maxWidth: number): number {
-  return maxWidth <= Infinity ? maxWidth : Infinity
+export function clampLineWidth(least: number, maxWidth: number): number {
+  return maxWidth > least ? +maxWidth : maxWidth <= least ? least : Infinity
 }
 
 // Mutates `cursor` to the next renderable line start. False when no line remains.
@@ -299,7 +300,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
     return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
   }
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, lineStartExtras, lineEndTrims } = prepared
-  const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
+  const fitLimit = clampLineWidth(0, maxWidth) + getEngineProfile().lineFitEpsilon
   const segmentCount = widths.length
   let count = 0
   // Every line starts at 0 and adds its content's widths. Firefox runs this loop
@@ -476,7 +477,7 @@ function walkPreparedComplexLines(
   // leave it a negative width, and its break before the item is the line's pending
   // break (ItemLine). Any other negative width lays out as 0, as in the simple stepper.
   const continues = item !== null && item.continues
-  const availableWidth = continues ? maxWidth : Math.max(0, maxWidth)
+  const availableWidth = continues ? maxWidth : clampLineWidth(0, maxWidth)
   const fitLimit = availableWidth + engineProfile.lineFitEpsilon
   // Preparation records soft-hyphen contexts only where the text has a soft hyphen.
   const retreatsFromUnfitHyphen = prepared.discretionaryHyphenContexts !== null
@@ -965,7 +966,7 @@ function stepPreparedSimpleLineGeometry(
 ): number {
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartExtras, lineEndTrims, overflowLineEndTrims } = prepared
   // A negative width lays out as 0, as in the complex walker.
-  const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon
+  const fitLimit = clampLineWidth(0, maxWidth) + getEngineProfile().lineFitEpsilon
   const start = cursor.segmentIndex
 
   // The first segment of the line, or the rest of one a line ended inside. One that

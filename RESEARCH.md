@@ -2972,24 +2972,21 @@ decisions for the maintainer.
   named gaps in ENGINE_FOLLOWUPS.md, Emoji correction. Leaving it out costs one thing in text an app may hold, in
   Firefox: three ZWJ sequences of emoji-test.txt written with no U+FE0F measure 5px wide. Such sequences turning up in
   real text would reopen it.
-- **2026-10-02: a `maxWidth` that isn't a number lays out as unbounded in the line APIs called once for a paragraph, and
-  the streams take it as given** (landed on judgement with #401). `NaN`, or the `undefined` of a container not measured
-  yet, fails every comparison, and the line loops ask some whether a segment fits and others whether it overflows. So
-  since #340 `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN`
-  width for a pre-wrap line ending in spaces. `normalizeMaxWidth()` (`src/line-break.ts`) turns such a width into
-  `Infinity` with one comparison, once a call, in `layout()`, `layoutWithLines()`, `walkLineRanges()`,
-  `measureLineStats()`, `walkRichInlineLineRanges()` and `measureRichInlineStats()`, whose loops stay as written for
-  numbers: none of their results at `NaN` or `undefined` differs from the one at `Infinity` (8,000 cases drawn from the
-  sets in each profile, offline). `layoutNextLine()`, `layoutNextLineRange()` and `layoutNextRichInlineLineRange()` are
-  called once for each line and don't check: they return, break as at an unbounded width, and differ from `Infinity` in
-  three places (ENGINE_FOLLOWUPS.md, Small ones). Two wider forms were timed in Chrome 154.0.8037.57 and dropped, as
-  valid input paid in each for an argument no app should pass. With `layout()`'s two fit tests negated into overflow
-  tests, so that its count asked the walkers' question, `layout()` of the bench's Arabic book read 3.4-4.8% slower in
-  each of three sessions (2026-10-01). With the function in the three streams too, those rows read within noise again
-  over three sessions, and the mixed stream row, which then paid the comparison for each line, read 1.7% and 3.4% slower
-  in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
-  `walkLineRanges()` row, which pays the comparison once for a paragraph, read 1.2-1.4% slower in each session with the
-  second copy of the base 0.5-1.1% slower, and in the run of two 2.4% faster and 2.8% slower; a run that reads it slower
-  in every session with the streams as on main would reopen the comparison there. Whether such a width should throw, as
-  a `letterSpacing` that isn't finite does (#356), is on the API discussion's list (TODO.md): in the six APIs a throw
-  would go in that one function, and in the streams it would cost the comparison for each line again.
+- **2026-10-02: a `maxWidth` that isn't a number lays out as unbounded, made so by the clamp each line loop already
+  makes on its width** (a candidate, not timed in a browser). `NaN`, or the `undefined` of a container not measured yet,
+  fails every comparison, and the line loops ask some whether a segment fits and others whether it overflows. So since
+  #340 `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN` width
+  for a pre-wrap line ending in spaces. Each loop began by clamping its width, `Math.max(0, maxWidth)` in the text loops
+  and `Math.max(1, maxWidth)` in rich inline, seven places in all. `clampLineWidth()` (`src/line-break.ts`) stands for
+  that clamp: `maxWidth > least ? +maxWidth : maxWidth <= least ? least : Infinity`, one comparison for a valid width
+  where `Math.max` made one, `Infinity` for a width that isn't a number, and a number still for a string of digits,
+  which `Math.max` converted. No line API's result at `NaN` or `undefined` differs from the one at `Infinity`, the
+  streams included (8,000 cases drawn from the sets in each profile, offline), and none at a number differs from before.
+  Three forms that added work to valid input's path were timed in Chrome 154.0.8037.57 first. With `layout()`'s two fit
+  tests negated into overflow tests, `layout()` of the bench's Arabic book read 3.4-4.8% slower in each of three
+  sessions (2026-10-01). With a comparison at the entry of all nine line APIs, the mixed stream row, which paid it for
+  each line, read 1.7% and 3.4% slower in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three, and the mixed
+  `walkLineRanges()` row 1.2-1.4% slower in each of the three with the second copy of the base 0.5-1.1% slower. With it
+  in the six APIs called once for a paragraph only, the streams differed from `Infinity` in three places (#401). Whether
+  a width that isn't a number should throw, as a `letterSpacing` that isn't finite does (#356), is on the API
+  discussion's list (TODO.md).
