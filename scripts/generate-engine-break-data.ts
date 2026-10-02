@@ -33,27 +33,21 @@
 //   or fewer, all with root's table and delimiters, which generate the same module.
 // - quotation.json: the code points libicucore's u_getIntPropertyValue gives Line_Break=QU.
 // firefox-156/, from Firefox 155.0.1's source tree. Firefox 156.0's and 156.0.1's XUL hold the
-// same line data and icu_properties Bidi_Class data byte for byte:
+// same line data byte for byte:
 // - segmenter_break_line_v1.rs.data: intl/icu_segmenter_data/data/, Firefox's baked ICU4X
 //   line data (icuexport release-78.1, CLDR 48), databake output for RuleBreakData
 //   (icu_segmenter 2.1.2 src/provider/mod.rs:151-180).
 // - segmenter_break_grapheme_cluster_v1.rs.data: the same directory's grapheme data, which
 //   is only checked against Chrome's char.brk (see the character tables below).
 // - properties.json: icu_properties 2.1.2's compiled data (Unicode 17), the crate Firefox
-//   vendors, as [first, last, value] ranges over every code point: Bidi_Class and
-//   East_Asian_Width in ICU4C numbering (CodePointMapData::get32(cp).to_icu4c_value()).
-//   Dumped by a small Rust program that depends on that crate alone. Gecko asks its ICU4C for
-//   East_Asian_Width, not this crate (u_getIntPropertyValue, intl/components/src/
-//   UnicodeProperties.h:75-100), so the map takes a premise: both hold one Unicode version's
-//   values. Firefox 156.0's do, on every code point (ICU 78.3's propsVectors, intl/icu/source/
-//   common/uchar_props_data.h, bits 12-14 of the first column, uprops.h:159-160; compared on
-//   2026-10-01). Nothing compares a later Firefox's: `bun harness repin firefox` looks for the
-//   Bidi_Class bytes only.
-// - bidi_pairs_table.rs: servo/unicode-bidi ca612daf's bracket table,
-//   src/char_data/tables.rs:519-535.
-// - property_enum_bidi_class_v1.rs.data: third_party/rust/icu_properties_data/data/ in
-//   Firefox 156.0's source tree, the baked Bidi_Class trie properties.json's bidiClass holds;
-//   this script doesn't read it, and `bun harness repin firefox` looks for its bytes in XUL.
+//   vendors, as [first, last, value] ranges over every code point: East_Asian_Width in ICU4C
+//   numbering (CodePointMapData::get32(cp).to_icu4c_value()). Dumped by a small Rust program
+//   that depends on that crate alone. Gecko asks its ICU4C for East_Asian_Width, not this crate
+//   (u_getIntPropertyValue, intl/components/src/UnicodeProperties.h:75-100), so the map takes a
+//   premise: both hold one Unicode version's values. Firefox 156.0's do, on every code point
+//   (ICU 78.3's propsVectors, intl/icu/source/common/uchar_props_data.h, bits 12-14 of the first
+//   column, uprops.h:159-160; compared on 2026-10-01). Nothing compares a later Firefox's:
+//   `bun harness repin firefox` looks for the line and grapheme data's bytes only.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -470,12 +464,10 @@ if (geckoLineField('complex_property') !== 46) throw new Error('Expected SA to b
   engineClassMaps['gecko/line'] = classesOf(c => getSmallTrieValue(index, geckoLineData, highStart, c))
 }
 
-// Firefox's Unicode properties: icu_properties 2.1.2's Bidi_Class, and its East_Asian_Width H (2),
-// F (3) and W (5) with 0 for every other value, in ICU4C numbering.
+// Firefox's Unicode properties: icu_properties 2.1.2's East_Asian_Width H (2), F (3) and W (5)
+// with 0 for every other value, in ICU4C numbering.
 type Ranges = [number, number, number][]
-const properties = JSON.parse(readText(`${FIREFOX}/properties.json`)) as {
-  bidiClass: Ranges, eastAsianWidth: Ranges
-}
+const properties = JSON.parse(readText(`${FIREFOX}/properties.json`)) as { eastAsianWidth: Ranges }
 // The class of every code point from ranges that cover them all in order.
 const rangeClasses = (ranges: Ranges, keep: (value: number) => boolean): Uint8Array => {
   const classes = new Uint8Array(0x110000)
@@ -489,15 +481,6 @@ const rangeClasses = (ranges: Ranges, keep: (value: number) => boolean): Uint8Ar
   return classes
 }
 engineClassMaps['gecko/east_asian_width'] = rangeClasses(properties.eastAsianWidth, value => value === 2 || value === 3 || value === 5)
-engineClassMaps['gecko/bidi_class'] = rangeClasses(properties.bidiClass, () => true)
-
-// unicode-bidi's bracket pairs: [opening, closing, normalized opening or 0].
-const geckoBidiPairs: number[] = []
-const pairsSource = readText(`${FIREFOX}/bidi_pairs_table.rs`)
-for (const match of pairsSource.matchAll(/\(\s*'\\u\{([0-9a-f]+)\}',\s*'\\u\{([0-9a-f]+)\}',\s*(?:None|Some\(\s*'\\u\{([0-9a-f]+)\}'\s*\))\s*\)/g)) {
-  geckoBidiPairs.push(parseInt(match[1]!, 16), parseInt(match[2]!, 16), match[3] === undefined ? 0 : parseInt(match[3], 16))
-}
-if (geckoBidiPairs.length / 3 !== (pairsSource.match(/None|Some\(/g) ?? []).length) throw new Error('Unparsed bidi pairs')
 
 // --- The shorter form ---
 
@@ -725,7 +708,6 @@ const quoted = (names: readonly string[]) => names.map(name => `'${name}'`).join
 const classRemapsPacked = packTable(classRemaps)
 const ruleTablesJson = JSON.stringify(ruleTables)
 const geckoLineBreakStatesPacked = packTable(geckoLineStates)
-const geckoBidiPairsVarints = packVarints(geckoBidiPairs)
 const nextSource = `// Generated by scripts/generate-engine-break-data.ts from scripts/engine-data/.
 // Do not edit by hand. Regenerate with \`bun run generate:engine-break-data\`.
 
@@ -741,8 +723,8 @@ export type CharTable = ${quoted(charTableNames)}
 export type RuleTable = LineTable | CharTable
 
 // A class for every code point: each rule table's categories, and for Firefox the Line_Break
-// values of its baked ICU4X line data and icu_properties 2.1.2's Bidi_Class and East_Asian_Width
-// H (2), F (3) and W (5), 0 otherwise, in ICU4C numbering. For each map, its row in the remaps and
+// values of its baked ICU4X line data and icu_properties 2.1.2's East_Asian_Width H (2), F (3)
+// and W (5), 0 otherwise, in ICU4C numbering. For each map, its row in the remaps and
 // how many blocks its table takes; then one list of runs for all maps and the remaps, a byte per
 // joint class and map (unpackClassRuns in src/line-breaks.ts).
 export type ClassMap = ${quoted(classMapNames)}
@@ -774,9 +756,6 @@ export const geckoLineLastCodepointProperty = ${geckoLineField('last_codepoint_p
 export const geckoLineEotProperty = ${geckoLineField('eot_property')}
 export const geckoLineBreakStatesPacked = '${geckoLineBreakStatesPacked}'
 
-// unicode-bidi's bracket pairs (Unicode 15) as varints: [opening, closing, normalized opening or 0]
-// for each.
-export const geckoBidiPairsVarints = '${geckoBidiPairsVarints}'
 
 `
 
@@ -786,7 +765,7 @@ const summary = [
   `state tables ${Object.keys(ruleTables).map(name => `${name} ${ruleTables[name]![5].length} B${ruleTables[name]![4] === null ? '' : ` from ${ruleTables[name]![4]}`}`).join(', ')}`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
-  `Firefox break states packed ${geckoLineBreakStatesPacked.length} B, bracket pairs ${geckoBidiPairsVarints.length} B`,
+  `Firefox break states packed ${geckoLineBreakStatesPacked.length} B`,
   `module ${nextSource.length} B, ${gzipSize(nextSource)} B gzipped`,
 ].join('; ')
 

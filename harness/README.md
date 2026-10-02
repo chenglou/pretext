@@ -33,7 +33,8 @@ builds widths are compared exactly: to `equal <ref>` a line width that differs a
 `measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`, `layoutNextLine()`, `layoutWithLines()`,
 `materializeLineRange()` and their rich-inline counterparts) must agree on lines, widths and text, and none may call
 `measureText` after preparing. A rich fragment's text is `materializeLineRange()`'s over its cursors in its item's own
-prepared text, but for the hyphen of a soft hyphen it ends at, which the text the items join decides.
+prepared text, but for the hyphen of a soft hyphen it ends at, which the text the items join decides. A box is a visible
+character whatever its width, placed by its top.
 
 A predicted line's range runs over the source, so white space the library leaves out inside a text is in the line of the
 unit before it (`alignStream`, `predict.ts`), as white space that ends a line is in its line: Firefox gives such a
@@ -248,6 +249,11 @@ shared by every canvas and the DOM, so a fresh canvas doesn't make text new.
   time in Chrome and 1.18-1.25 in Firefox, and letter-spaced CJK and control layouts at 1.12 and 1.20 in Safari.
 - **WebKit's width cache** samples one Canvas call in 21 after a run of misses, so a prepare that submits n strings
   speeds up only after 21 / gcd(n, 21) repeats: compare submitted text and cold first prepares.
+- **Firefox's `resize: latin layout at new widths`** moves about 16% with the names the bench's minifier gives the
+  bundle's top-level bindings (`RESEARCH.md`, JavaScript Engines; Firefox 156, 2026-10-02), so where it alone reads
+  slower or faster, with Firefox's other `layout()` rows level and no change to code `layout()` runs, it is read as the
+  names and not the change: a build one unused local apart gets other names and settles it. Making the constants that
+  loop reads literals in the emitted code, which would end this, is being tried separately.
 
 A full bench took about 27 minutes (2026-09-26). Nothing timed is checked in.
 
@@ -322,13 +328,12 @@ the lines of webkit-host's passing sample draws inside the claims were more than
 (2026-10-01). The shrink-wrap check keeps them, so there it misses a box up to a pixel too narrow where such a line is
 the widest, as in a fifth of the sample's pre-wrap draws, and webkit-host's `narrow` column reads low on pre-wrap text.
 The harness doesn't see re-layout at a line's own width; a defect that changes the widths a prepared handle keeps for
-one way of fitting lines when another is used (the stand-in Canvas gives the same widths to every way); a bracket-pair
-error in the Gecko bidi port; several rules of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`,
-Harness debt); an emoji modifier split from its base across rich items; a rich paragraph of one item, which the adapter
-writes as plain text, so `src/layout.test.ts` checks its line functions against the rich stepper; which line holds a box
-of width 0, which has no rectangle, but through the text around it; Chrome's UI language, and so its `zh` table for
-pages without a `lang`; rendering other than macOS's and an iOS simulator's (Other ratios and phones), though Android
-and Windows are 65% of page views (`weights.json`);
-text chat users wrote (the sample's chat draws are stand-ins); or the demos' painted layout. No planted defect guards
-the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the library compiled in a module of its
-own), Firefox's start-up hold, the page passing the browser's name to the recorder, or the cap on a job's browser.
+one way of fitting lines when another is used (the stand-in Canvas gives the same widths to every way); several rules
+of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an emoji modifier split from its
+base across rich items; a rich paragraph of one item, which the adapter writes as plain text, so `src/layout.test.ts`
+checks its line functions against the rich stepper; Chrome's UI language, and so its `zh` table for pages without a
+`lang`; rendering other than macOS's and an iOS simulator's (Other ratios and phones), though Android and Windows are
+65% of page views (`weights.json`); text chat users wrote (the sample's chat draws are stand-ins); or the demos' painted
+layout. No planted defect guards the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the
+library compiled in a module of its own), Firefox's start-up hold, the page passing the browser's name to the recorder,
+or the cap on a job's browser.

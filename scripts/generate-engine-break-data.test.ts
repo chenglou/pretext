@@ -8,7 +8,7 @@ import { engineClassMaps, engineRuleTables } from './generate-engine-break-data.
 
 test('every code point has its engine\'s class in every class map', () => {
   const maps = Object.keys(engineClassMaps) as ClassMap[]
-  expect(maps.length).toBe(10)
+  expect(maps.length).toBe(9)
   for (let m = 0; m < maps.length; m++) {
     const classes = engineClassMaps[maps[m]!]!
     const table = unpackClasses(maps[m]!)

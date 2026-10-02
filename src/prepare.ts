@@ -5,7 +5,6 @@
 import { observeSegmentEntries, textMayHaveEntryGeometry, type SegmentEntryGeometry } from './entry-geometry.js'
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
-import { getBidiBrackets } from './gecko-bidi-levels.js'
 import {
   CONTROL,
   HARD_BREAK,
@@ -106,6 +105,30 @@ const wideOpeningBrackets = '\u2329\uFE59\uFE5B\uFE5D\uFF08\uFF3B\uFF5B\uFF5F'
 // character takes its scripts from, or a wide opening bracket.
 const firstScriptRe = new RegExp(`[^\\p{scx=Common}\\p{Script=Inherited}]|${markedCommonSource}|[${wideOpeningBrackets}]`, 'u')
 
+// Unicode 15's bracket pairs, each an opening bracket and then its closing one (BidiBrackets.txt,
+// as servo/unicode-bidi ca612daf lists them, src/char_data/tables.rs:519-535).
+const bracketPairs = '()[]{}\u0F3A\u0F3B\u0F3C\u0F3D\u169B\u169C\u2045\u2046\u207D\u207E\u208D\u208E\u2308\u2309\u230A\u230B' +
+  '\u2329\u232A\u2768\u2769\u276A\u276B\u276C\u276D\u276E\u276F\u2770\u2771\u2772\u2773\u2774\u2775\u27C5\u27C6' +
+  '\u27E6\u27E7\u27E8\u27E9\u27EA\u27EB\u27EC\u27ED\u27EE\u27EF\u2983\u2984\u2985\u2986\u2987\u2988\u2989\u298A' +
+  '\u298B\u298C\u298D\u2990\u298F\u298E\u2991\u2992\u2993\u2994\u2995\u2996\u2997\u2998\u29D8\u29D9\u29DA\u29DB' +
+  '\u29FC\u29FD\u2E22\u2E23\u2E24\u2E25\u2E26\u2E27\u2E28\u2E29\u2E55\u2E56\u2E57\u2E58\u2E59\u2E5A\u2E5B\u2E5C' +
+  '\u3008\u3009\u300A\u300B\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3016\u3017\u3018\u3019\u301A\u301B' +
+  '\uFE59\uFE5A\uFE5B\uFE5C\uFE5D\uFE5E\uFF08\uFF09\uFF3B\uFF3D\uFF5B\uFF5D\uFF5F\uFF60\uFF62\uFF63'
+// Each of those brackets to its pair's opening bracket << 1, | 1 for an opening bracket. U+2329
+// and U+232A read as U+3008 and U+3009, their canonical equivalents, as that table folds them.
+let brackets: Map<number, number> | null = null
+function getBrackets(): Map<number, number> {
+  if (brackets !== null) return brackets
+  brackets = new Map()
+  for (let k = 0; k < bracketPairs.length; k += 2) {
+    const first = bracketPairs.charCodeAt(k)
+    const opening = first === 0x2329 ? 0x3008 : first
+    brackets.set(first, opening << 1 | 1)
+    brackets.set(bracketPairs.charCodeAt(k + 1), opening << 1)
+  }
+  return brackets
+}
+
 // Blink's script run as preparation follows it through a text's segments, in order:
 // whether it is cursive, and each bracket it has open, as its opening character and then
 // 1 where that bracket's run is cursive, else 0.
@@ -122,12 +145,11 @@ function startScriptRun(text: string): ScriptRun {
 // opening bracket's run, among the last 32 opened, and closes the ones opened since; its
 // own stays open, so a second closing bracket goes back to that run too (OpenBracket and
 // CloseBracket, script_run_iterator.cc:431-481). A wide opening bracket starts a Han run.
-// The pairs are Unicode 15's, as the Gecko profile's bidi levels read them, with U+2329
-// and U+232A folded into U+3008 and U+3009, which ICU pairs only with each other
-// (ENGINE_FOLLOWUPS.md, Letter spacing).
+// The pairs are Unicode 15's (bracketPairs), with U+2329 and U+232A folded into U+3008
+// and U+3009, which ICU pairs only with each other (ENGINE_FOLLOWUPS.md, Letter spacing).
 function enterScriptRun(run: ScriptRun, text: string, i: number, c: number): void {
   const { openBrackets } = run
-  const bracket = getBidiBrackets().get(c)
+  const bracket = getBrackets().get(c)
   // No bracket's code is the 0 or 1 that tells its run.
   const opened = bracket !== undefined && (bracket & 1) === 0 ? openBrackets.lastIndexOf(bracket >> 1) : -1
   if (opened >= 0) {

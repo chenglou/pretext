@@ -1,5 +1,5 @@
 {
   "chrome": { "dir": "chrome-153", "inBrowser": ["line_normal.brk", "line_normal_cj.brk", "char.brk"] },
   "safari": { "dir": "safari-27.0", "inBrowser": ["line.brk", "line_normal.brk", "line_cj.brk", "char.brk"] },
-  "firefox": { "dir": "firefox-156", "inBrowser": ["segmenter_break_line_v1.rs.data", "segmenter_break_grapheme_cluster_v1.rs.data", "property_enum_bidi_class_v1.rs.data"] }
+  "firefox": { "dir": "firefox-156", "inBrowser": ["segmenter_break_line_v1.rs.data", "segmenter_break_grapheme_cluster_v1.rs.data"] }
 }

@@ -209,6 +209,32 @@ catalog-ac3239461359f75a count
 facts-bd0eaee2b5eb1b8c breaks
 facts-d93fe86d92078783 breaks
 
+## Firefox splits text runs where the bidi level changes and the library's Gecko scan doesn't: a direction change inside a cluster, as at a Balinese or Batak vowel killer after Arabic or Hebrew letters (1-57 px) and at a kasra after U+200E between Arabic letters (under 24 px), named in ENGINE_FOLLOWUPS.md
+catalog-03c7896e07a6eae6 count
+catalog-06dbd5021fa52b68 breaks
+catalog-0bc27cecd015b1b4 breaks
+catalog-1015eff8fe075f61 breaks
+catalog-1f3de60818df515a count
+catalog-2d80228a6a0453e3 count
+catalog-31327136febc3613 breaks
+catalog-356b5c8828e4eb7f breaks
+catalog-40f9f8f275b7118a count
+catalog-4922209c3e913de5 breaks
+catalog-5542835d441cae3c count
+catalog-5b202e6acfc4d344 breaks
+catalog-63bf8efbb00ef768 breaks
+catalog-667efb5fc3158d4d count
+catalog-7360dda07ebc9bb1 breaks
+catalog-871799e005b9bf36 breaks
+catalog-a65f3d19168c4d18 count
+catalog-a8de406bb5fa05c7 breaks
+catalog-aa1815e454ae18f9 breaks
+catalog-ab5bba383752b4d5 count
+catalog-ad346c65c59beeb9 count
+catalog-daa9561e7fccc7d0 breaks
+catalog-ec81ddcc01704b97 count
+catalog-f9108f90869a61c2 breaks
+
 ## Firefox splits text runs where the script changes and the library's Gecko scan doesn't: mixed-script strings with a mark that clusters across the change, named in ENGINE_FOLLOWUPS.md (main before #340 fails them too)
 followup-730e77aebf008adb count
 
@@ -2961,6 +2987,14 @@ rich-4aaf3b30f4f2a014 count
 rich-66104da5d28ab8e4 breaks
 rich-8cd941655dd7be98 count
 rich-ce7bddd0b27c873e count
+
+## White space, then a right-to-left mark with soft hyphens at the end of a span, before white space that starts the next, in a left-to-right paragraph, at 24 px and wider: Firefox ends its white-space run at the mark, which is at another bidi level than the white space there, and keeps both spaces, where rich lines resolve no levels and carry the run past the mark as one space, as Firefox does under direction: rtl (ENGINE_FOLLOWUPS.md)
+rich-17286779a3574402 count
+rich-2273d82c15891cc6 breaks
+rich-57545ea1a56fed12 count
+rich-9a2f1d48d54592d8 count
+rich-ad4cfe8561fad751 count
+rich-c9040bfe99878c7a count
 
 ## White space on both sides of a right-to-left mark between Latin words in a left-to-right paragraph, at 24 px and wider: Firefox ends its white-space run at the mark, which starts a bidi level run there, and keeps both spaces, where the Gecko scan takes a text as one text frame and keeps one, as Firefox does for the same text in a right-to-left paragraph, since Pretext takes no paragraph direction (main too; ENGINE_FOLLOWUPS.md)
 facts-a93377367151561f count
