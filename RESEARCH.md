@@ -1168,7 +1168,7 @@ Kerning across a ZWSP or a soft hyphen before a space, across a rich item's edge
 stays missing (ENGINE_FOLLOWUPS.md). Letter-spaced text takes the kerning too, as Blink turns off only ligatures under
 spacing (Engine Facts, Chrome).
 
-The Chromium profile also takes the kerning between two kana (#TBD; `getKanaKerning()` in `src/measurement.ts`,
+The Chromium profile also takes the kerning between two kana (#412; `getKanaKerning()` in `src/measurement.ts`,
 `addKanaKerning()` in `src/prepare.ts`). Blink's layout shapes a run of kana in one call, katakana with hiragana
 (`GetScriptForOpenType`, `script_run_iterator.cc:20-36`), so a font's pair kerning applies between them. Its Canvas
 starts a word at each kana or ideograph that follows another (`NextWordEndIndex`, `plain_text_node.cc:92-153`) and
