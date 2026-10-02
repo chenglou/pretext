@@ -26,7 +26,6 @@ import {
 import {
   type BreakableFitMode,
   type EngineProfile,
-  type FontKanaKerning,
   type FontMeasurement,
   getCorrectedSegmentWidth,
   getEmojiCorrection,
@@ -790,7 +789,7 @@ const kanaPairRe = /[\u3041-\u30FF]{2}/
 // starts a line. One that widens it stays on the first kana's, since Blink looks for a line's
 // end in the run shaped whole (shaping_line_breaker.cc:325-333), where the first kana has it. An
 // emergency break inside a segment takes none (ENGINE_FOLLOWUPS.md, Kerning between kana).
-function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement, font: FontKanaKerning): number[] | null {
+function addKanaKerning(extras: number[] | null, widths: number[], analysis: TextAnalysis, measurement: FontMeasurement, kernings: Map<number, number>): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = 0; i < flags.length; i++) {
     if ((flags[i]! & KIND_BITS) !== TEXT) continue
@@ -812,7 +811,7 @@ function addKanaKerning(extras: number[] | null, widths: number[], analysis: Tex
       if (!cut || code < 0x3041 || code > 0x30ff) continue
       const before = normalized.charCodeAt(k - 1)
       if (before < 0x3041 || before > 0x30ff) continue
-      const kerning = getKanaKerning(normalized, k, measurement, font)
+      const kerning = getKanaKerning(normalized, k, measurement, kernings)
       if (kerning > 0 && k === start) {
         widths[i - 1] = widths[i - 1]! + kerning
       } else if (kerning !== 0) {
