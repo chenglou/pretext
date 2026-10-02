@@ -24,8 +24,9 @@
 //   starts; and, cut on their own too, a run that a right-to-left mark after its white space ends where one at the white
 //   space's bidi level doesn't, one that text after it ends, an atomic item whose leading white space collapses into
 //   one, a soft hyphen after no white space, which opens none, and a ZWSP after soft hyphens where a line starts after
-//   a wrap; and, cut on their own too, the levels that rule reads: the paragraph's, at each item's offset, of every
-//   character the run goes past against the white space before them, with a newline as a space; and, cut on their own
+//   a wrap; and, cut on their own too, the levels Firefox reads there, which rich inline doesn't resolve
+//   (ENGINE_FOLLOWUPS.md): the paragraph's, at each item's offset, of every character the run goes past against the
+//   white space before them, with a newline as a space; and, cut on their own
 //   too, a soft hyphen that ends an item before a bidi control that starts the next, at the paragraph's start, after a
 //   space in the item or a collapsed one before it, which Firefox's scan of the joined text takes as text, and after
 //   other text; and, cut on its own too, a padded span that starts with a line separator after a word, before which
@@ -60,8 +61,12 @@
 //   moves to the next line with them;
 // - boxes (RichInlineBox), cut on their own: custom emoji at the line height between words with spaces on both sides,
 //   before punctuation and at the paragraph's end; boxes inside words, of width 0 and beside U+00A0; adjacent boxes, a
-//   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; and in pre-wrap,
-//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one;
+//   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; in pre-wrap,
+//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and
+//   a box of width 0 past a line's end, after a space that doesn't fit and after a box wider than the line, which
+//   Chrome and Safari move to the next line and Firefox keeps unless text comes right after it, not after a space
+//   (getKeptEmptyEnd in src/rich-inline.ts), and two of them after a pre-wrap space that hangs, which Firefox has
+//   inside the line;
 // - shapes whose rule only a unit test held, cut on their own: a padded code span alone in its paragraph, which the
 //   adapter still lays out with rich-inline, for its padding; in pre-wrap, a box about as wide as the words after it
 //   before preserved spaces that start their item, which stay on its line however far it overflows; and a Korean
@@ -259,12 +264,17 @@ export function richTemplates(): Template[] {
   }
   // Boxes as apps write them: an image, a custom emoji or a badge, an empty inline-block of its width (#201).
   const emoji = box(20, 20, ARIAL)
+  const empty = box(0, 20, ARIAL)
   const boxes: ReadonlyArray<readonly [string, CssFont, readonly Part[], string, Paragraph['wordBreak'], Paragraph['whiteSpace']]> = [
     ['between-words', ARIAL, ['Thanks ', emoji, ' for the review', emoji, ', merging now ', emoji], 'en', 'normal', 'normal'],
     ['inside-words', ARIAL, ['inter', box(0, 18, ARIAL), 'national', box(18, 18, ARIAL), 'ization and\u{A0}', box(18, 18, ARIAL), '\u{A0}more'], 'en', 'normal', 'normal'],
     ['adjacent-and-wide', ARIAL, [box(40, 20, ARIAL), box(40, 20, ARIAL), ' a photo ', box(260, 120, ARIAL), ' and after it'], 'en', 'normal', 'normal'],
     ['keep-all', KOREAN, ['안녕하세요', box(20, 20, KOREAN), '님, 반가워요 ', box(20, 20, KOREAN), '오늘'], 'ko', 'keep-all', 'normal'],
     ['pre-wrap', ARIAL, [box(60, 20, ARIAL), '  ', span(' ', BOLD(ARIAL)), 'next words', box(30, 40, ARIAL), '\n', emoji, '\tgo'], 'en', 'normal', 'pre-wrap'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, 'again'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, ' again'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, [box(260, 120, ARIAL), empty, 'caption'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, empty, 'again'], 'en', 'normal', 'pre-wrap'],
     ['pre-wrap', ARIAL, [box(76, 20, ARIAL), '   next words'], 'en', 'normal', 'pre-wrap'],
   ]
   for (let i = 0; i < boxes.length; i++) {

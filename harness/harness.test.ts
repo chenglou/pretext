@@ -110,6 +110,21 @@ describe('the pass rule', () => {
     expect(score({ lines, height: 96 }, main).status).toBe('breaks')
   })
 
+  test('a box of width 0 is a visible character on the line of its top: one a prediction put on the wrong line would pass unseen', () => {
+    // `ab`, a box of width 0 and `cd`, the box on the second line with `cd`, as Firefox places one that text follows.
+    const letter = (x: number, line: number): Rect => ({ x, y: line * 20 + 1, width: 8, height: 18 })
+    const boxRect: Rect = { x: 0, y: 20, width: 0, height: 20, box: true }
+    const points: Rect[][] = [[letter(0, 0)], [letter(8, 0)], [boxRect], [letter(0, 1)], [letter(8, 1)]]
+    const nodeRects: Rect[] = [{ x: 0, y: 1, width: 16, height: 18 }, boxRect, { x: 0, y: 21, width: 16, height: 18 }]
+    const lines = recordedLines('ab\u{FFFC}cd', nodeRects, 20, offset => points[offset]!, 'firefox')
+    expect(lines).toEqual([{ first: 0, last: 1, width: 16 }, { first: 2, last: 4, width: 16 }])
+    expect(score({ lines, height: 40 }, predicted('ab\u{FFFC}cd', [0, 3])).status).toBe('breaks')
+    expect(score({ lines, height: 40 }, predicted('ab\u{FFFC}cd', [0, 2])).status).toBe('pass')
+    // A rect of no width that isn't a box's, as a collapsed space's, stays invisible.
+    points[2] = [{ x: 0, y: 20, width: 0, height: 20 }]
+    expect(recordedLines('ab\u{FFFC}cd', nodeRects, 20, offset => points[offset]!, 'firefox').map(line => line.first)).toEqual([0, 3])
+  })
+
   test('line count comes from rect positions: fractional line boxes would otherwise fail every Safari 27 case', () => {
     // Three line boxes 20.0149 px tall: 60.0447 / 20 is 3.002, which the old harness's height check rejected.
     const boxes = [0, 1, 2].map(line => ({ x: 0, y: line * 20.0149, width: 50, height: 20.0149 }))
@@ -1006,7 +1021,7 @@ describe('the library through the adapter', () => {
   test('measureLineStats giving another widest line than the walk blocks: a bubble shrink-wrapped to it would be too wide', async () => {
     const c = paragraph('A message long enough to wrap at a few widths', 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('line-stats', 'layout.ts', /(walkPreparedLinesRaw\(getInternalPrepared\(prepared\), maxWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
+    const stats = await planted('line-stats', 'layout.ts', /(walkPreparedLinesRaw\(getInternalPrepared\(prepared\), normalizeMaxWidth\(maxWidth\), undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureLineStats gives')
   })
 

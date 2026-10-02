@@ -1,4 +1,4 @@
-import { getGeckoLineBreaks, isClusterExtender, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail, isSpaceOrTabOrSegmentBreak } from './gecko-line-breaks.js'
+import { getGeckoLineBreaks, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail, isSpaceOrTabOrSegmentBreak } from './gecko-line-breaks.js'
 import { isBidiControl, type GraphemeTable } from './graphemes.js'
 import { BREAK, CLUSTER_START, FORCED_BREAK, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
 
@@ -307,8 +307,7 @@ function isControlSegmentCode(code: number): boolean {
 // such a run is no content of its own, so the hard break before it takes it (nsTextFrame.cpp:
 // 11421-11429). After a control or marks that stay alone, the run starts a text segment. The
 // profile's graphemes look past these characters (src/graphemes.ts), so a cluster extender after
-// them joins the cluster before, unless a bidi level run starts at it, where the scan starts a
-// cluster (gfxTextRun.cpp:2828-2835) and the extender starts a segment.
+// them joins the cluster before, and the text after them goes on in the segment as without them.
 function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], hangTabs: boolean, afterContent: boolean, dropsBidiControl: boolean): TextAnalysis {
   const oneCluster = scan === 'gecko' ? SegmentFlag.OneCluster : 0
   const starts: number[] = []
@@ -352,11 +351,9 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
     const kind = classifySegmentUnit(normalized, breaks, i, code, whiteSpace, scan, afterContent)
     const alone = kind === SegmentKind.Text && isControlSegmentCode(code)
     const unbroken = (breaks[i]! & BREAK) === 0
-    const levelRunExtender = dropsBidiControl && i === droppedEnd && (breaks[i]! & CLUSTER_START) !== 0 && isBidiControl(normalized.charCodeAt(i - 1)) &&
-      isClusterExtender(normalized.codePointAt(i)!)
     if (
       unbroken && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
-      !levelRunExtender && kind === lastKind && gathersKind(kind)
+      kind === lastKind && gathersKind(kind)
     ) {
       if ((breaks[i]! & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~SegmentFlag.OneCluster
       continue
