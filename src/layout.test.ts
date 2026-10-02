@@ -1723,9 +1723,9 @@ describe('measurement invariants', () => {
 
   test('breakable fit cache distinguishes fit modes', () => {
     const measurement = getFontMeasurement('16px Fit Mode Test', null)
-    const metrics: SegmentMetrics = { width: 80, emojiCount: -1, fit: null, spaceKerning: null }
+    const metrics: SegmentMetrics = { width: 80, emojiCount: -1, fit: null }
     for (const [text, width] of [['a', 10], ['b', 20], ['c', 30], ['ab', 35], ['bc', 60]] as const) {
-      measurement.metrics.set(text, { width, emojiCount: -1, fit: null, spaceKerning: null })
+      measurement.metrics.set(text, { width, emojiCount: -1, fit: null })
     }
     measurement.metrics.set('abc', metrics)
 
@@ -5618,9 +5618,10 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
     const cut = measured.filter(text => text.length > 1 && text.includes(' '))
     const fontAsked = [asks('AATT', '16px Fresh Two'), asks('AA TT AT', '16px Plain Two'), asks('AA TT', '16px Plain Two'), asks('AA TT', '16px Glyph Two')]
     const unasked = [asks('\\u6F22 \\u3042 \\u30A2 \\uD55C\\uAD6D \\u6F22', '16px Words'), asks('\\u05D0 AA TT', '16px Mixed')]
-    console.log(JSON.stringify({ widths, lines, rich, asked, fontAsked, unasked, cut }))
+    const sides = asks('AA TT', '16px Sides').slice(3)
+    console.log(JSON.stringify({ widths, lines, rich, asked, fontAsked, unasked, sides, cut }))
   `
-  const { widths, lines, rich, asked, fontAsked, unasked, cut } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'asked' | 'fontAsked' | 'unasked' | 'cut', unknown>
+  const { widths, lines, rich, asked, fontAsked, unasked, sides, cut } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'asked' | 'fontAsked' | 'unasked' | 'sides' | 'cut', unknown>
   expect(widths).toEqual([
     // The word keeps its kerning with the space after it, and the space takes its own
     // with the word after it.
@@ -5704,10 +5705,12 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
   expect(rich).toEqual([37, 40])
   // The font is asked once whether it kerns the space: U+2028 between the printable ASCII
   // characters, 189 units, as the context stands and under fontKerning 'none', then U+2028
-  // alone. Then each edge letter once with U+2028, however many words share the letter. One
+  // alone. Then, space by space, the letter before it and the letter after it, each once with
+  // U+2028 however many words share the letter, and only on the side a space is on. One
   // string holds a U+0020 beside other text: the first letter that kerns with a space after
   // it, asked once per font under fontKerning 'normal' for where that kerning sits.
-  expect(asked).toEqual(['189', 'none:189', '\u2028', '\u2028A', 'A\u2028', '\u2028T', 'T\u2028'])
+  expect(asked).toEqual(['189', 'none:189', '\u2028', 'A\u2028', '\u2028T', 'T\u2028', '\u2028A'])
+  expect(sides).toEqual(['A\u2028', '\u2028T'])
   expect(cut).toEqual(['normal:A '])
   // A text without a space doesn't ask the font. A font that kerns nothing is asked once and
   // its words never; one whose U+2028 isn't the space likewise.

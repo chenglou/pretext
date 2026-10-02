@@ -5,7 +5,7 @@
 import { observeSegmentEntries, textMayHaveEntryGeometry, type SegmentEntryGeometry } from './entry-geometry.js'
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
-import { DEFAULT_IGNORABLE, hasProperty } from './line-breaks.js'
+import { addSpaceKerning } from './space-kerning.js'
 import {
   CONTROL,
   HARD_BREAK,
@@ -31,13 +31,10 @@ import {
   getEmojiCorrection,
   getFollowingSpaceMetrics,
   getFontMeasurement,
-  getFontSpaceKerning,
   getSegmentFit,
   getSegmentMetrics,
-  getSpaceKerning,
   getTextWidth,
   measureWithLetterSpacing,
-  noSpaceKerning,
   textMayContainEmoji,
   type SegmentFit,
   type SegmentMetrics,
@@ -106,100 +103,11 @@ const trailingFormatCharacterRe = /(?![\u200E\u200F\u061C])\p{Cf}$/u
 // Letters in the right-to-left blocks have bidi class R or AL, as do RLM and
 // ALM. Every other letter except modifier letters has class L, as does LRM.
 const rightToLeftLetterRe = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u200F\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u
-// Either of the two: a right-to-left letter or an explicit bidi control.
-const mixedDirectionRe = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u200F\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}\u202A-\u202E\u2066-\u2069]/u
 // The last letter or direction mark before format characters other than a soft
 // hyphen, and the first letter, direction mark or ASCII digit after the space,
 // past spaces and format characters.
 const letterBeforeFormatTailRe = /([\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])\p{M}*(?:(?![\u00AD\u200E\u200F\u061C])\p{Cf})+$/u
 const letterAfterSpacesRe = / (?: |(?![\u200E\u200F\u061C])\p{Cf})*([0-9\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])/uy
-
-function isSpaceKind(kind: number): boolean {
-  return kind === SPACE || kind === PRESERVED_SPACE
-}
-
-// The scripts a character can be in, for kerning with a space, as bits: Cyrillic, Greek, Latin,
-// and one bit for a character in none of them; a character of any script has all four. The three
-// are in Blink's order for a Common character's extensions, by ICU script code with Latin last
-// (GetScripts, script_run_iterator.cc:191-198), so a run's lowest bit is the script it resolves to.
-const OTHER_SCRIPT = 1
-const CYRILLIC_SCRIPT = 2
-const GREEK_SCRIPT = 4
-const LATIN_SCRIPT = 8
-const ANY_SCRIPT = 15
-// By Script_Extensions, as Blink reads a character's scripts (:120-216): an Inherited character,
-// or a Common one without extensions, joins any run. Half of a surrogate pair counts with them
-// (ENGINE_FOLLOWUPS.md, Kerning with spaces, has where these four bits depart from Blink).
-const anyScriptRe = /[\p{sc=Zinh}\p{scx=Zyyy}\p{Cs}]/u
-const latinScriptRe = /\p{scx=Latn}/u
-const cyrillicScriptRe = /\p{scx=Cyrl}/u
-const greekScriptRe = /\p{scx=Grek}/u
-// General categories Ps and Pe hold every paired bracket and a few characters more.
-const openingBracketRe = /\p{Ps}/u
-const closingBracketRe = /\p{Pe}/u
-
-function getKerningScripts(character: string): number {
-  // ASCII letters are Latin and the rest of ASCII is Common.
-  const code = character.charCodeAt(0)
-  if (code < 0x80) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? LATIN_SCRIPT : ANY_SCRIPT
-  // A Common opening bracket that is East Asian wide is in the Han scripts
-  // (FixScriptsByEastAsianWidth, :83-110, from OpenBracket, :431-441): those from U+FE17 up.
-  if (anyScriptRe.test(character)) return code >= 0xfe17 && openingBracketRe.test(character) ? OTHER_SCRIPT : ANY_SCRIPT
-  return (latinScriptRe.test(character) ? LATIN_SCRIPT : 0) | (cyrillicScriptRe.test(character) ? CYRILLIC_SCRIPT : 0) |
-    (greekScriptRe.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
-}
-
-// How far a text's script runs were read, the scripts the run there can be in, and the script of
-// the run the last opening bracket is in: 0 before a bracket, -1 while its run goes on.
-type ScriptRuns = { read: number, scripts: number, bracket: number }
-
-// Whether the space before the text segment text[at..end) is in the script run of the segment's
-// first character past default ignorables, the one it kerns with. Blink shapes each script run
-// apart (HarfBuzzShaper::Shape, harfbuzz_shaper.cc:1063-1104), and a space joins the run of the
-// text before it (ScriptRunIterator::MergeSets, :490-510). The search back ends at the nearest
-// character with one script; a closing bracket, or a character of several scripts, takes its
-// script from the runs before it (readScriptRuns).
-function spaceSharesScriptRun(text: string, at: number, end: number, runs: ScriptRuns): boolean {
-  let scripts = getKerningScripts(text[at]!)
-  // A default ignorable with a script of its own, as U+061C, counts as the word's first letter.
-  while (scripts === ANY_SCRIPT && at + 1 < end && hasProperty(text.charCodeAt(at), DEFAULT_IGNORABLE)) scripts = getKerningScripts(text[++at]!)
-  if (scripts === ANY_SCRIPT) return true
-  for (let i = at - 1; i >= 0; i--) {
-    const character = text[i]!
-    const before = getKerningScripts(character)
-    if (before === ANY_SCRIPT) {
-      if (character === ' ' || !closingBracketRe.test(character)) continue
-    } else if ((before & (before - 1)) === 0) {
-      return (before & scripts) !== 0
-    }
-    return (readScriptRuns(text, at, runs) & scripts) !== 0
-  }
-  return true
-}
-
-// The scripts of the run that ends before text[to], read on from the last call as
-// ScriptRunIterator::Consume reads them (:325-429): a run keeps the scripts its characters share
-// and ends before one that shares none. A closing bracket takes the script of the run its opening
-// bracket is in, once that run has ended (CloseBracket, :443-489); any opening bracket pairs
-// with any closing one here, and only the last one opened is remembered.
-function readScriptRuns(text: string, to: number, runs: ScriptRuns): number {
-  for (; runs.read < to; runs.read++) {
-    const character = text[runs.read]!
-    let scripts = getKerningScripts(character)
-    // Brackets are Common or, with extensions, East Asian.
-    const opens = (scripts & OTHER_SCRIPT) !== 0 && openingBracketRe.test(character)
-    if (!opens && runs.bracket > 0 && (scripts & OTHER_SCRIPT) !== 0 && closingBracketRe.test(character)) scripts = runs.bracket
-    if ((runs.scripts & scripts) !== 0) {
-      runs.scripts &= scripts
-    } else {
-      // The run that ends resolves to its first script (ResolveCurrentScript, :639-642).
-      if (runs.bracket === -1) runs.bracket = runs.scripts & -runs.scripts
-      runs.scripts = scripts
-    }
-    if (opens) runs.bracket = -1
-  }
-  return runs.scripts
-}
 
 // Bidi class B: the characters that end a bidi paragraph.
 function isParagraphSeparatorCode(code: number): boolean {
@@ -367,17 +275,6 @@ export function measureAnalysis(
     return normalized.slice(baseStart, starts[markChainStart]) + normalized.slice(starts[markChainKept], start)
   }
 
-  // The font's kerning with the space where words take Blink's kerning with the spaces beside
-  // them, or null. Blink shapes nothing across a change of direction
-  // (ShouldBreakShapingBeforeText, inline_node.cc:472-490), and which spaces share a word's
-  // direction depends on the paragraph's, which preparation can't see, so text with a
-  // right-to-left letter or an explicit bidi control takes none.
-  let fontSpaceKerning = engineProfile.kernsSpacesInScriptRun && normalized.includes(' ') ? getFontSpaceKerning(fontMeasurement) : null
-  if (fontSpaceKerning !== null && mixedDirectionRe.test(normalized)) fontSpaceKerning = null
-  const scriptRuns: ScriptRuns = { read: 0, scripts: ANY_SCRIPT, bracket: 0 }
-  // What the word before a space adds to that space, the next segment (SpaceKerning.space).
-  let spaceShare = 0
-
   const widths: number[] = []
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
   // walkers, layout()'s count and rich-inline layout read where the scan gives no break.
@@ -419,8 +316,8 @@ export function measureAnalysis(
   function getEntryGeometry(text: string, fit: SegmentFit, width: number, fitBasis: 'fresh' | 'original'): SegmentEntryGeometry | null {
     // The fit fixes the text, font and advances, and Pretext sets no other context state.
     // The WebKit profile moves the advances by a following space, and it observes no
-    // entries; the Chromium profile's kerning with a space is in the width alone, which
-    // its fresh entries don't read.
+    // entries; the Chromium profile's kerning with a space is added after them
+    // (addSpaceKerning), and its fresh entries read none of it.
     const cached = fit.entryGeometry
     if (cached !== null && cached.letterSpacing === letterSpacing && cached.emojiCorrection === emojiCorrection) return cached.geometry
     const geometry = observeSegmentEntries(text, fit.advances!, letterSpacing, width, fitBasis,
@@ -472,26 +369,7 @@ export function measureAnalysis(
         previousJoinablePiece = text
         previousJoinableMetrics = textMetrics
         if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
-        let followingSpaceKerning = followingSpaceTail === null || measuredWithSpace ? 0 : getTailKerning(text + followingSpaceTail)
-        if (fontSpaceKerning !== null && textMetrics.spaceKerning !== noSpaceKerning) {
-          const afterSpace = mi > 0 && isSpaceKind(flags[mi - 1]! & KIND_BITS)
-          const beforeSpace = mi + 1 < segmentCount && isSpaceKind(flags[mi + 1]! & KIND_BITS)
-          if (afterSpace || beforeSpace) {
-            const kerning = textMetrics.spaceKerning ?? getSpaceKerning(text, textMetrics, fontMeasurement, fontSpaceKerning)
-            if (beforeSpace) {
-              followingSpaceKerning = kerning.after
-              spaceShare = kerning.space
-            }
-            // The space takes its kerning with this word, and takes it along where it hangs.
-            // Preserved spaces that start the text or follow a forced break are a Blink item of
-            // their own (inline_items_builder.cc:988-1034), which kerns with nothing.
-            if (afterSpace && kerning.before !== 0 &&
-              !((flags[mi - 1]! & KIND_BITS) === PRESERVED_SPACE && (mi === 1 || (flags[mi - 2]! & KIND_BITS) === HARD_BREAK)) &&
-              spaceSharesScriptRun(normalized, starts[mi]!, starts[mi]! + text.length, scriptRuns)) {
-              widths[mi - 1] = widths[mi - 1]! + kerning.before
-            }
-          }
-        }
+        const followingSpaceKerning = followingSpaceTail === null || measuredWithSpace ? 0 : getTailKerning(text + followingSpaceTail)
         width = getTextSegmentWidth(text, textMetrics, measuredWithSpace, followingSpaceKerning)
         // Under break-word, Blink retries an overflowing line with a break allowed between
         // any two graphemes (line_breaker.cc), WebKit searches the word's grapheme prefixes
@@ -522,8 +400,7 @@ export function measureAnalysis(
       case SPACE:
       case PRESERVED_SPACE:
       case ZERO_WIDTH_BREAK:
-        width = getTextWidth(text, fontMeasurement, emojiCorrection) + spaceShare
-        spaceShare = 0
+        width = getTextWidth(text, fontMeasurement, emojiCorrection)
         if (hasLetterSpacing) spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
         break
       case TAB:
@@ -565,6 +442,7 @@ export function measureAnalysis(
     }
   }
 
+  if (engineProfile.kernsSpacesInScriptRun) addSpaceKerning(fontMeasurement, analysis, widths, breakableFitAdvances)
   // A segment's width is its width between the text before and after it; one that starts
   // a line takes back the halt Blink gives its first character there.
   let hanKerning: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null, overflowLineEndTrims: null }
