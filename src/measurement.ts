@@ -338,10 +338,9 @@ export type FontMeasurement = {
   // In the Chromium profile, the font's kerning with the space glyph, or null where it has
   // none, asked for the first text with a space (getFontSpaceKerning).
   spaceKerning: FontSpaceKerning | null | undefined
-  // In the Chromium profile, the kerning between two kana in a row, by the first's code unit
-  // times 0x10000 plus the second's, once a text has the pair, or null where the font kerns
-  // none, asked for the first text with two kana in a row (getFontKanaKerning).
-  kanaKerning: Map<number, number> | null | undefined
+  // In the Chromium profile, the font's kerning between kana, or null where it has none,
+  // asked for the first text with two kana in a row (getFontKanaKerning).
+  kanaKerning: FontKanaKerning | null | undefined
   emojiCorrection: number | null // Probed for the first text that may hold emoji
   emojiWidth: number // Canvas's width of one glyph of the emoji font, measured with the correction
   hyphenText: string | null // Asked for the first text with a soft hyphen (getHyphenText)
@@ -353,6 +352,14 @@ export type FontSpaceKerning = {
   // once a segment has the character at that edge (getSpaceKerning).
   after: Map<number, number>
   before: Map<number, number>
+}
+// What preparation keeps of a font that kerns kana.
+export type FontKanaKerning = {
+  // The kerning of two kana in a row, by the first's code unit times 0x10000 plus the
+  // second's, once a text has the pair (getKanaKerning).
+  pairs: Map<number, number>
+  // Whether a pair asked about has kerned the two apart, as some of Klee's do.
+  widens: boolean
 }
 let cachedEngineProfile: EngineProfile | null = null
 
@@ -593,14 +600,17 @@ function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: strin
 // The kerning of every segment that takes none.
 export const noSpaceKerning: SpaceKerning = { after: 0, before: 0 }
 
+function isKanaLetter(code: number): boolean {
+  return (code >= 0x3041 && code <= 0x3096) || (code >= 0x30a1 && code <= 0x30fa)
+}
+
 // Whether a character is a kana or an ideograph, which Canvas shapes as a word of its own: it
 // cuts a string before one that follows another, and keeps with a letter the marks and CJK
 // punctuation after it (NextWordEndIndex, plain_text_node.cc:92-153, over
 // kIsCjkIdeographOrSymbolRanges, character_property_data.h:40-80, of which these are the
 // letters).
 export function isCanvasWordLetter(code: number): boolean {
-  return (code >= 0x3041 && code <= 0x3096) || (code >= 0x30a1 && code <= 0x30fa) ||
-    (code >= 0x3400 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff)
+  return isKanaLetter(code) || (code >= 0x3400 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff)
 }
 
 // Whether a character takes no kerning with a space, and Canvas isn't asked.
@@ -670,9 +680,9 @@ export function getSpaceKerning(seg: string, metrics: SegmentMetrics, measuremen
   return metrics.spaceKerning = after === 0 && before === 0 ? noSpaceKerning : { after, before }
 }
 
-// Twelve kana in a row, nine of whose eleven pairs or more kern in each Japanese face measured
+// Twelve kana in a row, nine or more of whose eleven pairs kern in each Japanese face measured
 // that kerns kana at all (getFontKanaKerning).
-const KANA_PROBE = '\u30D7\u30C0\u30B0\u30BF\u30CE\u30E0\u30D6\u30A4\u30E1\u3048\u305A\u307A'
+const KANA_PROBE = 'プダグタノムブイメえずぺ'
 
 // The font's context for kana: Canvas shapes a string whole, as Blink's layout shapes a run,
 // under text-rendering: optimizeLegibility where the lookups of the first font with a space
@@ -694,30 +704,63 @@ function getWholeRunContext(measurement: FontMeasurement): CanvasRenderingContex
 // `fontKerning` turns off). That is also a font Canvas doesn't shape whole, whose kana stay as
 // wide as Canvas measures them apart. Asked once per font. Premise: a font that kerns kana
 // kerns one of the probe's pairs (RESEARCH.md, Kerning At Line Edges, has the fonts measured).
-export function getFontKanaKerning(measurement: FontMeasurement): Map<number, number> | null {
+export function getFontKanaKerning(measurement: FontMeasurement): FontKanaKerning | null {
   if (measurement.kanaKerning === undefined) {
     const context = getWholeRunContext(measurement)
     const kerned = context.measureText(KANA_PROBE).width
     context.fontKerning = 'none'
     const unkerned = context.measureText(KANA_PROBE).width
     context.fontKerning = 'auto'
-    measurement.kanaKerning = kerned === unkerned ? null : new Map()
+    measurement.kanaKerning = kerned === unkerned ? null : { pairs: new Map(), widens: false }
   }
   return measurement.kanaKerning
 }
 
+// The most pairs asked about in one string (getKanaKerning).
+const KANA_STRETCH_PAIRS = 6
+
+// What kana in a row kern by in all: the string on the context that shapes it whole, less each
+// kana alone. As for a character and a space, up to the string's width / 2^22 is rounding.
+function measureKanaKerning(text: string, measurement: FontMeasurement): number {
+  const width = getWholeRunContext(measurement).measureText(text).width
+  let kerning = width
+  for (let i = 0; i < text.length; i++) kerning -= getSegmentMetrics(text[i]!, measurement).width
+  return Math.abs(kerning) <= width / 0x400000 ? 0 : kerning
+}
+
 // The kerning Blink's layout gives text[at - 1] and text[at], two kana in a row, which its
-// Canvas, shaping each apart, doesn't report: the two in one string on the context that shapes
-// a string whole, less each alone. Asked of Canvas once per font and pair.
-export function getKanaKerning(text: string, at: number, measurement: FontMeasurement, kernings: Map<number, number>): number {
-  const key = text.charCodeAt(at - 1) * 0x10000 + text.charCodeAt(at)
-  let kerning = kernings.get(key)
-  if (kerning === undefined) {
-    const pairWidth = getWholeRunContext(measurement).measureText(text.slice(at - 1, at + 1)).width
-    kerning = pairWidth - getSegmentMetrics(text[at - 1]!, measurement).width - getSegmentMetrics(text[at]!, measurement).width
-    // As for a character and a space, up to the pair's width / 2^22 is rounding.
-    if (Math.abs(kerning) <= pairWidth / 0x400000) kerning = 0
-    kernings.set(key, kerning)
+// Canvas, shaping each apart, doesn't report. Each pair is asked about once per font, and most
+// kern nothing (about one in ten of a text's pairs does in Hiragino Sans), so a new pair of
+// letters is asked together with the pairs after it in the text that are new too, up to
+// KANA_STRETCH_PAIRS: a stretch as wide as its kana alone has no kerning. In one that has, the
+// pairs are asked one at a time, until they add up to the stretch's. That holds while every
+// kerning tightens its pair. Once a pair has widened, the font's pairs are asked again, each
+// alone (RESEARCH.md, Kerning At Line Edges, has what that leaves).
+export function getKanaKerning(text: string, at: number, measurement: FontMeasurement, font: FontKanaKerning): number {
+  const pairs = font.pairs
+  let kerning = pairs.get(text.charCodeAt(at - 1) * 0x10000 + text.charCodeAt(at))
+  if (kerning !== undefined) return kerning
+  let end = at + 1
+  if (!font.widens && isKanaLetter(text.charCodeAt(at - 1)) && isKanaLetter(text.charCodeAt(at))) {
+    while (end - at < KANA_STRETCH_PAIRS && isKanaLetter(text.charCodeAt(end)) && !pairs.has(text.charCodeAt(end - 1) * 0x10000 + text.charCodeAt(end))) end++
+  }
+  // What the stretch's pairs not yet asked alone kern by, where it holds more than one.
+  let rest = end - at > 1 ? measureKanaKerning(text.slice(at - 1, end), measurement) : NaN
+  kerning = 0
+  for (let i = at; i < end; i++) {
+    const key = text.charCodeAt(i - 1) * 0x10000 + text.charCodeAt(i)
+    // A pair the stretch holds twice is asked once.
+    let pair = pairs.get(key)
+    if (pair === undefined) {
+      pair = rest === 0 && !font.widens ? 0 : measureKanaKerning(text.slice(i - 1, i + 1), measurement)
+      if (pair > 0 && !font.widens) {
+        font.widens = true
+        pairs.clear()
+      }
+      pairs.set(key, pair)
+    }
+    if (i === at) kerning = pair
+    rest -= pair
   }
   return kerning
 }

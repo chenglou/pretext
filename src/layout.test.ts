@@ -6194,7 +6194,11 @@ test('the Chromium profile takes the kerning between two kana', () => {
       prepare(text, font)
       return measured.filter(text => text.startsWith('whole ')).map(text => text.slice(6)).map(text => text.length > 9 ? text.slice(0, text.indexOf(':') + 1) + (text.length - text.indexOf(':') - 1) : text)
     }
-    const asked = [asks('あいあいあい', '16px Fresh'), asks('あい いあ', '16px Fresh'), asks('あ い 漢あ', '16px Fresh Two'), asks('あいう', '16px Plain Two'), asks('あいあ', '16px Plain Two')]
+    const asked = [
+      asks('あいあいあい', '16px Fresh'), asks('あい いあ', '16px Fresh'), asks('あ い 漢あ', '16px Fresh Two'), asks('あいう', '16px Plain Two'), asks('あいあ', '16px Plain Two'),
+      asks('いういう', '16px Fresh'), asks('かあアきく', '16px Fresh'), asks('さしすせそたちつ', '16px Fresh'), asks('アーア', '16px Fresh'),
+      asks('なにうえぬ', '16px Fresh'), asks('はひふ', '16px Fresh'),
+    ]
     console.log(JSON.stringify({ widths, lines, rich, asked }))
   `
   const { widths, lines, rich, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'asked', unknown>
@@ -6234,10 +6238,20 @@ test('the Chromium profile takes the kerning between two kana', () => {
   // (ENGINE_FOLLOWUPS.md).
   expect(rich).toEqual([30, 32])
   // The font is asked once whether it kerns kana: twelve kana as the second context stands
-  // and under fontKerning 'none'. Then each pair once, however often a text has it. A text
-  // without two kana in a row doesn't ask the font, and a font that kerns none of the probe
-  // is asked about no pair.
-  expect(asked).toEqual([['12', 'none:12', 'あい', 'いあ'], [], [], ['12', 'none:12'], []])
+  // and under fontKerning 'none'. New pairs in a row are asked whole first, then, since they
+  // kern, one at a time, each once however often the text has it. A text without two kana in
+  // a row doesn't ask the font, and a font that kerns none of the probe is asked about no
+  // pair.
+  // A stretch that kerns nothing is asked once. One that kerns has its pairs asked until they
+  // add up to it, here the first two of four. A stretch holds six pairs at most, and a pair
+  // with a mark is asked alone.
+  // Once a pair has widened, as うえ, a zero no longer says that nothing kerns, so the pairs
+  // after it and of later texts are asked alone, and the ones the font had are asked again.
+  expect(asked).toEqual([
+    ['12', 'none:12', 'あいあいあい', 'あい', 'いあ'], [], [], ['12', 'none:12'], [],
+    ['いういう'], ['かあアきく', 'かあ', 'あア'], ['さしすせそたち', 'ちつ'], ['アー', 'ーア'],
+    ['なにうえぬ', 'なに', 'にう', 'うえ', 'えぬ', 'にう'], ['はひ', 'ひふ'],
+  ])
 })
 
 
