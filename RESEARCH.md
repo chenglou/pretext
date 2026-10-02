@@ -3152,17 +3152,19 @@ decisions for the maintainer.
   called once for a paragraph only (`normalizeMaxWidth()`, #401), the three streams, called once for each line, took
   their width as given and differed from `Infinity` in three places: a pre-wrap line ending in hanging spaces reported a
   `NaN` width, a line starting inside a segment with fresh-line geometry ended after one grapheme, and in the Gecko
-  profile a rich fragment started after its item's leading soft hyphens. The clamp has one known cost. Against the tree
-  before #401, over three sessions of Chrome's `lines`, `resize` and `worst` rows (2026-10-02), no row has a verdict,
-  and one reads the same way in every session with its control level: `layout()` of the Arabic book, 0.9-1.5% slower
-  with the second copy of the base 0.0-0.2% faster, under that row's 2% floor. `layout()` clamps once a call there, for
-  106,576 characters, so it isn't the clamp's own work; the count loop (`countPreparedLines()`) runs slower after it.
-  Offline, as hypotheses, the d8 shell of that Chrome read the row 1.7-2.7% slower than #401's form in four runs of 20
-  to 24 processes and the SpiderMonkey shell of Firefox 156.0.1 3.2%, with the clamp in that loop alone 3.5% slower in
-  d8 and `Math.max` there alone within noise; `Math.max` around the clamp there still read 1.2% slower, so it isn't what
-  the compiler knows of the limit, and the cause wasn't found. d8 read `layout()` of chat messages, of the soft-hyphen
-  text and of the long breakable runs level. #401's form, timed the same way on the `lines` and `resize` rows, has no
-  verdict either, and reads `layout()` at widths seen before above the base in every session for four of the five
-  families (0.1-4.0%, under their 5% floor). A bench that reads the Arabic book's `layout()` slower than its floor in
-  every session reopens #401's form for `layout()`. Whether such a width should throw, as a `letterSpacing` that isn't
-  finite does (#356), is on the API discussion's list (TODO.md).
+  profile a rich fragment started after its item's leading soft hyphens. The clamp has been timed in Chrome only, and
+  offline the two engines' shells disagree about it. Against the tree before #401, over three sessions of Chrome's
+  `lines`, `resize` and `worst` rows (2026-10-02), no row has a verdict, and one reads the same way in every session
+  with its control level: `layout()` of the Arabic book, 0.9-1.5% slower with the second copy of the base 0.0-0.2%
+  faster, under that row's 2% floor. `layout()` clamps once a call there, for 106,576 characters, so it isn't the
+  clamp's own work. #401's form, timed the same way on the `lines` and `resize` rows, has no verdict either, and reads
+  `layout()` at widths seen before above the base in every session for four of the five families (0.1-4.0%, under their
+  5% floor). The shells, as hypotheses, each against #401's form over 16 to 24 processes a run: d8 of that Chrome reads
+  the Arabic book's `layout()` 1.6-2.7% slower and the chat messages' `layout()` and walk about 1% faster; SpiderMonkey
+  of Firefox 156.0.1 reads the messages' `layout()` 17-20% slower, their walk 8-9% and their stream 3%, each in every
+  process, and the Arabic book 3%, in builds whose minified names differ (so it isn't the minifier's names, JavaScript
+  Engines), and level with `Math.max` put back. Written at each place without a function, the clamp reads the messages'
+  `layout()` level there, the walk 5% slower, the stream 1.5% and the Arabic book 8%. So a bench in Firefox decides this
+  form: a row of its `lines` or `resize` tables slower than its floor in every session reopens #401's form, with the
+  streams' three places documented again in ENGINE_FOLLOWUPS.md. Whether such a width should throw, as a `letterSpacing`
+  that isn't finite does (#356), is on the API discussion's list (TODO.md).
