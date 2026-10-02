@@ -1636,6 +1636,29 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   page, against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors, seemingly because it
   then compiles the whole bundle up front (the doubling is measured, the cause a guess); V8 and JavaScriptCore didn't
   care (#340, 2026-09-23).
+- **Property classes in regular-expression literals** (#TBD, 2026-10-02). Where V8 and SpiderMonkey parse a literal with
+  a `\p{...}` class of a general category or a script, they build the class's set, in a function that never runs too. V8
+  builds it again when the script runs and makes the expression, and at the expression's first and second tests;
+  `new RegExp()` builds it where it's called; JavaScriptCore builds nothing while it parses. One such literal of
+  Pretext's took 10-83 µs to compile in d8 15.4.80, the shell of Chrome 154's V8, and 8-65 µs in SpiderMonkey 156.0.1's
+  shell, where a literal of plain ranges, or of binary properties alone (`Emoji`, `Default_Ignorable_Code_Point`), whose
+  sets the engines keep, took 2-4 µs. The six expressions of the cursive rule (#397), three literals and three
+  `new RegExp()` calls at module scope, read as 0.2 ms of a fresh page's compile in Chrome 154 and Firefox 156, and 0.2
+  ms of its run in Firefox, for a rule only letter-spaced text asks. So the first letter-spaced text a profile with the
+  rule prepares builds them (`getCursiveExpressions()`, `src/prepare.ts`), at 13 more code lines. Offline, the bench's
+  bundle then compiled in 1.55-1.63 ms against 1.73-1.82 in d8 and in 1.24-1.30 ms against 1.40-1.47 in the SpiderMonkey
+  shell, and ran as long as before; Bun 1.4's JavaScriptCore read no difference (a page in a process that had loaded the
+  bundle before, as the bench's fresh pages after the first are; medians of 60 pages for each of five families). In a
+  new process, where nothing has built a set yet, compiling and running it read 3.2 ms against 3.7 in d8 and 2.1 against
+  2.5 in the SpiderMonkey shell (medians of 25 processes). The bench doesn't show that: its Chrome pages run the bundle
+  in 0.06-0.07 ms, as a d8 process that has loaded it before does (0.03 ms), where a new one takes 1.3 ms. `prepare()`
+  read within 1.7% of main on seen and on new Latin, Arabic and mixed messages in the three shells, where two copies of
+  main read within 1.6%; on letter-spaced Arabic, where the expressions are fetched for every character, d8 read
+  1.6-1.9% slower and Bun under the Blink profile 3.4%. Every number here is from a shell on a stand-in Canvas, a
+  hypothesis until the bench's fresh rows show it (the PR has them). Main's other 25 literals with property classes are
+  left as they are: 17 hold a class of a general category or a script, which one by one summed to 0.4 ms of compile in
+  d8 and 0.2 ms in the SpiderMonkey shell, and the bench's chat messages test four to ten of the 25, by engine. Branch
+  `lazy-property-expressions` builds the ones most text never reaches at first use.
 - **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
   full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
   nothing (#350, 2026-09-26).

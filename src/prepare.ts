@@ -70,7 +70,7 @@ function addInternalLetterSpacing(width: number, graphemeCount: number, letterSp
 // Chrome 154, Firefox 156 and webkit-host lay 64 strings out so (2026-10-01). The
 // profile's unspacedCursive names the engine's rule, and the scripts and script
 // extensions are the JavaScript engine's (RESEARCH.md, Tables Against Canvas).
-const cursiveScriptRe = /[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Nko}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Phags_Pa}\p{Script=Hanifi_Rohingya}]/uy
+const cursiveScriptSource = '[\\p{Script=Arabic}\\p{Script=Syriac}\\p{Script=Nko}\\p{Script=Mandaic}\\p{Script=Mongolian}\\p{Script=Phags_Pa}\\p{Script=Hanifi_Rohingya}]'
 // What starts or goes on with a cursive run in Blink: the letters; the Common characters
 // and marks whose scripts include Arabic, such as U+060C, U+0640 and the vowel signs,
 // since a shared character's run starts with the lowest code of its scripts, Latin aside
@@ -82,19 +82,17 @@ const cursiveScriptRe = /[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Nko}\p{Scr
 // next to Thaana it spaces U+060C, and next to Mongolian it doesn't space the CJK
 // punctuation Mongolian shares, nor U+202F outside Latin (ENGINE_FOLLOWUPS.md, Letter
 // spacing).
-const cursiveRunRe = /[\p{scx=Arabic}\p{Script=Syriac}\u1DFA\p{Script=Nko}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Phags_Pa}\p{Script=Hanifi_Rohingya}\u1802\u1803\u1805]/uy
-const mayBeCursiveRe = new RegExp(cursiveRunRe.source, 'u')
+const cursiveRunSource = '[\\p{scx=Arabic}\\p{Script=Syriac}\\u1DFA\\p{Script=Nko}\\p{Script=Mandaic}\\p{Script=Mongolian}\\p{Script=Phags_Pa}\\p{Script=Hanifi_Rohingya}\\u1802\\u1803\\u1805]'
 // Characters that stay in the run before them in Blink: Common ones that no script lists,
 // and marks, which inherit. Gap: so does a Common character that one script lists, such as
 // the circled ideographs, which here ends a cursive run (ENGINE_FOLLOWUPS.md, Letter
 // spacing).
-const scriptNeutralRe = /[\p{scx=Common}\p{Script=Inherited}]/uy
+const scriptNeutralSource = '[\\p{scx=Common}\\p{Script=Inherited}]'
 // A Common character right before a mark that has script extensions, as the Arabic vowel
 // signs do, doesn't stay: it takes the mark's scripts (FetchNextCharacter,
 // script_run_iterator.cc:624-635), so a digit or a dotted circle that carries a fatha
 // starts an Arabic run. A match ends where the mark starts; the mark is the first group.
 const markedCommonSource = '\\p{scx=Common}(?=((?=\\p{Script=Inherited})\\P{scx=Inherited}))'
-const markedCommonRe = new RegExp(markedCommonSource, 'uy')
 // The opening brackets of no script that Blink makes Han, those whose East Asian Width is
 // wide, fullwidth or halfwidth (FixScriptsByEastAsianWidth, script_run_iterator.cc:83-110).
 // Regular expressions have no property for that width, so these are listed: of Unicode
@@ -104,7 +102,24 @@ const markedCommonRe = new RegExp(markedCommonSource, 'uy')
 const wideOpeningBrackets = '\u2329\uFE59\uFE5B\uFE5D\uFF08\uFF3B\uFF5B\uFF5F'
 // What gives a text's first run its script: a character that has one, the mark a Common
 // character takes its scripts from, or a wide opening bracket.
-const firstScriptRe = new RegExp(`[^\\p{scx=Common}\\p{Script=Inherited}]|${markedCommonSource}|[${wideOpeningBrackets}]`, 'u')
+const firstScriptSource = `[^\\p{scx=Common}\\p{Script=Inherited}]|${markedCommonSource}|[${wideOpeningBrackets}]`
+
+// The expressions above, built by the first letter-spaced text a profile with the rule
+// prepares: an engine checks an expression of script properties where it parses a literal
+// or builds one, which at module scope every page would pay for as it loads (RESEARCH.md,
+// Keeping Work Bounded, JavaScript Engines).
+type CursiveExpressions = { script: RegExp; run: RegExp; mayBeCursive: RegExp; scriptNeutral: RegExp; markedCommon: RegExp; firstScript: RegExp }
+let cursiveExpressions: CursiveExpressions | null = null
+function getCursiveExpressions(): CursiveExpressions {
+  return cursiveExpressions ??= {
+    script: new RegExp(cursiveScriptSource, 'uy'),
+    run: new RegExp(cursiveRunSource, 'uy'),
+    mayBeCursive: new RegExp(cursiveRunSource, 'u'),
+    scriptNeutral: new RegExp(scriptNeutralSource, 'uy'),
+    markedCommon: new RegExp(markedCommonSource, 'uy'),
+    firstScript: new RegExp(firstScriptSource, 'u'),
+  }
+}
 
 // Blink's script run as preparation follows it through a text's segments, in order:
 // whether it is cursive, and each bracket it has open, as its opening character and then
@@ -114,8 +129,9 @@ type ScriptRun = { cursive: boolean; openBrackets: number[] }
 // The run a text starts in: that of its first character that has a script, which takes in
 // the characters of no script before it.
 function startScriptRun(text: string): ScriptRun {
-  const first = firstScriptRe.exec(text)
-  return { cursive: first !== null && mayBeCursiveRe.test(first[1] ?? first[0]), openBrackets: [] }
+  const { firstScript, mayBeCursive } = getCursiveExpressions()
+  const first = firstScript.exec(text)
+  return { cursive: first !== null && mayBeCursive.test(first[1] ?? first[0]), openBrackets: [] }
 }
 
 // Takes the code point c at text[i] into the run. A closing bracket goes back to its
@@ -135,11 +151,12 @@ function enterScriptRun(run: ScriptRun, text: string, i: number, c: number): voi
     openBrackets.length = opened + 2
     return
   }
-  markedCommonRe.lastIndex = scriptNeutralRe.lastIndex = i
-  const marked = markedCommonRe.test(text)
-  if (marked || !scriptNeutralRe.test(text)) {
-    cursiveRunRe.lastIndex = marked ? markedCommonRe.lastIndex : i
-    run.cursive = cursiveRunRe.test(text)
+  const { markedCommon, scriptNeutral, run: cursiveRun } = getCursiveExpressions()
+  markedCommon.lastIndex = scriptNeutral.lastIndex = i
+  const marked = markedCommon.test(text)
+  if (marked || !scriptNeutral.test(text)) {
+    cursiveRun.lastIndex = marked ? markedCommon.lastIndex : i
+    run.cursive = cursiveRun.test(text)
   }
   if (bracket === undefined || (bracket & 1) === 0) return
   if (!marked && wideOpeningBrackets.includes(text.charAt(i))) run.cursive = false
@@ -155,12 +172,13 @@ function enterScriptRun(run: ScriptRun, text: string, i: number, c: number): voi
 function getUnspacedGraphemes(text: string, graphemeTable: GraphemeTable, run: ScriptRun | null): number[] | null {
   const ends = new Int32Array(text.length)
   const count = findGraphemeEnds(graphemeTable, text, 0, text.length, ends)
+  const cursiveScript = getCursiveExpressions().script
   let unspaced: number[] | null = null
   for (let g = 0, start = 0; g < count; start = ends[g++]!) {
     let joins = false
     if (run === null) {
-      cursiveScriptRe.lastIndex = start
-      joins = cursiveScriptRe.test(text)
+      cursiveScript.lastIndex = start
+      joins = cursiveScript.test(text)
     } else {
       for (let i = start; i < ends[g]!;) {
         const c = text.codePointAt(i)!
@@ -403,7 +421,7 @@ export function measureAnalysis(
 
   // Whether the text may hold graphemes that take no letter spacing in this engine, and
   // Blink's script run over it.
-  const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && mayBeCursiveRe.test(normalized)
+  const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && getCursiveExpressions().mayBeCursive.test(normalized)
   const scriptRun = cursiveSpacing && engineProfile.unspacedCursive === 'run' ? startScriptRun(normalized) : null
 
   const widths: number[] = []
