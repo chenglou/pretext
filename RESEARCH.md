@@ -823,15 +823,16 @@ Outside the harness, of 186,720 layouts recorded fresh and not kept, 7,652 were 
 Cyrillic and Greek paragraphs and interface texts in 56 and 80 font specs, texts that mix scripts in 28, and the same in
 pre-wrap and letter-spaced (pinned Chrome 154.0.8037.57, 2026-10-01; the PR has the table). Those were counted with the
 script runs read forward and default ignorables read past; the two premises below gave back 38 of the interface texts'
-46,400 layouts and 13 of the mixed texts' 8,680, and the other sets weren't run again. Five that were right went wrong: four Avenir Next layouts of Russian text
-with a Latin word in guillemets, where Canvas kerns the opening quote with the letter after it and the page doesn't,
-which the wide spaces hid before (ENGINE_FOLLOWUPS.md, Kerning with spaces), and one pre-wrap line of ZWNJs at word
-edges, which is right again since such an edge takes no kerning (below). Of 22,680 single lines, 5,936 measured more
-than 0.1px wider than painted and 2 do, and 58 measured narrower and 1 does. The least width at which a second word
-stays on the first line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs, where main fit 171 later, by
-up to 3.61px, and 4 earlier. A box sized to the predicted widest line, rounded up, makes Chrome wrap again in 2 of 8,179
-multi-line layouts in 18 font specs, where main's does in none of 8,006, and in 6 of 23,041 in 12 common ones at 34
-widths, where main's does in 11 of 22,726; all eight are the guillemet text in 14px Avenir Next.
+46,400 layouts and 13 of the mixed texts' 8,680, and the other sets weren't run again. Five that were right went wrong:
+four Avenir Next layouts of Russian text with a Latin word in guillemets, where Canvas kerns the opening quote with the
+letter after it and the page doesn't, which the wide spaces hid before (ENGINE_FOLLOWUPS.md, Kerning with spaces), and
+one pre-wrap line of ZWNJs at word edges, which is right again since such an edge takes no kerning (below). Of 22,680
+single lines, 5,936 measured more than 0.1px wider than painted and 2 do, and 58 measured narrower and 1 does. The least
+width at which a second word stays on the first line is Chrome's to 0.03px for all 650 such fits tried in 26 font specs,
+where main fit 171 later, by up to 3.61px, and 4 earlier. A box sized to the predicted widest line, rounded up, makes
+Chrome wrap again in 2 of 8,179 multi-line layouts in 18 font specs, where main's does in none of 8,006, and in 6 of
+23,041 in 12 common ones at 34 widths, where main's does in 11 of 22,726; all eight are the guillemet text in 14px
+Avenir Next.
 
 The cost is Canvas calls while a font is new. A font is first asked once whether it kerns anything with the space
 (`getFontSpaceKerning()` in `src/measurement.ts`; the premise is below): one string, U+2028 before, between and after
