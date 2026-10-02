@@ -3132,7 +3132,7 @@ decisions for the maintainer.
   (Bidi Levels has the numbers). It reopens with a `direction` option (TODO.md), under which a port is right in both
   directions.
 - **2026-10-02: a `maxWidth` that isn't a number lays out as unbounded in every line API, made so by the clamp each line
-  loop makes on its width** (#TBD, in place of the form #401 landed that day). `NaN`, or the `undefined` of a container
+  loop makes on its width** (#409, in place of the form #401 landed that day). `NaN`, or the `undefined` of a container
   not measured yet, fails every comparison, and the line loops ask some whether a segment fits and others whether it
   overflows. So since #340 `layout()` counted a line per grapheme where the other line APIs gave one line, and those
   reported a `NaN` width for a pre-wrap line ending in spaces. Each loop begins by clamping its width, to 0 in the three
