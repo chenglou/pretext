@@ -1395,15 +1395,16 @@ function stepRichInlineLine(
     // Sans at 32-44px, Firefox 156 lays out `文字\u3000`, a box of width 0 and `\u3000です` as
     // `文字\u3000` and `です`, and `文字\u3000` and a span of a ZWSP and `ab` as `文字\u3000`
     // and `ab`; in 16px Arial pre-wrap at 40-52px, after `ab cd   `, it keeps the two spaces
-    // of a span of a ZWSP, two spaces and `ef` on the first line. Where that walk reaches a
-    // tab, or a line feed right after a run of U+3000, the frame takes nothing and the line
-    // ends as before any item that doesn't fit (below): Firefox starts the second line with
-    // the space and the tab of a span of a ZWSP, a space, a tab and `ef`, and gives the
-    // U+3000 of a span of U+3000, a line feed and `ef` a line of its own. Where the line's
-    // content overflows, no break fit on it, and the frame's first break is the emergency one
-    // at its start, which ends the line before the item, as below: Firefox gives the ZWSP of
-    // items `A` and a ZWSP a line of its own at a width under `A`'s. In normal white space it
-    // does so too after white space that hangs on a line with no break (ENGINE_FOLLOWUPS.md).
+    // of a span of a ZWSP, two spaces and `ef` on the first line. Where that start runs into
+    // a tab on a line that has a break to end at, or the walk reaches a line feed right after
+    // a run of U+3000, the frame takes nothing and the line ends as before any item that
+    // doesn't fit (below): Firefox starts the second line with the space and the tab of a
+    // span of a ZWSP, a space, a tab and `ef`, and gives the U+3000 of a span of U+3000, a
+    // line feed and `ef` a line of its own. Where the line's content overflows, no break fit
+    // on it, and the frame's first break is the emergency one at its start, which ends the
+    // line before the item, as below: Firefox gives the ZWSP of items `A` and a ZWSP a line
+    // of its own at a width under `A`'s. In normal white space it does so too after white
+    // space that hangs on a line with no break (ENGINE_FOLLOWUPS.md).
     const reservedWidth = gapBefore + item.extraWidth
     let room = remainingWidth
     let hangBefore = 0
