@@ -4119,6 +4119,10 @@ describe('rich-inline invariants', () => {
       expect(lines([item('中中\u3000'), item('\u200B'), item('ab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
       expect(lines([item('中中\u3000'), { width: 0 }, item('\u3000中中')], 40)).toEqual(['中中\u3000||\u3000:40', '中中:32'])
       expect(lines([item('ab cd     '), item('\u200Bef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B:19.2', 'ef:19.2'])
+      // A ZWSP that is all of its item is such a start before an item that starts with a line
+      // feed too, where the text the items join gives no break after it (zero-width glue).
+      expect(lines([item('中中\u3000'), item('\u200B'), item('\nup')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B|:40', 'up:19.2'])
+      expect(lines([item('ab cd     '), item('\u200B'), item('\r\nef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B|:40', 'ef:19.2'])
       // Preserved spaces after that start hang with it, in the next item too.
       expect(lines([item('ab cd     '), item('\u200B  ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B  :19.2', 'ef:19.2'])
       expect(lines([item('ab cd     '), item('\u200B'), item('  ef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     |\u200B|  :19.2', 'ef:19.2'])

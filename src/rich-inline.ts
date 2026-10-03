@@ -962,12 +962,14 @@ function getEndRetreat(item: PreparedRichInlineItem, startSegmentIndex: number, 
   return retreat
 }
 
-// Whether the item's first segment takes no room where a line ends after it: a zero-width break,
-// text of no width, as a word joiner or a bidi control, or text that is all line-end trim, as a
-// run of U+3000 that hangs.
+// Whether the item's first segment takes no room where a line ends after it: a ZWSP, with a
+// break after it or, as before a hard break, where the text the items join gives none and makes
+// it zero-width glue (recordJoinedBreaks), since Gecko's frame is as empty either way; text of
+// no width, as a word joiner or a bidi control; or text that is all line-end trim, as a run of
+// U+3000 that hangs.
 function opensEmpty(data: PreparedSegments): boolean {
   const kind = data.segmentFlags[0]! & KIND_BITS
-  return kind === ZERO_WIDTH_BREAK || (kind === TEXT && data.widths[0]! <= (data.lineEndTrims === null ? 0 : data.lineEndTrims[0]!))
+  return kind === ZERO_WIDTH_BREAK || kind === ZERO_WIDTH_GLUE || (kind === TEXT && data.widths[0]! <= (data.lineEndTrims === null ? 0 : data.lineEndTrims[0]!))
 }
 
 // Whether segment `s` of item `itemIndex` is a tab, or the preserved spaces from there on,
