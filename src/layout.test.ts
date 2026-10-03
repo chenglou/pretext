@@ -2902,7 +2902,7 @@ describe('prepare invariants', () => {
       ['lineFitEpsilon', 0.005, 1 / 64, 0.005],
       ['prefixFitMinWidth', Infinity, 0, 80],
       ['measureTextWithFollowingSpace', false, true, false],
-      ['kernsSpacesInScriptRun', true, false, false],
+      ['kernsAcrossCanvasWords', true, false, false],
       ['letterSpaceDiscretionaryHyphen', false, true, true],
       ['letterSpacingInAppUnits', false, false, true],
       ['canvasLetterSpacingDropsLigatures', true, false, true],
@@ -6304,6 +6304,108 @@ test('the Chromium profile takes the kerning between a word and the spaces besid
   // with the space, and text that mixes directions takes no kerning, so only their fonts are
   // asked.
   expect(unasked).toEqual([['189', 'none:189', '\u2028'], ['189', 'none:189', '\u2028']])
+})
+
+
+test('the Chromium profile takes the kerning between two kana', () => {
+  // The engine profile is computed once per process, so Chrome runs in a child
+  // process. Every kana is 16px and a space 4px. Canvas cuts a string before each
+  // kana letter and shapes the pieces apart, keeping a mark such as ー with the
+  // letter before it, where アー kerns -1px, and a mark that starts the string with
+  // the letter after it, where ーア kerns -3px. A context under optimizeLegibility
+  // shapes a string whole: there あい kerns -2px, ーア -3px, あア, a hiragana with
+  // a katakana, -5px, うえ +1px and タノ, a pair of the font's probe, -1px, and
+  // nothing under fontKerning 'none'. The `Plain` fonts kern nothing there.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const script = `
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
+    } })
+    const measured = []
+    const count = (text, pair) => text.split(pair).length - 1
+    class Context {
+      font = ''
+      letterSpacing = '0px'
+      fontKerning = 'auto'
+      textRendering = 'auto'
+      measureText(text) {
+        const whole = this.textRendering === 'optimizeLegibility'
+        measured.push((whole ? 'whole ' : '') + (this.fontKerning === 'auto' ? '' : this.fontKerning + ':') + text)
+        let width = 0
+        for (const ch of text) width += ch === ' ' ? 4 : 16
+        width -= count(text, 'アー')
+        if (whole && this.fontKerning !== 'none' && !this.font.includes('Plain')) width -= 2 * count(text, 'あい') + 3 * count(text, 'ーア') + 5 * count(text, 'あア') - count(text, 'うえ') + count(text, 'タノ')
+        else if (!whole && text.startsWith('ーア')) width -= 3
+        return { width }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepare, prepareWithSegments, layout, layoutWithLines } = await import(${JSON.stringify(layoutUrl)})
+    const { prepareRichInline, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
+    const widths = []
+    for (const [text, font, options] of [
+      ['あいう', '16px Test', {}], ['アーア', '16px Test', {}], ['あいう', '16px Test', { wordBreak: 'keep-all' }], ['アーア', '16px Test', { wordBreak: 'keep-all' }],
+      ['ーアア', '16px Test', { wordBreak: 'keep-all' }], ['aーア', '16px Test', { wordBreak: 'keep-all' }],
+      ['あア', '16px Test', {}], ['あ い', '16px Test', {}], ['うえう', '16px Test', {}], ['あいう', '16px Test', { letterSpacing: 1 }], ['あいう', '16px Plain', {}],
+    ]) widths.push(prepareWithSegments(text, font, options).widths)
+    const lines = []
+    for (const [text, width] of [['あいう', 30.5], ['あいう', 16.5], ['ああい', 32.5], ['うえう', 32.5]]) {
+      const result = layoutWithLines(prepareWithSegments(text, '16px Test'), width, 20)
+      lines.push({ lines: result.lines.map(line => [line.text, line.width]), lineCount: layout(prepare(text, '16px Test'), width, 20).lineCount })
+    }
+    const rich = [[{ text: 'あい', font: '16px Test' }], [{ text: 'あ', font: '16px Test' }, { text: 'い', font: '16px Test' }]]
+      .map(items => measureRichInlineStats(prepareRichInline(items), 100).maxLineWidth)
+    // What a prepare asks the second context, the font's probe as its length.
+    const asks = (text, font) => {
+      measured.length = 0
+      prepare(text, font)
+      return measured.filter(text => text.startsWith('whole ')).map(text => text.slice(6)).map(text => text.length > 9 ? text.slice(0, text.indexOf(':') + 1) + (text.length - text.indexOf(':') - 1) : text)
+    }
+    const asked = [asks('あいあいあい', '16px Fresh'), asks('あい いあ', '16px Fresh'), asks('あ い 漢あ', '16px Fresh Two'), asks('あいう', '16px Plain Two'), asks('あいあ', '16px Plain Two')]
+    console.log(JSON.stringify({ widths, lines, rich, asked }))
+  `
+  const { widths, lines, rich, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'rich' | 'asked', unknown>
+  expect(widths).toEqual([
+    // A kerning that tightens the pair goes on the second kana's segment.
+    [16, 14, 16],
+    // A mark kerns with the letters on both sides of it.
+    [16, 15, 13],
+    // Inside a keep-all segment Canvas cuts before a letter, and has kept the mark's
+    // kerning with the letter before it.
+    [46],
+    [44],
+    // A mark that starts a segment is in Canvas's word with the letter after it, which
+    // has their kerning already. After a Latin letter Canvas cuts between the two.
+    [45],
+    [45],
+    // A hiragana and a katakana are one run and kern where the font pairs them. A space
+    // parts a pair.
+    [16, 11],
+    [16, 4, 16],
+    // A kerning that widens the pair stays on the first kana's segment.
+    [17, 16, 16],
+    // Letter spacing keeps the kerning.
+    [16, 14, 16],
+    // A font that kerns none of its probe's pairs takes no kerning.
+    [16, 16, 16],
+  ])
+  expect(lines).toEqual([
+    { lines: [['あい', 30], ['う', 16]], lineCount: 2 },
+    // A kana that starts a line has nothing before it to kern with.
+    { lines: [['あ', 16], ['い', 16], ['う', 16]], lineCount: 3 },
+    { lines: [['ああ', 32], ['い', 16]], lineCount: 2 },
+    // A kana needs the room of a kerning that widens it and the next.
+    { lines: [['う', 17], ['えう', 32]], lineCount: 2 },
+  ])
+  // Kana in one rich item kern as in plain text; across two items they don't
+  // (ENGINE_FOLLOWUPS.md).
+  expect(rich).toEqual([30, 32])
+  // The font is asked once whether it kerns kana: twelve kana as the second context stands
+  // and under fontKerning 'none'. Then each pair once, however often a text has it. A text
+  // without two kana in a row doesn't ask the font, and a font that kerns none of the probe
+  // is asked about no pair.
+  expect(asked).toEqual([['12', 'none:12', 'あい', 'いあ'], [], [], ['12', 'none:12'], []])
 })
 
 
