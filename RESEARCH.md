@@ -1169,7 +1169,7 @@ fragment widths: white space that hangs comes out of a stand-in's text width and
 (ENGINE_FOLLOWUPS.md, Rich-inline item edges). A box of width 0 is a box, with a break on both sides, as an empty
 inline-block of width 0 is. One that falls past a line's end, after a space that doesn't fit or an atomic item wider
 than the line, moves to the next line in Chrome and Safari, as any atomic item does. Firefox places an empty frame there
-(`CanPlaceFrame`, `nsLineLayout.cpp:1264-1269`; the profile's `emptyAtomicAlwaysFits`) without counting the break after
+(`CanPlaceFrame`, `nsLineLayout.cpp:1264-1269`; the profile's `emptyFrameAlwaysFits`) without counting the break after
 it as one that fits (`:1260`, `:1506-1513`), so a frame with a width that comes next, text, a span with padding or white
 space in a text node of its own, sends the line back to its last break that fit, and the empty frame starts the next
 line with it; it stays where the line ends without that (`getKeptEmptyEnd()` in `src/rich-inline.ts` has the cases). `ab
@@ -1825,7 +1825,7 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   `--max-inlined-bytecode-size=470`. So the accessor is a function apart from `buildEngineProfile()`, 21 bytes whatever
   the profile holds, which both of V8's optimizing tiers inline in Chrome 154, into the full walker too (Maglev takes no
   function over 100 bytes, and TurboFan left the 454 bytes a call there), and the Gecko rule for an atomic item of width
-  0, which read `paddedOpeningFit` to keep the profile at 23 fields, has a field of its own (`emptyAtomicAlwaysFits`).
+  0, which read `paddedOpeningFit` to keep the profile at 23 fields, has a field of its own (`emptyFrameAlwaysFits`).
   With both, Node read mixed stats, walk and stream 6-8% faster than main and the other rows within 2%. Node's times are
   a lead only; in Chrome 154 the bench read every row of this build within noise of main in three sessions, the line
   rows included, which the field alone had read 11-18% slower (#391, 2026-10-01). No other function inlined while

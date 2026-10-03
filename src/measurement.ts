@@ -262,9 +262,8 @@ export type EngineProfile = {
   // shaping_line_breaker.cc:490-495), the line trails them, taking the open tag and white space or
   // a forced break after them with no fit (HandleTrailingSpaces, :2426-2534), so Blink fits no
   // edge where the content before the spaces fits; after spaces that start an item, before which
-  // no break comes (UAX #14 LB7), it fits the start edge with them; a line that trails a run of
-  // U+3000 at an item's end ends before the next item too (stepRichInlineLine). WebKit fits a
-  // box that opens in the content it places without its cloned end edge (placedClonedDecorationWidth,
+  // no break comes (UAX #14 LB7), it fits the start edge with them. WebKit fits a box that opens
+  // in the content it places without its cloned end edge (placedClonedDecorationWidth,
   // InlineLineBuilder.cpp:1501-1523), but that content runs on past the inline box ends after a
   // line break or white space (nextWrapOpportunity, InlineFormattingUtils.cpp:470-475, 530-538),
   // so it fits the end edge too of an item of white space that ends there, and leaves white space
@@ -284,9 +283,12 @@ export type EngineProfile = {
   // unless the line ends before it: it breaks after white space that follows text already past
   // its end (getFrameEndSpace, src/rich-inline.ts), which only a frame that always fits is left
   // to show, and it goes back to a break before the item where a frame with a width that
-  // continues the text comes next (getKeptEmptyEnd). Blink and WebKit fit it as any other atomic
-  // inline and move it to the next line.
-  emptyAtomicAlwaysFits: boolean
+  // continues the text comes next (getKeptEmptyEnd). A text frame is empty where its text up to
+  // its first break takes no room, so the start of a text item that takes none stays on a line
+  // that overflows only by white space that hangs (opensEmpty, stepRichInlineLine). Blink and
+  // WebKit fit an atomic inline of width 0 as any other and move it to the next line, and end the
+  // line before text that starts with a ZWSP.
+  emptyFrameAlwaysFits: boolean
   // Where the preserved spaces that end a pre-wrap line's text and overflow the line still hang
   // once an item that takes no room follows them on the line, an atomic item of width 0 or an
   // item of soft hyphens alone. Gecko takes the hang out of each text frame's own width, the
@@ -299,6 +301,13 @@ export type EngineProfile = {
   // (ContinuousContent::append, InlineContentBreaker.cpp:943-947), so there the run of spaces
   // that hang ends at such an item.
   hangsSpacesPerTextFrame: boolean
+  // Whether a rich line that takes a run of U+3000 at an item's end as its trailing white space
+  // ends before the next item, whatever break the text gives there. Blink's line is done at the
+  // first item after its trailing spaces that isn't white space (HandleTrailingSpaces,
+  // line_breaker.cc:2447-2456 and 2518-2533; before an atomic inline, :1099-1105). Gecko gives
+  // that item's text a frame of its own, which stays where it is empty (emptyFrameAlwaysFits)
+  // and else sends the line back to its latest break, and WebKit hangs no U+3000.
+  trailedSpacesEndLine: boolean
   // Blink transforms segment breaks in the text of the whole inline formatting context
   // (ShouldRemoveNewline and RemoveTrailingCollapsibleNewlineIfNeeded, inline_items_builder.cc).
   // Gecko transforms each text frame's own text (nsTextFrameUtils::TransformText), as
@@ -653,8 +662,9 @@ function buildEngineProfile(): EngineProfile {
     breaksFromItemText: engine === 'webkit',
     hardBreakItemRetreat: engine === 'blink' ? 'item' : engine === 'webkit' ? 'fit' : 'last-grapheme',
     paddedOpeningFit: engine === 'blink' ? 'start' : engine === 'webkit' ? 'placed' : 'both',
-    emptyAtomicAlwaysFits: engine === 'gecko',
+    emptyFrameAlwaysFits: engine === 'gecko',
     hangsSpacesPerTextFrame: engine === 'gecko',
+    trailedSpacesEndLine: engine === 'blink',
     transformsSegmentBreaksAcrossItems: engine === 'blink',
   }
 }

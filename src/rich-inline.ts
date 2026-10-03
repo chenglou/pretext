@@ -1166,7 +1166,7 @@ function stepRichInlineLine(
   fragments: RichInlineFragmentRange[] | null,
 ): number | null {
   const safeWidth = Math.max(1, maxWidth)
-  const { emptyAtomicAlwaysFits, hangsSpacesPerTextFrame, hangTabs, hardBreakItemRetreat, lineFitEpsilon, paddedOpeningFit, spaceBeforeSoftHyphenHangs, unfitHyphenRetreat } = getEngineProfile()
+  const { emptyFrameAlwaysFits, hangsSpacesPerTextFrame, hangTabs, hardBreakItemRetreat, lineFitEpsilon, paddedOpeningFit, spaceBeforeSoftHyphenHangs, trailedSpacesEndLine, unfitHyphenRetreat } = getEngineProfile()
   let hasContent = false
   let lineWidth = 0
   let remainingWidth = safeWidth
@@ -1283,8 +1283,8 @@ function stepRichInlineLine(
     // item continues can move to the next line, and, where it has no break yet, before one that
     // a line that can't fit the next item's padding ends before (retreatsBefore). Blink's line
     // can end before the item after a run of U+3000 it trails (endHang, endTrails), whatever
-    // break the text gives there ('start', whose line trails white space).
-    if (hasContent && ((trails && endTrails && paddedOpeningFit === 'start') ||
+    // break the text gives there (trailedSpacesEndLine).
+    if (hasContent && ((trails && endTrails && trailedSpacesEndLine) ||
       (item.continued && (item.breakBefore || (breakItemIndex < 0 && hardBreakItemRetreat !== 'item' && retreatsBefore(flow, itemIndex)))))) {
       breakItemIndex = itemIndex
       breakSegmentIndex = 0
@@ -1322,7 +1322,7 @@ function stepRichInlineLine(
       const totalWidth = gapBefore + occupiedWidth
       // Blink and WebKit move an atomic item of width 0 that doesn't fit to the next line as any
       // other. Gecko places an empty frame though it sticks out of the line (CanPlaceFrame,
-      // emptyAtomicAlwaysFits). It sticks out where the content before it ends past the line's end
+      // emptyFrameAlwaysFits). It sticks out where the content before it ends past the line's end
       // with the collapsed space before the item, which a line end trims no more once the item
       // follows it (nsLineLayout.cpp:1017-1020), and without the preserved spaces that hang, which
       // end at the line's end (nsTextFrame.cpp:11216-11229). Where the text before the item ends in
@@ -1334,7 +1334,7 @@ function stepRichInlineLine(
       // (getKeptEmptyEnd); other text leaves no break at its end, so the line's first break is the
       // one after the item, which stays.
       if (hasContent && totalWidth > remainingWidth + lineFitEpsilon) {
-        if (!emptyAtomicAlwaysFits || occupiedWidth !== 0) break
+        if (!emptyFrameAlwaysFits || occupiedWidth !== 0) break
         const contentWidth = lineWidth - lineHangWidth
         const fitLimit = safeWidth + lineFitEpsilon
         if (contentWidth + gapBefore > fitLimit) {
@@ -1428,7 +1428,7 @@ function stepRichInlineLine(
         }
       }
       const hangs = (firstKind === PRESERVED_SPACE || (firstKind === TAB && hangTabs)) && reservedWidth <= remainingWidth + lineHangWidth + lineFitEpsilon
-      if (paddedOpeningFit === 'both' && reservedWidth <= 0 && lineWidth - lineHangWidth <= safeWidth + lineFitEpsilon && opensEmpty(item.lineData)) {
+      if (emptyFrameAlwaysFits && reservedWidth <= 0 && lineWidth - lineHangWidth <= safeWidth + lineFitEpsilon && opensEmpty(item.lineData)) {
         room = 0
         hangBefore = lineHangWidth
       } else if (!keepsHardBreak && !hangs) {

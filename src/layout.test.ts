@@ -2925,8 +2925,9 @@ describe('prepare invariants', () => {
       ['breaksFromItemText', false, true, false],
       ['hardBreakItemRetreat', 'item', 'fit', 'last-grapheme'],
       ['paddedOpeningFit', 'start', 'placed', 'both'],
-      ['emptyAtomicAlwaysFits', false, false, true],
+      ['emptyFrameAlwaysFits', false, false, true],
       ['hangsSpacesPerTextFrame', false, false, true],
+      ['trailedSpacesEndLine', true, false, false],
       ['transformsSegmentBreaksAcrossItems', true, false, false],
     ]
     const profileOf = (engine: 1 | 2 | 3, entryFitBasis?: Profile['entryFitBasis']): Record<string, unknown> => {
@@ -4085,9 +4086,11 @@ describe('rich-inline invariants', () => {
     // run, where one text node returns to its latest break. Where the run fits, the line returns
     // to that break too (Chrome ends it after the run there as well: ENGINE_FOLLOWUPS.md).
     const profile = getEngineProfile()
-    const previous = { paddedOpeningFit: profile.paddedOpeningFit, emptyAtomicAlwaysFits: profile.emptyAtomicAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame }
+    const previous = { paddedOpeningFit: profile.paddedOpeningFit, emptyFrameAlwaysFits: profile.emptyFrameAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame, trailedSpacesEndLine: profile.trailedSpacesEndLine }
     try {
       profile.paddedOpeningFit = 'start'
+      profile.trailedSpacesEndLine = true
+      profile.emptyFrameAlwaysFits = profile.hangsSpacesPerTextFrame = false
       expect(lines([item('中中\u3000'), item('\u300D中')], 40)).toEqual(['中中\u3000:32', '\u300D中:32'])
       expect(lines([item('中中\u3000'), item('\u300D中', { extraWidth: 2 })], 40)).toEqual(['中中\u3000:32', '\u300D中:34'])
       expect(lines([item('中中'), item('\u3000'), item('\u300D中')], 40)).toEqual(['中中|\u3000:32', '\u300D中:32'])
@@ -4110,7 +4113,8 @@ describe('rich-inline invariants', () => {
       // ZWSP after preserved spaces that overflow. Past the box, the part of the run inside the
       // line keeps its width, as preserved spaces do there (hangsSpacesPerTextFrame).
       profile.paddedOpeningFit = 'both'
-      profile.emptyAtomicAlwaysFits = profile.hangsSpacesPerTextFrame = true
+      profile.trailedSpacesEndLine = false
+      profile.emptyFrameAlwaysFits = profile.hangsSpacesPerTextFrame = true
       expect(lines([item('中中\u3000'), item('\u200Bab')], 40)).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
       expect(lines([item('中中\u3000'), item('\u200B'), item('ab')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['中中\u3000|\u200B:32', 'ab:19.2'])
       expect(lines([item('中中\u3000'), { width: 0 }, item('\u3000中中')], 40)).toEqual(['中中\u3000||\u3000:40', '中中:32'])
@@ -4524,14 +4528,14 @@ describe('rich-inline invariants', () => {
     // for the last, and Firefox fits both edges with them, else moves the last space.
     const previousEngine = {
       hardBreakItemRetreat: profile.hardBreakItemRetreat, paddedOpeningFit: profile.paddedOpeningFit,
-      emptyAtomicAlwaysFits: profile.emptyAtomicAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame,
+      emptyFrameAlwaysFits: profile.emptyFrameAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame,
     }
     try {
       const space = measureWidth(' ', FONT)
       for (const [retreat, fit] of [['item', 'start'], ['fit', 'placed'], ['last-grapheme', 'both']] as const) {
         profile.hardBreakItemRetreat = retreat
         profile.paddedOpeningFit = fit
-        profile.emptyAtomicAlwaysFits = fit === 'both'
+        profile.emptyFrameAlwaysFits = fit === 'both'
         profile.hangsSpacesPerTextFrame = fit === 'both'
         // The lines up to the one the padded span's line feed ends; `bar`, whose padding every piece
         // pays, follows.
@@ -4624,7 +4628,7 @@ describe('rich-inline invariants', () => {
     const previous = {
       lineBreakScan: profile.lineBreakScan, breaksFromItemText: profile.breaksFromItemText, hangTabs: profile.hangTabs,
       hardBreakItemRetreat: profile.hardBreakItemRetreat, paddedOpeningFit: profile.paddedOpeningFit,
-      emptyAtomicAlwaysFits: profile.emptyAtomicAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame,
+      emptyFrameAlwaysFits: profile.emptyFrameAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame,
     }
     try {
       for (const scan of ['blink', 'webkit', 'gecko'] as const) {
@@ -4633,7 +4637,7 @@ describe('rich-inline invariants', () => {
         profile.hangTabs = scan !== 'gecko'
         profile.hardBreakItemRetreat = scan === 'blink' ? 'item' : scan === 'webkit' ? 'fit' : 'last-grapheme'
         profile.paddedOpeningFit = scan === 'blink' ? 'start' : scan === 'webkit' ? 'placed' : 'both'
-        profile.emptyAtomicAlwaysFits = scan === 'gecko'
+        profile.emptyFrameAlwaysFits = scan === 'gecko'
         profile.hangsSpacesPerTextFrame = scan === 'gecko'
         clearCache()
         // No break comes before them (UAX #14 LB6, LB7), and the break after a chip takes them
@@ -4755,7 +4759,7 @@ describe('rich-inline invariants', () => {
         }
         // A box of width 0 that sticks out of the line, after a space that doesn't fit or an atomic
         // item wider than the line. Chrome and Safari move it to the next line as any other.
-        // Firefox places it there (emptyAtomicAlwaysFits, Gecko's CanPlaceFrame) and keeps it,
+        // Firefox places it there (emptyFrameAlwaysFits, Gecko's CanPlaceFrame) and keeps it,
         // unless a frame with a width comes next, which sends the line back to its last break that
         // fit, before the box (getKeptEmptyEnd). Each row matches Firefox 156.0.1 (2026-10-02):
         // the items, the options, each line's items in Firefox, and whether the line is narrower
