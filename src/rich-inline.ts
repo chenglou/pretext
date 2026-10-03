@@ -972,15 +972,19 @@ function opensEmpty(data: PreparedSegments): boolean {
   return kind === ZERO_WIDTH_BREAK || kind === ZERO_WIDTH_GLUE || (kind === TEXT && data.widths[0]! <= (data.lineEndTrims === null ? 0 : data.lineEndTrims[0]!))
 }
 
-// Whether segment `s` of item `itemIndex` is a tab, or the preserved spaces from there on,
-// whatever items they span, run into one.
+// Whether the preserved spaces and the text of no width from segment `s` of item `itemIndex` on,
+// whatever items they span, run into a tab.
 function runsIntoTab(flow: InternalPreparedRichInline, itemIndex: number, s: number): boolean {
   for (; itemIndex < flow.items.length; itemIndex++, s = 0) {
     const item = flow.items[itemIndex]
     if (item === undefined) continue
-    const { segmentFlags } = item.lineData
-    while (s < segmentFlags.length && (segmentFlags[s]! & KIND_BITS) === PRESERVED_SPACE) s++
-    if (s < segmentFlags.length) return (segmentFlags[s]! & KIND_BITS) === TAB
+    if (item.break === 'never') return false
+    const { segmentFlags, widths } = item.lineData
+    for (; s < segmentFlags.length; s++) {
+      const kind = segmentFlags[s]! & KIND_BITS
+      if (kind === TAB) return true
+      if (kind === HARD_BREAK || (kind !== PRESERVED_SPACE && widths[s] !== 0)) return false
+    }
   }
   return false
 }
@@ -1518,20 +1522,21 @@ function stepRichInlineLine(
       (item.prepared.segmentFlags[lineEnd.segmentIndex - 1]! & KIND_BITS) === HARD_BREAK
     // A walk with no room (hangBefore) takes two things Gecko's frame doesn't, and there the
     // frame takes nothing, so the line ends as before an item that takes room (above). Gecko
-    // breaks only after a run of spaces and tabs (nsLineBreaker.cpp:316-331) and fits a break
-    // without the spaces before it, of which a tab is none (BreakAndMeasureText's trimmable
-    // advance, gfxTextRun.cpp:1152-1160), so a tab doesn't fit, nor do the preserved spaces
-    // that run into it, whatever items they span, where a walk keeps a tab wherever the
-    // content before it fits. And Firefox gives a run of U+3000 right before a line feed in
-    // the same frame its width, where a walk leaves it out (itemLine.endTrim;
-    // ENGINE_FOLLOWUPS.md).
-    if (hangBefore > 0) {
-      let s = 1
-      while (s < lineEnd.segmentIndex && (item.lineData.segmentFlags[s]! & KIND_BITS) !== TAB) s++
-      if (runsIntoTab(flow, itemIndex, s) || (itemLine.endTrim > 0 && endsAfterHardBreak)) {
-        returnsToBreak = !item.breakBefore
-        break
-      }
+    // breaks after a run of spaces and tabs and never before a tab (nsLineBreaker.cpp:316-331),
+    // and a tab has an advance, so where the start, and the preserved spaces and text of no
+    // width after it, whatever items they span, run into a tab, no break after the frame's
+    // start fits, and a frame that can end before its first character places no text
+    // (BreakAndMeasureText, gfxTextRun.cpp:1091-1107; nsTextFrame.cpp:11469-11471). It can
+    // where the line has a break to end at, before the item or earlier. A line with none wraps
+    // before any cluster (gfxTextRun.cpp:1068-1074), a tab's too, so there the start stays
+    // and the line ends before the tab: in 16px Hiragino Sans pre-wrap, Firefox 156 lays out
+    // `文字\u3000` and a span of a ZWSP, a tab and `go` at 24-30px as `文`, `字\u3000`, the
+    // tab and `go`, with no line for the ZWSP, and at 32-42px goes back to the break before
+    // `字`. And Firefox gives a run of U+3000 right before a line feed in the same frame its
+    // width, where a walk leaves it out (itemLine.endTrim; ENGINE_FOLLOWUPS.md).
+    if (hangBefore > 0 && (((item.breakBefore || breakItemIndex >= 0) && runsIntoTab(flow, itemIndex, 1)) || (itemLine.endTrim > 0 && endsAfterHardBreak))) {
+      returnsToBreak = !item.breakBefore
+      break
     }
 
     const itemOccupiedWidth = lineWidthForItem + item.extraWidth

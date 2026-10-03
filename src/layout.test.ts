@@ -4086,7 +4086,7 @@ describe('rich-inline invariants', () => {
     // run, where one text node returns to its latest break. Where the run fits, the line returns
     // to that break too (Chrome ends it after the run there as well: ENGINE_FOLLOWUPS.md).
     const profile = getEngineProfile()
-    const previous = { paddedOpeningFit: profile.paddedOpeningFit, emptyFrameAlwaysFits: profile.emptyFrameAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame, trailedSpacesEndLine: profile.trailedSpacesEndLine }
+    const previous = { paddedOpeningFit: profile.paddedOpeningFit, emptyFrameAlwaysFits: profile.emptyFrameAlwaysFits, hangsSpacesPerTextFrame: profile.hangsSpacesPerTextFrame, trailedSpacesEndLine: profile.trailedSpacesEndLine, hangTabs: profile.hangTabs }
     try {
       profile.paddedOpeningFit = 'start'
       profile.trailedSpacesEndLine = true
@@ -4134,6 +4134,20 @@ describe('rich-inline invariants', () => {
         expect({ parts, lines: got }).toEqual({ parts, lines: flat(`ab cd     ${parts.join('')}`, 40, { whiteSpace: 'pre-wrap' }).map(line => line.replace('\u200B', '')) })
       }
       expect(lines([item('ab cd     '), item('\u200B  \tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     :19.2', '\u200B  \t:0', 'ef:19.2'])
+      // A Firefox tab doesn't hang, so one that doesn't fit ends the line before it. Where the
+      // line has no break to end at, before the item or earlier, it wraps before any cluster,
+      // so the start stays on it and only the tab moves down; with a break it goes back there.
+      profile.hangTabs = false
+      for (const parts of [['\u200B\tef'], ['\u200B', '\tef'], ['\u200B  ', '\tef']]) {
+        const at = (maxWidth: number) => lines([item('中中\u3000'), ...parts.map(part => item(part))], maxWidth, { whiteSpace: 'pre-wrap' }).map(line => line.replace(/[|\u200B ]/g, ''))
+        expect({ parts, lines: at(24) }).toEqual({ parts, lines: ['中:16', '中\u3000:16', '\t:42.24', 'ef:19.2'] })
+        expect({ parts, lines: at(40) }).toEqual({ parts, lines: ['中:16', '中\u3000:32', '\t:42.24', 'ef:19.2'] })
+      }
+      // After preserved spaces a break comes before the item, so it takes nothing, with text of
+      // no width between its start and the tab too.
+      expect(lines([item('ab cd     '), item('\u200B\u200B\tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     :19.2', '\u200B:0', '\t:42.24', 'ef:19.2'])
+      expect(lines([item('ab cd     '), item('\u200B \u200B\tef')], 40, { whiteSpace: 'pre-wrap' })).toEqual(['ab :19.2', 'cd     :19.2', '\u200B :0', '\t:42.24', 'ef:19.2'])
+      profile.hangTabs = true
       // Firefox gives a run of U+3000 right before a line feed in its item its width, so such
       // an item takes nothing either; before the next item's line feed, or a letter, the run hangs.
       for (const text of ['\u3000\nef', '\u3000\u3000\nef', '\u200B\u3000\nef']) {
