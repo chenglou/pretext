@@ -1087,8 +1087,8 @@ white space Pretext gets wrong there. In Firefox an atomic item's leading white 
 #### CJK At An Item's Edge
 
 Three facts about span edges, in Chrome 154.0.8037.57 and Firefox 156.0.1 on macOS 27.0 at DPR 2, in 16px Hiragino Sans
-and PingFang SC (2026-09-30), which rich inline follows since #TBD. webkit-host hangs no U+3000 and halts no mark, and
-none of its cases moved.
+and PingFang SC (2026-09-30 to 10-03), which rich inline follows since #TBD. webkit-host hangs no U+3000 and halts no
+mark, and none of its cases moved.
 - A run of U+3000 that ends a span is the line's trailing white space. Where the span fits only without it, Chrome and
   Firefox end the line after it, so a narrow letter, a box or a chip in the next span starts the next line, as in one
   text node: `文字`, U+3000 and a span `i` take two lines at 36-47px, where `i` would fit after `文字` (Blink's
@@ -1107,13 +1107,21 @@ none of its cases moved.
   box of width 0 too, unless that line has no break of its own (ENGINE_FOLLOWUPS.md), and a closing mark there
   takes the line back to its latest break. With a span of a ZWSP and `ab`, both browsers give `文字　` and `ab` at
   32-44px; in 16px Arial pre-wrap at 40-52px, after `ab cd   `, Firefox keeps the two spaces of a span of a ZWSP,
-  two spaces and `ef` on the first line. Two things take that frame off the line. Firefox breaks only after a run
-  of spaces and tabs (`nsLineBreaker.cpp:316-331`), and a tab is no space to that fit, so where the start, or the
-  spaces after it, run into a tab, in the same span or a later one, nothing of the frame fits: Firefox starts the
-  second line with the space and the tab of a span of a ZWSP, a space, a tab and `ef`. And it gives a run of
-  U+3000 right before a line feed in the same span its width, as in one text node (ENGINE_FOLLOWUPS.md, Line
-  edges), so the U+3000 of a span of U+3000, a line feed and `ef` takes a line of its own, where it hangs on the
-  first line before a letter, at the paragraph's end and before a line feed that starts the next span.
+  two spaces and `ef` on the first line. A ZWSP that is all of its span stays there before a span that starts with a
+  line feed too, where no break follows it: its frame is as empty. Two things take that frame off the line. Firefox
+  breaks after a run of spaces and tabs and never before a tab (`nsLineBreaker.cpp:316-331`), and a tab has an
+  advance, so where the start, and the spaces and text of no width after it, run into a tab, in the same span or a
+  later one, no break after the frame's start fits, and a frame that can end before its first character places no
+  text (`nsTextFrame.cpp:11469-11471`): Firefox starts the second line with the space and the tab of a span of a
+  ZWSP, a space, a tab and `ef`. It can end there where the line has a break to end at, before the span or earlier;
+  a line with none wraps before any cluster (`gfxTextRun.cpp:1068-1074`), so there the start stays and only the tab
+  moves down: `文字`, U+3000 and a span of a ZWSP, a tab and `go` in pre-wrap are `文`, `字　`, the tab and `go` at
+  24-30px, with no line for the ZWSP, and go back to the break before `字` at 32-42px. Since #395 the plain-text
+  walker ends a Firefox line before a tab that doesn't fit, so the stepper reads the tab from the text and no
+  longer from what its walk took (2026-10-03). And Firefox gives a run of U+3000 right before a line feed in the
+  same span its width, as in one text node (ENGINE_FOLLOWUPS.md, Line edges), so the U+3000 of a span of U+3000,
+  a line feed and `ef` takes a line of its own, where it hangs on the first line before a letter, at the
+  paragraph's end and before a line feed that starts the next span.
 - Chrome's `text-spacing-trim` halts a pair of fullwidth marks that a span edge splits as in one text node, whatever
   the two spans' weights, sizes or families and with padding between them, each mark by the font of its own span, since
   `HanKerning::Compute` reads the paragraph's text on both sides of each shaped run (`han_kerning.cc:262-320`): `文字」`
@@ -1133,25 +1141,34 @@ none of its cases moved.
   after a bold or linked closing bracket, which all pass since #TBD but 32 widths of two sentences that fail for
   U+3000 after a space (below).
 
-On a probe of 23,757 cases recorded fresh in two document orders (styled Japanese and Chinese sentences at 120-600px
-in nine font stacks; pairs of marks across span edges at 16-160px, and inside units filled grapheme by grapheme; U+3000
-at a span's end before letters, digits, emoji, boxes, chips, closing marks, a ZWSP, a soft hyphen and a word joiner, in
-normal white space and pre-wrap; a ZWSP or U+3000 that starts a span after other overflow; and a chip of only white
-space, Objects Inside A Line), #TBD fixed 3,170 Chrome, 506 Firefox and 357 webkit-host cases and lost none
-(2026-10-01): the styled sentences went from 5,608 to 6,199 of 6,210 in Chrome through the pair halt, and none moved
-in Firefox, which doesn't halt, since only something narrower than the run can follow it wrongly. Six more probes
-of 71,644 cases that looked for what breaks at these edges (a collapsible space before or after the run, a start
-that takes no room before tabs, spaces and line feeds in its own span and the next, a closing mark before spaces,
-boxes and chips, a soft hyphen after a split pair, sentences that use U+3000 as a separator, and 9,800 seeded
-draws) fixed 5,707 Chrome, 2,276 Firefox and 750 webkit-host cases and lost 115 Chrome, 16 Firefox and 1
-webkit-host case that main passed. In Chrome: 74 where the pair halt puts a tab within half a space of a tab stop,
-which Chrome skips and the Chromium profile doesn't, so that main's unhalted pair landed on Chrome's stop; 13
-where the pair halt gives the right widths and a soft hyphen's hyphen then doesn't fit; 17 that score a
-collapsible space after the run; and 11 through U+3000 hangs the plain-text walker gets wrong, which main's own
-errors hid. In Firefox: 15 at 16-20px and one of those hangs. In webkit-host: one sentence at one width, where
-main's line, short of a chip's 8px of padding, hid a width 1px over WebKit's. What it
-leaves is in ENGINE_FOLLOWUPS.md (Line edges; Rich-inline item edges, CJK at an item's edge). A Chrome that stops
-halting across spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
+The Chromium profile's break before the item after a trailed run reads `trailedSpacesEndLine`, and the Gecko
+profile's walk with no room reads `emptyFrameAlwaysFits`, the field #405 gave the same `CanPlaceFrame` rule for an
+atomic item of width 0 (as `emptyAtomicAlwaysFits`), now named for the frame.
+
+These counts are of probes recorded fresh in two document orders on 2026-10-03, each case predicted with main at
+#411 and with #TBD. On one of 23,757 cases (styled Japanese and Chinese sentences at 120-600px in nine font stacks;
+pairs of marks across span edges at 16-160px, and inside units filled grapheme by grapheme; U+3000 at a span's end
+before letters, digits, emoji, boxes, chips, closing marks, a ZWSP, a soft hyphen and a word joiner, in normal white
+space and pre-wrap; a ZWSP or U+3000 that starts a span after other overflow; and a chip of only white space, Objects
+Inside A Line), #TBD fixes 3,286 Chrome, 538 Firefox and 397 webkit-host cases and loses none. The styled sentences
+go from 5,608 to 6,199 of 6,210 in Chrome through the pair halt: of the 602 that fail on main, 162 have a wrong line
+count and 440 the right count with a wrong break, and 2 and 9 are left. None moves in Firefox, which doesn't halt,
+since only something narrower than the run can follow it wrongly. Six more probes of 71,644 cases that looked for
+what breaks at these edges (a collapsible space before or after the run, a start that takes no room before tabs,
+spaces and line feeds in its own span and the next, a closing mark before spaces, boxes and chips, a soft hyphen
+after a split pair, sentences that use U+3000 as a separator, and 9,800 seeded draws) fix 5,768 Chrome, 2,274
+Firefox and 773 webkit-host cases and lose 24 Chrome, 16 Firefox and 1 webkit-host case that main passes. In
+Chrome: 13 where the pair halt gives the right widths and a soft hyphen's hyphen then doesn't fit, and 11 through
+U+3000 hangs the plain-text walker gets wrong, which main's own errors hid. In Firefox: 15 at 16-20px and one of
+those hangs. In webkit-host: one sentence at one width, where main's line, short of a chip's 8px of padding, hid a
+width 1px over WebKit's. Two last probes of 40,196 cases, aimed at white space that goes on after the run and at
+starts that take no room, fix 4,755 Chrome, 1,922 Firefox and 248 webkit-host cases and lose 314 Chrome and 139
+Firefox cases. All 314 and 124 of the 139 are white space after the run with a second run of U+3000 among it,
+which both browsers hang whole and the plain-text walker doesn't (ENGINE_FOLLOWUPS.md, Line edges), and the other
+15 are a start before a tab, through two more of the walker's gaps. Each of those shapes fails in one text node
+on main and here alike, and main passed them as spans only because its line gave the run no room. What it leaves
+is in ENGINE_FOLLOWUPS.md (Line edges; Rich-inline item edges, CJK at an item's edge). A Chrome that stops halting
+across spans, which the rich set's `item-edges` cases would show at a repin, reopens the second fact.
 
 #### Objects Inside A Line
 
