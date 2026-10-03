@@ -99,7 +99,7 @@ while (true) {
 }
 ```
 
-See the `/demos/dynamic-layout` demo for a richer example.
+See the `/demos/dynamic-layout` demo for a richer example, and the `/demos/ellipsis` demo for a paragraph clamped to a number of lines with an ellipsis, as CSS `-webkit-line-clamp` does, and a path cut in its middle.
 
 For hyphenation, insert soft hyphens before calling `prepare()` or `prepareWithSegments()`. They stay invisible unless the line breaks there, in which case it ends with `-`. For mixed-language or user-generated app text, prefer conservative, locale-aware insertion over aggressive pattern hyphenation.
 

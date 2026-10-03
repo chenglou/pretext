@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pretext Demo — Ellipsis</title>
+    <style>
+      /* Keeps a classic scrollbar's room from the start, so the width ellipsis.ts reads doesn't
+         change when the page starts or stops overflowing. */
+      html {
+        scrollbar-gutter: stable;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        color-scheme: light;
+        --page: #f5f2ec;
+        --panel: #fffdf9;
+        --ink: #1e1a18;
+        --muted: #6e655f;
+        --rule: #d8cec3;
+        --accent: #955f3b;
+      }
+
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      /* ellipsis.ts writes the page width. */
+      .page {
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      /* Hidden until ellipsis.ts's first render writes the width and sets data-ready, so no frame
+         paints the page at the window's width. */
+      .page:not([data-ready]) {
+        visibility: hidden;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        font: 12px/1.2 "SF Mono", ui-monospace, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font: 700 30px/1.08 Georgia, "Times New Roman", serif;
+      }
+
+      .intro p {
+        margin: 10px 0 0;
+        max-width: 58ch;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 28px;
+        margin: 20px 0 6px;
+        font: 12px/1.2 "SF Mono", ui-monospace, monospace;
+        color: var(--muted);
+      }
+
+      .controls label {
+        display: flex;
+        flex: 1 1 160px;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .controls input[type="range"] {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .controls .val {
+        min-width: 40px;
+        text-align: right;
+        color: var(--ink);
+      }
+
+      .row-label {
+        margin: 18px 0 6px;
+        font: 12px/1.3 "SF Mono", ui-monospace, monospace;
+        color: var(--muted);
+      }
+
+      /* ellipsis.ts writes the padding, which the widest text depends on. The card is as wide
+         as its text and padding, and its ring is a box-shadow, so it takes no width from the
+         text. */
+      .card {
+        width: fit-content;
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--rule);
+      }
+
+      /* A box of Pretext's lines. ellipsis.ts writes its font, line height, width and height,
+         and each line's top and text; it has no padding or border, so its width is the width
+         the text wraps at. */
+      .text {
+        position: relative;
+      }
+
+      .line {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        white-space: nowrap;
+      }
+
+      /* The link takes the width of its text alone, in the paragraph's font, which is the room
+         Pretext leaves for it. */
+      .more-link {
+        appearance: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: var(--accent);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="page" class="page">
+      <section class="intro">
+        <p class="eyebrow">Demo</p>
+        <h1>Ellipsis</h1>
+        <p>Text cut to fit, with the cut worked out before anything is painted.</p>
+      </section>
+
+      <section class="controls" aria-label="Width and line count">
+        <label>
+          <span>Width</span>
+          <input type="range" id="width-slider" />
+          <span class="val" id="width-value"></span>
+        </label>
+        <label>
+          <span>Lines</span>
+          <input type="range" id="lines-slider" min="1" step="1" />
+          <span class="val" id="lines-value"></span>
+        </label>
+      </section>
+
+      <section id="rows"></section>
+    </main>
+
+    <script type="module" src="./ellipsis.ts"></script>
+  </body>
+</html>

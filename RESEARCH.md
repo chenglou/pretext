@@ -2232,6 +2232,71 @@ once `scrollbar-width` or `scrollbar-color` isn't `auto`. Since Chrome 145, macO
 too. Force classic scrollbars in a probe with Chrome's `-AppleShowScrollBars Always` (that process only) or a fresh
 Firefox profile with `ui.useOverlayScrollbars = 0`; an injected `::-webkit-scrollbar` behaves unlike real ones.
 
+### Line Clamp And Ellipsis
+
+The ellipsis demo (`pages/demos/ellipsis.html`, #410) ends a paragraph clamped to a number of lines the way browsers end
+a `-webkit-line-clamp` box, from the public API alone, and cuts a one-line label in its middle. Chrome 154.0.8037.57,
+Firefox 156.0.1 and webkit-host, 2026-10-02.
+
+**What browsers do.** The clamped line breaks where it would without the clamp. If the ellipsis fits after it, it goes
+there; if not, the engine drops characters from the line's end until it fits, inside a word if need be, without shaping
+the word again. Blink walks the line's items from its end and cuts the one that crosses the box's width less the
+ellipsis's at the shaped text's own offsets, and the line's first item keeps one character whatever the room
+(`LineTruncator::TruncateLine`, `EllipsizeChild`, `TruncateChild`, `line_truncator.cc:218-615`, Chromium 153). WebKit
+does the same over its display boxes (`truncateOverflowingDisplayBoxes`, `trailingEllipsisVisualRectAfterTruncation`,
+`InlineDisplayLineBuilder.cpp:238-351`, webkit-7625.1.29.11.27). In Gecko the ellipsis is a `text-overflow` marker, and
+the text is clipped by character to the line less the marker, in painting only (`TextOverflow::ProcessLine`,
+`TextOverflow.cpp:676-751`, Firefox 156.0). The ellipsis is U+2026 in the block's first font where that font has one,
+else three periods (`ComputeEllipsisText`, `line_truncator.cc:96-106`; `MakeEllipsisTextRun`, `gfxTextRun.cpp:3070-3089`).
+A line that mixes directions is cut at its end as painted, and in `pre-wrap` a space that ends the line stays before
+the ellipsis.
+
+**Reading the cut.** No DOM API gives it in Firefox. A probe painted the box into a canvas through an SVG
+`foreignObject` image, found the ellipsis by the clamped line's last inked column, and took as shown the characters
+whose boxes, in the same paragraph unclamped, end before it. Chrome's DOM tells directly, as a second box for the text
+left on a cut line, and WebKit's gives a hidden character a box of no width; the ink reading matched Chrome's DOM on
+all 5,742 truncated lines without an emoji. Chrome and Firefox draw emoji at another width inside an SVG image than on
+the page, so in Firefox a line with an emoji on or before it can't be read (182 of the 5,826 truncated layouts below).
+
+**The demo's cut.** Each line comes from `layoutNextLine()` at the box's width. When text is left over and the last line
+and the ellipsis don't fit together, the line is filled again up to the width less the ellipsis's: one call takes the
+words that fit, and the next, given the room left, breaks inside the following word, as `overflow-wrap: break-word`
+would. The ellipsis's width is `measureNaturalWidth()` of U+2026 in the paragraph's font. Over the demo's five
+paragraphs in 16px Helvetica Neue, with PingFang SC and Geeza Pro, at every width from 120 to 440px and 1 to 5 lines
+(8,025 layouts in each browser), `layout()`'s line count, the height and whether the box is truncated were the
+browser's in every layout. The last line's text was the browser's in 5,618 of 5,924 truncated layouts in Chrome, 5,342
+of 5,644 readable ones in Firefox and 5,931 of 5,934 in webkit-host. The differences, most to least:
+
+- **Inside an Arabic word**, 300 of the 427 layouts in Chrome, and of the 428 in Firefox, whose last line the browser
+  cuts in the Arabic paragraph: the browser shows one to three more letters (one fewer in one Chrome layout). In
+  webkit-host, 3 of 427, where it shows two fewer. A handle's widths inside a word are those of the word broken across
+  lines, each piece measured as the engine shapes it after a break (Widths After A Line Break), and a clamp cuts the
+  shaped word where its letters sit. Measuring each candidate start of the line again, as a rich-inline paragraph that
+  ends with the ellipsis, was right on 254 and 261 of 351 and 352 such lines at 1 to 3 lines, against the stream's 91
+  and 92, but prepares text on every change of width.
+- **Inside a Latin word**, 4 of 3,928 in Chrome and 2 of 3,648 in Firefox, the browser showing one more letter, for
+  the same reason at the size of a kerning pair, and one Chrome layout the other way, where the fit came within 0.01px.
+- **A line that starts elsewhere**, one Chrome layout, where a URL broken across lines breaks one character away.
+
+Texts only the probe laid out, 963 layouts each (1 to 3 lines): Hebrew, Japanese, 17px Georgia with kerned pairs,
+hyphenated compounds, long words and, where readable, emoji agreed on every truncated layout in Firefox and
+webkit-host. In Chrome 9 Japanese and 13 long-word layouts break their lines elsewhere, which is a difference in the
+lines and not in the cut, and the browser showed one letter more or fewer in 14 long-word layouts, 3 with emoji and 2
+with hyphens. A left-to-right paragraph with Arabic and Hebrew phrases agreed on 714 or 715 of 886 in each browser, and an
+Arabic paragraph with English words on 532, 529 and 698 of 776: browsers cut the painted end, which Pretext, without a
+visual order, can't name. A `pre-wrap` paragraph agreed on 818, 819 and 797 of 963, the rest a space the browser keeps
+before the ellipsis, which the demo, written for normal white space, drops.
+
+**The other two cuts.** The line that keeps a label's start and end painted no wider than its box at all 321 widths for
+a path and a URL in Chrome; in Firefox and webkit-host the URL ran over at 2 widths, by up to 1.0px, where the end it
+kept starts after a kerned pair (`y.`). The line that leaves "… more" room fit its box in all 1,274 layouts with a
+link, within 1/64px, and the open paragraph had the browser's lines in each.
+
+Not probed: widths under 120px, fonts without U+2026, letter spacing, soft hyphens, rich inline, `text-overflow:
+ellipsis` on one line and the unprefixed `line-clamp`. What the demo had to work around is on TODO.md's list for the API
+discussion (TODO.md, End of project). Letter positions inside a shaped word, which Canvas gives only through
+`getTextClusters()`, would reopen the Arabic difference.
+
 ### Engine Facts
 
 What one engine does that no topic above takes. Source lines are Blink at Chrome 153.0.8010.48 (.50 is the same source),
