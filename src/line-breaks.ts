@@ -191,18 +191,27 @@ export function unpackClasses(map: ClassMap): ClassTable {
   return unpackClassRuns(classRuns, classRemaps.subarray(row * jointClassCount), blocks)
 }
 
+// A regular expression built at its first use, for the ones most text never reaches. Where V8 or
+// SpiderMonkey parses a literal with a \p{...} class of a general category or a script, it builds the
+// class's set, in a function that never runs too, so each such literal costs every page as it loads.
+// One that every text tests stays a literal (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
+export function lazyRegExp(source: string, flags: string): () => RegExp {
+  let built: RegExp | null = null
+  return () => built ??= new RegExp(source, flags)
+}
+
 // Unicode properties the scans read with RegExp's \p{...}, as two bits per property and code point:
 // whether it was tested, and whether the code point has it. A scan tests a property the first time it
-// asks about a code point, so a page runs only the tests its engine's scan makes. Code points below
-// U+10000 keep their bits in one table, the others in a map.
+// asks about a code point, so a page builds and runs only the tests its engine's scan makes. Code
+// points below U+10000 keep their bits in one table, the others in a map.
 const PROPERTY_TESTS = [
-  /^[\p{L}\p{N}]$/u,
-  /^\p{M}$/u,
-  /^\p{P}$/u,
-  /^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Po}]$/u,
-  /^\p{Default_Ignorable_Code_Point}$/u,
-  /^\p{Emoji}$/u,
-  /^\p{sc=Hangul}$/u,
+  lazyRegExp(String.raw`^[\p{L}\p{N}]$`, 'u'),
+  lazyRegExp(String.raw`^\p{M}$`, 'u'),
+  lazyRegExp(String.raw`^\p{P}$`, 'u'),
+  lazyRegExp(String.raw`^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Po}]$`, 'u'),
+  lazyRegExp(String.raw`^\p{Default_Ignorable_Code_Point}$`, 'u'),
+  lazyRegExp(String.raw`^\p{Emoji}$`, 'u'),
+  lazyRegExp(String.raw`^\p{sc=Hangul}$`, 'u'),
 ]
 export const LETTER_OR_NUMBER = 0
 export const MARK = 1
@@ -219,7 +228,7 @@ export function hasProperty(cp: number, property: number): boolean {
   const has = 1 << (property * 2)
   let bits = cp < 0x10000 ? bmp[cp]! : astralProperties.get(cp) ?? 0
   if ((bits & has << 1) === 0) {
-    bits |= has << 1 | (PROPERTY_TESTS[property]!.test(String.fromCodePoint(cp)) ? has : 0)
+    bits |= has << 1 | (PROPERTY_TESTS[property]!().test(String.fromCodePoint(cp)) ? has : 0)
     if (cp < 0x10000) bmp[cp] = bits
     else astralProperties.set(cp, bits)
   }

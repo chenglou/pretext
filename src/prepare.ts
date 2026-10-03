@@ -5,7 +5,7 @@
 import { observeSegmentEntries, textMayHaveEntryGeometry, type SegmentEntryGeometry } from './entry-geometry.js'
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
-import { DEFAULT_IGNORABLE, hasProperty } from './line-breaks.js'
+import { DEFAULT_IGNORABLE, hasProperty, lazyRegExp } from './line-breaks.js'
 import {
   CONTROL,
   HARD_BREAK,
@@ -74,7 +74,7 @@ const complexTextPathRanges = [
 ] as const
 
 const extendedPictographicRe = /\p{Extended_Pictographic}/u
-const leadingCombiningMarkRe = /^\p{M}/u
+const leadingCombiningMarkRe = lazyRegExp(String.raw`^\p{M}`, 'u')
 // Decimal digits and the joiners of numbers, times and dates.
 const numericRunRe = /^[\p{Nd}:\-/×,.+\u2013\u2014]+$/u
 const markRunRe = /^\p{M}+$/u
@@ -115,8 +115,8 @@ const mixedDirectionRe = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u200F\u{10800
 // The last letter or direction mark before format characters other than a soft
 // hyphen, and the first letter, direction mark or ASCII digit after the space,
 // past spaces and format characters.
-const letterBeforeFormatTailRe = /([\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])\p{M}*(?:(?![\u00AD\u200E\u200F\u061C])\p{Cf})+$/u
-const letterAfterSpacesRe = / (?: |(?![\u200E\u200F\u061C])\p{Cf})*([0-9\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])/uy
+const letterBeforeFormatTailRe = lazyRegExp(String.raw`([\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])\p{M}*(?:(?![\u00AD\u200E\u200F\u061C])\p{Cf})+$`, 'u')
+const letterAfterSpacesRe = lazyRegExp(String.raw` (?: |(?![\u200E\u200F\u061C])\p{Cf})*([0-9\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])`, 'uy')
 
 function isSpaceKind(kind: number): boolean {
   return kind === SPACE || kind === PRESERVED_SPACE
@@ -140,42 +140,33 @@ const GREEK_SCRIPT = 4
 const LATIN_SCRIPT = 8
 const CURSIVE_SCRIPT = 16
 const ANY_SCRIPT = 31
-// The Unicode classes the scripts are read with, made for the first text that needs one and
-// not written as literals: V8 builds a \p{...} class's set where it parses the literal, on
-// every page, whether or not the page tests it (RESEARCH.md, Keeping Work Bounded).
-type ScriptClasses = { neutral: RegExp, markedCommon: RegExp, latin: RegExp, cyrillic: RegExp, greek: RegExp, cursive: RegExp, cursiveLetter: RegExp }
-let scriptClasses: ScriptClasses | null = null
-
-function getScriptClasses(): ScriptClasses {
-  return scriptClasses ??= {
-    // Characters that stay in the run before them in Blink: Common ones that no script lists,
-    // and marks, which inherit. Gap: so does a Common character that one script lists, such as
-    // the circled ideographs, which here has that script (ENGINE_FOLLOWUPS.md, Letter spacing).
-    neutral: new RegExp('[\\p{scx=Common}\\p{Script=Inherited}]', 'u'),
-    // A Common character right before a mark that has script extensions, as the Arabic vowel
-    // signs do, doesn't stay: it takes the mark's scripts (FetchNextCharacter, :624-635), so a
-    // digit or a dotted circle that carries a fatha starts an Arabic run. A match ends where
-    // the mark starts; the mark is the first group.
-    markedCommon: new RegExp('\\p{scx=Common}(?=((?=\\p{Script=Inherited})\\P{scx=Inherited}))', 'uy'),
-    latin: new RegExp('\\p{scx=Latin}', 'u'),
-    cyrillic: new RegExp('\\p{scx=Cyrillic}', 'u'),
-    greek: new RegExp('\\p{scx=Greek}', 'u'),
-    // What starts or goes on with a cursive run in Blink: the letters of the seven scripts;
-    // the Common characters and marks whose scripts include Arabic, such as U+060C, U+0640 and
-    // the vowel signs, since a shared character's run starts with the lowest code of its
-    // scripts, Latin aside for a Common one (GetScripts, :118-215), and Arabic's is the
-    // lowest; Mongolian's comma, full stop and four dots, whose scripts are Mongolian and
-    // Phags-pa; and U+1DFA, a mark whose one script is Syriac. Gap: Blink starts such a run
-    // with all the character's scripts, which the next character that has a script narrows,
-    // and goes on with the run before it where that run's script is one of them (MergeSets,
-    // :491-565); here such a character has the cursive bit alone. So next to Thaana Blink
-    // spaces U+060C, and next to Mongolian it doesn't space the CJK punctuation Mongolian
-    // shares, nor U+202F outside Latin (ENGINE_FOLLOWUPS.md, Letter spacing).
-    cursive: new RegExp('[\\p{scx=Arabic}\\p{Script=Syriac}\\u1DFA\\p{Script=Nko}\\p{Script=Mandaic}\\p{Script=Mongolian}\\p{Script=Phags_Pa}\\p{Script=Hanifi_Rohingya}\\u1802\\u1803\\u1805]', 'u'),
-    // The letters of those scripts alone, which is what Gecko asks.
-    cursiveLetter: new RegExp('[\\p{Script=Arabic}\\p{Script=Syriac}\\p{Script=Nko}\\p{Script=Mandaic}\\p{Script=Mongolian}\\p{Script=Phags_Pa}\\p{Script=Hanifi_Rohingya}]', 'uy'),
-  }
-}
+// The Unicode classes the scripts are read with, each built at its first use (lazyRegExp).
+// Characters that stay in the run before them in Blink: Common ones that no script lists,
+// and marks, which inherit. Gap: so does a Common character that one script lists, such as
+// the circled ideographs, which here has that script (ENGINE_FOLLOWUPS.md, Letter spacing).
+const scriptNeutralRe = lazyRegExp(String.raw`[\p{scx=Common}\p{Script=Inherited}]`, 'u')
+// A Common character right before a mark that has script extensions, as the Arabic vowel
+// signs do, doesn't stay: it takes the mark's scripts (FetchNextCharacter, :624-635), so a
+// digit or a dotted circle that carries a fatha starts an Arabic run. A match ends where
+// the mark starts; the mark is the first group.
+const markedCommonRe = lazyRegExp(String.raw`\p{scx=Common}(?=((?=\p{Script=Inherited})\P{scx=Inherited}))`, 'uy')
+const latinRe = lazyRegExp(String.raw`\p{scx=Latin}`, 'u')
+const cyrillicRe = lazyRegExp(String.raw`\p{scx=Cyrillic}`, 'u')
+const greekRe = lazyRegExp(String.raw`\p{scx=Greek}`, 'u')
+// What starts or goes on with a cursive run in Blink: the letters of the seven scripts;
+// the Common characters and marks whose scripts include Arabic, such as U+060C, U+0640 and
+// the vowel signs, since a shared character's run starts with the lowest code of its
+// scripts, Latin aside for a Common one (GetScripts, :118-215), and Arabic's is the
+// lowest; Mongolian's comma, full stop and four dots, whose scripts are Mongolian and
+// Phags-pa; and U+1DFA, a mark whose one script is Syriac. Gap: Blink starts such a run
+// with all the character's scripts, which the next character that has a script narrows,
+// and goes on with the run before it where that run's script is one of them (MergeSets,
+// :491-565); here such a character has the cursive bit alone. So next to Thaana Blink
+// spaces U+060C, and next to Mongolian it doesn't space the CJK punctuation Mongolian
+// shares, nor U+202F outside Latin (ENGINE_FOLLOWUPS.md, Letter spacing).
+const cursiveRunRe = lazyRegExp(String.raw`[\p{scx=Arabic}\p{Script=Syriac}\u1DFA\p{Script=Nko}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Phags_Pa}\p{Script=Hanifi_Rohingya}\u1802\u1803\u1805]`, 'u')
+// The letters of those scripts alone, which is what Gecko asks.
+const cursiveScriptRe = lazyRegExp(String.raw`[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Nko}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Phags_Pa}\p{Script=Hanifi_Rohingya}]`, 'uy')
 
 // The opening brackets of no script that Blink makes Han, those whose East Asian Width is
 // wide, fullwidth or halfwidth (FixScriptsByEastAsianWidth, script_run_iterator.cc:83-110).
@@ -215,17 +206,16 @@ function getScripts(text: string, i: number): number {
   // ASCII letters are Latin and the rest of ASCII is Common, unless a mark follows.
   const code = text.charCodeAt(i)
   if (code < 0x80 && !(text.charCodeAt(i + 1) >= 0x300)) return (code | 0x20) >= 0x61 && (code | 0x20) <= 0x7a ? LATIN_SCRIPT : ANY_SCRIPT
-  const classes = getScriptClasses()
   let character = String.fromCodePoint(text.codePointAt(i)!)
-  if (classes.neutral.test(character)) {
-    classes.markedCommon.lastIndex = i
-    const marked = classes.markedCommon.exec(text)
+  if (scriptNeutralRe().test(character)) {
+    markedCommonRe().lastIndex = i
+    const marked = markedCommonRe().exec(text)
     if (marked === null) return wideOpeningBrackets.includes(character) ? OTHER_SCRIPT : ANY_SCRIPT
     character = marked[1]!
   }
-  if (classes.cursive.test(character)) return CURSIVE_SCRIPT
-  return (classes.latin.test(character) ? LATIN_SCRIPT : 0) | (classes.cyrillic.test(character) ? CYRILLIC_SCRIPT : 0) |
-    (classes.greek.test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
+  if (cursiveRunRe().test(character)) return CURSIVE_SCRIPT
+  return (latinRe().test(character) ? LATIN_SCRIPT : 0) | (cyrillicRe().test(character) ? CYRILLIC_SCRIPT : 0) |
+    (greekRe().test(character) ? GREEK_SCRIPT : 0) || OTHER_SCRIPT
 }
 
 // How far a text's script runs are read, the scripts the run there can be in, and each
@@ -322,9 +312,8 @@ function getUnspacedGraphemes(text: string, start: number, end: number, grapheme
   for (let g = 0, at = start; g < count; at = ends[g++]!) {
     let joins: boolean
     if (runs === null) {
-      const { cursiveLetter } = getScriptClasses()
-      cursiveLetter.lastIndex = at
-      joins = cursiveLetter.test(text)
+      cursiveScriptRe().lastIndex = at
+      joins = cursiveScriptRe().test(text)
     } else {
       joins = readScriptRuns(runs, text, at + 1) === CURSIVE_SCRIPT && text.charCodeAt(at) !== 0xA0
     }
@@ -437,10 +426,10 @@ export function measureAnalysis(
   }
   function formatTailStaysWithWord(item: string, spaceStart: number): boolean {
     if (!trailingFormatCharacterRe.test(item)) return true
-    const before = letterBeforeFormatTailRe.exec(item)
+    const before = letterBeforeFormatTailRe().exec(item)
     if (before === null) return false
-    letterAfterSpacesRe.lastIndex = spaceStart
-    const after = letterAfterSpacesRe.exec(normalized)
+    letterAfterSpacesRe().lastIndex = spaceStart
+    const after = letterAfterSpacesRe().exec(normalized)
     if (after === null) return false
     // An ASCII digit takes the direction of the text before it (UAX #9 W7 and N1).
     const next = after[1]!
@@ -516,7 +505,7 @@ export function measureAnalysis(
   let spaceShare = 0
 
   // Whether the text may hold graphemes that take no letter spacing in this engine.
-  const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && getScriptClasses().cursive.test(normalized)
+  const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && cursiveRunRe().test(normalized)
 
   const widths: number[] = []
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
@@ -700,7 +689,7 @@ export function measureAnalysis(
         const nextText = mi + 1 < segmentCount ? texts[mi + 1]! : ''
         if (hasLetterSpacing && (
           (mi > 0 && (flags[mi - 1]! & KIND_BITS) === TEXT && needsComplexTextPath(texts[mi - 1]!)) ||
-          (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
+          (leadingCombiningMarkRe().test(nextText) && needsComplexTextPath(nextText))
         )) spacingGraphemeCount = 1
         break
       }

@@ -258,6 +258,10 @@ shared by every canvas and the DOM, so a fresh canvas doesn't make text new.
   slower or faster, with Firefox's other `layout()` rows level and no change to code `layout()` runs, it is read as the
   names and not the change: a build one unused local apart gets other names and settles it. Making the constants that
   loop reads literals in the emitted code, which would end this, is being tried separately.
+- **Firefox's `worst: controls layout` and `worst: invisible-tails layout`** read 15.8% and 5.9% slower under #409 and
+  16.8% and 8.7% slower under #406, two unrelated changes timed against the same main on the same day (Firefox 156.0.1,
+  three sessions each, 2026-10-02), so they move with unrelated changes to the bundle and want a second change's table
+  before being blamed on one.
 
 A full bench took about 27 minutes (2026-09-26). Nothing timed is checked in.
 

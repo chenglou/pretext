@@ -2185,25 +2185,55 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   a lead only; in Chrome 154 the bench read every row of this build within noise of main in three sessions, the line
   rows included, which the field alone had read 11-18% slower (#391, 2026-10-01). No other function inlined while
   preparing and laying out the bench's mixed and rich texts takes over 374 bytes (`getMarkContext()`, above).
-- **Unicode classes in regex literals**: V8 builds the character set of a `\p{…}` class while it parses a literal that
-  holds one, inside a function that never runs too, to report the literal's syntax errors early. In Node 23's V8 12.9 a
-  script of one such literal took 9 to 55µs longer to compile than an empty one (`\p{sc=Hangul}` 9, `\p{Ps}` 15,
-  `\p{scx=Latn}` 22, `[\p{L}\p{N}]` 55), a class of plain ranges or the same source given to `new RegExp` under 1µs, and
-  JavaScriptCore (Bun 1.4) nothing for either. The Chromium profile's six classes for script runs, as literals, took the
-  bench's bundle from 3.13 to 3.36ms to compile there (medians of 350 compiles), and Chrome 154's bench read 1.54 to
-  1.75ms on a fresh page, whatever the page's text and font. Made from their sources when a word first needs one
-  (`getScriptClasses()` in `src/prepare.ts`), the bundle took 3.17ms in Node. Chrome 154's bench then read a fresh
-  page's compile at 1.63ms against 1.56 for the main before #394, 0.07ms more where the literals had read 0.2 (two
-  sessions, 2026-10-02), so the literals were most of it. The reader of script runs that the kerning and the
-  letter-spacing rule now share makes its seven classes so, #397's among them, which main as of #399 has as literals:
-  against it Chrome 154 read a fresh page's compile at 1.59ms against 1.73, and Firefox 156 the bundle's first run at
-  0.08ms against 0.26-0.28 (two sessions, 2026-10-02). Main's other such literals weren't touched:
-  with the 17 a script found written as constructor calls, its bundle compiled in 2.36ms of 3.18 in Node, so about a
-  quarter of a fresh page's compile may be theirs, an open saving (ENGINE_FOLLOWUPS.md, Cost).
 - **Class fields in Firefox**: with any class field in the bundle, Firefox 156 took 4.5-4.8ms to evaluate it on a fresh
   page, against 1.9-2.2ms with plain objects, or with the fields emptied or set in constructors, seemingly because it
   then compiles the whole bundle up front (the doubling is measured, the cause a guess); V8 and JavaScriptCore didn't
   care (#340, 2026-09-23).
+- **Property classes in regular-expression literals** (#407, 2026-10-02). Where V8 and SpiderMonkey parse a literal with
+  a `\p{...}` class of a general category or a script, they build the class's set, in a function that never runs too. V8
+  builds it again when the script runs and makes the expression, and at the expression's first and second tests;
+  `new RegExp()` builds it where it's called; JavaScriptCore builds nothing while it parses. One such literal of
+  Pretext's took 10-83 µs to compile in d8 15.4.80, the shell of Chrome 154's V8, and 8-65 µs in SpiderMonkey 156.0.1's
+  shell, where a literal of plain ranges, or of binary properties alone (`Emoji`, `Default_Ignorable_Code_Point`), whose
+  sets the engines keep, took 2-4 µs. Main held 31 expressions with property classes, 28 literals and three
+  `new RegExp()` calls at module scope, and the bench's chat messages test four to ten of them, by engine. So the 16
+  that most text never reaches are built at first use (`lazyRegExp()`, `src/line-breaks.ts`): the seven tests behind
+  `hasProperty()`, the cursive rule's six, and three that follow a rarer test (a control segment under letter spacing,
+  and in the WebKit profile a word that ends in a format character). It costs 6 code lines. In the bench, a fresh page
+  then compiled the bundle in 1.33-1.36 ms against 1.72-1.76 in Chrome 154 and in 2.73-2.79 ms against 3.03-3.12 in
+  Firefox 156, which also ran it in 0.12 ms against 0.26-0.28: the cursive rule's three `new RegExp()` calls, which
+  #397 added, no longer run with the module (with that rule's six alone built at first use, Firefox's run read 0.08 ms).
+  Chrome ran it 0.01 ms longer. Safari 27.0 compiled it as before (1.24-1.26 ms against 1.23-1.27) and ran it in
+  0.51-0.54 ms against 0.46-0.48, the 16 closures and 13 `String.raw` calls for nothing in return (ordinary strings with
+  doubled backslashes read 0.01 ms shorter offline). So a page loads about 0.4 ms sooner in Chrome and 0.45 ms in
+  Firefox, and about 0.06 ms later in Safari. The first batches of messages took as long as main's, and every
+  `prepare()` row on seen text and on the worst-case shapes read within noise in the three browsers (two sessions, five
+  families, against main as of #399). The shells had shown the compile beforehand: offline, the bundle compiled in
+  1.27-1.31 ms against 1.73-1.82 in d8 and in 1.07-1.13 ms against 1.40-1.47 in the SpiderMonkey shell, and ran
+  0.01-0.04 ms longer in both and in Bun 1.4's JavaScriptCore, whose compile didn't move (a page in a process that had
+  loaded the bundle before; medians of 60 pages for each of five families). They missed Firefox's shorter run there,
+  since a shell process seems to keep the expressions it has made; a new process showed it (0.49 ms against 0.64). In a
+  new process, where nothing has built a set yet, compiling and running it read 2.1 ms against 3.7 in d8, 1.9 against
+  2.5 in the SpiderMonkey shell and 1.7 against 1.8 in Bun (medians of 25, 25 and 15 processes). The bench doesn't show
+  that case for Chrome: its pages run the bundle in 0.06-0.07 ms, as a d8 process that has loaded it before does (0.03
+  ms), where a new one takes 1.3 ms. Offline, `prepare()` read within 1.4% of main on seen and on new Latin, Arabic and
+  mixed messages in the three shells, where two copies of main read within 1.6%, and within 1.3% on four of the bench's
+  worst-case shapes in d8 and the SpiderMonkey shell (Bun's runs of those were noisier, two copies of main up to 5%
+  apart). On letter-spaced Arabic, which the bench has no row for and where the cursive rule's expressions are fetched
+  for every character, d8 read 0.6-1.2% slower and Bun under the Blink profile 2.7%. Fifteen literals stay. Six hold
+  only binary properties and cost nothing to parse. Four are tested for every segment of ordinary text, so every page
+  builds them anyway (`combiningMarkRe`, `numericRunRe`, Gecko's `controlCharacterRe`, WebKit's
+  `trailingFormatCharacterRe`): with `numericRunRe` built at first use, Bun prepared seen Latin messages 1.5-3% slower,
+  and as main with it a literal. Five are tested for every segment or mark of a worst-case shape, the three of
+  `getMarkContext()`'s mark runs and Han kerning's two: with them built at first use too, the keep-all CJK brackets
+  shape read 1.5% slower in d8 (0.1-3.3% over 12 processes) and 2.8% in Bun (from 2.0% faster to 4.7% slower over 8),
+  which isn't shown free, and they cost a page about 0.07 ms of compile in d8 and 0.04 ms in the SpiderMonkey shell. The
+  shells' numbers are hypotheses, on a stand-in Canvas; the browsers' are the bench's, whose tables are in the PR. Since
+  #408 the cursive rule reads its runs through the reader of script runs it shares with the kerning with spaces, which
+  has seven such classes where the rule had six, built the same way, so 17 are; as literals, the reader's first six had
+  cost a fresh page 0.2 ms of compile in Chrome 154's bench (1.75 ms against 1.54, two sessions, 2026-10-02). A new
+  expression with such a class that most text never reaches goes through `lazyRegExp()`; one tested per segment stays a
+  literal. Reopens if the bench reads the worst-case rows level with those five built at first use.
 - **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
   full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
   nothing (#350, 2026-09-26).
@@ -3239,6 +3269,20 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
 - **Removing the prefix-measurement cache**: 79% more cold Canvas calls.
 - **A growing bracket, then bisection, in the line counter** (in the rebuild): 59% faster than a global binary search
   at narrow widths, 17% slower at wide ones; one counter was kept.
+- **A width that isn't a number handled by the clamp each line loop already makes** (#409, closed unmerged,
+  2026-10-02), in place of `normalizeMaxWidth()` at the entry of the six line APIs called once for a paragraph (#401).
+  Every line loop starts with `Math.max(0, maxWidth)`, or `Math.max(1, maxWidth)` in rich inline; written as two
+  comparisons, `maxWidth > least ? +maxWidth : maxWidth <= least ? least : Infinity`, the clamp gives `Infinity` for
+  `NaN`, which fails both. That covered the three per-line streams too, so their three exceptions went
+  (ENGINE_FOLLOWUPS.md, Small ones), for 2 library lines fewer and no result changed at a number. Firefox 156.0.1 read
+  it slower than main (162fe261) in each of three sessions, the second copy of the base within 2%: mixed
+  `measureLineStats()` 9.3%, the mixed walk 7.8%, the mixed stream 1.7%, and `layout()` of the mixed text at widths seen
+  before 10.2%. Firefox's SpiderMonkey shell had read the same offline, on a stand-in Canvas: `layout()` of chat
+  messages 17-20% slower, whatever names the minifier gave, and with the clamp written out at each place instead of a
+  function, `layout()` level but the walk 5% and the Arabic book 8% slower. Chrome 154.0.8037.57 was timed only against
+  main before #401 (8c56caed), three sessions: no row got a verdict, and `layout()` of the Arabic book read 0.9-1.5%
+  slower in each, under its 2% floor. So valid text in Firefox would pay for a width an app can replace with
+  `Infinity`. Reopens with a form that Firefox reads level with main on those four rows.
 - **Upstream patches for engine hot spots** (2026-09-20): candidates listed in `rebuild/HANDOFF.md` on the rebuild's
   branch (lazy ink bounds in Chromium's `TextMetrics::Update`, per-call bidi and itemization, the font setter's fast
   path, and why a repeated string costs Firefox as much as a first ask); none was finished or posted. They go with the
@@ -3689,11 +3733,14 @@ decisions for the maintainer.
   in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
   `walkLineRanges()` row, which pays the comparison once for a paragraph, read 1.2-1.4% slower in each session with the
   second copy of the base 0.5-1.1% slower, and in the run of two 2.4% faster and 2.8% slower; a run that reads it slower
-  in every session with the streams as on main would reopen the comparison there. A form not yet timed in a browser
-  would close the streams' three places with no comparison added: each line loop already clamps its width, with
-  `Math.max(0, maxWidth)` or, in rich inline, `Math.max(1, maxWidth)`, and that clamp written as two comparisons can
-  return `Infinity` for a width that fails both. Offline it changes no result at a number and leaves no line API's
-  result at `NaN` or `undefined` different from the one at `Infinity`; a bench that reads it level with main would put
-  it in `normalizeMaxWidth()`'s place. Whether such a width should throw, as a `letterSpacing` that isn't finite does
-  (#356), is on the API discussion's list (TODO.md): in the six APIs a throw would go in that one function, and in the
-  streams it would cost the comparison for each line again.
+  in every session with the streams as on main would reopen the comparison there. A third form closed the streams'
+  three places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its
+  width, with `Math.max(0, maxWidth)` or, in rich inline, `Math.max(1, maxWidth)`, and that clamp written as two
+  comparisons returns `Infinity` for a width that fails both. It changed no result at a number and left no line API's
+  result at `NaN` or `undefined` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed
+  `measureLineStats()` row 9.3% slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at
+  widths seen before 10.2%, each in all three sessions (2026-10-02; Dead Ends, Simplifications Held Back, has Chrome's
+  reading and the shells'). So `normalizeMaxWidth()` stays and the three places stay documented; a form that Firefox
+  reads level with main on those rows would take its place. Whether such a width should throw, as a `letterSpacing`
+  that isn't finite does (#356), is on the API discussion's list (TODO.md): in the six APIs a throw would go in that
+  one function, and in the streams it would cost the comparison for each line again.
