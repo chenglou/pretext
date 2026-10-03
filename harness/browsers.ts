@@ -9,7 +9,7 @@
 // launch, after which macOS keeps other apps from writing inside it. WebKit runs as webkit-host, the system
 // WebKit.framework that installed Safari runs, in a background window (harness/webkit-host/build.sh); installed Safari
 // opens one window of its own. None of them takes focus, but the bench's foreground runs, where Chrome, Firefox
-// and Safari come to the front.
+// and Safari come to the front. 'ios' is Safari in an iOS simulator, which has no window at all.
 import { dlopen, FFIType } from 'bun:ffi'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -22,6 +22,11 @@ const PINS = join(import.meta.dir, 'pins.json')
 export const PINNED = JSON.parse(readFileSync(PINS, 'utf8')) as { readonly chrome: string; readonly firefox: string }
 // The copies this process runs: PINNED, unless `repin` pointed one at a new copy.
 export const pins: Record<keyof typeof PINNED, string> = { ...PINNED }
+// What a run asks of its browsers besides the pins, which cli.ts sets from its flags:
+// - `scale`: the device scale factor Chrome and Firefox lay out at, in place of the display's (--scale).
+// - `zoom`: Chrome's page zoom, which multiplies it (--zoom).
+// - `runtime`: the simulator runtime 'ios' boots, by the name `xcrun simctl list runtimes` prints (--runtime).
+export const setup: { scale: number | null; zoom: number | null; runtime: string | null } = { scale: null, zoom: null, runtime: null }
 const ROOT = resolve(import.meta.dir, '..')
 const PROFILES = join(ROOT, '.artifacts/harness-profiles')
 export const WEBKIT_HOST = join(ROOT, '.artifacts/webkit-host/webkit-host')
@@ -37,7 +42,19 @@ export function appPath(browser: BrowserKind): string {
     case 'firefox': return join(APPS, `${pins.firefox}.app`)
     case 'webkit-host':
     case 'safari': return '/Applications/Safari.app'
+    case 'ios': return join(simulatorRuntime().runtimeRoot, 'Applications/MobileSafari.app')
   }
+}
+
+// A simulator runtime as `simctl list runtimes -j` prints it: `runtimeRoot` holds the simulated OS, Safari and WebKit
+// included.
+type Runtime = { name: string; identifier: string; buildversion: string; runtimeRoot: string; supportedDeviceTypes: Array<{ identifier: string; productFamily: string }> }
+
+function simulatorRuntime(): Runtime {
+  const runtimes = (JSON.parse(command('xcrun', ['simctl', 'list', 'runtimes', '-j'])) as { runtimes: Runtime[] }).runtimes
+  const runtime = runtimes.find(each => each.name === setup.runtime)
+  if (runtime === undefined) throw new Error(`ios needs --runtime=<name>, one of: ${runtimes.map(each => each.name).join(', ')}`)
+  return runtime
 }
 
 function bundleVersion(bundle: string, key = 'CFBundleShortVersionString'): string {
@@ -87,14 +104,15 @@ export function writePin(browser: keyof typeof PINNED, name: string): void {
 
 // What a recording depends on besides the case: the browser build (and WebKit's, for the browsers that run the system
 // framework), the OS build (fonts, Core Text and ICU move with it), the languages the OS and the page run under, the
-// device pixel ratio and the web fonts served. The harness refuses to score a recording under another key.
+// device pixel ratio, which --scale moves, Chrome's page zoom when --zoom sets one, and the web fonts served. The
+// harness refuses to score a recording under another key.
 export type Environment = {
   browser: BrowserKind; version: string; webkit: string | null; os: string; osLanguages: string; pageLanguages: readonly string[]
-  devicePixelRatio: number; fonts: string
+  devicePixelRatio: number; zoom: number | null; fonts: string
 }
 
 export function keyOf(e: Environment): string {
-  return `${e.browser} ${e.version}${e.webkit === null ? '' : ` webkit=${e.webkit}`} os=${e.os} os-languages=${e.osLanguages} page-languages=${e.pageLanguages.join(',')} dpr=${e.devicePixelRatio} fonts=${e.fonts}`
+  return `${e.browser} ${e.version}${e.webkit === null ? '' : ` webkit=${e.webkit}`} os=${e.os} os-languages=${e.osLanguages} page-languages=${e.pageLanguages.join(',')} dpr=${e.devicePixelRatio}${e.zoom === null ? '' : ` zoom=${e.zoom}`} fonts=${e.fonts}`
 }
 
 // What the page serves: each fixture's family, weight and file bytes, not the manifest's notes on where it came from.
@@ -105,15 +123,19 @@ export function fontsKey(dir: string): string {
   return hasher.digest('hex').slice(0, 12)
 }
 
+// A simulator's Safari, WebKit, fonts and ICU are its runtime's, whose bundles keep Info.plist at their root, and a new
+// device takes the Mac's languages.
 export function environmentKey(browser: BrowserKind, env: PageEnv): string {
+  const runtime = browser === 'ios' ? simulatorRuntime() : null
   return keyOf({
     browser,
-    version: bundleVersion(join(appPath(browser), 'Contents/Info.plist')),
-    webkit: BROWSER[browser].systemWebKit ? bundleVersion('/System/Library/Frameworks/WebKit.framework/Resources/Info.plist', 'CFBundleVersion') : null,
-    os: command('sw_vers', ['-buildVersion']),
+    version: bundleVersion(join(appPath(browser), runtime === null ? 'Contents/Info.plist' : 'Info.plist')),
+    webkit: !BROWSER[browser].systemWebKit ? null : bundleVersion(runtime === null ? '/System/Library/Frameworks/WebKit.framework/Resources/Info.plist' : join(runtime.runtimeRoot, 'System/Library/Frameworks/WebKit.framework/Info.plist'), 'CFBundleVersion'),
+    os: runtime === null ? command('sw_vers', ['-buildVersion']) : runtime.buildversion,
     osLanguages: command('defaults', ['read', '-g', 'AppleLanguages']).replace(/[\s"()]/g, ''),
     pageLanguages: env.languages,
     devicePixelRatio: env.devicePixelRatio,
+    zoom: browser === 'chrome' ? setup.zoom : null,
     fonts: fontsKey(FONTS_DIR),
   })
 }
@@ -283,16 +305,21 @@ async function openApp(app: string, executable: string, marker: string, profile:
 }
 
 // Chrome activates itself when it shows a window the usual way, so it starts with none, and the job's one window is
-// opened in the background through the DevTools protocol (Target.createTarget { newWindow, background }).
+// opened in the background through the DevTools protocol (Target.createTarget { newWindow, background }). Its page zoom
+// is the profile's default zoom level, the power of 1.2 that gives the factor.
 async function launchChrome(url: string, profile: string, foreground: boolean): Promise<Launched> {
   const app = appPath('chrome')
   mkdirSync(join(profile, 'Default'), { recursive: true })
-  writeFileSync(join(profile, 'Default/Preferences'), JSON.stringify({ intl: { accept_languages: 'en-US,en', selected_languages: 'en-US,en' } }))
+  writeFileSync(join(profile, 'Default/Preferences'), JSON.stringify({
+    intl: { accept_languages: 'en-US,en', selected_languages: 'en-US,en' },
+    ...(setup.zoom === null ? {} : { partition: { default_zoom_level: { x: Math.log(setup.zoom) / Math.log(1.2) } } }),
+  }))
   const launched = await openApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     `--user-data-dir=${profile}`, '--disable-updater-scheduler', '--no-first-run', '--no-default-browser-check', '--disable-sync',
     '--disable-extensions', '--disable-component-update', '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--window-size=1200,900',
-    '--no-startup-window', '--remote-debugging-port=0', '-AppleLanguages', '(en-US)',
+    '--no-startup-window', '--remote-debugging-port=0', ...(setup.scale === null ? [] : [`--force-device-scale-factor=${setup.scale}`]),
+    '-AppleLanguages', '(en-US)',
   ], foreground)
   try {
     let endpoint: string | null = null
@@ -337,6 +364,7 @@ function launchFirefox(url: string, profile: string, foreground: boolean): Promi
     ['app.update.auto', false], ['app.update.staging.enabled', false],
     ['intl.locale.requested', 'en-US'], ['intl.accept_languages', 'en-US, en'], ['intl.regional_prefs.use_os_locales', false],
   ]
+  if (setup.scale !== null) prefs.push(['layout.css.devPixelsPerPx', String(setup.scale)])
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   return openApp(app, `${app}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile, ['--new-instance', '--profile', profile, url], foreground)
 }
@@ -373,6 +401,45 @@ async function launchWebKitHost(url: string): Promise<Launched> {
       }
     }
   })()
+  return launched
+}
+
+// Safari in an iOS simulator: a new device of the runtime's first iPhone type, booted by simctl alone, without
+// Simulator.app, so nothing shows; `simctl openurl` opens the page in its Safari, which reaches the job's server since
+// a simulator shares the Mac's network. The job's end shuts the device down and deletes it. The device's processes are
+// children of its launchd_sim, and the job bounds Safari's and WebKit's.
+async function launchSimulator(url: string, jobId: string): Promise<Launched> {
+  const runtime = simulatorRuntime()
+  const type = runtime.supportedDeviceTypes.find(each => each.productFamily === 'iPhone')
+  if (type === undefined) throw new Error(`${runtime.name} has no iPhone`)
+  const device = command('xcrun', ['simctl', 'create', `pretext-harness-${jobId}`, type.identifier, runtime.identifier])
+  const remove = (): void => {
+    for (const verb of ['shutdown', 'delete']) {
+      try {
+        execFileSync('xcrun', ['simctl', verb, device], { stdio: 'ignore', timeout: 60_000 })
+      } catch {
+        // Not booted, or gone already.
+      }
+    }
+  }
+  const launched = own<Launched>({
+    roots: rows => {
+      const init = rows.find(row => row.command.startsWith('launchd_sim ') && row.command.includes(device))
+      return init === undefined ? 'shut down' : rows.filter(row => row.ppid === init.pid && /\/(MobileSafari|com\.apple\.WebKit\.\w+)( |$)/.test(row.command))
+    },
+    stop: () => Promise.resolve(remove()),
+    cleanup: remove,
+  })
+  try {
+    // `bootstatus -b` boots the device and returns once it is up; a new device's first boot took 55 s.
+    for (const args of [['bootstatus', device, '-b'], ['openurl', device, url]]) {
+      const code = await Bun.spawn(['xcrun', 'simctl', ...args], { stdin: 'ignore', stdout: 'ignore', stderr: 'inherit', timeout: 300_000 }).exited
+      if (code !== 0) throw new Error(`xcrun simctl ${args[0]} exited ${code}`)
+    }
+  } catch (error) {
+    await release(launched)
+    throw error
+  }
   return launched
 }
 
@@ -432,5 +499,6 @@ export async function launch(browser: BrowserKind, url: string, jobId: string, o
     }
     case 'webkit-host': return watch(browser, await launchWebKitHost(url), fail, boundMb)
     case 'safari': return watch(browser, await launchSafari(url, jobId, owns, foreground), fail, boundMb)
+    case 'ios': return watch(browser, await launchSimulator(url, jobId), fail, boundMb)
   }
 }

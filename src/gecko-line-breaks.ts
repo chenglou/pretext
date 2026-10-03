@@ -5,15 +5,22 @@
 //
 // Sources, cited as file:line:
 // - Gecko in mozilla-firefox at Firefox 156.0 (3bf8f4682).
-// - icu_segmenter 2.1.2 src/line.rs, byte-identical to Firefox's third_party/rust copy, and
-//   icu_collections 2.1.1 src/codepointtrie/cptrie.rs.
+// - icu_segmenter 2.1.2 src/line.rs, byte-identical to Firefox's third_party/rust copy.
 //
 // Deliberate differences:
 // - Grapheme clusters come from the profile's ICU character rules (src/graphemes.ts), Chrome's,
 //   which give the clusters of icu_segmenter's GraphemeClusterSegmenter over Firefox's data, and
 //   Unicode properties from RegExp \p{...} and generated tables.
-// - Text runs don't split where the script changes (gfxScriptItemizer.cpp). Such a split only
-//   adds a cluster start. The port was removed on purpose (RESEARCH.md, Decisions Log).
+// - Text runs don't split where the script changes (gfxScriptItemizer.cpp), nor where the bidi
+//   level does: bidi resolution makes a text frame of each level run (nsBidiPresUtils.cpp:
+//   1037-1053), and a text run doesn't go on across two (ContinueTextRunAcrossFrames,
+//   nsTextFrame.cpp:2023-2030). Such a split only adds a cluster start, restarts clusters within
+//   its word and ends a word after a space before a cluster extender, so a level split is missed
+//   only inside a cluster, or after a space inside one: for example at a vowel killer of a
+//   left-to-right script after an Arabic letter, or at a ZWJ that ends the paragraph after a
+//   Hebrew letter, which rule L1 puts at the paragraph's level. Both ports were removed on
+//   purpose (RESEARCH.md, Decisions Log; ENGINE_FOLLOWUPS.md, Bidi levels, direction and script
+//   runs).
 // - Inside runs of Thai, Lao, Khmer and Myanmar letters, Intl.Segmenter word boundaries stand
 //   in for ICU4X's LSTM models (line.rs:445-451, complex/mod.rs:135-156). Firefox's own
 //   Intl.Segmenter answers as those models there once breaks inside grapheme clusters are
@@ -23,16 +30,11 @@
 //   (intl/lwbrk/LineBreaker.cpp:26-31).
 
 import {
-  geckoEastAsianWidthRangesPacked,
   geckoLineBreakStatesPacked,
   geckoLineEotProperty,
   geckoLineLastCodepointProperty,
   geckoLinePropertyCount,
-  geckoLineTrieDataPacked,
-  geckoLineTrieHighStart,
-  geckoLineTrieIndexPacked,
 } from './generated/engine-break-data.js'
-import { getParagraphLevels, getTrailingWhiteSpaceStart, keepsClusterLevel } from './gecko-bidi-levels.js'
 import { findGraphemeEnds, isBidiControl, type GraphemeTable } from './graphemes.js'
 import {
   BREAK as OPPORTUNITY,
@@ -44,14 +46,12 @@ import {
   PUNCTUATION,
   SOFT_HYPHEN_BREAK,
   getBreakLanguage,
-  getRangeValue,
-  getSmallTrieValue,
+  getClass,
   getWordSegmenter,
   hasProperty,
-  readValues,
-  unpackRanges,
+  unpackClasses,
   unpackTable,
-  type RangeTable,
+  type ClassTable,
 } from './line-breaks.js'
 
 const CH_SHY = 0x00ad
@@ -59,15 +59,14 @@ const CH_SHY = 0x00ad
 const isSurrogatePair = (a: number, b: number) => (a & 0xfc00) === 0xd800 && (b & 0xfc00) === 0xdc00
 const combine = (a: number, b: number) => 0x10000 + ((a - 0xd800) << 10) + (b - 0xdc00)
 
-// East_Asian_Width H (2), F (3) or W (5), and 0 for any other value, in ranges, which the first East
-// Asian segment break test unpacks (isEastAsianSegmentBreak). A binary search over the few ranges
-// saves a table per code unit.
-let eastAsianWidths: RangeTable | null = null
+// East_Asian_Width H (2), F (3) or W (5), and 0 for any other value, which the first East Asian
+// segment break test unpacks (isEastAsianSegmentBreak).
+let eastAsianWidths: ClassTable | null = null
 
 // --- Character classes ---
 
 // nsUnicodeProperties.h:202-207, nsUnicodeProperties.cpp:130-138
-export function isClusterExtender(cp: number): boolean {
+function isClusterExtender(cp: number): boolean {
   return cp >= 0x0300 && (hasProperty(cp, MARK) || cp === 0x200c || cp === 0x200d || (cp >= 0xff9e && cp <= 0xff9f) ||
     (cp >= 0x1f3fb && cp <= 0x1f3ff) || (cp >= 0xe0020 && cp <= 0xe007f))
 }
@@ -79,19 +78,19 @@ function isClusterExtenderExcludingJoiners(cp: number): boolean {
 }
 
 // UnicodeProperties.h:205-218
-function isEastAsianWidthFHWExcludingEmoji(widths: RangeTable, cp: number): boolean {
-  const width = getRangeValue(widths, cp)
+function isEastAsianWidthFHWExcludingEmoji(widths: ClassTable, cp: number): boolean {
+  const width = getClass(widths, cp)
   return width === 2 || width === 3 || (width === 5 && !hasProperty(cp, EMOJI))
 }
 
 // nsUnicharUtils.cpp:500-504
-function isSegmentBreakSkipChar(widths: RangeTable, cp: number): boolean {
+function isSegmentBreakSkipChar(widths: ClassTable, cp: number): boolean {
   return isEastAsianWidthFHWExcludingEmoji(widths, cp) && !hasProperty(cp, HANGUL) && cp !== 0x20a9
 }
 
 // nsUnicharUtils.cpp:506-527, with UnicodeProperties.h:187-199
-function isEastAsianPunctuation(widths: RangeTable, cp: number): boolean {
-  return getRangeValue(widths, cp) !== 0 && ((hasProperty(cp, PUNCTUATION) && cp !== 0x20a9) || cp === 0xff5e || cp === 0x3000)
+function isEastAsianPunctuation(widths: ClassTable, cp: number): boolean {
+  return getClass(widths, cp) !== 0 && ((hasProperty(cp, PUNCTUATION) && cp !== 0x20a9) || cp === 0xff5e || cp === 0x3000)
 }
 
 // gfxFontGroup::IsInvalidChar(char16_t), gfxTextRun.h:975-992. Below U+0100 it answers as
@@ -107,15 +106,17 @@ function isInvalidChar(ch: number): boolean {
 
 // Whether the text run leaves out a bidi control, which only 16-bit text does (IsDiscardable), is
 // noted as it leaves them out, as IsDiscardable notes a soft hyphen (HasShy): testing the text for
-// one before the scan costs every text a pass (RESEARCH.md, Keeping Work Bounded).
-type Transformed = { text: string, orig: Int32Array, skipped: Uint8Array, dropsBidiControl: boolean }
+// one before the scan costs every text a pass (RESEARCH.md, Keeping Work Bounded). `leftOut` is
+// GeckoLineBreaks'.
+type Transformed = { text: string, orig: Int32Array, skipped: Uint8Array, leftOut: Uint8Array | null, dropsBidiControl: boolean }
 
 // IsDiscardable, nsTextFrameUtils.cpp:32-49
 export function isDiscardable(ch: number, is8bit: boolean): boolean {
   return ch === CH_SHY || (!is8bit && isBidiControl(ch))
 }
 const isSpaceOrTab = (ch: number) => ch === 0x20 || ch === 0x09
-const isSpaceOrTabOrSegmentBreak = (ch: number) => ch === 0x20 || ch === 0x09 || ch === 0x0a
+// IsSpaceOrTabOrSegmentBreak, nsTextFrameUtils.cpp:51-57: a white-space run's white space, which a CR or FF isn't.
+export const isSpaceOrTabOrSegmentBreak = (ch: number) => ch === 0x20 || ch === 0x09 || ch === 0x0a
 
 // IsSpaceCombiningSequenceTail(const char16_t*, int32_t), nsTextFrameUtils.cpp:24-30, on code units.
 export function isSpaceCombiningSequenceTail(text: string, from: number): boolean {
@@ -139,7 +140,7 @@ export function isJapaneseOrChinese(language: string | null): boolean {
 // punctuation. Only an interior run qualifies.
 export function isEastAsianSegmentBreak(text: string, start: number, end: number, japaneseOrChinese: boolean): boolean {
   if (start === 0 || end >= text.length) return false
-  const widths = eastAsianWidths ??= unpackRanges(geckoEastAsianWidthRangesPacked, false)
+  const widths = eastAsianWidths ??= unpackClasses('gecko/east_asian_width')
   let before: number
   let pos = start
   do {
@@ -157,11 +158,25 @@ export function isEastAsianSegmentBreak(text: string, start: number, end: number
     (japaneseOrChinese && (isEastAsianPunctuation(widths, before) || isEastAsianPunctuation(widths, after)))
 }
 
+// The scan transforms a text node's text as one text frame's. Firefox transforms a frame at a
+// time, each from the white-space state the frame before it left (mNextRunContextInfo,
+// nsTextFrame.cpp:2515-2518), and bidi resolution splits a text node into a frame for each level
+// run (nsBidiPresUtils.cpp:1037-1053). A frame that starts at a character the text run drops ends
+// the white-space run there (nsTextFrameUtils.cpp:370-379), and a line's start trims the white
+// space a frame starts with while the line holds nothing (nsTextFrame.cpp:10904-10944). A
+// dropped character starts a frame only where it is a bidi control that starts a level run, and
+// whether one does turns on the paragraph's direction, which Pretext doesn't take: after a
+// space, U+200F between Latin words starts one in a left-to-right paragraph and none in a
+// right-to-left one, and U+200E between Hebrew words the other way around. So a white-space run
+// reads through every character the text run drops. That is Firefox's run wherever the control
+// keeps the level of the white space before it, as a mark of the paragraph's own direction does
+// outside an embedding or isolate; ENGINE_FOLLOWUPS.md, White space and controls, has the rest.
 function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boolean): Transformed {
   const len = input.length
   // The source index of each kept unit.
   const orig = new Int32Array(len)
   const skipped = new Uint8Array(len)
+  let leftOut: Uint8Array | null = null
   let n = 0
   let dropsBidiControl = false
   if (preserveWhiteSpace) {
@@ -182,6 +197,18 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
     while (i < len) {
       const ch = input.charCodeAt(i)
       if (!isSpaceOrTabOrSegmentBreak(ch) && !isDiscardable(ch, is8bit)) {
+        // A CR or FF is no white space to TransformText (:51-57), so it ends a white-space run and
+        // stays in the text run, which gives it no glyph and no advance: it skips a control
+        // character it doesn't draw as a hexbox, which is never CR and, in release and beta builds,
+        // no other one either (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3620-3627 and :3874-3892;
+        // layout.css.control-characters.visible, StaticPrefList.yaml:10926-10929). Every Canvas
+        // measures it as a space (Firefox's: CanvasRenderingContext2D.cpp:4634-4637), so a layout
+        // of the source leaves it out. Kept as a control of no advance, as the profile keeps the
+        // other controls Firefox hides (hidesControlCharacters), it is text at a line's edges,
+        // where Firefox trims it, and takes text with CRLF off the simple line walk (RESEARCH.md,
+        // Dead Ends). A CR right before a line feed needs no mark: the run that starts there keeps
+        // that line feed, and the CR, a breakable space to the scan too, collapses into it.
+        if (ch === 0x0c || (ch === 0x0d && input.charCodeAt(i + 1) !== 0x0a)) (leftOut ??= new Uint8Array(len))[i] = 1
         orig[n++] = i
         inWhitespace = false
         i++
@@ -191,10 +218,14 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
         let keepLastSpace = false
         let hasSegmentBreak = ch === 0x0a
         let trailingDiscardables = 0
+        // How many characters the run holds that the text run drops.
+        let dropped = 0
         let j = i + 1
-        while (j < len && (isSpaceOrTabOrSegmentBreak(input.charCodeAt(j)) || isDiscardable(input.charCodeAt(j), is8bit))) {
-          if (input.charCodeAt(j) === 0x0a) hasSegmentBreak = true
-          j++
+        for (; j < len; j++) {
+          const c = input.charCodeAt(j)
+          if (c === 0x0a) hasSegmentBreak = true
+          else if (isDiscardable(c, is8bit)) dropped++
+          else if (!isSpaceOrTab(c)) break
         }
         while (isDiscardable(input.charCodeAt(j - 1), is8bit)) { j--; trailingDiscardables++ } // :334-336
         if (!is8bit && input.charCodeAt(j - 1) === 0x20 && j < len && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
@@ -204,9 +235,14 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
         // goes (:152-162), and the run's first segment break stays as a space (:181-193).
         for (let k = i; k < j; k++) {
           const c = input.charCodeAt(k)
-          if (isDiscardable(c, is8bit) || inWhitespace || (hasSegmentBreak && isSpaceOrTab(c))) {
+          if (isDiscardable(c, is8bit)) {
             skipped[k] = 1
-            dropsBidiControl ||= c !== CH_SHY && !isSpaceOrTabOrSegmentBreak(c)
+            dropsBidiControl ||= c !== CH_SHY
+          } else if (inWhitespace || (hasSegmentBreak && isSpaceOrTab(c))) {
+            skipped[k] = 1
+            // Where the run reads through a dropped character, white space it leaves out may not
+            // touch the unit it keeps, so collapsing adjacent white space wouldn't drop it.
+            if (dropped > trailingDiscardables) (leftOut ??= new Uint8Array(len))[k] = 1
           } else {
             orig[n++] = k
             inWhitespace = true
@@ -246,7 +282,7 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
     }
   }
   text += input.slice(sliceStart, sliceEnd)
-  return { text, orig: orig.subarray(0, n), skipped, dropsBidiControl }
+  return { text, orig: orig.subarray(0, n), skipped, leftOut, dropsBidiControl }
 }
 
 // IsTrimmableSpace, nsTextFrame.cpp:921-942, in normal white space.
@@ -265,96 +301,7 @@ function hasCompressedLeadingWhitespace(source: string, skipped: Uint8Array, is8
   return false
 }
 
-// --- 2. Bidi text-run splits (nsBidiPresUtils.cpp) ---
-
-// encoding_rs::mem::is_utf16_code_unit_bidi (mem.rs:1392-1422), used by HasRTLChars (nsBidiUtils.h:107-111).
-function isUtf16CodeUnitBidi(u: number): boolean {
-  if (u < 0x0590) return false
-  if (u >= 0x0900 && u < 0xd802) {
-    if (u >= 0x200f && u <= 0x2067) return u === 0x200f || u === 0x202b || u === 0x202e || u === 0x2067
-    return false
-  }
-  if (u >= 0xd83c && u < 0xfb1d) return false
-  if (u >= 0xd804 && u < 0xd83a) return false
-  if (u > 0xfefe) return false
-  if (u >= 0xfe00 && u < 0xfe70) return false
-  return true
-}
-
-// HasRTLChars (nsBidiUtils.h:107-111).
-function hasRtlChars(source: string): boolean {
-  for (let i = 0; i < source.length; i++) if (isUtf16CodeUnitBidi(source.charCodeAt(i))) return true
-  return false
-}
-
-// ReplaceSeparators, nsBidiPresUtils.cpp:861-875
-function replaceSeparator(u: number): number {
-  return u === 0x09 || u === 0x0a || u === 0x0b || u === 0x0d || (u >= 0x1c && u <= 0x1f) || u === 0x85 || u === 0x2029 ? 0x20 : u
-}
-
-// The levels of source[start, end) as one paragraph, its separators replaced.
-function getLevels(source: string, start: number, end: number): Uint8Array {
-  const paragraph = new Uint16Array(end - start)
-  for (let i = 0; i < paragraph.length; i++) paragraph[i] = replaceSeparator(source.charCodeAt(start + i))
-  return getParagraphLevels(paragraph)
-}
-
-// A left-to-right block resolves bidi only where its text has right-to-left characters (Resolve
-// :790-854, ChildListMayRequireBidi :1467-1475): the levels of its paragraph in white-space: normal
-// there, else null.
-export function getGeckoParagraphLevels(source: string): Uint8Array | null {
-  return hasRtlChars(source) ? getLevels(source, 0, source.length) : null
-}
-
-// Raw indices where a logical level run starts (ResolveParagraph :877-1110, EnsureBidiContinuation
-// :1043-1053, Bidi::GetLogicalRun intl/components/src/Bidi.cpp:165-183).
-function getBidiRunStarts(source: string, preserveWhiteSpace: boolean): number[] {
-  const starts: number[] = []
-  // Pre-wrap text resolves one line at a time, each ending after its LF (:1262-1357, :1089-1098).
-  for (let start = 0; start < source.length;) {
-    let end = preserveWhiteSpace ? source.indexOf('\n', start) + 1 : source.length
-    if (end === 0) end = source.length
-    if (start > 0) starts.push(start)
-    const levels = getLevels(source, start, end)
-    for (let i = 1; i < levels.length; i++) if (levels[i] !== levels[i - 1]) starts.push(start + i)
-    start = end
-  }
-  return starts
-}
-
-// Whether bidi levels can change the glyph records of this text node's text run, set up in one
-// piece. A left-to-right block resolves bidi only for 16-bit text with right-to-left characters
-// (Resolve :790-854, ChildListMayRequireBidi :1467-1475), and the levels only split the text run
-// (ContinueTextRunAcrossFrames, nsTextFrame.cpp:2023-2030). A split makes a cluster start
-// (gfxTextRun.cpp:2828-2835), restarts clusters within its word and ends a word after a space before
-// a cluster extender, so it changes the records only inside a cluster, or after a space inside one,
-// which only a Prepend character (UAX #29 GB9b) such as U+0600 gives. Bidi controls leave the text
-// run, so with one a level run can start inside any cluster, and in pre-wrap every line starts a
-// text run; otherwise a unit inside a cluster starts none when it keeps the level of the unit
-// before it. A level run that starts at a unit the scan drops splits at the next unit kept: after
-// collapsed white space that is a space, which counts here whatever its level, a soft hyphen is BN,
-// which keepsClusterLevel() looks past, and a bidi control counts already.
-function levelsMayMatter(source: string, tr: Transformed, g: Glyphs, preserveWhiteSpace: boolean): boolean {
-  if (!hasRtlChars(source)) return false
-  // The paragraph holding the unit: the text, or in pre-wrap its line with the LF.
-  let from = 0, to = 0, trailingFrom = 0
-  for (let t = 1; t < tr.text.length; t++) {
-    if (g.clusterStart[t] === 1) continue
-    const at = tr.orig[t]!
-    if (at === tr.orig[t - 1]! + 1 && isSurrogatePair(source.charCodeAt(at - 1), source.charCodeAt(at))) continue
-    const ch = tr.text.charCodeAt(t)
-    if (tr.dropsBidiControl || ch === 0x20 || ch === 0xa0 || (preserveWhiteSpace && tr.text.charCodeAt(t - 1) === 0x0a)) return true
-    if (at >= to) {
-      from = preserveWhiteSpace ? source.lastIndexOf('\n', at - 1) + 1 : 0
-      to = preserveWhiteSpace ? source.indexOf('\n', at) + 1 || source.length : source.length
-      trailingFrom = getTrailingWhiteSpaceStart(source, from, to)
-    }
-    if (!keepsClusterLevel(source, at, from, trailingFrom)) return true
-  }
-  return false
-}
-
-// --- 3. Text-run glyph records (gfxTextRun.cpp, gfxFont.cpp) ---
+// --- 2. Text-run glyph records (gfxTextRun.cpp, gfxFont.cpp) ---
 //
 // Only the facts SetPotentialLineBreaks reads are recorded: which positions start a cluster and
 // which are spaces. Every position belongs to one shaped word, space or invalid character.
@@ -388,40 +335,36 @@ function setupClusterBoundaries(g: Glyphs, text: string, from: number, to: numbe
   }
 }
 
-// Whether text[i] ends a shaped word of a text run that ends at `end` (gfxFont.cpp:3778-3790): a
-// space or NBSP before no cluster extender (IsBoundarySpace, :3317-3330), or an invalid character.
-// splitAndInitTextRun() and the setup again of the words a level run cuts share it (RESEARCH.md,
-// Decisions Log; the numbers are under RESEARCH.md, Bidi Levels).
-function endsWord(text: string, i: number, end: number): boolean {
-  const ch = text.charCodeAt(i)
-  return ((ch === 0x20 || ch === 0xa0) && !(i + 1 < end && isClusterExtender(text.charCodeAt(i + 1)))) || isInvalidChar(ch)
-}
-
-// gfxFont::SplitAndInitTextRun, gfxFont.cpp:3707-3900: sets up the shaped words of one text run. A
-// space glyph (SetSpaceGlyphIfSimple, gfxTextRun.cpp:1612-1619) only sets isSpace, and an invalid
-// character (:3877-3892) keeps a zero record. Below U+0100, IsBoundarySpace (:3317-3330) and
-// SetupClusterBoundaries(uint8_t) (gfxFont.cpp:771-795) answer as the char16_t versions, so 8-bit
-// text and 8-bit words take the char16_t path, at any word length (:3569-3577, :3817-3821).
-function splitAndInitTextRun(g: Glyphs, text: string, start: number, end: number, graphemeTable: GraphemeTable, ends: Int32Array): void {
-  let wordStart = start
-  for (let i = start; i < end; i++) {
-    if (!endsWord(text, i, end)) continue
+// gfxFont::SplitAndInitTextRun, gfxFont.cpp:3707-3900: sets up the shaped words of the text run. A
+// word ends at a space or NBSP before no cluster extender (IsBoundarySpace, :3317-3330) or at an
+// invalid character (:3778-3790). A space glyph (SetSpaceGlyphIfSimple, gfxTextRun.cpp:1612-1619)
+// only sets isSpace, and an invalid character (:3877-3892) keeps a zero record. Below U+0100,
+// IsBoundarySpace and SetupClusterBoundaries(uint8_t) (gfxFont.cpp:771-795) answer as the char16_t
+// versions, so 8-bit text and 8-bit words take the char16_t path, at any word length (:3569-3577,
+// :3817-3821).
+function splitAndInitTextRun(g: Glyphs, text: string, graphemeTable: GraphemeTable, ends: Int32Array): void {
+  const end = text.length
+  let wordStart = 0
+  for (let i = 0; i < end; i++) {
+    const ch = text.charCodeAt(i)
+    const boundary = (ch === 0x20 || ch === 0xa0) && !(i + 1 < end && isClusterExtender(text.charCodeAt(i + 1)))
+    if (!boundary && !isInvalidChar(ch)) continue
     if (i > wordStart) setupClusterBoundaries(g, text, wordStart, i, graphemeTable, ends)
-    if (text.charCodeAt(i) === 0x20) g.isSpace[i] = 1
+    if (ch === 0x20) g.isSpace[i] = 1
     wordStart = i + 1
   }
   if (end > wordStart) setupClusterBoundaries(g, text, wordStart, end, graphemeTable, ends)
 }
 
-// --- 4. ICU4X 2.1.2's line iterator for one word (icu_segmenter src/line.rs) ---
+// --- 3. ICU4X 2.1.2's line iterator for one word (icu_segmenter src/line.rs) ---
 
 // Firefox's line data, which the first scan unpacks (getGeckoLineBreaks).
-type LineData = { readonly trieIndex: Uint16Array, readonly trieData: Uint8Array, readonly states: Uint8Array }
+type LineData = { readonly classes: ClassTable, readonly states: Uint8Array }
 let lineData: LineData | null = null
 
 // The Line_Break value, with error value 0 above U+10FFFF.
 function getLineBreakClass(line: LineData, c: number): number {
-  return c > 0x10ffff ? 0 : getSmallTrieValue(line.trieIndex, line.trieData, geckoLineTrieHighStart, c)
+  return c > 0x10ffff ? 0 : getClass(line.classes, c)
 }
 
 // Line_Break property values of the data (line.rs:18-128).
@@ -631,7 +574,7 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
   }
 }
 
-// --- 5. nsLineBreaker (dom/base/nsLineBreaker.cpp) ---
+// --- 4. nsLineBreaker (dom/base/nsLineBreaker.cpp) ---
 
 // kNonBreakableASCII, nsLineBreaker.cpp:33-48
 const NON_BREAKABLE_ASCII = new Uint8Array([
@@ -680,8 +623,12 @@ function getBreakStates(line: LineData, text: string, is8bit: boolean, afterLead
 // right after a soft hyphen adds SOFT_HYPHEN_BREAK: BreakAndMeasureText takes it as the normal
 // break, which neither fits nor draws a hyphen (gfxTextRun.cpp:1053-1063). A CLUSTER_START marks
 // where a cluster starts without a break, where only break-word can wrap (gfxTextRun.cpp:1068-1074).
-// The breaks, and whether the text run left out a bidi control.
-export type GeckoLineBreaks = { breaks: Uint8Array, dropsBidiControl: boolean }
+// The breaks, whether the text run left out a bidi control, and 1 at each unit that a layout of
+// the source leaves out where collapsing each run of adjacent white space wouldn't, or null where
+// there is none: white space the text run collapsed in a run that read past a character it drops,
+// and, in normal white space, an FF or a CR that no line feed follows, which the text run keeps
+// with no advance (transformText).
+export type GeckoLineBreaks = { breaks: Uint8Array, leftOut: Uint8Array | null, dropsBidiControl: boolean }
 
 export function getGeckoLineBreaks(
   source: string,
@@ -691,50 +638,20 @@ export function getGeckoLineBreaks(
 ): GeckoLineBreaks {
   const len = source.length
   const flags = new Uint8Array(len + 1)
-  if (len === 0) return { breaks: flags, dropsBidiControl: false }
+  if (len === 0) return { breaks: flags, leftOut: null, dropsBidiControl: false }
   let is8bit = true
   for (let i = 0; i < len && is8bit; i++) is8bit = source.charCodeAt(i) < 0x100
   // CharacterDataBuffer::SetTo stores 1b text when every unit is below 256 (CharacterDataBuffer.cpp:235-286).
   const tr = transformText(source, is8bit, preserveWhiteSpace)
   const n = tr.text.length
-  if (n === 0) return { breaks: flags, dropsBidiControl: tr.dropsBidiControl }
+  if (n === 0) return { breaks: flags, leftOut: null, dropsBidiControl: tr.dropsBidiControl }
 
   // The text run is built before the break sinks are set up (nsTextFrame.cpp:2860-2864), in one
-  // piece unless bidi levels split it where that matters.
+  // piece: Firefox splits it where the bidi level changes, which the scan leaves out (above).
   const g: Glyphs = { clusterStart: new Uint8Array(n).fill(1), isSpace: new Uint8Array(n) }
-  const ends = new Int32Array(n)
-  splitAndInitTextRun(g, tr.text, 0, n, graphemeTable, ends)
-  const runStarts = [0]
-  if (!is8bit && levelsMayMatter(source, tr, g, preserveWhiteSpace)) {
-    const bidiRunStarts = getBidiRunStarts(source, preserveWhiteSpace)
-    for (let k = 0; k < bidiRunStarts.length; k++) {
-      let lo = 0, hi = n // partition_point(orig < start)
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1
-        if (tr.orig[mid]! < bidiRunStarts[k]!) lo = mid + 1
-        else hi = mid
-      }
-      if (lo > 0 && lo < n && runStarts[runStarts.length - 1] !== lo) runStarts.push(lo)
-    }
-    // A split changes only the shaped word it cuts, which is set up again as the split's two pieces.
-    for (let k = 1; k < runStarts.length; k++) {
-      const at = runStarts[k]!, next = k + 1 < runStarts.length ? runStarts[k + 1]! : n
-      let from = at, to = at
-      while (from > runStarts[k - 1]! && !endsWord(tr.text, from - 1, n)) from--
-      if (from === at) continue
-      while (to < next && !endsWord(tr.text, to, n)) to++
-      g.clusterStart.fill(1, from, to)
-      splitAndInitTextRun(g, tr.text, from, at, graphemeTable, ends)
-      splitAndInitTextRun(g, tr.text, at, to, graphemeTable, ends)
-    }
-  }
-  for (let k = 0; k < runStarts.length; k++) g.clusterStart[runStarts[k]!] = 1 // gfxTextRun.cpp:2828-2835
+  splitAndInitTextRun(g, tr.text, graphemeTable, new Int32Array(n))
 
-  const line = lineData ??= {
-    trieIndex: readValues(Uint16Array, unpackTable(geckoLineTrieIndexPacked)),
-    trieData: unpackTable(geckoLineTrieDataPacked),
-    states: unpackTable(geckoLineBreakStatesPacked),
-  }
+  const line = lineData ??= { classes: unpackClasses('gecko/line'), states: unpackTable(geckoLineBreakStatesPacked) }
   const state = getBreakStates(line, tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
     const rawPos = tr.orig[t]!
@@ -746,5 +663,5 @@ export function getGeckoLineBreaks(
       flags[rawPos] = CLUSTER_START
     }
   }
-  return { breaks: flags, dropsBidiControl: tr.dropsBidiControl }
+  return { breaks: flags, leftOut: tr.leftOut, dropsBidiControl: tr.dropsBidiControl }
 }

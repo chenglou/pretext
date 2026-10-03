@@ -8,9 +8,10 @@
 //   of a soft hyphen's box. Its offset goes into the
 //   recording as its line's first or last visible character. The pass rule (score.ts) checks both ends of each line, which
 //   checks every visible character when the line index of visible characters never decreases in source order.
-// - A box's U+FFFC takes the box's rect (boxRect), so a box with a width is a visible character, and a line of boxes
-//   alone is a line. The white space of a chip that holds nothing else takes the chip's rect likewise: its inline-block
-//   is empty, so no Range rect shows where it sits.
+// - A box's U+FFFC takes the box's rect (boxRect), which has a top even at width 0, so a box is a visible character
+//   whatever its width, and a line of boxes alone is a line. A width-0 box adds nothing to its line's width. The white
+//   space of a chip that holds nothing else takes the chip's rect likewise: its inline-block is empty, so no Range rect
+//   shows where it sits.
 // - Short paragraphs are read code point by code point. Longer ones search from each line's first visible character for
 //   the next line's: a few Range calls per line instead of one per code point.
 import { BROWSER, type BrowserKind, type Case, type Recording, type RecordedLine, type Rect, type TextRun } from './types.ts'
@@ -66,13 +67,14 @@ function codePointLength(text: string, offset: number): number {
   return text.codePointAt(offset)! > 0xffff ? 2 : 1
 }
 
-// The line all the code point's positive-size rects sit on; INVISIBLE without such rects, SPLIT across lines.
+// The line all the code point's positive-size rects sit on, or its box's rect of any width; INVISIBLE without such
+// rects, SPLIT across lines.
 export function visibleLine(offset: number, lines: Lines, rectsAt: RectsAt): number {
   const rects = rectsAt(offset)
   let line = INVISIBLE
   for (let i = 0; i < rects.length; i++) {
     const rect = rects[i]!
-    if (!(rect.width > 0 && rect.height > 0)) continue
+    if (!((rect.width > 0 || rect.box === true) && rect.height > 0)) continue
     const at = lineOf(lines, rect)
     if (line === INVISIBLE) line = at
     else if (line !== at) return SPLIT
@@ -294,7 +296,7 @@ const isBlankChip = (run: TextRun): boolean => run.atomic === true && /^[ \t\n\r
 // height above its line's text's.
 function boxRect(box: HTMLElement, origin: DOMRect, lineHeight: number, onBaseline: boolean): Rect {
   const r = box.getBoundingClientRect()
-  return { x: r.x - origin.x, y: (onBaseline ? r.bottom - lineHeight : r.y) - origin.y, width: r.width, height: lineHeight }
+  return { x: r.x - origin.x, y: (onBaseline ? r.bottom - lineHeight : r.y) - origin.y, width: r.width, height: lineHeight, box: true }
 }
 
 function relativeRects(list: DOMRectList, origin: DOMRect, into: Rect[]): Rect[] {

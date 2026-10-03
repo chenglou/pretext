@@ -36,9 +36,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { LayoutCursor, LayoutLine, LayoutLineRange, PrepareOptions, PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
 import type { PreparedRichInline, RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineLineRange, RichInlineOptions } from '../src/rich-inline.ts'
-import { BOX_SEGMENTS, canvasFont, cursorOffsets, isBlankChip, isRich, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
+import { BOX_SEGMENTS, canvasFont, cursorOffsets, isBlankChip, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
 import { createRng } from './sets/build.ts'
-import type { Case } from './types.ts'
+import { isRich, type Case } from './types.ts'
 
 export const PROFILES = {
   blink: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
@@ -56,7 +56,9 @@ export function standInWidth(text: string, font: string, letterSpacing: number):
   let width = 0
   for (const ch of text) width += /[\p{M}\p{Cf}]/u.test(ch) ? 0 : ch === ' ' ? 4 : 8
   let count = 0
-  if (letterSpacing !== 0) for (const _ of graphemes.segment(text)) count++
+  // A spacing under Blink's unit, 1/65536 px, adds nothing in Chrome or Firefox, whose unit is 1/60 px: the library
+  // measures letter-spaced text under such a spacing (LETTER_SPACED_SHAPING in src/measurement.ts).
+  if (Math.abs(letterSpacing) >= 1 / 65536) for (const _ of graphemes.segment(text)) count++
   return width * size + count * letterSpacing
 }
 
@@ -131,9 +133,10 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   const json = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
   // Lines that cover `stream` forward without overlap, leaving between them only what may go unpainted there: in
-  // Firefox bidi controls too, which it leaves out of its text runs.
+  // Firefox bidi controls too, which it leaves out of its text runs, and in WebKit a U+2028 or U+2029, which its scan
+  // makes a hard break in normal white space as a line feed is one in pre-wrap.
   const gecko = profile === 'gecko'
-  const unpaintedNormal = gecko ? /^[ \u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[ \u00AD\u200B]*$/
+  const unpaintedNormal = gecko ? /^[ \u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : profile === 'webkit' ? /^[ \u00AD\u200B\u2028\u2029]*$/ : /^[ \u00AD\u200B]*$/
   const unpaintedPreWrap = gecko ? /^[\n\u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\u00AD\u200B]*$/
   const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0): string | null => {
     const unpainted = whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
@@ -280,7 +283,11 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
             if (gapItem.text === undefined) {
               fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is box ${f.gapItemIndex}'s, which holds no white space`)
             } else {
-              const space = standInWidth(' ', gapItem.font, gapItem.letterSpacing ?? 0)
+              // Firefox lays letter spacing out in whole app units, 1/60 px, rounded half away from zero
+              // (readLetterSpacing in src/measurement.ts).
+              const given = gapItem.letterSpacing ?? 0
+              const spacing = gecko ? Math.sign(given) * Math.round(Math.abs(Math.fround(Math.fround(given) * 60))) / 60 : given
+              const space = standInWidth(' ', gapItem.font, spacing)
               if (Math.abs(f.gapBefore - space) > 1e-6 && !(profile === 'gecko' && f.gapBefore === 0)) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}`)
             }
           }

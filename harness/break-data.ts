@@ -1,7 +1,7 @@
 // Whether a browser still holds the break data the engine tables were generated from (scripts/engine-data,
 // scripts/generate-engine-break-data.ts), byte for byte. Chrome and the system's ICU keep line and character rules as
-// brkitr entries of an ICU common data file; Firefox bakes ICU4X's line and grapheme data and icu_properties' Bidi_Class
-// trie into XUL as byte arrays, which the databake files hold as Rust byte strings. `bun harness repin` prints it.
+// brkitr entries of an ICU common data file; Firefox bakes ICU4X's line and grapheme data into XUL as byte arrays,
+// which the databake files hold as Rust byte strings. `bun harness repin` prints it.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import SOURCES from '../scripts/engine-data/sources.json'

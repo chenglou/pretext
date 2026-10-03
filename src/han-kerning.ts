@@ -184,11 +184,11 @@ function isCanvasCjkSymbol(c: number): boolean {
 // with the paragraph's whole text and reads the character before the run's first and after its
 // last there, typing both by the run's own font (HanKerning::Compute, han_kerning.cc:262-320,
 // over the text HarfBuzzShaper holds, harfbuzz_shaper.cc:895), so `font` is the font of the
-// item that holds the halted character.
-export function getHaltAcrossRuns(text: string, index: number, side: number, font: string, language: string | null): number {
+// item that holds the halted character, measured as that item's text is (`letterSpaced`).
+export function getHaltAcrossRuns(text: string, index: number, side: number, font: string, letterSpaced: boolean, language: string | null): number {
   const halted = text.charCodeAt(side === 1 ? index : index - 1)
   if (!maybeHanKerns(halted)) return 0
-  const measurement = getFontMeasurement(font, language)
+  const measurement = getFontMeasurement(font, language, letterSpaced)
   const data = getFontData(measurement)
   if (data === null || haltedSide(getCharType(data, text, index - 1), getCharType(data, text, index)) !== side) return 0
   return getTrim(data, halted, measurement)

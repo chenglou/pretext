@@ -103,20 +103,9 @@ catalog-ef80bea8577ea4c7 count
 catalog-f67d77f18a519536 count
 catalog-f8c9cc5fb3c842f8 breaks
 facts-0813a82f5b36d627 count
-facts-0e696fc6988e8211 count
-facts-1d36ba094f4df296 breaks
-facts-50fc5bdab261717b count
-facts-68abc663229eeb33 breaks
-facts-6ba8a9ac509d1b42 count
-facts-6d224b34ed76519a breaks
 facts-6e21867973072665 count
-facts-8e7f1f4ac28706ad count
-facts-992ad3e2cac24507 breaks
-facts-a53f616529c2f3d9 count
-facts-beb90f6d215e81b7 count
 facts-cb726fe075c99028 count
 facts-d586e19a99606fb9 count
-facts-f4c241559e8fd0ae count
 old-gate-431f934b64337fc7 breaks
 old-gate-5807fa59410c4a83 breaks
 old-gate-5af2d5845d9a0c9d breaks
@@ -134,6 +123,9 @@ catalog-7cffe66fa7484a1b count
 catalog-9d5251eebb33ef36 count
 catalog-c87a1e216aa3a4ea count
 catalog-efc5ebc1693c3350 count
+
+## Letter-spaced words with fi, fl or ffi in Roboto, at 24 px and wider: Safari turns those ligatures off under letter spacing, where its Canvas letterSpacing keeps them, so the library measures such a word up to 1.3 px narrower and keeps it on a line Safari wraps it from (ENGINE_FOLLOWUPS.md, Letter spacing)
+catalog-024b371958f09677 count
 
 ## Letter-spacing across scripts (Thai, Arabic, Khmer, CJK, digits and hyphens) and in rich runs, at 24 px and wider: WebKit spaces or breaks these where the library doesn't
 catalog-0cd616621690d7a0 count
@@ -340,7 +332,6 @@ catalog-093d51ce427667bc count
 catalog-09563178145e9621 count
 catalog-09667eca3b396be2 breaks
 catalog-0a08189a5e653e93 count
-catalog-0a973757a03761ac count
 catalog-0ade151f89292ca9 count
 catalog-0b08717f4235a401 count
 catalog-0b4918934e55965c count
@@ -1409,7 +1400,6 @@ catalog-cfd436ca1995a76d count
 catalog-d00955b39961b743 count
 catalog-d0375af1dad944ed count
 catalog-d03b3b76360f94c8 count
-catalog-d0ce0b80fed820a6 count
 catalog-d0dec72c303f2b23 count
 catalog-d0ef813d7d3dd515 count
 catalog-d1e0a06a25941fef count
@@ -1680,6 +1670,7 @@ facts-0792a7b2d9e3f483 count
 facts-0f1ad885cb39a80a count
 facts-125df7c318a3efbc count
 facts-23b29e20e2de5f70 count
+facts-27c1be99c04854ba count
 facts-2d485e09a3bf0d50 count
 facts-2eaa366f9927e571 count
 facts-2fbbda749e28f9f5 count
@@ -1694,6 +1685,7 @@ facts-48a07a0eac13b219 count
 facts-5497c2be7c8bb94c count
 facts-564192c6f714e2c7 count
 facts-59fb8ad037d7a948 count
+facts-68d46248814b6071 count
 facts-6b871d8dbe8153b0 count
 facts-74d652b1584bd03e breaks
 facts-76b3498be9da4bb6 breaks
@@ -1737,6 +1729,11 @@ rich-4e7797d2c399aac5 breaks
 rich-94e63267840040ac breaks
 rich-9d0c04c18c44fb34 count
 rich-f6d6190bf525ffc7 count
+
+## Narrower than real layouts: a soft hyphen after a word joiner, a combining mark and a ZWSP at 1 px letter-spacing, at 1-8 px: WebKit gives the characters without an advance no letter spacing, so its hyphen fits the line, where the library spaces them, finds the hyphen 3 px too wide and returns to the ZWSP; main kept every unfit hyphen and passed by accident (ENGINE_FOLLOWUPS.md, Letter spacing)
+catalog-1d72217944543263 breaks
+catalog-3552d0e49f3c4569 breaks
+catalog-a1b0b5def1fd6512 breaks
 
 ## Narrower than real layouts: width 1, where nothing fits and WebKit keeps spaces, marks, controls or zero-width characters with the character before them otherwise than the library
 catalog-0099ca5fe40e865a count
@@ -2613,6 +2610,7 @@ catalog-fd6f880ff605c454 count
 catalog-fde6c3aa70744e0d count
 catalog-fe3b29861adfc9d4 count
 catalog-ffa9651fd6cd2369 count
+facts-010cd794346e04fc count
 facts-0ed74272b2fa2c74 count
 facts-16d2d2b64c40a3ef count
 facts-1945c789bdf13a4b count
@@ -2627,11 +2625,14 @@ facts-4824eaef1a6a9cda count
 facts-4859e8de92154112 count
 facts-4bd70c5097dd6770 count
 facts-526c7c77b2627cd1 count
+facts-55baf946aff1af58 count
 facts-5bf89757205e4f86 count
 facts-60bb30c4d289e672 count
 facts-66523fa8da148ed6 count
 facts-6a07afc638d6fe5c count
+facts-6d6ab8922de21ded count
 facts-6d724e4cf4b8f113 count
+facts-6d87c41da81a4275 count
 facts-6f5dcfc72b0c443c count
 facts-71aeb6c8e04ba54d count
 facts-73ca725aaf1ed4ef count
@@ -2662,6 +2663,7 @@ facts-d4c268eb14035270 count
 facts-d54d8ea957f40c11 count
 facts-d5a3d937459712e1 count
 facts-f038a833918e39d7 count
+facts-f174326e6aba5a55 count
 facts-f30eb70272204314 count
 facts-fc69084749bc97f4 count
 rich-02422502faa37ede count
@@ -2711,6 +2713,7 @@ rich-a89fcbe1a2cdab74 count
 rich-ab169565a9c0a88b count
 rich-af536739c810f600 count
 rich-b0ae95da15d4fb3f count
+rich-b24c8a1759a7f9cb count
 rich-be0a029c0b919953 count
 rich-c4a883b30ad5ddaf count
 rich-c604ab44311a3b58 count
@@ -2734,7 +2737,6 @@ old-gate-c3afe2d7b44933ef count
 
 ## Outside what Pretext claims: system-ui font lists (README.md, Caveats); not looked into, since Safari's Canvas and DOM agree on system-ui itself
 sample-0c1ec78ea4cfbfeb breaks
-sample-1a18338f179a5fb2 breaks
 sample-207a75e33cbd70eb breaks
 sample-21c92e326cbdb57e breaks
 sample-23ca4df477e53669 count
@@ -2757,11 +2759,9 @@ sample-819ea30d59f573cf breaks
 sample-8ca12314a5172d97 breaks
 sample-9c3334d37a7b138a breaks
 sample-9d14c23a04cb8cb0 breaks
-sample-a36f4d1d05bc9aa7 breaks
 sample-a9da0755c335c393 count
 sample-ac70e5a04aeb85fa breaks
 sample-b9e10cb886979e50 breaks
-sample-bc0069836eb0091f breaks
 sample-e0d5e23e5630df98 breaks
 sample-e59e3ed268c7a10c count
 sample-fcc082da63a5687c count
@@ -3292,28 +3292,11 @@ sample-48b1ab52d386bd38 breaks
 sample-53ffbeedb28e3e2a breaks
 sample-863aac68305946bb breaks
 
-## Real usage: Roboto and Inter, served as web fonts; one word lands on the other line (main before #340 too)
+## Real usage: Roboto, served as a web font, at -0.2 px letter-spacing; Safari turns the fi of "Notifikasi" off under letter spacing, where its Canvas letterSpacing keeps it, so the library's first line is 326.70 px at 327 px and keeps a word Safari wraps (main before #340 too; ENGINE_FOLLOWUPS.md, Letter spacing)
 sample-2f7ddc63b335c886 breaks
 
 ## Real usage: a word longer than the line (URLs, message placeholders, long Cyrillic or Armenian words), broken between characters; WebKit fits one character more or fewer than the library's character widths allow (main before #340 too)
 sample-53c686eca38a7ced breaks
-
-## Real usage: soft hyphens; WebKit takes fewer soft-hyphen breaks than the library, moving the syllable before the hyphen to the next line (main before #340 too)
-sample-16a3704504259e8b breaks
-sample-2fb48a3ad067e670 breaks
-sample-347ac514160904d0 breaks
-sample-44e20720676184ff breaks
-sample-47cdc26516624116 breaks
-sample-4e652a6e528375ea breaks
-sample-6ab055ea83584055 breaks
-sample-6efb26191a4ca1ea breaks
-sample-7209228d4c484728 breaks
-sample-922d892454a68c2a breaks
-sample-926fb64160152b31 breaks
-sample-9d7e37be6c85f48b breaks
-sample-ae8d301037b80b5a breaks
-sample-d712baf7139ff041 breaks
-sample-da2e5a0e849969a1 breaks
 
 ## Real usage: table cells 25-125 px wide holding IDs, phone numbers and formulas; WebKit breaks at hyphens, brackets and between digits otherwise than the library (main before #340 too)
 sample-db62d90b64149427 breaks

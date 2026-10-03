@@ -3,8 +3,9 @@
 // case sets load as they are.
 
 // 'webkit-host' is the system WebKit.framework that installed Safari runs, in a background window (harness/webkit-host).
-export type BrowserKind = 'chrome' | 'firefox' | 'webkit-host' | 'safari'
-export const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-host', 'safari']
+// 'ios' is Safari in an iOS simulator the harness boots for the job (browsers.ts).
+export type BrowserKind = 'chrome' | 'firefox' | 'webkit-host' | 'safari' | 'ios'
+export const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-host', 'safari', 'ios']
 
 // What each browser is to the harness:
 // - `cases`: the browser whose cases it takes as well as its own; webkit-host runs installed Safari's engine.
@@ -16,16 +17,22 @@ export const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-ho
 // - `textEmojiLast`: Firefox's cases holding U+FE0E go in documents after every other and are never pinned (score.ts).
 // - `hyphenCopies`: Chrome reports a soft hyphen's box for the code point next to it too, which the recorder leaves out.
 // - `systemWebKit`: the system WebKit's build is part of the environment key.
-// - `background`: a background harness job may run it, and check, gate and the others run these by default.
+// - `wholePixelBoxes`: WebKit gives the rectangle of a range over part of a text box in whole pixels (RenderText.cpp,
+//   selectionRectForTextBox, which ends in snappedSelectionRect's enclosingIntRect), so a width the recorder reads off
+//   a character's box is exact only to a pixel there (score.ts, countWidths).
+// - `background`: check, gate and the others run it by default, in the background.
 // - `foreground`: the bench times it in the foreground, in these by default.
+// - `phone`: a phone's browser, which lays text out at its CSS size only in the page an app serves it: a viewport meta
+//   tag and `text-size-adjust: 100%` (run.ts). Its recordings are never checked in (cli.ts).
 export const BROWSER: Record<BrowserKind, {
   cases: BrowserKind; sample: number | null; settleMs: number; textEmojiLast: boolean; hyphenCopies: boolean; systemWebKit: boolean
-  background: boolean; foreground: boolean
+  wholePixelBoxes: boolean; background: boolean; foreground: boolean; phone: boolean
 }> = {
-  chrome: { cases: 'chrome', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: true, systemWebKit: false, background: true, foreground: true },
-  firefox: { cases: 'firefox', sample: null, settleMs: 15_000, textEmojiLast: true, hyphenCopies: false, systemWebKit: false, background: true, foreground: true },
-  'webkit-host': { cases: 'safari', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, background: true, foreground: false },
-  safari: { cases: 'safari', sample: 2000, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, background: false, foreground: true },
+  chrome: { cases: 'chrome', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: true, systemWebKit: false, wholePixelBoxes: false, background: true, foreground: true, phone: false },
+  firefox: { cases: 'firefox', sample: null, settleMs: 15_000, textEmojiLast: true, hyphenCopies: false, systemWebKit: false, wholePixelBoxes: false, background: true, foreground: true, phone: false },
+  'webkit-host': { cases: 'safari', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, wholePixelBoxes: true, background: true, foreground: false, phone: false },
+  safari: { cases: 'safari', sample: 2000, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, wholePixelBoxes: true, background: false, foreground: true, phone: false },
+  ios: { cases: 'safari', sample: null, settleMs: 0, textEmojiLast: false, hyphenCopies: false, systemWebKit: true, wholePixelBoxes: true, background: false, foreground: false, phone: true },
 }
 
 export type CssFont = { family: string; size: number; weight: number; style: 'normal' | 'italic' }
@@ -86,7 +93,22 @@ export type Case = {
   edge?: true
 }
 
-export type Rect = { x: number; y: number; width: number; height: number }
+function sameStyle(a: TextRun, b: TextRun): boolean {
+  return a.font.family === b.font.family && a.font.size === b.font.size && a.font.weight === b.font.weight
+    && a.font.style === b.font.style && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing
+}
+
+// Whether the adapter (predict.ts) sends a case's runs through rich-inline: an app would write them with inline elements.
+export function isRich(runs: readonly TextRun[]): boolean {
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i]!
+    if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined || run.box !== undefined) return true
+  }
+  return false
+}
+
+// `box`: the rect of a box (TextRun), which is a visible character whatever its width.
+export type Rect = { x: number; y: number; width: number; height: number; box?: true }
 
 // One line as the browser laid it out: the UTF-16 offsets of the code points that start its first and last visible
 // character (-1 on a line without one), and the horizontal extent of the line's text boxes.

@@ -98,15 +98,23 @@ type Weights = {
 const ROOT = join(import.meta.dir, '../..')
 const WEIGHTS = JSON.parse(readFileSync(join(import.meta.dir, 'weights.json'), 'utf8')) as Weights
 
-// Every source names a key of `sources`, a guess, or a file in the repo.
+// Every source names a key of `sources`, a guess, or a file in the repo. `shareSources` counts the shares: all of them,
+// those whose source is a guess, and the guesses that name nothing they lean on. A share that names a source may still
+// be a judgement made from it, so the count of guesses is a floor.
+export const shareSources = { shares: 0, guesses: 0, bare: 0 }
+
 function checkSources(value: unknown, path: string): void {
   if (Array.isArray(value)) {
     const last: unknown = value[value.length - 1]
     if (value.length >= 2 && typeof last === 'string' && typeof value[value.length - 2] === 'number') {
       const key = /^([A-Z0-9]+)(?::|$)/.exec(last)?.[1]
       const file = /^([\w./-]+\.\w+)(?::|$)/.exec(last)?.[1]
-      const known = key !== undefined ? WEIGHTS.sources[key] !== undefined : file !== undefined ? existsSync(join(ROOT, file)) : /^guess\b/.test(last)
+      const guess = /^guess\b/.test(last)
+      const known = key !== undefined ? WEIGHTS.sources[key] !== undefined : file !== undefined ? existsSync(join(ROOT, file)) : guess
       if (!known) throw new Error(`weights.json ${path}: unknown source "${last}"`)
+      shareSources.shares++
+      if (guess) shareSources.guesses++
+      if (last === 'guess') shareSources.bare++
     }
     for (let i = 0; i < value.length; i++) checkSources(value[i], `${path}[${i}]`)
   } else if (value !== null && typeof value === 'object') {

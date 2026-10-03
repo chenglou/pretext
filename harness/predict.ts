@@ -28,20 +28,7 @@ import {
 } from '../src/rich-inline.ts'
 import { findGraphemeEnds } from '../src/graphemes.ts'
 import { getEngineProfile } from '../src/measurement.ts'
-import type { Case, CssFont, Prediction, PredictedLine, TextRun } from './types.ts'
-
-function sameStyle(a: TextRun, b: TextRun): boolean {
-  return a.font.family === b.font.family && a.font.size === b.font.size && a.font.weight === b.font.weight
-    && a.font.style === b.font.style && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing
-}
-
-export function isRich(runs: readonly TextRun[]): boolean {
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i]!
-    if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined || run.box !== undefined) return true
-  }
-  return false
-}
+import { isRich, type Case, type CssFont, type Prediction, type PredictedLine, type TextRun } from './types.ts'
 
 // Why the library can't express the case, or null.
 export function unsupported(c: Case): string | null {
@@ -75,8 +62,12 @@ export const isBlankChip = (item: RichInlineItem): boolean => item.break === 'ne
 
 // For each UTF-16 unit of the library's segment stream, the source range it stands for. Normalization only rewrites or
 // removes white space (normal: a run of SPACE, TAB, LF, CR and FF becomes one SPACE, a leading and a trailing one go,
-// and some engines remove a run with LF next to a ZWSP; pre-wrap: CRLF, CR and FF become LF), so a greedy walk aligns
-// the two. null when they don't align.
+// some engines remove a run with LF next to a ZWSP, and the Gecko profile takes out white space after a character
+// Firefox drops and a CR or FF; pre-wrap: CRLF, CR and FF become LF), so a greedy walk aligns the two. null when they
+// don't align. White space the stream leaves out after a unit is in that unit's range, as white space that ends a line
+// is in its line: Firefox gives such a space a box at the end of a line whose text frame it doesn't trim, where the
+// space is the line's last visible character (`(see)`, space, U+00AD, space, `[this]` in a right-to-left paragraph at
+// 60px). A text's leading and trailing white space is in no unit's: a rich item's is the gap of the fragment after it.
 export function alignStream(source: string, stream: string, whiteSpace: 'normal' | 'pre-wrap'): { starts: Int32Array; ends: Int32Array } | null {
   const starts = new Int32Array(stream.length)
   const ends = new Int32Array(stream.length)
@@ -105,6 +96,7 @@ export function alignStream(source: string, stream: string, whiteSpace: 'normal'
       }
       if (whiteSpace === 'normal' && COLLAPSIBLE.test(ch)) {
         s++
+        if (n > 0) ends[n - 1] = s
         continue
       }
       return null

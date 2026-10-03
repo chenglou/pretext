@@ -1,4 +1,4 @@
-// The behaviour catalog's templates, before widths.ts cuts them. Seven sources:
+// The behaviour catalog's templates, before widths.ts cuts them. Ten sources:
 // - the per-engine rebuild's rule families (data/rule-families.ndjson), the flat ones within what the library takes;
 // - filed reports whose reporter measured the width with their own Canvas;
 // - a matrix of every UAX #14 line-break class between the scripts apps mix, under the CSS settings the library takes,
@@ -9,7 +9,10 @@
 //   so the cover keeps a change of each;
 // - a CJK closing mark at a line end before a line feed or a space;
 // - bidi controls where Firefox's line breaker, which never sees them, starts or ends a line, each shape a family of its
-//   own.
+//   own;
+// - CJK marks Chrome halts next to other punctuation;
+// - letter-spaced text in a font with `fi`, `fl` and `ffi` ligatures, which the browsers turn off under letter spacing;
+// - emoji characters a named font draws itself, beside one the emoji font draws.
 // main's adversarial families were taken once from the old harness's generator, which is gone: their cases,
 // `catalog/main/*` and `rich/main/*`, stay in the case files as they were cut, and `make.ts cut` keeps them.
 import { readFileSync } from 'node:fs'
@@ -236,8 +239,11 @@ export function lineEndMarkTemplates(): Template[] {
 
 // Bidi controls, which Firefox leaves out of the text runs it breaks (src/analysis.ts): a chunk of only them between hard
 // breaks, as a run, at the paragraph start and end, a control before a hard break, and one after a space where a line can
-// end, in both white-space modes and as an isolate around a word. Two words on each side give the search widths where the
-// lines around it change.
+// end, in both white-space modes and as an isolate around a word. Then white space on both sides of U+200E at the
+// paragraph start, which Firefox's white-space run reads through, so the line start trims all of it (transformText in
+// src/gecko-line-breaks.ts). Two words give the search widths where the lines change. White space on both sides of a
+// control between words is in the facts set (data/engine-facts.json): the cover here keeps a break's kind once, at the
+// narrowest width that shows it, and what tells one space from two is the width where the words join.
 export function bidiControlTemplates(): Template[] {
   const shapes: ReadonlyArray<readonly [string, string, 'normal' | 'pre-wrap']> = [
     ['between', 'ab cd\n\u200E\nef gh', 'pre-wrap'],
@@ -248,6 +254,7 @@ export function bidiControlTemplates(): Template[] {
     ['after-space', 'ab cd \u200Eef gh', 'normal'],
     ['after-space-pre-wrap', 'ab cd \u200Eef gh', 'pre-wrap'],
     ['isolate-after-space', 'ab cd \u2068ef\u2069 gh', 'normal'],
+    ['between-spaces-at-start', ' \u200E ab cd', 'normal'],
   ]
   const out: Template[] = []
   for (let i = 0; i < shapes.length; i++) {
@@ -260,13 +267,53 @@ export function bidiControlTemplates(): Template[] {
   return out
 }
 
+// Marks Chrome halts in pairs, in one family: `「` after a fullwidth colon, and after curly quotes, a semicolon and a
+// fullwidth full stop, in a font with `halt`. Every character Chrome types for the pair rule is src/layout.test.ts's;
+// these confirm a few in the browser, where each halt moves the width at which a line takes one more character, as
+// the cover describes a break by its UAX #14 classes and keeps few of them.
+export function hanKerningPairTemplates(): Template[] {
+  const texts = ['他说：「你好」她说：「再见」我说：「好」', '她说“「你好」”；「再见」．「好的」']
+  const out: Template[] = []
+  for (let i = 0; i < texts.length; i++) {
+    out.push({
+      family: 'han-kerning-pairs', origin: 'src/han-kerning.ts: marks Chrome halts next to other punctuation', pageLang: 'zh', widths: [], grid: true,
+      paragraph: paragraph({ font: font('"PingFang SC"', 16), lang: 'zh' }, [texts[i]!]),
+    })
+  }
+  return out
+}
+
+// Words with `fi`, `fl`, `ff` and `ffi` in Roboto, whose optional ligatures Chrome, Firefox and Safari turn off under any
+// letter spacing (shapesLetterSpaced in src/measurement.ts): each word is as wide as its letters, 0.35-1.34 px more
+// than with its ligatures at 16 px. One paragraph: the cover tells a line break by its classes and the spacing's sign,
+// not by its font, so it keeps no second one. Which contexts measure which shaping, and a break inside a word by the
+// same advances, are src/layout.test.ts's; the sample holds Roboto under negative spacing.
+export function letterSpacedLigatureTemplates(): Template[] {
+  return [{
+    family: 'letter-spaced-ligatures', origin: 'src/measurement.ts: letter spacing turns optional ligatures off', pageLang: 'en', widths: [], grid: true,
+    paragraph: paragraph({ font: font('Roboto, Arial, sans-serif', 16), lang: 'en', letterSpacing: 0.5 }, ['a difficult office workflow: fluffy waffles, five official offers']),
+  }]
+}
+
+// Emoji characters a named font draws with a glyph of its own, which Canvas measures as the page draws them, beside one
+// the emoji font draws, which Chrome's and Firefox's Canvas measure too wide at small sizes (countEmojiGlyphs in
+// src/measurement.ts): Hiragino Sans's U+26AA and U+26AB around U+1F44D. Which graphemes take the correction, font by
+// font and sequence by sequence, is src/layout.test.ts's.
+export function emojiGlyphTemplates(): Template[] {
+  return [{
+    family: 'emoji-glyphs', origin: 'src/measurement.ts: the emoji correction counts the glyphs the emoji font draws',
+    pageLang: 'ja', paragraph: paragraph({ font: font('"Hiragino Sans"', 16), lang: 'ja' }, ['\u26AA\u26AB\u26AA \u767D\u3068\u9ED2 \u26AB\u26AA\u26AB \u{1F44D} \u307E\u308B']), widths: [], grid: true,
+  }]
+}
+
 export function catalogTemplates(): Template[] {
   const catalog: Template[] = []
   const seen = new Set<string>()
   // The order decides which template shows a line break first, which the cover keeps (widths.ts): filed reports, the
-  // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, the line-end marks, then the bidi
-  // controls. main's families came before the class matrix when they were cut.
-  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), lineEndMarkTemplates(), bidiControlTemplates()]
+  // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, the line-end marks, the bidi
+  // controls, the pairs Chrome halts, the letter-spaced ligatures, then the emoji glyphs. main's families came before
+  // the class matrix when they were cut.
+  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), lineEndMarkTemplates(), bidiControlTemplates(), hanKerningPairTemplates(), letterSpacedLigatureTemplates(), emojiGlyphTemplates()]
   for (let l = 0; l < lists.length; l++) {
     for (let i = 0; i < lists[l]!.length; i++) {
       const t = lists[l]![i]!

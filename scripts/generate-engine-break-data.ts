@@ -1,8 +1,14 @@
 // Generates src/generated/engine-break-data.ts, the tables behind Chrome's and Safari's
 // break scans in src/line-breaks.ts, Firefox's in src/gecko-line-breaks.ts and the grapheme
-// clusters in src/graphemes.ts, from the engine files in scripts/engine-data/, and checks
-// each table against its source. Refresh those files by hand when a browser's tables change,
-// then run this. `--check` compares instead of writing.
+// clusters in src/graphemes.ts, from the engine files in scripts/engine-data/. It reads each
+// engine's own format (ICU's compiled rules and UCPTrie, ICU4X's baked trie, property ranges),
+// writes what the engines' tables hold in a shorter form, and checks that src/line-breaks.ts
+// unpacks that form to every class of every code point and every state row of its source.
+// Refresh those files by hand when a browser's tables change, then run this. `--check` compares
+// instead of writing. A test imports the tables as read here (engineClassMaps,
+// engineRuleTables) to check the module the library ships against them. This script unpacks with
+// src/line-breaks.ts, which imports the module it writes, so a change to the module's exports
+// has to leave the old module loadable until this has run.
 //
 // chrome-153/, from Chrome 153.0.8010.37. Chrome 154.0.8037.57's icudtl.dat holds the same
 // brkitr entries byte for byte (only its time zone data changed), and Chromium 154 left
@@ -27,34 +33,35 @@
 //   or fewer, all with root's table and delimiters, which generate the same module.
 // - quotation.json: the code points libicucore's u_getIntPropertyValue gives Line_Break=QU.
 // firefox-156/, from Firefox 155.0.1's source tree. Firefox 156.0's and 156.0.1's XUL hold the
-// same line data and icu_properties Bidi_Class data byte for byte:
+// same line data byte for byte:
 // - segmenter_break_line_v1.rs.data: intl/icu_segmenter_data/data/, Firefox's baked ICU4X
 //   line data (icuexport release-78.1, CLDR 48), databake output for RuleBreakData
 //   (icu_segmenter 2.1.2 src/provider/mod.rs:151-180).
 // - segmenter_break_grapheme_cluster_v1.rs.data: the same directory's grapheme data, which
 //   is only checked against Chrome's char.brk (see the character tables below).
 // - properties.json: icu_properties 2.1.2's compiled data (Unicode 17), the crate Firefox
-//   vendors, as [first, last, value] ranges over every code point: Bidi_Class and
-//   East_Asian_Width in ICU4C numbering (CodePointMapData::get32(cp).to_icu4c_value()).
-//   Dumped by a small Rust program that depends on that crate alone.
-// - bidi_pairs_table.rs: servo/unicode-bidi ca612daf's bracket table,
-//   src/char_data/tables.rs:519-535.
-// - property_enum_bidi_class_v1.rs.data: third_party/rust/icu_properties_data/data/ in
-//   Firefox 156.0's source tree, the baked Bidi_Class trie properties.json's bidiClass holds;
-//   this script doesn't read it, and `bun harness repin firefox` looks for its bytes in XUL.
+//   vendors, as [first, last, value] ranges over every code point: East_Asian_Width in ICU4C
+//   numbering (CodePointMapData::get32(cp).to_icu4c_value()). Dumped by a small Rust program
+//   that depends on that crate alone. Gecko asks its ICU4C for East_Asian_Width, not this crate
+//   (u_getIntPropertyValue, intl/components/src/UnicodeProperties.h:75-100), so the map takes a
+//   premise: both hold one Unicode version's values. Firefox 156.0's do, on every code point
+//   (ICU 78.3's propsVectors, intl/icu/source/common/uchar_props_data.h, bits 12-14 of the first
+//   column, uprops.h:159-160; compared on 2026-10-01). Nothing compares a later Firefox's:
+//   `bun harness repin firefox` looks for the line and grapheme data's bytes only.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import {
   getBreakLanguage,
-  getCategory,
-  getSmallTrieValue,
+  getClass,
   markRuleBoundaries,
-  parseBreakRules,
-  readValues,
+  unpackClassRuns,
+  unpackStateRows,
   unpackTable,
+  unpackVarints,
   type BreakRules,
+  type ClassTable,
 } from '../src/line-breaks.ts'
 import SOURCES from './engine-data/sources.json'
 
@@ -69,63 +76,74 @@ const readData = (path: string) => new Uint8Array(readFileSync(join(dataDir, pat
 const readText = (path: string) => readFileSync(join(dataDir, path), 'utf8')
 const gzipSize = (text: string) => gzipSync(Buffer.from(text), { level: 9 }).length
 const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
+const writeVarint = (out: number[], value: number) => {
+  for (; value >= 0x80; value = Math.floor(value / 0x80)) out.push((value & 0x7f) | 0x80)
+  out.push(value)
+}
 
-// unpackTable's form: greedy LZ77 over the dictionary and the table, matching at least four
-// bytes among the last 64 positions with the same next four, checked to unpack exactly.
-function packTable(bytes: Uint8Array, dictionary: Uint8Array | null = null): string {
-  const dict = dictionary ?? new Uint8Array(0)
-  const all = new Uint8Array(dict.length + bytes.length)
-  all.set(dict)
-  all.set(bytes, dict.length)
+// unpackTable's form: LZ77 over the table. A copy takes the longest run of at least four bytes that
+// starts at any earlier position, unless the copy one byte later would be longer: then this byte
+// goes out as a literal (lazy matching). Checked to unpack exactly.
+function packTable(bytes: Uint8Array): string {
   const out: number[] = []
-  const varint = (value: number) => {
-    for (; value >= 0x80; value = Math.floor(value / 0x80)) out.push((value & 0x7f) | 0x80)
-    out.push(value)
-  }
+  writeVarint(out, bytes.length)
+  // Earlier positions by their next four bytes.
   const chains = new Map<number, number[]>()
-  const key = (i: number) => all[i]! | (all[i + 1]! << 8) | (all[i + 2]! << 16) | (all[i + 3]! * 0x1000000)
+  const key = (i: number) => bytes[i]! | (bytes[i + 1]! << 8) | (bytes[i + 2]! << 16) | (bytes[i + 3]! * 0x1000000)
   const remember = (i: number) => {
-    if (i + 4 > all.length) return
+    if (i + 4 > bytes.length) return
     const k = key(i)
     let chain = chains.get(k)
     if (chain === undefined) chains.set(k, chain = [])
     chain.push(i)
-    if (chain.length > 64) chain.shift()
   }
-  for (let i = 0; i < dict.length; i++) remember(i)
-  varint(bytes.length)
-  let literals: number[] = []
-  for (let i = dict.length; i < all.length;) {
+  // The longest run at i that repeats an earlier position's, and how far back the nearest such position is.
+  const longestCopy = (i: number): [number, number] => {
     let length = 0
     let distance = 0
-    const chain = i + 4 <= all.length ? chains.get(key(i)) : undefined
+    const chain = i + 4 <= bytes.length ? chains.get(key(i)) : undefined
     if (chain !== undefined) {
       for (let c = chain.length - 1; c >= 0; c--) {
         const j = chain[c]!
         let n = 0
-        while (i + n < all.length && all[j + n] === all[i + n]) n++
+        while (i + n < bytes.length && bytes[j + n] === bytes[i + n]) n++
         if (n > length) { length = n; distance = i - j }
       }
     }
-    if (length >= 4) {
-      varint(literals.length)
-      out.push(...literals)
-      literals = []
-      varint(length - 4)
-      varint(distance)
-      for (let k = 0; k < length; k++) remember(i + k)
-      i += length
-    } else {
-      literals.push(all[i]!)
-      remember(i)
-      i++
-    }
+    return [length, distance]
   }
-  varint(literals.length)
+  let literals: number[] = []
+  for (let i = 0; i < bytes.length;) {
+    const [length, distance] = longestCopy(i)
+    remember(i)
+    if (length < 4 || longestCopy(i + 1)[0] > length) {
+      literals.push(bytes[i]!)
+      i++
+      continue
+    }
+    writeVarint(out, literals.length)
+    out.push(...literals)
+    literals = []
+    writeVarint(out, length - 4)
+    writeVarint(out, distance)
+    for (let k = 1; k < length; k++) remember(i + k)
+    i += length
+  }
+  writeVarint(out, literals.length)
   out.push(...literals)
   const packed = base64(new Uint8Array(out))
-  const unpacked = unpackTable(packed, dictionary)
+  const unpacked = unpackTable(packed)
   if (unpacked.length !== bytes.length || unpacked.some((byte, i) => byte !== bytes[i])) throw new Error('A table packs lossily')
+  return packed
+}
+
+// Values as the little-endian base-128 varints unpackVarints reads, in base64.
+function packVarints(values: readonly number[]): string {
+  const out: number[] = []
+  for (let i = 0; i < values.length; i++) writeVarint(out, values[i]!)
+  const packed = base64(new Uint8Array(out))
+  const unpacked = unpackVarints(packed)
+  if (unpacked.length !== values.length || unpacked.some((value, i) => value !== values[i])) throw new Error('Varints pack lossily')
   return packed
 }
 
@@ -146,8 +164,8 @@ function parsePairTable(source: string, marker: string): Uint8Array {
   return bytes
 }
 
-// An entry cut from an ICU data package starts with a DataHeader (unicode/udata.h:116-153),
-// which rbbidata.cpp:49-62 checks and skips.
+// An entry cut from an ICU data package starts with a DataHeader (ucmndata.h:36-46: its size, two
+// magic bytes and a UDataInfo, unicode/udata.h:116-153), which rbbidata.cpp:49-62 checks and skips.
 function withoutDataHeader(bytes: Uint8Array): Uint8Array {
   const headerSize = bytes[0]! | (bytes[1]! << 8)
   if (bytes[2] !== 0xda || bytes[3] !== 0x27 || headerSize < 20 || bytes[8] !== 0 || bytes[9] !== 0 ||
@@ -157,53 +175,142 @@ function withoutDataHeader(bytes: Uint8Array): Uint8Array {
   return bytes.subarray(headerSize)
 }
 
-// The RBBIDataHeader (rbbidata.h:67-94), forward state table and trie that parseBreakRules()
-// reads for markRuleBoundaries(), plus the status table, which nothing reads but which is
-// kept so the packed data stays byte-identical. The reverse table and rule source are dropped.
-function compactBreakRules(bytes: Uint8Array): Uint8Array {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const u32 = (offset: number) => view.getUint32(offset, true)
-  const align = (n: number) => (n + 3) & ~3
-  const [table, tableLength, trie, trieLength, status, statusLength] = [u32(16), u32(20), u32(32), u32(36), u32(48), u32(52)]
-  const newTable = 80
-  const newTrie = align(newTable + tableLength)
-  const newStatus = align(newTrie + trieLength)
-  const total = align(newStatus + statusLength)
-  const out = new Uint8Array(total)
-  out.set(bytes.subarray(0, 80), 0)
-  const o = new DataView(out.buffer)
-  o.setUint32(8, total, true)
-  o.setUint32(16, newTable, true)
-  o.setUint32(24, 0, true)
-  o.setUint32(28, 0, true)
-  o.setUint32(32, newTrie, true)
-  o.setUint32(40, 0, true)
-  o.setUint32(44, 0, true)
-  o.setUint32(48, newStatus, true)
-  out.set(bytes.subarray(table, table + tableLength), newTable)
-  out.set(bytes.subarray(trie, trie + trieLength), newTrie)
-  out.set(bytes.subarray(status, status + statusLength), newStatus)
+// ICU's compiled rules as the engines read them, which src/line-breaks.ts gets in the shorter form
+// written below: the state table and the UCPTrie of categories.
+type CompiledRules = {
+  catCount: number
+  dictCategoriesStart: number
+  flags: number
+  rowWidth: number
+  rows: Uint16Array
+  lookAheadResultsSize: number
+  trieIndex: Uint16Array
+  trieData: Uint16Array
+  trieDataLength: number
+  trieHighStart: number
+}
+
+// `count` little-endian values of `Type` from `offset` in `bytes`, which needn't be aligned, copied
+// out on a little-endian platform.
+function readValues<T extends Uint16Array | Uint32Array>(
+  Type: { new (length: number): T, readonly BYTES_PER_ELEMENT: number },
+  bytes: Uint8Array,
+  offset = 0,
+  count = (bytes.length - offset) / Type.BYTES_PER_ELEMENT,
+): T {
+  const out = new Type(count)
+  new Uint8Array(out.buffer).set(bytes.subarray(offset, offset + count * Type.BYTES_PER_ELEMENT))
   return out
 }
 
-function sameRules(a: BreakRules, b: BreakRules): boolean {
-  const same = (x: ArrayLike<number>, y: ArrayLike<number>) => {
-    if (x.length !== y.length) return false
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false
-    return true
+const RBBI_8BITS_ROWS = 4 // rbbidata.h:152
+
+// Compiled rules without the data package header: RBBIDataHeader (rbbidata.h:67-94),
+// checked as rbbidata.cpp:69-71 does, then the tables it points to.
+function parseBreakRules(bytes: Uint8Array): CompiledRules {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (view.getUint32(0, true) !== 0xb1a0 || bytes[4] !== 6) throw new Error('Expected ICU break rules, format 6')
+  const catCount = view.getUint32(12, true)
+  const table = view.getUint32(16, true)
+  const trie = view.getUint32(32, true)
+
+  // RBBIStateTable, rbbidata.h:134-148: five uint32 fields, then rows of fAccepting,
+  // fLookAhead, fTagsIdx and fNextState[catCount], 8 or 16 bits each (rbbidata.h:98-125).
+  // 8-bit rows and trie values are widened to 16 bits.
+  const numStates = view.getUint32(table, true)
+  const rowLength = view.getUint32(table + 4, true)
+  const dictCategoriesStart = view.getUint32(table + 8, true)
+  const lookAheadResultsSize = view.getUint32(table + 12, true)
+  const flags = view.getUint32(table + 16, true)
+  const rowWidth = 3 + catCount
+  const eightBitRows = (flags & RBBI_8BITS_ROWS) !== 0 // rbbi.cpp:739
+  if (rowLength !== rowWidth * (eightBitRows ? 1 : 2)) throw new Error('Unexpected state table row length')
+  const rows = eightBitRows
+    ? Uint16Array.from(bytes.subarray(table + 20, table + 20 + numStates * rowLength))
+    : readValues(Uint16Array, bytes, table + 20, numStates * rowWidth)
+
+  // UCPTrieHeader, ucptrie_impl.h:24-56, checked as ucptrie_openFromBinary does
+  // (ucptrie.cpp:44-68). RBBI asks for a fast trie with 8- or 16-bit values
+  // (rbbidata.cpp:113-127).
+  if (view.getUint32(trie, true) !== 0x54726933) throw new Error('Bad trie signature')
+  const options = view.getUint16(trie + 4, true)
+  const valueWidth = options & 7 // UCPTRIE_VALUE_BITS_16 = 0, UCPTRIE_VALUE_BITS_8 = 2
+  if (((options >> 6) & 3) !== 0 || (options & 0x38) !== 0 || (valueWidth !== 0 && valueWidth !== 2)) {
+    throw new Error('Expected a fast trie with 8- or 16-bit values')
   }
-  return a.catCount === b.catCount && a.dictCategoriesStart === b.dictCategoriesStart && a.flags === b.flags &&
-    a.rowWidth === b.rowWidth && a.lookAheadResultsSize === b.lookAheadResultsSize && a.trieDataLength === b.trieDataLength &&
-    a.trieHighStart === b.trieHighStart && same(a.rows, b.rows) &&
-    same(a.trieIndex, b.trieIndex) && same(a.trieData, b.trieData)
+  const indexLength = view.getUint16(trie + 6, true)
+  const trieDataLength = ((options & 0xf000) << 4) | view.getUint16(trie + 8, true) // ucptrie.cpp:74-75
+  const trieHighStart = view.getUint16(trie + 14, true) << 9 // UCPTRIE_SHIFT_2, ucptrie.cpp:80
+  const trieIndex = readValues(Uint16Array, bytes, trie + 16, indexLength) // ucptrie.cpp:110-113
+  const dataStart = trie + 16 + indexLength * 2
+  const trieData = valueWidth === 0
+    ? readValues(Uint16Array, bytes, dataStart, trieDataLength)
+    : Uint16Array.from(bytes.subarray(dataStart, dataStart + trieDataLength))
+
+  return {
+    catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize,
+    trieIndex, trieData, trieDataLength, trieHighStart,
+  }
 }
 
-// A table cut from an ICU data package, compacted and checked to parse the same.
-function readCompactBreakRules(path: string): Uint8Array {
-  const bytes = withoutDataHeader(readData(path))
-  const compact = compactBreakRules(bytes)
-  if (!sameRules(parseBreakRules(bytes), parseBreakRules(compact))) throw new Error(`The compact ${path} parses differently`)
-  return compact
+// A trie's data index past its fast range and below its high start: ucptrie_internalSmallIndex
+// (ucptrie.cpp:161-185) and ICU4X's internal_small_index (cptrie.rs:444-502, in icu_collections
+// 2.1.1's src/codepointtrie/ as Firefox 156.0 vendors it), with SHIFT_1 14, SHIFT_2 9, SHIFT_3 4
+// and 5-bit masks.
+function getTrieDataIndex(index: Uint16Array, firstLevelStart: number, c: number): number {
+  let i3Block = index[index[(c >> 14) + firstLevelStart]! + ((c >> 9) & 0x1f)]!
+  let i3 = (c >> 4) & 0x1f
+  let dataBlock: number
+  if ((i3Block & 0x8000) === 0) {
+    dataBlock = index[i3Block + i3]!
+  } else {
+    i3Block = (i3Block & 0x7fff) + (i3 & ~7) + (i3 >> 3)
+    i3 &= 7
+    dataBlock = (index[i3Block]! << (2 + 2 * i3)) & 0x30000
+    dataBlock |= index[i3Block + 1 + i3]!
+  }
+  return dataBlock + (c & 0xf)
+}
+
+// UCPTRIE_FAST_GET with fastMax 0xffff (unicode/ucptrie.h:358, 601-620), and a fast trie's
+// first index level after UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH entries.
+function getCategory(rules: CompiledRules, c: number): number {
+  const index = rules.trieIndex
+  if (c <= 0xffff) return rules.trieData[index[c >> 6]! + (c & 0x3f)]!
+  if (c >= rules.trieHighStart) return rules.trieData[rules.trieDataLength - 2]!
+  return rules.trieData[getTrieDataIndex(index, 1020, c)]!
+}
+
+// ICU4X's CodePointTrie::get32 for TrieType::Small with u8 values (cptrie.rs:668-676), for a
+// code point up to U+10FFFF: Firefox's line data. SMALL_INDEX_LENGTH is 64.
+function getSmallTrieValue(index: Uint16Array, data: Uint8Array, highStart: number, c: number): number {
+  if (c <= 0xfff) return data[index[c >> 6]! + (c & 0x3f)]! // get32_assuming_fast_index, :579-592
+  if (c >= highStart) return data[data.length - 2]! // small_index, :514-520
+  return data[getTrieDataIndex(index, 64, c)]!
+}
+
+// The class `get` gives every code point, a byte each.
+function classesOf(get: (c: number) => number): Uint8Array {
+  const classes = new Uint8Array(0x110000)
+  for (let c = 0; c < classes.length; c++) {
+    const value = get(c)
+    if (value > 0xff) throw new Error(`U+${c.toString(16)} has class ${value}, more than a byte`)
+    classes[c] = value
+  }
+  return classes
+}
+
+// Every code point's class in each map the library reads, and each line and character table's
+// compiled rules, as the engine files have them. The module below must unpack to these.
+export const engineClassMaps: Record<string, Uint8Array> = {}
+export const engineRuleTables: Record<string, CompiledRules> = {}
+
+// A table cut from an ICU data package: its rules, and its categories as a class map.
+function readBreakRules(name: string, path: string): CompiledRules {
+  const rules = parseBreakRules(withoutDataHeader(readData(path)))
+  engineRuleTables[name] = rules
+  engineClassMaps[name] = classesOf(c => getCategory(rules, c))
+  return rules
 }
 
 // Pair tables.
@@ -212,8 +319,7 @@ const webkitPairs = parsePairTable(readText(`${SAFARI}/BreakablePositions.cpp`),
 let differingPairs = 0
 for (let i = 0; i < blinkPairs.length; i++) for (let k = 0; k < 8; k++) if (((blinkPairs[i]! ^ webkitPairs[i]!) >> k) & 1) differingPairs++
 
-// Line tables. The five come from nearly the same rules, so each packs against the earlier table
-// that packs it shortest, or alone where none does.
+// Line tables.
 const lineTableSources = [
   ['chromium/line_normal', `${CHROME}/line_normal.brk`],
   ['chromium/line_normal_cj', `${CHROME}/line_normal_cj.brk`],
@@ -221,18 +327,9 @@ const lineTableSources = [
   ['apple/line', `${SAFARI}/line.brk`],
   ['apple/line_cj', `${SAFARI}/line_cj.brk`],
 ] as const
-const lineTableBytes: Uint8Array[] = []
-const lineTablesPacked: Record<string, [string | null, string]> = {}
 for (let t = 0; t < lineTableSources.length; t++) {
-  const bytes = readCompactBreakRules(lineTableSources[t]![1])
-  if ((parseBreakRules(bytes).flags & 2) !== 0) throw new Error(`${lineTableSources[t]![0]} has start-of-text rules, which src/line-breaks.ts doesn't read`)
-  lineTableBytes.push(bytes)
-  let entry: [string | null, string] = [null, packTable(bytes)]
-  for (let r = 0; r < t; r++) {
-    const packed = packTable(bytes, lineTableBytes[r]!)
-    if (packed.length < entry[1].length) entry = [lineTableSources[r]![0], packed]
-  }
-  lineTablesPacked[lineTableSources[t]![0]] = entry
+  const [name, path] = lineTableSources[t]!
+  if ((readBreakRules(name, path).flags & 2) !== 0) throw new Error(`${name} has start-of-text rules, which src/line-breaks.ts doesn't read`)
 }
 
 // Character tables: ICU's grapheme cluster rules. src/graphemes.ts reads one in a single pass,
@@ -242,7 +339,7 @@ for (let t = 0; t < lineTableSources.length; t++) {
 // look-ahead state is entered only from states that record its position, one code point back.
 // No dictionary categories or start-of-text rules either, and at most 128 states. The start
 // state doesn't accept, so no code point leads back to it.
-function checkSinglePass(rules: BreakRules, name: string): void {
+function checkSinglePass(rules: CompiledRules, name: string): void {
   const width = rules.rowWidth
   const rows = rules.rows
   if ((rules.flags & 2) !== 0 || rules.dictCategoriesStart < rules.catCount) throw new Error(`${name} has start-of-text rules or dictionaries`)
@@ -261,18 +358,13 @@ function checkSinglePass(rules: BreakRules, name: string): void {
     }
   }
 }
-const chromiumCharBytes = readCompactBreakRules(`${CHROME}/char.brk`)
-const appleCharBytes = readCompactBreakRules(`${SAFARI}/char.brk`)
-const chromiumChar = parseBreakRules(chromiumCharBytes)
-const appleChar = parseBreakRules(appleCharBytes)
+const charTableNames = ['chromium/char', 'apple/char'] as const
+const chromiumChar = readBreakRules('chromium/char', `${CHROME}/char.brk`)
+const appleChar = readBreakRules('apple/char', `${SAFARI}/char.brk`)
 checkSinglePass(chromiumChar, 'chromium/char')
 checkSinglePass(appleChar, 'apple/char')
 if (chromiumChar.catCount !== appleChar.catCount || chromiumChar.rows.some((row, i) => row !== appleChar.rows[i])) {
   throw new Error('Chrome and libicucore have different grapheme rules')
-}
-const charTablesPacked: Record<string, [string | null, string]> = {
-  'chromium/char': [null, packTable(chromiumCharBytes)],
-  'apple/char': ['chromium/char', packTable(appleCharBytes, chromiumCharBytes)],
 }
 // src/gecko-line-breaks.ts takes a word of code units below U+0300 as a cluster per unit: of those
 // code points, only CR and LF share a cluster (GB3), and Gecko's words hold neither.
@@ -366,6 +458,143 @@ const {
 } = readRuleBreakData(`${FIREFOX}/segmenter_break_line_v1.rs.data`)
 // src/gecko-line-breaks.ts reads Line_Break values by number (icu_segmenter line.rs:18-128).
 if (geckoLineField('complex_property') !== 46) throw new Error('Expected SA to be Line_Break value 46')
+{
+  const index = readValues(Uint16Array, geckoLineIndex)
+  const highStart = geckoLineField('high_start')
+  engineClassMaps['gecko/line'] = classesOf(c => getSmallTrieValue(index, geckoLineData, highStart, c))
+}
+
+// Firefox's Unicode properties: icu_properties 2.1.2's East_Asian_Width H (2), F (3) and W (5)
+// with 0 for every other value, in ICU4C numbering.
+type Ranges = [number, number, number][]
+const properties = JSON.parse(readText(`${FIREFOX}/properties.json`)) as { eastAsianWidth: Ranges }
+// The class of every code point from ranges that cover them all in order.
+const rangeClasses = (ranges: Ranges, keep: (value: number) => boolean): Uint8Array => {
+  const classes = new Uint8Array(0x110000)
+  for (let i = 0; i < ranges.length; i++) {
+    const [start, end, value] = ranges[i]!
+    if (start !== (i === 0 ? 0 : ranges[i - 1]![1] + 1) || end < start) throw new Error(`Ranges out of order at U+${start.toString(16)}`)
+    if (value > 0xff) throw new Error(`U+${start.toString(16)} has class ${value}, more than a byte`)
+    if (keep(value)) classes.fill(value, start, end + 1)
+  }
+  if (ranges[ranges.length - 1]![1] !== 0x10ffff) throw new Error('Ranges stop before U+10FFFF')
+  return classes
+}
+engineClassMaps['gecko/east_asian_width'] = rangeClasses(properties.eastAsianWidth, value => value === 2 || value === 3 || value === 5)
+
+// --- The shorter form ---
+
+// Class maps. Engines class most code points alike, and so do one engine's tables, so the maps
+// ship as one list of runs of joint classes, the classes all the maps together tell apart, and a
+// byte per joint class for each map (unpackClassRuns in src/line-breaks.ts). Joint classes are
+// numbered from the one with the most runs, so most take one byte.
+const classMapNames = Object.keys(engineClassMaps)
+const jointOf = new Uint16Array(0x110000)
+let jointClassCount = 0
+const jointRuns: [number, number][] = []
+{
+  const jointIds = new Map<string, number>()
+  for (let c = 0; c < 0x110000; c++) {
+    let key = ''
+    for (let m = 0; m < classMapNames.length; m++) key += String.fromCharCode(engineClassMaps[classMapNames[m]!]![c]!)
+    let joint = jointIds.get(key)
+    if (joint === undefined) jointIds.set(key, joint = jointIds.size)
+    jointOf[c] = joint
+  }
+  jointClassCount = jointIds.size
+  const runCounts = new Array<number>(jointClassCount).fill(0)
+  for (let c = 0; c < 0x110000; c++) if (c === 0 || jointOf[c] !== jointOf[c - 1]) runCounts[jointOf[c]!]!++
+  const byRuns = Array.from(runCounts.keys()).sort((x, y) => runCounts[y]! - runCounts[x]! || x - y)
+  const renumbered = new Uint16Array(jointClassCount)
+  for (let i = 0; i < byRuns.length; i++) renumbered[byRuns[i]!] = i
+  for (let c = 0; c < 0x110000; c++) jointOf[c] = renumbered[jointOf[c]!]!
+  for (let c = 0; c < 0x110000;) {
+    let end = c + 1
+    while (end < 0x110000 && jointOf[end] === jointOf[c]) end++
+    jointRuns.push([end - c - 1, jointOf[c]!])
+    c = end
+  }
+}
+const classRunsVarints = packVarints(jointRuns.flat())
+const classRuns = unpackVarints(classRunsVarints)
+const classRemaps = new Uint8Array(classMapNames.length * jointClassCount)
+for (let c = 0; c < 0x110000; c++) {
+  for (let m = 0; m < classMapNames.length; m++) classRemaps[m * jointClassCount + jointOf[c]!] = engineClassMaps[classMapNames[m]!]![c]!
+}
+// Each map's row in the remaps and the blocks its table takes, found by unpacking it with room for
+// every block, then checked: the table of that size gives every code point its class.
+const classMaps: Record<string, [number, number]> = {}
+const unpackedClasses: Record<string, ClassTable> = {}
+for (let m = 0; m < classMapNames.length; m++) {
+  const name = classMapNames[m]!
+  const remap = classRemaps.subarray(m * jointClassCount, (m + 1) * jointClassCount)
+  const blocks = unpackClassRuns(classRuns, remap, 0x1100).index.reduce((most, block) => Math.max(most, block), 0) + 1
+  const table = unpackClassRuns(classRuns, remap, blocks)
+  const classes = engineClassMaps[name]!
+  for (let c = 0; c < 0x110000; c++) if (getClass(table, c) !== classes[c]) throw new Error(`${name} unpacks U+${c.toString(16)} to another class`)
+  classMaps[name] = [m, blocks]
+  unpackedClasses[name] = table
+}
+
+// State tables, as unpackStateRows in src/line-breaks.ts reads them. The line tables come from
+// nearly the same rules, and so do the character tables, so each ships as its differences from the
+// earlier table of its kind and shape that makes it shortest, or alone where none does.
+const ruleTableKinds: readonly (readonly string[])[] = [lineTableSources.map(([name]) => name), charTableNames]
+
+// unpackStateRows's differences from `start`, the rows it has before it reads any, to `rows`.
+function findRowDifferences(rows: Uint16Array, width: number, start: Uint16Array): number[] {
+  const out: number[] = []
+  let skipped = 0
+  for (let row = 0; row < rows.length; row += width) {
+    const differing = (from: Uint16Array, other: number): number[] => {
+      const cells: number[] = []
+      for (let c = 0; c < width; c++) if (rows[row + c] !== from[other + c]) cells.push(c)
+      return cells
+    }
+    let back = 0
+    let cells = differing(start, row)
+    for (let other = row - width; other >= 0 && cells.length > 0; other -= width) {
+      const otherCells = differing(rows, other)
+      if (otherCells.length < cells.length) { back = (row - other) / width; cells = otherCells }
+    }
+    if (back === 0 && cells.length === 0) { skipped++; continue }
+    out.push(skipped, back, cells.length)
+    skipped = 0
+    for (let i = 0; i < cells.length; i++) out.push(cells[i]! - (i === 0 ? 0 : cells[i - 1]! + 1), rows[row + cells[i]!]!)
+  }
+  return out
+}
+
+type PackedRuleTable = [number, number, number, number, string | null, string]
+const ruleTables: Record<string, PackedRuleTable> = {}
+for (const ruleTableNames of ruleTableKinds) for (let t = 0; t < ruleTableNames.length; t++) {
+  const name = ruleTableNames[t]!
+  const rules = engineRuleTables[name]!
+  const states = rules.rows.length / rules.rowWidth
+  let best: PackedRuleTable | null = null
+  for (let r = -1; r < t; r++) {
+    const baseName = r < 0 ? null : ruleTableNames[r]!
+    const base = baseName === null ? null : engineRuleTables[baseName]!
+    if (base !== null && (base.rowWidth !== rules.rowWidth || base.rows.length !== rules.rows.length)) continue
+    const unpack = (differences: Int32Array) => unpackStateRows(rules.rowWidth, states, base === null ? null : base.rows, differences)
+    const differences = packVarints(findRowDifferences(rules.rows, rules.rowWidth, unpack(new Int32Array(0))))
+    const unpacked = unpack(unpackVarints(differences))
+    if (unpacked.length !== rules.rows.length || unpacked.some((cell, i) => cell !== rules.rows[i])) throw new Error(`${name}'s state rows unpack otherwise`)
+    if (best === null || differences.length < best[5].length) {
+      best = [rules.catCount, rules.dictCategoriesStart, rules.lookAheadResultsSize, states, baseName, differences]
+    }
+  }
+  ruleTables[name] = best!
+}
+
+// A table's rules as the library has them once unpacked: both checked above.
+const unpackedRules = (name: string): BreakRules => {
+  const rules = engineRuleTables[name]!
+  return {
+    catCount: rules.catCount, dictCategoriesStart: rules.dictCategoriesStart, rowWidth: rules.rowWidth, rows: rules.rows,
+    lookAheadResultsSize: rules.lookAheadResultsSize, classes: unpackedClasses[name]!,
+  }
+}
 
 // Firefox's grapheme clusters, from ICU4X's grapheme data, which src/graphemes.ts doesn't ship:
 // it takes Chrome's char.brk in Firefox. Checked here: both tables split the code points into the
@@ -373,6 +602,7 @@ if (geckoLineField('complex_property') !== 46) throw new Error('Expected SA to b
 // without complex properties) ends clusters where ICU's handleNext does, on every string of up to
 // four code points taking one per class and on 100,000 random longer ones.
 const geckoGrapheme = readRuleBreakData(`${FIREFOX}/segmenter_break_grapheme_cluster_v1.rs.data`)
+const chromiumCharUnpacked = unpackedRules('chromium/char')
 const geckoGraphemeIndex = readValues(Uint16Array, geckoGrapheme.index)
 const geckoGraphemeHighStart = geckoGrapheme.field('high_start')
 const getGeckoGraphemeProperty = (c: number) => getSmallTrieValue(geckoGraphemeIndex, geckoGrapheme.data, geckoGraphemeHighStart, c)
@@ -436,7 +666,7 @@ function getGeckoClusterEnds(classes: readonly number[]): number[] {
     let text = ''
     for (let i = 0; i < classes.length; i++) text += String.fromCodePoint(classRepresentatives[classes[i]!]!)
     const flags = new Uint8Array(text.length + 1)
-    markRuleBoundaries(chromiumChar, text, flags)
+    markRuleBoundaries(chromiumCharUnpacked, text, flags)
     const ends: number[] = []
     for (let b = 1; b <= text.length; b++) if (flags[b] === 1) ends.push(b)
     const geckoEnds = getGeckoClusterEnds(classes)
@@ -465,38 +695,6 @@ function getGeckoClusterEnds(classes: readonly number[]): number[] {
   }
 }
 
-// Firefox's Unicode properties.
-type Ranges = [number, number, number][]
-const properties = JSON.parse(readText(`${FIREFOX}/properties.json`)) as {
-  bidiClass: Ranges, eastAsianWidth: Ranges
-}
-// Flat [start - previous end - 1, end - start, value] triples of the kept values, from ranges
-// that cover every code point in order.
-const deltaRanges = (ranges: Ranges, keep: (value: number) => boolean): number[] => {
-  const flat: number[] = []
-  let previousEnd = -1
-  for (let i = 0; i < ranges.length; i++) {
-    const [start, end, value] = ranges[i]!
-    if (start !== (i === 0 ? 0 : ranges[i - 1]![1] + 1) || end < start) throw new Error(`Ranges out of order at U+${start.toString(16)}`)
-    if (!keep(value)) continue
-    flat.push(start - previousEnd - 1, end - start, value)
-    previousEnd = end
-  }
-  if (ranges[ranges.length - 1]![1] !== 0x10ffff) throw new Error('Ranges stop before U+10FFFF')
-  return flat
-}
-const geckoBidiClassRanges = deltaRanges(properties.bidiClass, value => value !== 0)
-const geckoEastAsianWidthRanges = deltaRanges(properties.eastAsianWidth, value => value === 2 || value === 3 || value === 5)
-
-// unicode-bidi's bracket pairs: [opening, closing, normalized opening or 0].
-const geckoBidiPairs: number[] = []
-const pairsSource = readText(`${FIREFOX}/bidi_pairs_table.rs`)
-for (const match of pairsSource.matchAll(/\(\s*'\\u\{([0-9a-f]+)\}',\s*'\\u\{([0-9a-f]+)\}',\s*(?:None|Some\(\s*'\\u\{([0-9a-f]+)\}'\s*\))\s*\)/g)) {
-  geckoBidiPairs.push(parseInt(match[1]!, 16), parseInt(match[2]!, 16), match[3] === undefined ? 0 : parseInt(match[3], 16))
-}
-if (geckoBidiPairs.length / 3 !== (pairsSource.match(/None|Some\(/g) ?? []).length) throw new Error('Unparsed bidi pairs')
-const lineTablesJson = JSON.stringify(lineTablesPacked)
-const charTablesJson = JSON.stringify(charTablesPacked)
 const hex = (c: number) => `U+${c.toString(16).toUpperCase().padStart(4, '0')}`
 const appleCharDifferenceRanges: string[] = []
 for (let i = 0; i < appleCharDifferences.length; i++) {
@@ -506,22 +704,39 @@ for (let i = 0; i < appleCharDifferences.length; i++) {
   i = k
 }
 const remapsJson = JSON.stringify(appleQuoteRemaps)
-const geckoPropertiesJson = JSON.stringify([geckoBidiClassRanges, geckoEastAsianWidthRanges, geckoBidiPairs])
+const quoted = (names: readonly string[]) => names.map(name => `'${name}'`).join(' | ')
+const classRemapsPacked = packTable(classRemaps)
+const ruleTablesJson = JSON.stringify(ruleTables)
+const geckoLineBreakStatesPacked = packTable(geckoLineStates)
 const nextSource = `// Generated by scripts/generate-engine-break-data.ts from scripts/engine-data/.
 // Do not edit by hand. Regenerate with \`bun run generate:engine-break-data\`.
 
-// Every table below is packed (unpackTable in src/line-breaks.ts).
+// A string named ...Packed is a table in unpackTable's form, the others are varints in base64
+// (unpackVarints), both in src/line-breaks.ts.
 
-// Chrome 153's line_normal.brk and line_normal_cj.brk (ICU 78.2) and libicucore 78.1's
-// line.brk, line_normal.brk and line_cj.brk, without their reverse tables and rule source:
-// each as the table it packs against, if any, and its packed bytes.
-export type LineTable = ${lineTableSources.map(([name]) => `'${name}'`).join(' | ')}
-export const lineTablesPacked: Record<LineTable, readonly [LineTable | null, string]> = ${lineTablesJson}
+// Chrome 153's line_normal.brk and line_normal_cj.brk (ICU 78.2) and libicucore 78.1's line.brk,
+// line_normal.brk and line_cj.brk: ICU's line rules. Chrome 153's and libicucore 78.1's char.brk:
+// ICU's grapheme cluster rules. libicucore's character classes ${appleCharDifferenceRanges.join(', ')}
+// apart from Chrome's.
+export type LineTable = ${quoted(lineTableSources.map(([name]) => name))}
+export type CharTable = ${quoted(charTableNames)}
+export type RuleTable = LineTable | CharTable
 
-// Chrome 153's and libicucore 78.1's char.brk, ICU's grapheme cluster rules, packed the same way.
-// libicucore's classes ${appleCharDifferenceRanges.join(', ')} apart from Chrome's.
-export type CharTable = ${Object.keys(charTablesPacked).map(name => `'${name}'`).join(' | ')}
-export const charTablesPacked: Record<CharTable, readonly [CharTable | null, string]> = ${charTablesJson}
+// A class for every code point: each rule table's categories, and for Firefox the Line_Break
+// values of its baked ICU4X line data and icu_properties 2.1.2's East_Asian_Width H (2), F (3)
+// and W (5), 0 otherwise, in ICU4C numbering. For each map, its row in the remaps and
+// how many blocks its table takes; then one list of runs for all maps and the remaps, a byte per
+// joint class and map (unpackClassRuns in src/line-breaks.ts).
+export type ClassMap = ${quoted(classMapNames)}
+export const classMaps: Record<ClassMap, readonly [number, number]> = ${JSON.stringify(classMaps)}
+export const jointClassCount = ${jointClassCount}
+export const classRunsVarints = '${classRunsVarints}'
+export const classRemapsPacked = '${classRemapsPacked}'
+
+// Each rule table's forward state table: its categories, first dictionary category, look-ahead
+// slots and states, then the table its rows start from, if any, and the rows' differences
+// (unpackStateRows in src/line-breaks.ts).
+export const ruleTables: Record<RuleTable, readonly [number, number, number, number, RuleTable | null, string]> = ${ruleTablesJson}
 
 // Chromium's generated kFastLineBreakTable, a bit per U+0021..U+00FF pair where a line may
 // start between them (character_property_data_generator.cc:422-551).
@@ -534,43 +749,32 @@ export const webkitLinePairsPacked = '${packTable(webkitPairs)}'
 // 0 for the category of U+007B or 1 for U+007D. A locale without an entry takes its parent's.
 export const appleQuoteRemaps: Record<string, readonly number[]> = ${remapsJson}
 
-// Firefox's baked ICU4X line data: a small CodePointTrie of Line_Break values (icu_collections
-// 2.1.1 codepointtrie), with the index as u16 little-endian, and the BreakState byte of each pair
-// of properties (icu_segmenter 2.1.2 src/provider/mod.rs:288-310).
-export const geckoLineTrieHighStart = ${geckoLineField('high_start')}
+// Firefox's baked ICU4X line data: the BreakState byte of each pair of properties (icu_segmenter
+// 2.1.2 src/provider/mod.rs:288-310).
 export const geckoLinePropertyCount = ${geckoLinePropertyCount}
 export const geckoLineLastCodepointProperty = ${geckoLineField('last_codepoint_property')}
 export const geckoLineEotProperty = ${geckoLineField('eot_property')}
-export const geckoLineTrieIndexPacked = '${packTable(geckoLineIndex)}'
-export const geckoLineTrieDataPacked = '${packTable(geckoLineData)}'
-export const geckoLineBreakStatesPacked = '${packTable(geckoLineStates)}'
+export const geckoLineBreakStatesPacked = '${geckoLineBreakStatesPacked}'
 
-// icu_properties 2.1.2's Bidi_Class other than L, and its East_Asian_Width H (2), F (3) and W (5),
-// in ICU4C numbering, as flat [start - previous end - 1, end - start, value] triples of u32
-// little-endian.
-export const geckoBidiClassRangesPacked = '${packTable(new Uint8Array(Uint32Array.from(geckoBidiClassRanges).buffer))}'
-export const geckoEastAsianWidthRangesPacked = '${packTable(new Uint8Array(Uint32Array.from(geckoEastAsianWidthRanges).buffer))}'
-
-// unicode-bidi's bracket pairs (Unicode 15): [opening, closing, normalized opening or 0] as u32
-// little-endian.
-export const geckoBidiPairsPacked = '${packTable(new Uint8Array(Uint32Array.from(geckoBidiPairs).buffer))}'
 
 `
 
 const summary = [
-  `line tables packed ${Object.entries(lineTablesPacked).map(([table, [reference, data]]) => `${table} ${data.length} B${reference === null ? '' : ` against ${reference}`}`).join(', ')}`,
-  `character tables packed ${Object.entries(charTablesPacked).map(([table, [reference, data]]) => `${table} ${data.length} B${reference === null ? '' : ` against ${reference}`}`).join(', ')}`,
+  `${jointRuns.length} runs of ${jointClassCount} joint classes for ${classMapNames.length} class maps, ${classRunsVarints.length} B in base64, remaps ${classRemapsPacked.length} B`,
+  `class table blocks ${classMapNames.map(name => `${name} ${classMaps[name]![1]}`).join(', ')}`,
+  `state tables ${Object.keys(ruleTables).map(name => `${name} ${ruleTables[name]![5].length} B${ruleTables[name]![4] === null ? '' : ` from ${ruleTables[name]![4]}`}`).join(', ')}`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
-  `Firefox line data ${geckoLineIndex.length + geckoLineData.length + geckoLineStates.length} B`,
-  `Firefox properties ${gzipSize(geckoPropertiesJson)} B gzipped`,
+  `Firefox break states packed ${geckoLineBreakStatesPacked.length} B`,
   `module ${nextSource.length} B, ${gzipSize(nextSource)} B gzipped`,
 ].join('; ')
 
-if (process.argv.includes('--check')) {
-  if (readFileSync(outputPath, 'utf8') !== nextSource) throw new Error(`Generated engine break data is stale: ${outputPath}`)
-  console.log(`Generated engine break data is up to date: ${summary}.`)
-} else {
-  await Bun.write(outputPath, nextSource)
-  console.log(`Wrote ${outputPath}: ${summary}.`)
+if (import.meta.main) {
+  if (process.argv.includes('--check')) {
+    if (readFileSync(outputPath, 'utf8') !== nextSource) throw new Error(`Generated engine break data is stale: ${outputPath}`)
+    console.log(`Generated engine break data is up to date: ${summary}.`)
+  } else {
+    await Bun.write(outputPath, nextSource)
+    console.log(`Wrote ${outputPath}: ${summary}.`)
+  }
 }

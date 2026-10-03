@@ -24,13 +24,16 @@
 //   starts; and, cut on their own too, a run that a right-to-left mark after its white space ends where one at the white
 //   space's bidi level doesn't, one that text after it ends, an atomic item whose leading white space collapses into
 //   one, a soft hyphen after no white space, which opens none, and a ZWSP after soft hyphens where a line starts after
-//   a wrap; and, cut on their own too, the levels that rule reads: the paragraph's, at each item's offset, of every
-//   character the run goes past against the white space before them, with a newline as a space; and, cut on their own
+//   a wrap; and, cut on their own too, the levels Firefox reads there, which rich inline doesn't resolve
+//   (ENGINE_FOLLOWUPS.md): the paragraph's, at each item's offset, of every character the run goes past against the
+//   white space before them, with a newline as a space; and, cut on their own
 //   too, a soft hyphen that ends an item before a bidi control that starts the next, at the paragraph's start, after a
 //   space in the item or a collapsed one before it, which Firefox's scan of the joined text takes as text, and after
 //   other text; and, cut on its own too, a padded span that starts with a line separator after a word, before which
 //   WebKit's check at an item boundary gives no break (getWebKitBreakBetweenItems in src/line-breaks.ts), so a line
-//   that can't fit its padding breaks the word (hardBreakItemRetreat in src/measurement.ts);
+//   that can't fit its padding breaks the word (hardBreakItemRetreat in src/measurement.ts); and, cut on its own too, a
+//   soft hyphen that starts an item in 16px Inter, whose U+2010 is narrower than its hyphen-minus, so the line that
+//   ends there shows which hyphen the profile measures (hyphenFromPrimaryFont in src/measurement.ts);
 // - cut on their own too, a line that ends at a space inside an item under negative letter spacing, whose next line the
 //   browsers start after the space, beside a break at the collapsed space between items;
 // - keep-all paragraphs, cut on their own: a Korean chat message with a mention chip, a bold run inside a word and a
@@ -58,9 +61,20 @@
 //   moves to the next line with them;
 // - boxes (RichInlineBox), cut on their own: custom emoji at the line height between words with spaces on both sides,
 //   before punctuation and at the paragraph's end; boxes inside words, of width 0 and beside U+00A0; adjacent boxes, a
-//   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; and in pre-wrap,
-//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and,
-//   cut with the next group, a padded chip of only a space, which is an empty inline-block of its padding;
+//   box wider than most widths and one taller than the line; a box inside a keep-all Korean word; in pre-wrap,
+//   preserved spaces split across items after a box, which stay on its line, a line feed and a tab after one; and
+//   a box of width 0 past a line's end, after a space that doesn't fit and after a box wider than the line, which
+//   Chrome and Safari move to the next line and Firefox keeps unless text comes right after it, not after a space
+//   (getKeptEmptyEnd in src/rich-inline.ts), and two of them after a pre-wrap space that hangs, which Firefox has
+//   inside the line; and, cut with the next group, a padded chip of only a space, which is an empty inline-block of
+//   its padding;
+// - shapes whose rule only a unit test held, cut on their own: a padded code span alone in its paragraph, which the
+//   adapter still lays out with rich-inline, for its padding; in pre-wrap, a box about as wide as the words after it
+//   before preserved spaces that start their item, which stay on its line however far it overflows; and a Korean
+//   message under keep-all and pre-wrap together, with preserved spaces, a line feed, and a bold word whose ending
+//   follows it inside a line, a break between items that only keep-all forbids. The ending is longer than the bold
+//   word, so the width the cut takes well inside a layout is one where the word fits the line above and its ending
+//   doesn't;
 // - CJK at an item's edge, cut on their own: a run of U+3000 that ends an item before a short word in another weight
 //   and before a box, which Chrome and Firefox hang and end the line after; and a pair of fullwidth marks that a bold
 //   span's edge splits, a closing mark before a full stop and a colon before an opening bracket, which Chrome's
@@ -204,6 +218,9 @@ export function richTemplates(): Template[] {
     const [family, parts, lang] = continued[i]!
     out.push(template(`continued/${family}`, 'items that continue the line before them (src/layout.test.ts, rich-inline invariants)', ARIAL, parts.map(part => typeof part === 'string' ? item(part) : part), lang))
   }
+  // A soft hyphen that starts an item in Inter, whose U+2010 is narrower than its hyphen-minus: the line that ends there
+  // paints the hyphen that the same text in one item paints.
+  out.push(template('continued/soft-hyphen-start', 'a soft hyphen that starts an item, in a font whose U+2010 is narrower than its hyphen-minus (src/layout.test.ts, a chosen soft hyphen measures as the hyphen the engine paints)', { ...INTER, size: 16 }, ['foo trans', item('\u{AD}atlantic', { ...INTER, size: 16 })]))
   // A line that ends at a space inside an item under negative letter spacing, at −1 as for large headings and at −0.08 as
   // Signal Desktop sets Inter, and beside them a break at the collapsed space between items, at −0.2.
   const tight: ReadonlyArray<readonly [CssFont, number, readonly string[]]> = [
@@ -252,18 +269,27 @@ export function richTemplates(): Template[] {
   }
   // Boxes as apps write them: an image, a custom emoji or a badge, an empty inline-block of its width (#201).
   const emoji = box(20, 20, ARIAL)
+  const empty = box(0, 20, ARIAL)
   const boxes: ReadonlyArray<readonly [string, CssFont, readonly Part[], string, Paragraph['wordBreak'], Paragraph['whiteSpace']]> = [
     ['between-words', ARIAL, ['Thanks ', emoji, ' for the review', emoji, ', merging now ', emoji], 'en', 'normal', 'normal'],
     ['inside-words', ARIAL, ['inter', box(0, 18, ARIAL), 'national', box(18, 18, ARIAL), 'ization and\u{A0}', box(18, 18, ARIAL), '\u{A0}more'], 'en', 'normal', 'normal'],
     ['adjacent-and-wide', ARIAL, [box(40, 20, ARIAL), box(40, 20, ARIAL), ' a photo ', box(260, 120, ARIAL), ' and after it'], 'en', 'normal', 'normal'],
     ['keep-all', KOREAN, ['안녕하세요', box(20, 20, KOREAN), '님, 반가워요 ', box(20, 20, KOREAN), '오늘'], 'ko', 'keep-all', 'normal'],
     ['pre-wrap', ARIAL, [box(60, 20, ARIAL), '  ', span(' ', BOLD(ARIAL)), 'next words', box(30, 40, ARIAL), '\n', emoji, '\tgo'], 'en', 'normal', 'pre-wrap'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, 'again'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, ' again'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, [box(260, 120, ARIAL), empty, 'caption'], 'en', 'normal', 'normal'],
+    ['width-0', ARIAL, ['Thanks for the review ', empty, empty, 'again'], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap', ARIAL, [box(76, 20, ARIAL), '   next words'], 'en', 'normal', 'pre-wrap'],
     ['blank-chip', ARIAL, ['hello', span(' ', ARIAL, { atomic: true, padding: 6 }), 'world again'], 'en', 'normal', 'normal'],
   ]
   for (let i = 0; i < boxes.length; i++) {
     const [family, base, parts, lang, wordBreak, whiteSpace] = boxes[i]!
     out.push(template(`boxes/${family}`, 'boxes as an app writes an image or custom emoji, an empty inline-block of its width (#201; src/layout.test.ts, rich-inline invariants)', base, parts, lang, wordBreak, whiteSpace))
   }
+  out.push(template('code-spans', 'inline code with padding, alone in its paragraph (src/layout.test.ts, rich-inline invariants)', HELVETICA, [span('git commit --amend --no-edit', CODE, { padding: 7 })]))
+  out.push(template('keep-all/pre-wrap', 'word-break: keep-all and white-space: pre-wrap together on the paragraph (src/layout.test.ts, rich-inline invariants)', KOREAN,
+    ['민수 씨,  오늘 ', span('회의', BOLD(KOREAN)), '에서는\n세 가지를  정합니다'], 'ko', 'keep-all', 'pre-wrap'))
   const edges: ReadonlyArray<readonly [string, readonly Part[]]> = [
     ['ideographic-space', ['東京\u{3000}', span('is', BOLD(JAPANESE)), ' big\u{3000}', box(12, 12, JAPANESE), 'です']],
     ['punctuation-pair', ['これは', span('「引用」', BOLD(JAPANESE)), '。と言った']],

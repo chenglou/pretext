@@ -10,8 +10,8 @@
 // Chrome's rules past them: one goes with the cluster before it, or at the start with the one
 // after it, and text of only such characters holds no cluster.
 
-import { charTablesPacked, type CharTable } from './generated/engine-break-data.js'
-import { getCategory, parseBreakRules, START_STATE, unpackTableFrom, type BreakRules } from './line-breaks.js'
+import type { CharTable } from './generated/engine-break-data.js'
+import { getBreakRules, getClass, START_STATE, type BreakRules } from './line-breaks.js'
 
 const CLUSTER_END = 0x80
 
@@ -34,7 +34,7 @@ type GraphemeRules = {
 // code point whose transition stops or enters that state, and the next cluster starts at that
 // code point from the start state. One pass over the text finds every cluster.
 function parseGraphemeRules(table: GraphemeTable): GraphemeRules {
-  const rules = parseBreakRules(unpackTableFrom(charTablesPacked, table === 'gecko/char' ? 'chromium/char' : table))
+  const rules = getBreakRules(table === 'gecko/char' ? 'chromium/char' : table)
   const width = rules.rowWidth
   const rows = rules.rows
   const states = rows.length / width
@@ -47,7 +47,7 @@ function parseGraphemeRules(table: GraphemeTable): GraphemeRules {
         : next
     }
   }
-  return { rules, transitions, skipped: table === 'gecko/char' ? getCategory(rules, 0x00ad) : -1 }
+  return { rules, transitions, skipped: table === 'gecko/char' ? getClass(rules.classes, 0x00ad) : -1 }
 }
 
 const graphemeRules: Partial<Record<GraphemeTable, GraphemeRules>> = {}
@@ -73,7 +73,7 @@ export function findGraphemeEnds(table: GraphemeTable, text: string, start: numb
       const trail = text.charCodeAt(next)
       if ((trail & 0xfc00) === 0xdc00) { next++; c = ((c - 0xd800) << 10) + trail - 0xdc00 + 0x10000 }
     }
-    const category = getCategory(rules, c)
+    const category = getClass(rules.classes, c)
     if (category === skipped && (c === 0x00ad || isBidiControl(c))) {
       i = next
       continue

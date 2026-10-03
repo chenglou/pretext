@@ -24,6 +24,7 @@ import {
 import { measureAnalysis } from './prepare.js'
 import {
   countPreparedLines,
+  normalizeMaxWidth,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
   walkPreparedLinesRaw,
@@ -99,8 +100,8 @@ function prepareInternal(
   options?: PrepareOptions,
 ): InternalPreparedText {
   const wordBreak = options?.wordBreak ?? 'normal'
-  const letterSpacing = readLetterSpacing(options?.letterSpacing)
   const engineProfile = getEngineProfile()
+  const letterSpacing = readLetterSpacing(options?.letterSpacing, engineProfile)
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
@@ -153,7 +154,7 @@ function getInternalPrepared(prepared: PreparedText): InternalPreparedText {
 export function layout(prepared: PreparedText, maxWidth: number, lineHeight: number): LayoutResult {
   // The resize hot path counts the same lines as `layoutWithLines()` without
   // building line ranges or text.
-  const lineCount = countPreparedLines(getInternalPrepared(prepared), maxWidth)
+  const lineCount = countPreparedLines(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth))
   return { lineCount, height: lineCount * lineHeight }
 }
 
@@ -233,7 +234,7 @@ export function walkLineRanges(
 ): number {
   return walkPreparedLinesRaw(
     getInternalPrepared(prepared),
-    maxWidth,
+    normalizeMaxWidth(maxWidth),
     (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
       onLine(createLayoutLineRange(
         width,
@@ -251,7 +252,7 @@ export function measureLineStats(
   maxWidth: number,
 ): LineStats {
   const stats = { lineCount: 0, maxLineWidth: 0 }
-  walkPreparedLinesRaw(getInternalPrepared(prepared), maxWidth, undefined, stats)
+  walkPreparedLinesRaw(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth), undefined, stats)
   return stats
 }
 
@@ -322,7 +323,7 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
   const lines: LayoutLine[] = []
   const lineCount = walkPreparedLinesRaw(
     getInternalPrepared(prepared),
-    maxWidth,
+    normalizeMaxWidth(maxWidth),
     (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
       lines.push(createLayoutLine(
         prepared,

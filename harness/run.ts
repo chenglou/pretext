@@ -65,13 +65,17 @@ export function documents(browser: BrowserKind, cases: Case[], size: number): Ca
   return docs.concat(late)
 }
 
-function pageHtml(doc: Case[]): string {
+// A phone gets the page an app serves it, with a viewport meta tag and `text-size-adjust: 100%`. On a bare page iPhone
+// Safari enlarges the text of a block wider than its viewport: it laid out 63 of the sample's 11,901 cases otherwise,
+// all 736-864 px wide (a 14 px Roboto line 177.5 px wide came out 262 px wide), and was wrong on 0.58% of paragraphs
+// inside what Pretext claims, against 0.29% (Safari 26.0.1 in the iOS 26.0 simulator, 2026-09-30).
+function pageHtml(doc: Case[], phone: boolean): string {
   const c = doc[0]!
   const families = c.fontFixtures ?? []
   const fonts = FIXTURES.filter(fixture => families.includes(fixture.family)).map(fixture => ({ family: fixture.family, weight: fixture.weight, url: `/fonts/${fixture.file}` }))
   const lang = c.pageLang.replace(/[&"<>]/g, ch => `&#${ch.charCodeAt(0)};`)
-  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>pretext harness</title>`
-    + '<style>html,body{margin:0;padding:0;background:#fff;color:#000}</style></head><body>'
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">${phone ? '<meta name="viewport" content="width=device-width,initial-scale=1">' : ''}<title>pretext harness</title>`
+    + `<style>html,body{margin:0;padding:0;background:#fff;color:#000}${phone ? 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}' : ''}</style></head><body>`
     + `<script id="fonts" type="application/json">${JSON.stringify(fonts)}</script><script type="module" src="/page.js"></script></body></html>`
 }
 
@@ -103,12 +107,14 @@ export async function serveJob(
     },
   })
   const base = `http://127.0.0.1:${server.port}`
-  const watchdog = setInterval(() => {
-    if (Date.now() - lastActivity > o.stallMs) finish(new Error(`${browser}: no page activity for ${o.stallMs / 60_000} minutes, ${o.stalled()}`))
-  }, 1000)
   let session: Session | null = null
+  // The stall clock starts once the browser is open: a simulator takes a minute to boot before it opens the page.
+  const watchdog = setInterval(() => {
+    if (session !== null && Date.now() - lastActivity > o.stallMs) finish(new Error(`${browser}: no page activity for ${o.stallMs / 60_000} minutes, ${o.stalled()}`))
+  }, 1000)
   try {
     session = await launch(browser, base + path, id, tabUrl => tabUrl.startsWith(`${base}/`), finish, o.foreground, o.boundMb)
+    lastActivity = Date.now()
     await finished
   } finally {
     clearInterval(watchdog)
@@ -171,7 +177,7 @@ export async function runJob<T extends Recording | Prediction>(job: Job): Promis
         if (url.searchParams.get('job') !== id || n !== doc) return new Response('Inactive document', { status: 409 })
         const wait = settled - Date.now()
         if (wait > 0) await Bun.sleep(wait)
-        return new Response(pageHtml(docs[n]!), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
+        return new Response(pageHtml(docs[n]!, BROWSER[job.browser].phone), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
       }
       case '/page.js': return new Response(script, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' } })
       case '/api/step': return await step(request, finish)

@@ -35,9 +35,14 @@
 import {
   appleQuoteRemaps,
   blinkLinePairsPacked,
-  lineTablesPacked,
+  classMaps,
+  classRemapsPacked,
+  classRunsVarints,
+  jointClassCount,
+  ruleTables,
   webkitLinePairsPacked,
-  type LineTable,
+  type ClassMap,
+  type RuleTable,
 } from './generated/engine-break-data.js'
 
 // What a scan marks at a position of its text, as bits. A line may start at a BREAK. The WebKit
@@ -66,12 +71,11 @@ export function getBreakLanguage(tag: string | null): BreakLanguage {
   return 'root'
 }
 
-// The generated tables ship packed, in base64: the unpacked length, then runs of literal bytes,
-// each followed by a copy of earlier bytes (length - 4, then distance back), every count a
-// little-endian base-128 varint. A copy may reach back into a dictionary, another table's bytes.
-// Packing keeps the tables a page parses small; a page unpacks only its engine's tables and, for
-// each, the tables it packs against.
-export function unpackTable(packed: string, dictionary: Uint8Array | null = null): Uint8Array {
+// The generated tables of bytes ship packed, in base64: the unpacked length, then runs of literal
+// bytes, each followed by a copy of earlier bytes (length - 4, then distance back), every count a
+// little-endian base-128 varint. Packing keeps the tables a page parses small; a page unpacks only
+// its engine's tables.
+export function unpackTable(packed: string): Uint8Array {
   const input = atob(packed)
   let at = 0
   const varint = (): number => {
@@ -85,10 +89,8 @@ export function unpackTable(packed: string, dictionary: Uint8Array | null = null
     } while (byte >= 0x80)
     return value
   }
-  const base = dictionary === null ? 0 : dictionary.length
-  const bytes = new Uint8Array(base + varint())
-  if (dictionary !== null) bytes.set(dictionary)
-  let out = base
+  const bytes = new Uint8Array(varint())
+  let out = 0
   while (at < input.length) {
     for (let n = varint(); n > 0; n--) bytes[out++] = input.charCodeAt(at++)
     if (at >= input.length) break
@@ -100,77 +102,116 @@ export function unpackTable(packed: string, dictionary: Uint8Array | null = null
     out += length
   }
   if (out !== bytes.length) throw new Error('A packed table unpacked to the wrong length')
-  return dictionary === null ? bytes : bytes.subarray(base)
+  return bytes
 }
 
-// A table of a record that ships each table packed against the earlier table it repeats most, if any.
-export function unpackTableFrom<T extends string>(tables: Readonly<Record<T, readonly [T | null, string]>>, table: T): Uint8Array {
-  const [reference, packed] = tables[table]
-  return unpackTable(packed, reference === null ? null : unpackTableFrom(tables, reference))
-}
-
-// `count` little-endian values of `Type` from `offset` in `bytes`, which needn't be aligned, copied
-// out on a little-endian platform.
-export function readValues<T extends Uint16Array | Uint32Array>(
-  Type: { new (length: number): T, readonly BYTES_PER_ELEMENT: number },
-  bytes: Uint8Array,
-  offset = 0,
-  count = (bytes.length - offset) / Type.BYTES_PER_ELEMENT,
-): T {
-  const out = new Type(count)
-  new Uint8Array(out.buffer).set(bytes.subarray(offset, offset + count * Type.BYTES_PER_ELEMENT))
-  return out
-}
-
-// Code point ranges packed as flat [start - previous end - 1, end - start, value] uint32 triples, which
-// a binary search looks up, with `bmp` a value per code unit below U+10000 in place of the ranges
-// there. A code point in no range reads as 0.
-export type RangeTable = { readonly bmp: Uint8Array | null, readonly starts: number[], readonly ends: number[], readonly values: number[] }
-
-export function unpackRanges(packed: string, bmp: boolean): RangeTable {
-  const triples = readValues(Uint32Array, unpackTable(packed))
-  const table: RangeTable = { bmp: bmp ? new Uint8Array(0x10000) : null, starts: [], ends: [], values: [] }
-  let previousEnd = -1
-  for (let i = 0; i < triples.length; i += 3) {
-    const start = previousEnd + 1 + triples[i]!
-    previousEnd = start + triples[i + 1]!
-    const value = triples[i + 2]!
-    if (table.bmp !== null && start < 0x10000) table.bmp.fill(value, start, Math.min(previousEnd + 1, 0x10000))
-    if (table.bmp === null || previousEnd >= 0x10000) {
-      table.starts.push(table.bmp === null ? start : Math.max(start, 0x10000))
-      table.ends.push(previousEnd)
-      table.values.push(value)
+// The little-endian base-128 varints a table in base64 holds. Tables of varints ship without
+// unpackTable's packing, which saves them nothing once the bundle is compressed.
+export function unpackVarints(base64: string): Int32Array {
+  const input = atob(base64)
+  const values = new Int32Array(input.length)
+  let count = 0
+  for (let i = 0; i < input.length;) {
+    let byte = input.charCodeAt(i++)
+    let value = byte & 0x7f
+    for (let shift = 7; byte >= 0x80; shift += 7) {
+      byte = input.charCodeAt(i++)
+      value |= (byte & 0x7f) << shift
     }
+    values[count++] = value
   }
-  return table
+  return values.subarray(0, count)
 }
 
-export function getRangeValue(table: RangeTable, cp: number): number {
-  if (cp < 0x10000 && table.bmp !== null) return table.bmp[cp]!
-  const { starts, ends } = table
-  let lo = 0
-  let hi = starts.length - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    if (cp < starts[mid]!) hi = mid - 1
-    else if (cp > ends[mid]!) lo = mid + 1
-    else return table.values[mid]!
+// A code point's class in one of the generated maps, in two loads: `index` has, for every 256 code
+// points up to U+10FFFF, their block of `values`. Code points that share a class through a whole
+// block share one block.
+export type ClassTable = { readonly index: Uint16Array, readonly values: Uint8Array }
+
+// For c in U+0000..U+10FFFF, which is every code point a scan decodes from UTF-16: `index` has no
+// entry above that, where the engines' tries give their error value (unicode/ucptrie.h:615-620;
+// getLineBreakClass in src/gecko-line-breaks.ts gives ICU4X's itself).
+export function getClass(table: ClassTable, c: number): number {
+  return table.values[(table.index[c >> 8]! << 8) | (c & 0xff)]!
+}
+
+// The maps ship as one list of runs over U+0000..U+10FFFF, each run a length - 1 and a joint class:
+// the joint classes are the classes all the maps together tell apart, so code points that the
+// engines class alike are stored once. `remap` has one map's class for each joint class, and
+// `blocks` is how many blocks its table takes. Throws for a list that doesn't end at U+10FFFF, an
+// empty one included.
+export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: number): ClassTable {
+  const index = new Uint16Array(0x1100)
+  const values = new Uint8Array(blocks << 8)
+  // The block each class fills whole, once a run covers one.
+  const whole = new Int32Array(0x100).fill(-1)
+  let count = 0
+  let c = 0
+  let end = 0
+  let value = -1
+  for (let r = 0; r <= runs.length; r += 2) {
+    // Runs of joint classes that are one class in this map make one run, [c, end), written once
+    // the next run's class differs or no run is left.
+    const following = r < runs.length ? remap[runs[r + 1]!]! : -1
+    if (following !== value) {
+      while (c < end) {
+        const block = c >> 8
+        if ((c & 0xff) === 0 && end - c >= 0x100) {
+          if (whole[value]! < 0) {
+            whole[value] = count
+            values.fill(value, count << 8, ++count << 8)
+          }
+          index.fill(whole[value]!, block, end >> 8)
+          c = end & ~0xff
+        } else {
+          // A block that several runs share is its own: the first of them starts it.
+          if ((c & 0xff) === 0) index[block] = count++
+          const stop = Math.min(end, (block + 1) << 8)
+          const shift = (index[block]! - block) << 8
+          values.fill(value, c + shift, stop + shift)
+          c = stop
+        }
+      }
+      value = following
+    }
+    if (r < runs.length) end += runs[r]! + 1
   }
-  return 0
+  if (end !== 0x110000) throw new Error('The class runs don\'t cover U+0000..U+10FFFF')
+  return { index, values }
+}
+
+// The run list and the remaps, kept for the other maps the engine reads.
+let classRuns: Int32Array | null = null
+let classRemaps: Uint8Array | null = null
+
+export function unpackClasses(map: ClassMap): ClassTable {
+  const [row, blocks] = classMaps[map]
+  classRuns ??= unpackVarints(classRunsVarints)
+  classRemaps ??= unpackTable(classRemapsPacked)
+  return unpackClassRuns(classRuns, classRemaps.subarray(row * jointClassCount), blocks)
+}
+
+// A regular expression built at its first use, for the ones most text never reaches. Where V8 or
+// SpiderMonkey parses a literal with a \p{...} class of a general category or a script, it builds the
+// class's set, in a function that never runs too, so each such literal costs every page as it loads.
+// One that every text tests stays a literal (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
+export function lazyRegExp(source: string, flags: string): () => RegExp {
+  let built: RegExp | null = null
+  return () => built ??= new RegExp(source, flags)
 }
 
 // Unicode properties the scans read with RegExp's \p{...}, as two bits per property and code point:
 // whether it was tested, and whether the code point has it. A scan tests a property the first time it
-// asks about a code point, so a page runs only the tests its engine's scan makes. Code points below
-// U+10000 keep their bits in one table, the others in a map.
+// asks about a code point, so a page builds and runs only the tests its engine's scan makes. Code
+// points below U+10000 keep their bits in one table, the others in a map.
 const PROPERTY_TESTS = [
-  /^[\p{L}\p{N}]$/u,
-  /^\p{M}$/u,
-  /^\p{P}$/u,
-  /^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Po}]$/u,
-  /^\p{Default_Ignorable_Code_Point}$/u,
-  /^\p{Emoji}$/u,
-  /^\p{sc=Hangul}$/u,
+  lazyRegExp(String.raw`^[\p{L}\p{N}]$`, 'u'),
+  lazyRegExp(String.raw`^\p{M}$`, 'u'),
+  lazyRegExp(String.raw`^\p{P}$`, 'u'),
+  lazyRegExp(String.raw`^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Po}]$`, 'u'),
+  lazyRegExp(String.raw`^\p{Default_Ignorable_Code_Point}$`, 'u'),
+  lazyRegExp(String.raw`^\p{Emoji}$`, 'u'),
+  lazyRegExp(String.raw`^\p{sc=Hangul}$`, 'u'),
 ]
 export const LETTER_OR_NUMBER = 0
 export const MARK = 1
@@ -187,7 +228,7 @@ export function hasProperty(cp: number, property: number): boolean {
   const has = 1 << (property * 2)
   let bits = cp < 0x10000 ? bmp[cp]! : astralProperties.get(cp) ?? 0
   if ((bits & has << 1) === 0) {
-    bits |= has << 1 | (PROPERTY_TESTS[property]!.test(String.fromCodePoint(cp)) ? has : 0)
+    bits |= has << 1 | (PROPERTY_TESTS[property]!().test(String.fromCodePoint(cp)) ? has : 0)
     if (cp < 0x10000) bmp[cp] = bits
     else astralProperties.set(cp, bits)
   }
@@ -213,102 +254,60 @@ export function clearWordSegmenter(): void {
 export const START_STATE = 1 // rbbi.cpp:48
 const STOP_STATE = 0 // rbbi.cpp:51
 const ACCEPTING_UNCONDITIONAL = 1 // rbbidata.h:127
-const RBBI_8BITS_ROWS = 4 // rbbidata.h:152
 
+// ICU's compiled rules (RBBIDataHeader, rbbidata.h:67-94) as the forward iterator reads them: the
+// state table's sizes (RBBIStateTable, rbbidata.h:134-148), its rows of fAccepting, fLookAhead,
+// fTagsIdx and fNextState[catCount] (rbbidata.h:98-125), 16 bits each, and the category of every
+// code point, which ICU keeps in a UCPTrie.
 export type BreakRules = {
   catCount: number
   dictCategoriesStart: number
-  flags: number
   rowWidth: number
   rows: Uint16Array
   lookAheadResultsSize: number
-  trieIndex: Uint16Array
-  trieData: Uint16Array
-  trieDataLength: number
-  trieHighStart: number
+  classes: ClassTable
 }
 
-// A trie's data index past its fast range and below its high start: ucptrie_internalSmallIndex
-// (ucptrie.cpp:161-185) and ICU4X's internal_small_index (icu_collections 2.1.1
-// cptrie.rs:433-500), with SHIFT_1 14, SHIFT_2 9, SHIFT_3 4 and 5-bit masks.
-function getTrieDataIndex(index: Uint16Array, firstLevelStart: number, c: number): number {
-  let i3Block = index[index[(c >> 14) + firstLevelStart]! + ((c >> 9) & 0x1f)]!
-  let i3 = (c >> 4) & 0x1f
-  let dataBlock: number
-  if ((i3Block & 0x8000) === 0) {
-    dataBlock = index[i3Block + i3]!
-  } else {
-    i3Block = (i3Block & 0x7fff) + (i3 & ~7) + (i3 >> 3)
-    i3 &= 7
-    dataBlock = (index[i3Block]! << (2 + 2 * i3)) & 0x30000
-    dataBlock |= index[i3Block + 1 + i3]!
+// A state table ships as its rows' differences from rows it repeats. The rows start as zeros or
+// as `base`, another table's rows of the same shape. Then, for each row that differs from how it
+// starts: the rows skipped since the last such row, how many rows back the row it copies is, or 0
+// for none, how many cells differ after that, and for each the cells skipped since the last one
+// and its value.
+export function unpackStateRows(width: number, states: number, base: Uint16Array | null, differences: Int32Array): Uint16Array {
+  const rows = new Uint16Array(states * width)
+  if (base !== null) rows.set(base)
+  for (let i = 0, row = -width; i < differences.length;) {
+    row += (differences[i++]! + 1) * width
+    const back = differences[i++]! * width
+    if (back > 0) rows.copyWithin(row, row - back, row - back + width)
+    let at = row - 1
+    for (let n = differences[i++]!; n > 0; n--) {
+      at += 1 + differences[i++]!
+      rows[at] = differences[i++]!
+    }
   }
-  return dataBlock + (c & 0xf)
+  return rows
 }
 
-// ICU4X's CodePointTrie::get32 for TrieType::Small with u8 values (cptrie.rs:648-656), for a
-// code point up to U+10FFFF: Firefox's line data. SMALL_INDEX_LENGTH is 64.
-export function getSmallTrieValue(index: Uint16Array, data: Uint8Array, highStart: number, c: number): number {
-  if (c <= 0xfff) return data[index[c >> 6]! + (c & 0x3f)]! // get32_assuming_fast_index, :568-600
-  if (c >= highStart) return data[data.length - 2]! // small_index, :503-509
-  return data[getTrieDataIndex(index, 64, c)]!
+// A table's rows. The rows of the table they start from are unpacked for it and not kept.
+function unpackTableRows(table: RuleTable): Uint16Array {
+  const [catCount, , , states, base, differences] = ruleTables[table]
+  return unpackStateRows(catCount + 3, states, base === null ? null : unpackTableRows(base), unpackVarints(differences))
 }
 
-// Compiled rules without the data package header: RBBIDataHeader (rbbidata.h:67-94),
-// checked as rbbidata.cpp:69-71 does, then the tables it points to.
-export function parseBreakRules(bytes: Uint8Array): BreakRules {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  if (view.getUint32(0, true) !== 0xb1a0 || bytes[4] !== 6) throw new Error('Expected ICU break rules, format 6')
-  const catCount = view.getUint32(12, true)
-  const table = view.getUint32(16, true)
-  const trie = view.getUint32(32, true)
+const breakRules: Partial<Record<RuleTable, BreakRules>> = {}
 
-  // RBBIStateTable, rbbidata.h:134-148: five uint32 fields, then rows of fAccepting,
-  // fLookAhead, fTagsIdx and fNextState[catCount], 8 or 16 bits each (rbbidata.h:98-125).
-  // 8-bit rows and trie values are widened to 16 bits.
-  const numStates = view.getUint32(table, true)
-  const rowLength = view.getUint32(table + 4, true)
-  const dictCategoriesStart = view.getUint32(table + 8, true)
-  const lookAheadResultsSize = view.getUint32(table + 12, true)
-  const flags = view.getUint32(table + 16, true)
-  const rowWidth = 3 + catCount
-  const eightBitRows = (flags & RBBI_8BITS_ROWS) !== 0 // rbbi.cpp:739
-  if (rowLength !== rowWidth * (eightBitRows ? 1 : 2)) throw new Error('Unexpected state table row length')
-  const rows = eightBitRows
-    ? Uint16Array.from(bytes.subarray(table + 20, table + 20 + numStates * rowLength))
-    : readValues(Uint16Array, bytes, table + 20, numStates * rowWidth)
-
-  // UCPTrieHeader, ucptrie_impl.h:24-56, checked as ucptrie_openFromBinary does
-  // (ucptrie.cpp:44-68). RBBI asks for a fast trie with 8- or 16-bit values
-  // (rbbidata.cpp:113-127).
-  if (view.getUint32(trie, true) !== 0x54726933) throw new Error('Bad trie signature')
-  const options = view.getUint16(trie + 4, true)
-  const valueWidth = options & 7 // UCPTRIE_VALUE_BITS_16 = 0, UCPTRIE_VALUE_BITS_8 = 2
-  if (((options >> 6) & 3) !== 0 || (options & 0x38) !== 0 || (valueWidth !== 0 && valueWidth !== 2)) {
-    throw new Error('Expected a fast trie with 8- or 16-bit values')
+// A line or character table's rules, unpacked the first time a scan asks for them.
+export function getBreakRules(table: RuleTable): BreakRules {
+  let rules = breakRules[table]
+  if (rules === undefined) {
+    const [catCount, dictCategoriesStart, lookAheadResultsSize] = ruleTables[table]
+    rules = breakRules[table] = {
+      catCount, dictCategoriesStart, rowWidth: catCount + 3, rows: unpackTableRows(table), lookAheadResultsSize,
+      classes: unpackClasses(table),
+    }
   }
-  const indexLength = view.getUint16(trie + 6, true)
-  const trieDataLength = ((options & 0xf000) << 4) | view.getUint16(trie + 8, true) // ucptrie.cpp:74-75
-  const trieHighStart = view.getUint16(trie + 14, true) << 9 // UCPTRIE_SHIFT_2, ucptrie.cpp:80
-  const trieIndex = readValues(Uint16Array, bytes, trie + 16, indexLength) // ucptrie.cpp:117-119
-  const dataStart = trie + 16 + indexLength * 2
-  const trieData = valueWidth === 0
-    ? readValues(Uint16Array, bytes, dataStart, trieDataLength)
-    : Uint16Array.from(bytes.subarray(dataStart, dataStart + trieDataLength))
-
-  return {
-    catCount, dictCategoriesStart, flags, rowWidth, rows, lookAheadResultsSize,
-    trieIndex, trieData, trieDataLength, trieHighStart,
-  }
-}
-
-// UCPTRIE_FAST_GET with fastMax 0xffff (unicode/ucptrie.h:358, 601-620), and a fast trie's
-// first index level after UCPTRIE_BMP_INDEX_LENGTH - UCPTRIE_OMITTED_BMP_INDEX_1_LENGTH entries.
-export function getCategory(rules: BreakRules, c: number): number {
-  const index = rules.trieIndex
-  if (c <= 0xffff) return rules.trieData[index[c >> 6]! + (c & 0x3f)]!
-  if (c >= rules.trieHighStart) return rules.trieData[rules.trieDataLength - 2]!
-  return rules.trieData[getTrieDataIndex(index, 1020, c)]!
+  return rules
 }
 
 // Apple's quotation remap for a locale: code points the line rules read as another category
@@ -359,7 +358,7 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
           if (c === overrideChars[i]) { category = overrides.categories[i]!; overridden = true; break }
         }
         if (!overridden) {
-          category = getCategory(r, c)
+          category = getClass(r.classes, c)
           if (category >= dictionaryStart) dictionaryCharCount++
         }
       }
@@ -410,15 +409,9 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
 
 type ChromiumLineTable = 'line_normal' | 'line_normal_cj'
 
-const lineRules: Partial<Record<LineTable, BreakRules>> = {}
-
-function getLineRules(table: LineTable): BreakRules {
-  return lineRules[table] ?? (lineRules[table] = parseBreakRules(unpackTableFrom(lineTablesPacked, table)))
-}
-
 // Line_Break=SA for one code point: the line rules' dictionary categories.
 function isComplexContext(rules: BreakRules, c: number): boolean {
-  return getCategory(rules, c) >= rules.dictCategoriesStart
+  return getClass(rules.classes, c) >= rules.dictCategoriesStart
 }
 
 function markDictionaryWords(rules: BreakRules, text: string, start: number, end: number, flags: Uint8Array): void {
@@ -528,7 +521,7 @@ export function getBlinkLineBreaks(text: string, keepAll: boolean, language: str
   if (length < 2) return breaks
   const pairs = blinkPairs ??= unpackTable(blinkLinePairsPacked)
   const table: ChromiumLineTable = getBreakLanguage(language) === 'zh' ? 'line_normal_cj' : 'line_normal'
-  const rules = getLineRules(`chromium/${table}`)
+  const rules = getBreakRules(`chromium/${table}`)
   let icu: Uint8Array | null = null
   let lastLast = 0
   let last = text.charCodeAt(0)
@@ -780,7 +773,7 @@ function getWebKitLineRules(language: string | null): WebKitLineRules {
   let line = webkitLineRules.get(locale)
   if (line !== undefined) return line
   const breakLanguage = getBreakLanguage(locale)
-  const rules = getLineRules(breakLanguage === 'ja' || breakLanguage === 'ko' ? 'apple/line_normal' : breakLanguage === 'zh' ? 'apple/line_cj' : 'apple/line')
+  const rules = getBreakRules(breakLanguage === 'ja' || breakLanguage === 'ko' ? 'apple/line_normal' : breakLanguage === 'zh' ? 'apple/line_cj' : 'apple/line')
   const subtags = locale.split(/[-_]/)
   let name = subtags[0]!.toLowerCase()
   for (let k = 1; k < subtags.length; k++) {
@@ -797,7 +790,7 @@ function getWebKitLineRules(language: string | null): WebKitLineRules {
   const categories: number[] = []
   for (let k = 0; k < remap.length; k += 2) {
     chars.push(remap[k]!)
-    categories.push(getCategory(rules, remap[k + 1] === 0 ? 0x7b : 0x7d))
+    categories.push(getClass(rules.classes, remap[k + 1] === 0 ? 0x7b : 0x7d))
   }
   line = { rules, overrides: { chars, categories } }
   webkitLineRules.set(locale, line)

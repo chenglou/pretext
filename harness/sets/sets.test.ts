@@ -8,7 +8,7 @@ import { writeRecordings } from '../store.ts'
 import type { Recording } from '../types.ts'
 import { font, paragraph, writeCases } from './build.ts'
 import { reportCases } from './exact.ts'
-import { checkedInSample, type Sample } from './sample.ts'
+import { checkedInSample, shareSources, type Sample } from './sample.ts'
 import { CUT_BROWSERS, cut, dirOf, probesFile, recordingsFile, select, sweepId, templateKey, type Template } from './widths.ts'
 
 // The checked-in sample's draw, made once for both tests.
@@ -38,6 +38,19 @@ describe('the real-usage sample', () => {
     expect(readFileSync(path, 'utf8')).toBe(readFileSync(join(import.meta.dir, '../cases/sample.ndjson'), 'utf8'))
     rmSync(path)
   }, 60_000)
+})
+
+describe('the sample\'s weights', () => {
+  test('the shares counted as guesses are those whose source says so, and the rest name a source: a count written by hand would call the weights sourced after they changed', () => {
+    const text = readFileSync(join(import.meta.dir, 'weights.json'), 'utf8')
+    // A share is a number followed by its source, the last two entries of a list.
+    const sources = [...text.matchAll(/\d,\s*"((?:[^"\\]|\\.)*)"\s*\]/g)].map(match => match[1]!)
+    expect(shareSources.shares).toBe(sources.length)
+    expect(shareSources.guesses).toBe(sources.filter(source => source.startsWith('guess')).length)
+    expect(shareSources.bare).toBe(sources.filter(source => source === 'guess').length)
+    expect(shareSources.guesses).toBeGreaterThan(shareSources.bare)
+    expect(shareSources.shares).toBeGreaterThan(shareSources.guesses)
+  })
 })
 
 describe('the sets taken as they are', () => {
