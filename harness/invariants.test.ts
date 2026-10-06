@@ -152,7 +152,7 @@ describe('equal --offline', () => {
   test('line text every text API gets wrong alike differs, and a prepare that measures each segment twice is measured otherwise with the same results: a build that paints no hyphen at a soft-hyphen break would equal main, or one that measures more pass unseen', async () => {
     const [hyphen, twice] = await Promise.all([
       offline(planted('offline-hyphen', 'line-text.ts', [[/\? text \+ '-' : text/, '? text : text']])),
-      offline(planted('offline-twice', 'measurement.ts', [[/width: measurement\.state\.context\.measureText\(text\)\.width,/, 'width: (measurement.state.context.measureText(text), measurement.state.context.measureText(text).width),']])),
+      offline(planted('offline-twice', 'measurement.ts', [[/width: getContext\(measurement\)\.measureText\(text\)\.width,/, 'width: (getContext(measurement).measureText(text), getContext(measurement).measureText(text).width),']])),
     ])
     expect([hyphen.differ > 0, hyphen.parts['prepareWithSegments'], hyphen.measuredOtherwise]).toEqual([true, undefined, 0])
     expect([twice.differ, twice.measuredOtherwise > 0]).toEqual([0, true])

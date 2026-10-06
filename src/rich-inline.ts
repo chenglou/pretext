@@ -21,6 +21,7 @@ import {
   type WhiteSpaceMode,
 } from './analysis.js'
 import { isDiscardable, isSpaceOrTabOrSegmentBreak } from './gecko-line-breaks.js'
+import { getHaltAcrossRuns, getPairTypes } from './han-kerning.js'
 import { getWebKitBreakBetweenItems } from './line-breaks.js'
 import { buildLineTextFromRange, getGraphemeEnds, type PreparedSegments } from './line-text.js'
 import {
@@ -33,7 +34,7 @@ import {
   walkPreparedLinesRaw,
   type ItemLine,
 } from './line-break.js'
-import { getEngineProfile, getFontMeasurement, getPreparationLanguage, getSegmentMetrics, readLetterSpacing, type EngineProfile } from './measurement.js'
+import { getEngineProfile, getFontMeasurement, getPreparationLanguage, getSegmentMetrics, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
 import { measureAnalysis } from './prepare.js'
 
 // Helper for rich-text inline flow under `white-space: normal` or `pre-wrap`.
@@ -360,13 +361,62 @@ function getWalkedHandle(prepared: PreparedSegments, flags: Uint8Array): Prepare
   return { ...prepared, segmentFlags: flags, simpleLineWalkFastPath: false }
 }
 
-// A box's handle, which every box shares, as nothing writes to a handle: one empty segment, which its
+// A box's handle, which every box shares, as nothing writes to it: one empty segment, which its
 // fragment spans, so that a line starting at the box doesn't take that start for its end
 // (stepRichInlineLine).
 const BOX_HANDLE: PreparedSegments = {
   segments: [''], widths: [0], segmentFlags: Uint8Array.of(TEXT), simpleLineWalkFastPath: false, simpleLineCountFastPath: false,
-  breakableFitAdvances: [null], entryGeometry: null, lineStartProhibitions: null, lineStartExtras: null, lineEndTrims: null,
+  breakableFitAdvances: [null], entryGeometry: null, lineStartProhibitions: null, breakableLineStartExtras: null, lineStartExtras: null, lineEndTrims: null,
   overflowLineEndTrims: null, letterSpacing: 0, discretionaryHyphenWidth: 0, discretionaryHyphenContexts: null, tabStopAdvance: 0, minimumTabAdvance: 0,
+}
+
+// Blink's text-spacing-trim halts a pair of marks that two items split between them, as it does
+// in one text node, whatever the fonts or the padding between them (getHaltAcrossRuns): in 16px
+// Hiragino Sans, Chrome 154 lays out `文字」` and a span `。文字`, bold or padded or neither, 88px
+// wide plus the padding, as their text in one node, where the two measured apart take 96px.
+// `joined` is the text the items join, `after`'s starting at its `start`. A closing mark halted
+// before the next item's first character is halted wherever the line ends, so it has no
+// line-end halt left to take, and an opening mark halted after the item before takes its halt
+// back where it starts a line, so a line walks its item (lineStartExtras), whose whole width is
+// its width at a line's start.
+function haltAcrossItems(before: JoinedPortion, after: JoinedPortion, joined: string, items: Array<RichInlineItem | RichInlineBox>, language: string | null): void {
+  const types = getPairTypes(joined, after.start)
+  if (types === 0) return
+  const closing = getHaltAcrossRuns(types, joined.charCodeAt(after.start - 1), -1, (items[before.itemIndex] as RichInlineItem).font, before.item.prepared.letterSpacing !== 0, language)
+  if (closing > 0) {
+    const { widths, lineEndTrims } = before.item.prepared
+    widths[widths.length - 1] = widths[widths.length - 1]! - closing
+    if (lineEndTrims !== null) lineEndTrims[widths.length - 1] = 0
+    before.item.naturalWidth -= closing
+  }
+  const opening = getHaltAcrossRuns(types, joined.charCodeAt(after.start), 1, (items[after.itemIndex] as RichInlineItem).font, after.item.prepared.letterSpacing !== 0, language)
+  if (opening > 0) {
+    const { prepared } = after.item
+    prepared.widths[0] = prepared.widths[0]! - opening
+    ;(prepared.lineStartExtras ??= zeros(prepared.widths.length))[0] = opening
+    after.item.walked = true
+  }
+}
+
+// Blink halts a closing mark at a line's end only where a break comes right after it, and its
+// scan gives none before a space, a tab or a line feed (src/han-kerning.ts), whichever item
+// holds that. There the halt an item's own text gives the mark it ends with is the one only a
+// line broken between graphemes takes (overflowLineEndTrims), as in one text: in 16px Hiragino
+// Sans, Chrome 154 fits `文字）` in 40-47px before a span `i`, and before a span that starts
+// with a space, or a space and a box, it breaks before `字`. An atomic item's own white space
+// is none, where it starts the item or is all of it: its inline-block trims it (ownsWhiteSpace
+// and gapIsSpace in prepareRichInline()), a break comes right after the mark, and Chrome fits
+// `設定）` in 40-47px before a chip ` @a ` and before a chip of a space. A run of U+3000 that
+// ends the item has a line-end trim too, its hang (addIdeographicSpaceHangs in src/prepare.ts),
+// which stays.
+function leaveEndHaltToOverflow(item: PreparedRichInlineItem): void {
+  const { lineEndTrims, segments } = item.prepared
+  if (lineEndTrims === null) return
+  const last = lineEndTrims.length - 1
+  const trim = lineEndTrims[last]!
+  if (trim === 0 || segments[last]!.endsWith('\u3000')) return
+  lineEndTrims[last] = 0
+  ;(item.prepared.overflowLineEndTrims ??= zeros(last + 1))[last] = trim
 }
 
 export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, options?: RichInlineOptions): PreparedRichInline {
@@ -478,7 +528,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         for (let i = 0, j = 0; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           while (j < joined.starts.length && joined.starts[j]! < portion.start) j++
-          if (i > 0) portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & KIND_BITS) !== HARD_BREAK
+          if (i > 0) {
+            portion.item.breakBefore = joined.starts[j] === portion.start && breaksBefore(joined.flags, j) && (joined.flags[j]! & KIND_BITS) !== HARD_BREAK
+            const before = joinedPortions[i - 1]!
+            if (profile.hanKerning) haltAcrossItems(before, portion, joinedText, items, language)
+            if (!portion.item.breakBefore) leaveEndHaltToOverflow(before.item)
+          }
           recordJoinedBreaks(portion, joined, j, i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length, walkedFlags)
         }
       }
@@ -488,6 +543,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
+    // Whether the gap before this item is a space in the paragraph's text. The gap an atomic
+    // item of only white space makes isn't one (leaveEndHaltToOverflow).
+    const gapIsSpace = pendingGapWidth !== null && (items[pendingGapItemIndex] as RichInlineItem).break !== 'never'
     if (item.text === undefined) {
       // A box: an atomic item with no text, and so no white space of its own, which takes the gap
       // before it, breaks on both sides and keeps white space after it on its line as an atomic item
@@ -498,6 +556,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // extraWidth does (RESEARCH.md, Objects Inside A Line), so Pretext refuses both.
       if (!Number.isFinite(item.width) || item.width < 0) throw new RangeError(`Item ${index} has no text, so it's a box, whose width must be a finite number of CSS px, at least 0, not ${item.width}`)
       finishJoinedText()
+      if (previousItem !== null && gapIsSpace) leaveEndHaltToOverflow(previousItem)
       const box: PreparedRichInlineItem = {
         break: 'never', breakBefore: pendingGapWidth !== null || previousItem !== null, continued: false, walked: false,
         establishesLine: true, extraWidth: item.width, gapBefore: pendingGapWidth ?? 0, gapItemIndex: pendingGapWidth === null ? -1 : pendingGapItemIndex,
@@ -674,6 +733,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 
     if (previousItem === null || whitespaceBefore || preparedItem.break === 'never' || previousItem.break === 'never') {
       finishJoinedText()
+      // What follows the mark is the gap before this item, where there is one, and only without
+      // one this item's own leading white space.
+      if (previousItem !== null && (pendingGapWidth !== null ? gapIsSpace : hasLeadingWhitespace && ownsWhiteSpace)) leaveEndHaltToOverflow(previousItem)
       preparedItem.breakBefore = whitespaceBefore || (previousItem !== null && breaksAfterAtomic)
     }
     if (preparedItem.break === 'never') {

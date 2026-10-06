@@ -1,6 +1,3 @@
-## #195, a run of x in Shantell Sans longer than the line, in pre-wrap: Chrome fits one more letter than the library's letter widths allow (main before #340 too)
-report-d569ba117dfb3fc7 breaks
-
 ## #323, "the international" with soft hyphens at 52.5-56 px: where the syllable before the first soft hyphen doesn't fit with its hyphen, Chrome breaks the word between letters, the library at the soft hyphen (main before #340 too)
 report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
@@ -331,7 +328,6 @@ catalog-0ed9c52fd4388b56 count
 catalog-173c1179540aca26 count
 catalog-182e40bc4516e7e2 count
 catalog-1918678b73be5c89 count
-catalog-1b47da9c5584dac8 count
 catalog-1ba815171eef71f3 count
 catalog-1ccdac99777d3205 count
 catalog-1edd1ccc60d9d05f count
@@ -341,17 +337,15 @@ catalog-23df1e89a9667598 breaks
 catalog-25d9b222a86d952e breaks
 catalog-25e91c02bc492e09 count
 catalog-29cc67b290c1fa70 count
-catalog-3130b6e5b4a890a1 count
 catalog-316b1e521ecbdc65 count
 catalog-35929ec35a7482a3 count
 catalog-36dc59ac929495fb count
-catalog-37575dc603004949 count
+catalog-37575dc603004949 breaks
 catalog-38ec907cfcb1b1c5 count
 catalog-39a2690f535ee13f count
 catalog-3e053575caaec98b count
 catalog-3fcddde286f9fea4 breaks
 catalog-418f17906c355e96 count
-catalog-42a916d1280c597c count
 catalog-433d3cb68a016c07 count
 catalog-460122ab22e663f3 count
 catalog-46545a2c11ad120d count
@@ -376,7 +370,6 @@ catalog-60c679764204e5cd count
 catalog-62c8def027cea88d count
 catalog-64c570254f8e6165 count
 catalog-6cf2945f5f30c03f breaks
-catalog-6f192a5c68cec80c count
 catalog-6f58351fa9263478 count
 catalog-6ffb4b8908e24bda count
 catalog-773c96e6fd6f245f count
@@ -419,17 +412,15 @@ catalog-b1d4039a1ff3dee7 breaks
 catalog-b3f6575b3f2c46df count
 catalog-b40e36a1cfea1eb8 count
 catalog-b9578d7f8f6e7037 count
-catalog-bcdab9cd3d475575 count
 catalog-bf36328191fcb978 count
 catalog-c1e44e7907be4da7 count
 catalog-c53f15c186ba471a count
 catalog-c548721b0c1b5353 breaks
-catalog-cb4097d178590a31 count
+catalog-cb4097d178590a31 breaks
 catalog-cd994e2c7ca551ce count
 catalog-d0593ed5bee118a2 breaks
 catalog-d110118919798a91 count
 catalog-d1d65d156cc76a45 count
-catalog-d2b02f9b264fdb6b breaks
 catalog-d72bfb8829099891 count
 catalog-d9e26d6d7cfbcd16 count
 catalog-daea7119749555b3 breaks
@@ -506,9 +497,7 @@ rich-fb89fcbe2ec753dd count
 ## Japanese in 16 px Hiragino Sans under keep-all, as spans and in one node alike, at 24 px and wider: Chrome lays the line out up to 1.6 px narrower than the Canvas widths add up to, so it fits one more character
 rich-1753feec3b2a030a count
 rich-1bc5940e590f28ef breaks
-rich-3326e4c2765ca2ec count
-rich-ce78e7cd89087f29 count
-rich-f75de9201b697ee0 count
+rich-3326e4c2765ca2ec breaks
 
 ## Letter-spacing across scripts (Thai, Arabic, Khmer, CJK, digits and hyphens) and in rich runs, at 24 px and wider: Chrome spaces or breaks these where the library doesn't
 catalog-05a6b33d99f603bc breaks
@@ -639,7 +628,6 @@ catalog-0ba13a2c49aecb63 breaks
 catalog-0ba63b9a395f1624 count
 catalog-0c156ed35ad73820 count
 catalog-0c15c151a255df1d count
-catalog-0c2bab858af887c5 count
 catalog-0c3f561f679d34a5 breaks
 catalog-0c69e132f029c07d count
 catalog-0ca1da8d2483c467 count
@@ -893,8 +881,6 @@ catalog-3eba00e2954d411c count
 catalog-3ef89e8c504d909f count
 catalog-3f10d2ea7268d6b0 count
 catalog-3f14e14f61675293 count
-catalog-3f201cd06723f04e breaks
-catalog-3f5136bb466bebee breaks
 catalog-3f96dbfec4865f52 breaks
 catalog-3feef1137eb27018 breaks
 catalog-40021620b88bebc4 count
@@ -1103,7 +1089,6 @@ catalog-6a2a693ba35e59a8 count
 catalog-6aa86a3e307ec889 breaks
 catalog-6aaa97b735061a85 count
 catalog-6aab9565d3e3096b count
-catalog-6ac116e9c411322c breaks
 catalog-6ae6dfc24c793eaf count
 catalog-6af0eb5f5bb1640e count
 catalog-6b276152b4a948c9 breaks
@@ -1117,7 +1102,6 @@ catalog-6cef974ec9f1b20b count
 catalog-6d0c5fe531998016 count
 catalog-6d22ce3530f2ce55 count
 catalog-6d378e7e6992ab68 count
-catalog-6db1a7d1595a950b count
 catalog-6dc16f17b9a9857f count
 catalog-6e15a8ba99b9bdf2 count
 catalog-6e473231c03a72a5 count
@@ -1138,7 +1122,7 @@ catalog-7254daa71ee40bde count
 catalog-7261c94cff961225 count
 catalog-72ac7251491ecffe breaks
 catalog-734e23a9baa472ad count
-catalog-7375ca3307f15ec3 count
+catalog-7375ca3307f15ec3 breaks
 catalog-739387b23a986fc5 count
 catalog-73d017eda7cb439e count
 catalog-73dd4652689d101a count
@@ -1168,7 +1152,6 @@ catalog-7a157873e506203f count
 catalog-7a62f95cf01e1585 count
 catalog-7a81fb589657c30c count
 catalog-7aac4ebe499b75c3 count
-catalog-7aae7c49e7043875 count
 catalog-7ac3a678e45bdae4 count
 catalog-7adb4746ca47231b count
 catalog-7b652edb92766ae7 count
@@ -1176,7 +1159,6 @@ catalog-7bb7e9c4dbee526f count
 catalog-7c2802fc1345f0e1 breaks
 catalog-7c57b17d97be0c0f breaks
 catalog-7c5dd2da22282352 count
-catalog-7d08faa8f3323a10 count
 catalog-7d215c45e9f378e6 count
 catalog-7d36fd17a0084f29 count
 catalog-7d417be7303cf379 count
@@ -1294,7 +1276,7 @@ catalog-93ecb9d9d7d43b20 count
 catalog-93f74d27acfd320e count
 catalog-9420871e0f34eb88 count
 catalog-94a0ef6fd363fcad breaks
-catalog-94ba01575f7f8836 count
+catalog-94ba01575f7f8836 breaks
 catalog-94d11d758083dfc9 count
 catalog-958ab6fcf411a4ee count
 catalog-95a797d79692a3b9 count
@@ -1379,7 +1361,6 @@ catalog-a4299d4c3f87463b breaks
 catalog-a4f5423bfae07b31 count
 catalog-a514323ef66d9e61 breaks
 catalog-a5e401501c99988c count
-catalog-a61831f181f0b141 count
 catalog-a62a9958892c140a count
 catalog-a65b82759777bc21 count
 catalog-a6862e0b6690d3a0 count
@@ -1414,7 +1395,6 @@ catalog-ab834065745c6941 count
 catalog-ab9e8d88d6290124 count
 catalog-ac356504e05c746e count
 catalog-ac470f63cf6f3754 breaks
-catalog-ac8d5d7acac30fdd count
 catalog-ada735a5492b6cd9 count
 catalog-adc244e4efd70837 count
 catalog-ae32eb2a2091447d count
@@ -1423,7 +1403,7 @@ catalog-ae8e5e59880884b7 breaks
 catalog-ae96e9b2fc7db125 count
 catalog-aeae0711b7b370ed count
 catalog-aed35fe7a95c4aa9 count
-catalog-aee1ea5ca7ef732c count
+catalog-aee1ea5ca7ef732c breaks
 catalog-aee4dff00ff7982a count
 catalog-aef9d41e64358dae count
 catalog-af048c7999f360b0 breaks
@@ -1472,7 +1452,6 @@ catalog-b8d44e7152f689eb count
 catalog-b90c99f9bcc1f09a count
 catalog-b91e8160b6b19bcd count
 catalog-b94abd7d360cf0fa count
-catalog-b971fdd217c10f9a count
 catalog-b9d9982a4f89b240 count
 catalog-ba04312f9e86b49a count
 catalog-ba25c16995cfba30 count
@@ -1532,7 +1511,6 @@ catalog-c66cccae861bcbb0 count
 catalog-c6751270ec96c3f9 count
 catalog-c6bad6417d0040ec count
 catalog-c6cb925665e6ec4f count
-catalog-c6dae3a411ffaf5d count
 catalog-c6e4a2e602245a92 count
 catalog-c6f5df18678e0e2e count
 catalog-c728621dd0e4f421 breaks
@@ -1642,7 +1620,7 @@ catalog-e28e0cef41461da5 count
 catalog-e296692bd8a5bca1 count
 catalog-e2aad5a1004c8771 breaks
 catalog-e2c06065cfb5a69f count
-catalog-e2eef850e803fc3b count
+catalog-e2eef850e803fc3b breaks
 catalog-e3046ebdaee5d7d9 count
 catalog-e31725b07b256ef8 breaks
 catalog-e31af8f9747a4c56 count
@@ -1657,7 +1635,7 @@ catalog-e49fe48d45010cd3 breaks
 catalog-e4f373ca1d9b5c0c count
 catalog-e51a5f34f06b5dd3 count
 catalog-e5251f44738ae680 count
-catalog-e528f4f6d38710a4 count
+catalog-e528f4f6d38710a4 breaks
 catalog-e592248209763fe5 count
 catalog-e5d4193f0ae43e24 count
 catalog-e61a4b5e93410c41 count
@@ -3177,7 +3155,6 @@ rich-dc51749039b55b72 count
 
 ## Outside what Pretext claims: system-ui font lists (README.md, Caveats); Chrome's Canvas and DOM pick different SF Pro variants (Chromium #489579956)
 sample-0c1ec78ea4cfbfeb breaks
-sample-0eab24ba03a95ed3 breaks
 sample-27ce1477fe0f0966 count
 sample-29261b6bc0cd56ef breaks
 sample-3f5a5d01804da30c breaks
@@ -3707,7 +3684,7 @@ facts-ab2e3429ea84c30c breaks
 facts-b7e2deddccd16861 count
 old-gate-02dae057b9d0cf87 count
 old-gate-0389719e61d4cfa7 count
-old-gate-04d3119da5a3931e breaks
+old-gate-04d3119da5a3931e count
 old-gate-09efad3614347d91 count
 old-gate-0b5e72cb4a2b6fe8 count
 old-gate-0bf5b3e7d7471095 count
@@ -3729,17 +3706,17 @@ old-gate-45567e7958e85b90 count
 old-gate-4e43accd4fa0a5b7 count
 old-gate-57276fcd42c3cb10 count
 old-gate-5da6c7e5cebcfc4e count
-old-gate-64311d82d42ef913 breaks
+old-gate-64311d82d42ef913 count
 old-gate-73606c8f7845aebc count
 old-gate-74893d4636097277 count
 old-gate-86431f273a4c399e count
-old-gate-91674bab36f09a1b breaks
+old-gate-91674bab36f09a1b count
 old-gate-92f05d8c29fb597d count
 old-gate-96890855127aac5d count
 old-gate-9915e938d38935b6 count
 old-gate-9e37ad98870162bb count
 old-gate-9f45277219b1ddb8 count
-old-gate-9ff20b301923d38f breaks
+old-gate-9ff20b301923d38f count
 old-gate-a0fef1ad5ba2e91a count
 old-gate-a129c4825e4eb270 breaks
 old-gate-a4c733288f4ee54e count
@@ -3779,15 +3756,6 @@ sample-fe4b8ea7070b7c99 breaks
 ## Real usage: Khmer and Myanmar; Chrome's dictionary breaks differ from the library's (main before #340 too)
 sample-6f8970d165201513 breaks
 sample-c11591c08197d852 breaks
-
-## Real usage: a word longer than the line (URLs, message placeholders, long Cyrillic or Armenian words), broken between characters; Chrome fits one character more or fewer than the library's character widths allow (main before #340 too)
-sample-15b8a9d949bc752a breaks
-sample-40da9c442607a2b9 breaks
-sample-a28b833f33f062cb breaks
-sample-a59ef022ee5dd16d breaks
-sample-b85f26f81ab7033e breaks
-sample-f313ba190897a0f2 breaks
-sample-f3bf2f1722208b15 breaks
 
 ## Real usage: soft hyphens; Chrome breaks before the syllable where the library takes the soft hyphen, or at another one (main before #340 too)
 sample-347ac514160904d0 breaks
@@ -3907,7 +3875,6 @@ old-gate-ebbad3ec75222375 breaks
 old-gate-eda49d3d069323a9 count
 
 ## Tabs beside other spaces, brackets or other scripts, at 24 px and wider: Chrome's tab stops and breaks around tabs differ from the library's
-catalog-037a243ea93c5b62 count
 catalog-0f665661fbf0dd22 count
 catalog-16ff8d714a074bb2 count
 catalog-1dc13600384b8b5f count
@@ -3923,13 +3890,10 @@ catalog-5382f0857fbd8731 count
 catalog-54457001d1ea8ae1 breaks
 catalog-56511ecbf8ebe44e count
 catalog-57484d9425928998 count
-catalog-5c6ec95d36e39ffa breaks
 catalog-64295e627acead04 breaks
 catalog-68ddbd6926a300f2 count
 catalog-6b7afd9f92e3d3c2 breaks
-catalog-6c4f32144e132726 count
 catalog-735c29d91ab56aef breaks
-catalog-73e9baa75cf6d6f2 count
 catalog-75c4231f31da3416 breaks
 catalog-765b7ba01a84f5d3 breaks
 catalog-78567fc4d292f95d count
@@ -3943,17 +3907,13 @@ catalog-96312710ee8bc5d1 count
 catalog-a6e15932b0df6950 breaks
 catalog-ad8d3f38bf37dc50 count
 catalog-ae4f3d2a02fe44c6 breaks
-catalog-ae894ed1894e3a79 breaks
 catalog-af1028942a3ed716 count
 catalog-b08b196ce6adeadf breaks
 catalog-b43faf7755b8f5d6 breaks
-catalog-bdfd5e24ab210c66 breaks
-catalog-c54f7ecc160c6b02 count
 catalog-c5504c8d91f34696 count
 catalog-c81dcdfc4d90df9f count
 catalog-dce2bb75c64098d0 breaks
 catalog-e149b88f31c14810 count
-catalog-e615a3a1d148a3e6 count
 catalog-e7c97d66eec775aa breaks
 catalog-f0173eb1a9000b2a breaks
 old-gate-1426548010b53ae6 count
@@ -4051,12 +4011,10 @@ catalog-9797b6d2a2583275 count
 catalog-9b8693b7dce4d912 count
 catalog-9be9d395f1c7ef3c breaks
 catalog-9df35d93133c7b1b count
-catalog-9df7661e909601df breaks
 catalog-a070ef98ce0e89fd count
 catalog-a81e726553ec8137 count
 catalog-ab768ff90353bb44 breaks
 catalog-b079f28e331e675f count
-catalog-b2a4bb947e94af9b breaks
 catalog-b5ffc44a84aaff90 count
 catalog-b6fdbfce23f84f63 count
 catalog-b9b2643af65fe890 breaks
@@ -4090,7 +4048,6 @@ facts-95bb3e0426c7a801 breaks
 facts-b8485914d68eddf6 count
 facts-c309045f0579e048 count
 facts-d5ba828b44bfb4e1 count
-facts-d5e7daf0e9f37a5d breaks
 facts-d6c085ad7370de25 count
 facts-edd23560d2da1d6f count
 facts-ee6c9de0a47bba8c count

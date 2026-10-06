@@ -1,3 +1,6 @@
+## #421, "AV" nine times in 16 px Helvetica Neue at 85 px, a word cut twice: WebKit measures a line that starts inside a cut word from that line's own start (TextUtil::breakWord, TextUtil.cpp:242-365) and gives the rest of the word the width left over (AbstractLineBuilder.cpp:92-96), so its second line, whose nine letters measure 85.06 px alone, keeps eight; the library takes every line from the differences of the word's prefixes, in which that line's first "A" keeps its kerning with the "V" before it, so the nine are 84.32 px and fit; the rest of a cut word carries its width from line to line, which the cursor has no field for, so the rule isn't ported (the right line count, main too; ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
+report-aa5ba7c12d9ff140 breaks
+
 ## A padded rich pre-wrap span that starts on the line it ends inside, at a line feed or after spaces that hang, at 24 px and wider: Safari fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-f7c605f19ec5d469 breaks
 
@@ -1738,6 +1741,11 @@ rich-f6d6190bf525ffc7 count
 catalog-1d72217944543263 breaks
 catalog-3552d0e49f3c4569 breaks
 catalog-a1b0b5def1fd6512 breaks
+
+## Narrower than real layouts: one word cut into many pieces in a box of 1-17 px ("To." eight times in 16 px Helvetica Neue at 1 px, forty joined "ه" in 16 px Arial at 15.1 and 17 px); WebKit measures each piece from its own line's start and gives the rest of the word the width left over (AbstractLineBuilder.cpp:92-96), which shrinks by what each piece takes beyond its share of the word, until the rest fits a line whole ("o." with 0.58 px left, the last three "ه"); the library's pieces add up to the word, so it cuts once more; the rest of a cut word carries its width from line to line, which the cursor has no field for, so the rule isn't ported (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
+catalog-1e09fb14909f48c4 count
+catalog-32b37afd7007a194 count
+catalog-5535b5abb35ad415 count
 
 ## Narrower than real layouts: width 1, where nothing fits and WebKit keeps spaces, marks, controls or zero-width characters with the character before them otherwise than the library
 catalog-0099ca5fe40e865a count

@@ -46,7 +46,7 @@ function run(op, data, widths, reps, font, options) {
       switch (op) {
         case 'new': case 'seen': n += L.layout(L.prepare(p, font, options), w, 20).lineCount; break
         case 'prepare': n += L.prepare(p, font, options) === null ? 0 : 1; break
-        case 'rich-new': n += R.measureRichInlineStats(R.prepareRichInline(p), w).lineCount; break
+        case 'rich-new': case 'rich-seen': n += R.measureRichInlineStats(R.prepareRichInline(p), w).lineCount; break
         case 'layout': n += L.layout(p, w, 20).lineCount; break
         case 'stats': { const s = L.measureLineStats(p, w); n += s.lineCount + s.maxLineWidth; break }
         case 'walk': n += L.walkLineRanges(p, w, line => { n += line.width }); break

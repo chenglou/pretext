@@ -73,7 +73,12 @@
 //   message under keep-all and pre-wrap together, with preserved spaces, a line feed, and a bold word whose ending
 //   follows it inside a line, a break between items that only keep-all forbids. The ending is longer than the bold
 //   word, so the width the cut takes well inside a layout is one where the word fits the line above and its ending
-//   doesn't.
+//   doesn't;
+// - fullwidth punctuation at an item's edge, cut on their own: a pair of marks that a bold span's edge splits, a
+//   closing mark before a full stop and a colon before an opening bracket, which Chrome's text-spacing-trim halts as
+//   in one text node; and a bold span that ends with a closing bracket before a space and a Latin word, where Chrome
+//   doesn't halt the bracket at a line's end, since no break comes right after it. The word doesn't break, so the
+//   cut reaches the width where the bracket stops fitting whole.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -284,5 +289,14 @@ export function richTemplates(): Template[] {
   out.push(template('code-spans', 'inline code with padding, alone in its paragraph (src/layout.test.ts, rich-inline invariants)', HELVETICA, [span('git commit --amend --no-edit', CODE, { padding: 7 })]))
   out.push(template('keep-all/pre-wrap', 'word-break: keep-all and white-space: pre-wrap together on the paragraph (src/layout.test.ts, rich-inline invariants)', KOREAN,
     ['민수 씨,  오늘 ', span('회의', BOLD(KOREAN)), '에서는\n세 가지를  정합니다'], 'ko', 'keep-all', 'pre-wrap'))
+  const edges: ReadonlyArray<readonly [string, readonly Part[]]> = [
+    ['punctuation-pair', ['これは', span('「引用」', BOLD(JAPANESE)), '。と言った']],
+    ['punctuation-pair', [span('注意：', BOLD(JAPANESE)), '「これは引用」です']],
+    ['closing-mark', ['まず', span('「設定」', BOLD(JAPANESE)), ' Settings']],
+  ]
+  for (let i = 0; i < edges.length; i++) {
+    const [family, parts] = edges[i]!
+    out.push(template(`item-edges/${family}`, 'fullwidth punctuation at an item\'s edge (src/layout.test.ts, layout invariants)', JAPANESE, parts, 'ja'))
+  }
   return out
 }

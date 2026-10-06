@@ -24,6 +24,9 @@ export type SpaceKerning = {
 export type SegmentFit = {
   mode: BreakableFitMode
   advances: number[] | null // Per grapheme, or null for one grapheme
+  // With advances, per grapheme, what a line that starts with it adds to its advance, where
+  // the engine shapes such a line again (the 'reshaped-lines' mode). Null where nothing.
+  lineStartExtras: number[] | null
   // With advances in the WebKit profile, per grapheme, 1 for one after the first that
   // WebKit doesn't start a line with when a line holds only an overflowing first
   // character, by its first code unit. Null without any.
@@ -54,18 +57,37 @@ export type EngineProfile = {
   // adds (InlineLineBuilder.cpp:1172-1183). Blink and Gecko fit exactly in their own units, so their
   // 0.005 px is a named gap (ENGINE_FOLLOWUPS.md, Fitting arithmetic).
   lineFitEpsilon: number
-  // Where an emergency break falls inside a segment. WebKit measures the word's grapheme
-  // prefixes (TextUtil::breakWord), and Gecko adds the advances of the word shaped whole
+  // How a segment is fit where a line narrower than it cuts it between letters, from Canvas
+  // questions about the word (getSegmentFit). WebKit measures the word's grapheme prefixes
+  // (TextUtil::breakWord), and Gecko adds the advances of the word shaped whole
   // (gfxTextRun::BreakAndMeasureText), which prefixes follow in joined scripts where
-  // standalone graphemes don't. Blink sums standalone graphemes. Segments at least this
-  // wide fit from prefixes, narrower ones from standalone graphemes. A segment breaks
-  // only on a line narrower than itself, so every line at least this wide gets prefixes.
-  // Gecko's 80px is a premise, not a browser rule: prefixes cost a Canvas call per
-  // grapheme of every new word, most of the calls a lower floor adds are in words 24-80px
-  // wide, and taking them from 24px or everywhere fixed adversarial lines at 24-80px but
-  // made Firefox prepare new text much slower (RESEARCH.md, Break Opportunities From
-  // Engine Data; Decisions Log).
+  // standalone graphemes don't: 'segment-prefixes' for both, which is WebKit's rule for a word
+  // cut once and neither engine's rule otherwise (ENGINE_FOLLOWUPS.md, Emergency breaks inside
+  // a word).
+  // Blink reads positions from the word shaped whole and shapes a line's start and end again
+  // wherever HarfBuzz calls the cut unsafe, as between two kerned or two joined letters
+  // (ShapingLineBreaker::ShapeLine, shaping_line_breaker.cc:304-324, 511-584), so kerning
+  // across a cut is on neither side and a line is as wide as its text shaped alone:
+  // 'reshaped-lines'.
+  cutWordFit: 'segment-prefixes' | 'reshaped-lines'
+  // The least width from which a segment takes that fit; a narrower one adds up its graphemes
+  // measured alone. A segment breaks only on a line narrower than itself, so every line at
+  // least this wide gets the engine's fit, and WebKit's is every segment's. Gecko's and
+  // Blink's 80px is a premise, not a browser rule: the fit costs Canvas calls for each new
+  // word, most of the calls a lower floor adds are in words 24-80px wide, and taking them
+  // from 24px or everywhere fixed adversarial lines at 24-80px but made Firefox prepare new
+  // text much slower (RESEARCH.md, Break Opportunities From Engine Data; Decisions Log).
   prefixFitMinWidth: number
+  // Gecko shapes a word once, whole, and never again (gfxTextRun::SetLineBreaks does nothing,
+  // gfxTextRun.cpp:1292-1301), so a line adds up the advances its letters have in that one
+  // shaping wherever it starts. A ligature's whole advance is on its first letter and none on
+  // the rest (GetAdvanceForGlyph, gfxTextRun.cpp:1139-1151), so a line ends inside a ligature
+  // only where the ligature starts the line and doesn't fit. Blink and WebKit shape or measure
+  // a line from its own start, where the letters of a ligature cut in two each have a glyph.
+  // The Gecko profile follows it in the words it fits from prefixes
+  // (countLigaturesOnFirstLetter). The kerning those advances keep at a cut isn't ported
+  // (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word).
+  cutWordKeepsLigatures: boolean
   // WebKit measures a text item together with a directly following U+0020 and
   // subtracts one unshaped space, so the item keeps its kerning with that space
   // wherever the line ends. Gecko shapes words without their spaces.
@@ -316,7 +338,7 @@ export type EngineProfile = {
   transformsSegmentBreaksAcrossItems: boolean
 }
 
-export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
+export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context' | 'reshaped-lines'
 
 // The measurement context and what preparation measured through it. Canvas resolves
 // fonts under the context's language, the page's unless the context has a `lang` to
@@ -325,14 +347,15 @@ export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-cont
 // language it was created under: all of it is replaced when that language changes.
 type MeasureState = {
   language: string | null
-  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D // Once made, read through getContext() alone
+  font: string // The font getContext() set the context to since a font was last looked up, or ''
+  letterSpacing: string // The letterSpacing getContext() last set the context to
   genericFamilies: string[] | null // The families the language gives the generic keywords, or null
   takesLetterSpacing: boolean // As Chrome's and Firefox's contexts do, as a string of CSS px
   // Whether the context shapes text under LETTER_SPACED_SHAPING as the page shapes text
   // under letter spacing, without its optional ligatures: it takes a letterSpacing and
   // the engine's Canvas turns them off under one (canvasLetterSpacingDropsLigatures).
   shapesLetterSpaced: boolean
-  letterSpaced: boolean // Whether the context is set to LETTER_SPACED_SHAPING, by getFontMeasurement()
   fonts: Map<string, FontMeasurement>
   // What letter-spaced text measures in each font where shapesLetterSpaced: the same text
   // shaped without its optional ligatures.
@@ -342,10 +365,11 @@ let measureState: MeasureState | null = null
 // What preparation keeps per font. It all goes together, when the caches clear or the
 // language changes.
 export type FontMeasurement = {
-  state: MeasureState // Its context, which getFontMeasurement() sets to the font and its shaping
+  state: MeasureState // Its context, which getContext() sets to the font and its shaping
   // The font Canvas is given: the declared font, with the generic keywords the context's
   // language names replaced by their families.
   canvasFont: string
+  letterSpacing: string // The Canvas letterSpacing its text is shaped under: LETTER_SPACED_SHAPING or none
   metrics: Map<string, SegmentMetrics>
   // Metrics of a text item measured together with one following U+0020, keyed by
   // the item alone. The width includes that space.
@@ -359,6 +383,7 @@ export type FontMeasurement = {
   emojiWidth: number // Canvas's width of one glyph of the emoji font, measured with the correction
   hyphenText: string | null // Asked for the first text with a soft hyphen (getHyphenText)
   hanKerning: HanKerningFontData | null | undefined // Read for the first text that may kern
+  ligaturePairs: Map<string, boolean> // Whether two neighbouring graphemes are a ligature, once asked (isLigature)
 }
 let cachedEngineProfile: EngineProfile | null = null
 
@@ -488,7 +513,7 @@ export function getHyphenText(measurement: FontMeasurement): string {
   const size = fontSizeRe.exec(font)
   let hyphenText = '-'
   if (size !== null && getSegmentMetrics('\u2010', measurement).width !== getSegmentMetrics('-', measurement).width) {
-    const context = measurement.state.context
+    const context = getContext(measurement)
     const start = size.index + size[0].length
     const prefix = font.slice(0, start)
     const families = font.slice(start).match(familyRe) ?? []
@@ -563,10 +588,10 @@ export function zeros(count: number): number[] {
 // even when assignment or measurement fails. Null where the context can't take the
 // spacing.
 export function measureWithLetterSpacing(text: string, letterSpacing: number, emojiCorrection: number, measurement: FontMeasurement): number | null {
-  const { context, takesLetterSpacing } = measurement.state
-  if (!takesLetterSpacing) return null
+  if (!measurement.state.takesLetterSpacing) return null
   // Counted before the spacing is set: the count measures stretches into the font's segment cache.
   const corrected = emojiCorrection === 0 ? 0 : countEmojiGlyphs(text, measurement) * emojiCorrection
+  const context = getContext(measurement)
   const previous = context.letterSpacing
   try {
     context.letterSpacing = `${letterSpacing}px`
@@ -591,7 +616,7 @@ export function getFollowingSpaceMetrics(seg: string, measurement: FontMeasureme
 }
 
 function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: string, measurement: FontMeasurement): SegmentMetrics {
-  const metrics: SegmentMetrics = { width: measurement.state.context.measureText(text).width, emojiCount: -1, fit: null, spaceKerning: null }
+  const metrics: SegmentMetrics = { width: getContext(measurement).measureText(text).width, emojiCount: -1, fit: null, spaceKerning: null }
   cache.set(seg, metrics)
   return metrics
 }
@@ -621,7 +646,7 @@ function takesNoSpaceKerning(code: number): boolean {
 // nothing with it (RESEARCH.md, Kerning At Line Edges, has the fonts that do).
 export function getFontSpaceKerning(measurement: FontMeasurement): Map<number, number> | null {
   if (measurement.spaceKerning === undefined) {
-    const context = measurement.state.context
+    const context = getContext(measurement)
     let probe = '\u2028'
     for (let code = 0x21; code <= 0x7e; code++) probe += String.fromCharCode(code) + '\u2028'
     const kerned = context.measureText(probe).width
@@ -643,7 +668,7 @@ function getCharacterSpaceKerning(code: number, spaceFirst: boolean, measurement
     kerning = 0
     if (!takesNoSpaceKerning(code)) {
       const character = String.fromCharCode(code)
-      const pairWidth = measurement.state.context.measureText(spaceFirst ? '\u2028' + character : character + '\u2028').width
+      const pairWidth = getContext(measurement).measureText(spaceFirst ? '\u2028' + character : character + '\u2028').width
       kerning = pairWidth - getSegmentMetrics(character, measurement).width - getSegmentMetrics(' ', measurement).width
       // Blink keeps a run's width as a float32 (shape_result.cc:1539-1576), so up to the pair's
       // width / 2^22 is rounding, not kerning (RESEARCH.md, Kerning At Line Edges).
@@ -716,7 +741,9 @@ function buildEngineProfile(): EngineProfile {
     lineBreakScan: engine,
     graphemeTable: engine === 'webkit' ? 'apple/char' : engine === 'gecko' ? 'gecko/char' : 'chromium/char',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
-    prefixFitMinWidth: engine === 'webkit' ? 0 : engine === 'gecko' ? 80 : Infinity,
+    cutWordFit: engine === 'blink' ? 'reshaped-lines' : 'segment-prefixes',
+    prefixFitMinWidth: engine === 'webkit' ? 0 : 80,
+    cutWordKeepsLigatures: engine === 'gecko',
     measureTextWithFollowingSpace: engine === 'webkit',
     kernsSpacesInScriptRun: engine === 'blink',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
@@ -764,7 +791,7 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
   if (correction !== null) return correction
 
   const fontSize = parseFontSize(font)
-  const canvasW = measurement.emojiWidth = measurement.state.context.measureText('\u{1F600}').width
+  const canvasW = measurement.emojiWidth = getContext(measurement).measureText('\u{1F600}').width
   correction = 0
   // document.body is null until the parser reaches <body>, which lib.dom's type leaves out.
   if (
@@ -796,6 +823,12 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
 // window far finer than the steps a font's advances come in (RESEARCH.md, Content
 // Language And Fonts).
 const CANVAS_WIDTH_ROUNDING = 2 ** -20
+
+// What a word's width may differ by from its graphemes' widths added up and still be their sum:
+// 2^-17 of the width, which covers the float32 roundings of a word of 96 graphemes, each 2^-24
+// of the width at most, and is a tenth of the least kerning of a 2,048-unit font in a 100px word
+// at 16px (RESEARCH.md, Break Opportunities From Engine Data).
+const WORD_SUM_ROUNDING = 2 ** -17
 
 // How many glyphs of the emoji font draw a text: the emoji font gives every glyph one
 // advance, the probe's, so text it draws measures a whole number of them, and none
@@ -871,17 +904,111 @@ export function getSegmentFit(
   withLineStartProhibitions = false,
 ): SegmentFit {
   if (metrics.fit !== null && metrics.fit.mode === mode) return metrics.fit
+  const profile = getEngineProfile()
   const ends = new Int32Array(seg.length)
-  const count = findGraphemeEnds(getEngineProfile().graphemeTable, seg, 0, seg.length, ends)
-  if (count <= 1) return metrics.fit = { mode, advances: null, lineStartProhibitions: null, entryGeometry: null }
+  const count = findGraphemeEnds(profile.graphemeTable, seg, 0, seg.length, ends)
+  if (count <= 1) return metrics.fit = { mode, advances: null, lineStartExtras: null, lineStartProhibitions: null, entryGeometry: null }
   let prohibitions: Uint8Array | null = null
   if (withLineStartProhibitions) {
     for (let i = 1; i < count; i++) if (!canWebKitLineStartWith(seg.charCodeAt(ends[i - 1]!))) (prohibitions ??= new Uint8Array(count))[i] = 1
   }
-  // Prefix widths, or each grapheme alone or after the one before it. Past
-  // MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
-  const prefixes = mode === 'segment-prefixes' && count <= MAX_PREFIX_FIT_GRAPHEMES
-  const pairs = mode !== 'sum-graphemes' && !prefixes
+  let advances: number[]
+  let lineStartExtras: number[] | null = null
+  if (mode === 'reshaped-lines') {
+    // Blink shapes a line of a cut word again where the cut falls between letters shaped
+    // together (EngineProfile's cutWordFit). Premise: a line holds the letters whose width,
+    // shaped alone, fits, so the letters after the line's first take the advances they have
+    // in the word, and the first its width alone. Premise, taken for speed: a word as wide as
+    // its graphemes measured alone has nothing shaped across them, and they are its advances,
+    // with nothing more measured. Else each grapheme is measured after the one before it,
+    // which every word of the font shares, and where those don't add up to the word either,
+    // as in a ligature of three letters or the joined forms of Arabic, the word's prefixes
+    // are, up to MAX_PREFIX_FIT_GRAPHEMES (RESEARCH.md, Break Opportunities From Engine Data).
+    const width = getCorrectedSegmentWidth(seg, metrics, measurement, emojiCorrection) - (followingSpaceWidth ?? 0)
+    const alone = measureFitAdvances(seg, ends, count, 'sum-graphemes', metrics, measurement, emojiCorrection, followingSpaceWidth)
+    advances = alone
+    if (!addUpTo(alone, width)) {
+      advances = measureFitAdvances(seg, ends, count, 'pair-context', metrics, measurement, emojiCorrection, followingSpaceWidth)
+      if (count <= MAX_PREFIX_FIT_GRAPHEMES && !addUpTo(advances, width)) {
+        advances = measureFitAdvances(seg, ends, count, 'segment-prefixes', metrics, measurement, emojiCorrection, followingSpaceWidth)
+      }
+      lineStartExtras = [0]
+      for (let i = 1; i < count; i++) lineStartExtras.push(alone[i]! - advances[i]!)
+    }
+  } else {
+    // Past MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
+    const prefixes = mode === 'segment-prefixes' && count <= MAX_PREFIX_FIT_GRAPHEMES
+    advances = measureFitAdvances(seg, ends, count, mode === 'segment-prefixes' && !prefixes ? 'pair-context' : mode, metrics, measurement, emojiCorrection, followingSpaceWidth)
+    if (prefixes && profile.cutWordKeepsLigatures) countLigaturesOnFirstLetter(seg, ends, advances, measurement, emojiCorrection)
+  }
+  return metrics.fit = { mode, advances, lineStartExtras, lineStartProhibitions: prohibitions, entryGeometry: null }
+}
+
+// Moves the advance of each later letter of a ligature onto the ligature's first letter, in a
+// segment's prefix advances, as Gecko counts it where it cuts a word (EngineProfile's
+// cutWordKeepsLigatures). A prefix that ends inside a ligature has the first letter's glyph
+// alone, so the next letter's advance after that prefix isn't its advance alone, in app units,
+// 1/60 px, which Gecko's Canvas reports whole, and there Canvas is asked whether the two are a
+// ligature (isLigature). Where a line is narrower than the ligature it starts with, Gecko cuts
+// inside it and gives each of its letters an equal share (ComputeLigatureData,
+// gfxTextRun.cpp:238-322); here the first letter keeps the whole advance (ENGINE_FOLLOWUPS.md,
+// Emergency breaks inside a word).
+function countLigaturesOnFirstLetter(seg: string, ends: Int32Array, advances: number[], measurement: FontMeasurement, emojiCorrection: number): void {
+  // Text measured under letter spacing has no optional ligature, and a context that can't
+  // turn them off can't be asked.
+  if (!measurement.state.shapesLetterSpaced || measurement.letterSpacing !== '0px') return
+  // The grapheme the ligature that holds the grapheme before this one starts with, or that grapheme.
+  let first = 0
+  for (let i = 1; i < advances.length; i++) {
+    const start = ends[i - 1]!
+    const alone = getTextWidth(seg.slice(start, ends[i]), measurement, emojiCorrection)
+    if (Math.round((advances[i]! - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : ends[i - 2]!, ends[i]), measurement)) {
+      advances[first] = advances[first]! + advances[i]!
+      advances[i] = 0
+    } else {
+      first = i
+    }
+  }
+}
+
+// Whether two neighbouring graphemes are one of the font's optional ligatures: the pair measures
+// otherwise without them, as the context shapes text under a letter spacing
+// (LETTER_SPACED_SHAPING). Asked of Canvas once per pair and font. A kerned pair, letters that
+// join, a mark on its base and a ligature the font requires measure the same, and aren't one.
+function isLigature(pair: string, measurement: FontMeasurement): boolean {
+  let ligature = measurement.ligaturePairs.get(pair)
+  if (ligature === undefined) {
+    const context = getContext(measurement)
+    const width = getSegmentMetrics(pair, measurement).width
+    context.letterSpacing = LETTER_SPACED_SHAPING
+    ligature = context.measureText(pair).width !== width
+    context.letterSpacing = '0px'
+    measurement.ligaturePairs.set(pair, ligature)
+  }
+  return ligature
+}
+
+// Whether a segment's advances add up to its width, within the rounding of Canvas's widths.
+function addUpTo(advances: readonly number[], width: number): boolean {
+  let sum = 0
+  for (let i = 0; i < advances.length; i++) sum += advances[i]!
+  return Math.abs(sum - width) <= width * WORD_SUM_ROUNDING
+}
+
+// A segment's advances per grapheme: the differences of its prefixes' widths, or each
+// grapheme's width alone or, as a pair, after the one before it.
+function measureFitAdvances(
+  seg: string,
+  ends: Int32Array,
+  count: number,
+  from: 'sum-graphemes' | 'segment-prefixes' | 'pair-context',
+  metrics: SegmentMetrics,
+  measurement: FontMeasurement,
+  emojiCorrection: number,
+  followingSpaceWidth: number | null,
+): number[] {
+  const prefixes = from === 'segment-prefixes'
+  const pairs = from === 'pair-context'
   const advances: number[] = []
   let previousStart = 0
   let previousWidth = 0
@@ -907,12 +1034,13 @@ export function getSegmentFit(
   if (followingSpaceWidth !== null && !prefixes) {
     advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
   }
-  return metrics.fit = { mode, advances, lineStartProhibitions: prohibitions, entryGeometry: null }
+  return advances
 }
 
-// What preparation measures a font's text through, with the context set to measure it.
-// Text under letter spacing has a measurement of its own where the context shapes it as
-// the page does: its widths, prefixes and line-edge facts all come from that shaping.
+// What preparation measures a font's text through. Text under letter spacing has a
+// measurement of its own where the context shapes it as the page does: its widths,
+// prefixes and line-edge facts all come from that shaping. The context isn't touched
+// here: text that is all in the font's caches measures nothing (getContext).
 export function getFontMeasurement(font: string, language: string | null, letterSpaced: boolean): FontMeasurement {
   // Preparation starts here, with the language it resolved. After that language
   // changes, start again with a new context and empty caches; clearing the caches
@@ -924,15 +1052,26 @@ export function getFontMeasurement(font: string, language: string | null, letter
   let measurement = fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    measurement = { state, canvasFont, metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, hanKerning: undefined }
+    measurement = { state, canvasFont, letterSpacing: shaped ? LETTER_SPACED_SHAPING : '0px', metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, hanKerning: undefined, ligaturePairs: new Map() }
     fonts.set(font, measurement)
   }
-  state.context.font = measurement.canvasFont
-  if (state.letterSpaced !== shaped) {
-    state.context.letterSpacing = shaped ? LETTER_SPACED_SHAPING : '0px'
-    state.letterSpaced = shaped
-  }
+  // The first measurement after a lookup sets the font again, the same string too: Firefox's
+  // context takes a face added to document.fonts only when its font is assigned.
+  state.font = ''
   return measurement
+}
+
+// The font's context, set to the font and its shaping. Every measurement in a font takes
+// its context from here as it measures, so none reads a width under another font's
+// setting, whatever was looked up or prepared in between, and text that is all cached,
+// which measures nothing, sets nothing. What changes the context after that puts it back
+// before it returns (getHyphenText, measureWithLetterSpacing, getFontSpaceKerning,
+// isLigature).
+export function getContext(measurement: FontMeasurement): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  const state = measurement.state
+  if (state.font !== measurement.canvasFont) state.context.font = state.font = measurement.canvasFont
+  if (state.letterSpacing !== measurement.letterSpacing) state.context.letterSpacing = state.letterSpacing = measurement.letterSpacing
+  return state.context
 }
 
 function createMeasureState(language: string | null): MeasureState {
@@ -952,10 +1091,11 @@ function createMeasureState(language: string | null): MeasureState {
   return {
     language,
     context,
+    font: '',
+    letterSpacing: '0px',
     genericFamilies: language !== null && profile.namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, context) : null,
     takesLetterSpacing,
     shapesLetterSpaced: takesLetterSpacing && profile.canvasLetterSpacingDropsLigatures,
-    letterSpaced: false,
     fonts: new Map(),
     letterSpacedFonts: new Map(),
   }

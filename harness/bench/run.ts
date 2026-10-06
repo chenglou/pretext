@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { serveJob, windowTitle } from '../run.ts'
+import { serveJob, watched, windowTitle } from '../run.ts'
 import { BROWSER, type BrowserKind } from '../types.ts'
 import { benchBundle, buildName, srcOf } from './lib.ts'
 import type { Doc, DocResult, OpSpec } from './page.ts'
@@ -72,6 +72,8 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
     doc('rich', 'latin', 'en', STYLE.latin.font, {}, [
       { op: 'rich-new', batches, batchUnits: batches.map(items => items.reduce((n, list) => n + list.reduce((m, item) => m + item.text.length, 0), 0)), widths: [220] },
       ...['rich-stats', 'rich-walk', 'rich-stream'].map(op => ({ op, texts: kept, textUnits: keptUnits, handles: 'rich' as const, widths: [180, 220, 260] })),
+      // The kept messages prepared again, where every item looks its font up and measures nothing.
+      { op: 'rich-seen', texts: kept, textUnits: keptUnits, widths: [220] },
     ])
   }
   for (const family of MESSAGE_FAMILIES) {
@@ -144,7 +146,7 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
     if (url.searchParams.get('job') !== id && url.pathname !== '/favicon.ico') return new Response('Inactive job', { status: 409 })
     const d = docs[Number(url.searchParams.get('n'))]!
     switch (url.pathname) {
-      case '/doc': return new Response(`<!doctype html><html lang="${d.lang}"><head><meta charset="utf-8"><title>${foreground ? 'pretext bench' : windowTitle('pretext bench', browser)}</title></head><body><script type="module" src="/page.js?job=${id}&n=0"></script></body></html>`, { headers: { ...isolated, 'content-type': 'text/html; charset=utf-8' } })
+      case '/doc': return new Response(`<!doctype html><html lang="${d.lang}"><head><meta charset="utf-8"><title>${foreground ? 'pretext bench' : windowTitle('pretext bench', browser)}</title>${watched(browser) ? '<style>html{background:#111}</style>' : ''}</head><body><script type="module" src="/page.js?job=${id}&n=0"></script></body></html>`, { headers: { ...isolated, 'content-type': 'text/html; charset=utf-8' } })
       case '/page.js': return new Response(script, { headers: { ...isolated, 'content-type': 'text/javascript; charset=utf-8' } })
       case '/api/doc': {
         const names = d.library === undefined ? LABELS : [d.library]

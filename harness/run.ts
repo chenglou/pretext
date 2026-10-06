@@ -73,7 +73,7 @@ export function documents(browser: BrowserKind, cases: Case[], size: number): Ca
 // - A title is never laid out or measured, so its words reach none of the caches the cases meet, where a sentence or
 //   an image in the page moved a Chrome prediction. The words come first, since a tab cuts a long title at its end.
 // The other browsers keep the white page and the bare name. The measurements: harness/README.md, Browsers and pins.
-const watched = (browser: BrowserKind): boolean => browser === 'chrome' || browser === 'firefox'
+export const watched = (browser: BrowserKind): boolean => browser === 'chrome' || browser === 'firefox'
 export function windowTitle(name: string, browser: BrowserKind): string {
   return watched(browser) ? `This tab doesn't need focus - ${name}` : name
 }

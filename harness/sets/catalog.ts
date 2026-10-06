@@ -1,4 +1,4 @@
-// The behaviour catalog's templates, before widths.ts cuts them. Ten sources:
+// The behaviour catalog's templates, before widths.ts cuts them. Eleven sources:
 // - the per-engine rebuild's rule families (data/rule-families.ndjson), the flat ones within what the library takes;
 // - filed reports whose reporter measured the width with their own Canvas;
 // - a matrix of every UAX #14 line-break class between the scripts apps mix, under the CSS settings the library takes,
@@ -12,7 +12,8 @@
 //   own;
 // - CJK marks Chrome halts next to other punctuation;
 // - letter-spaced text in a font with `fi`, `fl` and `ffi` ligatures, which the browsers turn off under letter spacing;
-// - emoji characters a named font draws itself, beside one the emoji font draws.
+// - emoji characters a named font draws itself, beside one the emoji font draws;
+// - one word wider than its line, kerned or joined, which each browser cuts between letters its own way.
 // main's adversarial families were taken once from the old harness's generator, which is gone: their cases,
 // `catalog/main/*` and `rich/main/*`, stay in the case files as they were cut, and `make.ts cut` keeps them.
 import { readFileSync } from 'node:fs'
@@ -306,14 +307,38 @@ export function emojiGlyphTemplates(): Template[] {
   }]
 }
 
+// One word wider than its line, which each browser cuts between letters by its own rule (EngineProfile's cutWordFit in
+// src/measurement.ts): `To` kerns, by a `kern` table in Helvetica Neue, where HarfBuzz gives each letter half, and
+// by GPOS in Roboto, where the first letter takes it all, and a run of `ه`, as Arabic laughter is typed, joins. Each
+// shape is a family of its own: the cover tells a break by its classes, which are the same letters in all three, and
+// keeps one change of a family. With no grid, a template's one kept change is everything under 320 px, of which the cut
+// takes the widest three, where the word stops fitting on one line: the widths under 24 px hold many such cuts already.
+// webkit-host's search also keeps a change of the joined word at 14-17 px.
+export function cutWordTemplates(): Template[] {
+  const shapes: ReadonlyArray<readonly [string, string, string, string]> = [
+    ['kerning-split', 'To.'.repeat(8), '"Helvetica Neue"', 'en'],
+    ['kerning-first-glyph', 'To.'.repeat(8), 'Roboto, Arial, sans-serif', 'en'],
+    ['joined', 'ه'.repeat(40), 'Arial', 'ar'],
+  ]
+  const out: Template[] = []
+  for (let i = 0; i < shapes.length; i++) {
+    const [name, text, family, lang] = shapes[i]!
+    out.push({
+      family: `cut-words/${name}`, origin: `src/measurement.ts: a word cut between letters, ${name}`,
+      pageLang: lang, paragraph: paragraph({ font: font(family, 16), lang }, [text]), widths: [320], grid: false,
+    })
+  }
+  return out
+}
+
 export function catalogTemplates(): Template[] {
   const catalog: Template[] = []
   const seen = new Set<string>()
   // The order decides which template shows a line break first, which the cover keeps (widths.ts): filed reports, the
   // rebuild's rule families, the class matrix, the follow-ups' shapes, the mark chains, the line-end marks, the bidi
-  // controls, the pairs Chrome halts, the letter-spaced ligatures, then the emoji glyphs. main's families came before
-  // the class matrix when they were cut.
-  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), lineEndMarkTemplates(), bidiControlTemplates(), hanKerningPairTemplates(), letterSpacedLigatureTemplates(), emojiGlyphTemplates()]
+  // controls, the pairs Chrome halts, the letter-spaced ligatures, the emoji glyphs, then the cut words. main's families
+  // came before the class matrix when they were cut.
+  const lists = [reportedTemplates(), ruleFamilyTemplates(), classMatrixTemplates(), followupTemplates(), markChainTemplates(), lineEndMarkTemplates(), bidiControlTemplates(), hanKerningPairTemplates(), letterSpacedLigatureTemplates(), emojiGlyphTemplates(), cutWordTemplates()]
   for (let l = 0; l < lists.length; l++) {
     for (let i = 0; i < lists[l]!.length; i++) {
       const t = lists[l]![i]!

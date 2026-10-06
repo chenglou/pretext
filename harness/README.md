@@ -94,9 +94,9 @@ layouts" (the narrowest real-usage draw is 25 px).
 |---|---|---|
 | `sample.ndjson` | The real-usage sample | `make.ts write` |
 | `reports.ndjson` | Filed reports with the text, font and width as filed (`sets/exact.ts`) | `make.ts write` |
-| `catalog.ndjson` | Families of templates, from the engines' rules, the UAX #14 classes between the scripts apps mix, the shapes `ENGINE_FOLLOWUPS.md` names, bidi controls where Firefox's line breaking looks past them, CJK marks Chrome halts next to other punctuation, letter-spaced words whose ligatures the browsers turn off and emoji characters a named font draws itself, plus adversarial `main/*` cases taken from the old test suite | the width search |
+| `catalog.ndjson` | Families of templates, from the engines' rules, the UAX #14 classes between the scripts apps mix, the shapes `ENGINE_FOLLOWUPS.md` names, bidi controls where Firefox's line breaking looks past them, CJK marks Chrome halts next to other punctuation, letter-spaced words whose ligatures the browsers turn off, emoji characters a named font draws itself and one word wider than its line, kerned or joined, that each browser cuts between letters its own way, plus adversarial `main/*` cases taken from the old test suite | the width search |
 | `facts.ndjson` | The engine facts `src/layout.test.ts` checks on plain text, in a browser | the width search |
-| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, plus `main/*` cases | the width search |
+| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, fullwidth punctuation at an item's edge, plus `main/*` cases | the width search |
 | `census.ndjson`, `books.ndjson`, `smoke.ndjson` | Real paragraphs of `corpora/` at several widths, and whole books, from the per-engine rebuild | taken once |
 | `oracles.ndjson` | The mode oracles (pre-wrap, keep-all, symbols, letter spacing, soft hyphens) the old test suite ran | taken once |
 | `followups.ndjson` | Two fuzz strings `ENGINE_FOLLOWUPS.md` names | taken once |
@@ -238,11 +238,18 @@ harness/invariants.test.ts`) and the bench's floors.
   line text, the line APIs' disagreements and the Canvas calls after preparing. So a change that moves only widths,
   which `check` never fails on, still shows there.
 - An offline replay detects change but isn't an oracle: its stand-in Canvas gives each character a width from a
-  formula, moved a little by each pair of neighbouring characters (`offline-equal.ts`), so it can't fail on shaping,
-  painting or string storage. Every stand-in font kerns the space, so offline the Chromium profile never takes the
+  formula, moved a little by each pair of neighbouring characters (`standInWidth()` in `invariants.ts`), so it can't
+  fail on shaping, painting or string storage. Every stand-in font kerns the space, so offline the Chromium profile never takes the
   path of a font that kerns nothing with it, which `src/layout.test.ts` and the browsers run.
 - Without the invariants' desktop user agent and string `letterSpacing` (`invariants.ts`), a planted defect in reusing
   a prepared handle went unseen in 500 draws.
+- Without the stand-in's kerning and ligatures between neighbouring letters (#435), every word measured as its letters
+  do alone, so the fits of a word cut between letters all gave one answer: a planted defect that overwrote the advances
+  a held handle keeps when its word was fit another way went unseen in 600 draws of every profile. With them, the
+  unknown profile, whose context takes no `letterSpacing`, fails it in 84 draws of 600. The WebKit profile's takes none
+  either, and it failed in 1 of the 600 drawn before the cut-word cases joined the sets and in none of those drawn
+  since; the Blink and Gecko profiles measure letter-spaced text apart, so no word there is fit two ways. A planted miss
+  of a line-start width in `layout()`'s count fails the Blink profile's agreement check in 3 draws of 600.
 - Canvas-call counts before #355 aren't comparable with later ones: the harness's adapter (`run.ts`) stopped calling
   `setLocale()` per case, cutting its calls 20-25% with no prediction change (2026-09-26).
 
@@ -251,8 +258,9 @@ harness/invariants.test.ts`) and the bench's floors.
 Speed claims rest on `bun harness bench`'s same-document ratios. Its rows (`new`, `rich`, `seen`, `resize`, `lines`,
 `worst`) follow what an app does; never rank `prepare()` against `layout()`, as one is paid once and the other on every
 resize. The `new` rows time text no library or browser has laid out: Firefox and Safari keep shaped text per font,
-shared by every canvas and the DOM, so a fresh canvas doesn't make text new. The `lines` row times the line functions on
-mixed, Latin and CJK messages, each family in a document of its own.
+shared by every canvas and the DOM, so a fresh canvas doesn't make text new. The `rich` row's `rich-seen` prepares its
+kept messages again, where every item looks its font up and measures nothing. The `lines` row times the line functions
+on mixed, Latin and CJK messages, each family in a document of its own.
 
 - **A control copy.** Each document runs base, the candidate and a second copy of base, shuffled each round, since only
   same-document ratios survive drift between sessions (`RESEARCH.md`, Evaluation Traps, has the numbers behind this and
@@ -334,8 +342,8 @@ first document until 15 s.
 Pinned Chrome and Firefox open each job's window on the user's screen, behind the others. Its page is blank and dark
 (`#111` on html and body; a case's paragraph is added, read and removed in one call, so none is ever painted), and its
 title reads "This tab doesn't need focus - pretext harness", or "... - pretext bench" under `bench --background`: such a
-job runs on fetches alone. The bench's own document takes only the title and keeps its white page. Chrome's window is
-the smallest Chrome gives, 500x375. With all three, every case recorded the same lines, widths and height in both
+job runs on fetches alone. The bench's own document is dark too, in the foreground as well. Chrome's window is the
+smallest Chrome gives, 500x375. With all three, every case recorded the same lines, widths and height in both
 orders, and was predicted the same, as with main's white page, bare title and 1200x900 window: Chrome's 43,101 and
 Firefox's 44,205 (2026-10-05, Chrome 154.0.8037.57, Firefox 156.0.1). The one Chrome prediction listed as varying
 between runs moved in check's order in 11 of 100 runs with them and in 14 of 100 without, and in reverse order in none
@@ -351,11 +359,14 @@ of either; no other prediction moved in any. None of the three reaches a case:
   overflowed the 1200 px window too.
 
 The other windows are as they were. The bench's foreground runs keep the bare title and Chrome's 1200x900, which their
-floors were fitted with, until a foreground run shows another form within them. Firefox's window keeps its size:
-Firefox hides the page of a window covered whole, as a small one is more easily, and three documents of one background
-bench at 500x375 ran hidden, two of them 1.7 and 3 times slower. Installed Safari's page wasn't run, and webkit-host's
-window is transparent. During its hold a Firefox window shows Firefox's own blank page. None of this was run with
-macOS set to always show scroll bars, where a case that overflows only the small window would newly get one.
+floors were fitted with, until a foreground run shows another form within them. The dark page is such a form: a
+foreground bench of main against its own `src/` with it, three sessions on an idle machine, called no row in Chrome or
+Firefox, and its rows' noise bands were the white page's (medians of 3.3% and 2.8% against 2.8% and 3.2%; 2026-10-05).
+Firefox's window keeps its size: Firefox hides the page of a window covered whole, as a small one is more easily, and
+three documents of one background bench at 500x375 ran hidden, two of them 1.7 and 3 times slower. Installed Safari's
+page wasn't run, and webkit-host's window is transparent. During its hold a Firefox window shows Firefox's own blank
+page. None of this was run with macOS set to always show scroll bars, where a case that overflows only the small window
+would newly get one.
 
 ## Other ratios and phones
 
@@ -405,9 +416,8 @@ rounds (`types.ts`, `wholePixelBoxes`). The width report leaves those lines out 
 the lines of webkit-host's passing sample draws inside the claims were more than 0.05 px off, without them 0.8%
 (2026-10-01). The shrink-wrap check keeps them, so there it misses a box up to a pixel too narrow where such a line is
 the widest, as in a fifth of the sample's pre-wrap draws, and webkit-host's `narrow` column reads low on pre-wrap text.
-The harness doesn't see re-layout at a line's own width; a defect that changes the widths a prepared handle keeps for
-one way of fitting lines when another is used (the stand-in Canvas gives the same widths to every way); several rules
-of the Gecko profile's analysis of bidi controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an emoji modifier split from its
+The harness doesn't see re-layout at a line's own width; several rules of the Gecko profile's analysis of bidi
+controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an emoji modifier split from its
 base across rich items; a rich paragraph of one item, which the adapter writes as plain text, so `src/layout.test.ts`
 checks its line functions against the rich stepper; Chrome's UI language, and so its `zh` table for pages without a
 `lang`; rendering other than macOS's and an iOS simulator's (Other ratios and phones), though Android and Windows are

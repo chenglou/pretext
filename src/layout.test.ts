@@ -2376,7 +2376,7 @@ describe('prepare invariants', () => {
     }
   })
 
-  test('segments at least prefixFitMinWidth wide fit emergency breaks from prefixes, narrower ones from standalone graphemes', () => {
+  test('segments at least prefixFitMinWidth wide take the engine\'s fit of a cut word, narrower ones their graphemes alone', () => {
     const profile = getEngineProfile()
     const previous = profile.prefixFitMinWidth
     const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
@@ -2900,7 +2900,9 @@ describe('prepare invariants', () => {
       ['lineBreakScan', 'blink', 'webkit', 'gecko'],
       ['graphemeTable', 'chromium/char', 'apple/char', 'gecko/char'],
       ['lineFitEpsilon', 0.005, 1 / 64, 0.005],
-      ['prefixFitMinWidth', Infinity, 0, 80],
+      ['cutWordFit', 'reshaped-lines', 'segment-prefixes', 'segment-prefixes'],
+      ['prefixFitMinWidth', 80, 0, 80],
+      ['cutWordKeepsLigatures', false, false, true],
       ['measureTextWithFollowingSpace', false, true, false],
       ['kernsSpacesInScriptRun', true, false, false],
       ['letterSpaceDiscretionaryHyphen', false, true, true],
@@ -5816,6 +5818,107 @@ describe('layout invariants', () => {
           expect(layoutWithLines(prepareWithSegments(text, font), width, LINE_HEIGHT).lines.map(line => line.text.trimEnd())).toEqual(expected)
         }
       }
+      // A pair that two items split halts as in one text: a closing mark before the next item's
+      // closing mark or middle dot, wherever the line ends, and an opening mark after the mark
+      // that ends the item before, but for where it starts a line. Each takes its own item's
+      // font, so the pair halts across a change of weight or size too. From 56px, where no
+      // line fills a pair's unit grapheme by grapheme, the lines and their widths are the text's.
+      const richLines = (items: Array<{ text: string, font?: string, break?: 'never', extraWidth?: number } | RichInlineBox>, width: number): string[] => {
+        const rich = prepareRichInline(items.map(item => (item.text === undefined ? item : { font, ...item })))
+        const lines: string[] = []
+        walkRichInlineLineRanges(rich, width, range => {
+          lines.push(`${range.fragments.map(fragment => materializeRichInlineLineRange(rich, { ...range, fragments: [fragment] }).fragments[0]!.text).join('')}:${Math.round(range.width * 100) / 100}`)
+        })
+        expect(measureRichInlineStats(rich, width).lineCount).toBe(lines.length)
+        return lines
+      }
+      const pairs: [string, string][] = [['中中」', '。中中'], ['中中」', '「中中'], ['中中）', '、中中'], ['中中「', '「中中'], ['中中」', '」中中'], ['中中。', '「中中'], ['中「中」', '。中'], ['中」', '·中']]
+      for (const [first, second] of pairs) {
+        const text = first + second
+        const prepared = prepareWithSegments(text, font)
+        for (let width = 56; width <= 104; width += 8) {
+          const flat = layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => `${line.text}:${Math.round(line.width * 100) / 100}`)
+          expect({ first, second, width, lines: richLines([{ text: first }, { text: second }], width) }).toEqual({ first, second, width, lines: flat })
+          expect({ first, second, width, lines: richLines([{ text: first, font: `700 ${font}` }, { text: second }], width) }).toEqual({ first, second, width, lines: flat })
+        }
+      }
+      expect(richLines([{ text: '中中」' }, { text: '。中中' }], 88)).toEqual(['中中」。中中:88'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中' }], 88)).toEqual(['中中」「中中:88'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中' }], 71)).toEqual(['中中」:48', '「中中:48'])
+      // The halted mark takes the trim of its own item's font: 10px at 20px.
+      expect(richLines([{ text: '中中」', font: '20px Halt Test Sans' }, { text: '。中中' }], 1e5)).toEqual(['中中」。中中:98'])
+      expect(richLines([{ text: '中中」' }, { text: '「中中', font: '20px Halt Test Sans' }], 1e5)).toEqual(['中中」「中中:98'])
+      // Also a trim its item's own text never asked for, a dot's, which the pair is the first to
+      // measure, after the item after it was measured in another font: 12px at 24px.
+      expect(richLines([{ text: '中中。', font: '24px Halt Test Sans' }, { text: '」中' }], 1e5)).toEqual(['中中。」中:92'])
+      // No pair crosses an atomic item, a box or a collapsed space.
+      expect(measureRichInlineStats(prepareRichInline([{ text: '中」', font }, { width: 0 }, { text: '。中', font }]), 1e5).maxLineWidth).toBe(64)
+      expect(measureRichInlineStats(prepareRichInline([{ text: '中」', font }, { text: '。', font, break: 'never' }, { text: '中', font }]), 1e5).maxLineWidth).toBe(64)
+      expect(measureRichInlineStats(prepareRichInline([{ text: '中」 ', font }, { text: '。中', font }]), 1e5).maxLineWidth).toBe(69.28)
+      // A closing mark that Blink halts at its item's end, where the item doesn't fit otherwise,
+      // stays halted, and the line goes on after it, where one text node ends the line: `中中」`
+      // and a 5px box take one 45px line at 46px.
+      const halted = prepareRichInline([{ text: '中中」', font }, { width: 5 }])
+      expect(measureRichInlineStats(halted, 46)).toEqual({ lineCount: 1, maxLineWidth: 45 })
+      expect(measureRichInlineStats(halted, 53)).toEqual({ lineCount: 1, maxLineWidth: 53 })
+      expect(measureRichInlineStats(halted, 52)).toEqual({ lineCount: 2, maxLineWidth: 48 })
+      // Blink halts it only where a break comes right after it, and its scan gives none before
+      // a space, so before its item's own trailing space, the next item's leading one or an item
+      // of one, the mark keeps its width, as in one text; before a letter it halts.
+      for (const items of [[{ text: '中中」 ' }, { text: '中' }], [{ text: '中中」' }, { text: ' 中' }], [{ text: '中中」' }, { text: ' ' }, { text: '中' }]]) {
+        for (const width of [40, 47, 48]) {
+          const flat = layoutWithLines(prepareWithSegments('中中」 中', font), width, LINE_HEIGHT).lines.map(line => `${line.text.trimEnd()}:${Math.round(line.width * 100) / 100}`)
+          expect({ items, width, lines: richLines(items, width) }).toEqual({ items, width, lines: flat })
+        }
+        expect(richLines(items, 46)).toEqual(['中:16', '中」:32', '中:16'])
+      }
+      expect(richLines([{ text: '中中」' }, { text: '中' }], 46)).toEqual(['中中」:40', '中:16'])
+      // Before a space the mark's line-end halt is left to a line broken between graphemes, which
+      // an item of one character and the mark takes at 24-31px. A run of U+3000 that ends an
+      // item keeps its hang before a space. And a closing mark halted by its pair has no
+      // line-end halt left to take: `中中」` is 40px before `·`, never 32. Each as the text.
+      const edges: [string, string, number, string[]][] = [
+        ['中」', ' 中', 28, ['中」:24', '中:16']],
+        ['中中\u3000', ' 中', 40, ['中中\u3000:32', '中:16']],
+        ['中中」', '·中', 36, ['中:16', '中」·:33.6', '中:16']],
+      ]
+      for (const [first, second, width, expected] of edges) {
+        expect({ first, second, width, lines: richLines([{ text: first }, { text: second }], width) }).toEqual({ first, second, width, lines: expected })
+        const flat = layoutWithLines(prepareWithSegments(first + second, font), width, LINE_HEIGHT).lines.map(line => `${line.text.replace(/ $/, '')}:${Math.round(line.width * 100) / 100}`)
+        expect({ first, second, width, lines: flat }).toEqual({ first, second, width, lines: expected })
+      }
+      // In pre-wrap the next item's preserved space, tab or line feed joins the mark's text, which
+      // gives no break before it, and a ZWSP that starts the next item gives none in either mode.
+      for (const [second, whiteSpace] of [[' 中', 'pre-wrap'], ['\t中', 'pre-wrap'], ['\n中', 'pre-wrap'], ['\u200B中', 'normal']] as const) {
+        for (const width of [40, 46, 47, 48]) {
+          const rich = prepareRichInline([{ text: '中中」', font }, { text: second, font }], { whiteSpace })
+          const lines: string[] = []
+          walkRichInlineLineRanges(rich, width, range => {
+            lines.push(`${materializeRichInlineLineRange(rich, range).fragments.map(fragment => fragment.text).join('')}:${range.width}`)
+          })
+          const flat = layoutWithLines(prepareWithSegments(`中中」${second}`, font, { whiteSpace }), width, LINE_HEIGHT).lines.map(line => `${line.text}:${line.width}`)
+          expect({ second, width, lines }).toEqual({ second, width, lines: flat })
+          expect(lines.length).toBe(width < 48 ? 3 : 2)
+        }
+      }
+      // A space before a box or a chip is such a space too, in its own item or the mark's. A
+      // chip's own leading space is none: its box trims it, so a break comes right after the
+      // mark, which halts as before a chip without one.
+      for (const items of [[{ text: '中中」 ' }, { width: 5 }], [{ text: '中中」' }, { text: ' ' }, { width: 5 }]]) {
+        expect({ items, lines: richLines(items, 46) }).toEqual({ items, lines: ['中:16', '中」:42.28'] })
+        expect({ items, lines: richLines(items, 48) }).toEqual({ items, lines: ['中中」:48', ':5'] })
+      }
+      expect(richLines([{ text: '中中」' }, { width: 5 }], 46)).toEqual(['中中」:45'])
+      for (const text of [' @a ', ' @a', '@a']) {
+        expect({ text, lines: richLines([{ text: '中中」' }, { text, break: 'never', extraWidth: 8 }, { text: '中' }], 46) }).toEqual({ text, lines: ['中中」:40', '@a中:43.2'] })
+      }
+      // Nor is the white space of a chip that holds nothing else, before text or a box.
+      expect(richLines([{ text: '中中」' }, { text: ' ', break: 'never', extraWidth: 5 }, { text: '中' }], 46)).toEqual(['中中」:40', '中:16'])
+      expect(richLines([{ text: '中中」' }, { text: ' ', break: 'never', extraWidth: 5 }, { width: 5 }], 46)).toEqual(['中中」:40', ':5'])
+      // Nor is a space that starts the item after such a chip, which the chip comes before.
+      expect(richLines([{ text: '中中」' }, { text: ' ', break: 'never', extraWidth: 5 }, { text: ' 中' }], 46)).toEqual(['中中」:40', '中:16'])
+      expect(richLines([{ text: '中中」 ' }, { text: ' ', break: 'never', extraWidth: 5 }, { text: '中' }], 46)).toEqual(['中:16', '中」:32', '中:16'])
+      expect(richLines([{ text: '中中」' }, { text: ' ' }, { text: ' ', break: 'never', extraWidth: 5 }, { text: ' 中' }], 46)).toEqual(['中:16', '中」:32', '中:16'])
     } finally {
       Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
     }
@@ -6486,6 +6589,146 @@ test('the Firefox profile resolves letter spacing to whole app units', () => {
   for (let i = 0; i < spacings.length - 1; i++) expect(chrome[i]![1]).toBeCloseTo(spacings[i]![0] * 60, 9)
 })
 
+test('the Chromium profile cuts a word as lines shaped alone', () => {
+  // The engine profile is computed once per process, so each engine runs in a child
+  // process. A letter is 8px and a full stop 4px. `To` kern, 3px narrower, and `ffi` is a
+  // ligature, 6px narrower than its letters, of which `fi` alone has 2px. Each row: the
+  // advances a cut falls by, what a line that starts at each letter adds to it, the lines
+  // with their widths, as layoutWithLines(), layout(), the stream and the full walker give
+  // them, and the strings of two or more letters Canvas was asked, the word aside.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const rowsOf = (userAgent: string): unknown => JSON.parse(runInChild(`
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: ${JSON.stringify(userAgent)} } })
+    const asked = []
+    class Context {
+      font = ''
+      letterSpacing = '0px'
+      fontKerning = 'auto'
+      measureText(text) {
+        if (text.length > 1) asked.push(text)
+        const ligatures = text.split('ffi').length - 1
+        return { width: [...text].length * 8 - 4 * (text.split('.').length - 1) - 3 * (text.split('To').length - 1) - 6 * ligatures - 2 * (text.split('fi').length - 1 - ligatures) }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepare, prepareWithSegments, layout, layoutWithLines, layoutNextLine } = await import(${JSON.stringify(layoutUrl)})
+    const font = '16px Test'
+    const row = (text, width, letterSpacing = 0) => {
+      asked.length = 0
+      const prepared = prepareWithSegments(text, font, { letterSpacing })
+      const questions = asked.filter(question => question !== text)
+      const lines = layoutWithLines(prepared, width, 20).lines.map(line => [line.text, line.width])
+      const stream = []
+      for (let line = layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 0 }, width); line !== null; line = layoutNextLine(prepared, line.end, width)) stream.push([line.text, line.width])
+      // Preserved spaces send a text to the full walker.
+      const walked = layoutWithLines(prepareWithSegments('  ' + text, font, { whiteSpace: 'pre-wrap', letterSpacing }), width, 20).lines.slice(1).map(line => [line.text, line.width])
+      const same = layout(prepare(text, font, { letterSpacing }), width, 20).lineCount === lines.length && JSON.stringify(stream) === JSON.stringify(lines) && JSON.stringify(walked) === JSON.stringify(lines)
+      return [prepared.breakableFitAdvances[0], prepared.breakableLineStartExtras === null ? null : prepared.breakableLineStartExtras[0], lines, same, questions]
+    }
+    console.log(JSON.stringify([row('To.To.To.To.To.', 44), row('aaaaaaaaaaaa', 44), row('To.To.', 14), row('aaaaffiaaaaa', 44), row('To.To.To.To.To.', 44, 1)]))
+  `))
+  expect(rowsOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36')).toEqual([
+    // Each letter after the one before it, so a line holds its kerning: seven letters are
+    // 42px, where they are 48px alone. The line after starts with `o` alone, 8px, so its
+    // seven letters are 42px too and the last full stop takes a third line; the prefixes'
+    // differences give that `o` 5px and keep all eight letters, 43px, on the second.
+    [
+      [8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4], [0, 3, 0, 0, 3, 0, 0, 3, 0, 0, 3, 0, 0, 3, 0],
+      [['To.To.T', 42], ['o.To.To', 42], ['.', 4]], true, ['To', 'o.', '.T'],
+    ],
+    // A word as wide as its letters alone is fit from them, with nothing more asked.
+    [[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8], null, [['aaaaa', 40], ['aaaaa', 40], ['aa', 16]], true, []],
+    // A word under 80px adds up its letters alone, kerned or not.
+    [[8, 8, 4, 8, 8, 4], null, [['T', 8], ['o.', 12], ['T', 8], ['o.', 12]], true, []],
+    // Where the pairs don't add up to the word, as around a ligature of three letters, its
+    // prefixes are measured. The second line shows what that leaves, not the premise: it
+    // starts inside the ligature, and its `i` keeps the 2px it has after `ff`, so `fiaaaa`
+    // comes to 42px where that text alone is 46px here, wider than the box, and Chrome, which
+    // shapes `fi` again, would end the line a letter earlier (ENGINE_FOLLOWUPS.md, Emergency
+    // breaks inside a word).
+    [
+      [8, 8, 8, 8, 8, 8, 2, 8, 8, 8, 8, 8], [0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0],
+      [['aaaaf', 40], ['fiaaaa', 42], ['a', 8]], true,
+      ['aa', 'af', 'ff', 'fi', 'ia', 'aaa', 'aaaa', 'aaaaf', 'aaaaff', 'aaaaffi', 'aaaaffia', 'aaaaffiaa', 'aaaaffiaaa', 'aaaaffiaaaa'],
+    ],
+    // Letter-spaced text keeps its prefixes, and its lines start as they come.
+    [
+      [8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4], null,
+      [['To.To.', 40], ['To.To.', 40], ['To.', 20]], true, ['To', 'To.', 'To.T', 'To.To', 'To.To.', 'To.To.T', 'To.To.To', 'To.To.To.', 'To.To.To.T', 'To.To.To.To', 'To.To.To.To.', 'To.To.To.To.T', 'To.To.To.To.To'],
+    ],
+  ])
+  // WebKit carries the rest of a cut word's width, and Gecko leaves a pair's kerning where
+  // the word shaped whole has it. Neither is ported: both profiles take the lines of a kerned
+  // word from its prefixes (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word).
+  for (const userAgent of [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0',
+  ]) {
+    expect((rowsOf(userAgent) as unknown[][])[0]!.slice(0, 4))
+      .toEqual([[8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4, 8, 5, 4], null, [['To.To.T', 42], ['o.To.To.', 43]], true])
+  }
+})
+
+test('the Firefox profile counts a ligature whole on its first letter where it cuts a word', () => {
+  // The engine profile is computed once per process, so each engine runs in a child
+  // process. Every letter is 8px. `fi` is a ligature, 3px narrower than its letters, which
+  // the context turns off under any letterSpacing but 0, as Firefox's does. `AV` kern and
+  // `xy` join, as two Arabic letters do, 2px narrower under every letterSpacing. Each word is
+  // 80px or wider, so the Gecko profile fits it from its prefixes.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const rowsOf = (userAgent: string): unknown => JSON.parse(runInChild(`
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: ${JSON.stringify(userAgent)} } })
+    const asked = []
+    class Context {
+      font = ''
+      letterSpacing = '0px'
+      measureText(text) {
+        asked.push((this.letterSpacing === '0px' ? '' : 'spaced:') + text)
+        const ligatures = this.letterSpacing === '0px' ? text.split('fi').length - 1 : 0
+        return { width: [...text].length * 8 - 3 * ligatures - 2 * (text.split(/AV|xy/).length - 1) }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepareWithSegments, layoutWithLines } = await import(${JSON.stringify(layoutUrl)})
+    const font = '16px Test'
+    const row = (text, width, letterSpacing = 0) => {
+      asked.length = 0
+      const prepared = prepareWithSegments(text, font, { letterSpacing })
+      return [prepared.breakableFitAdvances[0], layoutWithLines(prepared, width, 20).lines.map(line => line.text), letterSpacing === 0 ? asked.filter(text => text.startsWith('spaced:')) : []]
+    }
+    console.log(JSON.stringify([row('aaaafiaaaaaa', 44), row('bbbbbbbbfifi', 44), row('aaaafiaaaaaa', 44, 1), row('aaaaxyaaaaaa', 44), row('ccfiaaaaaaaa', 10), row('AVAVAVAVAVAV', 21)]))
+  `))
+  // Each row: the advances a cut falls by, the lines, and what the profile asked Canvas under
+  // the letterSpacing that turns ligatures off, for text that has no letter spacing.
+  expect(rowsOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0')).toEqual([
+    // The ligature counts whole on its first letter, so no line ends inside it: `aaaaf` alone
+    // would fit 44px. One Canvas question, the pair without its ligatures.
+    [[8, 8, 8, 8, 13, 0, 8, 8, 8, 8, 8, 8], ['aaaa', 'fiaaa', 'aaa'], ['spaced:fi']],
+    // Asked once per pair and font.
+    [[8, 8, 8, 8, 8, 8, 8, 8, 13, 0, 13, 0], ['bbbbb', 'bbbfi', 'fi'], []],
+    // Letter-spaced text has no ligature to keep whole.
+    [[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8], ['aaaa', 'fiaa', 'aaaa'], []],
+    // Letters that join are no ligature the context can turn off, and stay as the prefixes have them.
+    [[8, 8, 8, 8, 8, 6, 8, 8, 8, 8, 8, 8], ['aaaax', 'yaaaa', 'aa'], ['spaced:xy']],
+    // A line narrower than the ligature it starts with takes the first letter, as every line
+    // takes one, and the rest of the ligature has no width left (ENGINE_FOLLOWUPS.md,
+    // Emergency breaks inside a word).
+    [[8, 8, 13, 0, 8, 8, 8, 8, 8, 8, 8, 8], ['c', 'c', 'f', 'ia', 'a', 'a', 'a', 'a', 'a', 'a', 'a'], []],
+    // A kerned pair is asked about too and stays as the prefixes have it: the part of the
+    // kerning Firefox leaves on the letter before a cut isn't ported, so `AVA`, 22px as a
+    // prefix, doesn't fit 21px.
+    [[8, 6, 8, 6, 8, 6, 8, 6, 8, 6, 8, 6], ['AV', 'AV', 'AV', 'AV', 'AV', 'AV'], ['spaced:AV']],
+  ])
+  // Blink and WebKit shape or measure a line again from its start, so their profiles end a
+  // line inside the ligature and ask nothing.
+  for (const userAgent of [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
+  ]) {
+    expect((rowsOf(userAgent) as unknown[][])[0]).toEqual([[8, 8, 8, 8, 8, 5, 8, 8, 8, 8, 8, 8], ['aaaaf', 'iaaaa', 'aa'], []])
+  }
+})
+
 test('letter spacing leaves out cursive scripts as Chrome and Firefox do', () => {
   // The engine profile is computed once per process, so each engine runs in a child
   // process. Each row: what the string shows, the string, and the letter-spacing gaps
@@ -6605,4 +6848,167 @@ test('letter spacing leaves out cursive scripts as Chrome and Firefox do', () =>
   const letters = ['\u0628', '\u0628', '\u0628', '\u0628']
   expect([chrome.lines, firefox.lines, safari.lines]).toEqual([pairs, pairs, letters])
   expect([chrome.rich, firefox.rich, safari.rich]).toEqual([40, 40, 48])
+})
+
+test('a width is measured under its own font, shaping and language, whatever was measured before it', () => {
+  // The engine profile is computed once per process, so each engine runs in a child process.
+  // Preparation sets the context where it measures, not where it looks a font up, so each row
+  // measures something new right after the context was left on another font, another
+  // letterSpacing or another language's context. An ASCII character is half an em wide and
+  // any other a whole one; `fi` ligates, 3px narrower, unless the context has a letterSpacing;
+  // a context under `ja` measures three quarters; Canvas draws an emoji an em and a quarter
+  // wide and the page an em; U+2010 is three quarters of an em; a font named Kern kerns `b`
+  // with the space after it by 1px; and one named Halt halts fullwidth marks as Chrome's
+  // Canvas does, its dots closing ones. Like Firefox's, the context takes a face the page
+  // adds only when its font is assigned: a family named Late measures twice as wide before.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const rowsOf = (userAgent: string): unknown => JSON.parse(runInChild(`
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: ${JSON.stringify(userAgent)} } })
+    const root = { lang: 'en' }
+    const em = font => Number.parseFloat(/[\\d.]+(?=px)/.exec(font)[0])
+    let contexts = 0
+    let measuredIn = ''
+    let added = false
+    let assignments = 0
+    class Context {
+      assigned = '10px sans-serif'
+      late = false
+      get font() { return this.assigned }
+      set font(value) {
+        assignments++
+        this.assigned = value
+        this.late = added
+      }
+      letterSpacing = '0px'
+      fontKerning = 'auto'
+      lang = 'inherit'
+      constructor() { contexts++ }
+      measureText(text) {
+        const size = em(this.font)
+        measuredIn = this.font
+        let width = 0
+        for (const ch of text) width += ch === '\\u{1F600}' ? size * 1.25 : ch === '\\u2010' ? size * 0.75 : ch > '\\u2E7F' ? size : size / 2
+        if (Number.parseFloat(this.letterSpacing) === 0) width -= 3 * (text.split('fi').length - 1)
+        if (this.font.includes('Kern') && this.fontKerning === 'auto') width -= text.split('b\\u2028').length - 1
+        if (this.font.includes('Halt')) width -= (text.match(/[\\u3002\\u300D](?=[\\u3002\\u300D])|(?<=[\\u3002\\u300D\\u300C])\\u300C/g) ?? []).length * size / 2
+        if (this.lang === 'ja') width *= 0.75
+        if (this.font.includes('Late') && !this.late) width *= 2
+        return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width - (/[\\u3001\\u3002\\uFF0C\\uFF0E]$/.test(text) ? size / 2 : 0) }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    globalThis.document = {
+      documentElement: root,
+      body: { appendChild() {}, removeChild() {} },
+      createElement() {
+        const style = {}
+        return { style, getBoundingClientRect: () => ({ width: em(style.font) }) }
+      },
+    }
+    const { prepareWithSegments, measureNaturalWidth, clearCache } = await import(${JSON.stringify(layoutUrl)})
+    const { prepareRichInline, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
+    const width = (text, font, letterSpacing = 0) => measureNaturalWidth(prepareWithSegments(text, font, { letterSpacing }))
+    const rich = items => measureRichInlineStats(prepareRichInline(items), 1e5).maxLineWidth
+    const rows = {}
+
+    // Two fonts by turns, where all the text is cached but one segment.
+    const a = '16px Test', b = '20px Test'
+    rich([{ text: 'aa', font: a }, { text: 'bb', font: b }, { text: 'aa', font: a }])
+    rows.fonts = [rich([{ text: 'aa', font: a }, { text: 'bb', font: b }, { text: 'cc', font: a }]), rich([{ text: 'bb', font: b }, { text: 'aa', font: a }, { text: 'dd', font: b }])]
+    // Prepared again, with every segment cached, the items measure nothing and assign no font.
+    const assigned = assignments
+    rich([{ text: 'aa', font: a }, { text: 'bb', font: b }, { text: 'cc', font: a }])
+    rows.again = assignments - assigned
+
+    // One font, with and without letter spacing: new text each time, then new text after a cached item of the other kind.
+    const spaced = '16px Spaced'
+    rows.spacing = [
+      rich([{ text: 'fig', font: spaced }, { text: 'fin', font: spaced, letterSpacing: 2 }, { text: 'fit', font: spaced }]),
+      rich([{ text: 'fit', font: spaced }, { text: 'fib', font: spaced, letterSpacing: 2 }]),
+      rich([{ text: 'fin', font: spaced, letterSpacing: 2 }, { text: 'fir', font: spaced }]),
+    ]
+
+    // Another language makes another context, which starts with neither the font nor the shaping.
+    const made = contexts
+    rows.language = [width('fig', '16px Language', 1)]
+    root.lang = 'ja'
+    rows.language.push(width('fig', '16px Language', 1), width('fig', '16px Language'))
+    root.lang = 'en'
+    rows.language.push(width('fig', '16px Language'), contexts - made)
+
+    // clearCache() keeps the context, with the font and the shaping it was left on.
+    const kept = contexts
+    rows.cleared = [width('fin', '16px Cleared', 2)]
+    clearCache()
+    rows.cleared.push(width('fin', '16px Cleared'))
+    clearCache()
+    rows.cleared.push(width('fin', '16px Cleared', 2))
+    clearCache()
+    rows.cleared.push(width('aa', '20px Cleared'))
+    clearCache()
+    rows.cleared.push(width('aa', '16px Cleared'), contexts - kept)
+
+    // A face added after its font was measured shows in new text prepared in that font, with nothing prepared in
+    // another between, and after clearCache() in the text measured before.
+    rows.added = [width('aa', '16px Late')]
+    added = true
+    rows.added.push(width('bb', '16px Late'), width('aa', '16px Late'))
+    clearCache()
+    rows.added.push(width('aa', '16px Late'))
+
+    // What a font is asked once, asked first when its text is cached and another font was measured last: the emoji
+    // correction, whether it kerns with the space, a character's kerning with one, and a mark's halt beside the next
+    // item's.
+    width('ab', '16px Emoji')
+    width('x', b)
+    rows.emoji = width('ab \\u{1F600}', '16px Emoji')
+    width('ab', '16px Kern')
+    width('cb', '16px Kern')
+    width('y', b)
+    rows.kerning = [width('ab ab', '16px Kern')]
+    width('z', b)
+    rows.kerning.push(width('cb cb', '16px Kern'))
+    rows.halt = rich([{ text: '\\u4E2D\\u4E2D\\u3002', font: '24px Halt' }, { text: '\\u300D\\u4E2D', font: '16px Halt' }])
+    // Asking a font which hyphen it paints sets the context to other fonts and back, so the marks' halts, read after
+    // it in the same preparation, are the font's.
+    rows.hyphen = width('a\\u00ADb\\u4E2D\\u300D\\u300C\\u4E2D', '16px Hyphen Halt')
+    // Where a line that starts inside a word at an invisible character takes its widths from Canvas, they are observed
+    // again under another letter spacing, with the word's other measurements cached.
+    width('ab\\u2060cd', '16px Entry', 1)
+    width('s', b)
+    width('ab\\u2060cd', '16px Entry', 2)
+    rows.entry = measuredIn
+    // Whether two letters are a ligature is asked of the context without its ligatures, here first asked with the
+    // word, its letters and the pair all cached, after letter-spaced text in a font whose \`fi\` without the ligature
+    // is as wide as this font's with it. The text measured next has its ligature, and the letter-spaced text after it none.
+    rich([{ text: 'f i fi', font: '100px Liga', break: 'never' }])
+    width('x', '97px Test', 1)
+    rows.ligature = [measureRichInlineStats(prepareRichInline([{ text: 'fi', font: '100px Liga' }]), 60).maxLineWidth, width('fig', '16px Liga'), width('fix', '16px Liga', 2)]
+    console.log(JSON.stringify(rows))
+  `))
+  // `fin` under letter spacing is 24px and its three spacings where the context drops the
+  // ligature, and 21px and them in the WebKit profile, which measures with it. Two contexts
+  // are made for the two language changes and none for the four clearCache() calls. Only the
+  // Chromium profile asks for kerning with the space and for halts, and the WebKit profile
+  // observes no line starts inside a word, so its last measurement is the 20px text's. Only
+  // the Gecko profile asks for ligatures: a line that cuts \`fi\` has the ligature's 97px on its
+  // \`f\`, and the others the letter's 50px.
+  const rows = (fin: number, kerned: number, halted: number, entry: string, cutLigature: number): unknown => ({
+    fonts: [52, 56],
+    again: 0,
+    spacing: [21 + fin + 21, 21 + fin, fin + 21],
+    language: [fin - 3, (fin - 6) * 0.75 + 3, 15.75, 21, 2],
+    cleared: [fin, 21, fin, 20, 16, 0],
+    added: [32, 16, 32, 16],
+    emoji: 40,
+    kerning: [kerned, kerned],
+    halt: halted,
+    hyphen: halted === 92 ? 72 : 80,
+    entry,
+    ligature: [cutLigature, 21, fin],
+  })
+  expect(rowsOf(CHROME_USER_AGENT)).toEqual(rows(30, 39, 92, '16px Entry', 50))
+  expect(rowsOf(FIREFOX_USER_AGENT)).toEqual(rows(30, 40, 104, '16px Entry', 97))
+  expect(rowsOf(SAFARI_USER_AGENT)).toEqual(rows(27, 40, 104, '20px Test', 50))
 })

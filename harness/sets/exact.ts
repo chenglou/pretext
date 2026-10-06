@@ -41,6 +41,9 @@ const REPORTS: readonly Report[] = [
   { issue: '#323', text: ['the ', { text: 'inter', font: 'bold 16px Arial' }, 'na\u{AD}tion\u{AD}al'], font: '16px Arial', width: 56, lineHeight: 20 },
   { issue: '#334', text: '{测试内容.csjg.ysjcxxnr.ypbh}', font: '16px "Songti SC", "PingFang SC", serif', width: 120, lineHeight: 20.96 },
   { issue: '#334', text: '{测试内容.csjg.ysjcxxnr.ypbh}', font: '16px "Songti SC", "PingFang SC", serif', width: 135, lineHeight: 20.96 },
+  { issue: '#421', text: 'AV'.repeat(9), font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 85, lineHeight: 22, whiteSpace: 'pre-wrap' },
+  { issue: '#421', text: 'WAVEWAVEWAVEWAVEWA', font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 102, lineHeight: 22, whiteSpace: 'pre-wrap' },
+  { issue: '#421', text: 'To.'.repeat(5), font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 54, lineHeight: 22, whiteSpace: 'pre-wrap' },
 ]
 
 // #206 (fixed by #208): repeated symbols in a chat message, at the widths and letter spacing main's suite runs.

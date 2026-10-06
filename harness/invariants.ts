@@ -7,8 +7,12 @@
 // 0, plus the letter spacing per grapheme. U+2028 measures as the space, whose glyph Chrome draws it with, and sits 0,
 // 0.5 or 1 px closer to the character on either side of it unless the context's `fontKerning` is 'none', so the
 // Chromium profile finds every font kerning the space and takes its kerning with spaces (getFontSpaceKerning and
-// getSpaceKerning in src/measurement.ts). The Blink and Gecko processes run under a desktop user agent with a string
-// `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
+// getSpaceKerning in src/measurement.ts). Two neighbouring characters that both have an advance sit 0 to 0.6 px
+// closer: for six of every seven pairs that is kerning, and for the seventh a ligature, off under any letter spacing,
+// so a word doesn't measure as its letters do alone and the fits of a word cut between letters take the paths they
+// take in a font (getSegmentFit). Nothing in src/ measures two such neighbours under `fontKerning` 'none', so that
+// kerning doesn't read it. The Blink and Gecko processes run under a desktop user agent with a string `letterSpacing`
+// on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
 // The inputs are seeded draws from harness/cases (a failure names its case, at its width, half and 1.5 times it, 1 and
 // Infinity) and a few fixed ones; `bun harness gate` runs its browser's profile over every case (`all`), 20-25 s of
 // processor time a profile at a load average of 30-60: in 500 draws, five WebKit-profile cases that failed the coverage
@@ -61,11 +65,18 @@ export function standInWidth(text: string, font: string, letterSpacing: number, 
   const size = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 16) / 16
   let width = 0
   let previous = -1
+  let previousAdvance = 0
   for (const ch of text) {
     const code = ch.codePointAt(0)!
-    width += /[\p{M}\p{Cf}]/u.test(ch) ? 0 : code === 0x20 || code === 0x2028 ? 4 : 8
+    const advance = /[\p{M}\p{Cf}]/u.test(ch) ? 0 : code === 0x20 || code === 0x2028 ? 4 : 8
+    width += advance
     if (fontKerning !== 'none' && previous >= 0 && (code === 0x2028) !== (previous === 0x2028)) width -= (code === 0x2028 ? previous : code) % 3 / 2
+    if (advance === 8 && previousAdvance === 8) {
+      const together = (previous * 31 + code) % 7
+      if (together !== 6 || letterSpacing === 0) width -= together / 10
+    }
     previous = code
+    previousAdvance = advance
   }
   let count = 0
   // A spacing under Blink's unit, 1/65536 px, adds nothing in Chrome or Firefox, whose unit is 1/60 px: the library

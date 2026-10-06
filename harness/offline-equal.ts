@@ -11,8 +11,9 @@
 // layout(), walkLineRanges, measureLineStats, layoutWithLines, and layoutNextLine, layoutNextLineRange and
 // materializeLineRange at a width that changes per line; walkRichInlineLineRanges, materializeRichInlineLineRange,
 // measureRichInlineStats and layoutNextRichInlineLineRange for a rich one. It is measured otherwise when its measureText
-// calls, in order, differ in font, letter spacing or text. The stand-in's widths also move with each pair of neighbouring
-// units, so a text measured whole and in pieces measures differently, and its bounding boxes span its width.
+// calls, in order, differ in font, letter spacing or text. The stand-in's widths move with each pair of neighbouring
+// characters (standInWidth), so a text measured whole and in pieces measures differently, and its bounding boxes span its
+// width.
 // It prints `{ profile, inputs, differ, parts, measuredOtherwise, calls, units, first, ms }` as JSON: `parts`, the
 // inputs each part differs in, and calls and units for each build.
 import './watchdog.ts'
@@ -44,8 +45,7 @@ Reflect.set(globalThis, 'OffscreenCanvas', class {
         current.calls++
         current.units += text.length
         current.log += `${ctx.font}\u0001${ctx.letterSpacing ?? ''}\u0001${text}\u0000`
-        let width = standInWidth(text, ctx.font, spaced ? Number.parseFloat(ctx.letterSpacing!) : 0, ctx.fontKerning)
-        for (let i = 1; i < text.length; i++) width -= ((text.charCodeAt(i - 1) * 31 + text.charCodeAt(i)) % 7) / 10
+        const width = standInWidth(text, ctx.font, spaced ? Number.parseFloat(ctx.letterSpacing!) : 0, ctx.fontKerning)
         return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width }
       },
     } as { font: string; fontKerning: string; letterSpacing?: string; measureText: (text: string) => { width: number } }

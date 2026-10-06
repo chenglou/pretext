@@ -744,10 +744,10 @@ Where an emergency break falls inside a segment depends on which advances an eng
 shaped whole: in 16px Arial `بِبِ((tail` at 27.86px fits `بِبِ((` and starts the next line at `tail`, while summing
 isolated graphemes charged both ب their isolated 11.42px (the first takes 3.9px joined) and lost 460 old-suite rows in
 the installed browsers. The Gecko profile, like the WebKit one, fits from grapheme prefixes, which give each letter its
-left context but miss kerning with the next grapheme. In an offline replay prefixes gained 2,110 left-to-right and 703
-right-to-left line counts over sums, lost 643 and 349, and doubled a cold preparation's Canvas calls; pairs, each
-grapheme measured after the one before, did slightly worse at 21% more calls on the corpora and 91% more where every
-preparation starts cold (Firefox 155, 2026-09-16).
+left context but miss kerning with the next grapheme and the joined form the next letter gives it. In an offline replay
+prefixes gained 2,110 left-to-right and 703 right-to-left line counts over sums, lost 643 and 349, and doubled a cold
+preparation's Canvas calls; pairs, each grapheme measured after the one before, did slightly worse at 21% more calls on
+the corpora and 91% more where every preparation starts cold (Firefox 155, 2026-09-16).
 
 So the Gecko profile takes prefixes only in segments at least 80px wide (`prefixFitMinWidth`) and sums graphemes below.
 A cold Firefox preparation of real paragraphs then took 88 Canvas calls a paragraph (113 for prefixes everywhere, 86 for
@@ -766,6 +766,156 @@ three Amiri splits 1/64px from where the lines change, and the one draw of the r
 in a 31.25px table cell in 16px Helvetica Neue, where prefixes give the hyphen that starts the second line its 2.05px of
 kerning with the `T` before it, so `-845` fits where Firefox moves the `5` on); no draw gains, and 1.5% of the sample's
 weight is narrower than 80px. So the floor stays at 80px, a premise with that gap (Decisions Log, 2026-09-27).
+
+Prefixes aren't Firefox's lines where a cut falls between two letters shaped together. A prefix measured alone ends as
+the word goes on, but for what its last letter and the next one change by standing together, which shows as the next
+letter's advance after the prefix, less that letter measured alone. Where the two are a kerned pair, the prefix's last
+letter lacks its part of the kerning: all of it in a font that kerns through GPOS, half in one with a `kern` or `kerx`
+pair table (Kerning At Line Edges). So the Gecko profile charges a line that part too much at its end and the next line
+as much too little at its start, and all three texts of #421, in 16px Helvetica Neue, come out with a wrong line count:
+`AV` nine times at 85px is 9 and 9 letters in Firefox, the first line 84.67px wide, where the prefix of nine letters
+alone is 85.03px, and `To.` five times at 54px is 7, 7 and 1, where the profile keeps the last `.` on the second line at
+53.97px for Firefox's 54.85px. Where the two are a ligature, the prefix has its first letter alone, and Firefox's scan
+counts the glyph's whole advance on that letter and nothing on the rest (Engine Facts, Firefox, Ligatures), so it ends a
+line inside a ligature only where the ligature starts the line and doesn't fit: the real-usage sample's
+`արդյունավետությունը։` in 16px `Arial, sans-serif` at 151px, whose fallback font draws `ու` as one glyph, ends its line
+before the ligature, 140.95px wide, in Firefox, where the prefixes keep `ո` at 150.5px (Firefox 156.0.1, 2026-10-04).
+
+Since #435 the Gecko profile counts a ligature as Firefox does, in the words it fits from prefixes
+(`countLigaturesOnFirstLetter()` in `src/measurement.ts`). Where a letter's advance after its prefix isn't its advance
+alone, in app units, Canvas is asked about the two letters, once per pair and font: whether the pair measures otherwise
+under the letter spacing that turns optional ligatures off (Measurement Model). If it does, the two are a ligature; a
+kerned pair and two joined letters measure the same. A ligature's later letters then give their advances to its first,
+and the walkers need nothing more: a letter with no advance fits wherever the letter before it does, so a line ends
+inside the ligature only where the ligature starts the line and doesn't fit. Letter-spaced text has no optional ligature
+and is asked nothing. Against the prefixes alone in Firefox 156.0.1 (2026-10-05), 6 of 44,235 predictions differ, 3 of
+them in a line's width alone: 2 accepted cases pass, the Armenian word and `x ffiffiffiffiffiffi y` in 24px Hoefler Text
+at 15px, so the sample's failing draws inside the claims go from 3 to 2, and 1 case fails anew, the same Hoefler text in
+a 1px box, 20 lines in Firefox and 14 in the profile, which doesn't give the letters of a ligature that starts a line it
+doesn't fit the equal shares Firefox gives them (`ComputeLigatureData`, `gfxTextRun.cpp:238-322`). The letters measured
+alone and the question cost 3.1% more `measureText` calls and 1.0% more submitted units on the sample, and 0.7% and 0.3%
+on the books; a pair is asked once per font, so text in a font seen before costs less. Of the 405 ligatures Firefox drew
+among 42,680 font and two-letter combinations probed, the question found 387, missed the 18 that are as wide as their
+letters, as Helvetica Neue's `fi`, and named no pair that isn't one (Firefox 156.0.1, 2026-10-04). The rule stops where
+the prefixes do: a word of more than 96 graphemes (`MAX_PREFIX_FIT_GRAPHEMES`; Keeping Work Bounded, Canvas Work) and a
+run of digits are fit from letter pairs and aren't asked, so a line can still end inside a ligature there, as before
+#435. In 16px `Arial, sans-serif` at 155px, `ու` 48 times, 96 letters, passes with 20 letters a line; 50 times, 100
+letters, has the right line count with a letter on another line on every line, 21 letters a line for Firefox's 20; and
+210 times is 20 lines for Firefox's 21 (Firefox 156.0.1, 2026-10-05). The same move over pair advances isn't built.
+ENGINE_FOLLOWUPS.md, Emergency breaks inside a word, has that and what else the rule leaves.
+
+The kerning at a cut is not ported. Canvas totals at the text's size don't show which letter of a pair holds its
+kerning, and a build on a premise in its place, half on the letter before the cut in every font, was left out (Dead
+Ends, Fitting, Cuts And Fast Paths; Decisions Log, 2026-10-05). `getTextClusters()` in Firefox would give every advance
+inside the word in one call, ligatures and kerning alike.
+
+Chrome reads each offset's position from the text shaped once, whole, takes the last offset within the width and one
+layout unit, and shapes the line's start and end again wherever HarfBuzz marks the cut unsafe, which it does between two
+kerned letters and between two joined ones (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:266-612`, the
+start at `:304-324` and the end at `:511-584`); the end shaped again is tested again and only moves back. So where
+letters don't join, a line is as wide as its own text shaped alone: kerning inside the line counts, kerning across a cut
+is on neither side, and the next line starts with its first letter as it measures alone. The Blink profile added up
+letters measured alone (the sums, below), which leaves out every kerning inside the word, and that was all 7 of the
+real-usage sample's Chrome failures of a word longer than its line, URLs, message placeholders and a long Ukrainian word
+whose first line Chrome fits one letter more of (`https://github.com/chenglou/pretext/issues/210` in 17px Roboto at
+360px ends its line at `…/issues/21`, 358.48px, in Chrome and ended it a letter earlier in the profile).
+
+Since #435 the Blink profile fits a word of 80px or wider, with no letter spacing and not a run of digits, on a premise:
+a line holds the longest stretch of letters whose width, shaped alone, fits (`getSegmentFit()`'s `reshaped-lines` in
+`src/measurement.ts`). A letter's advance is its width after the letter before it, a pair less that letter, which every
+word of the font shares. Where those don't add up to the word's width, as around a ligature of three letters, a lam-alef
+inside a word or the middle forms of Arabic letters, the word's prefixes are measured in their place, up to 96
+graphemes. A line that starts inside the word adds what its first letter measures alone, less that advance (the handle's
+`breakableLineStartExtras`, read where each of the three line walkers starts a line inside a segment); without it `To.`
+five times at 54px, #421's Chrome text, kept its last `.` on the second line, a wrong line count. And a word as wide as
+its letters measured alone, within 2^-17 of its width, is taken to have nothing shaped across them and keeps them as its
+advances with nothing more asked: a premise for speed that here can only fail to fix. Words under 80px, letter-spaced
+words and digit runs are fit as before. Digit runs are left out by what the text looks like (`numericRunRe` in
+`src/prepare.ts`), not by a rule of Chrome's, which has none for digits, and no pinned case decides it
+(ENGINE_FOLLOWUPS.md, Emergency breaks inside a word, has what their fit gets wrong). The floor is the Gecko profile's
+premise, for its reason: with none, 233 more accepted cases pass, all made-up and most under 24px, no draw of the sample
+moves, and the sample takes 22.3% more `measureText` calls than the sums in place of 7.2%, the books 50% in place of
+1.3%. A higher floor costs less and gives cases back: at 100px the sample takes 4.7% more calls than the sums and 28
+cases fail again, one of them a real-usage draw, a Ukrainian word about 91px wide in 12px Times New Roman in a 69.83px
+box; at 120px 3.5% and 32, with #421's `To.` text at 54px; at 160px 2.4% and the same 32; at 240px 1.2% and 47. 26 of
+the 32 are in boxes under 80px (Chrome 154.0.8037.57, 2026-10-04; calls counted, not timed).
+
+Against the sums in Chrome 154.0.8037.57 (2026-10-05), 144 of 43,101 predictions differ: 39 accepted cases pass, 20 of
+them wrong line counts before, none fails anew, and 12 accepted failures change kind, 8 from a wrong line count to a
+character on another line and 4 the other way. The sample's failing draws inside the claims go from 29 to 22, and its 7
+cases pass with every line within 0.01px of Chrome's, as do #421's three texts in 16px Helvetica Neue, of which the sums
+failed `To.` five times at 54px. Of the 39, 29 have every line within 0.01px of Chrome's, leaving out the tab that hangs
+at a line's end in 8 of them, which the recording counts to its tab stop and a line's `width` doesn't: the 7, #195's run
+of `x` in Shantell Sans, `foo@bar.com` before a fullwidth comma and 20 cases of two made-up words before a tab or a soft
+hyphen. 7 more of one of those words, `aאבaabb((بببب`, have Chrome's breaks with a line of joined Arabic letters 7.51px
+wider than Chrome paints it, 2 keep-all Japanese paragraphs at 159px pass because the run's pairs hold the kerning after
+`。` that single characters lack, and 1 is a `system-ui` draw outside the claims. The 4 that become wrong line counts are
+`a`, U+000B, `aabb((بب` in 24px Noto Nastaliq Urdu at 48px, whose first two lines were wrong before and whose last now
+holds both `ب`, 32.16px, where Chrome gives the second a line of its own; they stay accepted. On 18,382 probe layouts of
+one kerned word in 13 font specs at 20-120px the profile passes 18,191, with 83 wrong line counts, where the sums passed
+12,919 with 1,605. The pairs cost 7.2% more `measureText` calls and 2.5% more submitted units on the sample, which meets
+331 font strings with little text each, 12.7% and 17.6% more calls on its Roboto and Inter paragraphs, whose words
+rarely add up, and 1.3% on the books; a pair is asked once per font, so text in a font seen before costs less.
+
+New interface labels pay the most for the pairs, since a label is short and a font has met few of its pairs: over
+Chromium's 7,000 translated labels in 35 languages, prepared one a call in 13px `system-ui` in the order of the bench's
+`new: labels` row, the profile makes 27,128 `measureText` calls where the sums made 24,647, 10.1% more, with 4.7% more
+submitted units, and 10.7% more calls over the batches that row times. One language's 200 labels alone take 17.3% more
+calls in English, 41.7% in German, 34.3% in Russian, 8.1% in Japanese and 50.6% in Greek and in Tamil. A pair is asked
+once per font, so the extra falls as the font sees text: 1.07 calls a label over the first 100 of the 7,000, 0.29 over
+the second thousand and 0.20 over the last 3,000, where 22%, 83% and 89% of the pairs looked up were already known. The
+sums' own calls fall too, so over those last 3,000 the profile still makes 8.1% more. 96% of the added calls are pairs,
+82% of them for words 80-120px wide, and four pair answers in five are that the two letters don't kern, which Canvas
+says no other way. Each pair a font hasn't met is one unknown, and the word's width, already measured, is the one
+equation the fit has for them, so no fit that asks less gives the same advances: what costs less asks fewer words or
+fewer of a word's pairs, and Dead Ends, Fitting, Cuts And Fast Paths has those measured (Chrome 154.0.8037.57,
+2026-10-05; calls counted in a background window). In time, the bench's `new: labels` row read slower than main in every
+session of two foreground runs, 15.0% in the first (12.0%, 12.0% and 15.8%; 58.9 µs a label for 53.8) and 8.3% in the
+second, with #425 in both builds (8.3%, 7.3% and 7.3%; 59.6 µs for 55.7), and its other rows of new text within noise in
+both (Chrome 154.0.8037.57, 2026-10-05). By the counts, that is about what the added calls cost at main's time per call,
+0.44-0.52 more calls a label over 4.33-4.45 in the batches the row times, so the time is Canvas's and not the fit's own.
+The fit lands at that cost (Decisions Log, 2026-10-05).
+
+Against the released 0.0.9, new text is mostly still faster with the fit, and not all of it (three foreground sessions
+for each figure, Chrome 154.0.8037.57, Firefox 156.0.1 and Safari 27.0, 2026-10-05, with the change at ef8e4b89, before
+it took #425, which changes nothing that plain `prepare()` does). The bench's rows of new prose take 33-58% less time
+than 0.0.9 in Chrome, 26-39% in Firefox with Thai inside noise, and 13-37% in Safari with Arabic inside noise. Its `new:
+labels` row, 35 languages mixed, reads level with 0.0.9 in Chrome (5.2% less time, inside its ±11.2% of noise) and in
+Firefox (4.8% less, inside ±8.3%) and 11.1% faster in Safari; main before the fit read that row 18.7% faster than 0.0.9
+in Chrome. One language's 200 labels at a time, each batch timed in a process of its own that had prepared only other
+scripts' labels (three sessions in Chrome and Safari, four in Firefox; a second reader recomputed every figure from the
+samples and reran German in Chrome). In Chrome, 31 of the 35 languages are faster than 0.0.9 (46% less time in English,
+39% in German, 31% in Russian, 55% in Japanese) and four are slower: Tamil (31% more time), Telugu (13%), Armenian (12%)
+and Hebrew (3%), which are among the costliest, 160-235 µs a label where a Latin-script one takes 10-26. Telugu was 6.7%
+slower than 0.0.9 on main already. Against main the same batches take 22% more time in German, 17% in Russian, 11% in
+English and 43% in Tamil, 8% over the 35 languages mixed, and read level for Japanese, Chinese, Korean, Thai and Hindi,
+whose labels ask almost no pair (0-1.4% more calls). In Firefox eight languages' labels are slower than 0.0.9 with the
+fit, Armenian by 34%, Tamil 27%, Telugu 24%, Georgian 23%, Finnish 22%, Greek 19%, German 14% and Bulgarian 10%, and
+Dutch and Russian lean slower (9% and 5%), where English is 17% faster and the 35 languages mixed 6.5%; nearly all of
+that is main's, which asks Firefox's Canvas 6.59 times a German label where 0.0.9 asked 3.10, and the fit adds to main
+only in Finnish (8.5%) and Armenian (6.6%). What on main added those calls isn't traced. In Safari no language is slower
+than 0.0.9, and the fit makes main's calls exactly. The script that timed them isn't in the repository. A trace of
+main's Firefox calls, or a release whose labels must not be slower than 0.0.9's in any language, would reopen this.
+
+What the labels get for it, on 13,090 probe layouts of one word a paragraph: 390 words of 78px or wider from those
+labels, Latin, Cyrillic and Greek in 13px Helvetica Neue, 13px Inter and 14px Roboto and Tamil in 13px Tamil Sangam MN,
+in boxes of 50-140px, and 130 Arabic words of seven letters or more in 24px and 32px Geeza Pro, 24px Arial and 24px Noto
+Naskh Arabic in boxes of 48-160px. Chrome cuts the word in 6,063 of them. Of the 5,077 that aren't Arabic the profile
+fails 4, each the right line count with a letter on another line in a box under 80px, where the sums failed 142, 9 of
+them wrong line counts and 60 in boxes of 80px or wider. Of the 986 Arabic ones it fails 577, 5 of the 144 in boxes of
+80px or wider, where the sums failed 848 and 117: in a joined script the prefixes are not Chrome's rule and still far
+nearer to it than the letters alone (Chrome 154.0.8037.57, 2026-10-05).
+
+What the premise leaves, each in ENGINE_FOLLOWUPS.md, Emergency breaks inside a word: a wrapped line whose every pair of
+letters is kerned, which Chrome can leave wider than its box by a rule that turns on which glyph holds a pair's kerning
+and on the device pixel ratio; a pair that kerns apart at the cut; joined scripts, where Chrome shapes a line again with
+the whole text as context (`harfbuzz_shaper.cc:989-1007`), so the letters at a cut keep the forms they have in the word;
+and a line that starts inside a ligature of three letters, whose second letter keeps the advance it has in the word's
+prefixes where Chrome shapes the line's start again. The first two can fail a layout the sums pass, since their lines,
+without any kerning, land on Chrome's side of some cuts by luck: 5 of 4,480 probe layouts of real-looking long words,
+each with the right line count, against 696 fixed; the last made a wrong line count of two probe layouts the sums pass,
+`nnnnffinnnnnnnnnnnn` in 16px Roboto at 43.8px and in 16px Baskerville at 42.1px. `getTextClusters()` shipping in
+Chrome, if its positions are the advance sums, would give the positions the engine reads and reopen all four.
 
 A rule ending an overflowing segment's emergency split after its last fitting hyphen, which recovered breaks hidden when
 main merged segments before the engine scans, was dropped on 2026-09-16: a scan segment ends at every break, so a hyphen
@@ -1178,10 +1328,12 @@ Helvetica Neue, Hoefler Text and 10 more families split it; Arial, Futura, Gill 
 that don't. Canvas adds both halves, so Chrome's and Safari's never show the placement (in Chrome, 26 families and 264
 pairs gave the same values under every probe), and for a pair with the space the Chromium profile doesn't ask which
 (above); Firefox rounds each glyph to app units, so it shows there at the size times 2^k. Chrome keeps kerning when it
-splits an overflowing word (`'AV'.repeat(116)` at 109px takes 22 lines, not 24). Firefox shapes words without their
+splits an overflowing word (`'AV'.repeat(116)` at 109px takes 22 lines, not 24), which the Blink profile follows in
+words of 80px or wider (#435; Break Opportunities From Engine Data). Firefox shapes words without their
 spaces and splits them at ZWSP, WJ and other invisible controls, so its kerning never reaches a space, and after an
 emergency break inside `AV` in 18px Times New Roman it paints `V` at 11.833px, keeping half the adjustment with `A`
-(rebuild harness; the `AV` paint in Firefox 155, 2026-09-12).
+(rebuild harness; the `AV` paint in Firefox 155, 2026-09-12). The Gecko profile's prefixes leave that part off the
+letter before such a break (Break Opportunities From Engine Data).
 
 ### Rich Inline Boundaries
 
@@ -1189,7 +1341,8 @@ Rich inline (`prepareRichInline()` and its walkers, `src/rich-inline.ts`) measur
 paragraph's joined text. Measuring alone is a premise whose gap is out of scope for now, since rich inline with kerning
 between sibling spans is left for later (Part 1, The Per-Engine Rebuild And What Counts As Done): Chrome and Firefox
 kern across same-font spans, so Arial `community` + `,` fits about 1px earlier than its two widths, and Safari doesn't
-(2026-09-12). Where Pretext's plain-text walkers, given the joined text as one string, and the browser's lines for the
+(2026-09-12). The one width read across items is the halt Chrome gives a pair of fullwidth marks (CJK At An Item's
+Edge). Where Pretext's plain-text walkers, given the joined text as one string, and the browser's lines for the
 same text in one text node disagree, rich inline follows the plain-text walkers, but for a few places where it follows
 the browser and the walkers don't yet: in the Gecko profile a rich line hangs the space before a soft hyphen Firefox
 drops and its start consumes that soft hyphen, and in every profile an item whose whole width fits goes on its line
@@ -1345,6 +1498,44 @@ object (Blink's, WebKit's and Gecko's sources are cited at the rule in `prepareR
 On three probes that fixed 1,845 Chrome, 818 Firefox and 1,884 webkit-host cases and lost 76, 81 and 101, 241 of the
 258 losses holding a soft hyphen or bidi control beside the atomic item's white space, where the gap had made up for
 white space Pretext gets wrong there. In Firefox an atomic item's leading white space also collapses into an open run.
+
+#### CJK At An Item's Edge
+
+What Chrome's `text-spacing-trim` does with fullwidth punctuation at a span's edge, in Chrome 154.0.8037.57 on macOS
+27.0 at DPR 2, in 16px Hiragino Sans and PingFang SC (2026-09-30 to 10-04), which rich inline follows since #425. A
+halt is the half an em Chrome takes off a fullwidth mark (`src/han-kerning.ts`). Firefox and webkit-host halt no mark.
+- Chrome halts a pair of fullwidth marks that a span edge splits as in one text node, whatever the two spans' weights,
+  sizes or families and with padding between them, each mark by the font of its own span, since
+  `HanKerning::AppendFontFeatures` reads the paragraph's text on both sides of each shaped run
+  (`han_kerning.cc:262-320`, Chromium 153): `文字」` and a span `。文字` are 88px wide, where the two measured apart
+  take 96px, and a 20px `「引用」` before a 16px `。` halts `」` by 10px. Measured apart, `これは`, a bold `「引用」` and
+  `。と言った` wrapped otherwise than Chrome at 68 of 141 widths from 60 to 200px.
+- A closing mark that Chrome halts at a span's end, where the span fits only so, stays halted where the line goes on:
+  `文字」` and a span `i` take one 43.81px line at 44-47px, where their text in one node takes two, of 40px and
+  3.81px. Rich inline did this before #425, and still does. Chrome halts the mark only where a break comes right
+  after it (`ShapingLineBreaker::ShapeLine`, `shaping_line_breaker.cc:342-363`), and its scan gives none before a
+  space, a tab or a line feed: `文字）` before a span that starts with a space, or with that space ending its own
+  span, or before a span that starts with a line feed in pre-wrap, breaks before `字` at 40-47px, as in one node,
+  and so does `設定）` before a space and a box or a chip. A chip's own white space is no such space, where it starts
+  the chip's text or is all of it, since its inline-block trims it: a break comes right after the mark, and `設定）`
+  before a chip ` @a `, or before a chip of a space, fits 40-47px halted, also where the span after that chip starts
+  with a space. Rich inline had kept `文字）` halted on one line before a space, since an item's own text ends at the
+  mark.
+
+These counts are of probes recorded fresh in two document orders on 2026-10-04, each case predicted with main at #423
+and with #425, and not kept. Styled Japanese and Chinese sentences at 120-600px in nine font stacks go from 5,608 to
+6,199 of 6,210 in Chrome, all through the pair halt: of the 602 that fail on main, 162 have a wrong line count and 440
+the right count with a wrong break, and 2 and 9 are left. Over twelve probes of 152,572 cases (those sentences and
+five more sets of them; pairs of marks across span edges at 16-160px, and inside units filled grapheme by grapheme; a
+closing mark before spaces, boxes and chips; U+3000 and white space at a span's end; and 12,200 seeded draws), #425
+fixes 7,676 Chrome cases and loses 36 that main passes. A line count that main has wrong is right in 3,469 cases, and
+one that main has right is wrong in 23: 9 of the 36, and 14 that main fails with a wrong break. No prediction moves in
+Firefox or webkit-host, which halt nothing. Each of the 36 and of the 14 is another gap that main's marks, half an em
+too wide, had made up for (ENGINE_FOLLOWUPS.md, Rich-inline item edges). Of the 36: 13 where a soft hyphen's hyphen no
+longer fits, 12 through a U+3000 run that ends a span, 9 through U+3000 after a collapsible space, and 2 through the
+padding of a chip of only white space. Of the 14: 10 through U+3000 after a collapsible space, 1 through a U+3000 run
+that ends a span, 2 through a padded span's padding and 1 through a ZWSP that holds a line. A Chrome that stops
+halting across spans, which the rich set's `item-edges` cases would show at a repin, reopens the first fact.
 
 #### Objects Inside A Line
 
@@ -1702,7 +1893,8 @@ and the letters alone sum to 480.67px; Chrome's first bold `x` is 8.586px alone 
 kept. At 48 nearby thresholds, prefix widths matched 16 per face in Chrome, and one following grapheme of context all 48
 in Chrome but 16 per face in Safari 26.5.2, where reshaping each line prefix matched 42: a context-aware fit per engine
 (ENGINE_FOLLOWUPS.md). Pretext's `pair-context` mode, for numeric runs, keeps the grapheme before, not after; the
-Chromium profile sums graphemes, and the case stays on Chrome's accepted list.
+Chromium profile summed graphemes, and the case was on Chrome's accepted list until the profile came to fit a word of
+80px or wider from its pairs or prefixes (#435), with which the report's layout is Chrome's.
 
 **Firefox's joined Arabic.** Gecko fits from the whole shaped word's advances; Pretext prices letters beside a soft
 hyphen, or at an emergency break in a segment under 80px, isolated. Measuring each connected letter with a ZWJ on an
@@ -1849,6 +2041,38 @@ before #340's scans and #344's grapheme tables made analysis faster; the split h
 Safari gains must come from measuring less. Korean, Thai, Khmer, Burmese and Hindi cost Chrome about 4 times English
 under system fallback, twice with a named font for the script.
 
+The context's font is set at the first measurement after a font is looked up (`getContext()` in `src/measurement.ts`),
+not at the lookup (#445): rich inline looks a font up for every item, and an item whose text is all in the font's cache
+measures nothing. Prepared again, the bench's 147 Latin rich messages, 7,040 items, assigned `context.font` 7,040 times,
+2,310 of them to another font than the context held, and ten dense styled Japanese sentences, 74 items, 74 times and 44;
+now neither assigns any (a stand-in Canvas's counts; a row of the unit test for stale contexts holds the zero). Those
+messages prepared again are the bench's `rich: latin rich-seen`, which read 20.9% faster in Chrome 154.0.8037.57, 21.7%
+in Firefox 156.0.1 and 56.0% in Safari 27.0 (foreground, three sessions, 2026-10-05, against main at #435; against main
+before #435 Firefox read 12%, on the page below, and what widened it wasn't looked for). On a page that times main, the
+change and a second copy of main by turns, the sentences read 11%, 5% and 31% faster, CJK prose with bold quotations 3%,
+2% and 9%, and the same messages as plain text in one font within 2% (foreground, five pages a browser, 2026-10-05).
+
+What it costs: 5 code lines, and in Safari the two worst-case rows that prepare cached CJK text. `worst:
+cjk-brackets-keep-all prepare` read above base in 19 of 19 foreground sessions, by 0.6% to 2.8%, 1.7% at the median, so
+mostly under the row's 2% floor, and `worst: cjk-letter-spaced prepare` in 8 of 8 against main at #435, by 0.7% to 5.2%,
+its control up to 4.8% from base. Not assigning the font isn't what costs: the same build with the font also assigned at
+every lookup, as before, read the keep-all row 2.3% to 3.0% slower in five of five sessions, so the assignment left out
+gives about 1.5% of that row back, and a build one unused binding apart read it 1.4% to 5.3% slower. Preparing that
+row's 120 texts again measures nothing, and where main assigned the context's font and compared a flag it makes one
+store, so it is taken as how Safari compiles the bundle, with the cause not found (Safari 27.0, foreground, five
+sessions a build, 2026-10-05).
+
+Every measurement still follows an assignment of its font made since the font was looked up, as it did before; only an
+assignment that no measurement follows is gone. That moves one thing in the pinned browsers, in Safari: a kept context
+that missed a late face takes it when its font string changes, which now follows the font measured last and not the font
+looked up last. So cached text in another font no longer heals it, and cached text of the late family, prepared after
+text measured in another font, no longer keeps it from healing (PLATFORM_BUGS.md, Safari: a kept Canvas context misses a
+loaded `FontFace`; webkit-host, with Chrome 154.0.8037.57 and Firefox 156.0.1 taking the face in every order,
+2026-10-05). Firefox before 156, where an assignment could still heal a context stuck on a late family name
+(PLATFORM_BUGS.md, Firefox: the late family names), wasn't run and may differ the same way. A build that set the font
+only where the context held another lost Firefox a face added after its font was measured (Engine Facts, Firefox).
+Reopens if an engine needs a font assigned where nothing is measured.
+
 #### Work Done Only Where A Rule Applies
 
 A rule only rare text needs costs other text nothing only where preparation finds that text through a test it already
@@ -1887,6 +2111,27 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   (Part 1, Engineering, JIT tuning), and it missed the punctuation Arabic shares outside those blocks, so `abc`,
   U+204F, `def` took 7 gaps where Chrome 154 gives 6. Reopens if the bench's letter-spaced CJK prepare row shows the
   test.
+- **Line-start extras** (#435; Break Opportunities From Engine Data): only a word of 80px or wider whose letters don't
+  add up to it has them, and the handle lists them per segment, so a text with one such word carries a list as long as
+  its segments. In Chrome 154, 40 of the bench's 278 Latin messages do, and the Arabic book is one text of 37,604
+  segments with 23 such words. Built as the lists of fresh-line geometry and of line-start prohibitions are, by
+  `Array.from` over the segments before the first such word and then a test and a push for every segment, the list made
+  Chrome prepare Latin messages it had seen 3.4% slower than main, the book 3.5%, keep-all brackets 3.7% and the emoji
+  texts 3.0% (three foreground sessions of a first build, 2026-10-04). It is made where the first such word is found, at
+  the text's segment count, and filled with null in one call. Against the first build those rows read 2.9%, 3.4%, 3.1%
+  and 2.3% faster, where a build that lists nothing, and so cuts words otherwise, read 3.2%, 5.1%, 4.9% and 2.5% faster;
+  a loop of pushes read as the fill does, and `Array.from` at the full count read the book 5.7% slower than the first
+  build and long breakable runs 5.8%, 8-11 ns for each slot. The simple stepper and the full walker read the list where
+  a line starts inside a word, where the first build read it for every line and held it through every walk:
+  `measureLineStats()` of mixed messages read 1.5% faster and `walkLineRanges()` of pre-wrap chunks 2.2%, which had read
+  3.2% and 4.6% slower than main. On mixed messages that is a read removed for every line. On pre-wrap chunks it is one
+  read for every walk, twelve a pass, so that reading is no work saved: the walker holds one local less (JavaScript
+  Engines, State a loop keeps for its rare paths), and a second run of that change alone gave neither row a verdict,
+  1.4% and 2.1% faster. Against main, every `prepare()` row on seen text and both of those then read within 1.1% (three
+  background sessions for each figure here but the foreground ones, so hypotheses). The foreground bench of the change
+  as it landed gave none of those rows a verdict in Chrome 154: seen Latin messages read 0.9% slower than main, the book
+  0.6%, keep-all brackets 0.5%, the emoji texts 0.2%, `measureLineStats()` of mixed messages 1.4% and `walkLineRanges()`
+  of pre-wrap chunks 0.9% (three sessions, 2026-10-05).
 
 #### The Walkers' Shapes
 
@@ -1978,10 +2223,11 @@ rich-inline preparation 12% slower in Chrome 154, so the analysis builds a plain
 measurement reads them, not once in the analysis, made Firefox 156 prepare rich items 11-19% slower (#360, 2026-09-26).
 `Array.from({ length }, fn)` cost Chrome 154 5.7% preparing CJK it had measured before, so per-segment arrays that
 start at zero are pushed in a loop (`zeros()`), while lists of records or null keep `Array.from`: one helper pushing
-both made Node 23's V8 store each zero as a boxed double (#366, #370). Overflow trims read in `countPreparedLines()`'s
-loop cost Firefox 156 13-26% counting long breakable runs, so `layout()` counts a handle with overflow trims through
-the simple stepper, and its line APIs keep the simple walk, without which Chrome 154's line APIs ran 62-108% slower on
-CJK messages (#366, 2026-09-27). `measureAnalysis()` keeps its helpers as closures: hoisted, they
+both made Node 23's V8 store each zero as a boxed double (#366, #370). The list of line-start extras, a null for nearly
+every segment, is filled in one call (Work Done Only Where A Rule Applies). Overflow trims read in
+`countPreparedLines()`'s loop cost Firefox 156 13-26% counting long breakable runs, so `layout()` counts a handle with
+overflow trims through the simple stepper, and its line APIs keep the simple walk, without which Chrome 154's line APIs
+ran 62-108% slower on CJK messages (#366, 2026-09-27). `measureAnalysis()` keeps its helpers as closures: hoisted, they
 measured the same in offline replays of all four profiles the replay runs (Blink, WebKit, Gecko and an unrecognized
 engine's) but took 16 more lines, and a hoist lands only if it removes lines and the bench shows a gain, so they weren't
 timed (2026-09-26). AGENTS.md's locals rule is for line walkers.
@@ -2122,6 +2368,20 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   alone says nothing about a change whose code `layout()` doesn't run (`harness/README.md`, Bench). Reopen on a Firefox
   whose scopes give every binding one kind of slot, or if the row moves between two builds whose minified names are the
   same.
+- **Firefox's `lines: cjk stats` moved the same way** under a first build of #435, which also changed the Gecko
+  profile's fit of a cut word (Dead Ends, Fitting, Cuts And Fast Paths) and gave it no line-start extras. A build of it
+  doing main's work in the Gecko profile, with main's `src/line-break.ts` and main's fit of a cut word, so that only the
+  bundle differed (five more top-level functions, one more handle field, always null), read `lines: cjk stats` 4.4%
+  slower than main in every session, `cjk walk` 3.7% slower, inside its noise, and `resize: latin layout at new widths`
+  14.1% faster. The first build read those three 4.4%, 6.7% and 23.8% slower, with main's `src/line-break.ts` alone 4.5%
+  and 10.4% slower and 16.4% faster, and with the list read where a line starts inside a word 1.1% and 0.7% slower and
+  11.6% faster. So a verdict on `cjk stats` can come from the bundle alone. About `worst: long-breakable-runs layout`,
+  the other row that runs the counter's grapheme loop, these runs say nothing either way: one build read it 7.1% slower
+  and, timed again, 0.2% faster, its control between 10.2% faster and 13.1% slower (Firefox 156.0.1, three background
+  sessions each, 2026-10-04, so hypotheses). The change as it landed keeps that build's ligature rule in the Gecko
+  profile and not its kerning. Its foreground bench read `lines: cjk stats` and `resize: latin layout at new widths`
+  within noise in Firefox (three sessions, 2026-10-05), and the long breakable runs slower, for a reason of their own
+  (below, One whole number among a cut word's advances).
 - **Constants written into the built code as numbers** took the names out of that loop, and were declined (#406, closed
   unmerged; Decisions Log, 2026-10-03). With the segment kinds and flag bits as const enums, a bundle holds each use as
   its number, and under two namings the row read alike, -1.1% and -0.3%, where main's two read 16% apart (three sessions
@@ -2154,6 +2414,61 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   letter spacing or under one that is a short binary fraction, such as 0.5px. Under another, such as 0.3px, the width
   of a line with a tab past its third stop can differ in its last bits: by up to 1.1e-13px, in under a tenth of 44,000
   generated lines for each of four such spacings, none of which broke elsewhere.
+- **A second array kept by each cut word** (#435, Chrome 154, 2026-10-04): with line-start extras, `layout()` of the
+  bench's long breakable runs reads 8.6-10.3% slower than main, where 660 to 1,100 words are cut at each width and the
+  counter reads one extra for each line that starts inside one. Part of it is no operation of the counter's. With
+  `countPreparedLines()` as on main, which reads no extra, the row read 6.2%, 3.1% and 5.3% slower than main in three
+  builds whose cut words keep their extras in an array, listed on the handle or not, and 0.8% with no such array made,
+  0.3% with main's fit in the same bundle, and 0.9% with the extras in `Float64Array`s; a second session's runs of four
+  of those builds read 3.6% and 5.0% with the array and 0.3% and 0.6% without it or with typed arrays. So 3-6% comes and
+  goes with a second ordinary array kept by each cut word, in a loop that does the same work either way, and the rest is
+  the read. That the cost is where V8 keeps that array, next to the advances the loop adds up, is an inference from
+  those builds, since V8 keeps a typed array's numbers apart from ordinary arrays; nothing of V8's was read or traced
+  for it. Typed arrays weren't taken: read by the walkers they made the row 13.4% slower than main, and the only reason
+  for them is one engine's heap. Storing each letter's own width in place of the difference, so that a line start reads
+  one number and adds nothing, read level in Chrome (+0.1% against the build with differences) and in Firefox 156, whose
+  profile has none (4.0% slower than main against 4.6%, inside its control's band), so the handle keeps the difference,
+  which holds whatever a segment's advances take later. Three background sessions for each figure but the 10.3%, so
+  hypotheses. In the foreground the row read 9.4% slower than main for the Blink profile's fit alone and 9.7% for the
+  change as it landed, 4.8%, 10.6% and 10.8% by session, then 7.9% in a second run of the change with #425 in both
+  builds, 7.3%, 7.6% and 11.7%, and level in Safari 27, whose profile keeps no extras (three sessions each, 2026-10-05).
+  The paragraph has 1,100, 880 and 660 cut words at the row's 240, 300 and 360px in Chrome, and 1,760, 1,320 and 880
+  lines that start inside one. Reopens if a foreground run shows either form of the read faster, or with
+  `getTextClusters()` (Break Opportunities From Engine Data).
+- **One whole number among a cut word's advances, in Firefox** (#435, Firefox 156.0.1, 2026-10-05): with the Gecko
+  profile's ligature rule, `layout()` of the bench's long breakable runs read 13.9% slower than main in the foreground,
+  13.9%, 14.9% and 5.5% in three sessions, then 8.2% in a second foreground run with #425 in both builds, 7.7%, 7.9% and
+  10.3%, and 7.2% and 8.7% in two background runs, where the build with the Blink profile's fit alone, whose Gecko
+  profile runs main's code, read level (1.4% faster in the foreground, 0.8% slower and 0.8% faster in the background).
+  It isn't work. Main, that build and the change break the paragraph into the same lines, cut the same words (880, 660
+  and 440 at the bench's 240, 300 and 360px) and add the same letters in `countPreparedLines()`'s loop (53,966, 45,980
+  and 36,960), and their handles differ in one word of 4,205: the paragraph's one ligature in Firefox, the `ff` of a
+  link, whose two letters have the advances 9.2333 and 0 where main has 4.7333 and 4.5. The rule writes that 0 as a
+  whole number among the word's fractional advances, and with that one number present SpiderMonkey's compiled loop is in
+  a slower state, about 7% apart, far more often: 15 of 18 background readings of the row, against 7 of 48 for main and
+  1 of 18 for the same build with the zero written as -0. A build that stores every whole-number advance as an integer
+  was not slow, so the cost is not an integer's but that of one stray integer among doubles, for a reason not found.
+  That SpiderMonkey holds the 0 as an integer and -0 as a double is inferred from how those builds read, since neither a
+  page nor the engine's shell shows how a number is held. The slow state also appears with no such number, in a quarter
+  to a third of processes, so three sessions of this row in Firefox are weak evidence either way. Two ways out, neither
+  taken: the zero written as -0 removes it, and is a constant chosen for one engine's number tags; the advances in typed
+  arrays, which have no tags, remove it in SpiderMonkey's shell and read about 40% slower than main in V8's. So it is
+  left as a regression one JIT alone explains (Part 1, Engineering, JIT tuning). The two foreground runs read `worst:
+  arabic-book layout` 2.6% and 3.3% slower in every session, and the build with the Blink profile's fit alone had read
+  it 3.7% slower with main's code in the Gecko profile, so that row isn't the ligature rule's; it wasn't traced. Reopens
+  with `getTextClusters()` in Firefox, which would take the rule's place, if typed arrays are taken for another reason,
+  or if cut words in real text show the cost.
+- **Firefox's `rich: latin rich-new` read slower in one run, for no work found** (#435, Firefox 156.0.1, 2026-10-05):
+  the second foreground run of the cut-word change, with #425 in both builds, read the row 13.6% slower than main in
+  every session (13.8%, 11.8% and 15.6%; 520 µs per 1,000 units for 460), where the first run had read it level (0.0%,
+  +3.7% and -6.8%). It isn't Canvas work: over the row's 42 batches the Gecko profile makes 4,270 `measureText` calls
+  for main's 4,243, 0.6% more, with 0.2% more units and the same lines, counted in a background window, and the builds
+  before #425 count the same. Run alone in the foreground, the row read 10.4% slower over three sessions, with main's
+  second copy up to 23.5% from main, and 3.3% slower over six, from 3.0% faster to 23.8% slower, both within noise. A
+  reading of this row is one batch of about half a millisecond on a timer that steps by 0.02 ms, about 4% a step, and in
+  a round each build reads a batch of its own, since the text has to be new to it. So the row isn't attributed to the
+  change, and what it read wasn't traced. Reopens if the row reads slower again in a full run, or in a build that
+  differs from main only in the Gecko profile's ligature rule.
 - **Inline caches**: once `layout()` has stepped such text, Chrome's `walkLineRanges()` of simple text, sharing the
   simple stepper, takes 2-4% longer than a second copy of main, by a mechanism not found. V8's caches turn polymorphic
   over the two handle kinds (`--log-ic`), but one shape for both didn't help Chrome and cost Firefox up to 14%; a
@@ -2523,6 +2838,13 @@ repin` shows what), and a fact read in source needs reading again.
   of the rebuild harness's emoji cases in one run, 104 in an identical one), and order matters: an app measures before
   layout, a test harness usually after, and measuring first moved 121 Firefox emoji cases, none in Chrome or
   webkit-host. (Firefox 156, 2026-09-16 to 09-20.)
+- **An added face reaches a kept context when its font is assigned**, the same string too. A context that measured
+  `32px "Late", monospace` before the family had a face keeps the fallback after `await face.load();
+  document.fonts.add(face)` until its `font` is assigned: with the assignment, the text prepared again after
+  `clearCache()` is 649.45 px wide, as painted, and a build that left out an assignment of the string the context
+  already held read the fallback's 770.67 px. Chrome 154's context takes the face with no assignment, and webkit-host's
+  only after another font string (PLATFORM_BUGS.md). So the first measurement after a font is looked up assigns it
+  (`getFontMeasurement()` in `src/measurement.ts`). (Firefox 156.0.1, 2026-10-05.)
 - **Thai, Lao, Khmer and Burmese** break with the ICU4X model `Intl.Segmenter` runs (PLATFORM_BUGS.md), a
   space-delimited word at a time, so the segmenter gives exactly Firefox's breaks (54,588 of 54,588, once breaks inside
   grapheme clusters are dropped). New text's `prepare()` plus `layout()` per 1,000 characters, Chrome / Firefox /
@@ -2538,7 +2860,9 @@ repin` shows what), and a fact read in source needs reading again.
   Helvetica Neue go through HarfBuzz and round each glyph. (Firefox 156, 2026-09-16 to 09-20.)
 - **Ligatures.** A range edge inside a ligature gets its advance shared by started clusters (`ComputeLigatureData`,
   `gfxTextRun.cpp:238-322`), but the break scan puts it all on the first character (`:989, 1139-1149`), so a break
-  between lam and alef never fits more text. Real text breaks inside ligatures under break-all, in long words, at soft
+  between lam and alef never fits more text. The Gecko profile follows that for a font's optional ligatures in words of
+  80px or wider and up to 96 graphemes (#435) and not for one the font requires, as lam-alef, which its prefixes cut
+  (Break Opportunities From Engine Data). Real text breaks inside ligatures under break-all, in long words, at soft
   hyphens and in URLs (1,432 cases in Helvetica, Hoefler Text, Seravek, Lucida Grande and the Latin of PingFang SC and
   Hiragino Sans). Unfiled: `ComputeLigatureData` divides a signed advance by an unsigned count (`:249-289`), so a span
   starting between two marks of one cluster makes a frame about 17.9 million px wide. (Firefox 156, 2026-09-17 to
@@ -2971,6 +3295,127 @@ below 256 px, Canvas totals are exact (Engine Facts, Chrome).
   (AGENTS.md, Implementation notes), which a cheaper Chrome recipe from the emulation study would need too.
 - **Gecko prefix fits from 24px, or everywhere** (2026-09-27): the 24-80px lines they fix cost too much in preparing new
   text (Break Opportunities From Engine Data). Reopens if prefixes get cheaper, or real usage shows the gap.
+- **Other forms of the Blink profile's fit of a cut word** (#435, 2026-10-04, each one build scored once in Chrome
+  154.0.8037.57 on every pinned case, the 18,382 probe layouts and nine joined-script words). From pairs alone it fixes
+  the same 39 cases and fails 2 anew, `a  سلاملاtail` in 32px Arial at 26.6px and 26.7px, whose second lam-alef comes to
+  17.4px from its pairs for Chrome's 19.2px; it passes 18,155 probe layouts and 4 of the nine words. From prefixes alone
+  it fails 1 anew, `بِبِ((()))tail` in 24px Amiri in a 1px box, whose prefixes shrink as Latin letters join the
+  brackets, and costs 8.9% more calls and 15.5% more units on the sample, and on the bench's texts 145% more calls for
+  long breakable runs, 186% for keep-all Japanese with brackets and 156% for a list of distinct links, where pairs cost
+  16%, 42% and 54%. Pairs checked against the word's width, with prefixes where they don't add up, fail neither, pass
+  the prefixes' 18,191 and 5 of nine, and cost what pairs do but on Arabic prose, 3.3% more calls on the bench's Arabic
+  book for 1.5%. With no line-start widths, pairs or prefixes failed 7 or 8 cases anew at 24-80px. The same fit for
+  letter-spaced words, in a build that sent digit runs through it too, passed 51 more accepted cases, 41 of them with a
+  line more than 1px off, failed 5 more anew and turned 28 more accepted failures into wrong line counts: a letter
+  measured alone is its isolated form, which a line of joined letters doesn't start with. All 84 cases that build moved
+  were letter-spaced, so it says nothing of digit runs, which no build here scored alone (ENGINE_FOLLOWUPS.md, Emergency
+  breaks inside a word, has a later count). And measuring a letter-spaced word's letters before its prefixes, to skip
+  the prefixes of one that adds up, moved 16 Amiri cases through what Chrome's Canvas remembers (PLATFORM_BUGS.md).
+  Reopens with a line start measured as its first two graphemes together, which keeps joined forms.
+- **Cheaper forms of the Blink profile's fit of a cut word, for new interface labels** (#435, 2026-10-05, each a build
+  whose calls were counted on Chromium's 7,000 labels and which was scored once in Chrome 154.0.8037.57 on every pinned
+  case and on the 13,090 probe layouts of Break Opportunities From Engine Data; the percentages are `measureText` calls
+  over the sums, on all the labels, on the batches the bench's `new: labels` row times and on the real-usage sample,
+  where the fit as landed reads 10.1%, 10.7% and 7.2%). None gives the fit's advances for less, and none is taken: each
+  gives up layouts the fit gets right, on a premise that real fonts break, and the fit lands as it is (Decisions Log,
+  2026-10-05). The builds are on local branches that #435's description names.
+  - Words holding a letter of a joined script left to the sums, since the premise is wrong for them: 9.5%, 10.6% and
+    7.2%, as no word of Arabic letters alone reaches 80px at 13px. 23 pinned cases fail anew, 19 of them wrong line
+    counts, and 848 of the 986 Arabic probe layouts fail in place of 577. A dead end: the sums are much further from
+    Chrome there than the prefixes.
+  - The pairs asked in the word's order only until what they hold accounts for the word's width, the letters after that
+    keeping their widths alone: 8.4%, 9.2% and 5.0%. It takes the premise of a word that adds up for the rest of a word,
+    and fails the same way, where kernings after the stop cancel, which a font's few kerning values make common: 3
+    pinned predictions change a width and none fails (`certificat`, cut from `certificates` in 24px Inter, comes to
+    100.51px for Chrome's 100.75px, its `ca` and `te` kerning 0.234px each way after `rt` has held the word's 0.375px,
+    and a lam-alef of `سلاملاtail` in 32px Arial to 17.41px for 19.22px, the word's first two pairs holding by chance
+    all of its 14.72px, so that its prefixes are never asked), 1 more label layout of the 5,077 fails
+    (`approvata}other{#` in 13px Inter at 50px), and 2.00% of the passing probe lines are more than 0.05px from Chrome's
+    in place of 1.87%. Not taken: a sixth of the added calls, for widths that are off wherever a font's kernings cancel.
+  - The same, counting first the pairs the font has measured already: 5.9%, 6.2% and 4.3%, with 1 pinned prediction
+    changing a width and no probe layout. A word's advances then depend, where kernings cancel, on which texts the font
+    met before it, which nothing in Pretext does by its own doing, and so it isn't taken.
+  - A floor of 90px for the Blink profile: 7.8%, 8.0% and 5.8% (6.6%, 7.0% and 4.0% with the stop). No pinned case fails
+    and the sample's 7 hold, the narrowest of their words being 90.6px, which is the only reason for 90. Words of
+    80-90px go back to the sums: 32 of the 5,077 label layouts fail, 5 of them in boxes of 80px or wider, and 710 of the
+    986 Arabic ones. Not taken: the floor would sit 0.6px under a real case's word, for no browser reason.
+  - A floor of 100px: 5.9%, 5.9% and 4.7% (5.0%, 5.1% and 3.2% with the stop). 28 pinned cases fail again, 18 of them
+    wrong line counts, one a real-usage draw, a 90.6px Ukrainian word in a 12px Times New Roman label in a 69.83px box
+    with the right line count and a letter on another line, so the sample's failing draws in claims are 23; 59 of the
+    5,077 label layouts fail, 18 of them in boxes of 80px or wider, and 793 Arabic ones. Not taken: it loses a
+    real-usage draw.
+  - No pair asked: what a word's width differs by from its letters' is spread over the letters in proportion to their
+    widths, and a line that starts inside the word starts with its first letter alone. 0%, 0% and 0%: the sums' calls
+    and units in every set. It takes a word's kerning to be even along the word, which every kerned font breaks: the
+    kerning sits at one or two pairs (`AT`, `T,`, `//`), and a line far from them is charged kerning it doesn't have. Of
+    the sample's 7 it keeps 6 and loses a 346.4px link in 16px Roboto at 287.44px, a letter short as from the sums, and
+    it fails a draw that the sums and the fit pass, `https://docs.google.com/document/d/1a2B3c4D5e6F7g8H9i0J/edit` in
+    16px Inter at 282px, whose kerning is in `7g` and `J/` near its end and whose first line takes a letter too many, so
+    the sample's failing draws in claims are 24. 44 pinned cases fail that the fit passes, 15 of them wrong line counts,
+    and 11 of the 44 pass from the sums; 91 of the 5,077 label layouts fail, 9 of them wrong line counts and 34 of them
+    layouts the sums pass, and 708 of the 986 Arabic ones. It can give a line too few: `{NUM_GROUPS,plural,` in 14px
+    Roboto at 70px, whose one kerned pair is `ra`, by 0.27px, is 3 lines in Chrome and 2 from the spread. Not taken: it
+    breaks real-usage text that the sums get right.
+  - The same under 160px, and the pairs from 160px: 1.6%, 1.6% and 2.4%, and 15.4% over German labels alone. The
+    sample's 7 hold and its failing draws in claims are 22, as with the fit, since every draw the spread loses is a link
+    of 346px or wider. 34 pinned cases fail that the fit passes, 10 of them wrong line counts, and 5 of the 34 pass from
+    the sums; 71 of the 5,077 label layouts fail, 7 of them wrong line counts, where the fit fails 4: a word of 80-160px
+    keeps the spread. Pairs from 120px cost 3.3% on the labels for the same pinned cases, and from 240px 0.5% for 6 more
+    lost; 160 has no browser reason. Not taken: it is the spread's premise, kept to label-sized words.
+  With the spread and no floor, a scratch build passed 59 more pinned cases, 45 of them with Arabic letters, and failed
+  25 that pass, 18 of them in boxes under 24px, with no draw of the sample moved; the 25 weren't attributed. Reopens
+  with a Canvas call that gives every position of a run, as `getTextClusters()`; with an option that tells `prepare()` a
+  text is never cut inside a word (TODO.md, the API discussion); or with an app that shows the added calls as time its
+  users wait.
+- **Safari's rule for a cut word, in part** (#435, 2026-10-04, four builds of the WebKit profile, each scored once in
+  webkit-host on 44,448 pinned cases). WebKit keeps the longest prefix that fits, measured from the line's own start,
+  and gives the rest of the word the width left over without measuring it (Engine Facts, Safari, Overlong words).
+  With a line's first letter measured alone in every word, 83 accepted cases passed and 175 failed anew; with the
+  width left over carried too, in a prototype's third cursor field, 146 and 195; with both only in words of 80px or
+  wider, 21 and 54. The new failures are joined Arabic in boxes under 80px, where a letter alone isn't what a joined
+  line starts with, and words cut into many pieces, whose lines add up to more than the word once the rest isn't
+  carried. The line's first grapheme and its first two, measured together, matched webkit-host on 571,857 probe
+  layouts in an offline count that cost 44-62% more calls; no build of it was made. Reopens with a cursor that carries
+  a line's start width (TODO.md, the API discussion) together with that line start.
+- **Half of a pair's kerning on the letter before a cut, in the Gecko profile** (#435, 2026-10-04, one build of the
+  profile, scored once in Firefox 156.0.1 on 44,205 pinned cases). Firefox adds up the advances a word's letters have in
+  the word shaped whole, wherever a line starts, so the letter before a cut keeps its part of the kerning with the
+  letter after it, which a prefix measured alone doesn't have (Break Opportunities From Engine Data). For a letter whose
+  advance after its prefix isn't its advance alone, the build asked Canvas, before the ligature rule's question, whether
+  the pair with `fontKerning` off is as wide as its two letters: that is kerning. Canvas totals hold both halves of a
+  pair's kerning wherever both letters are measured, so at the text's size they don't show which letter holds it, and
+  the build took a premise: the letter before a cut keeps half, in every font. That is exact, to an app unit, for a font
+  that splits kerning, and #421's three texts laid out as Firefox does, each line within 0.01px. A font that kerns
+  through GPOS, as most web fonts do, keeps half of the prefixes' error on each line, in the same direction, and a
+  paragraph whose errors cancelled can gain or lose a line: `AV` twelve times in 16px Arial at 76.8px is 8, 8, 7 and 1
+  letters in Firefox, 7, 8, 8 and 1 from the prefixes and 8, 8 and 8 with half, whose last eight come to 76.46px for
+  Firefox's 77.05px. With it and the ligature rule 107 predictions differed from the prefixes alone, 6 of them the
+  ligature rule's, and 4 more accepted cases passed, all wrong line counts before, and none more was lost. On 27,884
+  probe layouts of words cut between letters in 55 font rows, 23 that split kerning and 26 that don't, the prefixes were
+  wrong in 1,097: half fixed 490 of them and lost 8, all 8 in fonts that split kerning, and in the 26 GPOS rows lost
+  none of 12,876, turned 16 from the right count with a letter on another line into a wrong count, 2 the other way, and
+  48 from a wrong count into Firefox's lines; all of the kerning on the letter before fixed 723 and lost 237; each
+  font's own placement fixed 753 and lost 10. On a second probe of 10,011 layouts, of made-up paragraphs, real-looking
+  long words and a sweep of 70 widths, half turned 9 from the right count with a letter on another line into a wrong
+  count, 8 of them `AV` runs in Arial, Roboto and Inter and 1 the placeholder
+  `{MULTI_GROUP_TAB_COUNT,plural,=1{Tab}other{Tabs}}` in 15px Inter at 67.6px (7 lines in Firefox, 8 with half), and 21
+  from a wrong count into the right one, and failed none that the prefixes passed (the probes' strings were chosen to be
+  cut inside kerned words, so their rates aren't real text's). In a joined script the kerning question reads a kerning
+  the word may not have, since a prefix's last letter has the form it takes at a word's end: `بالأخبار` in 32px Geeza
+  Pro at 52px is `بالأ`, 35.67px, and `خبار`, 51.57px, in Firefox and from the prefixes, and three lines with half,
+  which moved half of 1.77px that the word's initial `خ` doesn't have; of 924 probe layouts of Arabic words of 80px or
+  wider in 32px Geeza Pro, half turned 20 into Firefox's lines and 6 away from them. Left out (Decisions Log,
+  2026-10-05). Reopens with `getTextClusters()` in Firefox, or with a probe of each font's placement: Firefox rounds
+  each glyph's advance to an app unit, so a pair measured at the text's size and at a much larger one shows which letter
+  holds the kerning, at 6 to 90 `measureText` calls for a font that kerns (the per-engine rebuild's recipe, which told
+  47 of 49 font rows and none wrongly).
+- **A question about kerning before the Gecko profile's ligature question** (#435, 2026-10-05, one build, Firefox
+  156.0.1, every case predicted once). Whether the pair with `fontKerning` off is as wide as its two letters, asked
+  first, settles a kerned pair in one Canvas call, where the ligature question takes two, the pair as it stands and
+  without its ligatures; a ligature or two joined letters then take three. No prediction of 44,235 differed. The sample
+  took 2.5% more `measureText` calls than the prefixes alone, for the one question's 3.1%, and the books 0.9% for 0.7%.
+  Not kept: a second Canvas state to set and restore and ten more lines, for 0.6% of the sample's calls. Reopens if text
+  of many fonts with few words in each comes to matter more than those.
 
 #### DOM And Canvas-Element Paths
 
@@ -3686,3 +4131,63 @@ decisions for the maintainer.
   of chat. The one gap it turned up is recorded (ENGINE_FOLLOWUPS.md, Canvas answers that differ from the page:
   Firefox's synthetic bold). Reopens if the headline is to be quoted in public, where a stand-in share of 80% weakens
   it, or with a set of messages between people whose license allows republishing.
+- **2026-10-05: of the three engines' rules for a word cut between letters, Chrome's is ported, on a premise, and lands
+  at what it costs new text, with no cheaper form in its place, and of Firefox's the ligature rule; Firefox's kerning at
+  a cut and Safari's carried width are not** (#435). Chrome reads positions from the word shaped whole and shapes a
+  line's ends again where the cut is unsafe; which glyph holds a pair's kerning, HarfBuzz's safe-to-break flags and the
+  device pixel ratio decide the rest, and Canvas gives none of the three to `prepare()`, so the Blink profile takes the
+  longest stretch of letters that fits shaped alone, in a word of 80px or wider (Break Opportunities From Engine Data
+  has the rule, the numbers and the gaps). Three things in it are choices. The 80px floor is the Gecko profile's
+  (2026-09-27), kept for the same reason. A word as wide as its letters alone is taken to have nothing shaped across
+  them, for speed, which leaves such a word fit as it was before. And pairs stand for the word wherever they add up to
+  it, with its prefixes measured only where they don't: pairs are shared by every word of a font and prefixes by none,
+  and prefixes alone cost more than twice the `measureText` calls on new long words, links and keep-all Japanese (Dead
+  Ends, Fitting, Cuts And Fast Paths). The price is 7.2% more calls on the real-usage sample for 7 of the 29 draws
+  Chrome failed, and no recorded case lost. New interface labels pay most: 10.1% more calls over Chromium's 7,000, 17.3%
+  over 200 English ones alone and 41.7% over German ones, and 8.3% and 15.0% more time in the bench's row of them in two
+  foreground runs (Break Opportunities From Engine Data). The rule lands at that cost as it is, the maintainer's
+  decision. Cheaper forms were built and measured, each with its calls on those labels: the pairs asked only until they
+  account for the word (8.4%), a floor of 90px (7.8%, and 6.6% with that stop) or of 100px (5.9%), the pairs a font has
+  met counted first (5.9%), and the word's kerning spread over its letters, with the pairs kept from 160px (1.6%) or
+  with none asked (0%). None is taken, for three reasons. Each gives up layouts the rule gets right, on a premise that
+  real fonts break: a word whose kernings cancel after the stop, a kerned word under the higher floor, a word kerned at
+  one pair and not evenly along it. A premise real fonts break isn't taken for speed (Part 1, The Correctness Stance),
+  and the form that asks nothing fails a real-usage link that the letters added up alone pass (Dead Ends, Fitting, Cuts
+  And Fast Paths, has what each loses). The cost is paid once per letter pair and font, on text not measured before and
+  in Chrome alone, so it falls as a font sees text, from 1.07 calls a label over the first 100 labels to 0.20 over the
+  last 3,000. And against the released 0.0.9, whose `prepare()` #344 made up to about twice as fast in Chrome on new
+  text, most new text still prepares faster with the rule, though not all of it: new prose takes 33-58% less time than
+  in 0.0.9 in Chrome, the bench's row of mixed labels reads level with 0.0.9 in Chrome and in Firefox, where main before
+  the rule read it 18.7% faster in Chrome, and of one language's labels at a time in Chrome, 31 of 35 languages are
+  faster than in 0.0.9 and Tamil, Telugu, Armenian and Hebrew are 31%, 13%, 12% and 3% slower; in Firefox eight
+  languages' labels are slower than in 0.0.9, nearly all of it main's cost and not the rule's (Break Opportunities
+  From Engine Data has the figures, their builds and date; #435's description has the tables). The rule lands with that
+  known. `layout()` pays where words are cut: the bench's long breakable runs read
+  7.9% and 9.7% slower in Chrome 154 in two foreground runs, for one number read at each line that starts inside a word,
+  and 8.2% and 13.9% slower in Firefox 156.0.1 with the ligature rule, which is none of the rule's work and is left as
+  one JIT's (Keeping Work Bounded, JavaScript Engines). Firefox adds up the advances a word's letters have in the word
+  shaped whole, and two parts of that were built. The ligature rule is ported: a ligature counts whole on its first
+  letter (`GetAdvanceForGlyph`, `gfxTextRun.cpp:1139-1151`), found from one Canvas question per pair and font, which
+  takes no premise about the font. It fixes 1 of the 3 real-usage draws Firefox failed, for 3.1% more calls on the
+  sample, and loses one case, in a 1px box narrower than the ligature that starts its line, where Firefox gives each
+  letter an equal share of the advance; the shares aren't ported, since they show only in a box narrower than one
+  ligature. It covers the words fit from prefixes, of 80px or wider and up to 96 graphemes; a longer word and a run of
+  digits are fit from pairs and keep the cut they had. The kerning is not ported, the maintainer's decision. The exact
+  rule needs which letter of a pair holds the kerning, which Canvas doesn't give at the text's size; the build's premise
+  in its place, half on the letter before the cut in every font, is exact for the fonts that split kerning and is one
+  that fonts kerning through GPOS break, which most web fonts are, and a premise real fonts break isn't taken (Part 1,
+  The Correctness Stance). It fixed #421's three Firefox texts and 4 accepted cases, none of them a real-usage draw, and
+  on a probe of 10,011 layouts turned 9 right line counts into wrong ones and 21 the other way (Dead Ends, Fitting, Cuts
+  And Fast Paths, has the build and its numbers). Safari's rule needs the width left of a cut word carried from line to
+  line, a third field of the cursor and so a change of the public API, and its partial builds lost more than they fixed.
+  So the Gecko profile keeps the prefixes' kerning and the WebKit profile the prefixes, with the gaps
+  ENGINE_FOLLOWUPS.md names under Emergency breaks inside a word. Chrome's fit gives way to `getTextClusters()` in
+  Chrome, and its floor to cheaper questions or a real case under 80px. Its cheaper forms reopen with an app that shows
+  the added calls as time its users wait, which new labels in Tamil, Telugu or Armenian, slower than in 0.0.9, are the
+  likeliest to. An option that tells `prepare()` a text is never cut inside a word would spare such text the questions
+  on no premise, since all but 16 of the labels' 2,599 pair and prefix questions are for words narrower than the 320px
+  the bench lays them out at; it is a question for the API discussion (TODO.md), not built. Firefox's kerning reopens
+  with `getTextClusters()` in Firefox, which would take the place of the ligature questions too, or with a probe of each
+  font's kerning placement, which Firefox's Canvas shows at a much larger size. The ligature's equal shares reopen with
+  a real layout cut inside a ligature that starts its line, and the rule past 96 graphemes with a real word that long
+  cut inside one. Safari's reopens with a cursor that carries a line's start width (TODO.md, the API discussion).

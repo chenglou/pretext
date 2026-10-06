@@ -106,7 +106,7 @@ async function runDoc(doc: Doc): Promise<DocResult> {
     for (let k = 0; k < first.length; k++) {
       const e = libs[first[k]!]!
       if (spec.handles !== undefined) e.handles[o] = e.lib.prepare(spec.handles, spec.texts!, doc.font, doc.options)
-      else if (spec.op === 'seen') sink += e.lib.run('seen', spec.texts!, [320], 1, doc.font, doc.options)
+      else if (spec.op === 'seen' || spec.op === 'rich-seen') sink += e.lib.run(spec.op, spec.texts!, spec.widths, 1, doc.font, doc.options)
     }
     let reps = 1
     let batch = 0

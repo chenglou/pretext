@@ -1,7 +1,16 @@
+## "To." eight times, one word, cut between "T" and "o" 1/64 px under where Firefox's lines change, in 16 px Helvetica Neue at 155.67 px and in 16 px Roboto at 163.6 px: Firefox's cut follows the advances the letters have in the word shaped whole (BreakAndMeasureText, gfxTextRun.cpp:1004-1191), where the "T" before the cut is narrower by its part of the kerning with the "o", half in Helvetica Neue, whose kern table splits it (hb-kern.hh:102-106), and all of it in Roboto, which kerns through GPOS (PairSet.hh:126-127), so 22 letters fit, 155.65 px and 163.58 px; the library takes the differences of the word's prefixes, and the prefix that ends in that "T" has it as wide as it is alone, so the "T" moves to the next line; Canvas totals don't show which letter of a pair holds its kerning, so the kerning at a cut isn't ported (the right line count; ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
+catalog-0ca65d4f65590f2a breaks
+catalog-7980a6283a8730fd breaks
+
 ## #323, "the international" with soft hyphens at 52.5-56 px: where the syllable before the first soft hyphen doesn't fit with its hyphen, Firefox breaks the word between letters, the library at the soft hyphen (main before #340 too)
 report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
+
+## #421, one word of 16 px Helvetica Neue wider than its line, cut between kerned letters ("AV" nine times at 85 px, "WAVEWAVEWAVEWAVEWA" at 102 px, "To." five times at 54 px): Firefox's cut follows the advances the letters have in the word shaped whole (BreakAndMeasureText, gfxTextRun.cpp:1004-1191), where the letter before a cut keeps its part of the kerning with the letter after it, half in this font (hb-kern.hh:102-106); the library takes the differences of the word's prefixes, whose last letter has none of that kerning, so its first line of "AV" and of "WAVE" stops a letter short (nine letters are 84.67 px and 101.82 px in Firefox, and the prefix of nine "AV" letters alone is 85.03 px) and its second line of "To." keeps the last ".", 53.97 px, where Firefox has those eight letters at 54.85 px; Canvas totals don't show which letter of a pair holds its kerning, so the kerning at a cut isn't ported (wrong line counts, main too; ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
+report-136b18a538e3db2e count
+report-2d7294b7f20a2cd9 count
+report-aa5ba7c12d9ff140 count
 
 ## A CR between CJK characters at -1 px letter spacing, at 24 px and wider: Firefox keeps the CR in its text run with no advance and gives it the letter spacing, so `xx 漢字` and the CR are 43.70 px and fit at 43.72-44.18 px, where the Gecko analysis takes the CR out of the text, spacing and all, has 44.70 px and breaks before `字`; before #399 the CR had a space's room there (ENGINE_FOLLOWUPS.md, White space and controls)
 catalog-2ba906e88a826adc breaks
@@ -757,7 +766,6 @@ catalog-3a18766a9c10c306 count
 catalog-3ba208b58aee6148 count
 catalog-3bea89af252b3495 count
 catalog-3c8d4ddd7bb2e1df count
-catalog-3c9d6ca302623879 count
 catalog-3cc698cdc113734a count
 catalog-3ce6ec5a2718832e breaks
 catalog-3d7d20bb6eceed73 count
@@ -1432,6 +1440,9 @@ rich-8983391970c05be0 breaks
 rich-8992da35e9afd564 breaks
 rich-92a3f55de690d221 breaks
 rich-ac88f7d112e69240 count
+
+## Narrower than real layouts: a 1 px box, narrower than the "ffi" ligature of 24 px Hoefler Text that starts its line; Firefox cuts inside such a ligature and gives each of its letters an equal share of its advance (ComputeLigatureData, gfxTextRun.cpp:238-322), so each letter takes a line, where the library counts the ligature whole on its first letter and gives the rest no width, so two of them share a line (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
+catalog-5e5da93679ee9480 count
 
 ## Narrower than real layouts: width 1, where nothing fits and Firefox keeps spaces, marks, controls or zero-width characters with the character before them otherwise than the library
 catalog-0099ca5fe40e865a count
@@ -2878,9 +2889,6 @@ old-gate-d938fc2ff2e06063 breaks
 sample-e726bd7217f63339 breaks
 sample-e8cac7f67840689b breaks
 
-## Real usage: a word longer than the line (URLs, message placeholders, long Cyrillic or Armenian words), broken between characters; Firefox fits one character more or fewer than the library's character widths allow (main before #340 too)
-sample-a22746c4728a2506 breaks
-
 ## Spaces other than U+0020 (U+3000, U+2007, U+202F, NBSP) beside marks, brackets or other spaces, at 24 px and wider: Firefox breaks or hangs them where the library doesn't
 catalog-0b8678d71b205c60 breaks
 catalog-2c12e5f7cb9358d3 count
@@ -2996,6 +3004,9 @@ rich-66104da5d28ab8e4 breaks
 rich-8cd941655dd7be98 count
 rich-ce7bddd0b27c873e count
 
+## White space on both sides of a right-to-left mark between Latin words in a left-to-right paragraph, at 24 px and wider: Firefox ends its white-space run at the mark, which starts a bidi level run there, and keeps both spaces, where the Gecko scan takes a text as one text frame and keeps one, as Firefox does for the same text in a right-to-left paragraph, since Pretext takes no paragraph direction (main too; ENGINE_FOLLOWUPS.md)
+facts-a93377367151561f count
+
 ## White space, then a right-to-left mark with soft hyphens at the end of a span, before white space that starts the next, in a left-to-right paragraph, at 24 px and wider: Firefox ends its white-space run at the mark, which is at another bidi level than the white space there, and keeps both spaces, where rich lines resolve no levels and carry the run past the mark as one space, as Firefox does under direction: rtl (ENGINE_FOLLOWUPS.md)
 rich-17286779a3574402 count
 rich-2273d82c15891cc6 breaks
@@ -3003,9 +3014,6 @@ rich-57545ea1a56fed12 count
 rich-9a2f1d48d54592d8 count
 rich-ad4cfe8561fad751 count
 rich-c9040bfe99878c7a count
-
-## White space on both sides of a right-to-left mark between Latin words in a left-to-right paragraph, at 24 px and wider: Firefox ends its white-space run at the mark, which starts a bidi level run there, and keeps both spaces, where the Gecko scan takes a text as one text frame and keeps one, as Firefox does for the same text in a right-to-left paragraph, since Pretext takes no paragraph direction (main too; ENGINE_FOLLOWUPS.md)
-facts-a93377367151561f count
 
 ## Within 1/64 px of where the browser's lines change, at 24 px and wider: the library's fit lands on the other side there, while the whole-pixel widths inside both layouts pass
 catalog-005a8fe68a67e9a2 count
