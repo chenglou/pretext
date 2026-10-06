@@ -409,18 +409,13 @@ function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): n
 }
 
 // Whether a line that would end at the break before `breakSegmentIndex`, painting
-// `breakWidth`, returns to the earlier opportunity `targetSegmentIndex`: where it
-// ends at a selected discretionary hyphen that doesn't fit. A return needs an
-// overflow that isolated widths can show and a target that really is the latest
-// opportunity. The soft hyphens on the line may measure narrower joined than apart by
-// less than the overflow, and nothing after the target may be text that the scan breaks
-// before after other text, an opportunity that segment kinds don't mark. The target can
-// be a segment start that follows a break outside the prepared text, such as a
-// rich-inline item boundary.
+// `breakWidth`, returns to an earlier opportunity: where it ends at a selected
+// discretionary hyphen that doesn't fit. A return needs an overflow that isolated
+// widths can show: the soft hyphens on the line may measure narrower joined than apart
+// by less than the overflow.
 function returnsFromUnfitHyphen(
   prepared: PreparedLineBreakData,
   lineStartSegmentIndex: number,
-  targetSegmentIndex: number,
   breakSegmentIndex: number,
   breakWidth: number,
   fitLimit: number,
@@ -431,12 +426,7 @@ function returnsFromUnfitHyphen(
   const overflow = breakWidth - fitLimit
   let narrowing = 0
   if (discretionaryHyphenContexts !== null) for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) narrowing += discretionaryHyphenContexts[i]!
-  if (narrowing >= overflow) return false
-  for (let i = targetSegmentIndex + 1; i < softHyphenIndex; i++) {
-    const flags = segmentFlags[i]!
-    if (!breaksAfterKind(flags & KIND_BITS) && (flags & UNBROKEN) === 0 && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) return false
-  }
-  return true
+  return narrowing < overflow
 }
 
 // The full walker, for text the simple walkers don't cover: from a normalized line
@@ -487,9 +477,9 @@ function walkPreparedComplexLines(
   // Preparation records soft-hyphen contexts only where the text has a soft hyphen.
   const retreatsFromUnfitHyphen = prepared.discretionaryHyphenContexts !== null
   // Blink's retry leaves room for the hyphen at every earlier opportunity. Gecko and
-  // WebKit return to any opportunity whose line fits, such as a break between text segments.
-  const retreatsAtFullWidth = retreatsFromUnfitHyphen && engineProfile.unfitHyphenRetreat !== 'reduced-width'
-  const reservedHyphenWidth = retreatsAtFullWidth ? 0 : discretionaryHyphenWidth
+  // WebKit return to any opportunity whose line fits.
+  const reservesHyphenWidth = engineProfile.unfitHyphenRetreat === 'reduced-width'
+  const reservedHyphenWidth = reservesHyphenWidth ? discretionaryHyphenWidth : 0
   // WebKit's return stops at the line's first opportunity, whatever its hyphen overflows:
   // the soft hyphen the line reaches before any of its opportunities has fit, since one
   // without a hyphen fits where the text before it did. A rich item that continues a line
@@ -517,8 +507,8 @@ function walkPreparedComplexLines(
     // The opportunity the line returns to when a selected discretionary hyphen does
     // not fit, with that line's painted width: the latest whose line leaves room for
     // the hyphen, which Blink's retry against the width minus the hyphen finds, or
-    // the latest that fits at the full width (retreatsAtFullWidth). Under
-    // keepsFirstBreak it is the line's first soft hyphen, whatever its hyphen
+    // in Gecko and WebKit the latest that fits at the full width (reservedHyphenWidth).
+    // Under keepsFirstBreak it is the line's first soft hyphen, whatever its hyphen
     // overflows, until a later opportunity fits.
     let fitBreakSegmentIndex = fitBreakBefore
     let fitBreakPaintWidth = 0
@@ -768,7 +758,12 @@ function walkPreparedComplexLines(
                 pendingBreakSegmentIndex = i
                 pendingBreakWidth = lineW
               }
-              if (retreatsAtFullWidth && !breakAfter && (flags & UNBROKEN) === 0 && i > lineStartSegmentIndex && !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS)) {
+              // A break the scan gives between two text segments, as after `-` or between
+              // ideographs, is an opportunity the line returns to like any other. The line up
+              // to it fit when its last segment was admitted, with the letter-spacing gap after
+              // it that lineW leaves out, so only Blink's room for the hyphen is tested here.
+              if (retreatsFromUnfitHyphen && !breakAfter && (flags & UNBROKEN) === 0 && i > lineStartSegmentIndex &&
+                !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) && (!reservesHyphenWidth || lineW + discretionaryHyphenWidth <= fitLimit)) {
                 fitBreakSegmentIndex = i
                 fitBreakPaintWidth = lineW
               }
@@ -895,7 +890,7 @@ function walkPreparedComplexLines(
           fitBreakSegmentIndex >= 0 &&
           pendingBreakSegmentIndex === lineEndSegmentIndex &&
           lineEndGraphemeIndex === 0 &&
-          returnsFromUnfitHyphen(prepared, lineStartSegmentIndex, fitBreakSegmentIndex, lineEndSegmentIndex, pendingBreakWidth, fitLimit)
+          returnsFromUnfitHyphen(prepared, lineStartSegmentIndex, lineEndSegmentIndex, pendingBreakWidth, fitLimit)
         ) {
           endSegmentIndex = fitBreakSegmentIndex
           endGraphemeIndex = 0
@@ -936,7 +931,7 @@ function walkPreparedComplexLines(
             breakSegmentIndex = innerBreakSegmentIndex
             breakGraphemeIndex = innerBreakGraphemeIndex
             breakWidth = innerBreakWidth
-          } else if (fitBreakSegmentIndex >= 0 && returnsFromUnfitHyphen(prepared, lineStartSegmentIndex, fitBreakSegmentIndex, breakSegmentIndex, breakWidth, fitLimit)) {
+          } else if (fitBreakSegmentIndex >= 0 && returnsFromUnfitHyphen(prepared, lineStartSegmentIndex, breakSegmentIndex, breakWidth, fitLimit)) {
             breakSegmentIndex = fitBreakSegmentIndex
             breakWidth = fitBreakPaintWidth
           }

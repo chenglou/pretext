@@ -942,18 +942,17 @@ describe('boundary-policy regressions', () => {
       profile.lineBreakScan = 'gecko'
       profile.hidesControlCharacters = true
       // Gecko records a soft-hyphen break only where its hyphen fits, and any other
-      // break where its line fits, such as the break after a hidden control.
+      // break where its line fits, such as the break after a hidden control. That break
+      // takes no room, so Blink's retry at the width less the hyphen ends there too.
       const text = '\u000Btrans\u00ADic'
       const width = measureWidth('trans', FONT) + 0.1
-      for (const [unfitHyphenRetreat, expected] of [
-        ['reduced-width', ['\u000Btrans-', 'ic']],
-        ['full-width', ['\u000B', 'trans-', 'ic']],
-      ] as const) {
+      const expected = ['\u000B', 'trans-', 'ic']
+      for (const unfitHyphenRetreat of ['reduced-width', 'full-width'] as const) {
         profile.unfitHyphenRetreat = unfitHyphenRetreat
         clearCache()
         const prepared = prepareWithSegments(text, FONT, { whiteSpace: 'pre-wrap' })
-        expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => line.text)).toEqual([...expected])
-        expect(collectStreamedLines(prepared, width).map(line => line.text)).toEqual([...expected])
+        expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => line.text)).toEqual(expected)
+        expect(collectStreamedLines(prepared, width).map(line => line.text)).toEqual(expected)
         expect(layout(prepare(text, FONT, { whiteSpace: 'pre-wrap' }), width, LINE_HEIGHT).lineCount).toBe(expected.length)
       }
     } finally {
@@ -2158,12 +2157,52 @@ describe('prepare invariants', () => {
       const replaced = prepareWithSegments('a b\u00ADc\u200B\u00ADjki', FONT)
       expect(layoutWithLines(replaced, 36, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['a b-', 'c\u200B-', 'jki'])
 
-      // Text after text, or a dash inside a segment, can hold a later real
-      // opportunity, so the line never returns past it to the space.
-      expect(layoutWithLines(prepareWithSegments('x ab-cd\u00ADefgh', FONT), 62, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['x ab-cd-', 'efgh'])
-      expect(layoutWithLines(prepareWithSegments('x 10\u201320\u00ADabcd', FONT), 58, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['x 10\u201320-', 'abcd'])
+      // A break between two text segments, as after `-`, after an en dash or between
+      // ideographs, is an opportunity like a space: the line returns to it, with no hyphen.
+      const lineTexts = (source: string, maxWidth: number, letterSpacing = 0): string[] => {
+        const handle = prepareWithSegments(source, FONT, { letterSpacing })
+        const lines = layoutWithLines(handle, maxWidth, LINE_HEIGHT).lines.map(line => line.text)
+        expect(collectStreamedLines(handle, maxWidth).map(line => line.text)).toEqual(lines)
+        expect(measureLineStats(handle, maxWidth).lineCount).toBe(lines.length)
+        expect(layout(prepare(source, FONT, { letterSpacing }), maxWidth, LINE_HEIGHT).lineCount).toBe(lines.length)
+        return lines
+      }
+      expect(prepareWithSegments('x ab-cd\u00ADefgh', FONT).segments).toEqual(['x', ' ', 'ab-', 'cd', '\u00AD', 'efgh'])
+      expect(lineTexts('x ab-cd\u00ADefgh', 62)).toEqual(['x ab-', 'cdefgh'])
+      expect(lineTexts('x 10\u201320\u00ADabcd', 58)).toEqual(['x 10\u2013', '20abcd'])
+      expect(lineTexts('x \u65E5\u672C\u8A9E\u00AD\u65E5\u672C', measureWidth('x \u65E5\u672C\u8A9E', FONT) + 0.1)).toEqual(['x \u65E5\u672C', '\u8A9E\u65E5\u672C'])
+      // The break after `-` is the only one on its line.
+      expect(lineTexts('ab-cd\u00ADefgh', measureWidth('ab-cd', FONT) + 0.1)).toEqual(['ab-', 'cd-', 'efgh'])
+      // The retry passes a break that leaves no room for the hyphen, here the one after `-`
+      // before a syllable narrower than the hyphen, where a return at the full width ends
+      // the line there.
+      const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
+      // An `i` is 3px wide.
+      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', {
+        ...measureText,
+        value(this: TestCanvasRenderingContext2D, measured: string) {
+          return { width: measureWidth(measured, this.font) - 6.6 * (measured.match(/i/g) ?? []).length }
+        },
+      })
+      clearCache()
+      try {
+        const narrowSyllable = 'x ab-i\u00ADefgh'
+        const narrowWidth = measureWidth('x ab-', FONT) + 3.1
+        expect(lineTexts(narrowSyllable, narrowWidth)).toEqual(['x ', 'ab-i-', 'efgh'])
+        profile.unfitHyphenRetreat = 'full-width'
+        expect(lineTexts(narrowSyllable, narrowWidth)).toEqual(['x ab-', 'iefgh'])
+        // A return at the full width tests no width at such a break: the line fit when it
+        // reached the break, with the letter-spacing gap after its last letter. Under spacing
+        // that gives the syllable a negative advance, `x ab-` fits 22px only with that gap.
+        for (const unfitHyphenRetreat of ['full-width', 'full-width-or-first'] as const) {
+          profile.unfitHyphenRetreat = unfitHyphenRetreat
+          expect(lineTexts(narrowSyllable, 22, -4)).toEqual(['x ab-', 'iefgh'])
+        }
+      } finally {
+        Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
+        profile.unfitHyphenRetreat = 'reduced-width'
+        clearCache()
+      }
       // Text the scan doesn't break before, as after a control character, holds no
       // opportunity, so the line returns past it.
       const unbroken = 'ab cd\u0001ef\u00ADgh'

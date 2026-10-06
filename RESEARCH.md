@@ -2708,6 +2708,43 @@ repin` shows what), and a fact read in source needs reading again.
   space (`NeedsAccurateEndPosition`), losing its kern with the space. U+2000-U+200A are ordinary text; only U+3000 is
   another space separator. No JavaScript API exposes Chrome's hyphenation data, so `hyphens: auto` can't be ported.
   (Chrome 153 source, 2026-09-16.)
+- **Soft hyphens.** Where a line would end at a soft hyphen whose text fits and whose hyphen doesn't, `BreakText` takes
+  the hyphen's width off the available width and asks `ShapeLine` once more (`line_breaker.cc:1705-1718`), which takes
+  the latest break opportunity at or before that width, of any kind (`shaping_line_breaker.cc:326-333`, `389-395`):
+  after a space, a ZWSP or an earlier soft hyphen, whose hyphen then fits, or wherever else the break iterator gives
+  one, as after `-` before a letter, after a dash or `?`, and between ideographs. A break that leaves no room for the
+  hyphen is passed, so before a syllable narrower than the hyphen the line goes back further: in 16px Arial
+  `Bitte die Nebenrollen-i\u00ADkes vor der Regie` starts with `Bitte die` at 157.5-159px and with
+  `Bitte die Nebenrollen-`, 153.87px wide, at 159.25-162.5px, the hyphen being 5.33px. Without an opportunity at or
+  before the reduced width the item overflows and `HandleOverflow` takes over (#323's family; ENGINE_FOLLOWUPS.md, Line
+  edges). Firefox and Safari end the line at such a break where it fits at the full width (`gfxTextRun.cpp:1053-1094`;
+  Safari (WebKit), Soft hyphens). Until #446 the Chromium profile returned only to a space, a ZWSP or a soft hyphen,
+  and kept the hyphen, up to its whole width past the line's end, wherever a break between two text segments lay after
+  that target: in #433, `Bitte die Nebenrollen-Ta-`, 178.1px wide, at 172-178px in 16px Helvetica Neue, and a French
+  sentence in 5 lines at 148-152px in 16px Arial, where Chrome has 6. Since #446 each break the scan gives between two
+  text segments is a target where its line leaves room for the hyphen (`walkPreparedComplexLines`,
+  `src/line-break.ts`). Of 34,064 probe layouts the profile agreed with Chrome on 31,620 before and on 33,612 after,
+  with a wrong line count on 345 and on 79: the issue's texts in four fonts; a hyphen-minus, U+2010, an en or em dash,
+  `?`, `!`, a slash, a ZWSP, a space, ideographs or nothing before the hyphenated syllable, in five fonts at every
+  pixel; a syllable narrower than the hyphen at quarter pixels; Chinese and Japanese sentences in three fonts;
+  pre-wrap, keep-all, letter spacing and a right-to-left paragraph; and rich items. 2,021 were fixed and 29 lost, each
+  of the 29 a hyphen line the profile reports past the width and Chrome fits, by kerning across segments measured apart
+  (7) or without a padded span's end edge (22), which agreed before only because the profile kept the hyphen
+  (ENGINE_FOLLOWUPS.md, Line edges, has them). The Gecko and WebKit profiles' return is as it was: there such a break
+  is a target with no width test, since the line fit when it reached the break. The room for the hyphen is tested in
+  the Chromium profile alone, because the line's width at the break leaves out the letter-spacing gap after its last
+  letter, which the hyphen's width carries: tested at the full width in the other two profiles, it lost the return
+  under letter spacing negative enough to give the next syllable a negative advance, 90 of 3,816 layouts at -4px to
+  -6px in 16px Arial and Georgia in Firefox and 80 in webkit-host, with 8 gained there. No prediction of either
+  profile moved on the 34,064 layouts, on those 3,816 or on 13,060 more, in Firefox or webkit-host. Of the harness's
+  cases 20 Chrome predictions moved, 19 of them from a failure to Chrome's lines: 4 facts cases and a real-usage
+  Japanese draw that were on the accepted list, the issue's two texts, and 9 of the 47 facts cases and 3 of the 46
+  rich cases added with the change. The twentieth, a padded span's, went from Chrome's lines to a failure
+  (ENGINE_FOLLOWUPS.md, Line edges). None moved in Firefox or webkit-host. The per-engine rebuild, which ports
+  `BreakText` whole, agreed with Chrome on all 17,535 of the first probe's layouts it could take. A break opportunity
+  that isn't a segment boundary, or a fit in Chrome's 1/64px units, would reopen it. (Chromium 153.0.8010.48 source;
+  the probes in Chrome 154.0.8037.57, the harness's cases in 154.0.8037.98, Firefox 156.0.1, webkit-host, 2026-10-05
+  and 2026-10-06.)
 - **Languages.** `--lang` is ignored on macOS; `navigator.language` follows the accept languages, not the UI; DevTools
   locale emulation (Playwright's `locale`) moves `Intl`'s default locale, not Blink's, a disagreement no user meets.
   Generic `serif` follows the process languages (16px `Hamburgefonstiv`: 114.40 px under zh-CN, 111.70 under en-US). The
@@ -3123,10 +3160,13 @@ Mostly on main as it was then, measured with the old suite in installed browsers
 - **NEL joined to its neighbors**: joined before, overlong words split at Canvas grapheme widths; joined both sides, a
   following mark took 12 px.
 - **Soft-hyphen returns**: returning from a soft hyphen to an earlier break works only when isolated widths show the
-  overflow and the break returned to is truly the latest. Returning past breaks with no segment kind lost 142 Chrome
-  rows, both rules for a soft hyphen with no fitting opportunity hundreds (the #323 entries on `harness/accepted/`'s
-  lists), Firefox's (4e6d4dd5, branch `archive/gecko-soft-hyphen-return`) 15 per direction. They reopen with contextual
-  widths during preparation.
+  overflow and the break returned to is truly the latest. Returning past a break between two text segments, to the
+  space or soft hyphen before it, lost 142 Chrome rows (2026-09-12), and the Chromium profile then kept the hyphen
+  wherever such a break lay after its target. Chrome returns to that break itself, which the profile does since #446,
+  now that each break the scan gives is a segment boundary (Engine Facts, Chrome, Soft hyphens). Both rules for a soft
+  hyphen with no fitting opportunity lost hundreds (the #323 entries on `harness/accepted/`'s lists), Firefox's
+  (4e6d4dd5, branch `archive/gecko-soft-hyphen-return`) 15 per direction. Those reopen with contextual widths during
+  preparation.
 - **Other returns from an unfit hyphen in rich inline** (tried for #369, 2026-09-27, Chrome 154): returning only to a
   break a pixel before its item's end, else to the break before the item, as Blink's `HandleOverflow` breaks earlier
   text items again at their width less one pixel, fixed 35 probe cases that main and the branch failed and lost 12 they

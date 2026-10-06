@@ -78,7 +78,13 @@
 //   closing mark before a full stop and a colon before an opening bracket, which Chrome's text-spacing-trim halts as
 //   in one text node; and a bold span that ends with a closing bracket before a space and a Latin word, where Chrome
 //   doesn't halt the bracket at a line's end, since no break comes right after it. The word doesn't break, so the
-//   cut reaches the width where the bracket stops fitting whole.
+//   cut reaches the width where the bracket stops fitting whole;
+// - a soft hyphen whose hyphen doesn't fit after a break between two text segments, to which Chrome's line returns
+//   (unfitHyphenRetreat in src/measurement.ts; #433), cut on their own: the break right after a `-` at an item's edge,
+//   inside a bold word, and between two ideographs at an item's edge, each before a syllable long enough that a width
+//   the cut takes inside a layout is one where the text before the soft hyphen fits and its hyphen doesn't; and #433's
+//   rich row, a box and a padded span that holds such a word, where Chrome keeps a hyphen that fits without the span's
+//   end edge and rich inline, which counts that edge, returns (ENGINE_FOLLOWUPS.md, Line edges).
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -297,6 +303,17 @@ export function richTemplates(): Template[] {
   for (let i = 0; i < edges.length; i++) {
     const [family, parts] = edges[i]!
     out.push(template(`item-edges/${family}`, 'fullwidth punctuation at an item\'s edge (src/layout.test.ts, layout invariants)', JAPANESE, parts, 'ja'))
+  }
+  const label = font('Georgia', 10)
+  const returns: ReadonlyArray<readonly [string, CssFont, readonly Part[], string]> = [
+    ['item-edge-after-hyphen', ARIAL, [item('x ab-'), item('cd\u{AD}efgh')], 'en'],
+    ['bold-word', ARIAL, ['x ', span('ab-cd\u{AD}efgh', BOLD(ARIAL))], 'en'],
+    ['item-edge-between-ideographs', JAPANESE, [item('x 日本', JAPANESE), item('語\u{AD}abcdefg', JAPANESE)], 'ja'],
+    ['padded-span', label, [box(13, 13, label), span('Bitte die Nebenrollen-Ta\u{AD}kes vor', label, { padding: 2.5 })], 'en'],
+  ]
+  for (let i = 0; i < returns.length; i++) {
+    const [family, base, parts, lang] = returns[i]!
+    out.push(template(`soft-hyphen-return/${family}`, 'a soft hyphen whose hyphen doesn\'t fit after a break between two text segments (#433; src/layout.test.ts, Blink returns an unfit soft hyphen to the latest earlier break that leaves room for the hyphen)', base, parts, lang))
   }
   return out
 }

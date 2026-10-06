@@ -96,7 +96,7 @@ layouts" (the narrowest real-usage draw is 25 px).
 | `reports.ndjson` | Filed reports with the text, font and width as filed (`sets/exact.ts`) | `make.ts write` |
 | `catalog.ndjson` | Families of templates, from the engines' rules, the UAX #14 classes between the scripts apps mix, the shapes `ENGINE_FOLLOWUPS.md` names, bidi controls where Firefox's line breaking looks past them, CJK marks Chrome halts next to other punctuation, letter-spaced words whose ligatures the browsers turn off, emoji characters a named font draws itself and one word wider than its line, kerned or joined, that each browser cuts between letters its own way, plus adversarial `main/*` cases taken from the old test suite | the width search |
 | `facts.ndjson` | The engine facts `src/layout.test.ts` checks on plain text, in a browser | the width search |
-| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, fullwidth punctuation at an item's edge, plus `main/*` cases | the width search |
+| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, fullwidth punctuation at an item's edge, a line's return from an unfit soft hyphen to a break between two text segments, plus `main/*` cases | the width search |
 | `census.ndjson`, `books.ndjson`, `smoke.ndjson` | Real paragraphs of `corpora/` at several widths, and whole books, from the per-engine rebuild | taken once |
 | `oracles.ndjson` | The mode oracles (pre-wrap, keep-all, symbols, letter spacing, soft hyphens) the old test suite ran | taken once |
 | `followups.ndjson` | Two fuzz strings `ENGINE_FOLLOWUPS.md` names | taken once |
@@ -169,8 +169,10 @@ reasons that cite a `layout.test.ts` line point at the files of main before #340
 `git show 6d1d2106:<path>`. The two facts #396 added (lines 1948 and 2015) point at that pull request's `layout.test.ts`, and
 name the fonts they run in where that isn't 16px Arial. A fact added after them names its test's line as of the commit
 that added or last changed the fact, which this paragraph names, since a later merge moves the test and a case's family
-and origin keep the line: line 1000 at dbfab0de (#399), Firefox's white space around bidi controls. Such a fact also
-names the paragraph directions it runs in where a browser's lines turn on them (that one, both). The facts set has no
+and origin keep the line: line 1000 at dbfab0de (#399), Firefox's white space around bidi controls, and line 2140 at
+785e5af2 (#446), Chrome's return from an unfit hyphen to a break between two text segments, whose second row runs in
+16px Hiragino Sans. Such a fact also names the paragraph directions it runs in where a browser's lines turn on them
+(the first of those, both). The facts set has no
 cover, so it keeps the width where a template's words join, which the catalog's cover drops once a narrower change has
 shown that kind of break: a fact that rests on a line's width, such as one space against two, goes there.
 ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again.
@@ -320,7 +322,10 @@ of the third sessions' 145 documents in the 19 runs above. Nothing timed is chec
 ## Browsers and pins
 
 Builds are read from the app bundles, since a user agent names only the major version. Each Firefox copy gets its update
-policy before its first launch, since a pinned Firefox once updated itself (`browsers.ts` has how). Safari can't be
+policy before its first launch, since a pinned Firefox once updated itself (`browsers.ts` has how). A Chrome copy has
+no such guard: Google's updater updated the pinned copy of 154.0.8037.57 in place to 154.0.8037.98 (2026-10-06), after
+which `record`, `check` and `gate` refuse until a repin. That build recorded all 43,203 cases as 154.0.8037.57 had,
+lines, widths and height, and holds the same break data. Safari can't be
 pinned, and a macOS update moves all three browsers (system fonts, Core Text, ICU, emoji). `repin` records every case
 with the new build into a scratch copy of the recordings and prints the cases laid out otherwise, the new page history,
 and whether the browser still holds the break data and character properties in `scripts/engine-data/`.

@@ -44,6 +44,8 @@ const REPORTS: readonly Report[] = [
   { issue: '#421', text: 'AV'.repeat(9), font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 85, lineHeight: 22, whiteSpace: 'pre-wrap' },
   { issue: '#421', text: 'WAVEWAVEWAVEWAVEWA', font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 102, lineHeight: 22, whiteSpace: 'pre-wrap' },
   { issue: '#421', text: 'To.'.repeat(5), font: '16px "Helvetica Neue", Helvetica, Arial, sans-serif', width: 54, lineHeight: 22, whiteSpace: 'pre-wrap' },
+  { issue: '#433', text: 'Bit\u{AD}te die Ne\u{AD}ben\u{AD}rol\u{AD}len-Ta\u{AD}kes vor der End\u{AD}ab\u{AD}mi\u{AD}schung noch ein\u{AD}mal mit der Re\u{AD}gie\u{AD}as\u{AD}sis\u{AD}ten\u{AD}tin durch\u{AD}hö\u{AD}ren.', font: '400 16px "Helvetica Neue", "PingFang SC", "Geeza Pro", sans-serif', width: 172, lineHeight: 24 },
+  { issue: '#433', text: 'Les re\u{AD}pré\u{AD}sen\u{AD}tantes syn\u{AD}di\u{AD}cales ont pré\u{AD}sen\u{AD}té une contre-pro\u{AD}po\u{AD}si\u{AD}tion par\u{AD}ti\u{AD}cu\u{AD}liè\u{AD}re\u{AD}ment cir\u{AD}cons\u{AD}tan\u{AD}ciée.', font: '400 16px Arial, "PingFang SC", "Geeza Pro", sans-serif', width: 150, lineHeight: 24 },
 ]
 
 // #206 (fixed by #208): repeated symbols in a chat message, at the widths and letter spacing main's suite runs.

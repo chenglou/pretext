@@ -10,6 +10,9 @@ rich-9b04cbd2a170ff51 count
 ## A padded rich pre-wrap span whose text breaks across lines, at 24 px and wider: Chrome pads only the first piece's start and the last piece's end, where the library charges the whole extraWidth on every piece, so a piece overflows and breaks again (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-68e863d10ee4ce7e count
 
+## A padded rich span after a box whose line ends inside it, in white-space: normal at 80 px and wider: Chrome fits that line without the span's end edge, the library with it, as Firefox and Safari do (main too; ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-d302cbe44b3852b1 breaks
+
 ## A padded rich span alone in its paragraph whose line ends inside it, in white-space: normal at 80 px and wider: Chrome fits that line with the span's start edge only, the library with both edges, as Firefox does (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-38a4029ad6338920 breaks
 rich-8137a60b373d6338 breaks
@@ -36,6 +39,9 @@ rich-befcad2d664c96dc count
 rich-c71a21ddc6fa35ca breaks
 rich-d7ac0a6af37a56bf count
 rich-dc1f44c993d80708 breaks
+
+## A soft hyphen inside a padded rich span whose hyphen fits only without the span's end edge, at 80 px and wider: Chrome fits a line that ends inside the span without that edge and keeps the hyphen, where the library fits it with the edge, as Firefox and Safari do, and returns to the break after the hyphen-minus before the syllable; main kept the hyphen wherever such a break came after the latest space, and passed by accident (ENGINE_FOLLOWUPS.md, Line edges)
+rich-56788800a39c88c4 breaks
 
 ## A soft hyphen that ends a word before a space, or follows a space before a word, whose hyphen doesn't fit, at 24 px and wider: Chrome breaks the word before it between letters, as for the text in one node, where the library ends the line at the space or after the soft hyphen (main and fd8002ba too; ENGINE_FOLLOWUPS.md)
 rich-678c2f661ad5b57b count
@@ -446,15 +452,11 @@ facts-1fe27e7853d9044e breaks
 facts-2464e56e85f810a3 count
 facts-25a8722c305b4f97 count
 facts-26f2e5a1ad671eb1 breaks
-facts-27169629dc7293ed breaks
 facts-3529f7f7a5f8bdf4 count
 facts-3c22e58cfce60993 breaks
 facts-440ced509df2d3f1 breaks
 facts-5b71f005fcfe128a breaks
-facts-6d224b34ed76519a breaks
-facts-992ad3e2cac24507 breaks
 facts-b0d939ba4135eb20 count
-facts-b346a98dcaf21070 breaks
 facts-bdd0486cdef5c133 breaks
 facts-cb726fe075c99028 count
 facts-d586e19a99606fb9 count
@@ -2984,11 +2986,13 @@ catalog-ff47daf5a0938642 count
 catalog-ffa9651fd6cd2369 count
 facts-010cd794346e04fc count
 facts-035bbb35c6e81dba count
+facts-04644e7b44f018db count
 facts-0ddf325bd8abfccc count
 facts-0ed74272b2fa2c74 count
 facts-1564387085f2ca33 count
 facts-1945c789bdf13a4b count
 facts-1aac752cc8ef26c8 count
+facts-1c2586019051612d count
 facts-21a16b8e65116bcf count
 facts-21afc42741a7fe13 count
 facts-2201b1f61283823d count
@@ -3008,6 +3012,7 @@ facts-46e103bf142a6b39 count
 facts-4824eaef1a6a9cda count
 facts-4859e8de92154112 count
 facts-4bd70c5097dd6770 count
+facts-4be2a82943042210 count
 facts-55baf946aff1af58 count
 facts-57cd75abe3cabcaf count
 facts-59d5120a908a1400 count
@@ -3044,6 +3049,7 @@ facts-b649f72983ec07a1 count
 facts-b6dd5ee61c6de9d2 count
 facts-b7b4e98847034030 count
 facts-b8e592e9511bc57b count
+facts-be571c06ad6bc4e7 count
 facts-bf93be567bae400c count
 facts-c01debc3aba76bad count
 facts-c122d98f9e243dc4 count
@@ -3074,6 +3080,7 @@ rich-0a3fec9a06a04eef count
 rich-0a8313779639e9ef count
 rich-0cabfc789f6a4358 count
 rich-0fd068ce5f126fef count
+rich-112fa3ba1cca94b2 count
 rich-11c49eccf08f18c8 count
 rich-13fa0b66ebfc4b40 count
 rich-166322a1778d474c count
@@ -3088,6 +3095,7 @@ rich-2ba96631579775f7 count
 rich-2d09e453d98924b9 count
 rich-3055350027afea05 count
 rich-31ddf4b29ff31fe7 count
+rich-3291c2ea0976e8b1 count
 rich-34075de5f2f50824 count
 rich-3d6b0dd007f16ed1 count
 rich-3f6c610251935b3f count
@@ -3112,9 +3120,11 @@ rich-857a18338463351b count
 rich-8acb5b79e29743bd count
 rich-8eb0d80727c48a84 count
 rich-8f112ed49e735213 count
+rich-910f25fcc0b5bf94 count
 rich-91260660c787313b count
 rich-9576d45cd60f16e5 count
 rich-9b8ab32bccc7a1a6 count
+rich-9becc0db45b762ca count
 rich-9caad05a8d6ec08d count
 rich-a09d53bd7aff382c count
 rich-a560650dfbeafe72 count
@@ -3758,7 +3768,6 @@ sample-6f8970d165201513 breaks
 sample-c11591c08197d852 breaks
 
 ## Real usage: soft hyphens; Chrome breaks before the syllable where the library takes the soft hyphen, or at another one (main before #340 too)
-sample-347ac514160904d0 breaks
 sample-b440ccf29c8506b7 breaks
 
 ## Real usage: table cells 25-125 px wide holding IDs, phone numbers and formulas; Chrome breaks at hyphens, brackets and between digits otherwise than the library (main before #340 too)

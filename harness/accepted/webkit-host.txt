@@ -2623,10 +2623,12 @@ catalog-fde6c3aa70744e0d count
 catalog-fe3b29861adfc9d4 count
 catalog-ffa9651fd6cd2369 count
 facts-010cd794346e04fc count
+facts-04644e7b44f018db count
 facts-0ed74272b2fa2c74 count
 facts-16d2d2b64c40a3ef count
 facts-1945c789bdf13a4b count
 facts-1aac752cc8ef26c8 count
+facts-1c2586019051612d count
 facts-1e7abb5d6bab6af2 count
 facts-2201b1f61283823d count
 facts-38a1ce8c61ba552d count
@@ -2636,6 +2638,7 @@ facts-46e103bf142a6b39 count
 facts-4824eaef1a6a9cda count
 facts-4859e8de92154112 count
 facts-4bd70c5097dd6770 count
+facts-4be2a82943042210 count
 facts-526c7c77b2627cd1 count
 facts-55baf946aff1af58 count
 facts-5bf89757205e4f86 count
@@ -2663,6 +2666,7 @@ facts-accb74caab8fff0d count
 facts-b031feb5bdc3bc9d count
 facts-b7b4e98847034030 count
 facts-b8e592e9511bc57b count
+facts-be571c06ad6bc4e7 count
 facts-bf93be567bae400c count
 facts-c01debc3aba76bad count
 facts-c122d98f9e243dc4 count
@@ -2682,6 +2686,7 @@ rich-02422502faa37ede count
 rich-029e71d595e94f0c count
 rich-0a3fec9a06a04eef count
 rich-0cabfc789f6a4358 count
+rich-112fa3ba1cca94b2 count
 rich-11c49eccf08f18c8 count
 rich-166322a1778d474c count
 rich-1bb83fe38e3bd589 breaks
@@ -2696,6 +2701,7 @@ rich-2c00457bd7ad6bcf count
 rich-2d09e453d98924b9 count
 rich-3055350027afea05 count
 rich-31ddf4b29ff31fe7 count
+rich-3291c2ea0976e8b1 count
 rich-34075de5f2f50824 count
 rich-388b66a049fe9fbd count
 rich-3f6c610251935b3f count
@@ -2715,9 +2721,11 @@ rich-807cbc79ec3f2948 count
 rich-81926e46654c3d06 count
 rich-857a18338463351b count
 rich-8acb5b79e29743bd count
+rich-910f25fcc0b5bf94 count
 rich-91260660c787313b count
 rich-9367ecb62ffff68e count
 rich-943e608b099dd5a2 count
+rich-9becc0db45b762ca count
 rich-9caad05a8d6ec08d count
 rich-a09d53bd7aff382c count
 rich-a560650dfbeafe72 count
