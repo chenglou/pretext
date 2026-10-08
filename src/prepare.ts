@@ -553,8 +553,12 @@ export function measureAnalysis(
   // `mi - from` in the lists of the measured segments alone; nothing is pushed. A paragraph's
   // list comes from a caller that has run a few times, in V8's form for small integers.
   // Compiled code that pushes a fraction or a null onto such a list is deoptimized, and V8
-  // compiles that push as a call from then on, for every text. A store by index is compiled
-  // again with the list's change of form in it, and stays compiled.
+  // compiles that push as a call from then on, for every text: on a page of mostly plain text
+  // whose first rich paragraphs are short, Chrome 154 prepared plain text again 4-9% slower
+  // for the rest of the page's life. A store by index is compiled with the list's change of
+  // form in it and stays compiled. Against a push it costs a text about 1% of a preparing
+  // (text measured before: 0.4-1.2% in Chrome 154, Firefox 156 and Safari 27, under the
+  // bench's floors).
   for (let mi = from, at = base; mi < to; mi++, at++) {
     const text = texts[mi]!
     const segment = flags[mi]!
