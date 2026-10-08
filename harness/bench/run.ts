@@ -249,7 +249,7 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
           console.log(`${browser}: ${d.id}: ${counted.map(w => `${w.label} ${w.paragraphs} paragraphs, ${w.widthFractions} of ${w.widths} widths not whole, ${w.otherFractions} of ${w.others} other numbers${w.example === '' ? '' : ` (${w.example})`}`).join('; ')}`)
         }
         const probed = 'ops' in body.result! ? body.result.probe : undefined
-        if (probed !== undefined) for (const f of probed) console.log(`${browser}: probe: ${f.font}: ${f.fractions} of ${f.characters} characters not whole${f.example === '' ? '' : ` (${f.example})`}; a space ${f.space}`)
+        if (probed !== undefined) for (const f of probed) console.log(`${browser}: probe: ${f.font}: ${f.fractions} of ${f.characters} characters not whole${f.example === '' ? '' : ` (${f.example})`}; a space ${f.space}, a hyphen-minus ${f.hyphen}`)
         const spaces = 'ops' in body.result! ? body.result.spaces : undefined
         if (spaces !== undefined) console.log(`${browser}: ${d.id}: a space is ${spaces.map(f => `${f.space}px in ${f.font}`).join(', ')}`)
         attempt = 0

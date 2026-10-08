@@ -41,7 +41,7 @@ export type WholeCheck = { label: string; paragraphs: number; widths: number; wi
 export type SpaceWidth = { font: string; space: number }
 // Scratch (rp3-whole-rich). The font probe: for each font, how many of the characters measure a width that isn't
 // whole, alone, with the first such character and its width, and a space's width.
-export type FontProbe = { font: string; characters: number; fractions: number; example: string; space: number }
+export type FontProbe = { font: string; characters: number; fractions: number; example: string; space: number; hyphen: number }
 export type DocResult =
   | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[]; spaces?: SpaceWidth[]; probe?: FontProbe[] }
   | { id: string; timerStep: number; start: Snapshot; end: Snapshot; label: string; compileMs: number; runMs: number; batches: Sample[] }
@@ -198,7 +198,7 @@ async function runDoc(doc: Doc): Promise<DocResult> {
     const probe: FontProbe[] = []
     for (const font of doc.probe.fonts) {
       context.font = font
-      const entry: FontProbe = { font, characters: doc.probe.characters.length, fractions: 0, example: '', space: context.measureText(' ').width }
+      const entry: FontProbe = { font, characters: doc.probe.characters.length, fractions: 0, example: '', space: context.measureText(' ').width, hyphen: context.measureText('-').width }
       for (let i = 0; i < doc.probe.characters.length; i++) {
         const width = context.measureText(doc.probe.characters[i]!).width
         if (Number.isInteger(width)) continue
