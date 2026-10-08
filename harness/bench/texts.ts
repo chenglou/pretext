@@ -193,6 +193,65 @@ export function itemReader(lists: RichInlineItem[][]): { batch: (n: number) => R
   }
 }
 
+// ---- Scratch (rp3-whole-rich, never merged): rich paragraphs whose every width is a whole number ----
+
+// The CJK messages with only the characters a CJK font draws a whole number of pixels wide at a whole font size
+// (ideographs, kana, CJK punctuation, fullwidth forms): the text of the plain probe of 2026-10-07 (branch
+// widths-as-doubles-3-probe, wholeMessages()), less its messages of one character, which can't be several items.
+export function wholeMessages(): string[] {
+  return reader('cjk').batch(20_000)!.map(m => m.split('').filter(ch => /[\u3001-\u303F\u3040-\u30FF\u4E00-\u9FFF\uFF01-\uFF60]/.test(ch)).join('')).filter(m => m.length > 1)
+}
+
+// `count` batches of `size` units of those messages in order, the last message of a batch cut and its rest starting the
+// next. No piece is one character: there the cut moves by one, so a batch can hold a unit more or less.
+export function wholeBatches(messages: string[], count: number, size: number): string[][] {
+  const out: string[][] = []
+  let at = 0
+  let carry: string | null = null
+  for (let b = 0; b < count; b++) {
+    const batch: string[] = []
+    for (let total = 0; total < size;) {
+      if (carry === null && at === messages.length) throw new Error('wholeBatches: the messages hold fewer units than the batches read')
+      const m: string = carry ?? messages[at++]!
+      let cut = Math.min(m.length, size - total)
+      if (cut === 1) cut = 2
+      if (m.length - cut === 1) cut = m.length
+      carry = cut < m.length ? m.slice(cut) : null
+      batch.push(m.slice(0, cut))
+      total += cut
+    }
+    out.push(batch)
+  }
+  return out
+}
+
+// A text as a rich paragraph in the shape of one of the chat demo's (chatItems): as many items, each the same share of
+// the text, every one in PingFang TC and with every property, as the demo's. Body text is 16px, bold or bold italic
+// where the demo's item is (a heading's is bold); a code span and an image chip are 12px with the demo's extraWidth,
+// the chip unbreakable. No letter spacing, and even sizes, so that half an em, a mark Chrome halts, is whole too. A
+// text shorter than the shape's items takes the first of them, a character each.
+const WHOLE_FAMILY = '"PingFang TC"'
+export function wholeItems(text: string, shape: RichInlineItem[]): RichInlineItem[] {
+  const count = Math.min(shape.length, text.length)
+  let total = 0
+  for (let i = 0; i < count; i++) total += shape[i]!.text.length
+  const items: RichInlineItem[] = []
+  let at = 0
+  let read = 0
+  for (let i = 0; i < count; i++) {
+    const from = shape[i]!
+    read += from.text.length
+    // At least one character an item, and one left for each item after it.
+    const end = i === count - 1 ? text.length : Math.min(text.length - (count - 1 - i), Math.max(at + 1, Math.round(text.length * read / total)))
+    const piece = text.slice(at, end)
+    at = end
+    if (from.break === 'never') items.push({ text: piece, font: `700 12px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'never', extraWidth: 14 })
+    else if ((from.extraWidth ?? 0) !== 0) items.push({ text: piece, font: `600 12px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'normal', extraWidth: 12 })
+    else items.push({ text: piece, font: `${from.font.startsWith('italic') ? 'italic ' : ''}${from.font.includes('700') ? 700 : 400} 16px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'normal', extraWidth: 0 })
+  }
+  return items
+}
+
 // ---- Worst-case shapes ----
 
 export type Shape = { id: string; font: string; lang: string; options: PrepareOptions; texts: string[]; ops: string[] }

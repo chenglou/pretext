@@ -23,9 +23,15 @@ export type Doc = {
   libraries: Array<{ label: string; code: string }>
   ops: OpSpec[]
   fresh?: { batches: string[][]; units: number[] }
+  // Scratch (rp3-whole-rich): count, for each copy of the library, the numbers in its paragraphs' lists that aren't whole.
+  checkWhole?: boolean
 }
+// Scratch (rp3-whole-rich). What one copy's paragraphs hold: the handles its line operations ran on and every new batch
+// prepared again. `widths` counts the numbers in every list named `widths`, `others` those in every other list;
+// `example` is the first number that isn't whole, with the property it was under.
+export type WholeCheck = { label: string; paragraphs: number; widths: number; widthFractions: number; others: number; otherFractions: number; example: string }
 export type DocResult =
-  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }> }
+  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[] }
   | { id: string; timerStep: number; start: Snapshot; end: Snapshot; label: string; compileMs: number; runMs: number; batches: Sample[] }
 
 type Library = { prepare: (kind: string, texts: unknown[], font: string, options: object) => unknown[]; run: (op: string, data: unknown[], widths: number[], reps: number, font: string, options: object) => number }
@@ -50,6 +56,32 @@ function evaluate(code: string): { lib: Library; compileMs: number; runMs: numbe
   const after = performance.now()
   const started = Reflect.get(globalThis, '__benchStarted') as number
   return { lib: Reflect.get(globalThis, '__benchLibrary') as Library, compileMs: started - before, runMs: after - started }
+}
+
+// Scratch (rp3-whole-rich). Every number in every list reachable from a handle, typed arrays aside, each list once.
+function countNumbers(value: unknown, key: string, seen: Set<object>, out: WholeCheck): void {
+  if (typeof value !== 'object' || value === null || ArrayBuffer.isView(value) || seen.has(value)) return
+  seen.add(value)
+  if (!Array.isArray(value)) {
+    for (const name of Object.keys(value)) countNumbers(Reflect.get(value, name), name, seen, out)
+    return
+  }
+  for (let i = 0; i < value.length; i++) {
+    const v: unknown = value[i]
+    if (typeof v !== 'number') {
+      countNumbers(v, key, seen, out)
+      continue
+    }
+    const whole = Number.isInteger(v)
+    if (key === 'widths') {
+      out.widths++
+      if (!whole) out.widthFractions++
+    } else {
+      out.others++
+      if (!whole) out.otherFractions++
+    }
+    if (!whole && out.example === '') out.example = `${key}[${i}] = ${v}`
+  }
 }
 
 async function runDoc(doc: Doc): Promise<DocResult> {
@@ -138,7 +170,27 @@ async function runDoc(doc: Doc): Promise<DocResult> {
     ops.push({ op: spec.op, rounds })
   }
   document.body.dataset['sink'] = String(sink)
-  return { id: doc.id, timerStep, start, end: snap(), ops }
+  if (doc.checkWhole !== true) return { id: doc.id, timerStep, start, end: snap(), ops }
+  // Scratch (rp3-whole-rich). After every round was timed: this loop reads every copy's lists, and JavaScriptCore
+  // converts a list of integers to doubles where one loop has read both kinds, which before the timing would undo the
+  // state the document is there to time.
+  const end = snap()
+  const whole: WholeCheck[] = []
+  for (let k = 0; k < libs.length; k++) {
+    const e = libs[k]!
+    const out: WholeCheck = { label: e.label, paragraphs: 0, widths: 0, widthFractions: 0, others: 0, otherFractions: 0, example: '' }
+    const seen = new Set<object>()
+    for (let o = 0; o < doc.ops.length; o++) {
+      const spec = doc.ops[o]!
+      const lists = spec.batches === undefined ? (e.handles[o] === undefined ? [] : [e.handles[o]!]) : spec.batches.map(batch => e.lib.prepare('rich', batch, doc.font, doc.options))
+      for (let l = 0; l < lists.length; l++) {
+        out.paragraphs += lists[l]!.length
+        countNumbers(lists[l]!, '', seen, out)
+      }
+    }
+    whole.push(out)
+  }
+  return { id: doc.id, timerStep, start, end, ops, whole }
 }
 
 async function main(): Promise<void> {

@@ -15,7 +15,7 @@ import type { Doc, DocResult, OpSpec } from './page.ts'
 import { report, unconfirmed, type SessionResults } from './report.ts'
 import { createRng } from '../sets/build.ts'
 import type { RichInlineItem } from '../../src/rich-inline.ts'
-import { chatItems, familyText, itemReader, labels, MESSAGE_FAMILIES, reader, richItems, shapes, STYLE, units } from './texts.ts'
+import { chatItems, familyText, itemReader, labels, MESSAGE_FAMILIES, reader, richItems, shapes, STYLE, units, wholeBatches, wholeItems, wholeMessages } from './texts.ts'
 
 export const ROWS = ['new', 'fresh', 'rich', 'seen', 'resize', 'lines', 'worst'] as const
 const LABELS = ['base', 'candidate', 'control'] as const
@@ -92,6 +92,35 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
     const styled = itemReader(chat.rest().filter(items => items.length > 1))
     const styledKept = styled.batch(20_000)
     rich('chat-styled', Array.from({ length: NEW_BATCHES }, () => styled.batch(CHAT_UNITS)), styledKept)
+  }
+  // Scratch (rp3-whole-rich, never merged), chosen with --rows=whole (--rows=rich,whole times them after the rich row's
+  // own): three documents of the rich row, with its floor and operations, whose every width is a whole number, the
+  // CJK messages cut down to the characters 16px PingFang TC draws a whole number of pixels wide (texts.ts,
+  // wholeMessages). `whole-one`: every paragraph one item. `whole-chat`: each paragraph in the shape of the chat
+  // demo's paragraph of the same rank, 86% of them one item. `whole-styled`: each in the shape of the demo's styled
+  // paragraph of the same rank, so every one is several items. The kept paragraphs are the messages, and the new
+  // batches the same messages cut into batches, so a new batch is new to the copy that prepares it and holds text the
+  // kept paragraphs hold too, which nothing timed reads: the line operations' handles and the first exposure of the
+  // text prepared again aren't timed. The page counts, after the timed rounds, the numbers in each copy's lists that
+  // aren't whole (page.ts, checkWhole).
+  if (want('whole')) {
+    const messages = wholeMessages()
+    const batches = wholeBatches(messages, NEW_BATCHES, Math.floor(units(messages) / NEW_BATCHES / 10) * 10)
+    const demo = chatItems()
+    const styled = demo.filter(items => items.length > 1)
+    const body: RichInlineItem[] = [{ text: ' ', font: '400', letterSpacing: 0, break: 'normal', extraWidth: 0 }]
+    const itemUnits = (lists: RichInlineItem[][]): number => lists.reduce((n, list) => n + list.reduce((m, item) => m + item.text.length, 0), 0)
+    for (const [family, shapeOf] of [['whole-one', () => body], ['whole-chat', (rank: number) => demo[rank]!], ['whole-styled', (rank: number) => styled[rank]!]] as const) {
+      let rank = 0
+      const texts = messages.map(m => wholeItems(m, shapeOf(rank++)))
+      const newBatches = batches.map(batch => batch.map(m => wholeItems(m, shapeOf(rank++))))
+      doc('rich', family, STYLE.cjk.lang, STYLE.cjk.font, {}, [
+        { op: 'rich-new', batches: newBatches, batchUnits: newBatches.map(itemUnits), widths: [220] },
+        ...['rich-stats', 'rich-walk', 'rich-stream'].map(op => ({ op, texts, textUnits: itemUnits(texts), handles: 'rich' as const, widths: [180, 220, 260] })),
+        { op: 'rich-seen', texts, textUnits: itemUnits(texts), widths: [220] },
+      ])
+      out[out.length - 1]!.checkWhole = true
+    }
   }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
@@ -182,6 +211,11 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
           return Response.json({ next: docUrl(n) })
         }
         results.set(d.id, body.result!)
+        // Scratch (rp3-whole-rich): what the page counted in each copy's lists.
+        const counted = 'ops' in body.result! ? body.result.whole : undefined
+        if (counted !== undefined) {
+          console.log(`${browser}: ${d.id}: ${counted.map(w => `${w.label} ${w.paragraphs} paragraphs, ${w.widthFractions} of ${w.widths} widths not whole, ${w.otherFractions} of ${w.others} other numbers${w.example === '' ? '' : ` (${w.example})`}`).join('; ')}`)
+        }
         attempt = 0
         if (++n === docs.length) {
           finish(null)
