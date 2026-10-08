@@ -326,8 +326,10 @@ export function measureAnalysis(
   // A text's lists are made here, where they are filled, and not by its caller: V8 types a
   // list by what the `[]` that made it has seen, and with every caller making them Chrome
   // prepared long texts 5-11% slower and Firefox walked CJK lines 12% slower. A paragraph's
-  // lists are its caller's, typed there by a push and a pop (RESEARCH.md, Keeping Work
-  // Bounded, JavaScript Engines, under A list made where it is filled).
+  // lists are its caller's, each a plain `[]` that comes to hold what is stored in it; the
+  // loop below takes one in whatever form the engine made it, since it stores by index
+  // (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made where it is
+  // filled).
   const widths: number[] = paragraph === null ? [] : paragraph.widths
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
   // walkers, layout()'s count and rich-inline layout read where the scan gives no break.
@@ -547,7 +549,13 @@ export function measureAnalysis(
     return getCorrectedSegmentWidth(text, textMetrics, fontMeasurement, emojiCorrection) - (measuredWithSpace ? spaceWidth : 0) + followingSpaceKerning
   }
 
-  for (let mi = from; mi < to; mi++) {
+  // Each segment is stored at its index, `at` in the paragraph's or the text's three lists and
+  // `mi - from` in the lists of the measured segments alone; nothing is pushed. A paragraph's
+  // list comes from a caller that has run a few times, in V8's form for small integers.
+  // Compiled code that pushes a fraction or a null onto such a list is deoptimized, and V8
+  // compiles that push as a call from then on, for every text. A store by index is compiled
+  // again with the list's change of form in it, and stays compiled.
+  for (let mi = from, at = base; mi < to; mi++, at++) {
     const text = texts[mi]!
     const segment = flags[mi]!
     const kind = (segment & KIND_BITS) as SegmentKindCode
@@ -608,7 +616,7 @@ export function measureAnalysis(
             if (spaceBefore && kerning.before !== 0 &&
               !((flags[mi - 1]! & KIND_BITS) === PRESERVED_SPACE && (mi === from + 1 || (flags[mi - 2]! & KIND_BITS) === HARD_BREAK)) &&
               spaceSharesScriptRun(scriptRuns, own, starts[mi]! - ownStart, starts[mi]! - ownStart + text.length)) {
-              widths[widths.length - 1] = widths[widths.length - 1]! + kerning.before
+              widths[at - 1] = widths[at - 1]! + kerning.before
             }
           }
         }
@@ -688,22 +696,22 @@ export function measureAnalysis(
     }
     if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) simpleKinds = false
     if (kind !== TEXT && kind !== SOFT_HYPHEN) previousJoinablePiece = null
-    segmentFlags[widths.length] = (segment & ~ONE_CLUSTER) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0)
-    widths.push(addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing))
-    breakableFitAdvances.push(fitAdvances)
+    segmentFlags[at] = (segment & ~ONE_CLUSTER) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0)
+    widths[at] = addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing)
+    breakableFitAdvances[at] = fitAdvances
     if (entry !== null && entryGeometry === null) entryGeometry = Array.from({ length: mi - from }, () => null)
-    entryGeometry?.push(entry)
+    if (entryGeometry !== null) entryGeometry[mi - from] = entry
     if (prohibitions !== null && lineStartProhibitions === null) lineStartProhibitions = Array.from({ length: mi - from }, () => null)
-    lineStartProhibitions?.push(prohibitions)
-    if (segments !== null) segments.push(text)
+    if (lineStartProhibitions !== null) lineStartProhibitions[mi - from] = prohibitions
+    if (segments !== null) segments[mi - from] = text
     // Contexts for every segment of soft hyphens, whatever its kind here, one that is glue
     // too, where the scan gives no break after it: a handle with contexts is one whose lines
     // return from an unfit hyphen, measured below.
     if (kind !== TEXT && text.charCodeAt(0) === 0xAD) {
       discretionaryHyphenContexts ??= zeros(mi - from)
-      discretionaryHyphenContexts.push(returnFitsEachSideAlone ? 0 : getJoinedNarrowing(mi, previousJoinablePiece, previousJoinableMetrics))
-    } else {
-      discretionaryHyphenContexts?.push(0)
+      discretionaryHyphenContexts[mi - from] = returnFitsEachSideAlone ? 0 : getJoinedNarrowing(mi, previousJoinablePiece, previousJoinableMetrics)
+    } else if (discretionaryHyphenContexts !== null) {
+      discretionaryHyphenContexts[mi - from] = 0
     }
   }
 

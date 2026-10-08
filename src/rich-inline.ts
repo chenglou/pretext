@@ -278,23 +278,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const count = analysis.flags.length
 
   // The paragraph's lists, which each item's measurement adds its segments to (measureAnalysis).
-  // The widths and the advances each take one push and one pop of what they come to hold, a
-  // fraction and a null. It changes no value: both lists are empty again before anything reads
-  // them. It is there for V8, which makes a list from `[]` in its form for small integers until
-  // this function has run a few times: compiled measureAnalysis() fails once where it pushes a
-  // fraction or null onto such a list, and V8 never compiles that push inline again, so plain text
-  // prepares slower from then on too (RESEARCH.md, Keeping Work Bounded, JavaScript Engines,
-  // under A list made where it is filled). With the push and pop each list has its final form
-  // before measureAnalysis() sees it. They stay by decision (RESEARCH.md, Decisions Log,
-  // 2026-10-07, a paragraph's lists) and go once these lists are made inside measureAnalysis(),
-  // as a text's are, or once V8 compiles a push inline again after it failed there once.
   const widths: number[] = []
-  widths.push(0.5)
-  widths.pop()
   const flags = new Uint8Array(count + padded)
   const breakableFitAdvances: (number[] | null)[] = []
-  breakableFitAdvances.push(null)
-  breakableFitAdvances.pop()
   const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances }
   const segments: string[] = []
   const sourceStarts: number[] = []
