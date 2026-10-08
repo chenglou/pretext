@@ -154,6 +154,26 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
     doc('rich', 'whole-probe', STYLE.cjk.lang, STYLE.cjk.font, {}, [])
     out[out.length - 1]!.probe = { fonts, characters }
   }
+  // Scratch (opent-check-whole, never merged), --rows=whole-solo: the mixed whole-width rich document and the two
+  // plain ones with ONE copy of the library in the document, base's or the candidate's, as a page holds one where the
+  // bench's own documents hold three. A session times the mixed document for base, the candidate, the candidate and
+  // base, the plain texts after rich paragraphs for the candidate, base, base and the candidate, and the plain texts
+  // alone for base and the candidate, so each build comes first and last as often. A round holds one sample, so the
+  // report has no ratio for these documents and leaves the row out (report.ts): each copy's own cost is read from
+  // the saved samples.
+  if (want('whole-solo')) {
+    const made = documents(['whole', 'whole-plain'], seed, focus)
+    const solo = (family: string, libraries: readonly string[]): void => {
+      const from = made.find(d => d.family === family)!
+      for (let k = 0; k < libraries.length; k++) {
+        const id = `solo ${family} ${k} ${libraries[k]!}`
+        out.push({ ...from, id, row: 'solo', seed: `${seed}/${id}`, library: libraries[k]! })
+      }
+    }
+    solo('whole-chat', ['base', 'candidate', 'candidate', 'base'])
+    solo('whole-plain-after-rich', ['candidate', 'base', 'base', 'candidate'])
+    solo('whole-plain-alone', ['base', 'candidate'])
+  }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
     const style = STYLE[family]

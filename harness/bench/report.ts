@@ -62,7 +62,8 @@ function entriesOf(results: readonly SessionResults[]): Map<string, Entry> {
   for (const r of results) {
     for (const d of r.docs) {
       const result = r.results[d.id]
-      if (result === undefined || 'compileMs' in result) continue
+      // Scratch (opent-check-whole): a one-copy document's rounds hold one sample, so it has no ratio (run.ts).
+      if (result === undefined || 'compileMs' in result || d.row === 'solo') continue
       for (let o = 0; o < result.ops.length; o++) {
         const name = `${d.row} | ${d.family} ${result.ops[o]!.op}${d.row === 'resize' ? (o === 0 ? ' at widths seen before' : ' at new widths') : ''}`
         const e = bySession.get(name) ?? { entry: { row: d.row, doc: d.id, perCall: d.family === 'labels', sessions: [] }, rounds: new Map<number, Sample[][]>() }
