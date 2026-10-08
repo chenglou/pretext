@@ -18,6 +18,12 @@ export type OpSpec = {
   handles?: 'fast' | 'segments' | 'rich'
   widths: number[]
 }
+// Scratch (rp3-speed-lists-probe, never merged). What each copy of the library prepares before the document's
+// operations are timed, as a page that prepares most of its text with prepare() and a rich paragraph now and then:
+// `warm` plain texts (the first operation's texts in turn), then `slots` times a wait of `waitMs` and a rich
+// paragraph, where `rich` has one for that slot (the twin document has none), with `gap` plain texts after each but
+// the last.
+export type PageOrder = { warm: number; gap: number; slots: number; rich: unknown[][]; waitMs: number }
 export type Doc = {
   id: string; seed: string; font: string; options: object; focus: boolean; warm: number; rounds: number; targetMs: number
   libraries: Array<{ label: string; code: string }>
@@ -30,6 +36,7 @@ export type Doc = {
   // Scratch (rp3-whole-rich-plain): rich paragraphs each copy of the library prepares and lays out, `passes` times,
   // before the document's operations, as a page that held rich paragraphs before the texts it lays out now.
   before?: { rich: unknown[][]; passes: number }
+  order?: PageOrder
 }
 // Scratch (rp3-whole-rich). What one copy's paragraphs hold: the handles its line operations ran on and every new batch
 // prepared again. `widths` counts the numbers in every list named `widths`, `others` those in every other list;
@@ -96,7 +103,7 @@ function countNumbers(value: unknown, key: string, seen: Set<object>, out: Whole
   }
 }
 
-async function runDoc(doc: Doc): Promise<DocResult> {
+async function runDoc(doc: Doc, wait: (ms: number) => Promise<void>): Promise<DocResult> {
   if (!crossOriginIsolated) throw new Error('the bench page must be cross-origin isolated, for a fine timer')
   for (let i = 0; doc.focus && i < 100 && !(snap().visible && snap().focused); i++) await new Promise(done => setTimeout(done, 20))
   const check = (): void => {
@@ -151,6 +158,35 @@ async function runDoc(doc: Doc): Promise<DocResult> {
         sink += e.lib.run('rich-stats', handles, [180, 220, 260], 3, doc.font, doc.options)
         sink += e.lib.run('rich-walk', handles, [180, 220, 260], 3, doc.font, doc.options)
       }
+    }
+  }
+  if (doc.order !== undefined) {
+    // The page's order. Each copy prepares `warm` plain texts. Then, `slots` times: the page waits `waitMs`, as a
+    // page's rich paragraphs come now and then, which also gives the engine time to finish what it compiles in the
+    // background, and each copy prepares a rich paragraph (the twin: none) and, but after the last, `gap` plain
+    // texts. The copies take each step in one shuffled order. Plain texts go through the call the timed operation
+    // makes, 'prepare'. The wait is a fetch the server answers late, since a background window's timers are slowed.
+    const { warm, gap, slots, rich, waitMs } = doc.order
+    const texts = doc.ops[0]!.texts!
+    const first = shuffled(-1)
+    const at = libs.map(() => 0)
+    const plain = (copy: number, count: number): void => {
+      const list: unknown[] = []
+      for (let i = 0; i < count; i++) list.push(texts[at[copy]!++ % texts.length]!)
+      sink += libs[copy]!.lib.run('prepare', list, [320], 1, doc.font, doc.options)
+    }
+    await pause()
+    check()
+    for (let k = 0; k < first.length; k++) plain(first[k]!, warm)
+    for (let slot = 0; slot < slots; slot++) {
+      await wait(waitMs)
+      check()
+      for (let k = 0; k < first.length; k++) {
+        const copy = first[k]!
+        if (slot < rich.length) sink += libs[copy]!.lib.prepare('rich', [rich[slot]!], doc.font, doc.options).length
+        if (slot + 1 < slots) plain(copy, gap)
+      }
+      check()
     }
   }
   const ops: Array<{ op: string; rounds: Sample[][] }> = []
@@ -255,7 +291,7 @@ async function main(): Promise<void> {
   const doc = await (await fetch(`/api/doc?${query}`)).json() as Doc
   let body: unknown
   try {
-    body = { result: await runDoc(doc) }
+    body = { result: await runDoc(doc, async ms => { await fetch(`/api/wait?${query}&ms=${ms}`) }) }
   } catch (error) {
     body = { error: error instanceof Error ? error.message : String(error) }
   }

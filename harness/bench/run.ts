@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { serveJob, watched, windowTitle } from '../run.ts'
 import { BROWSER, type BrowserKind } from '../types.ts'
 import { benchBundle, buildName, srcOf } from './lib.ts'
-import type { Doc, DocResult, OpSpec } from './page.ts'
+import type { Doc, DocResult, OpSpec, PageOrder } from './page.ts'
 import { report, unconfirmed, type SessionResults } from './report.ts'
 import { createRng } from '../sets/build.ts'
 import type { RichInlineItem } from '../../src/rich-inline.ts'
@@ -30,6 +30,14 @@ const RICH_UNITS = 1000
 // demo's paragraphs cost 180 to 1,900 µs per 1,000 units in Chrome by what they held, where batches of prose differ
 // less: main read 15-49% slower than itself in three sessions (RESEARCH.md, Evaluation Traps, Timing).
 const CHAT_UNITS = 4000
+// Scratch (rp3-speed-lists-probe): the rows of the page with a rich paragraph now and then and of its twin, chosen
+// with --rows alone; a copy's plain texts before its first rich paragraph and between two; the rich paragraphs.
+const LISTS_ROWS = ['lists', 'lists-twin'] as const
+const LISTS_ROUNDS = 16
+const LISTS_WARM = Number(process.env['LISTS_WARM'] ?? 1000)
+const LISTS_GAP = Number(process.env['LISTS_GAP'] ?? 200)
+const LISTS_SLOTS = 3
+const LISTS_WAIT_MS = Number(process.env['LISTS_WAIT_MS'] ?? 100)
 const NEW_BATCHES = LABELS.length * (WARM + ROUNDS.new)
 const FRESH_ROUNDS = WARM + ROUNDS.fresh
 
@@ -41,11 +49,12 @@ let firstKind = 0
 export type Planned = Omit<Doc, 'libraries'> & { lang: string; row: string; family: string; library?: string }
 export function documents(rows: readonly string[], seed: string, focus: boolean): Planned[] {
   const out: Planned[] = []
-  const doc = (row: (typeof ROWS)[number], family: string, lang: string, font: string, options: object, ops: OpSpec[], fresh?: { label: string; round: number; batches: string[][] }): void => {
+  const doc = (row: (typeof ROWS)[number] | (typeof LISTS_ROWS)[number], family: string, lang: string, font: string, options: object, ops: OpSpec[], fresh?: { label: string; round: number; batches: string[][] }, order?: PageOrder): void => {
     const id = `${row} ${family}${fresh === undefined ? '' : ` ${fresh.round} ${fresh.label}`}`
     out.push({
-      id, row, family, lang, seed: `${seed}/${id}`, font, options, focus, warm: WARM, rounds: ROUNDS[row], targetMs: TARGET_MS, ops,
+      id, row, family, lang, seed: `${seed}/${id}`, font, options, focus, warm: WARM, rounds: row === 'lists' || row === 'lists-twin' ? LISTS_ROUNDS : ROUNDS[row], targetMs: TARGET_MS, ops,
       ...(fresh === undefined ? {} : { library: fresh.label, fresh: { batches: fresh.batches, units: fresh.batches.map(units) } }),
+      ...(order === undefined ? {} : { order }),
     })
   }
   const rng = createRng(seed)
@@ -220,6 +229,29 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
       doc('lines', family, STYLE[family].lang, STYLE[family].font, {}, ops.map(op => ({ op, texts, textUnits: units(texts), handles: 'segments' as const, widths: [180, 240, 320] })))
     }
   }
+  // Scratch (rp3-speed-lists-probe, never merged), only with --rows=lists or --rows=lists-twin. `lists`: a page that
+  // prepares most of its text with prepare() and a short rich paragraph now and then. Each copy of the library
+  // prepares LISTS_WARM plain texts, then three rich paragraphs of two items of three words each with LISTS_GAP plain
+  // texts between them, the page waiting LISTS_WAIT_MS before each paragraph, and the document then times the plain
+  // text, prepared again: the bench's long pre-wrap texts (the worst row's pre-wrap chunks), its CJK messages and its
+  // Latin messages (the seen row's), a document each. `lists-twin`: the same documents with no rich paragraph. The
+  // rich paragraphs' words are the Latin messages' in order, in the document's font.
+  for (const row of LISTS_ROWS) {
+    if (!want(row)) continue
+    const words = reader('latin').batch(SEEN_UNITS.latin)!.join(' ').replace(/[^A-Za-z ]/g, '').split(' ').filter(w => w.length > 1)
+    const preWrap = shapes().find(shape => shape.id === 'pre-wrap-chunks')!
+    const kinds = [
+      { family: 'prewrap', lang: preWrap.lang, font: preWrap.font, options: preWrap.options as object, texts: preWrap.texts },
+      { family: 'cjk', lang: STYLE.cjk.lang, font: STYLE.cjk.font, options: {}, texts: reader('cjk').batch(SEEN_UNITS.cjk)! },
+      { family: 'latin', lang: STYLE.latin.lang, font: STYLE.latin.font, options: {}, texts: reader('latin').batch(SEEN_UNITS.latin)! },
+    ]
+    for (const kind of kinds) {
+      let word = 0
+      const take = (count: number): string => Array.from({ length: count }, () => words[word++ % words.length]!).join(' ')
+      const rich: RichInlineItem[][] = row === 'lists-twin' ? [] : Array.from({ length: LISTS_SLOTS }, () => [{ text: `${take(3)} `, font: kind.font }, { text: `${take(3)} `, font: kind.font }])
+      doc(row, kind.family, kind.lang, kind.font, kind.options, [{ op: 'prepare', texts: kind.texts, textUnits: units(kind.texts), widths: [320] }], undefined, { warm: LISTS_WARM, gap: LISTS_GAP, slots: LISTS_SLOTS, rich, waitMs: LISTS_WAIT_MS })
+    }
+  }
   if (want('worst')) {
     for (const shape of shapes()) {
       doc('worst', shape.id, shape.lang, shape.font, shape.options, shape.ops.map(op => ({
@@ -277,6 +309,11 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
         const names = d.library === undefined ? LABELS : [d.library]
         const libraries = names.map(label => ({ label, code: `/* ${d.id} ${label} ${id} ${attempt} */\n${bundles[label === 'control' ? 'base' : label]}` }))
         return Response.json({ ...d, libraries } satisfies Doc)
+      }
+      // Scratch (rp3-speed-lists-probe): a page's wait, answered late (page.ts, PageOrder).
+      case '/api/wait': {
+        await Bun.sleep(Math.min(1000, Number(url.searchParams.get('ms') ?? 0)))
+        return new Response('', { headers: isolated })
       }
       case '/api/result': {
         const body = await request.json() as { result?: DocResult; error?: string }
