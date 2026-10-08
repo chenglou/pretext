@@ -226,11 +226,15 @@ export function wholeBatches(messages: string[], count: number, size: number): s
 }
 
 // A text as a rich paragraph in the shape of one of the chat demo's (chatItems): as many items, each the same share of
-// the text, every one in PingFang TC and with every property, as the demo's. Body text is 16px, bold or bold italic
-// where the demo's item is (a heading's is bold); a code span and an image chip are 12px with the demo's extraWidth,
-// the chip unbreakable. No letter spacing, and even sizes, so that half an em, a mark Chrome halts, is whole too. A
-// text shorter than the shape's items takes the first of them, a character each.
-const WHOLE_FAMILY = '"PingFang TC"'
+// the text, every one with every property, as the demo's. Body text is 400 16px PingFang TC. What the demo makes bold
+// or bold italic (a heading's text is bold), a code span or an image chip is in Heiti TC, bold at 16px, a code span 600
+// 12px and a chip 700 12px with the demo's extraWidth, the chip unbreakable: Safari measures an ideograph of PingFang
+// TC at weights 500 to 700 two hundredths of an em wider than its size, 16.32px at 16px, where Chrome and Firefox
+// measure 16, and every character of these messages is whole in Heiti TC at every weight in the three (the font
+// probe, run.ts). No letter spacing, and even sizes, so that half an em, a mark Chrome halts, is whole too. A text
+// shorter than the shape's items takes the first of them, a character each.
+const WHOLE_BODY = '"PingFang TC"'
+const WHOLE_STYLED = '"Heiti TC"'
 export function wholeItems(text: string, shape: RichInlineItem[]): RichInlineItem[] {
   const count = Math.min(shape.length, text.length)
   let total = 0
@@ -245,9 +249,10 @@ export function wholeItems(text: string, shape: RichInlineItem[]): RichInlineIte
     const end = i === count - 1 ? text.length : Math.min(text.length - (count - 1 - i), Math.max(at + 1, Math.round(text.length * read / total)))
     const piece = text.slice(at, end)
     at = end
-    if (from.break === 'never') items.push({ text: piece, font: `700 12px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'never', extraWidth: 14 })
-    else if ((from.extraWidth ?? 0) !== 0) items.push({ text: piece, font: `600 12px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'normal', extraWidth: 12 })
-    else items.push({ text: piece, font: `${from.font.startsWith('italic') ? 'italic ' : ''}${from.font.includes('700') ? 700 : 400} 16px ${WHOLE_FAMILY}`, letterSpacing: 0, break: 'normal', extraWidth: 0 })
+    if (from.break === 'never') items.push({ text: piece, font: `700 12px ${WHOLE_STYLED}`, letterSpacing: 0, break: 'never', extraWidth: 14 })
+    else if ((from.extraWidth ?? 0) !== 0) items.push({ text: piece, font: `600 12px ${WHOLE_STYLED}`, letterSpacing: 0, break: 'normal', extraWidth: 12 })
+    else if (from.font.includes('700')) items.push({ text: piece, font: `${from.font.startsWith('italic') ? 'italic ' : ''}700 16px ${WHOLE_STYLED}`, letterSpacing: 0, break: 'normal', extraWidth: 0 })
+    else items.push({ text: piece, font: `${from.font.startsWith('italic') ? 'italic ' : ''}400 16px ${WHOLE_BODY}`, letterSpacing: 0, break: 'normal', extraWidth: 0 })
   }
   return items
 }
