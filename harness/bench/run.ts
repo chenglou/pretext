@@ -156,11 +156,12 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
   }
   // Scratch (opent-check-whole, never merged), --rows=whole-solo: the mixed whole-width rich document and the two
   // plain ones with ONE copy of the library in the document, base's or the candidate's, as a page holds one where the
-  // bench's own documents hold three. A session times the mixed document for base, the candidate, the candidate and
-  // base, the plain texts after rich paragraphs for the candidate, base, base and the candidate, and the plain texts
-  // alone for base and the candidate, so each build comes first and last as often. A round holds one sample, so the
-  // report has no ratio for these documents and leaves the row out (report.ts): each copy's own cost is read from
-  // the saved samples.
+  // bench's own documents hold three. A session times the plain texts alone for base and the candidate first, where
+  // neither build runs the statements that tell them apart, so no document that is read for them is a session's first;
+  // then the mixed document for base, the candidate, the candidate and base, and the plain texts after rich paragraphs
+  // for the candidate, base, base and the candidate, so each build comes first and last as often. A round holds one
+  // sample, so the report has no ratio for these documents and leaves the row out (report.ts): each copy's own cost is
+  // read from the saved samples.
   if (want('whole-solo')) {
     const made = documents(['whole', 'whole-plain'], seed, focus)
     const solo = (family: string, libraries: readonly string[]): void => {
@@ -170,9 +171,9 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
         out.push({ ...from, id, row: 'solo', seed: `${seed}/${id}`, library: libraries[k]! })
       }
     }
+    solo('whole-plain-alone', ['base', 'candidate'])
     solo('whole-chat', ['base', 'candidate', 'candidate', 'base'])
     solo('whole-plain-after-rich', ['candidate', 'base', 'base', 'candidate'])
-    solo('whole-plain-alone', ['base', 'candidate'])
   }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
