@@ -177,16 +177,29 @@ async function runDoc(doc: Doc, wait: (ms: number) => Promise<void>): Promise<Do
     }
     await pause()
     check()
-    for (let k = 0; k < first.length; k++) plain(first[k]!, warm)
-    for (let slot = 0; slot < slots; slot++) {
-      await wait(waitMs)
-      check()
+    if (waitMs === 0) {
+      // No wait: each copy takes the whole order in one go, its paragraphs as far apart as its plain texts take.
       for (let k = 0; k < first.length; k++) {
         const copy = first[k]!
-        if (slot < rich.length) sink += libs[copy]!.lib.prepare('rich', [rich[slot]!], doc.font, doc.options).length
-        if (slot + 1 < slots) plain(copy, gap)
+        plain(copy, warm)
+        for (let slot = 0; slot < slots; slot++) {
+          if (slot < rich.length) sink += libs[copy]!.lib.prepare('rich', [rich[slot]!], doc.font, doc.options).length
+          if (slot + 1 < slots) plain(copy, gap)
+        }
       }
       check()
+    } else {
+      for (let k = 0; k < first.length; k++) plain(first[k]!, warm)
+      for (let slot = 0; slot < slots; slot++) {
+        await wait(waitMs)
+        check()
+        for (let k = 0; k < first.length; k++) {
+          const copy = first[k]!
+          if (slot < rich.length) sink += libs[copy]!.lib.prepare('rich', [rich[slot]!], doc.font, doc.options).length
+          if (slot + 1 < slots) plain(copy, gap)
+        }
+        check()
+      }
     }
   }
   const ops: Array<{ op: string; rounds: Sample[][] }> = []
