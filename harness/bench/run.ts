@@ -216,6 +216,8 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
         if (counted !== undefined) {
           console.log(`${browser}: ${d.id}: ${counted.map(w => `${w.label} ${w.paragraphs} paragraphs, ${w.widthFractions} of ${w.widths} widths not whole, ${w.otherFractions} of ${w.others} other numbers${w.example === '' ? '' : ` (${w.example})`}`).join('; ')}`)
         }
+        const spaces = 'ops' in body.result! ? body.result.spaces : undefined
+        if (spaces !== undefined) console.log(`${browser}: ${d.id}: a space is ${spaces.map(f => `${f.space}px in ${f.font}`).join(', ')}`)
         attempt = 0
         if (++n === docs.length) {
           finish(null)

@@ -30,8 +30,12 @@ export type Doc = {
 // prepared again. `widths` counts the numbers in every list named `widths`, `others` those in every other list;
 // `example` is the first number that isn't whole, with the property it was under.
 export type WholeCheck = { label: string; paragraphs: number; widths: number; widthFractions: number; others: number; otherFractions: number; example: string }
+// Scratch (rp3-whole-rich). A space's width in each font of the document's items, as this browser's Canvas gives it:
+// no list of these paragraphs holds it, and where it is a fraction V8 comes to hold every measured width as a double
+// (the notes of the plain trial of 2026-10-07), so it says what a list of whole widths is in Chrome.
+export type SpaceWidth = { font: string; space: number }
 export type DocResult =
-  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[] }
+  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[]; spaces?: SpaceWidth[] }
   | { id: string; timerStep: number; start: Snapshot; end: Snapshot; label: string; compileMs: number; runMs: number; batches: Sample[] }
 
 type Library = { prepare: (kind: string, texts: unknown[], font: string, options: object) => unknown[]; run: (op: string, data: unknown[], widths: number[], reps: number, font: string, options: object) => number }
@@ -190,7 +194,19 @@ async function runDoc(doc: Doc): Promise<DocResult> {
     }
     whole.push(out)
   }
-  return { id: doc.id, timerStep, start, end, ops, whole }
+  const fonts = new Set<string>()
+  for (let o = 0; o < doc.ops.length; o++) {
+    const spec = doc.ops[o]!
+    const paragraphs = (spec.batches === undefined ? spec.texts! : spec.batches.flat()) as Array<Array<{ font: string }>>
+    for (let i = 0; i < paragraphs.length; i++) for (let k = 0; k < paragraphs[i]!.length; k++) fonts.add(paragraphs[i]![k]!.font)
+  }
+  const context = new OffscreenCanvas(1, 1).getContext('2d')!
+  const spaces: SpaceWidth[] = []
+  for (const font of fonts) {
+    context.font = font
+    spaces.push({ font, space: context.measureText(' ').width })
+  }
+  return { id: doc.id, timerStep, start, end, ops, whole, spaces }
 }
 
 async function main(): Promise<void> {
