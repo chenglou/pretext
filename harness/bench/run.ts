@@ -122,6 +122,25 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
       out[out.length - 1]!.checkWhole = true
     }
   }
+  // Scratch (rp3-whole-rich-plain, never merged), --rows=whole-plain: the whole-width messages as plain texts in 400
+  // 16px PingFang TC, with the resize row's first operation, the lines row's three and the seen row's.
+  // `whole-plain-after-rich`: each copy of the library first prepares the whole-styled paragraphs and counts and walks
+  // their lines, five times, as a page that held styled rich paragraphs before the texts it lays out now.
+  // `whole-plain-alone`: the same page with no rich paragraph. Both take the lines row's rounds and floor.
+  if (want('whole-plain')) {
+    const messages = wholeMessages()
+    const styled = chatItems().filter(items => items.length > 1)
+    const rich = messages.map((m, rank) => wholeItems(m, styled[rank]!))
+    for (const family of ['whole-plain-after-rich', 'whole-plain-alone']) {
+      doc('lines', family, STYLE.cjk.lang, '400 16px "PingFang TC"', {}, [
+        { op: 'layout', texts: messages, textUnits: units(messages), handles: 'fast', widths: [260, 380, 440] },
+        ...['stats', 'walk', 'stream'].map(op => ({ op, texts: messages, textUnits: units(messages), handles: 'segments' as const, widths: [180, 240, 320] })),
+        { op: 'seen', texts: messages, textUnits: units(messages), widths: [320] },
+      ])
+      out[out.length - 1]!.checkWhole = true
+      if (family === 'whole-plain-after-rich') out[out.length - 1]!.before = { rich, passes: 5 }
+    }
+  }
   // Scratch (rp3-whole-rich), --rows=whole-probe: no operation; the page measures every distinct character of the
   // whole-width messages in each of these fonts and counts the widths that aren't whole (page.ts, FontProbe).
   if (want('whole-probe')) {

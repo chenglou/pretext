@@ -27,6 +27,9 @@ export type Doc = {
   checkWhole?: boolean
   // Scratch (rp3-whole-rich): measure these characters in these fonts with the page's own Canvas (FontProbe).
   probe?: { fonts: string[]; characters: string }
+  // Scratch (rp3-whole-rich-plain): rich paragraphs each copy of the library prepares and lays out, `passes` times,
+  // before the document's operations, as a page that held rich paragraphs before the texts it lays out now.
+  before?: { rich: unknown[][]; passes: number }
 }
 // Scratch (rp3-whole-rich). What one copy's paragraphs hold: the handles its line operations ran on and every new batch
 // prepared again. `widths` counts the numbers in every list named `widths`, `others` those in every other list;
@@ -139,6 +142,17 @@ async function runDoc(doc: Doc): Promise<DocResult> {
   }
   let sink = 0
   let widthCounter = 0
+  if (doc.before !== undefined) {
+    const order = shuffled(-1)
+    for (let k = 0; k < order.length; k++) {
+      const e = libs[order[k]!]!
+      for (let pass = 0; pass < doc.before.passes; pass++) {
+        const handles = e.lib.prepare('rich', doc.before.rich, doc.font, doc.options)
+        sink += e.lib.run('rich-stats', handles, [180, 220, 260], 3, doc.font, doc.options)
+        sink += e.lib.run('rich-walk', handles, [180, 220, 260], 3, doc.font, doc.options)
+      }
+    }
+  }
   const ops: Array<{ op: string; rounds: Sample[][] }> = []
   for (let o = 0; o < doc.ops.length; o++) {
     const spec = doc.ops[o]!
@@ -218,8 +232,13 @@ async function runDoc(doc: Doc): Promise<DocResult> {
   const fonts = new Set<string>()
   for (let o = 0; o < doc.ops.length; o++) {
     const spec = doc.ops[o]!
-    const paragraphs = (spec.batches === undefined ? spec.texts! : spec.batches.flat()) as Array<Array<{ font: string }>>
-    for (let i = 0; i < paragraphs.length; i++) for (let k = 0; k < paragraphs[i]!.length; k++) fonts.add(paragraphs[i]![k]!.font)
+    const paragraphs = (spec.batches === undefined ? spec.texts! : spec.batches.flat()) as Array<string | Array<{ font: string }>>
+    for (let i = 0; i < paragraphs.length; i++) {
+      const paragraph = paragraphs[i]!
+      // A plain text is in the document's font.
+      if (typeof paragraph === 'string') fonts.add(doc.font)
+      else for (let k = 0; k < paragraph.length; k++) fonts.add(paragraph[k]!.font)
+    }
   }
   const context = new OffscreenCanvas(1, 1).getContext('2d')!
   const spaces: SpaceWidth[] = []
