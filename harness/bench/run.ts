@@ -33,6 +33,9 @@ const CHAT_UNITS = 4000
 const NEW_BATCHES = LABELS.length * (WARM + ROUNDS.new)
 const FRESH_ROUNDS = WARM + ROUNDS.fresh
 
+// Scratch (opent-check-whole): how many sessions of --rows=whole-first this process has planned (documents()).
+let firstKind = 0
+
 // The documents of one session in one browser, in this order, so the rows that want new text meet text no document
 // before them laid out: new, fresh and rich read each family forward; seen, resize and lines take its first units.
 export type Planned = Omit<Doc, 'libraries'> & { lang: string; row: string; family: string; library?: string }
@@ -182,6 +185,21 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
       solo('whole-chat', ['candidate', 'base', 'base', 'candidate'])
       solo('whole-styled', ['base', 'candidate', 'candidate', 'base'])
     }
+  }
+  // --rows=whole-first and whole-first-rich: ONE one-copy document a session, so that every document read is the
+  // first its session lays out, as a page's own text is: in Safari a one-copy document that came second in a session
+  // ran at another level than the same document coming first. The sessions take the kinds in turn (firstKind counts
+  // the sessions of this process), so with --sessions a multiple of six each kind is timed as often, a kind every
+  // sixth session. whole-first: the mixed document, the plain texts after rich paragraphs and the plain texts alone,
+  // for base and the candidate. whole-first-rich: the three rich documents.
+  if (want('whole-first') || want('whole-first-rich')) {
+    const made = documents(['whole', 'whole-plain'], seed, focus)
+    const families = want('whole-first') ? ['whole-chat', 'whole-plain-after-rich', 'whole-plain-alone'] : ['whole-one', 'whole-chat', 'whole-styled']
+    const kind = firstKind++ % 6
+    const family = families[kind >> 1]!
+    const library = LABELS[kind & 1]!
+    const id = `solo ${family} 0 ${library}`
+    out.push({ ...made.find(d => d.family === family)!, id, row: 'solo', seed: `${seed}/${id}`, library })
   }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
