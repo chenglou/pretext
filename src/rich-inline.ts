@@ -277,25 +277,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const offsets = paragraph.sourceOffsets!
   const count = analysis.flags.length
 
-  // The paragraph's lists, which each item's measurement adds its segments to (measureAnalysis).
-  // The widths and the advances each take one push and one pop of what they come to hold, a
-  // fraction and a null. It changes no value: both lists are empty again before anything reads
-  // them. It is there for V8, which makes a list from `[]` in its form for small integers until
-  // this function has run a few times: compiled measureAnalysis() fails once where it pushes a
-  // fraction or null onto such a list, and V8 never compiles that push inline again, so plain text
-  // prepares slower from then on too (RESEARCH.md, Keeping Work Bounded, JavaScript Engines,
-  // under A list made where it is filled). With the push and pop each list has its final form
-  // before measureAnalysis() sees it. They stay by decision (RESEARCH.md, Decisions Log,
-  // 2026-10-07, a paragraph's lists) and go once these lists are made inside measureAnalysis(),
-  // as a text's are, or once V8 compiles a push inline again after it failed there once.
-  const widths: number[] = []
-  widths.push(0.5)
-  widths.pop()
+  // The paragraph's lists, which each item's measurement adds its segments to. Its widths and
+  // advances are the lists measureAnalysis() makes for the first item it measures, as it makes a
+  // text's; these two hold what comes before that item, an object or a padded item's start edge,
+  // and are the lists of a paragraph with no item to measure.
+  let widths: number[] = []
   const flags = new Uint8Array(count + padded)
-  const breakableFitAdvances: (number[] | null)[] = []
-  breakableFitAdvances.push(null)
-  breakableFitAdvances.pop()
-  const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances }
+  let breakableFitAdvances: (number[] | null)[] = []
+  const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances, measured: false }
   const segments: string[] = []
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
@@ -478,10 +467,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // text, and a string the caller hands in again keeps its hash, where the slice is hashed anew
     // at every preparation.
     if (to === from + 1 && analysis.texts[from] === item.text) analysis.texts[from] = item.text
-    // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
-    // what else measurement gives them, from the item's first segment.
+    // The item's segments, measured in its font onto the end of the paragraph's lists, which are
+    // from here on the lists they went on; `sub` holds what else measurement gives them, from the
+    // item's first segment.
     const itemAt = widths.length
     const sub = measureAnalysis(analysis, from, to, item.font, false, letterSpacing, profile, language, true, lists)
+    widths = lists.widths = sub.widths
+    breakableFitAdvances = lists.breakableFitAdvances = sub.breakableFitAdvances
+    lists.measured = true
     simple &&= sub.simpleLineCountFastPath
     if (readsItemFonts) {
       // The gap before the hyphen is the letter spacing after the grapheme before it.

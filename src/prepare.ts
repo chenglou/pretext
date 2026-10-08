@@ -288,11 +288,14 @@ function isParagraphSeparatorCode(code: number): boolean {
 }
 
 // The lists of a rich-inline paragraph's handle that each item's measurement adds its segments
-// to; `segmentFlags` has room for them from `widths.length` on.
+// to; `segmentFlags` has room for them from `widths.length` on. Until an item is measured the
+// widths and the advances are the paragraph's builder's, with what it made before that item;
+// from then on, `measured`, they are the lists measureAnalysis() made for that item.
 export type ParagraphLists = {
   widths: number[]
   segmentFlags: Uint8Array
   breakableFitAdvances: (number[] | null)[]
+  measured: boolean
 }
 
 // Measures segments [from, to) of an analysis in a font, alone: all of a text's, or those of one
@@ -323,16 +326,25 @@ export function measureAnalysis(
   // is asked of it, and places in it count from its start.
   const ownStart = from === 0 ? 0 : starts[from]!
   const own = from === 0 && to === flags.length ? normalized : to === from + 1 ? texts[from]! : normalized.slice(ownStart, to < flags.length ? starts[to]! : normalized.length)
-  // A text's lists are made here, where they are filled, and not by its caller: V8 types a
-  // list by what the `[]` that made it has seen, and with every caller making them Chrome
-  // prepared long texts 5-11% slower and Firefox walked CJK lines 12% slower. A paragraph's
-  // lists are its caller's, typed there by a push and a pop (RESEARCH.md, Keeping Work
-  // Bounded, JavaScript Engines, under A list made where it is filled).
-  const widths: number[] = paragraph === null ? [] : paragraph.widths
+  // A handle's widths and advances are made here, where they are filled, and not by a caller:
+  // V8 types a list by what the `[]` that made it has seen, and with every caller making them
+  // Chrome prepared long texts 5-11% slower and Firefox walked CJK lines 12% slower. A
+  // paragraph's are made for the first of its items measured, by the `[]` that makes a text's,
+  // and start with what its builder made before that item, an object or a padded item's start
+  // edge (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made where it is
+  // filled).
+  const makes = paragraph === null || !paragraph.measured
+  const widths: number[] = makes ? [] : paragraph.widths
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
   // walkers, layout()'s count and rich-inline layout read where the scan gives no break.
   const segmentFlags = paragraph === null ? new Uint8Array(to - from) : paragraph.segmentFlags
-  const breakableFitAdvances: (number[] | null)[] = paragraph === null ? [] : paragraph.breakableFitAdvances
+  const breakableFitAdvances: (number[] | null)[] = makes ? [] : paragraph.breakableFitAdvances
+  if (paragraph !== null && makes) {
+    for (let i = 0; i < paragraph.widths.length; i++) {
+      widths.push(paragraph.widths[i]!)
+      breakableFitAdvances.push(paragraph.breakableFitAdvances[i]!)
+    }
+  }
   const segments = includeSegments ? [] as string[] : null
   // Where the first measured segment goes in the lists.
   const base = widths.length
