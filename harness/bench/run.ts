@@ -162,7 +162,9 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
   // for the candidate, base, base and the candidate, so each build comes first and last as often. A round holds one
   // sample, so the report has no ratio for these documents and leaves the row out (report.ts): each copy's own cost is
   // read from the saved samples.
-  if (want('whole-solo')) {
+  // --rows=whole-solo-rich: the three rich documents the same way, one-item paragraphs, the mixed ones and the styled
+  // ones, for a base that isn't the candidate's code (main): what a page that holds one copy gets from each.
+  if (want('whole-solo') || want('whole-solo-rich')) {
     const made = documents(['whole', 'whole-plain'], seed, focus)
     const solo = (family: string, libraries: readonly string[]): void => {
       const from = made.find(d => d.family === family)!
@@ -171,9 +173,15 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
         out.push({ ...from, id, row: 'solo', seed: `${seed}/${id}`, library: libraries[k]! })
       }
     }
-    solo('whole-plain-alone', ['base', 'candidate'])
-    solo('whole-chat', ['base', 'candidate', 'candidate', 'base'])
-    solo('whole-plain-after-rich', ['candidate', 'base', 'base', 'candidate'])
+    if (want('whole-solo')) {
+      solo('whole-plain-alone', ['base', 'candidate'])
+      solo('whole-chat', ['base', 'candidate', 'candidate', 'base'])
+      solo('whole-plain-after-rich', ['candidate', 'base', 'base', 'candidate'])
+    } else {
+      solo('whole-one', ['base', 'candidate', 'candidate', 'base'])
+      solo('whole-chat', ['candidate', 'base', 'base', 'candidate'])
+      solo('whole-styled', ['base', 'candidate', 'candidate', 'base'])
+    }
   }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
