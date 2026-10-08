@@ -172,7 +172,7 @@ async function runDoc(doc: Doc, wait: (ms: number) => Promise<void>): Promise<Do
     const at = libs.map(() => 0)
     const plain = (copy: number, count: number): void => {
       const list: unknown[] = []
-      for (let i = 0; i < count; i++) list.push(texts[at[copy]!++ % texts.length]!)
+      for (let i = 0; i < count; i++) list.push(texts[at[copy]!++ % texts.length])
       sink += libs[copy]!.lib.run('prepare', list, [320], 1, doc.font, doc.options)
     }
     await pause()
