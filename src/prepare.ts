@@ -331,8 +331,11 @@ export function measureAnalysis(
   // Chrome prepared long texts 5-11% slower and Firefox walked CJK lines 12% slower. A
   // paragraph's are made for the first of its items measured, by the `[]` that makes a text's,
   // and start with what its builder made before that item, an object or a padded item's start
-  // edge (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made where it is
-  // filled).
+  // edge, which no paragraph of the chat demo has. Made by the builder, they cost Chrome 154
+  // 5-9% of plain text prepared after a page's first rich paragraphs; made there and given a
+  // fraction to hold, they cost Safari 27 14-61% of the line functions on a page whose widths
+  // are all whole (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made
+  // where it is filled).
   const makes = paragraph === null || !paragraph.measured
   const widths: number[] = makes ? [] : paragraph.widths
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
