@@ -25,6 +25,8 @@ export type Doc = {
   fresh?: { batches: string[][]; units: number[] }
   // Scratch (rp3-whole-rich): count, for each copy of the library, the numbers in its paragraphs' lists that aren't whole.
   checkWhole?: boolean
+  // Scratch (rp3-whole-rich): measure these characters in these fonts with the page's own Canvas (FontProbe).
+  probe?: { fonts: string[]; characters: string }
 }
 // Scratch (rp3-whole-rich). What one copy's paragraphs hold: the handles its line operations ran on and every new batch
 // prepared again. `widths` counts the numbers in every list named `widths`, `others` those in every other list;
@@ -34,8 +36,11 @@ export type WholeCheck = { label: string; paragraphs: number; widths: number; wi
 // no list of these paragraphs holds it, and where it is a fraction V8 comes to hold every measured width as a double
 // (the notes of the plain trial of 2026-10-07), so it says what a list of whole widths is in Chrome.
 export type SpaceWidth = { font: string; space: number }
+// Scratch (rp3-whole-rich). The font probe: for each font, how many of the characters measure a width that isn't
+// whole, alone, with the first such character and its width, and a space's width.
+export type FontProbe = { font: string; characters: number; fractions: number; example: string; space: number }
 export type DocResult =
-  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[]; spaces?: SpaceWidth[] }
+  | { id: string; timerStep: number; start: Snapshot; end: Snapshot; ops: Array<{ op: string; rounds: Sample[][] }>; whole?: WholeCheck[]; spaces?: SpaceWidth[]; probe?: FontProbe[] }
   | { id: string; timerStep: number; start: Snapshot; end: Snapshot; label: string; compileMs: number; runMs: number; batches: Sample[] }
 
 type Library = { prepare: (kind: string, texts: unknown[], font: string, options: object) => unknown[]; run: (op: string, data: unknown[], widths: number[], reps: number, font: string, options: object) => number }
@@ -174,6 +179,22 @@ async function runDoc(doc: Doc): Promise<DocResult> {
     ops.push({ op: spec.op, rounds })
   }
   document.body.dataset['sink'] = String(sink)
+  if (doc.probe !== undefined) {
+    const context = new OffscreenCanvas(1, 1).getContext('2d')!
+    const probe: FontProbe[] = []
+    for (const font of doc.probe.fonts) {
+      context.font = font
+      const entry: FontProbe = { font, characters: doc.probe.characters.length, fractions: 0, example: '', space: context.measureText(' ').width }
+      for (let i = 0; i < doc.probe.characters.length; i++) {
+        const width = context.measureText(doc.probe.characters[i]!).width
+        if (Number.isInteger(width)) continue
+        entry.fractions++
+        if (entry.example === '') entry.example = `${doc.probe.characters[i]!} ${width}`
+      }
+      probe.push(entry)
+    }
+    return { id: doc.id, timerStep, start, end: snap(), ops, probe }
+  }
   if (doc.checkWhole !== true) return { id: doc.id, timerStep, start, end: snap(), ops }
   // Scratch (rp3-whole-rich). After every round was timed: this loop reads every copy's lists, and JavaScriptCore
   // converts a list of integers to doubles where one loop has read both kinds, which before the timing would undo the

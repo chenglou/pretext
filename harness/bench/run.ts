@@ -122,6 +122,19 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
       out[out.length - 1]!.checkWhole = true
     }
   }
+  // Scratch (rp3-whole-rich), --rows=whole-probe: no operation; the page measures every distinct character of the
+  // whole-width messages in each of these fonts and counts the widths that aren't whole (page.ts, FontProbe).
+  if (want('whole-probe')) {
+    const characters = [...new Set(wholeMessages().join('').split(''))].join('')
+    const fonts: string[] = []
+    for (const family of ['"PingFang TC"', '"PingFang SC"', '"Heiti TC"', '"Songti TC"', '"Hiragino Sans"', '"Hiragino Mincho ProN"']) {
+      for (const size of family === '"PingFang TC"' ? [10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 24] : [12, 14, 16, 18, 20]) {
+        for (const weight of [400, 500, 600, 700]) for (const style of ['', 'italic ']) fonts.push(`${style}${weight} ${size}px ${family}`)
+      }
+    }
+    doc('rich', 'whole-probe', STYLE.cjk.lang, STYLE.cjk.font, {}, [])
+    out[out.length - 1]!.probe = { fonts, characters }
+  }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!
     const style = STYLE[family]
@@ -216,6 +229,8 @@ async function session(browser: BrowserKind, docs: Planned[], bundles: Record<st
         if (counted !== undefined) {
           console.log(`${browser}: ${d.id}: ${counted.map(w => `${w.label} ${w.paragraphs} paragraphs, ${w.widthFractions} of ${w.widths} widths not whole, ${w.otherFractions} of ${w.others} other numbers${w.example === '' ? '' : ` (${w.example})`}`).join('; ')}`)
         }
+        const probed = 'ops' in body.result! ? body.result.probe : undefined
+        if (probed !== undefined) for (const f of probed) console.log(`${browser}: probe: ${f.font}: ${f.fractions} of ${f.characters} characters not whole${f.example === '' ? '' : ` (${f.example})`}; a space ${f.space}`)
         const spaces = 'ops' in body.result! ? body.result.spaces : undefined
         if (spaces !== undefined) console.log(`${browser}: ${d.id}: a space is ${spaces.map(f => `${f.space}px in ${f.font}`).join(', ')}`)
         attempt = 0
