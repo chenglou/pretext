@@ -321,10 +321,11 @@ export function walkPreparedLinesRaw(
 }
 
 // The text's line count and its widest line: the walk's lines, with no visitor.
-// Counts run by the walker leave its visitor call unrun, where V8 deoptimizes: Chrome 154 walked
-// one-item CJK paragraphs 9 to 14% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
-// The fast path's loop is the walker's, written again: with its line start in a function both
-// call, Chrome 154 counted 3 to 5% slower and Firefox 156 walked up to 13% slower (the same entry).
+// Run by the walker, with its visitor left out, the count left Chrome 154 walking one-item CJK
+// paragraphs 9 to 14% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
+// The fast path's loop is the walker's, written again: with the line start in a function both
+// call, Chrome 154 counted and walked plain Latin and CJK text 4 to 6% slower and Firefox 156
+// counted plain CJK text 2% slower, with Safari 27 level (the same entry).
 export function measurePreparedLineStats(prepared: PreparedLineData, maxWidth: number): LineStats {
   const stats = { lineCount: 0, maxLineWidth: 0 }
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }

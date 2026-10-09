@@ -812,7 +812,7 @@ function setEmptyObjectFacts(
 // spacing and hanging spaces, has the counts.
 // The line is stepped from the paragraph's start, as the stream steps one, and a line start found
 // after it is a second line's, which leaves the paragraph without a whole one.
-// A walk hands walkPreparedLinesRaw() a second visitor, and Firefox 156 inlines neither: it walked
+// Found by a walk, with a visitor of its own at every preparation, it left Firefox 156 walking
 // one-item CJK paragraphs 5 to 8% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
 function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichInline {
   const { data } = flow
