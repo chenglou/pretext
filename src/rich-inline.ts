@@ -280,7 +280,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // The paragraph's lists. Its widths and advances are the ones measureAnalysis() makes for the
   // first item it measures (below), and each later item's measurement adds its segments to them;
   // these two hold what comes before that item, an object or a padded item's start edge, and are
-  // the lists of a paragraph with no item to measure.
+  // the lists of a paragraph with no item to measure. The paragraph's segments so far are counted
+  // by `segments`, one list from its first segment to its last.
   let widths: number[] = []
   const flags = new Uint8Array(count + padded)
   let breakableFitAdvances: (number[] | null)[] = []
@@ -328,13 +329,13 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     const offset = offsets[analysis.starts[from]!]!
     let index = itemSegments.length === 0 ? 0 : itemSegments.length - 1
     while (index + 1 < starts.length && starts[index + 1]! <= offset) index++
-    while (itemSegments.length <= index) itemSegments.push(widths.length)
+    while (itemSegments.length <= index) itemSegments.push(segments.length)
     const itemEnd = index + 1 < starts.length ? starts[index + 1]! : source.length
     let to = from + 1
     while (to < count && offsets[analysis.starts[to]!]! < itemEnd) to++
     const item = items[index]!
     const previousItemStart = itemStart
-    itemStart = widths.length
+    itemStart = segments.length
 
     if (item.text === undefined || atomic[index]) {
       // One object: a box's width, or the width of the item's text on a line of its own, laid out
@@ -369,7 +370,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         simple = false
         hasEmptyObject = true
       }
-      flags[widths.length] = OBJECT
+      flags[segments.length] = OBJECT
       widths.push(width)
       segments.push(text)
       breakableFitAdvances.push(null)
@@ -384,7 +385,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       // An item of only collapsible white space, as between two styled words: its one space, as
       // measureAnalysis() measures one.
       if (letterSpacing !== 0) simple = false
-      flags[widths.length] = SPACE | (analysis.flags[from]! & (UNBROKEN | RETURNABLE)) | (letterSpacing !== 0 ? SPACED : 0)
+      flags[segments.length] = SPACE | (analysis.flags[from]! & (UNBROKEN | RETURNABLE)) | (letterSpacing !== 0 ? SPACED : 0)
       widths.push(getSpaceWidth(getFontMeasurement(item.font, language, letterSpacing !== 0)) + (spacingsDiffer ? letterSpacing : 0))
       segments.push(' ')
       breakableFitAdvances.push(null)
@@ -411,7 +412,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       while (first < to && ((analysis.flags[first]! & KIND_BITS) === SOFT_HYPHEN || (first === from && (analysis.flags[from]! & KIND_BITS) === SPACE))) first++
       const firstKind = first < to ? analysis.flags[first]! & KIND_BITS : TEXT
       if (firstKind === PRESERVED_SPACE || firstKind === TAB || firstKind === HARD_BREAK || (firstKind === ZERO_WIDTH_BREAK && first === from)) {
-        const at = widths.length
+        const at = segments.length
         const afterObject = at > 0 && (flags[at - 1]! & KIND_BITS) === OBJECT
         // Whether the item follows preserved spaces that follow text in their own text item. Blink
         // ends a text item at each character it makes a control item (IsControlItemCharacter,
@@ -469,7 +470,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     if (to === from + 1 && analysis.texts[from] === item.text) analysis.texts[from] = item.text
     // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
     // what else measurement gives them, from the item's first segment.
-    const itemAt = widths.length
+    const itemAt = segments.length
     const sub = measureAnalysis(analysis, from, to, item.font, false, letterSpacing, profile, language, true, lists)
     if (lists === null) {
       // The first item measured is measured as a text is, with lists of its own, and its widths
@@ -584,7 +585,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
     from = to
   }
-  const segmentCount = widths.length
+  const segmentCount = segments.length
   while (itemSegments.length <= items.length) itemSegments.push(segmentCount)
   const segmentFlags = segmentCount === flags.length ? flags : flags.subarray(0, segmentCount)
   // A paragraph whose lines return from an unfit hyphen marks every break the scan gives before
