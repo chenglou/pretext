@@ -277,14 +277,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const offsets = paragraph.sourceOffsets!
   const count = analysis.flags.length
 
-  // The paragraph's lists, which each item's measurement adds its segments to. Its widths and
-  // advances are the lists measureAnalysis() makes for the first item it measures, as it makes a
-  // text's; these two hold what comes before that item, an object or a padded item's start edge,
-  // and are the lists of a paragraph with no item to measure.
+  // The paragraph's lists. Its widths and advances are the ones measureAnalysis() makes for the
+  // first item it measures (below), and each later item's measurement adds its segments to them;
+  // these two hold what comes before that item, an object or a padded item's start edge, and are
+  // the lists of a paragraph with no item to measure.
   let widths: number[] = []
   const flags = new Uint8Array(count + padded)
   let breakableFitAdvances: (number[] | null)[] = []
-  const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances, measured: false }
+  let lists: ParagraphLists | null = null
   const segments: string[] = []
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
@@ -467,14 +467,23 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // text, and a string the caller hands in again keeps its hash, where the slice is hashed anew
     // at every preparation.
     if (to === from + 1 && analysis.texts[from] === item.text) analysis.texts[from] = item.text
-    // The item's segments, measured in its font onto the end of the paragraph's lists, which are
-    // from here on the lists they went on; `sub` holds what else measurement gives them, from the
-    // item's first segment.
+    // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
+    // what else measurement gives them, from the item's first segment.
     const itemAt = widths.length
     const sub = measureAnalysis(analysis, from, to, item.font, false, letterSpacing, profile, language, true, lists)
-    widths = lists.widths = sub.widths
-    breakableFitAdvances = lists.breakableFitAdvances = sub.breakableFitAdvances
-    lists.measured = true
+    if (lists === null) {
+      // The first item measured is measured as a text is, with lists of its own, and its widths
+      // and advances are the paragraph's from here on, after what the paragraph made before the
+      // item; its flags go into the paragraph's.
+      for (let i = itemAt - 1; i >= 0; i--) {
+        sub.widths.unshift(widths[i]!)
+        sub.breakableFitAdvances.unshift(breakableFitAdvances[i]!)
+      }
+      for (let i = 0; i < sub.segmentFlags.length; i++) flags[itemAt + i] = sub.segmentFlags[i]!
+      widths = sub.widths
+      breakableFitAdvances = sub.breakableFitAdvances
+      lists = { widths, segmentFlags: flags, breakableFitAdvances }
+    }
     simple &&= sub.simpleLineCountFastPath
     if (readsItemFonts) {
       // The gap before the hyphen is the letter spacing after the grapheme before it.
