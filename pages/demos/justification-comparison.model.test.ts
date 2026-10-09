@@ -1,6 +1,5 @@
 // The justification demo's model under a stand-in Canvas, at every other column width the slider offers: the optimal
 // column never paints a line wider than the column, and each painted column's lines keep the source text in order.
-// Before #40 the optimal column fit candidates to spacing it didn't paint and overflowed.
 import { running } from '../../harness/watchdog.ts'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 

@@ -1,11 +1,15 @@
 import {
+  layout,
   layoutNextLine,
   layoutWithLines,
+  measureNaturalWidth,
+  prepare,
   prepareWithSegments,
-  walkLineRanges,
   type LayoutCursor,
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
+import { breaksInsideWord, hasActiveTextSelection, positionedLinesEqual, setNodeCount, type PositionedLine } from './line-nodes.ts'
+import { carveTextLineSlots, type Interval } from './wrap-geometry.ts'
 
 const BODY_FONT = '18px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const BODY_LINE_HEIGHT = 30
@@ -23,18 +27,6 @@ const NARROW_COL_GAP = 20
 const NARROW_BOTTOM_GAP = 16
 const NARROW_ORB_SCALE = 0.58
 const NARROW_ACTIVE_ORBS = 3
-
-type Interval = {
-  left: number
-  right: number
-}
-
-type PositionedLine = {
-  x: number
-  y: number
-  width: number
-  text: string
-}
 
 type TextProjection = {
   headlineLeft: number
@@ -145,25 +137,6 @@ function getRequiredDiv(id: string): HTMLDivElement {
   const element = document.getElementById(id)
   if (!(element instanceof HTMLDivElement)) throw new Error(`#${id} not found`)
   return element
-}
-
-function carveTextLineSlots(base: Interval, blocked: Interval[]): Interval[] {
-  let slots = [base]
-  for (let blockedIndex = 0; blockedIndex < blocked.length; blockedIndex++) {
-    const interval = blocked[blockedIndex]!
-    const next: Interval[] = []
-    for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-      const slot = slots[slotIndex]!
-      if (interval.right <= slot.left || interval.left >= slot.right) {
-        next.push(slot)
-        continue
-      }
-      if (interval.left > slot.left) next.push({ left: slot.left, right: interval.left })
-      if (interval.right < slot.right) next.push({ left: interval.right, right: slot.right })
-    }
-    slots = next
-  }
-  return slots.filter(slot => slot.right - slot.left >= MIN_SLOT_WIDTH)
 }
 
 function circleIntervalForBand(
@@ -284,13 +257,7 @@ const pullquoteSpecs: PullquoteSpec[] = [
 const DROP_CAP_SIZE = BODY_LINE_HEIGHT * DROP_CAP_LINES - 4
 const DROP_CAP_FONT = `700 ${DROP_CAP_SIZE}px ${HEADLINE_FONT_FAMILY}`
 const DROP_CAP_TEXT = BODY_TEXT[0]!
-const preparedDropCap = prepareWithSegments(DROP_CAP_TEXT, DROP_CAP_FONT)
-
-let dropCapWidth = 0
-walkLineRanges(preparedDropCap, 9999, line => {
-  dropCapWidth = line.width
-})
-const DROP_CAP_TOTAL_W = Math.ceil(dropCapWidth) + 10
+const DROP_CAP_TOTAL_W = Math.ceil(measureNaturalWidth(prepare(DROP_CAP_TEXT, DROP_CAP_FONT))) + 10
 
 const dropCapEl = document.createElement('div')
 dropCapEl.className = 'drop-cap'
@@ -300,17 +267,17 @@ dropCapEl.style.letterSpacing = '0px'
 dropCapEl.style.lineHeight = `${DROP_CAP_SIZE}px`
 stage.appendChild(dropCapEl)
 
-const linePool: HTMLSpanElement[] = []
-const headlinePool: HTMLSpanElement[] = []
-const pullquoteLinePool: HTMLSpanElement[] = []
-const pullquoteBoxPool: HTMLDivElement[] = []
+const bodyLineNodes: HTMLSpanElement[] = []
+const headlineLineNodes: HTMLSpanElement[] = []
+const pullquoteLineNodes: HTMLSpanElement[] = []
+const pullquoteBoxNodes: HTMLDivElement[] = []
 const domCache = {
   stage, // cache lifetime: same as page
   dropCap: dropCapEl, // cache lifetime: same as page
-  bodyLines: linePool, // cache lifetime: on body line-count changes
-  headlineLines: headlinePool, // cache lifetime: on headline line-count changes
-  pullquoteLines: pullquoteLinePool, // cache lifetime: on pullquote line-count changes
-  pullquoteBoxes: pullquoteBoxPool, // cache lifetime: on pullquote-count changes
+  bodyLines: bodyLineNodes, // cache lifetime: on body line-count changes
+  headlineLines: headlineLineNodes, // cache lifetime: on headline line-count changes
+  pullquoteLines: pullquoteLineNodes, // cache lifetime: on pullquote line-count changes
+  pullquoteBoxes: pullquoteBoxNodes, // cache lifetime: on pullquote-count changes
   orbs: orbDefs.map(definition => createOrbEl(definition.color)), // cache lifetime: same as orb defs
 }
 
@@ -337,17 +304,6 @@ const st: AppState = {
 
 let committedTextProjection: TextProjection | null = null
 
-function syncPool<T extends HTMLElement>(pool: T[], count: number, create: () => T): void {
-  while (pool.length < count) {
-    const element = create()
-    stage.appendChild(element)
-    pool.push(element)
-  }
-  for (let index = 0; index < pool.length; index++) {
-    pool[index]!.style.display = index < count ? '' : 'none'
-  }
-}
-
 let cachedHeadlineWidth = -1
 let cachedHeadlineHeight = -1
 let cachedHeadlineMaxSize = -1
@@ -372,16 +328,7 @@ function fitHeadline(maxWidth: number, maxHeight: number, maxSize: number = 92):
     const font = `700 ${size}px ${HEADLINE_FONT_FAMILY}`
     const lineHeight = Math.round(size * 0.93)
     const prepared = prepareWithSegments(HEADLINE_TEXT, font, { letterSpacing: HEADLINE_LETTER_SPACING })
-    let breaksWord = false
-    let lineCount = 0
-
-    walkLineRanges(prepared, maxWidth, line => {
-      lineCount++
-      if (line.end.graphemeIndex !== 0) breaksWord = true
-    })
-
-    const totalHeight = lineCount * lineHeight
-    if (!breaksWord && totalHeight <= maxHeight) {
+    if (!breaksInsideWord(prepared, maxWidth) && layout(prepared, maxWidth, lineHeight).height <= maxHeight) {
       best = size
       const result = layoutWithLines(prepared, maxWidth, lineHeight)
       bestLines = result.lines.map((line, index) => ({
@@ -443,7 +390,7 @@ function layoutColumn(
       blocked.push({ left: rect.x, right: rect.x + rect.w })
     }
 
-    const slots = carveTextLineSlots({ left: regionX, right: regionX + regionW }, blocked)
+    const slots = carveTextLineSlots({ left: regionX, right: regionX + regionW }, blocked, MIN_SLOT_WIDTH)
     if (slots.length === 0) {
       lineTop += lineHeight
       continue
@@ -501,32 +448,10 @@ function isSelectableTextTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.line, .headline-line, .pullquote-line') !== null
 }
 
-function hasActiveTextSelection(): boolean {
-  const selection = window.getSelection()
-  return selection !== null && !selection.isCollapsed && selection.rangeCount > 0
-}
-
 function clearQueuedPointerEvents(): void {
   st.events.pointerDown = null
   st.events.pointerMove = null
   st.events.pointerUp = null
-}
-
-function positionedLinesEqual(a: PositionedLine[], b: PositionedLine[]): boolean {
-  if (a.length !== b.length) return false
-  for (let index = 0; index < a.length; index++) {
-    const left = a[index]!
-    const right = b[index]!
-    if (
-      left.x !== right.x ||
-      left.y !== right.y ||
-      left.width !== right.width ||
-      left.text !== right.text
-    ) {
-      return false
-    }
-  }
-  return true
 }
 
 function textProjectionEqual(a: TextProjection | null, b: TextProjection): boolean {
@@ -545,11 +470,11 @@ function textProjectionEqual(a: TextProjection | null, b: TextProjection): boole
 }
 
 function projectTextProjection(projection: TextProjection): void {
-  syncPool(domCache.headlineLines, projection.headlineLines.length, () => {
+  setNodeCount(domCache.headlineLines, projection.headlineLines.length, () => {
     const element = document.createElement('span')
     element.className = 'headline-line'
     return element
-  })
+  }, domCache.stage)
   for (let index = 0; index < projection.headlineLines.length; index++) {
     const element = domCache.headlineLines[index]!
     const line = projection.headlineLines[index]!
@@ -561,11 +486,11 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.lineHeight = `${projection.headlineLineHeight}px`
   }
 
-  syncPool(domCache.bodyLines, projection.bodyLines.length, () => {
+  setNodeCount(domCache.bodyLines, projection.bodyLines.length, () => {
     const element = document.createElement('span')
     element.className = 'line'
     return element
-  })
+  }, domCache.stage)
   for (let index = 0; index < projection.bodyLines.length; index++) {
     const element = domCache.bodyLines[index]!
     const line = projection.bodyLines[index]!
@@ -577,11 +502,11 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.lineHeight = `${projection.bodyLineHeight}px`
   }
 
-  syncPool(domCache.pullquoteLines, projection.pullquoteLines.length, () => {
+  setNodeCount(domCache.pullquoteLines, projection.pullquoteLines.length, () => {
     const element = document.createElement('span')
     element.className = 'pullquote-line'
     return element
-  })
+  }, domCache.stage)
   for (let index = 0; index < projection.pullquoteLines.length; index++) {
     const element = domCache.pullquoteLines[index]!
     const line = projection.pullquoteLines[index]!
@@ -933,11 +858,11 @@ function render(now: number): boolean {
   domCache.dropCap.style.left = `${column0X}px`
   domCache.dropCap.style.top = `${bodyTop}px`
 
-  syncPool(domCache.pullquoteBoxes, pullquoteRects.length, () => {
+  setNodeCount(domCache.pullquoteBoxes, pullquoteRects.length, () => {
     const element = document.createElement('div')
     element.className = 'pullquote-box'
     return element
-  })
+  }, domCache.stage)
 
   for (let index = 0; index < pullquoteRects.length; index++) {
     const pullquote = pullquoteRects[index]!

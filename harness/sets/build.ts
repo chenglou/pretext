@@ -67,7 +67,7 @@ export function parseFont(shorthand: string): CssFont {
 }
 
 // The web fonts the harness serves (harness/fonts/fonts.json) that a font family list starts with.
-const FIXTURE_FAMILIES = ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'ProbeShantell', 'Shantell Sans', 'Inter', 'Roboto']
+const FIXTURE_FAMILIES = (JSON.parse(readFileSync(join(import.meta.dir, '../fonts/fonts.json'), 'utf8')) as Array<{ family: string }>).map(fixture => fixture.family)
 
 export function fixturesOf(runs: readonly TextRun[]): string[] {
   const out: string[] = []

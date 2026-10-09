@@ -2,7 +2,7 @@ import {
   computeBubbleRender,
   formatPixelCount,
   prepareBubbleTexts,
-} from './bubbles-shared.ts'
+} from './bubbles.model.ts'
 
 type State = {
   requestedChatWidth: number
@@ -12,14 +12,12 @@ type State = {
 }
 
 const domCache = {
-  chatShrink: getRequiredDiv('chat-shrink'),
   slider: getRequiredInput('slider'),
   cssWaste: getRequiredSpan('css-waste'),
-  shrinkWaste: getRequiredSpan('shrink-waste'),
 }
 
-const shrinkNodes = getChatMessageNodes(domCache.chatShrink)
-const preparedBubbles = prepareBubbleTexts(shrinkNodes.map(readNodeText))
+const shrinkNodes = bubblesPage.dom.shrinkBubbles
+const preparedBubbles = prepareBubbleTexts(bubblesPage.messages.map(message => message.text))
 const st: State = {
   requestedChatWidth: bubblesPage.defaultChatWidth,
   events: {
@@ -37,17 +35,7 @@ window.addEventListener('resize', () => {
   scheduleRender()
 })
 
-document.fonts.ready.then(() => {
-  scheduleRender()
-})
-
 scheduleRender()
-
-function getRequiredDiv(id: string): HTMLDivElement {
-  const element = document.getElementById(id)
-  if (!(element instanceof HTMLDivElement)) throw new Error(`#${id} not found`)
-  return element
-}
 
 function getRequiredInput(id: string): HTMLInputElement {
   const element = document.getElementById(id)
@@ -59,14 +47,6 @@ function getRequiredSpan(id: string): HTMLSpanElement {
   const element = document.getElementById(id)
   if (!(element instanceof HTMLSpanElement)) throw new Error(`#${id} not found`)
   return element
-}
-
-function getChatMessageNodes(chat: HTMLDivElement): HTMLDivElement[] {
-  return Array.from(chat.querySelectorAll<HTMLDivElement>('.msg'))
-}
-
-function readNodeText(node: HTMLDivElement): string {
-  return node.textContent ?? ''
 }
 
 function scheduleRender(): void {
@@ -98,5 +78,4 @@ function render(): void {
   }
 
   domCache.cssWaste.textContent = formatPixelCount(renderState.totalWastedPixels)
-  domCache.shrinkWaste.textContent = '0'
 }

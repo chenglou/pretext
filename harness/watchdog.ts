@@ -18,7 +18,7 @@ const start = Date.now()
 // The seconds since `start` when the main thread last ran a timer.
 const clock = new Int32Array(new SharedArrayBuffer(4))
 setInterval(() => Atomics.store(clock, 0, Math.floor((Date.now() - start) / 1000)), 1000).unref()
-// What the process is running, for the message: a test file names itself while bun test runs it.
+// What the process is running, for the message: a test file may name itself while bun test runs it.
 const label = new Uint8Array(new SharedArrayBuffer(256))
 export function running(what: string): void {
   label.fill(0)

@@ -1,5 +1,6 @@
-// main's engine facts as browser cases. src/layout.test.ts pins 36 rules main learned about the engines (research/TESTS.md
-// §1c in the rebuild), each against a fake Canvas and one engine profile, and 33 of them use texts no browser case holds.
+// main's engine facts as browser cases. src/layout.test.ts pins 36 rules main learned about the engines
+// (rebuild/research/TESTS.md §1c on branch rebuild-20260916), each against a fake Canvas and one engine profile, and 33
+// of them use texts no browser case holds.
 // data/engine-facts.json keeps the texts of the 28 whose tests lay out plain text, taken from the tests once, with the
 // white-space and word-break modes and page languages each test names. Each fact's test name and line number are
 // those of main before #340 (harness/README.md, Adding a case), and the number names its family, so both stay as the
@@ -8,6 +9,9 @@
 // test is now "a tab nearer its stop than the engine's minimum takes the stop after". The fact of Firefox's tab that
 // doesn't hang has a second row too: a word, a tab, a space and a tab after a break, where Firefox ends no line inside
 // the run of white space, so its line returns to the break or, on a line without one, wraps before the second tab.
+// The fact of the WebKit profile's lone carriage return runs in Menlo alone, a font on WebKit's fixed-pitch shortcut,
+// where Safari gives the carriage return a character's width and the profile none: the catalog holds the rule in
+// proportional fonts, and this row holds the fonts it gives up (RESEARCH.md, Decisions Log, 2026-10-06).
 // The ones that lay out rich items are in rich.ts, and three read only the user agent. A fact added since keeps its
 // test's line as of the pull request or commit that added it, which harness/README.md names (Adding a case), and names
 // the paragraph directions it runs in where a browser's lines turn on them (left-to-right otherwise). Here each text

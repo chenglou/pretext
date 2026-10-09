@@ -131,17 +131,15 @@ export const HYPHEN_EXCEPTIONS: Record<string, readonly string[]> = {
 }
 
 export const PREFIXES = [
-  'anti', 'auto', 'be', 'bi', 'co', 'com', 'con', 'contra', 'counter', 'de',
-  'dis', 'en', 'em', 'ex', 'extra', 'fore', 'hyper', 'il', 'im', 'in', 'inter',
-  'intra', 'ir', 'macro', 'mal', 'micro', 'mid', 'mis', 'mono', 'multi', 'non',
-  'omni', 'out', 'over', 'para', 'poly', 'post', 'pre', 'pro', 'pseudo',
-  'quasi', 're', 'retro', 'semi', 'sub', 'super', 'sur', 'syn', 'tele', 'trans',
-  'tri', 'ultra', 'un', 'under',
+  'anti', 'auto', 'be', 'bi', 'co', 'de', 'dis', 'en', 'em', 'ex', 'fore',
+  'hyper', 'il', 'im', 'in', 'ir', 'macro', 'mal', 'micro', 'mid', 'mis',
+  'mono', 'multi', 'non', 'omni', 'out', 'over', 'para', 'poly', 'post', 'pre',
+  'pro', 'pseudo', 'quasi', 're', 'semi', 'sub', 'super', 'sur', 'syn', 'tele',
+  'trans', 'tri', 'ultra', 'un',
 ] as const
 
 export const SUFFIXES = [
-  'able', 'ible', 'tion', 'sion', 'ment', 'ness', 'ous', 'ious', 'eous', 'ful',
-  'less', 'ive', 'ative', 'itive', 'al', 'ial', 'ical', 'ical', 'ing', 'ling',
-  'ed', 'er', 'est', 'ism', 'ist', 'ity', 'ety', 'ty', 'ence', 'ance', 'ly',
-  'fy', 'ify', 'ize', 'ise', 'ure', 'ture',
+  'able', 'ible', 'tion', 'sion', 'ment', 'ness', 'ous', 'ful', 'less', 'ive',
+  'al', 'ing', 'ed', 'er', 'est', 'ism', 'ist', 'ity', 'ety', 'ty', 'ence',
+  'ance', 'ly', 'fy', 'ize', 'ise', 'ure',
 ] as const

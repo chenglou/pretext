@@ -10,7 +10,6 @@
         "marked": "^17.0.5",
         "oxlint": "^1.51.0",
         "oxlint-tsgolint": "^0.15.0",
-        "tsgolint": "^0.0.1",
         "typescript": "6.0.2",
       },
     },
@@ -197,8 +196,6 @@
     "strip-json-comments": ["strip-json-comments@5.0.3", "", {}, "sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw=="],
 
     "tinyglobby": ["tinyglobby@0.2.16", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg=="],
-
-    "tsgolint": ["tsgolint@0.0.1", "", {}, "sha512-cSh6jgqMsVrzaRipcTBDcfiUo3iTK92gukInY0eeFP14ICe1pZjBC+yL1rVfQSBR72ZaBizmwsqEI4g1eqx1Eg=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 

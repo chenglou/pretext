@@ -134,7 +134,7 @@ function shuffled<T>(list: T[], seed: number): T[] {
 
 export async function record(browser: BrowserKind, cases: Case[], o: Options, io: Io): Promise<void> {
   const old = readRecordings(recordingsPath(io.root, browser))
-  const oldHistory = readHistory(historyPath(io.root, browser))
+  const oldHistory = readHistory(historyPath(io.root, browser), old?.env)
   let list = cases.filter(c => applies(c, browser))
   if (o.onlyNew) list = list.filter(c => old?.recordings.has(c.id) !== true && oldHistory?.cases.has(c.id) !== true)
   let sorted = list.slice().sort((a, b) => (a.id < b.id ? -1 : 1))
@@ -208,7 +208,7 @@ type Scored = {
 export async function check(browser: BrowserKind, cases: Case[], o: Options, io: Io): Promise<Scored> {
   const recorded = readRecordings(recordingsPath(io.root, browser))
   if (recorded === null) throw new Error(`${browser}: no recordings; run record first`)
-  const history = readHistory(historyPath(io.root, browser))?.cases ?? new Map<string, [Recording, Recording]>()
+  const history = readHistory(historyPath(io.root, browser), recorded.env)?.cases ?? new Map<string, [Recording, Recording]>()
   const path = acceptedPath(io.root, browser)
   const accepted = readAccepted(path)
   const varying = readVarying(varyingPath(io.root, browser))
@@ -313,7 +313,7 @@ export async function check(browser: BrowserKind, cases: Case[], o: Options, io:
   out.push(`  shrink-wrap, report only: ${shortBubbles} passing cases predict a widest line narrower than the browser's`)
   const inexact = allWidths.inexact === 0 ? '' : `; left out, ${head === null ? '' : `${sampleWidths.inexact} and `}${allWidths.inexact} lines that end in a space, recorded in whole pixels`
   out.push(`  line widths, report only: more than ${WIDTH_STEPS.join(' / ')} px from the recorded width are ${head === null ? '' : `${widthShares(sampleWidths)} of the sample's passing draws in claims, and `}${widthShares(allWidths)} of every passing case${inexact}`)
-  out.push(`  Canvas: ${units === 0 ? '-' : (1000 * calls / units).toFixed(1)} measureText calls per 1,000 units while preparing`)
+  out.push(`  Canvas: ${units === 0 ? '-' : (1000 * calls / units).toFixed(1)} measureText calls per 1,000 units of text while preparing`)
   const blocks = checkBlocks(browser, job.results, plan.unrecorded, verdict, updated, id => describe(byId.get(id)!, outcomes.get(id)!))
   for (let i = 0; i < blocks.length; i++) out.push(`  ${blocks[i]}`)
   io.log(out.join('\n'))

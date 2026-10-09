@@ -166,10 +166,6 @@ function boot(): void {
     scheduleRender()
   })
 
-  document.fonts.ready.then(() => {
-    scheduleRender()
-  })
-
   window.addEventListener('resize', () => {
     scheduleRender()
   })

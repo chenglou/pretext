@@ -4,7 +4,7 @@
 //   environment key. A line is `<id>\t<height>\t<line> <line> ...`, each line `<first>-<last>:<width>` with `-` for no
 //   visible character, or `<id>\terror\t<reason>`.
 // - harness/recordings/<browser>.history.txt: the cases whose two recordings put a character on another line (page
-//   history), both recordings, as `<id>\t<A|B>\t...`. They are never pinned.
+//   history), both recordings, as `<id>\t<A|B>\t...`, under the recordings' environment key. They are never pinned.
 // - harness/accepted/<browser>.txt: the failures a change accepted, under `## <reason>` headings, one `<id> <status>` per line.
 // - harness/varying/<browser>.txt: the cases whose predictions move with the browser's state, under `## <reason>`
 //   headings, one `<id> <kind>` per line: `runs` for one that moves between runs, predicted and printed but never
@@ -94,9 +94,12 @@ export function writeRecordings(path: string, file: RecordingFile): void {
   writeFileSync(path, `# env ${file.env}\n${sortedById(lines).join('\n')}${lines.length > 0 ? '\n' : ''}`)
 }
 
-export function readHistory(path: string): HistoryFile | null {
+// `recorded`: the environment key of the recordings whose page history the file lists. The two files are written
+// together under one key, so a history file under another came from elsewhere, and its cases would go unpinned.
+export function readHistory(path: string, recorded?: string): HistoryFile | null {
   const lines = readLines(path)
   if (lines === null) return null
+  if (recorded !== undefined && readEnv(lines, path) !== recorded) throw new Error(`${path} was written under\n  ${readEnv(lines, path)}\nbut its recordings under\n  ${recorded}\nRestore the two files from one commit.`)
   const cases = new Map<string, [Recording, Recording]>()
   for (let i = 1; i < lines.length; i += 2) {
     const [a, b] = [lines[i]!.split('\t'), lines[i + 1]?.split('\t') ?? []]

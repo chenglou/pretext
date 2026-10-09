@@ -4,16 +4,23 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize, relative } from 'node:path'
 
 // Code, data and docs cite a doc's section as `<DOC>.md, <Section>[, <Subsection>]` when a reason is longer than a
-// comment. Each citation has to name headings of that doc, so a heading renamed or a doc removed fails here instead of
-// leaving readers searching. A heading's text on either side of its colon counts too (`Part 3: Decisions Log`,
-// `Firefox: the late family names`), and so does it without a closing parenthesis (`Firefox (Gecko)` as `Firefox`).
-// After the first section, a part that starts in lower case is prose and ends the citation. RESEARCH.md is long enough
-// that citing it without a section says nothing. The rebuild's docs live on another branch and aren't checked.
+// comment. Each citation has to name headings of that doc, and a doc named with no section has to be in the repository,
+// so a heading renamed or a doc removed fails here instead of leaving readers searching. A doc is read by its path from
+// the root, or by its name alone where that is in upper case; a lower-case name with no folder isn't, since most are
+// another repository's (engineering.md, ui.md). Any mention counts, in prose too, so a doc that is gone can't be named
+// by its file name. A heading's text on either side of its colon counts too (`Part 3: Decisions Log`, `Firefox: the
+// late family names`), and so does it without a closing parenthesis (`Firefox (Gecko)` as `Firefox`). After the first
+// section, a part that starts in lower case is prose and ends the citation. RESEARCH.md is long enough that citing it
+// without a section says nothing. The rebuild's docs live on another branch and are cited under `rebuild/`, that other
+// repository's under `docs/`; neither is checked. A date after `Decisions Log` has to be the date of an entry there.
 const ROOT = join(import.meta.dir, '..')
-const SOURCES = new Bun.Glob('{src,harness,scripts,pages}/**/*.{ts,js,html,json,ndjson,txt}')
-const DOCS = ['*.md', 'harness/**/*.md', 'pages/**/*.md', 'corpora/**/*.md'].map(pattern => new Bun.Glob(pattern))
-const CITATION = /(?<![\w/.-])((?:[a-z]+\/)*[A-Z_]+\.md)`?,[ \t]+([^;()\n]+)/g
-const ANCHOR = /\]\(((?:\.\.?\/)*(?:[a-z]+\/)*[A-Z_]+\.md)#([\w-]+)\)/g
+const FILES = ['*.{ts,json,md}', '{src,harness,scripts,pages}/**/*.{ts,js,html,json,ndjson,txt}', '{harness,pages,corpora}/**/*.md']
+  .map(pattern => new Bun.Glob(pattern))
+const CITATION = /(?<![\w/.-])((?:[a-z-]+\/)+[\w-]+\.md|[A-Z_]+\.md)`?,[ \t]+([^;()\n]+)/g
+const DOC = /(?<![\w/.-])((?:[a-z-]+\/)+[\w-]+\.md|[A-Z_]+\.md)(?![\w-])/g
+const ELSEWHERE = /^(?:rebuild|docs)\//
+const LOG_DATES = /Decisions Log,\s+(\d{4}-\d{2}-\d{2}(?:(?:,| and)\s+\d{4}-\d{2}-\d{2})*)/g
+const ANCHOR = /\]\(((?:\.\.?\/)*(?:[a-z-]+\/)*[\w-]+\.md)#([\w-]+)\)/g
 
 function headings(doc: string): Set<string> | null {
   if (!existsSync(join(ROOT, doc))) return null
@@ -56,15 +63,18 @@ function namesNoHeading(section: string, names: Set<string>): boolean {
   return false
 }
 
-test('every section a doc citation names is a heading of that doc: a renamed heading would strand its citations', () => {
+test('every doc a citation names is in the repository, every section it names is a heading of that doc, and a Decisions Log date is an entry\'s: a removed doc, a renamed heading or a wrong date would strand its citations', () => {
   const docs = new Map<string, Set<string> | null>()
   const headingsOf = (doc: string): Set<string> | null => {
     if (!docs.has(doc)) docs.set(doc, headings(doc))
     return docs.get(doc)!
   }
+  const research = readFileSync(join(ROOT, 'RESEARCH.md'), 'utf8')
+  const logDates = new Set<string>()
+  for (const [, date] of research.slice(research.indexOf('\n## Part 3: Decisions Log')).matchAll(/^- \*\*(\d{4}-\d{2}-\d{2})/gm)) logDates.add(date!)
   const wrong: string[] = []
-  const paths = [...SOURCES.scanSync({ cwd: ROOT })]
-  for (let d = 0; d < DOCS.length; d++) paths.push(...DOCS[d]!.scanSync({ cwd: ROOT }))
+  const paths: string[] = []
+  for (let f = 0; f < FILES.length; f++) paths.push(...FILES[f]!.scanSync({ cwd: ROOT }))
   for (let p = 0; p < paths.length; p++) {
     const path = paths[p]!
     const isDoc = path.endsWith('.md')
@@ -83,9 +93,17 @@ test('every section a doc citation names is a heading of that doc: a renamed hea
         .replace(/\n(?![ \t]*\n)[ \t]*/g, ' ')
       : text.replace(/\n[ \t]*\/\/[ \t]*/g, ' ')
     for (const [, doc, section] of text.matchAll(CITATION)) {
-      if (doc!.startsWith('rebuild/')) continue
+      if (ELSEWHERE.test(doc!)) continue
       const names = headingsOf(doc!)
       if (names === null || namesNoHeading(section!, names)) wrong.push(`${path}: ${doc}, ${section!.trim()}`)
+    }
+    for (const [, doc] of text.matchAll(DOC)) {
+      if (!ELSEWHERE.test(doc!) && headingsOf(doc!) === null) wrong.push(`${path}: ${doc} isn't in the repository`)
+    }
+    for (const [, cited] of text.matchAll(LOG_DATES)) {
+      for (const [date] of cited!.matchAll(/\d{4}-\d{2}-\d{2}/g)) {
+        if (!logDates.has(date)) wrong.push(`${path}: Decisions Log, ${date} is no entry's date`)
+      }
     }
     if (/\(RESEARCH\.md\)/.test(text)) wrong.push(`${path}: RESEARCH.md without a section`)
   }

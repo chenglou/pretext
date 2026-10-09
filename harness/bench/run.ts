@@ -14,7 +14,8 @@ import { benchBundle, buildName, srcOf } from './lib.ts'
 import type { Doc, DocResult, OpSpec } from './page.ts'
 import { report, unconfirmed, type SessionResults } from './report.ts'
 import { createRng } from '../sets/build.ts'
-import { familyText, labels, MESSAGE_FAMILIES, reader, richItems, shapes, STYLE, units } from './texts.ts'
+import type { RichInlineItem } from '../../src/rich-inline.ts'
+import { chatItems, familyText, itemReader, labels, MESSAGE_FAMILIES, reader, richItems, shapes, STYLE, units } from './texts.ts'
 
 export const ROWS = ['new', 'fresh', 'rich', 'seen', 'resize', 'lines', 'worst'] as const
 const LABELS = ['base', 'candidate', 'control'] as const
@@ -24,6 +25,11 @@ const TARGET_MS = 50
 const SEEN_UNITS: Record<(typeof MESSAGE_FAMILIES)[number], number> = { latin: 40_000, cjk: 15_000, arabic: 40_000, thai: 30_000, mixed: 40_000 }
 const FRESH_UNITS: Record<(typeof MESSAGE_FAMILIES)[number], number> = { latin: 1000, cjk: 200, arabic: 1000, thai: 650, mixed: 1000 }
 const RICH_UNITS = 1000
+// A new batch of the chat documents holds four times the stress document's, whose size the length of the Latin text
+// caps (The Great Gatsby's opening, texts.ts). A round compares three batches, one a library, and 1,000 units of the
+// demo's paragraphs cost 180 to 1,900 µs per 1,000 units in Chrome by what they held, where batches of prose differ
+// less: main read 15-49% slower than itself in three sessions (RESEARCH.md, Evaluation Traps, Timing).
+const CHAT_UNITS = 4000
 const NEW_BATCHES = LABELS.length * (WARM + ROUNDS.new)
 const FRESH_ROUNDS = WARM + ROUNDS.fresh
 
@@ -68,13 +74,24 @@ export function documents(rows: readonly string[], seed: string, focus: boolean)
     const latin = readers.get('latin')!
     const batches = Array.from({ length: NEW_BATCHES }, () => latin.batch(RICH_UNITS)!.map(m => richItems(m, STYLE.latin.font)))
     const kept = reader('latin').batch(20_000)!.map(m => richItems(m, STYLE.latin.font))
-    const keptUnits = 20_000
-    doc('rich', 'latin', 'en', STYLE.latin.font, {}, [
-      { op: 'rich-new', batches, batchUnits: batches.map(items => items.reduce((n, list) => n + list.reduce((m, item) => m + item.text.length, 0), 0)), widths: [220] },
-      ...['rich-stats', 'rich-walk', 'rich-stream'].map(op => ({ op, texts: kept, textUnits: keptUnits, handles: 'rich' as const, widths: [180, 220, 260] })),
+    const itemUnits = (lists: RichInlineItem[][]): number => lists.reduce((n, list) => n + list.reduce((m, item) => m + item.text.length, 0), 0)
+    const rich = (family: string, newBatches: RichInlineItem[][][], texts: RichInlineItem[][]): void => doc('rich', family, 'en', STYLE.latin.font, {}, [
+      { op: 'rich-new', batches: newBatches, batchUnits: newBatches.map(itemUnits), widths: [220] },
+      ...['rich-stats', 'rich-walk', 'rich-stream'].map(op => ({ op, texts, textUnits: itemUnits(texts), handles: 'rich' as const, widths: [180, 220, 260] })),
       // The kept messages prepared again, where every item looks its font up and measures nothing.
-      { op: 'rich-seen', texts: kept, textUnits: keptUnits, widths: [220] },
+      { op: 'rich-seen', texts, textUnits: itemUnits(texts), widths: [220] },
     ])
+    // The stress items, a word or a space each; then the chat demo's messages as it prepares them, most of them one
+    // item, and its styled paragraphs alone, which no document before them prepared (texts.ts, chatItems). Each chat
+    // document's kept paragraphs are read before its new batches, so a batch's size doesn't decide which paragraphs
+    // the line operations run on.
+    rich('latin', batches, kept)
+    const chat = itemReader(chatItems())
+    const chatKept = chat.batch(20_000)
+    rich('chat', Array.from({ length: NEW_BATCHES }, () => chat.batch(CHAT_UNITS)), chatKept)
+    const styled = itemReader(chat.rest().filter(items => items.length > 1))
+    const styledKept = styled.batch(20_000)
+    rich('chat-styled', Array.from({ length: NEW_BATCHES }, () => styled.batch(CHAT_UNITS)), styledKept)
   }
   for (const family of MESSAGE_FAMILIES) {
     const texts = reader(family).batch(SEEN_UNITS[family])!

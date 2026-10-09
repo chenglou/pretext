@@ -110,10 +110,6 @@ window.addEventListener('resize', () => {
   scheduleRender()
 })
 
-document.fonts.ready.then(() => {
-  scheduleRender()
-})
-
 scheduleRender()
 
 function toggleMore(): void {

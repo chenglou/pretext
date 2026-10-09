@@ -131,9 +131,9 @@ export function getRectIntervalsForBand(
 // and the returned intervals are the candidate text slots for that row.
 //
 // This helper is intentionally page-oriented, not pure geometry:
-// it also discards absurdly narrow leftover slivers that we would never
-// want to hand to text layout.
-export function carveTextLineSlots(base: Interval, blocked: Interval[]): Interval[] {
+// it also discards leftover slivers narrower than `minWidth`, which a page
+// would never want to hand to text layout.
+export function carveTextLineSlots(base: Interval, blocked: Interval[], minWidth: number): Interval[] {
   let slots: Interval[] = [base]
 
   for (let blockedIndex = 0; blockedIndex < blocked.length; blockedIndex++) {
@@ -151,7 +151,7 @@ export function carveTextLineSlots(base: Interval, blocked: Interval[]): Interva
     slots = next
   }
 
-  return slots.filter(slot => slot.right - slot.left >= 24)
+  return slots.filter(slot => slot.right - slot.left >= minWidth)
 }
 
 async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Point[]> {
@@ -176,8 +176,8 @@ async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Poin
   ctx.drawImage(image, 0, 0, width, height)
 
   const { data } = ctx.getImageData(0, 0, width, height)
-  const lefts: Array<number | null> = new Array(height).fill(null)
-  const rights: Array<number | null> = new Array(height).fill(null)
+  const lefts = new Array<number | null>(height).fill(null)
+  const rights = new Array<number | null>(height).fill(null)
   const alphaThreshold = 12
 
   for (let y = 0; y < height; y++) {
@@ -215,8 +215,8 @@ async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Poin
   const boundWidth = Math.max(1, boundRight - boundLeft)
   const boundHeight = Math.max(1, boundBottom - boundTop)
 
-  const smoothedLefts: number[] = new Array(height).fill(0)
-  const smoothedRights: number[] = new Array(height).fill(0)
+  const smoothedLefts = new Array<number>(height).fill(0)
+  const smoothedRights = new Array<number>(height).fill(0)
 
   for (let index = 0; index < validRows.length; index++) {
     const y = validRows[index]!

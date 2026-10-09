@@ -47,7 +47,17 @@ export type EngineProfile = {
   // Where preparation finds break opportunities: each engine's own scan. Blink and WebKit
   // scan the text with their pair tables and ICU line rules (src/line-breaks.ts), Gecko
   // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
-  // doesn't recognize take Blink's scan.
+  // doesn't recognize take Blink's scan. A rich-inline paragraph's text is scanned as the
+  // engine scans its inline items (analyzeText in src/analysis.ts). Blink runs one line-break
+  // iterator over the text of the whole inline formatting context, and Gecko collects a word
+  // across text frames until a space and breaks it in one pass, so every break near an item
+  // boundary comes from the text the items join. WebKit finds breaks inside each inline box
+  // from that box's own text, and decides a boundary between boxes from the previous box's
+  // last two characters (TextUtil.cpp:374-396); it also finds a break next to every
+  // white-space item, so before preserved white space that starts an item
+  // (isAtSoftWrapOpportunity, InlineFormattingUtils.cpp:406-418), and its soft wrap index loop
+  // ends the content it places after a line break item, so no break comes before one at any
+  // boundary, after an atomic item too (nextWrapOpportunity, InlineFormattingUtils.cpp:469-475).
   lineBreakScan: 'blink' | 'webkit' | 'gecko'
   // Where grapheme clusters end: the engine's ICU character rules (src/graphemes.ts).
   // libicucore's add Apple's transcoding hints to Extend. Firefox's ICU4X data gives the
@@ -76,7 +86,8 @@ export type EngineProfile = {
   // Blink's 80px is a premise, not a browser rule: the fit costs Canvas calls for each new
   // word, most of the calls a lower floor adds are in words 24-80px wide, and taking them
   // from 24px or everywhere fixed adversarial lines at 24-80px but made Firefox prepare new
-  // text much slower (RESEARCH.md, Break Opportunities From Engine Data; Decisions Log).
+  // text much slower (RESEARCH.md, Break Opportunities From Engine Data; Decisions Log,
+  // 2026-09-27 and 2026-10-05).
   prefixFitMinWidth: number
   // Gecko shapes a word once, whole, and never again (gfxTextRun::SetLineBreaks does nothing,
   // gfxTextRun.cpp:1292-1301), so a line adds up the advances its letters have in that one
@@ -226,52 +237,21 @@ export type EngineProfile = {
   // font description (OffscreenCanvasRenderingContext2D.cpp:93-130) and WebKit has no
   // canvas `lang` (WebKit #285993). The WebKit profile names the page's families in
   // the Canvas font (getWebKitGenericFamilies), from a table rather than a `<canvas>`
-  // element, whose contexts force style updates (RESEARCH.md, Decisions Log).
+  // element, whose contexts force style updates (RESEARCH.md, Decisions Log, 2026-09-24).
   namesGenericFamiliesByLanguage: boolean
   // Release Gecko draws C0 and C1 controls, U+2028 and U+2029 with no advance plus letter
   // spacing (gfxFont.cpp:3877-3892), where its Canvas measures VT, FS-US, NEL and U+2029 as a
   // space (CanvasRenderingContext2D.cpp:4634-4637) and other controls as a hexbox. Chrome and
   // Safari give most controls an advance on the page, as their Canvas does.
   hidesControlCharacters: boolean
-  // Where collapsible white space before soft hyphens that end a rich-inline line hangs, as
-  // white space that ends a line does, where the line doesn't end at a soft hyphen with its
-  // hyphen. Gecko discards soft hyphens from a text frame's text (IsDiscardable,
-  // nsTextFrameUtils.cpp:32-49), so the white space ends the line wherever it ends
-  // ('line-end'): rich items `see`, ` \u00AD` in 16px Arial take one 25.8px line in Firefox
-  // at 26px. Blink hangs it where the line breaks before more content ('break') and lays a
-  // soft hyphen that ends the paragraph out after it, where it takes room: Chrome gives
-  // that soft hyphen a line of its own at 26px. WebKit does too, and also keeps a soft
-  // hyphen on a line that ends at white space after it, so it hangs the white space
-  // before a soft hyphen only where the line breaks there ('own-break'): items `see`,
-  // ` \u00AD `, `this word` end their first line at 30.24px in Safari at 45px, and at
-  // 25.80px in Chrome and Firefox.
-  spaceBeforeSoftHyphenHangs: 'line-end' | 'break' | 'own-break'
-  // Gecko drops soft hyphens and bidi controls before it collapses white space, so white
-  // space after one collapses with the white space before it, in a run that goes on from one
-  // text frame to the next (nsTextFrameUtils::TransformText): Firefox lays out items `ab`,
-  // ` \u00AD \u00AD`, `cd` in 16px Arial in one 39.15px line at 40px, where Chrome and Safari
-  // give 2 lines, as they do for one text node. Rich-inline takes it across items and after an
-  // item's leading white space (whitespaceRunOpen in src/rich-inline.ts); the Gecko profile's
-  // analysis takes it inside a text, where its scan's white-space run reads through both
-  // (transformText in src/gecko-line-breaks.ts).
-  collapsesSpaceAcrossSoftHyphens: boolean
-  // Where rich-inline finds break opportunities next to an item boundary. Blink runs one
-  // line-break iterator over the text of the whole inline formatting context, and Gecko
-  // collects a word across text frames until a space and breaks it in one pass, so every
-  // break fact near a boundary comes from the text the items join. WebKit finds breaks
-  // inside each inline box from that box's own text, and decides a boundary between boxes
-  // from the previous box's last two characters (TextUtil.cpp:374-396). Its soft wrap index
-  // loop ends the content it places after a line break item, so no break comes before one
-  // at any boundary, after an atomic item too (nextWrapOpportunity, InlineFormattingUtils.cpp:469-475).
-  breaksFromItemText: boolean
-  // Where a rich line that has no break to return to ends when an item that starts with a
-  // hard break, with none before it, doesn't fit its padding. Blink's retry of an overflowing
+  // Where a rich-inline line that has no break to return to ends when a padded item that starts
+  // with a hard break, with none before it, doesn't fit its padding as the engine fits it there
+  // (paddedOpeningFit; walkPreparedComplexLines in src/line-break.ts). Blink's retry of an overflowing
   // line breaks between any two graphemes (kBreakCharacter, line_breaker.cc:4258-4264,
   // 4620-4622), so the line ends before the item ('item'). Gecko's wrap opportunities come
   // before each cluster inside a text frame, none at its end (gfxTextRun.cpp:1046-1101), so the
   // line ends before the last grapheme of the text before the item, a preserved space too,
-  // before that grapheme's item where it is all of that item, and keeps the item where that
-  // grapheme starts the line ('last-grapheme'). WebKit breaks the last run of the content that
+  // and keeps the item where that grapheme starts the line ('last-grapheme'). WebKit breaks the last run of the content that
   // doesn't fit where that run fits, TextUtil::breakWord in an overflowing run, else before the
   // last character of one that no text run follows (InlineContentBreaker.cpp:611-651), so it
   // ends the line there too, but after the preserved spaces that fit where the spaces that end
@@ -281,9 +261,10 @@ export type EngineProfile = {
   // at 86-103px, which moves the last space in Firefox and in Safari the spaces that don't fit,
   // all three at 86px.
   hardBreakItemRetreat: 'item' | 'last-grapheme' | 'fit'
-  // Which edges of a padded item a line fits where the line takes the item's opening and no
-  // more of it: a hard break that starts the item, or white space that starts it after an
-  // atomic item, and in Blink anywhere (openingEdge, prepareRichInline). Blink adds a span's
+  // Which edges of a padded rich-inline item a line fits where the line takes the item's
+  // opening and no more of it: a hard break or a zero-width space that starts the item, or
+  // white space that starts it after an atomic item, and in Blink anywhere (getOpeningFit in
+  // src/rich-inline.ts); the line paints both edges whatever it fitted. Blink adds a span's
   // start edge to the line when it opens (HandleOpenTag, line_breaker.cc:3957-3976), and only a
   // test-only flag narrows the line for its cloned end edge (BoxDecorationBreakCloneLineBreaking,
   // :454-461); the text or forced break after it finds the line overflowing and returns to the
@@ -316,9 +297,9 @@ export type EngineProfile = {
   // overflows too ("Empty frames always fit right where they are", CanPlaceFrame,
   // nsLineLayout.cpp:1264-1269), so an atomic item of width 0 stays on the line it falls on,
   // unless the line ends before it: it breaks after white space that follows text already past
-  // its end (getFrameEndSpace, src/rich-inline.ts), which only a frame that always fits is left
-  // to show, and it goes back to a break before the item where a frame with a width that
-  // continues the text comes next (getKeptEmptyEnd). Blink and WebKit fit it as any other atomic
+  // its end, which only a frame that always fits is left to show, and it goes back to a break
+  // before the item where a frame with a width that continues the text comes next
+  // (setEmptyObjectFacts in src/rich-inline.ts). Blink and WebKit fit it as any other atomic
   // inline and move it to the next line.
   emptyAtomicAlwaysFits: boolean
   // Where the preserved spaces that end a pre-wrap line's text and overflow the line still hang
@@ -333,6 +314,18 @@ export type EngineProfile = {
   // (ContinuousContent::append, InlineContentBreaker.cpp:943-947), so there the run of spaces
   // that hang ends at such an item.
   hangsSpacesPerTextFrame: boolean
+  // Whether a soft hyphen that ends a rich-inline item right before an atomic item or a box needs
+  // room for its hyphen to end the line. Blink tests the hyphen where it places the text item
+  // that ends at the soft hyphen (SetBreakOffset, shaping_line_breaker.cc:211-216;
+  // line_breaker.cc:1705-1718), and Gecko's soft-hyphen break fits only with its hyphen
+  // (gfxTextRun.cpp:1086-1089; nsTextFrame.cpp:11432-11440). WebKit adds a soft hyphen's width
+  // to the content it places only where nothing but text follows the soft hyphen inside that
+  // content (setTrailingSoftHyphenWidth, InlineLineBuilder.cpp:1154-1165), which the closing
+  // tag of a span that ends with one does, and tests the hyphen again only once content that
+  // starts with text wraps after it (hasLeadingTextContent, InlineContentBreaker.cpp:41-50,
+  // 113-121), which a box isn't: the hyphen is never tested there, and the line that ends at
+  // it paints it past its width.
+  testsHyphenBeforeAtomic: boolean
   // Blink transforms segment breaks in the text of the whole inline formatting context
   // (ShouldRemoveNewline and RemoveTrailingCollapsibleNewlineIfNeeded, inline_items_builder.cc).
   // Gecko transforms each text frame's own text (nsTextFrameUtils::TransformText), as
@@ -384,6 +377,7 @@ export type FontMeasurement = {
   emojiCorrection: number | null // Probed for the first text that may hold emoji
   emojiWidth: number // Canvas's width of one glyph of the emoji font, measured with the correction
   hyphenText: string | null // Asked for the first text with a soft hyphen (getHyphenText)
+  spaceWidth: number | null // The space's width, which every text asks for, kept from the first (getSpaceWidth)
   hanKerning: HanKerningFontData | null | undefined // Read for the first text that may kern
   ligaturePairs: Map<string, boolean> // Whether two neighbouring graphemes are a ligature, once asked (isLigature)
 }
@@ -585,12 +579,14 @@ export function zeros(count: number): number[] {
   return out
 }
 
-// A direct measurement under letter spacing, borrowing the font's context for the
-// synchronous call. It never enters a segment cache, and letterSpacing is restored
-// even when assignment or measurement fails. Null where the context can't take the
-// spacing.
+// A text's width as Canvas spaces it under a letter spacing, or null where the context
+// can't take the spacing. Under none, that is the text's width in the font, which the
+// font's segment cache asks once. Under a spacing it is asked each time, borrowing the
+// font's context for the synchronous call, never enters a segment cache, and
+// letterSpacing is restored even when assignment or measurement fails.
 export function measureWithLetterSpacing(text: string, letterSpacing: number, emojiCorrection: number, measurement: FontMeasurement): number | null {
   if (!measurement.state.takesLetterSpacing) return null
+  if (letterSpacing === 0) return getTextWidth(text, measurement, emojiCorrection)
   // Counted before the spacing is set: the count measures stretches into the font's segment cache.
   const corrected = emojiCorrection === 0 ? 0 : countEmojiGlyphs(text, measurement) * emojiCorrection
   const context = getContext(measurement)
@@ -605,9 +601,13 @@ export function measureWithLetterSpacing(text: string, letterSpacing: number, em
   }
 }
 
-// The lookup is the first to hash seg and internalizes it, so V8 hands Canvas a Latin-1
-// segment one-byte, which Chrome measures as Latin (RESEARCH.md, Keeping Work Bounded,
-// String Storage).
+// The lookup internalizes seg, and a string V8 hashes for the first time there gets a one-byte
+// copy where its units fit, so Canvas is handed a Latin-1 segment one-byte, which Chrome measures
+// as Latin (RESEARCH.md, Keeping Work Bounded, String Storage). A segment cut from a longer text
+// is a new string, so the lookup is its first hash. A text that is one segment is the caller's
+// own string, since a slice of a whole string is that string, and so is a rich item that is one
+// segment (prepareRichInline() in src/rich-inline.ts): a two-byte one that something hashed
+// before without internalizing it, as a RegExp made from it does, stays two-byte.
 export function getSegmentMetrics(seg: string, measurement: FontMeasurement): SegmentMetrics {
   return measurement.metrics.get(seg) ?? addMetrics(measurement.metrics, seg, seg, measurement)
 }
@@ -697,6 +697,12 @@ export function getSpaceKerning(seg: string, metrics: SegmentMetrics, measuremen
   return metrics.spaceKerning = after === 0 && before === 0 ? noSpaceKerning : { after, before }
 }
 
+// The font's space, which holds no emoji. Every text asks for it, so it is kept beside the font's
+// Map, which still answers the first one.
+export function getSpaceWidth(measurement: FontMeasurement): number {
+  return measurement.spaceWidth ??= getSegmentMetrics(' ', measurement).width
+}
+
 // A text's width in the font, less the emoji correction.
 export function getTextWidth(text: string, measurement: FontMeasurement, emojiCorrection: number): number {
   return getCorrectedSegmentWidth(text, getSegmentMetrics(text, measurement), measurement, emojiCorrection)
@@ -724,7 +730,7 @@ export function getLayoutEngine(userAgent: string): LayoutEngine | null {
 // of the cached profile, however much the profile holds. V8 inlines a function only while its
 // bytecode takes at most 460 bytes (max_inlined_bytecode_size), minified or not. With the builder
 // inside, this took 454 bytes with 23 fields and 463 with a 24th, which Chrome 154's V8 no longer
-// inlined into the line counter and the simple and rich steppers, and its plain line APIs ran
+// inlined into the line counter and the simple stepper, and its plain line APIs ran
 // 11-18% slower. Apart, it takes 21 (Node 23, V8 12.9). Check with node --print-bytecode and
 // --trace-turbo-inlining (RESEARCH.md, JavaScript Engines).
 export function getEngineProfile(): EngineProfile {
@@ -733,7 +739,8 @@ export function getEngineProfile(): EngineProfile {
 
 function buildEngineProfile(): EngineProfile {
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  // Engines Pretext doesn't recognize take Blink's profile (RESEARCH.md, Decisions Log).
+  // Engines Pretext doesn't recognize take Blink's profile (RESEARCH.md, Decisions Log,
+  // 2026-09-26).
   const engine = getLayoutEngine(ua) ?? 'blink'
   // Fresh-entry observations are verified only for desktop Blink and Gecko.
   const isDesktop = /Windows NT|Macintosh|X11/.test(ua) && !/Android|Mobile|iPhone|iPad|iPod/.test(ua)
@@ -767,13 +774,11 @@ function buildEngineProfile(): EngineProfile {
     hangsIdeographicSpace: engine !== 'webkit',
     laysOutUnderDefaultLocale: engine === 'blink',
     namesGenericFamiliesByLanguage: engine === 'webkit',
-    spaceBeforeSoftHyphenHangs: engine === 'gecko' ? 'line-end' : engine === 'webkit' ? 'own-break' : 'break',
-    collapsesSpaceAcrossSoftHyphens: engine === 'gecko',
-    breaksFromItemText: engine === 'webkit',
     hardBreakItemRetreat: engine === 'blink' ? 'item' : engine === 'webkit' ? 'fit' : 'last-grapheme',
     paddedOpeningFit: engine === 'blink' ? 'start' : engine === 'webkit' ? 'placed' : 'both',
     emptyAtomicAlwaysFits: engine === 'gecko',
     hangsSpacesPerTextFrame: engine === 'gecko',
+    testsHyphenBeforeAtomic: engine !== 'webkit',
     transformsSegmentBreaksAcrossItems: engine === 'blink',
   }
 }
@@ -1054,7 +1059,7 @@ export function getFontMeasurement(font: string, language: string | null, letter
   let measurement = fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    measurement = { state, canvasFont, letterSpacing: shaped ? LETTER_SPACED_SHAPING : '0px', metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, hanKerning: undefined, ligaturePairs: new Map() }
+    measurement = { state, canvasFont, letterSpacing: shaped ? LETTER_SPACED_SHAPING : '0px', metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, emojiCorrection: null, emojiWidth: 0, hyphenText: null, spaceWidth: null, hanKerning: undefined, ligaturePairs: new Map() }
     fonts.set(font, measurement)
   }
   // The first measurement after a lookup sets the font again, the same string too: Firefox's

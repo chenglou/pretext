@@ -30,23 +30,11 @@ if (result.exitCode !== 0) {
   process.exit(result.exitCode)
 }
 
-const targets = [
-  { source: 'index.html', target: 'index.html' },
-  { source: 'accordion.html', target: 'accordion/index.html' },
-  { source: 'bubbles.html', target: 'bubbles/index.html' },
-  { source: 'dynamic-layout.html', target: 'dynamic-layout/index.html' },
-  { source: 'editorial-engine.html', target: 'editorial-engine/index.html' },
-  { source: 'ellipsis.html', target: 'ellipsis/index.html' },
-  { source: 'justification-comparison.html', target: 'justification-comparison/index.html' },
-  { source: 'markdown-chat.html', target: 'markdown-chat/index.html' },
-  { source: 'masonry/index.html', target: 'masonry/index.html' },
-  { source: 'rich-note.html', target: 'rich-note/index.html' },
-  { source: 'variable-typographic-ascii.html', target: 'variable-typographic-ascii/index.html' },
-]
-
-for (let index = 0; index < targets.length; index++) {
-  const entry = targets[index]!
-  await moveBuiltHtml(entry.source, entry.target)
+for (let index = 0; index < entrypoints.length; index++) {
+  // pages/demos/x.html is published as x/index.html; an index.html keeps its place.
+  const source = path.relative('pages/demos', entrypoints[index]!)
+  const target = path.basename(source) === 'index.html' ? source : path.join(path.basename(source, '.html'), 'index.html')
+  await moveBuiltHtml(source, target)
 }
 
 await rm(path.join(outdir, 'pages'), { recursive: true, force: true })

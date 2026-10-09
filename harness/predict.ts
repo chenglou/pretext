@@ -2,18 +2,20 @@
 // width, and the prepare options main documents. A case an app would write with inline elements (spans among other runs,
 // several styles, a chip, padding or a box) goes through rich-inline, one item per run: a chip is `break: 'never'`, padding
 // is `extraWidth`, a box a RichInlineBox of its width, and the paragraph's white-space and word-break are
-// prepareRichInline()'s options. Line cursors index the library's
+// prepareRichInline()'s options. A text's line cursors index the library's
 // segments, which are the source after white-space normalization, so the adapter aligns them with the source and returns
-// UTF-16 source offsets. `run.ts --lib` bundles another build in place of src/.
+// UTF-16 source offsets; a rich line's are its first fragment's sourceStart and its last one's sourceEnd, in their items'
+// texts. `run.ts --lib` bundles another build in place of src/.
 //
 // The prediction is walkLineRanges' lines (walkRichInlineLineRanges' for a rich case). Every other line API runs on the
 // same case too, and the first way one disagrees with the walk is kept: layout() on prepare()'s handle (the resize path,
 // with its own line counter), measureLineStats, layoutNextLineRange, layoutNextLine, layoutWithLines and
 // materializeLineRange; for rich cases measureRichInlineStats, layoutNextRichInlineLineRange and
-// materializeRichInlineLineRange, whose fragments' text is checked against their items' own text. The lines' text (the
+// materializeRichInlineLineRange, whose fragments' text is checked against their items' text between sourceStart and
+// sourceEnd. The lines' text (the
 // fragments' for a rich case) goes out as a hash, for `equal` to compare builds by. measureText calls are
 // counted apart while preparing and while the line APIs run. A walk that goes past a line per source unit, plus one,
-// fails its case instead of stalling the page, and so does a range or a rich fragment that names no place in its text,
+// fails its case instead of stalling the page, and so does a range that names no place in its text,
 // before its text is built, since builds before #353, which --lib can run, build the text of a range that ends at
 // segment Infinity without end. A cursor's place is found with the library's own graphemes (cursorOffsets), so the
 // adapter needs a build with src/graphemes.ts (from 2026-09-24). The offline invariants (invariants.ts) call the same
@@ -24,7 +26,7 @@ import {
 } from '../src/layout.ts'
 import {
   layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, prepareRichInline, walkRichInlineLineRanges,
-  type RichInlineBox, type RichInlineCursor, type RichInlineFragmentRange, type RichInlineItem, type RichInlineLineRange, type RichInlineOptions,
+  type RichInlineBox, type RichInlineCursor, type RichInlineFragment, type RichInlineFragmentRange, type RichInlineItem, type RichInlineLineRange, type RichInlineOptions,
 } from '../src/rich-inline.ts'
 import { findGraphemeEnds } from '../src/graphemes.ts'
 import { getEngineProfile } from '../src/measurement.ts'
@@ -54,17 +56,15 @@ export function canvasFont(font: CssFont): string {
 
 const COLLAPSIBLE = /^[ \t\n\r\f]$/
 
-// The segments a box's fragment cursors index: one empty segment (src/rich-inline.ts).
-export const BOX_SEGMENTS: readonly string[] = ['']
-
 // For each UTF-16 unit of the library's segment stream, the source range it stands for. Normalization only rewrites or
 // removes white space (normal: a run of SPACE, TAB, LF, CR and FF becomes one SPACE, a leading and a trailing one go,
-// some engines remove a run with LF next to a ZWSP, and the Gecko profile takes out white space after a character
-// Firefox drops and a CR or FF; pre-wrap: CRLF, CR and FF become LF), so a greedy walk aligns the two. null when they
-// don't align. White space the stream leaves out after a unit is in that unit's range, as white space that ends a line
-// is in its line: Firefox gives such a space a box at the end of a line whose text frame it doesn't trim, where the
-// space is the line's last visible character (`(see)`, space, U+00AD, space, `[this]` in a right-to-left paragraph at
-// 60px). A text's leading and trailing white space is in no unit's: a rich item's is the gap of the fragment after it.
+// some engines remove a run with LF next to a ZWSP, the Gecko profile takes out white space after a character Firefox
+// drops and a CR or FF, and the WebKit profile a lone CR; pre-wrap: CRLF, CR and FF become LF), so a greedy walk aligns
+// the two. null when they don't align. White space the stream leaves out after a unit is in that unit's range, as white
+// space that ends a line is in its line: Firefox gives such a space a box at the end of a line whose text frame it
+// doesn't trim, where the space is the line's last visible character (`(see)`, space, U+00AD, space, `[this]` in a
+// right-to-left paragraph at 60px). A text's leading and trailing white space is in no unit's: a rich item's is the gap
+// of the fragment after it.
 export function alignStream(source: string, stream: string, whiteSpace: 'normal' | 'pre-wrap'): { starts: Int32Array; ends: Int32Array } | null {
   const starts = new Int32Array(stream.length)
   const ends = new Int32Array(stream.length)
@@ -179,6 +179,11 @@ function sameCursor(a: LayoutCursor, b: LayoutCursor): boolean {
   return a.segmentIndex === b.segmentIndex && a.graphemeIndex === b.graphemeIndex
 }
 
+// Whether a cursor's indices are whole and not negative, so that a JSON copy of it is the same cursor.
+function isPlace(c: LayoutCursor): boolean {
+  return Number.isInteger(c.segmentIndex) && Number.isInteger(c.graphemeIndex) && c.segmentIndex >= 0 && c.graphemeIndex >= 0
+}
+
 function showCursor(c: LayoutCursor): string {
   return `${c.segmentIndex}.${c.graphemeIndex}`
 }
@@ -247,9 +252,8 @@ function sameFragments(a: readonly RichInlineFragmentRange[], b: readonly RichIn
   return true
 }
 
-// The same for rich-inline, against walkRichInlineLineRanges' lines. A fragment's cursors index its item's own prepared
-// text, whose cursorOffsets() `offsetsOf(itemIndex)` gives.
-export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prepareRichInline>, walked: RichInlineLineRange[], walkedCount: number, width: number, steps: number, offsetsOf: (itemIndex: number) => ((cursor: LayoutCursor) => number) | undefined): string | null {
+// The same for rich-inline, against walkRichInlineLineRanges' lines.
+export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prepareRichInline>, walked: RichInlineLineRange[], walkedCount: number, width: number, steps: number): string | null {
   const n = walked.length
   if (walkedCount !== n) return `walkRichInlineLineRanges returns ${walkedCount} for ${n} lines`
   let widest = 0
@@ -265,13 +269,65 @@ export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prep
     if (!sameFragments(range.fragments, line.fragments) || !sameWidth(range.width, line.width) || range.end.itemIndex !== line.end.itemIndex || !sameCursor(range.end, line.end)) return `layoutNextRichInlineLineRange line ${i} differs from walkRichInlineLineRanges'`
     for (let k = 0; k < line.fragments.length; k++) {
       const f = line.fragments[k]!
-      const offsetOf = offsetsOf(f.itemIndex)
-      if (offsetOf === undefined || offsetOf(f.start) < 0 || offsetOf(f.end) < 0) return `walkRichInlineLineRanges line ${i} fragment ${k} is item ${f.itemIndex}'s ${showCursor(f.start)}-${showCursor(f.end)}, outside its text`
+      if (!isPlace(f.start) || !isPlace(f.end)) return `walkRichInlineLineRanges line ${i} fragment ${k} is item ${f.itemIndex}'s ${showCursor(f.start)}-${showCursor(f.end)}, which names no place`
     }
     const materialized = api.materializeRichInlineLineRange(prepared, line)
     if (!sameFragments(materialized.fragments, line.fragments) || materialized.width !== line.width) return `materializeRichInlineLineRange of line ${i} changes its fragments`
     cursor = range.end
   }
+}
+
+const UNPAINTED = /[\u00AD\u2028\u2029]/g
+const DROPPED = /^[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]$/
+// A run of what an engine profile's analysis takes out of normal white space with nothing in its place: a CR or FF in
+// the Gecko profile, a lone CR in the WebKit profile (src/analysis.ts, analyzeText). The Blink profile collapses both.
+const REMOVED = { blink: null, webkit: /^\r+$/, gecko: /^[\r\f]+$/ }
+
+// Whether `text` is `source`, a stretch of an item's text, as painted: without soft hyphens and what ends a line. In
+// normal white space each run of white space is one space, or nothing where the engine removes it: at either end, where
+// it can collapse into white space outside the stretch; where it holds a line feed, which the segment break
+// transformation can remove, as Firefox does between two ideographs; next to a soft hyphen or a bidi control, which
+// Firefox's white-space run reads through; and where it is only what the profile takes out (REMOVED). In pre-wrap the
+// bidi controls that end the stretch after a line feed paint nothing either: the Gecko analysis keeps those that end a
+// paragraph in its last line feed's segment.
+function paints(source: string, text: string, whiteSpace: 'normal' | 'pre-wrap'): boolean {
+  if (whiteSpace === 'pre-wrap') return text.replace(/[\u00AD\u2028\u2029\n\r\f]/g, '') === source.replace(/([\n\r\f\u2028\u2029])[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/, '$1').replace(/[\u00AD\u2028\u2029\n\r\f]/g, '')
+  const painted = text.replace(UNPAINTED, '')
+  const removed = REMOVED[getEngineProfile().lineBreakScan]
+  let t = 0
+  for (let s = 0; s < source.length;) {
+    const ch = source[s]!
+    if (COLLAPSIBLE.test(ch)) {
+      let end = s + 1
+      while (end < source.length && COLLAPSIBLE.test(source[end]!)) end++
+      const run = source.slice(s, end)
+      // What the profile takes out paints nothing, not even a space.
+      if (!(s > 0 && end < source.length && removed !== null && removed.test(run))) {
+        if (painted[t] === ' ') t++
+        else if (s > 0 && end < source.length && !run.includes('\n') && !DROPPED.test(source[s - 1]!) && !DROPPED.test(source[end]!)) return false
+      }
+      s = end
+      continue
+    }
+    if (ch !== '\u00AD' && ch !== '\u2028' && ch !== '\u2029') {
+      if (painted[t] !== ch) return false
+      t++
+    }
+    s++
+  }
+  return t === painted.length
+}
+
+// How a materialized fragment disagrees with its item's text between its sourceStart and sourceEnd, or null: its text is
+// that text as painted, but for the hyphen of a soft hyphen its line ends at. A box's fragment has no text, and an
+// atomic item's is laid out in normal white space.
+export function fragmentProblem(item: RichInlineItem | RichInlineBox, f: RichInlineFragment, whiteSpace: 'normal' | 'pre-wrap'): string | null {
+  if (item.text === undefined) return f.text === '' ? null : `a box, is ${JSON.stringify(f.text)}`
+  if (!(Number.isInteger(f.sourceStart) && Number.isInteger(f.sourceEnd) && 0 <= f.sourceStart && f.sourceStart <= f.sourceEnd && f.sourceEnd <= item.text.length)) return `is ${f.sourceStart}-${f.sourceEnd}, outside its item's text`
+  const source = item.text.slice(f.sourceStart, f.sourceEnd)
+  const mode = item.break === 'never' ? 'normal' : whiteSpace
+  if (paints(source, f.text, mode) || (f.text.endsWith('-') && source.endsWith('\u00AD') && paints(source, f.text.slice(0, -1), mode))) return null
+  return `is ${JSON.stringify(f.text)}; its item's text there ${JSON.stringify(source)}`
 }
 
 // The prepare options of a case without inline structure.
@@ -290,15 +346,6 @@ export function richOptions(c: Case): RichInlineOptions {
   if (c.paragraph.whiteSpace === 'pre-wrap') options.whiteSpace = 'pre-wrap'
   if (c.paragraph.wordBreak === 'keep-all') options.wordBreak = 'keep-all'
   return options
-}
-
-// The options of the handle a rich item's fragment cursors index: the paragraph's, with the item's letter spacing, and
-// an atomic item's in normal white space (src/rich-inline.ts).
-export function itemOptions(item: RichInlineItem, options: RichInlineOptions): PrepareOptions {
-  const own: PrepareOptions = { ...options }
-  if (item.break === 'never') delete own.whiteSpace
-  if (item.letterSpacing !== undefined) own.letterSpacing = item.letterSpacing
-  return own
 }
 
 // A rich case's items, one per run.
@@ -358,54 +405,53 @@ export function predict(c: Case): Prediction {
       counting = 'lines'
       const walked: RichInlineLineRange[] = []
       const walkedCount = walkRichInlineLineRanges(prepared, p.width, line => { if (walked.push(line) > steps) throw new Error(`walkRichInlineLineRanges gives more than ${steps} lines`) })
-      // Fragment cursors index prepareWithSegments(item.text) of the item's font and letter spacing and the paragraph's
-      // white-space (an atomic item's normal) and word-break, prepared here uncounted, as an app needs none of them. So each fragment's text is
-      // materializeLineRange's over those cursors, but for the hyphen of a soft hyphen it ends at, which the text the items
-      // join decides; the text builder both share is src/layout.test.ts's to check. A box's fragment spans one empty
-      // segment and has no text.
+      disagreement = richDisagreement(LIBRARY, prepared, walked, walkedCount, p.width, steps)
       counting = null
-      const handles = items.map(item => item.text === undefined ? null : prepareWithSegments(item.text, item.font, itemOptions(item, options)))
-      counting = 'lines'
-      const offsets = handles.map(handle => cursorOffsets(handle === null ? BOX_SEGMENTS : handle.segments))
-      disagreement = richDisagreement(LIBRARY, prepared, walked, walkedCount, p.width, steps, i => offsets[i])
-      counting = null
-      for (let i = 0; i < walked.length && disagreement === null; i++) {
-        const fragments = materializeRichInlineLineRange(prepared, walked[i]!).fragments
-        for (let k = 0; k < fragments.length; k++) {
-          const f = fragments[k]!
-          if (items[f.itemIndex]!.text === undefined) {
-            if (f.text !== '') disagreement ??= `materializeRichInlineLineRange line ${i} fragment ${k}, a box, is ${JSON.stringify(f.text)}`
-            textHash = hashText(textHash, f.text)
-            continue
-          }
-          const handle = handles[f.itemIndex]!
-          const text = materializeLineRange(handle, { start: f.start, end: f.end, width: 0 }).text
-          const afterSoftHyphen = f.end.graphemeIndex === 0 && f.end.segmentIndex > 0 && handle.segments[f.end.segmentIndex - 1]?.charCodeAt(0) === 0x00AD
-          if (f.text !== text && !(afterSoftHyphen && f.text.replace(/-$/, '') === text.replace(/-$/, ''))) disagreement ??= `materializeRichInlineLineRange line ${i} fragment ${k} is ${JSON.stringify(f.text)}; its item's text there ${JSON.stringify(text)}`
-          textHash = hashText(textHash, f.text)
-        }
-      }
-      const maps: Array<ReturnType<typeof sourceRanges> | undefined> = []
       const bases: number[] = []
       for (let i = 0, base = 0; i < runs.length; i++) {
         bases.push(base)
         base += runs[i]!.text.length
       }
-      const fragment = (f: RichInlineFragmentRange): { start: number; end: number } => {
-        const item = items[f.itemIndex]!
-        // A box's fragment is its U+FFFC.
-        if (item.text === undefined) return { start: bases[f.itemIndex]!, end: bases[f.itemIndex]! + 1 }
-        const map = maps[f.itemIndex] ??= sourceRanges(runs[f.itemIndex]!.text, handles[f.itemIndex]!, item.break === 'never' ? 'normal' : whiteSpace)
-        const range = map(f.start, f.end)
-        return { start: bases[f.itemIndex]! + range.start, end: bases[f.itemIndex]! + range.end }
+      // A line runs from its first fragment's start in the source to where it ends there: its end cursor's place,
+      // or after its last fragment for the paragraph's last line, so that white space a line's end takes is in the
+      // line, as in a text's (alignStream), and white space that ends the paragraph in none. White space the library
+      // leaves out inside an item's text after the line's last unit is in the line too, and an item's trailing white
+      // space is the gap of the fragment after it. A box's fragment is its U+FFFC. The text builder the fragments'
+      // text shares with the text line APIs is src/layout.test.ts's to check.
+      const leftOut = (itemIndex: number, end: number): number => {
+        const item = items[itemIndex]!
+        if (item.text === undefined || item.break === 'never' || whiteSpace !== 'normal') return end
+        let after = end
+        while (after < item.text.length && COLLAPSIBLE.test(item.text[after]!)) after++
+        return after === item.text.length ? end : after
+      }
+      const fragmentEnd = (f: RichInlineFragment): number => bases[f.itemIndex]! + (items[f.itemIndex]!.text === undefined ? 1 : leftOut(f.itemIndex, f.sourceEnd))
+      // Where a cursor is in the source: after its item's text up to it, which a fragment from the item's start to
+      // the cursor ends at.
+      const cursorEnd = (cursor: RichInlineCursor): number => {
+        const base = bases[cursor.itemIndex]!
+        if (cursor.segmentIndex === 0 && cursor.graphemeIndex === 0) return base
+        const whole: RichInlineLineRange = {
+          fragments: [{ itemIndex: cursor.itemIndex, gapBefore: 0, gapItemIndex: -1, occupiedWidth: 0, start: { segmentIndex: 0, graphemeIndex: 0 }, end: { segmentIndex: cursor.segmentIndex, graphemeIndex: cursor.graphemeIndex } }],
+          width: 0, end: cursor,
+        }
+        return base + leftOut(cursor.itemIndex, materializeRichInlineLineRange(prepared, whole).fragments[0]!.sourceEnd)
       }
       let previousEnd = 0
       for (let i = 0; i < walked.length; i++) {
-        const fragments = walked[i]!.fragments
+        const fragments = materializeRichInlineLineRange(prepared, walked[i]!).fragments
+        for (let k = 0; k < fragments.length; k++) {
+          const f = fragments[k]!
+          const problem = fragmentProblem(items[f.itemIndex]!, f, whiteSpace)
+          if (problem !== null) disagreement ??= `materializeRichInlineLineRange line ${i} fragment ${k} ${problem}`
+          if (disagreement === null) textHash = hashText(textHash, f.text)
+        }
         const first = fragments[0]
         const last = fragments[fragments.length - 1]
-        const start = first === undefined ? previousEnd : fragment(first).start
-        const end = last === undefined ? previousEnd : fragment(last).end
+        const lineEnd = walked[i]!.end
+        const start = first === undefined ? previousEnd : bases[first.itemIndex]! + first.sourceStart
+        const fragmentsEnd = last === undefined ? previousEnd : fragmentEnd(last)
+        const end = lineEnd.itemIndex < items.length ? Math.max(fragmentsEnd, cursorEnd(lineEnd)) : fragmentsEnd
         lines.push({ start, end, width: walked[i]!.width })
         previousEnd = end
       }

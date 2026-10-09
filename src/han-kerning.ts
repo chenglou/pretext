@@ -24,7 +24,7 @@
 // bounds under the page's Han script (han_kerning.cc:47-168, 400-535).
 import { KIND_BITS, TEXT, UNBROKEN, type TextAnalysis } from './analysis.js'
 import { hasProperty, PUNCTUATION } from './line-breaks.js'
-import { getContext, getFontMeasurement, getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
+import { getContext, getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
 
 const OTHER = 0
 const OPEN = 1
@@ -150,10 +150,7 @@ function getFontData(measurement: FontMeasurement): HanKerningFontData | null {
 
 // HanKerning::GetCharType (han_kerning.cc:142-168).
 function getCharType(data: HanKerningFontData, text: string, index: number): number {
-  return getFontCharType(data, getStaticCharType(text, index))
-}
-
-function getFontCharType(data: HanKerningFontData, type: number): number {
+  const type = getStaticCharType(text, index)
   switch (type) {
     case DOT: return data.typeForDot
     case COLON: return data.typeForColon
@@ -180,33 +177,6 @@ function isCanvasCjkSymbol(c: number): boolean {
   return (c >= 0x3000 && c <= 0x30FF) || (c >= 0xFE30 && c <= 0xFE6F) || (c >= 0xFF00 && c <= 0xFFEF && c !== 0xFF1B)
 }
 
-// The types of the pair text[index - 1], text[index] before a font types its dots, colons and
-// quotes (getStaticCharType), the earlier's times 16 plus the later's; 0 where either has none,
-// as no font halts a character next to one, and 0 at once where neither is in the ranges a halt
-// can come from, so a boundary between Latin letters and ASCII punctuation types nothing.
-export function getPairTypes(text: string, index: number): number {
-  if (!maybeHanKerns(text.charCodeAt(index - 1)) && !maybeHanKerns(text.charCodeAt(index))) return 0
-  const earlier = getStaticCharType(text, index - 1)
-  const later = earlier === OTHER ? OTHER : getStaticCharType(text, index)
-  return later === OTHER ? 0 : earlier * 16 + later
-}
-
-// The halt of one character, `halted`, of a pair that two shaped runs split between them, as two
-// rich-inline items do, from the pair's types (getPairTypes): `side` 1 is the later character's,
-// after the earlier one, and -1 the earlier's, before the later one; 0 without one. Blink shapes
-// each run with the paragraph's whole text and reads the character before the run's first and
-// after its last there, typing both by the run's own font (HanKerning::AppendFontFeatures,
-// han_kerning.cc:262-320, over the text HarfBuzzShaper holds, harfbuzz_shaper.cc:895), so `font`
-// is the font of the item that holds the halted character, measured as that item's text is
-// (`letterSpaced`).
-export function getHaltAcrossRuns(types: number, halted: number, side: number, font: string, letterSpaced: boolean, language: string | null): number {
-  if (!maybeHanKerns(halted)) return 0
-  const measurement = getFontMeasurement(font, language, letterSpaced)
-  const data = getFontData(measurement)
-  if (data === null || haltedSide(getFontCharType(data, types >> 4), getFontCharType(data, types & 15)) !== side) return 0
-  return getTrim(data, halted, measurement)
-}
-
 export type HanKerningTrims = {
   // Per segment, the halts the page gives its characters that its Canvas width keeps: of its
   // first character after the text before it, of its last before the text after it, and of
@@ -222,26 +192,31 @@ export type HanKerningTrims = {
   overflowLineEndTrims: number[] | null
 }
 
-// The trims of an analysis' text segments, read from the characters before and after each.
-export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextAnalysis): HanKerningTrims {
+// The trims of an analysis' text segments, read from the characters before and after each. For a
+// rich-inline item, those of its segments, [from, to) of its paragraph's analysis, in lists that
+// start at `from`: Blink reads the character before a shaped run and the one after it from the
+// paragraph's text, whatever items they are in, and types both by the font of the run it shapes
+// (HanKerning::AppendFontFeatures, han_kerning.cc:242-243, 266-273, 288-294, 314-319), so a pair
+// of marks an item start splits halts as in one text, each mark by its own item's font.
+export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextAnalysis, from: number, to: number): HanKerningTrims {
   const out: HanKerningTrims = { widthTrims: null, lineStartExtras: null, lineEndTrims: null, overflowLineEndTrims: null }
   const data = getFontData(measurement)
   if (data === null) return out
   const { flags, starts, normalized } = analysis
   const count = flags.length
   const addWidthTrim = (i: number, trim: number): void => {
-    out.widthTrims ??= zeros(count)
-    out.widthTrims[i] = out.widthTrims[i]! + trim
+    out.widthTrims ??= zeros(to - from)
+    out.widthTrims[i - from] = out.widthTrims[i - from]! + trim
   }
-  for (let i = 0; i < count; i++) {
+  for (let i = from; i < to; i++) {
     if ((flags[i]! & KIND_BITS) !== TEXT) continue
     const start = starts[i]!
     const end = i + 1 < count ? starts[i + 1]! : normalized.length
     const first = normalized.charCodeAt(start)
     if (i > 0 && maybeHanKerns(first) && haltedSide(getCharType(data, normalized, start - 1), getCharType(data, normalized, start)) === 1) {
       const trim = getTrim(data, first, measurement)
-      out.lineStartExtras ??= zeros(count)
-      out.lineStartExtras[i] = trim
+      out.lineStartExtras ??= zeros(to - from)
+      out.lineStartExtras[i - from] = trim
       addWidthTrim(i, trim)
     }
     for (let k = start + 1; k < end; k++) {
@@ -266,11 +241,11 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     if ((lastType !== CLOSE && lastType !== CLOSE_QUOTE) || getCharType(data, normalized, end - 1) !== CLOSE) continue
     // A break directly after the segment: text after a break, or the end of the text.
     if (atEnd || ((flags[i + 1]! & KIND_BITS) === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) {
-      out.lineEndTrims ??= zeros(count)
-      out.lineEndTrims[i] = getTrim(data, last, measurement)
+      out.lineEndTrims ??= zeros(to - from)
+      out.lineEndTrims[i - from] = getTrim(data, last, measurement)
     } else {
-      out.overflowLineEndTrims ??= zeros(count)
-      out.overflowLineEndTrims[i] = getTrim(data, last, measurement)
+      out.overflowLineEndTrims ??= zeros(to - from)
+      out.overflowLineEndTrims[i - from] = getTrim(data, last, measurement)
     }
   }
   return out

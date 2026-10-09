@@ -300,8 +300,8 @@ function layoutParagraphOptimal(
   if (prepared.segments.length === 0) return []
 
   const candidateCount = breakCandidates.length
-  const dp: number[] = new Array(candidateCount).fill(Infinity)
-  const previous: number[] = new Array(candidateCount).fill(-1)
+  const dp = new Array<number>(candidateCount).fill(Infinity)
+  const previous = new Array<number>(candidateCount).fill(-1)
   dp[0] = 0
 
   for (let toCandidate = 1; toCandidate < candidateCount; toCandidate++) {

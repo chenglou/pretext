@@ -176,7 +176,7 @@ function render(): void {
   const layout = layoutRichNote(richInline, bodyWidth, notePaddingX)
 
   // Commit state
-  st.requestedWidth = bodyWidth
+  st.requestedWidth = requestedWidth
   st.events.sliderValue = null
 
   // DOM writes

@@ -1,8 +1,12 @@
-// The grapheme check (build.ts): findGraphemeEnds under the table the engine profile picks, and
-// under the other table, against the runtime's own Intl.Segmenter, on:
+// The grapheme check (build.ts): findGraphemeEnds under Chrome's table and under Apple's
+// ('chromium/char', 'apple/char'), against the runtime's own Intl.Segmenter, on:
 // - every code point in contexts that tell the classes of the character rules apart;
 // - every case text of the harness, whole and run by run, and the segments prepareWithSegments() makes;
-// - random strings of code points drawn from two to five random classes.
+// - random strings of code points drawn from two to five random classes of the engine profile's table.
+// The Gecko profile's table, 'gecko/char', is compared with nothing: it runs Chrome's rules past soft
+// hyphens and bidi controls, which Intl.Segmenter gives clusters of their own
+// (RESEARCH.md, Grapheme Clusters From Engine Data), so in Firefox the check judges the rules under
+// it, 'chromium/char'.
 // page.ts runs it in a browser; offline.ts under Bun, or under Node once bundled.
 import type { CharTable } from '../../src/generated/engine-break-data.ts'
 import { findGraphemeEnds } from '../../src/graphemes.ts'

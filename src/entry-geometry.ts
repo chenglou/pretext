@@ -1,3 +1,16 @@
+// Fresh-line geometry, or entry geometry: the widths a line takes where it starts inside a
+// segment cut between graphemes, at or inside a stretch of it that holds a default-ignorable code
+// point (a ZWNJ, a word joiner, a bidi mark). Shaping looks past such a character, so the text
+// after the cut, shaped afresh at the line's start, can measure otherwise than the segment's own
+// advances give (RESEARCH.md, Widths After A Line Break). For each such start, preparation
+// measures the text from the start through the first whole grapheme past that stretch, the
+// anchor, in at most three prefixes (the entry's head); past the anchor the widths go on by the
+// segment's advances. The walkers (src/line-break.ts) ask an entry whether the segment's whole
+// tail fits the line (admissionFit), which Blink reads from the tail as measured afresh and Gecko
+// from the whole segment's width less the prefixes already placed (the profile's entryFitBasis),
+// and, where it doesn't fit, how many graphemes do by the fresh prefixes. Only the desktop Blink
+// and Gecko profiles observe entries, the browsers they were checked in, and a segment of more
+// than 96 graphemes takes none (RESEARCH.md, Keeping Work Bounded).
 import { findGraphemeEnds } from './graphemes.js'
 import { getEngineProfile } from './measurement.js'
 
@@ -19,8 +32,12 @@ export type SegmentEntryGeometry = {
 
 type Part = { start: number; end: number; observe: boolean }
 
-// Projection selects original source intervals, never measurement text or break
-// permission. Preserve original boundaries except where projection reunites them.
+// The stretches of a segment that a default-ignorable affects, as intervals of the source text.
+// The text without its default-ignorables (the projection) is cut into grapheme clusters, and the
+// segment's own graphemes that one such cluster spans are joined into one interval. An interval
+// is observed where it holds a default-ignorable, and leading default-ignorables join the first
+// visible interval. The projection only picks the intervals: what is measured is the source text,
+// and the segment's grapheme boundaries and breaks stay its own.
 function affectedIntervals(text: string, endpoints: readonly number[]): Part[] {
   const spans: { start: number; end: number }[] = []
   const projected: string[] = []
@@ -99,14 +116,16 @@ export function observeSegmentEntries(
     const sourceStart = endpoints[start]!
     while (partIndex < parts.length && parts[partIndex]!.end <= sourceStart) partIndex++
     const part = parts[partIndex]
-    // An anchor supplies right context for the preceding affected interval;
-    // its own resume cursor does not thereby belong to that interval.
+    // A start is observed inside an affected interval. The anchor, the first whole grapheme
+    // past that interval, is measured after it as its right context, and a line that starts
+    // at the anchor takes an entry only where the anchor's own interval is affected.
     if (part === undefined || !part.observe || sourceStart < part.start) continue
     let anchor = start + 1
     while (anchor < advances.length && endpoints[anchor]! <= part.end) anchor++
-    // Coverage requires one complete original right grapheme beyond the
-    // affected interval. A clipped/terminal view cannot supply that anchor;
-    // measuring its isolated end is a different, unverified observation.
+    // An entry needs that whole grapheme. An interval that ends the segment has none, so
+    // its starts take no entry: what a line start measures with nothing after it hasn't
+    // been checked against a browser. Nor does a start whose head would take more than
+    // three prefixes.
     if (endpoints[anchor]! <= part.end || anchor - start > MAX_HEAD_ENDPOINTS) continue
     const head: number[] = []
     let complete = true
@@ -144,8 +163,9 @@ export function getFreshLineEnd(geometry: SegmentEntryGeometry, start: number, e
   return g
 }
 
-// Fresh terminal-inclusive width. Null means unobserved, including entry zero;
-// an observed zero is a real value, and negative increments remain ordered.
+// The width of a segment's graphemes from `start` to `end` on a fresh line that starts at
+// `start`, with the letter spacing after the last of them. Null where no entry was observed,
+// as at the segment's own start; an observed 0 is a width, and the prefixes needn't grow.
 export function getSegmentEntryWidth(
   geometry: SegmentEntryGeometry | null,
   start: number,

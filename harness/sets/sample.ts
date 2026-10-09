@@ -200,7 +200,13 @@ function loadPools(): { corpora: Map<Script, Corpus[]>; ui: Map<Script, Text[]>;
   const showerData = JSON.parse(readFileSync(join(ROOT, 'pages/demos/masonry/shower-thoughts.json'), 'utf8')) as string[]
   const shower: Text[] = []
   for (let i = 0; i < showerData.length; i++) shower.push({ text: showerData[i]!, lang: 'en', from: `pages/demos/masonry/shower-thoughts.json #${i}`, pool: shower })
-  return { corpora, ui, shower, blocks: demoBlocks() }
+  const blocks = new Map<string, Block[]>()
+  for (const block of demoBlocks(2000, false)) {
+    let list = blocks.get(block.kind)
+    if (list === undefined) blocks.set(block.kind, list = [])
+    list.push(block)
+  }
+  return { corpora, ui, shower, blocks }
 }
 
 // ---- The markdown-chat demo's replies, as its blocks ----
@@ -227,10 +233,10 @@ function inlinePieces(tokens: readonly Token[], style: Piece['style'], out: Piec
   }
 }
 
-function demoBlocks(): Map<string, Block[]> {
-  const byKind = new Map<string, Block[]>()
-  const add = (input: Block): void => {
-    let block = input
+// The blocks of the demo's first `count` messages in its order: the AI replies', or with `users` every message's.
+export function demoBlocks(count: number, users: boolean): Block[] {
+  const blocks: Block[] = []
+  const add = (block: Block): void => {
     if (block.pieces.map(piece => piece.text).join('').trim() === '') return
     // Neighbouring pieces in one style are one item, as the demo merges them (links stay apart: each has its own href).
     const merged: Piece[] = []
@@ -240,12 +246,9 @@ function demoBlocks(): Map<string, Block[]> {
       if (previous !== undefined && previous.style === piece.style && piece.style !== 'link' && piece.style !== 'image' && piece.style !== 'code') previous.text += piece.text
       else merged.push({ ...piece })
     }
-    block = { ...block, pieces: merged }
-    let list = byKind.get(block.kind)
-    if (list === undefined) byKind.set(block.kind, list = [])
-    list.push(block)
+    blocks.push({ ...block, pieces: merged })
   }
-  const specs = createMarkdownChatSpecs(2000)
+  const specs = createMarkdownChatSpecs(count)
   const visit = (tokens: readonly Token[], from: string): void => {
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]!
@@ -276,8 +279,8 @@ function demoBlocks(): Map<string, Block[]> {
       }
     }
   }
-  for (let i = 0; i < specs.length; i++) if (specs[i]!.role === 'assistant') visit(marked.lexer(specs[i]!.markdown, { gfm: true }), `pages/demos/markdown-chat.data.ts createMarkdownChatSpecs(2000) #${i}`)
-  return byKind
+  for (let i = 0; i < specs.length; i++) if (users || specs[i]!.role === 'assistant') visit(marked.lexer(specs[i]!.markdown, { gfm: true }), `pages/demos/markdown-chat.data.ts createMarkdownChatSpecs(${count}) #${i}`)
+  return blocks
 }
 
 // ---- Building texts ----

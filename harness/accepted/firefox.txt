@@ -25,9 +25,6 @@ catalog-26d0c58f4b1a737e count
 catalog-3cf193e86082144e count
 catalog-7cf32037f7604eb3 count
 
-## A bidi control after a space that starts a span, before white space that starts the next, at 24 px and wider: Firefox drops it from its text (IsDiscardable) and ends the line past it, where the library keeps it as text of no width, which the next line starts with (main and 0fef0023 too; ENGINE_FOLLOWUPS.md)
-rich-426a9dc0f93dbfdb breaks
-
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Firefox breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-4635ddffedd43c84 breaks
 rich-8736e842495c21ea count
@@ -579,6 +576,20 @@ facts-c0558690d387886c breaks
 catalog-658777b7de4a75b5 count
 catalog-92d159c42fda8ce1 count
 catalog-db900db766e91e07 count
+
+## Narrower than real layouts: 1-23 px, a ZWSP alone in a rich item, at the start of one, or in one after only white space, soft hyphens or a combining mark's base, where the text around it doesn't fit its line: Firefox gives the ZWSP a line of its own, as for the text in one node, where the text walkers keep it on the line before it or consume it at a line's start; the item stepper took an item's start as a text's start, where a ZWSP holds a line (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-0cabfc789f6a4358 count
+rich-19e866488d756c8e count
+rich-1f6ad9306376b1f5 count
+rich-25f9f1b3f0b0888e count
+rich-338fdf8cb6af531f count
+rich-3f7623a4b4dd94eb count
+rich-4b7d153ff81b0f68 count
+rich-5727de8063237d68 count
+rich-676951c3e7b42eca count
+rich-7ed410c8998dbb4a count
+rich-d5b65aa2a4d131a5 count
+rich-dcfaf1298b58bfa4 count
 
 ## Narrower than real layouts: 2-23 px, where most lines break inside a word; the narrowest real-usage draw is 25 px
 catalog-00112a174f3b5ab9 count
@@ -1436,13 +1447,18 @@ oracle-f1121833e4ed5ed7 count
 rich-0228179eb16f7fed count
 rich-0e00bb1689b366cc count
 rich-7b25479467251799 count
-rich-8983391970c05be0 breaks
 rich-8992da35e9afd564 breaks
 rich-92a3f55de690d221 breaks
 rich-ac88f7d112e69240 count
 
+## Narrower than real layouts: 9.7 px, `A` and a word joiner in an item of its own at -1 px letter spacing: Firefox gives the word joiner no letter spacing and keeps it on the line of `A`, where the library spaces it (ENGINE_FOLLOWUPS.md, Letter spacing) and the text walkers, which fit a character of no advance against the line's width before the negative gap, end the line before it; the item stepper fitted each item whole
+rich-6dbb34be649dfa2b count
+
 ## Narrower than real layouts: a 1 px box, narrower than the "ffi" ligature of 24 px Hoefler Text that starts its line; Firefox cuts inside such a ligature and gives each of its letters an equal share of its advance (ComputeLigatureData, gfxTextRun.cpp:238-322), so each letter takes a line, where the library counts the ligature whole on its first letter and gives the rest no width, so two of them share a line (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
 catalog-5e5da93679ee9480 count
+
+## Narrower than real layouts: width 1, a soft hyphen in a span of its own after a word: Firefox ends the last letter's line after the soft hyphen, where the text walkers end it at the letter and the next line's start consumes the soft hyphen, as in one text (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-fb77b1bfbe1c8a96 breaks
 
 ## Narrower than real layouts: width 1, where nothing fits and Firefox keeps spaces, marks, controls or zero-width characters with the character before them otherwise than the library
 catalog-0099ca5fe40e865a count
@@ -1929,25 +1945,18 @@ facts-cb2d5cc303747edb count
 facts-cc939d224ccd4816 count
 facts-d5a3d937459712e1 count
 facts-fc69084749bc97f4 count
-rich-029e71d595e94f0c breaks
 rich-26c6030b9304ccd7 count
 rich-2ba96631579775f7 count
 rich-2d09e453d98924b9 count
 rich-34075de5f2f50824 count
 rich-3f6c610251935b3f count
-rich-56f1ab0f866f4262 count
 rich-8acb5b79e29743bd count
 rich-8d3626fe8bbced7a count
-rich-9b4af34068e55c9a breaks
 rich-9caad05a8d6ec08d count
 rich-a560650dfbeafe72 count
 rich-ab169565a9c0a88b count
-rich-af536739c810f600 count
-rich-b24c8a1759a7f9cb breaks
 rich-c4a883b30ad5ddaf count
-rich-c604ab44311a3b58 breaks
 rich-cd0ee47c06b6cf6d count
-rich-d2cbcec88b98434b breaks
 rich-eac5e4eee615b1b8 count
 rich-eafa066368d2585d count
 

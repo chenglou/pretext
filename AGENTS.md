@@ -9,8 +9,8 @@ Changelog updates guideline: don't add dev-facing notes, only user-facing ones. 
   (Part 3). Read the log before reversing a documented decision; code comments that cite it mark where each one applies.
   A PR's full story goes in its description; `RESEARCH.md` gets the durable fact: the claim, its number, build and date,
   its source, and what would reopen it.
-- `harness/README.md`: how cases pass and grow. Accuracy claims rest on its recordings and accepted lists; speed claims
-  and finished comparisons go in PR descriptions.
+- `harness/README.md`: how cases pass and grow. Accuracy claims rest on its recordings and accepted lists; bench tables
+  and finished comparisons go in PR descriptions, and `RESEARCH.md` keeps the number a decision rests on.
 - `ENGINE_FOLLOWUPS.md`: open gaps. `PLATFORM_BUGS.md`: browser and OS bugs, read before changing an engine-profile
   workaround or a line-fit tolerance. `TODO.md`: priorities. `DEVELOPMENT.md`: the demo server, engine data, releases.
   `pages/demos/markdown-chat.md`: the chat demo's patterns for app developers, updated with the chat.
@@ -55,7 +55,7 @@ judgement; one outside them needs the maintainer first.
 - For plain text, the per-engine rebuild (`rebuild/` on branch `rebuild-20260916`) is the correctness reference: where it gets a case right, port its rule. For rich inline, follow the engine's own inline model: one paragraph's text broken across its spans.
 - Engine differences live in the engine profile and its tables, not in branches elsewhere.
 - Attribute every case a change moves (fixed, right by luck, page history) before landing; a new accepted failure needs a written reason.
-- Write plain predictable code; don't shape code to one JIT's heuristics, and accept a small regression a JIT alone explains. Don't keep dead or redundant code because one JIT runs it faster, whatever the regression, and note what it costs (`RESEARCH.md`, Decisions Log).
+- Write plain predictable code. For speed, aim at what stays true across engines and versions: stable types, good allocation patterns and plain C-like code, measured and commented (engineering.md, Control Flow). Don't shape code to one JIT's moving heuristics; accept a small regression that only such a heuristic explains, and don't keep dead or redundant code because one JIT runs it faster. Note what it costs (`RESEARCH.md`, Decisions Log).
 
 ### Implementation notes
 
@@ -68,6 +68,8 @@ judgement; one outside them needs the maintainer first.
 - Preparation makes a new Canvas context when its language changes, because Chrome's OffscreenCanvas picks fonts for a
   new language only when the font string changes; not on `clearCache()`, because Chrome caches shaped text per canvas
   (`PLATFORM_BUGS.md`).
+- Callers are well-typed TypeScript: no runtime check of an argument's type, and nothing promised to a caller the
+  types rule out (`RESEARCH.md`, Decisions Log, 2026-10-06).
 - Source imports keep `.js` specifiers in `.ts` files so plain `tsc` emits working JS; extensionless ones pass
   `moduleResolution: "bundler"` and only `bun run package-smoke-test` catches them.
 - Engine data is refreshed by hand, never in a build step (`DEVELOPMENT.md`). `Intl.Segmenter` only splits words in the

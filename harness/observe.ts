@@ -1,5 +1,5 @@
 // How `record` reads the browser's own layout of a case. The DOM part runs in the page; the line functions below it also
-// run offline, on stored rects, where the tests and the premise checks call them.
+// run offline, on stored rects, where the tests call them.
 //
 // - Lines come from rect positions, never from height / line height: every text box rect with positive height has a
 //   vertical centre, and a new line starts where the next centre down is half a line height or more below the one before.

@@ -32,8 +32,9 @@ builds widths are compared exactly: to `equal <ref>` a line width that differs a
 (Proving "no change"). The library's consistency blocks on every case, recorded or not: the line APIs (`layout()`,
 `measureLineStats()`, `walkLineRanges()`, `layoutNextLineRange()`, `layoutNextLine()`, `layoutWithLines()`,
 `materializeLineRange()` and their rich-inline counterparts) must agree on lines, widths and text, and none may call
-`measureText` after preparing. A rich fragment's text is `materializeLineRange()`'s over its cursors in its item's own
-prepared text, but for the hyphen of a soft hyphen it ends at, which the text the items join decides. A box is a visible
+`measureText` after preparing. A rich fragment's text is its item's text between the fragment's `sourceStart` and
+`sourceEnd` as painted, white space collapsed, invisible breaks and what the engine profile's analysis takes out of
+the text left out, with the hyphen of a soft hyphen its line ends at (`fragmentProblem()`). A box is a visible
 character whatever its width, placed by its top. Every case is laid out start-aligned in an element with no text
 decoration or background, so a browser rule that depends on those is recorded on one side only: Chrome keeps a word's
 kerning with a hanging space in such text and drops it in the others (`RESEARCH.md`, Kerning At Line Edges).
@@ -96,7 +97,7 @@ layouts" (the narrowest real-usage draw is 25 px).
 | `reports.ndjson` | Filed reports with the text, font and width as filed (`sets/exact.ts`) | `make.ts write` |
 | `catalog.ndjson` | Families of templates, from the engines' rules, the UAX #14 classes between the scripts apps mix, the shapes `ENGINE_FOLLOWUPS.md` names, bidi controls where Firefox's line breaking looks past them, CJK marks Chrome halts next to other punctuation, letter-spaced words whose ligatures the browsers turn off, emoji characters a named font draws itself and one word wider than its line, kerned or joined, that each browser cuts between letters its own way, plus adversarial `main/*` cases taken from the old test suite | the width search |
 | `facts.ndjson` | The engine facts `src/layout.test.ts` checks on plain text, in a browser | the width search |
-| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, fullwidth punctuation at an item's edge, a line's return from an unfit soft hyphen to a break between two text segments, plus `main/*` cases | the width search |
+| `rich.ndjson` | Rich-inline paragraphs: styled runs, span edges, chips, padded code spans, boxes (an empty inline-block of a width and a height, top-aligned), the shapes whose lines changed when items began to continue the line (#369), keep-all and pre-wrap paragraphs, fullwidth punctuation at an item's edge, a line's return from an unfit soft hyphen to a break between two text segments, a lone carriage return at an item's edge and a line separator that ends an item before white space, plus `main/*` cases | the width search |
 | `census.ndjson`, `books.ndjson`, `smoke.ndjson` | Real paragraphs of `corpora/` at several widths, and whole books, from the per-engine rebuild | taken once |
 | `oracles.ndjson` | The mode oracles (pre-wrap, keep-all, symbols, letter spacing, soft hyphens) the old test suite ran | taken once |
 | `followups.ndjson` | Two fuzz strings `ENGINE_FOLLOWUPS.md` names | taken once |
@@ -153,8 +154,13 @@ New cases mustn't pile up as the old suite's did, a hand-written repro per bug.
 3. `make.ts cut <set>` writes `cases/<set>.ndjson`. It keeps only the frozen `main/*` cases and the templates the saved
    search holds, so it refuses a search that doesn't cover every template of the set (a cut after a partial search
    dropped 8,926 generated cases with no word at b1fd05fc); search the whole set before cutting, then remove
-   `.artifacts/harness-sets/<set>/`. A template added to an existing family should bring its older cases back byte for
-   byte, and a whole-catalog search derives every generated case again, so a browser's drift lands in the PR.
+   `.artifacts/harness-sets/<set>/`. The rich set is the exception: its earlier templates' widths were searched in older
+   browser builds, so each later group of its templates is searched and cut on its own, by calling `sets/widths.ts`'s
+   `recordFirst`, `select`, `bisect` and `cut` over the new templates alone (no `make.ts` command takes part of a set),
+   and its cases are added to the file (`sets/rich.ts`'s header; ENGINE_FOLLOWUPS.md, Harness debt, has the additions to
+   the catalog and the facts set that weren't a whole cut either). A template added to an existing family should bring
+   its older cases back byte for byte, and a whole-catalog search derives every generated case again, so a browser's
+   drift lands in the PR.
 4. `bun harness record --only-new`, then `bun harness check`; a new failure the change doesn't fix goes on the accepted
    list with `check --accept="<reason>"`.
 
@@ -169,13 +175,17 @@ reasons that cite a `layout.test.ts` line point at the files of main before #340
 `git show 6d1d2106:<path>`. The two facts #396 added (lines 1948 and 2015) point at that pull request's `layout.test.ts`, and
 name the fonts they run in where that isn't 16px Arial. A fact added after them names its test's line as of the commit
 that added or last changed the fact, which this paragraph names, since a later merge moves the test and a case's family
-and origin keep the line: line 1000 at dbfab0de (#399), Firefox's white space around bidi controls, and line 2140 at
+and origin keep the line: line 1000 at dbfab0de (#399), Firefox's white space around bidi controls, line 2140 at
 785e5af2 (#446), Chrome's return from an unfit hyphen to a break between two text segments, whose second row runs in
-16px Hiragino Sans. Such a fact also names the paragraph directions it runs in where a browser's lines turn on them
-(the first of those, both). The facts set has no
+16px Hiragino Sans, and line 1575 at f2e54d1b (#455), the WebKit profile's lone carriage return, which runs in 16px
+Menlo alone: there Safari gives the carriage return a character's width, the profile gives it none, and webkit-host's
+six failures at 24 px and wider are accepted (`RESEARCH.md`, Decisions Log, 2026-10-06). Such a fact also names the
+paragraph directions it runs in where a browser's lines turn on them (the first of those, both). The facts set has no
 cover, so it keeps the width where a template's words join, which the catalog's cover drops once a narrower change has
 shown that kind of break: a fact that rests on a line's width, such as one space against two, goes there.
-ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again.
+ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again. The oracle set's origins point at
+main before #340 too: each names a mode and a case's label in `src/test-data.ts`'s oracle arrays, gone from today's
+file.
 
 ## Commands
 
@@ -252,24 +262,49 @@ harness/invariants.test.ts`) and the bench's floors.
   either, and it failed in 1 of the 600 drawn before the cut-word cases joined the sets and in none of those drawn
   since; the Blink and Gecko profiles measure letter-spaced text apart, so no word there is fit two ways. A planted miss
   of a line-start width in `layout()`'s count fails the Blink profile's agreement check in 3 draws of 600.
+- The stand-in halts a closing fullwidth mark by a few tenths of a pixel, so almost no line there fits only by a halt:
+  with the halt that a mark at a rich item's end keeps on a line with content (`itemEndHalts`) taken out of the walker,
+  0 of 21,251 inputs differed in every profile (2026-10-07). A change to that rule rests on the unit tests and on
+  predictions in Chrome.
 - Canvas-call counts before #355 aren't comparable with later ones: the harness's adapter (`run.ts`) stopped calling
   `setLocale()` per case, cutting its calls 20-25% with no prediction change (2026-09-26).
 
 ## Bench
 
-Speed claims rest on `bun harness bench`'s same-document ratios. Its rows (`new`, `rich`, `seen`, `resize`, `lines`,
-`worst`) follow what an app does; never rank `prepare()` against `layout()`, as one is paid once and the other on every
-resize. The `new` rows time text no library or browser has laid out: Firefox and Safari keep shaped text per font,
-shared by every canvas and the DOM, so a fresh canvas doesn't make text new. The `rich` row's `rich-seen` prepares its
-kept messages again, where every item looks its font up and measures nothing. The `lines` row times the line functions
-on mixed, Latin and CJK messages, each family in a document of its own.
+Speed claims rest on `bun harness bench`'s same-document ratios. Its rows (`new`, `fresh`, `rich`, `seen`, `resize`,
+`lines`, `worst`) follow what an app does; never rank `prepare()` against `layout()`, as one is paid once and the other
+on every resize. The `new` rows time text no library or browser has laid out: Firefox and Safari keep shaped text per
+font, shared by every canvas and the DOM, so a fresh canvas doesn't make text new. The `fresh` rows are the one kind
+with no same-document ratio: each document holds one library, and times compiling its bundle, running it and its first
+two batches of new messages, which the table after the rows gives as medians per library, with no verdict. The `rich`
+row has three documents: `latin`, the stress items, a word or a space each; `chat`, the Markdown chat demo's paragraphs,
+list items and headings as it prepares them, 86% of them one item; and `chat-styled`, only its paragraphs of several
+items, where an item is several words and 37% of the paragraphs (40% of the ones the line operations run on) hold an
+item that starts inside a word, with no space on either side of its start: punctuation right after a styled run (a
+comma, a full stop, a closing bracket) or a code run right after an opening bracket, never a letter after a letter. A
+change can read faster on one and slower on another: the stress items never start inside a word and have a segment an
+item. Each one's `rich-new` gives every library a batch of its own a round: 1,000 units of the stress items, which the
+length of the Latin text caps (The Great Gatsby's opening, which the `new` and `fresh` rows read forward too), and 4,000
+of the demo's paragraphs, which differ more from one batch to the next than prose does. The demo repeats sentences, so
+its batches are paragraphs of words mostly seen, and 6% of `chat`'s new paragraphs repeat an earlier one whole. Each
+one's `rich-seen` prepares its kept paragraphs again, where every item looks its font up and measures nothing. Each
+one's `rich-walk` and `rich-stream` keep every line they are handed, in one variable outside the loop, as an app that
+paints its lines keeps them: both rich demos, the Markdown chat and the rich note, pass each line they walk to
+`materializeRichInlineLineRange()`. A callback that reads only the line's width times less than an app pays, and not the
+same less for every library, since an engine that inlines a library's line builder into the walk then never makes the
+line. So a `rich-walk` or `rich-stream` figure from before #456 isn't comparable with one after it, on the stress
+document either (`RESEARCH.md`, Evaluation Traps, Timing, has the numbers behind the batches and the kept line). The
+`lines` row times the line functions on mixed, Latin and CJK messages, each family in a document of its own.
 
 - **A control copy.** Each document runs base, the candidate and a second copy of base, shuffled each round, since only
   same-document ratios survive drift between sessions (`RESEARCH.md`, Evaluation Traps, has the numbers behind this and
   the next three).
 - **Focus and a quiet machine.** Background windows' timers are slowed, so Chrome and Safari need a visible, focused
   window throughout. Using the machine spoils the sessions it overlaps, and only those; a loaded machine spoils them
-  all.
+  all. Time on mains, from an adapter that charges the machine under load, or on a battery above 20% charge: at 20%
+  and under the machine throttles, some operations more than others, so the ratios of a run that starts or ends there
+  are void as well as its times (`RESEARCH.md`, Evaluation Traps, Timing; a run prints its power source and charge as
+  it starts and as it ends).
 - **Two sessions and a confirming one.** A row reads slower or faster only when it does so in every session, and the
   floors are fitted to three, where two agree by chance: in the 19 runs of three sessions saved on 2026-10-02, the
   first two called 74 of 322 rows and the third took 22 of them back. So after the default two sessions each browser
@@ -286,6 +321,16 @@ on mixed, Latin and CJK messages, each family in a document of its own.
   runs of Chrome's CJK and Thai `new` rows, whose spread is between batches of text. Such a row says nothing of a
   change smaller than its band: time it again alone with more sessions (`--rows`, `--sessions`) when the change touches
   what the row times.
+- **The band misses a slow copy that is the candidate's.** Where one copy of three keeps another speed for a document,
+  a session reads level when that copy is the control's and as a change when it is the candidate's. Chrome 154 runs one
+  copy of main about 12% slower than the other two on the chat documents' `rich-seen` (47.5 or 53.5 µs per 1,000 units
+  on `chat`, 58 or 65 on `chat-styled`), a different copy from session to session, and Safari 27 does the same on the
+  stress document's `rich-walk` and `rich-stream`. Main against itself read Safari's stress `rich-stream` 12-15% slower
+  in all three sessions of one run, which called it slower, and Chrome's `chat-styled rich-seen` 10-13% slower in 7
+  sessions of 11 (2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing). Read such an entry over ten sessions, and by
+  each copy's own cost in the saved samples, since the table prints base's and the candidate's medians only: the line a
+  run prints as it starts names their folder, `.artifacts/harness-bench/<time>/`, which holds one file for each browser
+  and session, with each round's `ms` and `units` by `label`.
 - **Floors**, the noise threshold under which a row's ratio isn't called a change (1-6% by row, `FLOORS` in
   `bench/report.ts`, with the builds and machine they came from), are the largest deviation held in one direction in all
   three sessions of a calibration of HEAD against itself; calibrate again, with `bun harness bench HEAD --sessions=3`,
@@ -295,7 +340,17 @@ on mixed, Latin and CJK messages, each family in a document of its own.
   known between main before #340 (6d1d2106) and 217c84b8, a commit of #340: pre-wrap layout and walk at 1.05 of base's
   time in Chrome and 1.18-1.25 in Firefox, and letter-spaced CJK and control layouts at 1.12 and 1.20 in Safari. One
   floor serves a row in all three browsers, and the `lines` row's Latin and CJK entries, added after that calibration
-  (#416), take the row's (`ENGINE_FOLLOWUPS.md`, Harness debt).
+  (#416), take the row's (`ENGINE_FOLLOWUPS.md`, Harness debt). The `rich` row's was fitted to the stress items with a
+  callback that read only a line's width; with the kept line and the two chat documents, main against itself was called
+  on none of the row's 45 entries in a run of eight sessions of the row or in a run of three sessions of every row
+  (e1c6ed68, 2026-10-07), so the row keeps it. A verdict needs every session to agree, so a run of eight says less than
+  a run of three: three at a time, those eleven sessions call a chat entry in Chrome in 37 of their 165 sets
+  (`chat-styled rich-seen` in 35, 20 of them `chat-styled rich-new` too: the slow copy was the candidate's in 7 of the
+  11 sessions, where an even shuffle makes it a third of them and a call once in 27 runs), a rich entry in Safari in 12
+  (the stress `rich-stream` in 10) and in Firefox in 2. By the letter of the fitting rule the run of three sessions of
+  every row would give 7%, from the control's copy on Safari's stress `rich-walk` (6.2%, 15.4% and 20.9% over base), an
+  entry where a copy keeps a speed: the band covers a control's copy, and no floor short of the distance between two
+  speeds covers a candidate's (the bullet above).
 - **The builds.** The first line of the output names base and the candidate with their commits and dates, and says
   when this tree's `src/` has uncommitted changes, so a pasted table says what it compared.
 - **WebKit's width cache** samples one Canvas call in 21 after a run of misses, so a prepare that submits n strings
@@ -310,14 +365,23 @@ on mixed, Latin and CJK messages, each family in a document of its own.
   16.8% and 8.7% slower under #406, two unrelated changes timed against the same main on the same day (Firefox 156.0.1,
   three sessions each, 2026-10-02), so they move with unrelated changes to the bundle and want a second change's table
   before being blamed on one.
+- **Safari's `resize: latin layout at widths seen before`** read 9-15% slower in six sessions of a build whose
+  `layout()` code was main's, and within noise for the same code one top-level binding apart (Safari 27.0, 2026-10-06;
+  `RESEARCH.md`, JavaScript Engines). Where it alone reads slower or faster with no change to code `layout()` runs,
+  time a build one binding apart before blaming the change.
 - **A verdict on one of those three rows** prints "(moves with the bundle)" in Firefox's table (`MOVES_WITH_BUNDLE`,
   `bench/report.ts`). The list is Firefox 156's: after a pin bump a row stays on it only while unrelated changes still
   move it.
+- **Chrome's `lines: mixed stats`** read the candidate's copy about 1% over base's on identical code, in 15 of 16
+  sessions of main against itself and with the code the bench wraps a library in (`ENTRY`, `bench/lib.ts`) as it was
+  before and after #456 (Chrome 154.0.8037.98, 2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing), and the row's floor
+  is 1%. A reading of about 1% slower there, alone, is this.
 
-A session of every row took 74 s in Chrome, 91 s in Firefox and 79 s in Safari (the medians of 50-52 sessions each,
-2026-10-01 and 02; a document that loses focus waits a minute and starts again), before the Latin and CJK `lines`
-entries: a little over eight minutes for the default two, and then the confirming sessions, which would have timed 57
-of the third sessions' 145 documents in the 19 runs above. Nothing timed is checked in.
+A session of every row takes 96 s in Chrome, 117 s in Firefox and 98 s in Safari (six sessions each, 2026-10-07; a
+document that loses focus waits a minute and starts again): a little over ten minutes for the default two, and then the
+confirming sessions, which would have timed 57 of the third sessions' 145 documents in the 19 runs above. Before the
+Latin and CJK `lines` entries and the two chat documents it took 74, 91 and 79 s (the medians of 50-52 sessions each,
+2026-10-01 and 02). Nothing timed is checked in.
 
 ## Browsers and pins
 
@@ -328,7 +392,8 @@ which `record`, `check` and `gate` refuse until a repin. That build recorded all
 lines, widths and height, and holds the same break data. Safari can't be
 pinned, and a macOS update moves all three browsers (system fonts, Core Text, ICU, emoji). `repin` records every case
 with the new build into a scratch copy of the recordings and prints the cases laid out otherwise, the new page history,
-and whether the browser still holds the break data and character properties in `scripts/engine-data/`.
+and whether the browser still holds the files of `scripts/engine-data/` that its `sources.json` lists: the engines'
+compiled break rules and ICU's character properties, not the two pair tables (DEVELOPMENT.md, Engine Data).
 
 webkit-host lays text out as Safari 27.0 does: the same line geometry on 25,180 cases in both orders (2026-09-17, in
 the per-engine rebuild's harness) and on installed Safari's 2,000-case sample here, where the 1,990 cases pinned in both
@@ -424,10 +489,10 @@ the widest, as in a fifth of the sample's pre-wrap draws, and webkit-host's `nar
 The harness doesn't see re-layout at a line's own width; several rules of the Gecko profile's analysis of bidi
 controls (`ENGINE_FOLLOWUPS.md`, Harness debt); an emoji modifier split from its
 base across rich items; a rich paragraph of one item, which the adapter writes as plain text, so `src/layout.test.ts`
-checks its line functions against the rich stepper; Chrome's UI language, and so its `zh` table for pages without a
+checks its line functions against the same item with an empty item after it; a line that holds only an atomic item of
+white space, which has no text for the recorder to list, so a prediction with that line is scored as a line too many
+though the recorded height has it; Chrome's UI language, and so its `zh` table for pages without a
 `lang`; rendering other than macOS's and an iOS simulator's (Other ratios and phones), though Android and Windows are
 65% of page views (`weights.json`); text chat users wrote (the sample's chat draws are stand-ins; written prompts and replies in their place moved the
 headline by 0.03 points or less, RESEARCH.md, Decisions Log, 2026-10-05); or the demos' painted
-layout. No planted defect guards the watchdog's kill, the bench's shuffle and its separate compiles (each copy of the
-library compiled in a module of its own), Firefox's start-up hold, the page passing the browser's name to the recorder,
-or the cap on a job's browser beyond its kill needing no `ps` table.
+layout. `ENGINE_FOLLOWUPS.md`, Harness debt, lists the mechanisms and checks that no planted defect guards.

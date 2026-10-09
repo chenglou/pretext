@@ -6,7 +6,7 @@ import { buildName } from './lib.ts'
 import type { DocResult, Sample } from './page.ts'
 import { report, unconfirmed, verdict, type SessionResults } from './report.ts'
 import { documents, runSessions, type Planned } from './run.ts'
-import { familyText, MESSAGE_FAMILIES, STYLE, units } from './texts.ts'
+import { EMOJI, familyText, MESSAGE_FAMILIES, STYLE, units } from './texts.ts'
 
 describe('the verdict', () => {
   test('a row is slower or faster only outside the band in every session: one noisy session would call a change', () => {
@@ -164,18 +164,22 @@ describe('the sessions', () => {
 
 describe('the texts', () => {
   const docs = documents(['new', 'fresh', 'rich'], 'bench-test', false)
+  // A mixed message may end with a space and an emoji its text doesn't hold, which a batch's end may cut anywhere.
+  const emojiTail = new RegExp(` ?[${EMOJI.join('')}]*$`, 'u')
 
-  test('the rows that time new text never prepare a message twice: a warm cache would read as a faster library', () => {
+  test('the rows that time new text never prepare a message of the corpora twice: a warm cache would read as a faster library', () => {
+    // The chat documents are left out: the demo repeats sentences, and 6% of `chat`'s new paragraphs repeat an earlier
+    // one whole (harness/README.md, Bench).
     for (const family of MESSAGE_FAMILIES) {
-      if (family === 'mixed') continue // its messages may end with an emoji the text doesn't hold
       const text = familyText(family)
       let at = 0
-      for (const d of docs.filter(x => x.family === family || (x.row === 'rich' && family === 'latin'))) {
+      for (const d of docs.filter(x => x.family === family)) {
         const messages = d.fresh !== undefined ? d.fresh.batches.flat() : d.ops.filter(op => op.batches !== undefined).flatMap(op => op.batches!.flat().map(m => (typeof m === 'string' ? m : (m as Array<{ text: string }>).map(item => item.text).join(''))))
         for (const m of messages) {
-          const found = text.indexOf(m, at)
+          const read = family === 'mixed' ? m.replace(emojiTail, '') : m
+          const found = text.indexOf(read, at)
           expect(found).toBeGreaterThanOrEqual(at)
-          at = found + m.length
+          at = found + read.length
         }
       }
     }
@@ -191,16 +195,35 @@ describe('the texts', () => {
         expect(op.textUnits).toBeGreaterThanOrEqual(20_000)
         const texts = op.texts as string[]
         expect(units(texts)).toBe(op.textUnits!)
-        // The mixed messages may end with an emoji their text doesn't hold.
-        if (family !== 'mixed') for (const message of texts) expect(familyText(family)).toContain(message)
+        for (const message of texts) expect(familyText(family)).toContain(family === 'mixed' ? message.replace(emojiTail, '') : message)
       }
     }
+  })
+
+  test('the rich row times the chat demo\'s paragraphs beside the stress items, and its styled ones alone: a change that slows items of several words would be read only on items of a word each', () => {
+    type Items = Array<{ text: string }>
+    const rich = docs.filter(d => d.row === 'rich')
+    expect(rich.map(d => `${d.family} ${d.ops.map(op => op.op).join(' ')}`)).toEqual(['latin', 'chat', 'chat-styled'].map(family => `${family} rich-new rich-stats rich-walk rich-stream rich-seen`))
+    const [stress, chat, styled] = rich.map(d => ({ kept: d.ops[1]!.texts as Items[], batch: Math.max(...d.ops[0]!.batchUnits!) }))
+    const share = (lists: Items[], of: (items: Items) => boolean): number => lists.filter(of).length / lists.length
+    // The stress items are a word or a space each. Most of the demo's paragraphs are one item, as 86% of all it
+    // prepares are; its styled ones are several, with an item of several words in most, and in two in five an item
+    // that starts inside a word, with no white space on either side of its start.
+    expect(share(stress!.kept, items => items.every(item => !/\S\s|\s\S/.test(item.text)))).toBe(1)
+    expect(share(chat!.kept, items => items.length === 1)).toBeGreaterThan(0.8)
+    expect(share(chat!.kept, items => items.length === 1)).toBeLessThan(0.92)
+    expect(share(styled!.kept, items => items.length > 1)).toBeGreaterThan(0.98)
+    expect(share(styled!.kept, items => items.some(item => /\S\s+\S/.test(item.text)))).toBeGreaterThan(0.9)
+    expect(share(styled!.kept, items => items.some((item, i) => i > 0 && !/\s/.test(item.text[0]!) && !/\s/.test(items[i - 1]!.text.at(-1)!)))).toBeGreaterThan(0.3)
+    // A round of new text compares three batches, and the demo's paragraphs differ more than prose does: a batch of
+    // them is four of the stress document's (harness/README.md, Bench).
+    expect([stress!.batch, chat!.batch, styled!.batch]).toEqual([1000, 4000, 4000])
   })
 
   test('each family\'s new batches hold the same units: a longer batch would read as a slower library', () => {
     for (const d of docs) {
       const sizes = d.fresh !== undefined ? d.fresh.batches.map(units) : d.ops[0]!.batchUnits!
-      // One unit more where a cut would split a surrogate pair.
+      // One unit more, or one fewer in the item lists, where a cut would split a surrogate pair.
       expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1)
       if (d.row === 'new' && d.family !== 'labels') expect(Math.min(...sizes)).toBeGreaterThan(200)
     }

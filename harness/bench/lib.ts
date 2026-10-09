@@ -30,8 +30,14 @@ export function buildName(refOrDir: string): string {
 }
 
 // What a document runs of a library: handles of each kind, and one operation over them `reps` times, a width a rep.
+// A rich walk or stream keeps each line it is handed, in `kept`, as an app that paints its lines keeps them: a callback
+// that read only the line's width let an engine that inlines a library's line builder never make the line, for that
+// library and not for another (harness/README.md, Bench). The run reads the last one, so the store isn't dead. A
+// walk's `n +=` reads `n` before the call, so the widths its callback adds are overwritten and a walk, plain or rich,
+// adds line counts alone to `n`, as it did before `kept`: `kept` is what makes the engine build each rich line.
 const ENTRY = `import * as L from 'LIB/layout.ts'
 import * as R from 'LIB/rich-inline.ts'
+let kept = null
 function prepare(kind, texts, font, options) {
   const out = new Array(texts.length)
   for (let i = 0; i < texts.length; i++) out[i] = kind === 'rich' ? R.prepareRichInline(texts[i]) : kind === 'segments' ? L.prepareWithSegments(texts[i], font, options) : L.prepare(texts[i], font, options)
@@ -39,6 +45,7 @@ function prepare(kind, texts, font, options) {
 }
 function run(op, data, widths, reps, font, options) {
   let n = 0
+  kept = null
   for (let r = 0; r < reps; r++) {
     const w = widths[r % widths.length]
     for (let i = 0; i < data.length; i++) {
@@ -53,13 +60,13 @@ function run(op, data, widths, reps, font, options) {
         case 'stream': for (let c = { segmentIndex: 0, graphemeIndex: 0 }; ;) { const line = L.layoutNextLineRange(p, c, w); if (line === null) break; n += line.width; c = line.end } break
         case 'lines': n += L.layoutWithLines(p, w, 20).lines.length; break
         case 'rich-stats': n += R.measureRichInlineStats(p, w).maxLineWidth; break
-        case 'rich-walk': n += R.walkRichInlineLineRanges(p, w, line => { n += line.width }); break
-        case 'rich-stream': for (let c = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }; ;) { const line = R.layoutNextRichInlineLineRange(p, w, c); if (line === null) break; n += line.width; c = line.end } break
+        case 'rich-walk': n += R.walkRichInlineLineRanges(p, w, line => { kept = line; n += line.width }); break
+        case 'rich-stream': for (let c = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }; ;) { const line = R.layoutNextRichInlineLineRange(p, w, c); if (line === null) break; kept = line; n += line.width; c = line.end } break
         default: throw new Error('unknown operation ' + op)
       }
     }
   }
-  return n
+  return kept === null ? n : n + kept.fragments.length
 }
 globalThis.__benchLibrary = { prepare, run }
 `

@@ -77,7 +77,7 @@ function inLine(offset: number, range: { start: number; end: number }): boolean 
   return offset >= range.start && offset < range.end
 }
 
-// Report only, for now: a chat bubble sized to the predicted widest line, rounded up (pages/demos/bubbles-shared.ts),
+// Report only, for now: a chat bubble sized to the predicted widest line, rounded up (pages/demos/bubbles.model.ts),
 // must be at least as wide as the browser's widest line, or the browser wraps the text again.
 export function shrinkWrapShort(recording: Recording, prediction: Prediction): boolean {
   if ('error' in recording || !('lines' in prediction)) return false

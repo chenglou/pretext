@@ -4,13 +4,14 @@ import {
   layoutNextLineRange,
   layoutWithLines,
   measureNaturalWidth,
+  prepare,
   prepareWithSegments,
   type LayoutCursor,
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
 
 // Local layout model for this demo: where a truncated line is cut, from Pretext's line
-// stream. Userland structure on the public API, not a new core abstraction.
+// stream. Userland structure on the public API.
 
 // Every value Pretext measures or a width depends on. The painter writes them inline, and
 // CSS doesn't restate them.
@@ -87,7 +88,7 @@ const START: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
 const FIT_TOLERANCE = 1 / 64
 
 function measureWidth(text: string): number {
-  return measureNaturalWidth(prepareWithSegments(text, FONT))
+  return measureNaturalWidth(prepare(text, FONT))
 }
 
 function createSample(label: string, direction: 'ltr' | 'rtl', text: string): Sample {

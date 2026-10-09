@@ -1,7 +1,7 @@
 // Break opportunities as Chrome and Safari find them: ports of Blink's and WebKit's
 // line-break scans over their own pair tables and ICU line rules, which
 // scripts/generate-engine-break-data.ts writes to src/generated/engine-break-data.ts.
-// The tables' bundle cost is accepted (RESEARCH.md, Decisions Log).
+// The tables' bundle cost is accepted (RESEARCH.md, Decisions Log, 2026-09-23).
 //
 // Sources, cited as file:line:
 // - ICU 78.2 as vendored in Chromium 152, under third_party/icu/source/common. Chrome
@@ -11,7 +11,7 @@
 //   tbi.cc = text_break_iterator.cc, tbi.h = text_break_iterator.h,
 //   tbi_icu.cc = text_break_iterator_icu.cc, gen.cc = character_property_data_generator.cc.
 // - WebKit safari-7625.1.29.11-branch (Safari 27.0), under Source/. Only Safari 27's rules
-//   are ported, not Safari 26's (RESEARCH.md, Decisions Log):
+//   are ported, not Safari 26's (RESEARCH.md, Decisions Log, 2026-09-16):
 //   BP.h = WebCore/rendering/BreakablePositions.h,
 //   IIB = WebCore/layout/formattingContexts/inline/InlineItemsBuilder.cpp,
 //   IFU = WebCore/layout/formattingContexts/inline/InlineFormattingUtils.cpp,
@@ -48,11 +48,13 @@ import {
 // What a scan marks at a position of its text, as bits. A line may start at a BREAK. The WebKit
 // scan marks a FORCED_BREAK after a U+2028 or U+2029 that starts an item; the Gecko scan marks a
 // CLUSTER_START where a cluster starts without a break, and a SOFT_HYPHEN_BREAK with the BREAK
-// right after a soft hyphen.
+// right after a soft hyphen. A rich-inline paragraph's analysis marks an ITEM_START where one of
+// its items starts, which starts a segment whether or not a line may start there.
 export const BREAK = 1
 export const CLUSTER_START = 2
 export const FORCED_BREAK = 4
 export const SOFT_HYPHEN_BREAK = 8
+export const ITEM_START = 16
 
 // Page languages whose line-break rules differ in some engine. Every other
 // language, an empty or missing one, and no document read as root.

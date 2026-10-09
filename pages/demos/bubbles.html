@@ -172,9 +172,10 @@
     <p class="eyebrow">Demo</p>
     <h1>Shrinkwrap showdown</h1>
     <p class="intro">
-      CSS <code>width: fit-content</code> sizes a bubble to its widest wrapped
-      line, which leaves dead space when the last line is short. Pretext finds
-      the tightest width that still wraps to the exact same number of lines.
+      With CSS <code>width: fit-content</code>, a bubble whose text wraps is as
+      wide as its <code>max-width</code>, which leaves dead space beside the
+      lines. Pretext finds the tightest width that still wraps to the exact
+      same number of lines.
     </p>
 
     <section class="controls" aria-label="Container width control">
@@ -182,10 +183,37 @@
       <input type="range" id="slider">
       <span class="val" id="val"></span>
     </section>
+
+    <section class="grid">
+      <section class="panel" id="panel-css">
+        <h2>CSS fit-content</h2>
+        <p>
+          Uses <code>width: fit-content</code> and a <code>max-width</code> of
+          80% of the chat. Text that fits on one line gets a bubble of its own
+          width. Text that wraps gets the whole <code>max-width</code>, however
+          short its lines.
+        </p>
+        <div class="metric">Wasted pixels: <span id="css-waste">...</span></div>
+        <div class="chat" id="chat-css"></div>
+      </section>
+
+      <section class="panel" id="panel-shrink">
+        <h2>Pretext shrinkwrap</h2>
+        <p>
+          Uses <code>layout()</code> to binary-search the tightest width with
+          the same line count, and <code>walkLineRanges()</code> for its widest
+          line. Zero wasted pixels. No DOM text measurement in the resize path.
+        </p>
+        <!-- 0 by definition: a bubble's wasted pixels are its area beyond the shrunk bubble's, and these are the shrunk bubbles. -->
+        <div class="metric">Wasted pixels: <span>0</span></div>
+        <div class="chat" id="chat-shrink"></div>
+      </section>
+    </section>
+
     <script>
-      // The page's geometry, and the bubbles' font and padding. It's a classic script so the first
-      // paint has them before bubbles.ts loads, and bubbles.ts calls the same getGeometry() and
-      // paint() on every render.
+      // The page's geometry, the bubbles' font and padding, and the messages. It's a classic script
+      // so the first paint has them before bubbles.ts loads, and bubbles.ts calls the same
+      // getGeometry() and paint() on every render.
       const bubblesPage = {
         defaultChatWidth: 340,
         // Pretext measures the bubbles in this font, and a bubble's width includes this padding.
@@ -193,10 +221,24 @@
         bubbleLineHeight: 20,
         bubblePaddingX: 12,
         bubblePaddingY: 8,
+        // Both chats paint these texts, and bubbles.ts prepares them.
+        messages: [
+          { side: 'recv', text: 'Yo did you see the new Pretext library?' },
+          { side: 'sent', text: 'yeah! It measures text without the DOM. Pure JavaScript arithmetic' },
+          { side: 'recv', text: "That shrinkwrap demo is wild it finds the exact minimum width for multiline text. CSS can't do that." },
+          { side: 'sent', text: '성능 최적화가 정말 많이 되었더라고요 🎉' },
+          { side: 'recv', text: 'Oh wow it handles CJK and emoji too??' },
+          { side: 'sent', text: 'كل شيء! Mixed bidi, grapheme clusters, whatever you want. Try resizing' },
+          { side: 'sent', text: "the best part: zero layout reflow. You could shrinkwrap 10,000 bubbles and the browser wouldn't even blink" },
+        ],
         dom: {
           root: document.documentElement,
           slider: document.getElementById('slider'),
           label: document.getElementById('val'),
+          cssChat: document.getElementById('chat-css'),
+          shrinkChat: document.getElementById('chat-shrink'),
+          // The shrink chat's bubbles, one per message, which bubbles.ts gives their widths.
+          shrinkBubbles: [],
         },
         getGeometry(viewportWidth, requestedChatWidth) {
           const isNarrow = viewportWidth <= 760
@@ -235,63 +277,36 @@
           slider.value = String(geometry.chatWidth)
           label.textContent = `${geometry.chatWidth}px`
         },
+        createBubble(message) {
+          const bubble = document.createElement('div')
+          bubble.className = `msg ${message.side}`
+          bubble.textContent = message.text
+          return bubble
+        },
       }
       // The body has no margin, border or padding, so its width is the room the page lays out in.
       // Chrome's root clientWidth ignores an empty scrollbar gutter and reports the full window.
       bubblesPage.paint(bubblesPage.getGeometry(document.body.clientWidth, bubblesPage.defaultChatWidth))
+      for (let index = 0; index < bubblesPage.messages.length; index++) {
+        const message = bubblesPage.messages[index]
+        bubblesPage.dom.cssChat.appendChild(bubblesPage.createBubble(message))
+        bubblesPage.dom.shrinkBubbles.push(bubblesPage.dom.shrinkChat.appendChild(bubblesPage.createBubble(message)))
+      }
     </script>
-
-    <section class="grid">
-      <section class="panel" id="panel-css">
-        <h2>CSS fit-content</h2>
-        <p>
-          Uses <code>width: fit-content; max-width: 80%</code>. The browser wraps
-          the text, then sizes the bubble to the longest wrapped line. Shorter
-          lines leave empty bubble area behind.
-        </p>
-        <div class="metric">Wasted pixels: <span id="css-waste">...</span></div>
-        <div class="chat" id="chat-css">
-          <div class="msg recv">Yo did you see the new Pretext library?</div>
-          <div class="msg sent">yeah! It measures text without the DOM. Pure JavaScript arithmetic</div>
-          <div class="msg recv">That shrinkwrap demo is wild it finds the exact minimum width for multiline text. CSS can't do that.</div>
-          <div class="msg sent">성능 최적화가 정말 많이 되었더라고요 🎉</div>
-          <div class="msg recv">Oh wow it handles CJK and emoji too??</div>
-          <div class="msg sent">كل شيء! Mixed bidi, grapheme clusters, whatever you want. Try resizing</div>
-          <div class="msg sent">the best part: zero layout reflow. You could shrinkwrap 10,000 bubbles and the browser wouldn't even blink</div>
-        </div>
-      </section>
-
-      <section class="panel" id="panel-shrink">
-        <h2>Pretext shrinkwrap</h2>
-        <p>
-          Uses <code>walkLineRanges()</code> to binary-search the tightest width
-          that produces the same line count. Zero wasted pixels. No DOM text
-          measurement in the resize path.
-        </p>
-        <div class="metric">Wasted pixels: <span id="shrink-waste">0</span></div>
-        <div class="chat" id="chat-shrink">
-          <div class="msg recv">Yo did you see the new Pretext library?</div>
-          <div class="msg sent">yeah! It measures text without the DOM. Pure JavaScript arithmetic</div>
-          <div class="msg recv">That shrinkwrap demo is wild it finds the exact minimum width for multiline text. CSS can't do that.</div>
-          <div class="msg sent">성능 최적화가 정말 많이 되었더라고요 🎉</div>
-          <div class="msg recv">Oh wow it handles CJK and emoji too??</div>
-          <div class="msg sent">كل شيء! Mixed bidi, grapheme clusters, whatever you want. Try resizing</div>
-          <div class="msg sent">the best part: zero layout reflow. You could shrinkwrap 10,000 bubbles and the browser wouldn't even blink</div>
-        </div>
-      </section>
-    </section>
 
     <section class="why">
       <h2>Why can't CSS do this?</h2>
       <p>
-        CSS only knows <code>fit-content</code>, which is the width of the
-        widest line after wrapping. If a paragraph wraps to 3 lines and the
-        last line is short, CSS still sizes the container to the longest line.
+        CSS picks a box's width before it breaks the lines.
+        <code>fit-content</code> is the width of the text on one line, capped
+        at the room the box may take, here its <code>max-width</code>. If a
+        paragraph is too long for one line and wraps to 3, the box takes all
+        of that room, and stays that wide even when all 3 lines end up shorter.
         There's no CSS property to say “find the narrowest width that still
         produces exactly 3 lines.” That requires
         <strong>measuring the text at multiple widths and comparing line
         counts</strong>, which is exactly what Pretext's
-        <code>walkLineRanges()</code> does, without DOM text measurement in the
+        <code>layout()</code> does, without DOM text measurement in the
         resize path. Pure arithmetic, no reflows, instant results.
       </p>
     </section>

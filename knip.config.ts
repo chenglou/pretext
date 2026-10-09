@@ -7,9 +7,10 @@ const config: KnipConfig = {
     // Library entry points — match the `exports` field in package.json
     'src/layout.ts',
     'src/rich-inline.ts',
-    // Scripts invoked via package.json
+    // Scripts run directly: by package.json's scripts, or by hand as the headers in scripts/grapheme-check say
     'scripts/**/*.ts',
-    // Browser pages and demos — each `pages/**/*.ts` is the target of a `<script type="module" src="…">` in a sibling `.html`
+    // Browser pages and demos — the modules a `<script type="module" src="…">` in a sibling `.html` loads, and the ones those
+    // import (shared code, models, data and a type declaration), every one of them an entry
     'pages/**/*.ts',
     // The page the harness's runner bundles, the case-set maker, and the invariants and offline equal it runs in child
     // processes.
@@ -22,9 +23,6 @@ const config: KnipConfig = {
   ],
   ignore: [
     '**/*.test.ts', // Exclude tests so their imports don't count as "usage"
-  ],
-  ignoreDependencies: [
-    'tsgolint', // Type-aware checker invoked by `oxlint --type-aware` via oxlint-tsgolint
   ],
   ignoreBinaries: [
     // Used in package.json scripts

@@ -33,5 +33,6 @@
 {"test": "src/layout.test.ts:3866 the Safari profile lets small kana and U+30FC start a line only on Japanese and Korean pages", "texts": ["日本ァア", "日本ーー", "わかって"], "modes": ["normal"], "pageLangs": ["en", "ja", "ko", "zh", "zh-Hant", "ko-KR"]},
 {"test": "src/layout.test.ts:1000 Gecko lays out bidi controls as its text run, which leaves them out", "texts": ["ab \u200e cd", "ab \u200f cd"], "modes": ["normal"], "pageLangs": ["en"], "directions": ["ltr", "rtl"]},
 {"test": "src/layout.test.ts:2140 Blink returns an unfit soft hyphen to the latest earlier break that leaves room for the hyphen", "texts": ["x ab-i\u00adefgh", "x ab?cd\u00adefgh"], "modes": ["normal"], "pageLangs": ["en"]},
-{"test": "src/layout.test.ts:2140 Blink returns an unfit soft hyphen to the latest earlier break that leaves room for the hyphen", "texts": ["x \u65e5\u672c\u8a9e\u00ad\u65e5\u672c\u8a9e", "x \u65e5\u672c\u8a9e\u00adabcdefg"], "modes": ["normal"], "pageLangs": ["en"], "families": ["\"Hiragino Sans\""]}
+{"test": "src/layout.test.ts:2140 Blink returns an unfit soft hyphen to the latest earlier break that leaves room for the hyphen", "texts": ["x \u65e5\u672c\u8a9e\u00ad\u65e5\u672c\u8a9e", "x \u65e5\u672c\u8a9e\u00adabcdefg"], "modes": ["normal"], "pageLangs": ["en"], "families": ["\"Hiragino Sans\""]},
+{"test": "src/layout.test.ts:1575 the WebKit profile takes a lone carriage return out of normal white space, with the breaks its scan found around it", "texts": ["ab\rcd ef"], "modes": ["normal"], "pageLangs": ["en"], "families": ["Menlo"]}
 ]

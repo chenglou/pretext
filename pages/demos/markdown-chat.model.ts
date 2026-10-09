@@ -4,6 +4,7 @@ import {
   layout,
   layoutWithLines,
   measureNaturalWidth,
+  prepare,
   prepareWithSegments,
   type LayoutLine,
   type PreparedTextWithSegments,
@@ -403,9 +404,10 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
       }
 
       case 'html': {
-        const htmlText = token.text.trim().length > 0 ? token.text : token.raw
-        const isPre = 'pre' in token && token.pre === true
-        if (token.block || isPre) {
+        const html = token as Tokens.HTML | Tokens.Tag
+        const htmlText = html.text.trim().length > 0 ? html.text : html.raw
+        const isPre = 'pre' in html && html.pre === true
+        if (html.block || isPre) {
           appendBlockGroup(blocks, [buildCodeBlock(htmlText, ctx)], RICH_BLOCK_GAP)
         } else {
           appendBlockGroup(blocks, buildPlainTextBlocks(htmlText, ctx), BLOCK_GAP)
@@ -795,14 +797,14 @@ function measureMarkerWidth(text: string): number {
   const cached = markerWidthCache.get(text)
   if (cached !== undefined) return cached
 
-  const width = measureNaturalWidth(prepareWithSegments(text, MARKER_FONT))
+  const width = measureNaturalWidth(prepare(text, MARKER_FONT))
   markerWidthCache.set(text, width)
   return width
 }
 
 function fallbackTextForToken(token: Token): string {
   if ('text' in token && typeof token.text === 'string') return token.text
-  return token.raw ?? ''
+  return token.raw
 }
 
 function formatTable(token: Tokens.Table): string {

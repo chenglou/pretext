@@ -476,7 +476,7 @@ export function cut(set: string, templates: readonly Template[]): Case[] {
   return cases
 }
 
-// UTF-16 units a case set asks a recording to read, per browser: the recording-time estimate is this times 58 us.
+// UTF-16 units a case set asks a recording to read, per browser: make.ts's US_PER_UNIT times this estimates the time.
 export function unitsPerBrowser(cases: readonly Case[]): Record<CutBrowser, { cases: number; units: number }> {
   const out = { chrome: { cases: 0, units: 0 }, firefox: { cases: 0, units: 0 }, 'webkit-host': { cases: 0, units: 0 } }
   for (let i = 0; i < cases.length; i++) {

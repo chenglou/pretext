@@ -19,8 +19,8 @@
 //   only inside a cluster, or after a space inside one: for example at a vowel killer of a
 //   left-to-right script after an Arabic letter, or at a ZWJ that ends the paragraph after a
 //   Hebrew letter, which rule L1 puts at the paragraph's level. Both ports were removed on
-//   purpose (RESEARCH.md, Decisions Log; ENGINE_FOLLOWUPS.md, Bidi levels, direction and script
-//   runs).
+//   purpose (RESEARCH.md, Decisions Log, 2026-09-24 and 2026-10-01; ENGINE_FOLLOWUPS.md, Bidi
+//   levels, direction and script runs).
 // - Inside runs of Thai, Lao, Khmer and Myanmar letters, Intl.Segmenter word boundaries stand
 //   in for ICU4X's LSTM models (line.rs:445-451, complex/mod.rs:135-156). Firefox's own
 //   Intl.Segmenter answers as those models there once breaks inside grapheme clusters are
@@ -171,7 +171,14 @@ export function isEastAsianSegmentBreak(text: string, start: number, end: number
 // reads through every character the text run drops. That is Firefox's run wherever the control
 // keeps the level of the white space before it, as a mark of the paragraph's own direction does
 // outside an embedding or isolate; ENGINE_FOLLOWUPS.md, White space and controls, has the rest.
-function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boolean): Transformed {
+// A rich-inline paragraph's items are text frames too: `frameStarts` has where each starts in the
+// input, in order, or is null for one text. A white-space run goes on from one frame into white
+// space that starts the next (INCOMING_WHITESPACE, :286, :382-386), whose own scan ends with its
+// frame, and a dropped character that starts a frame ends it, as it follows no white space in
+// that frame. In 16px Arial at 56px Firefox fits `see this` of items `see`, ` \u00AD`,
+// ` this word` on a 55.15px line, and not of `see `, `\u00AD `, `this word`, whose text in one node
+// it fits.
+function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boolean, frameStarts: number[] | null): Transformed {
   const len = input.length
   // The source index of each kept unit.
   const orig = new Int32Array(len)
@@ -194,6 +201,10 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
     // COMPRESS_WHITESPACE_NEWLINE, :272-387
     let inWhitespace = false
     let i = 0
+    // Where the frame a white-space run starts in ends, the next frame start past the run's start:
+    // the input's end for one text. Only a run reads it, so it is found where one starts.
+    let frame = 0
+    let frameEnd = frameStarts === null ? len : 0
     while (i < len) {
       const ch = input.charCodeAt(i)
       if (!isSpaceOrTabOrSegmentBreak(ch) && !isDiscardable(ch, is8bit)) {
@@ -215,20 +226,27 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
         continue
       }
       if (isSpaceOrTabOrSegmentBreak(ch)) {
+        if (i >= frameEnd) {
+          while (frame < frameStarts!.length && frameStarts![frame]! <= i) frame++
+          frameEnd = frame < frameStarts!.length ? frameStarts![frame]! : len
+        }
         let keepLastSpace = false
         let hasSegmentBreak = ch === 0x0a
         let trailingDiscardables = 0
         // How many characters the run holds that the text run drops.
         let dropped = 0
+        // A run that goes on from the frame before, after the characters that frame's run dropped at
+        // its end, leaves out white space that doesn't touch the unit the run kept.
+        const goesOnPastDropped = inWhitespace && i > 0 && isDiscardable(input.charCodeAt(i - 1), is8bit)
         let j = i + 1
-        for (; j < len; j++) {
+        for (; j < frameEnd; j++) {
           const c = input.charCodeAt(j)
           if (c === 0x0a) hasSegmentBreak = true
           else if (isDiscardable(c, is8bit)) dropped++
           else if (!isSpaceOrTab(c)) break
         }
         while (isDiscardable(input.charCodeAt(j - 1), is8bit)) { j--; trailingDiscardables++ } // :334-336
-        if (!is8bit && input.charCodeAt(j - 1) === 0x20 && j < len && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
+        if (!is8bit && input.charCodeAt(j - 1) === 0x20 && j < frameEnd && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
         // TransformWhiteSpaces over [i, j), :84-209. The runs it deletes whole, next to a ZWSP or
         // between East Asian characters (:120-150), are gone already (removeSkippableSegmentBreaks in
         // src/analysis.ts), so a run keeps one space. A space or tab in a run with a segment break
@@ -242,7 +260,7 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
             skipped[k] = 1
             // Where the run reads through a dropped character, white space it leaves out may not
             // touch the unit it keeps, so collapsing adjacent white space wouldn't drop it.
-            if (dropped > trailingDiscardables) (leftOut ??= new Uint8Array(len))[k] = 1
+            if (dropped > trailingDiscardables || goesOnPastDropped) (leftOut ??= new Uint8Array(len))[k] = 1
           } else {
             orig[n++] = k
             inWhitespace = true
@@ -635,6 +653,8 @@ export function getGeckoLineBreaks(
   preserveWhiteSpace: boolean,
   keepAll: boolean,
   graphemeTable: GraphemeTable,
+  // Where each item of a rich-inline paragraph starts in the source, or null for one text (transformText).
+  frameStarts: number[] | null = null,
 ): GeckoLineBreaks {
   const len = source.length
   const flags = new Uint8Array(len + 1)
@@ -642,7 +662,7 @@ export function getGeckoLineBreaks(
   let is8bit = true
   for (let i = 0; i < len && is8bit; i++) is8bit = source.charCodeAt(i) < 0x100
   // CharacterDataBuffer::SetTo stores 1b text when every unit is below 256 (CharacterDataBuffer.cpp:235-286).
-  const tr = transformText(source, is8bit, preserveWhiteSpace)
+  const tr = transformText(source, is8bit, preserveWhiteSpace, frameStarts)
   const n = tr.text.length
   if (n === 0) return { breaks: flags, leftOut: null, dropsBidiControl: tr.dropsBidiControl }
 

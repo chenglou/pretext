@@ -35,7 +35,6 @@ rich-9881c81d4b5f26ca breaks
 rich-a4b44edb3de875c2 breaks
 rich-af15c89ce4d5d9a8 breaks
 rich-b0c830aec8fcea25 breaks
-rich-befcad2d664c96dc count
 rich-c71a21ddc6fa35ca breaks
 rich-d7ac0a6af37a56bf count
 rich-dc1f44c993d80708 breaks
@@ -51,18 +50,6 @@ rich-9fb830f3b14af5c6 breaks
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Chrome breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-d5e8ab54da9c767a breaks
 rich-d95b699e131357ec breaks
-
-## A span of a soft hyphen before a span that starts with a bidi control, at the paragraph's start or after a word or a collapsed space, at 24 px and wider: Chrome breaks after the control, as for the text in one node, where the library can't end a line inside the next item's first segment, which holds the control and so takes fresh-line geometry, and ends the line at the space before the soft hyphen or, without one, inside the word after the control (main too; ENGINE_FOLLOWUPS.md)
-rich-05d465f9481322f1 breaks
-rich-158f360c052c7452 count
-rich-20c085be5cdd75ad breaks
-rich-441b269859b5762d breaks
-rich-58d40529eee407eb count
-rich-735197c68f7df397 breaks
-rich-9eb6da49941cc4f6 breaks
-rich-ab47c1d99a186b6d count
-rich-baf150bfd1f499c5 breaks
-rich-cab7a1cf42268d8d breaks
 
 ## A span of a soft hyphen between spaces after a word, at 24 px and wider: Chrome keeps the space after the soft hyphen visible at the start of the next line, as it doesn't consume a soft hyphen at a line start, where the library consumes both, as it does in one text (main and c09d264b too; ENGINE_FOLLOWUPS.md)
 rich-ed1f76e1c1bff59b count
@@ -568,6 +555,19 @@ catalog-13327218ea16077c count
 catalog-97cd971f46155b13 count
 catalog-b530bfcdd337fb4e breaks
 catalog-d5273aeae7cb64af breaks
+
+## Narrower than real layouts: 1-23 px, a ZWSP alone in a rich item, at the start of one, or in one after only white space, soft hyphens or a combining mark's base, where the text around it doesn't fit its line: Chrome gives the ZWSP a line of its own, as for the text in one node, where the text walkers keep it on the line before it or consume it at a line's start; the item stepper took an item's start as a text's start, where a ZWSP holds a line (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-14eba924d604608e count
+rich-19e866488d756c8e count
+rich-4b7d153ff81b0f68 count
+rich-7ed410c8998dbb4a count
+rich-96c42e63c2a158e1 count
+rich-a55f33376400f2f4 count
+rich-a889c7e59cf41cad count
+rich-d5874c9d718554c2 count
+rich-dcfaf1298b58bfa4 count
+rich-e7a3eb32859cfd67 count
+rich-f3094dad03fc3dc4 count
 
 ## Narrower than real layouts: 2-23 px, where most lines break inside a word; the narrowest real-usage draw is 25 px
 catalog-00656c2cd69fa2fc count
@@ -1895,6 +1895,13 @@ rich-a4c0d3d9594731bf count
 rich-c26cf717c3859584 count
 rich-ddca88239fb74e75 breaks
 rich-eb45f8c12b7c6cda count
+
+## Narrower than real layouts: 4-9 px, white space and soft hyphens in items before a ZWSP where a line starts: Chrome keeps the space after the first soft hyphen visible there, where the library consumes both, as it does in one text; these passed only while a line gave an item its start consumes an empty fragment, whose range held that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-f42418c66dcadfef breaks
+rich-fcfac9060093667e breaks
+
+## Narrower than real layouts: 9.7 px, `A` and a word joiner in an item of its own at -1 px letter spacing: Chrome gives the word joiner no letter spacing and keeps it on the line of `A`, where the library spaces it (ENGINE_FOLLOWUPS.md, Letter spacing) and the text walkers, which fit a character of no advance against the line's width before the negative gap, end the line before it; the item stepper fitted each item whole
+rich-f992024121779cca count
 
 ## Narrower than real layouts: width 1, where nothing fits and Chrome keeps spaces, marks, controls or zero-width characters with the character before them otherwise than the library
 catalog-004931ad21691689 count
@@ -3978,10 +3985,14 @@ catalog-fcaddf2e30bed338 count
 ## White space and soft hyphens before a ZWSP where a line starts, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible there, as it doesn't consume a soft hyphen at a line start, where the library consumes both, as it does in one text; main passed these only because its first fragment started before the space its line start consumed (ENGINE_FOLLOWUPS.md)
 rich-11a3923c1b2e930a breaks
 rich-1e4eb256d9bee7b8 breaks
-rich-5b60c65e1f4531a1 breaks
 rich-62e4228d958cf44e breaks
 rich-8058c8ea44ac27f5 breaks
-rich-c84427ff3e354b1e breaks
+
+## White space and soft hyphens in items before a ZWSP where a line starts, at 24 px and wider: Chrome keeps the space after the first soft hyphen visible there, as it doesn't consume a soft hyphen at a line start, where the library consumes both, as it does in one text; these passed only while a line gave an item its start consumes an empty fragment, whose range held that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-49f015c20c562738 breaks
+rich-64a76c11090a01ae breaks
+rich-729b900c377fd1bd breaks
+rich-eb73803ffd58f47c breaks
 
 ## Within 1/64 px of where the browser's lines change, at 24 px and wider: the library's fit lands on the other side there, while the whole-pixel widths inside both layouts pass
 catalog-0264013048297716 breaks
@@ -4122,6 +4133,10 @@ rich-ffca6282fca44ec7 count
 
 ## `a`, a space under the Arabic vowel sign U+064B, a space and `b` at 1.5 px letter-spacing in pre-wrap, at 16.32 px, where `a` and the space under the mark overflow by 0.02 px: Chrome moves the second space to a line of its own, the library hangs it on the first; the library gives the mark no gap, as Chrome does since the space is in an Arabic run, and admits text with no advance and no gap wherever the line before it fit, which the space, hanging, did (main passed while it charged the mark a gap, 1.5 px too wide at any width; ENGINE_FOLLOWUPS.md, Letter spacing)
 catalog-0506555f8d35bd12 count
+
+## `ab`, an item of a space, a soft hyphen, a space, a soft hyphen and a ZWSP, then `textword`, at 26 and 26.7 px: Chrome's first line shows `ab` and its second only the space after the first soft hyphen, at width 0, 5 lines in all, as it doesn't consume a soft hyphen at a line start, so the space after it stays on that line; the library's first line shows `ab` too, and its next line's start consumes the soft hyphens, that space and the ZWSP, as it does in one text, so its prediction is a line short, 4 lines, where main's 5 had the ZWSP alone on the second line, a wrong break (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-5b60c65e1f4531a1 count
+rich-c84427ff3e354b1e count
 
 ## pre-wrap spaces before U+FFFC or brackets, and kerning before a space, at 24 px and wider: Chrome breaks there where the library doesn't
 catalog-13dd55803a1a2260 count

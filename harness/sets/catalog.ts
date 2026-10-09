@@ -213,7 +213,7 @@ export function markChainTemplates(): Template[] {
   for (let i = 0; i < shapes.length; i++) {
     const [name, text, family, size] = shapes[i]!
     out.push({
-      family: `mark-chains/${name}`, origin: `a chain of mark runs past MARK_CHAIN_CONTEXT_UNITS (src/layout.ts): ${name}`,
+      family: `mark-chains/${name}`, origin: `a chain of mark runs past MARK_CHAIN_CONTEXT_UNITS (src/prepare.ts): ${name}`,
       pageLang: 'en', paragraph: paragraph({ font: font(family, size), lang: 'en' }, [text]), widths: [], grid: true,
     })
   }

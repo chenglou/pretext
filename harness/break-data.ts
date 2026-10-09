@@ -1,5 +1,6 @@
-// Whether a browser still holds the break data the engine tables were generated from (scripts/engine-data,
-// scripts/generate-engine-break-data.ts), byte for byte. Chrome and the system's ICU keep line and character rules as
+// Whether a browser still holds, byte for byte, the files of scripts/engine-data that sources.json lists: the compiled
+// rules and character properties the engine tables were generated from (scripts/generate-engine-break-data.ts), not
+// the two pair tables (DEVELOPMENT.md, Engine Data). Chrome and the system's ICU keep line and character rules as
 // brkitr entries of an ICU common data file; Firefox bakes ICU4X's line and grapheme data into XUL as byte arrays,
 // which the databake files hold as Rust byte strings; and ICU's character properties, which the script classes come
 // from, are arrays of its C sources, compiled into Chrome's framework and into XUL. `bun harness repin` prints it.

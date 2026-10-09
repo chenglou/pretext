@@ -7,12 +7,13 @@
 // 0, plus the letter spacing per grapheme. U+2028 measures as the space, whose glyph Chrome draws it with, and sits 0,
 // 0.5 or 1 px closer to the character on either side of it unless the context's `fontKerning` is 'none', so the
 // Chromium profile finds every font kerning the space and takes its kerning with spaces (getFontSpaceKerning and
-// getSpaceKerning in src/measurement.ts). Two neighbouring characters that both have an advance sit 0 to 0.6 px
-// closer: for six of every seven pairs that is kerning, and for the seventh a ligature, off under any letter spacing,
-// so a word doesn't measure as its letters do alone and the fits of a word cut between letters take the paths they
-// take in a font (getSegmentFit). Nothing in src/ measures two such neighbours under `fontKerning` 'none', so that
-// kerning doesn't read it. The Blink and Gecko processes run under a desktop user agent with a string `letterSpacing`
-// on the context, as Chrome's and Firefox's have, so preparation takes the paths those browsers take.
+// getSpaceKerning in src/measurement.ts). Two neighbouring characters of 8 px each, so neither a space, U+2028, a mark
+// nor a format character, sit 0 to 0.6 px closer: for six of every seven pairs that is kerning, and for the seventh a
+// ligature, off under any letter spacing, so a word doesn't measure as its letters do alone and the fits of a word cut
+// between letters take the paths they take in a font (getSegmentFit). Nothing in src/ measures two such neighbours
+// under `fontKerning` 'none', so that kerning doesn't read it. The Blink and Gecko processes run under a desktop user
+// agent with a string `letterSpacing` on the context, as Chrome's and Firefox's have, so preparation takes the paths
+// those browsers take.
 // The inputs are seeded draws from harness/cases (a failure names its case, at its width, half and 1.5 times it, 1 and
 // Infinity) and a few fixed ones; `bun harness gate` runs its browser's profile over every case (`all`), 20-25 s of
 // processor time a profile at a load average of 30-60: in 500 draws, five WebKit-profile cases that failed the coverage
@@ -26,10 +27,12 @@
 // - stepping leaves its start cursor as it was, the ranges a stream gives stay as they were, JSON copies of cursors and
 //   ranges resume the same, and a materialized line passed back as a range gives the same line;
 // - a visitor that edits the range it's given doesn't change the lines after it;
-// - rich lines: a gap is the SPACE advance of the item whose white space made it, sign included, and never a box's; an
-//   empty item keeps the other items' indices; a `break: 'never'` item and a box stay whole; each fragment counts its
-//   item's extraWidth once; a line is as wide as its fragments' gaps and widths together, or 0 if they add up to less;
-//   pre-wrap makes no gaps;
+// - rich lines: a gap is the SPACE advance of the item whose white space made it, sign included, or in the Chromium
+//   profile that less its kerning with the character beside it in that item, and never a box's; white space between
+//   two fragments on a line makes a gap, but where a line feed lies between them or, in Firefox, where it joins a run
+//   of white space (joinsWhiteSpaceRun), or where it is only what the profile takes out; an empty item keeps the other
+//   items' indices; a `break: 'never'` item and a box stay whole; each fragment counts its item's extraWidth once; a
+//   line is as wide as its fragments' gaps and widths together, or 0 if they add up to less; pre-wrap makes no gaps;
 // - held handles, and their structuredClone() copies, lay out as before after the same texts are prepared with letter
 //   spacing 1, after clearCache() and after setLocale(), and prepares with filled caches equal cold ones, at the held
 //   texts' letter spacing and at 1;
@@ -45,8 +48,8 @@ import './watchdog.ts'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { LayoutCursor, LayoutLine, LayoutLineRange, PrepareOptions, PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
-import type { PreparedRichInline, RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineLineRange, RichInlineOptions } from '../src/rich-inline.ts'
-import { BOX_SEGMENTS, canvasFont, cursorOffsets, itemOptions, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
+import type { PreparedRichInline, RichInlineBox, RichInlineCursor, RichInlineFragment, RichInlineItem, RichInlineLineRange, RichInlineOptions } from '../src/rich-inline.ts'
+import { canvasFont, cursorOffsets, fragmentProblem, plainDisagreement, prepareOptions, richDisagreement, richItems, richOptions, unsupported } from './predict.ts'
 import { createRng } from './sets/build.ts'
 import { isRich, type Case } from './types.ts'
 
@@ -147,6 +150,52 @@ function* drawnCases(dir: string, seed: string, plain: number, rich: number): Ge
   }
 }
 
+// The first item whose collapsible white space lies between two fragments that follow each other on a line, in the
+// items' texts: after the earlier fragment's text in its item, in an item between the two, or before the later one's
+// text in its item; -1 without any, and where a line feed lies between them, which the segment break transformation
+// can remove with the white space around it, as next to a ZWSP. An atomic item's own white space is none of the
+// paragraph's. What the profile's analysis takes out of the text with nothing in its place is no white space either: a
+// CR or FF in the Gecko profile, a CR in the WebKit profile. A CR before a line feed never gets this far, since a line
+// feed between the fragments ends the search.
+function whiteSpaceBetween(items: ReadonlyArray<RichInlineItem | RichInlineBox>, earlier: RichInlineFragment, later: RichInlineFragment, removed: RegExp | null): number {
+  let holder = -1
+  for (let index = earlier.itemIndex; index <= later.itemIndex; index++) {
+    const item = items[index]!
+    if (item.text === undefined || item.break === 'never') continue
+    const text = item.text.slice(index === earlier.itemIndex ? earlier.sourceEnd : 0, index === later.itemIndex ? later.sourceStart : item.text.length)
+    if (text.includes('\n')) return -1
+    if (holder < 0 && COLLAPSIBLE.test(removed === null ? text : text.replace(removed, ''))) holder = index
+  }
+  return holder
+}
+
+// Whether the white space of item `gapItem` that lies before item `after` joins a run of white space in Firefox, where
+// it takes no room and makes no gap. Firefox drops soft hyphens and bidi controls before it collapses white space, so
+// white space collapses into a space or tab or line feed before it with only those characters between them, in one
+// item or from the end of one into the start of the next with text; an atomic item and a box end the run
+// (transformText in src/gecko-line-breaks.ts). That white space is the item's leading white space where it is before
+// the item's own text, all of an item of only white space, and else its trailing white space, which starts after the
+// last character that is neither white space nor a bidi control.
+const COLLAPSIBLE = /[ \t\n\r\f]/
+const COLLAPSIBLE_OR_BIDI_CONTROL = /[ \t\n\r\f\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/
+function joinsWhiteSpaceRun(items: ReadonlyArray<RichInlineItem | RichInlineBox>, gapItem: number, after: number): boolean {
+  const text = items[gapItem]!.text!
+  let leading = 0
+  while (leading < text.length && COLLAPSIBLE.test(text[leading]!)) leading++
+  let start = 0
+  if (gapItem !== after && leading < text.length) {
+    start = text.length
+    for (let i = text.length - 1; i >= leading && COLLAPSIBLE_OR_BIDI_CONTROL.test(text[i]!); i--) if (COLLAPSIBLE.test(text[i]!)) start = i
+  }
+  let before = text.slice(0, start)
+  for (let i = gapItem - 1; start === 0 && before === '' && i >= 0; i--) {
+    const item = items[i]!
+    if (item.text === undefined || item.break === 'never') return false
+    before = item.text
+  }
+  return /[ \t\n][\u00AD\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/.test(before)
+}
+
 type Failures = { list: string[]; counts: Record<string, number> }
 
 export async function runInvariants(profile: Profile, lib: string, draws: { dir: string; seed: string; plain: number; rich: number }): Promise<{ cases: number; failures: Failures }> {
@@ -164,10 +213,14 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   // Firefox bidi controls too, which it leaves out of its text runs, and in WebKit a U+2028 or U+2029, which its scan
   // makes a hard break in normal white space as a line feed is one in pre-wrap.
   const gecko = profile === 'gecko'
+  const removed = gecko ? /[\r\f]/g : profile === 'webkit' ? /\r/g : null
   const unpaintedNormal = gecko ? /^[ \u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : profile === 'webkit' ? /^[ \u00AD\u200B\u2028\u2029]*$/ : /^[ \u00AD\u200B]*$/
   const unpaintedPreWrap = gecko ? /^[\n\u00AD\u200B\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\u00AD\u200B]*$/
-  const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0): string | null => {
-    const unpainted = whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
+  // The same in a rich item's own text, which white space hasn't been normalized in.
+  const unpaintedSourceNormal = gecko ? /^[ \t\n\r\f\u00AD\u200B\u2028\u2029\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[ \t\n\r\f\u00AD\u200B\u2028\u2029]*$/
+  const unpaintedSourcePreWrap = gecko ? /^[\n\r\f\u00AD\u200B\u2028\u2029\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]*$/ : /^[\n\r\f\u00AD\u200B\u2028\u2029]*$/
+  const covers = (stream: string, spans: ReadonlyArray<[number, number]>, whiteSpace: 'normal' | 'pre-wrap', from = 0, source = false): string | null => {
+    const unpainted = source ? (whiteSpace === 'normal' ? unpaintedSourceNormal : unpaintedSourcePreWrap) : whiteSpace === 'normal' ? unpaintedNormal : unpaintedPreWrap
     let end = from
     for (let i = 0; i < spans.length; i++) {
       const [s, e] = spans[i]!
@@ -252,12 +305,11 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
 
   const rich = (label: string, items: Array<RichInlineItem | RichInlineBox>, width: number, options: RichInlineOptions = {}): void => {
     const at = `${label} at ${width}`
-    // Everything prepared first, so what follows asks Canvas nothing: the paragraph, each item alone (whose own
-    // prepared text the fragments' cursors index; a box's fragment spans one empty segment), the paragraph after an
-    // empty item, and without extraWidth.
+    // Everything prepared first, so what follows asks Canvas nothing: the paragraph, the paragraph after an empty
+    // item, and without extraWidth.
     const prepared = api.prepareRichInline(items, options)
-    const segmentsOf = items.map(item => item.text === undefined ? BOX_SEGMENTS : api.prepareWithSegments(item.text, item.font, itemOptions(item, options)).segments)
-    const atomic = items.map(item => item.text === undefined || item.break === 'never')
+    const whiteSpace = options.whiteSpace ?? 'normal'
+    const atomic = items.map(item => item.text !== undefined && item.text !== '' && item.break === 'never')
     const shiftedPrepared = api.prepareRichInline([{ text: '', font: '16px Test' }, ...items], options)
     const extraOf = (item: RichInlineItem | RichInlineBox): number => item.text === undefined ? 0 : item.extraWidth ?? 0
     const extra = items.some(item => extraOf(item) !== 0)
@@ -273,8 +325,7 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
     try {
       const walked: RichInlineLineRange[] = []
       const count = api.walkRichInlineLineRanges(prepared, width, line => { if (walked.push(line) > steps) throw new Error(`walkRichInlineLineRanges gives more than ${steps} lines`) })
-      const offsets = segmentsOf.map(segments => cursorOffsets(segments))
-      const disagreement = richDisagreement(api, prepared, walked, count, width, steps, i => offsets[i])
+      const disagreement = richDisagreement(api, prepared, walked, count, width, steps)
       if (disagreement !== null) return fail('agreement', at, disagreement)
       const lines: RichInlineLineRange[] = []
       let cursor: RichInlineCursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
@@ -294,17 +345,25 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
         lines.push(range)
         cursor = { ...range.end }
       }
-      // Each item's fragments cover its own prepared text.
+      // Each item's fragments cover its text, and each one's text is its item's between sourceStart and sourceEnd.
       const spans: Array<Array<[number, number]>> = items.map(() => [])
       const whole = items.map(() => 0)
       for (let i = 0; i < lines.length; i++) {
         let occupied = 0
-        for (const f of lines[i]!.fragments) {
+        let before: RichInlineFragment | null = null
+        for (const f of api.materializeRichInlineLineRange(prepared, lines[i]!).fragments) {
           occupied += f.gapBefore + f.occupiedWidth
-          spans[f.itemIndex]!.push([offsets[f.itemIndex]!(f.start), offsets[f.itemIndex]!(f.end)])
-          // A gap is the SPACE of the item whose white space made it, or none where Gecko's run of
-          // white space took that white space in (whitespaceRunOpen in src/rich-inline.ts). Nothing
-          // collapses in pre-wrap.
+          // White space between two fragments makes a gap before the later one, or none where Firefox's run of
+          // white space took it in.
+          if (before !== null && whiteSpace !== 'pre-wrap' && f.gapItemIndex === -1) {
+            const holder = whiteSpaceBetween(items, before, f, removed)
+            if (holder >= 0 && !(gecko && joinsWhiteSpaceRun(items, holder, f.itemIndex))) fail('rich lines', at, `line ${i} has no gap before item ${f.itemIndex}, after item ${holder}'s white space`)
+          }
+          before = f
+          const problem = fragmentProblem(items[f.itemIndex]!, f, whiteSpace)
+          if (problem !== null) fail('rich lines', at, `line ${i}'s fragment of item ${f.itemIndex} ${problem}`)
+          spans[f.itemIndex]!.push([f.sourceStart, f.sourceEnd])
+          // A gap is the SPACE of the item whose white space made it. Nothing collapses in pre-wrap.
           if (options.whiteSpace === 'pre-wrap' && (f.gapBefore !== 0 || f.gapItemIndex !== -1)) fail('rich lines', at, `line ${i} has a gap of ${f.gapBefore} before item ${f.itemIndex} in pre-wrap`)
           if (f.gapItemIndex >= 0) {
             const gapItem = items[f.gapItemIndex]!
@@ -316,21 +375,35 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
               const given = gapItem.letterSpacing ?? 0
               const spacing = gecko ? Math.sign(given) * Math.round(Math.abs(Math.fround(Math.fround(given) * 60))) / 60 : given
               const space = standInWidth(' ', gapItem.font, spacing, 'auto')
-              if (Math.abs(f.gapBefore - space) > 1e-6 && !(profile === 'gecko' && f.gapBefore === 0)) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}`)
+              // The Chromium profile's space takes its kerning with the character beside it in its own item,
+              // the one after the white space that starts the item or before the white space that ends it,
+              // where the profile kerns the two (getSpaceKerning in src/measurement.ts): a gap is the SPACE
+              // or the SPACE less that kerning, as this Canvas gives it (standInWidth), and nothing between.
+              let kerning = 0
+              if (profile === 'blink' || profile === 'unknown') {
+                const text = gapItem.text
+                const step = f.gapItemIndex === f.itemIndex ? 1 : -1
+                let beside = step === 1 ? 0 : text.length - 1
+                while (beside >= 0 && beside < text.length && ' \t\n\r\f'.includes(text[beside]!)) beside += step
+                if (beside >= 0 && beside < text.length) kerning = text.charCodeAt(beside) % 3 / 2 * Number(/(\d+(?:\.\d+)?)px/.exec(gapItem.font)?.[1] ?? 16) / 16
+              }
+              if (Math.abs(f.gapBefore - space) > 1e-6 && Math.abs(f.gapBefore - (space - kerning)) > 1e-6) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}, and ${space - kerning} with its kerning`)
             }
           }
-          const segments = segmentsOf[f.itemIndex]!.length
-          if (atomic[f.itemIndex]! && segments > 0) {
+          if (atomic[f.itemIndex]!) {
             whole[f.itemIndex]!++
-            if (!same(f.start, START) || !same(f.end, { segmentIndex: segments, graphemeIndex: 0 })) fail('rich lines', at, `atomic item ${f.itemIndex} is split at ${JSON.stringify(f.start)}-${JSON.stringify(f.end)}`)
+            const text = (items[f.itemIndex] as RichInlineItem).text
+            if (text.slice(f.sourceStart, f.sourceEnd) !== text.trim()) fail('rich lines', at, `atomic item ${f.itemIndex} is split at ${f.sourceStart}-${f.sourceEnd}`)
           }
         }
         if (Math.abs(lines[i]!.width - Math.max(0, occupied)) > 1e-6) fail('rich lines', at, `line ${i} is ${lines[i]!.width} wide; its fragments' gaps and widths add up to ${occupied}`)
       }
       for (let k = 0; k < items.length; k++) {
-        const coverage = covers(segmentsOf[k]!.join(''), spans[k]!, atomic[k]! ? 'normal' : options.whiteSpace ?? 'normal')
+        const text = items[k]!.text
+        if (text === undefined) continue
+        const coverage = covers(text, spans[k]!, atomic[k]! ? 'normal' : whiteSpace, 0, true)
         if (coverage !== null) fail('coverage', `${at}, item ${k}`, coverage)
-        if (atomic[k]! && segmentsOf[k]!.length > 0 && whole[k] !== 1) fail('rich lines', at, `atomic item ${k} is in ${whole[k]} fragments`)
+        if (atomic[k]! && whole[k] !== 1) fail('rich lines', at, `atomic item ${k} is in ${whole[k]} fragments`)
       }
       const visited: RichInlineLineRange[] = []
       api.walkRichInlineLineRanges(prepared, width, range => {
@@ -417,6 +490,11 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
   plainInput('fixed a WJ U+0301 bc x16', 'a\u2060\u0301bc '.repeat(16), FONT, { letterSpacing: -1 }, widthsOf(27, false), 20)
   // A SPACE is 4px here: the gap's sign changes at letter spacing -4.
   for (const letterSpacing of [-10, -4.1, -4, -3.9, 0, 2]) rich(`fixed a gap at letter spacing ${letterSpacing}`, [{ text: 'x ', font: FONT, letterSpacing }, { text: 'y', font: FONT, letterSpacing }], Infinity)
+  // White space after white space and a soft hyphen takes no room in Firefox, in the next item or in the same one, but
+  // keeps it after a soft hyphen that starts its item.
+  for (const texts of [['see', ' \u00AD', ' this word'], ['see \u00AD ', 'this word'], ['see ', '\u00AD ', 'this word']]) {
+    for (const width of [30, Infinity]) rich('fixed white space after a soft hyphen', texts.map(text => ({ text, font: FONT })), width)
+  }
   rich('fixed empty and blank items', ['', 'AB', ' ', 'CD', ''].map(text => ({ text, font: FONT })), 16.1)
   rich('fixed one item a line', ['A', 'B', 'C'].map(text => ({ text, font: FONT })), 8.1)
   const pill: RichInlineItem = { text: 'ABCD', font: FONT, break: 'never', extraWidth: 18 }

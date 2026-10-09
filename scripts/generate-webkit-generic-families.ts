@@ -11,7 +11,8 @@
 //   zh-MO, zh-SG and zh-TW, the family of CTFontDescriptorCreateForCSSFamily(key, language) for the
 //   five kCTFontCSSFamily keys, the call SystemFontDatabaseCoreText.cpp:320-365 makes. Dumped on
 //   macOS 27.0 (26A428) and in the iOS 26.0 simulator; an iPhone on iOS 27 drew the same
-//   families on the 11 page languages the safari-generic probe covers.
+//   families under the ten page languages tried there (ar, en, he, hi, ja, ko, th, zh, zh-Hans
+//   and zh-Hant; Safari 27.0, 2026-09-24).
 // - missing-families.json: the families of those tables that Safari 27 on macOS 27 and Safari in
 //   the iOS 26.0 simulator can't use. A family counts as usable when some text in 28 scripts
 //   measures differently in OffscreenCanvas with it listed before Courier or Times than with
@@ -97,12 +98,16 @@ function readFamilies(system: System): Map<string, string[]> {
 const macos = readFamilies('macos')
 const ios = readFamilies('ios')
 
-// Language -> the five Canvas family lists, '' where the keyword stands.
+// Language -> the five Canvas family lists, '' where the keyword stands. The rows are macOS's
+// languages, each of which iOS's dump has to answer for too; a language only iOS's dump lists gets
+// no row, and the summary names it.
 const conflicts = new Map<string, string[]>()
 const pairHeads = new Set<string>()
 const lists = new Map<string, string[]>()
+const iosOnly = [...ios.keys()].filter(language => !macos.has(language))
 for (const [language, mac] of macos) {
-  const phone = ios.get(language) ?? mac
+  const phone = ios.get(language)
+  if (phone === undefined) throw new Error(`the iOS table has no row for ${language}, which the macOS table has`)
   const row: string[] = []
   for (let k = 0; k < KEYWORDS.length; k++) {
     const a = mac[k]!
@@ -188,6 +193,7 @@ const summary = [
   `${languageScripts.size} languages and ${scriptSubtags.length} script subtags`,
   `${macos.size} Core Text languages kept as ${kept.size} rows of ${names.length - 1} families and pairs`,
   `macOS's family kept where iOS has it too: ${[...conflicts].map(([key, where]) => `${key} (${where.length}, e.g. ${where.slice(0, 3).join(' ')})`).join('; ')}`,
+  `languages only iOS lists, left out: ${iosOnly.length > 0 ? iosOnly.join(' ') : 'none'}`,
   `module ${nextSource.length} B, ${gzipSync(Buffer.from(nextSource), { level: 9 }).length} B gzipped`,
 ].join('; ')
 

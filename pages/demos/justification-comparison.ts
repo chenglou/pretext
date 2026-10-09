@@ -11,6 +11,10 @@ type State = {
 
 const dom = createDomCache()
 
+// Before the listeners below, so that no render runs without the prepared texts.
+await document.fonts.ready
+const resources = createDemoResources()
+
 const state: State = {
   controls: {
     colWidth: Number.parseInt(dom.slider.value, 10),
@@ -37,9 +41,6 @@ dom.showIndicators.addEventListener('input', () => {
 
 window.addEventListener('resize', scheduleRender)
 
-await document.fonts.ready
-
-const resources = createDemoResources()
 render()
 
 function scheduleRender(): void {

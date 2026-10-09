@@ -61,7 +61,9 @@ function computeLayout(windowWidth: number): LayoutState {
   } else {
     const minColWidth = 100 + windowWidth * 0.1
     colCount = Math.max(2, Math.floor((windowWidth + gap) / (minColWidth + gap)))
-    colWidth = Math.min(maxColWidth, (windowWidth - (colCount + 1) * gap) / colCount)
+    // A share of the window, rounded down to a quarter pixel: browsers round a width to their layout
+    // unit, so the card would otherwise be narrower than the width its text was laid out in.
+    colWidth = Math.min(maxColWidth, Math.floor((windowWidth - (colCount + 1) * gap) / colCount * 4) / 4)
   }
   const textWidth = colWidth - cardPadding * 2
   const contentWidth = colCount * colWidth + (colCount - 1) * gap
@@ -134,6 +136,8 @@ function render() {
   const windowHeight = document.documentElement.clientHeight
   const scrollTop = window.scrollY
 
+  // Every card is laid out again on every frame, scroll frames included: the immediate-mode rule applied
+  // (RESEARCH.md, Demos And The Chat), and it shows what layout() costs.
   const layoutState = computeLayout(windowWidth)
   domCache.container.style.height = `${layoutState.contentHeight}px`
 

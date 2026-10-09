@@ -9,7 +9,7 @@ import {
 
 // Local layout model for this demo. It keeps the page readable and shows how
 // the rich-text inline flow helper composes with caller-owned classes, fonts, and
-// chrome widths. This is local userland structure, not a new core abstraction.
+// chrome widths. This is local userland structure on the public API.
 
 export type TextStyleName = 'body' | 'link' | 'code'
 export type ChipTone = 'mention' | 'status' | 'priority' | 'time' | 'count'

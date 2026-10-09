@@ -1,6 +1,9 @@
 // Prepare text with engine segmentation rules and cached Canvas measurements, then
-// lay it out with arithmetic. Emoji calibration may perform a cached DOM read
-// during preparation; layout itself does no measurement or string work.
+// lay it out with arithmetic. Preparation touches the DOM in three places: the emoji
+// correction's span, read once per font where Canvas measures an emoji wider than its
+// font size; the page's `<html lang>`, unless setLocale() gave a language; and, without
+// OffscreenCanvas, a canvas element never attached. Layout itself does no measurement
+// or string work.
 // Rich APIs add source cursors and text materialization.
 // Browser measurement limitations are documented in README.md and PLATFORM_BUGS.md.
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
@@ -30,7 +33,7 @@ import {
   walkPreparedLinesRaw,
   type PreparedLineBreakData,
 } from './line-break.js'
-import { buildLineTextFromRange } from './line-text.js'
+import { buildLineTextFromRange, type PreparedSegments } from './line-text.js'
 
 // --- Public types ---
 
@@ -42,14 +45,23 @@ export type PreparedText = {
   readonly [preparedTextBrand]: true
 }
 
-type InternalPreparedText = PreparedText & PreparedLineBreakData
-
-// Manual-layout handle that exposes the structural segment data used by
-// range/cursor APIs and custom rendering.
-export type PreparedTextWithSegments = InternalPreparedText & {
-  segments: string[] // Segment text aligned with the parallel arrays, e.g. ['hello', ' ', 'world']
-  kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
+// The handle that also keeps each segment's text, which the functions that return
+// line text need (layoutWithLines(), layoutNextLine() and materializeLineRange()),
+// and its kind, for the app's own rendering. Its type shows those two and each
+// segment's width, read-only, and none of the line walkers' other storage, which
+// changes with engine fixes (RESEARCH.md, Decisions Log, 2026-10-06).
+export type PreparedTextWithSegments = PreparedText & {
+  readonly segments: readonly string[] // Each segment's text, e.g. ['hello', ' ', 'world']
+  readonly kinds: readonly SegmentBreakKind[] // What each segment is, e.g. ['text', 'space', 'text']
+  readonly widths: ArrayLike<number> // Each segment's width in px, e.g. [42.5, 4.4, 37.2]
 }
+
+// What the two handles hold: the line walkers' data and, from prepareWithSegments(),
+// the segments' text and kinds. getInternalPrepared() reads a public handle as the
+// first; createLayoutLine() and layoutNextLine(), which pass theirs on to the line
+// text as it came, assert the second in place.
+type InternalPreparedText = PreparedText & PreparedLineBreakData
+type InternalPreparedTextWithSegments = PreparedText & PreparedSegments & { kinds: SegmentBreakKind[] }
 
 export type LayoutCursor = {
   segmentIndex: number // Segment index in `segments`
@@ -105,7 +117,7 @@ function prepareInternal(
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  return measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, language, true)
+  return measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
@@ -134,7 +146,7 @@ export function prepare(text: string, font: string, options?: PrepareOptions): P
 // Rich variant used by callers that need enough information to render the
 // laid-out lines themselves.
 export function prepareWithSegments(text: string, font: string, options?: PrepareOptions): PreparedTextWithSegments {
-  const prepared = prepareInternal(text, font, true, options) as PreparedTextWithSegments
+  const prepared = prepareInternal(text, font, true, options) as InternalPreparedTextWithSegments
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
   for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS]!)
@@ -173,7 +185,7 @@ function createLayoutLine(
 ): LayoutLine {
   return {
     text: buildLineTextFromRange(
-      prepared,
+      prepared as InternalPreparedTextWithSegments,
       startSegmentIndex,
       startGraphemeIndex,
       endSegmentIndex,
@@ -227,8 +239,11 @@ export function materializeLineRange(
 
 // Batch low-level line-range pass. This is the non-materializing counterpart
 // to layoutWithLines(), useful for shrinkwrap and other aggregate stats work.
+// It, measureLineStats(), measureNaturalWidth() and layoutNextLineRange() return
+// widths and cursors and no text, from the line-break data layout() reads, so they
+// take a prepare() handle as well (RESEARCH.md, Decisions Log, 2026-10-06).
 export function walkLineRanges(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   maxWidth: number,
   onLine: (line: LayoutLineRange) => void,
 ): number {
@@ -248,7 +263,7 @@ export function walkLineRanges(
 }
 
 export function measureLineStats(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   maxWidth: number,
 ): LineStats {
   const stats = { lineCount: 0, maxLineWidth: 0 }
@@ -259,7 +274,7 @@ export function measureLineStats(
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is
 // the prepared text when container width is not the thing forcing wraps?".
 // Explicit hard breaks still count, so this returns the widest forced line.
-export function measureNaturalWidth(prepared: PreparedTextWithSegments): number {
+export function measureNaturalWidth(prepared: PreparedText): number {
   return measureLineStats(prepared, Number.POSITIVE_INFINITY).maxLineWidth
 }
 
@@ -267,7 +282,7 @@ export function measureNaturalWidth(prepared: PreparedTextWithSegments): number 
 // normalized line start and the line end. Returns the reported width, or null
 // after the last line.
 function stepNextLine(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   start: LayoutCursor,
   maxWidth: number,
   lineStart: LayoutCursor,
@@ -295,7 +310,7 @@ export function layoutNextLine(
   if (width === null) return null
 
   const text = buildLineTextFromRange(
-    prepared,
+    prepared as InternalPreparedTextWithSegments,
     lineStart.segmentIndex,
     lineStart.graphemeIndex,
     end.segmentIndex,
@@ -305,7 +320,7 @@ export function layoutNextLine(
 }
 
 export function layoutNextLineRange(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   start: LayoutCursor,
   maxWidth: number,
 ): LayoutLineRange | null {
@@ -347,7 +362,7 @@ export function clearCache(): void {
 // Sets the language later preparation breaks and measures under in place of
 // `<html lang>`, which a worker doesn't have; an empty one is a page's without a
 // language. Without a locale, preparation reads `<html lang>` again. Prepared
-// handles keep theirs (RESEARCH.md, Decisions Log).
+// handles keep theirs (RESEARCH.md, Decisions Log, 2026-09-26).
 export function setLocale(locale?: string): void {
   setLocaleLanguage(locale)
   clearCache()

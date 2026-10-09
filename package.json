@@ -45,7 +45,7 @@
   ],
   "scripts": {
     "build:package": "rm -rf dist && tsc -p tsconfig.build.json",
-    "check": "tsc && oxlint --type-aware src harness && knip && bun run scripts/generate-engine-break-data.ts --check && bun run scripts/generate-webkit-generic-families.ts --check",
+    "check": "tsc && oxlint --type-aware src harness pages scripts && knip && bun run scripts/generate-engine-break-data.ts --check && bun run scripts/generate-webkit-generic-families.ts --check",
     "generate:engine-break-data": "bun run scripts/generate-engine-break-data.ts",
     "generate:webkit-generic-families": "bun run scripts/generate-webkit-generic-families.ts",
     "harness": "bun run harness/cli.ts",
@@ -61,7 +61,6 @@
     "marked": "^17.0.5",
     "oxlint": "^1.51.0",
     "oxlint-tsgolint": "^0.15.0",
-    "tsgolint": "^0.0.1",
     "typescript": "6.0.2"
   }
 }
