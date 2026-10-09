@@ -810,13 +810,21 @@ function setEmptyObjectFacts(
 // text. Blink takes a text item whole where its shaped width fits (ShapingLineBreaker::ShapeLine,
 // shaping_line_breaker.cc:281-297), which is that line; ENGINE_FOLLOWUPS.md, Negative letter
 // spacing and hanging spaces, has the counts.
+// The line is stepped from the paragraph's start, as the stream steps one, and a line start found
+// after it is a second line's, which leaves the paragraph without a whole one.
+// A walk hands walkPreparedLinesRaw() a second visitor, and Firefox 156 inlines neither: it walked
+// one-item CJK paragraphs 5 to 8% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
 function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichInline {
-  const lineCount = walkPreparedLinesRaw(flow.data, Number.POSITIVE_INFINITY, (width, startSegmentIndex, _startGraphemeIndex, endSegmentIndex) => {
-    flow.wholeWidth = width
-    flow.wholeStart = startSegmentIndex
-    flow.wholeEnd = endSegmentIndex
-  })
-  if (lineCount !== 1) flow.wholeWidth = null
+  const { data } = flow
+  const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  if (!normalizePreparedLineStart(data, cursor)) return flow
+  const start = cursor.segmentIndex
+  const width = stepPreparedLineGeometryFromStart(data, cursor, Number.POSITIVE_INFINITY)
+  const end = cursor.segmentIndex
+  if (normalizePreparedLineStart(data, cursor)) return flow
+  flow.wholeWidth = width
+  flow.wholeStart = start
+  flow.wholeEnd = end
   return flow
 }
 
