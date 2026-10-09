@@ -281,7 +281,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // first item it measures (below), and each later item's measurement adds its segments to them;
   // these two hold what comes before that item, an object or a padded item's start edge, and are
   // the lists of a paragraph with no item to measure. The paragraph's segments so far are counted
-  // by `segments`, one list from its first segment to its last.
+  // by `segments`, one list from its first segment to its last, where the widths are two.
   let widths: number[] = []
   const flags = new Uint8Array(count + padded)
   let breakableFitAdvances: (number[] | null)[] = []
@@ -475,7 +475,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     if (lists === null) {
       // The first item measured is measured as a text is, with lists of its own, and its widths
       // and advances are the paragraph's from here on, after what the paragraph made before the
-      // item; its flags go into the paragraph's.
+      // item; its flags go into the paragraph's. So every list measureAnalysis() fills was made
+      // by the `[]` that makes a text's and is typed as a text's are. Made by this function, a
+      // paragraph's lists cost Chrome 154 5-9% of plain text prepared after a page's first rich
+      // paragraphs; typed here by a push and a pop of a fraction, they cost Safari 27 14-61% of
+      // the line functions on a page whose widths are all whole; made in measureAnalysis() behind
+      // a test of its own, they cost Firefox 156 2-5% of its CJK lines. The item's flags list
+      // and the copy cost Safari about 1% of rich text prepared again (RESEARCH.md, Keeping Work
+      // Bounded, JavaScript Engines, under A list made where it is filled).
       for (let i = itemAt - 1; i >= 0; i--) {
         sub.widths.unshift(widths[i]!)
         sub.breakableFitAdvances.unshift(breakableFitAdvances[i]!)

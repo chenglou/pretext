@@ -300,9 +300,10 @@ export type ParagraphLists = {
 // marks Blink halts and a run of U+3000 read the text around the item (getHanKerningTrims,
 // addIdeographicSpaceHangs). Each segment's width, flags byte and advances go on the end of
 // three lists: a text's own, or for an item its paragraph's, so an item is measured with no
-// copy of its part of the analysis and no lists of its own to copy from. The handle returned
-// holds those lists; what else it holds is the measured segments' alone, each list from the
-// first of them.
+// copy of its part of the analysis and no lists of its own to copy from; a paragraph's first
+// measured item is measured as a text is, and its lists become the paragraph's
+// (prepareRichInline() in src/rich-inline.ts). The handle returned holds those lists; what
+// else it holds is the measured segments' alone, each list from the first of them.
 export function measureAnalysis(
   analysis: TextAnalysis,
   from: number,
