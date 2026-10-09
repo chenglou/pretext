@@ -2833,8 +2833,9 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   from 3.7% under base to 4.6% over; pre-wrap chunks' `layout()` and walk 3.0% and 3.2% slower in Safari, above main in
   five and in six sessions of six and each called in one run of two, and within 1.6% in the other two; the soft hyphens'
   `layout()` 3.6% slower in Firefox, in all six sessions and called in one run of two, 1.9% slower in Safari, in all six
-  and not called, and 0.3% slower in Chrome; the control characters' `layout()` within 1.2% in all three. No worst-case
-  entry is called slower over the six sessions.
+  and not called, and 0.3% slower in Chrome; the control characters' `layout()`, a third of whose text the full walker
+  lays out in the WebKit profile and next to none in the others, within 1.2% in all three. No worst-case entry is called
+  slower over the six sessions.
 - **A paragraph's segment breaks, in the Gecko profile**: Gecko transforms segment breaks in each text frame's own text,
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
@@ -4015,17 +4016,35 @@ repin` shows what), and a fact read in source needs reading again.
   `foo bar` is 49.81px. For the same reason a CR right after a U+2028 or U+2029, which ends its line
   (`handleSegmentBreak`, `InlineItemsBuilder.cpp:954-962`), is the content of a line of its own, where white space alone
   leads a line and collapses away (`Line::appendText`, `InlineLine.cpp:346-373`): `ab`, U+2028, CR is 2 lines at any
-  width that fits `ab`, the second with nothing visible, with or without white space after the CR, and `ab`, U+2028,
-  space is 1 (eight fonts, in webkit-host alone, 2026-10-07). The letters on a CR's two sides kern with its glyph and
-  not with each other. Where that is the font's space glyph, as in Arial, Times New Roman and Trebuchet MS, they kern as
-  with a space (16px Arial `A`, CR, `A` 19.58px, `AA` 21.34px); where the font has a glyph of its own for U+000D, as
-  Helvetica, Helvetica Neue, Times and Palatino do, nothing kerns with it (16px Helvetica `A`, CR, `V` 21.34px, `AV`
-  20.16px, and `A`, CR, space, `B` 25.79px, `A B` 24.91px). In Arabic a CR ends joining. No break comes beside a CR
-  where the characters on its two sides are up to U+00FF, as none comes beside any control there
-  (`BreakablePositions.h:179-187`); where either is above U+00FF, ICU decides and breaks after the CR (`:238-251`), so a
-  line can end after one between Cyrillic, Greek, Arabic, Hebrew, Thai, Devanagari, Hangul, kana or Han characters, or
-  between one of them and an ASCII letter, and not in `été`, CR, `cd`. At the edge of an inline box the break is the one
-  the check between two boxes finds, from the next box's text with the two characters before it
+  width that fits `ab`, the second zero wide but in Menlo, where the CR is a character wide by the fixed-pitch shortcut
+  (below), with or without white space after the CR, and `ab`, U+2028, space is 1 (eight fonts, in webkit-host alone,
+  2026-10-07). The letters on a CR's two sides kern with its glyph and not with each other. Where that is the font's
+  space glyph, as in Arial, Times New Roman and Trebuchet MS, they kern as with a space (16px Arial `A`, CR, `A`
+  19.58px, `AA` 21.34px); where the font has a glyph of its own for U+000D, as Helvetica, Helvetica Neue, Times and
+  Palatino do, nothing kerns with it (16px Helvetica `A`, CR, `V` 21.34px, `AV` 20.16px, and `A`, CR, space, `B`
+  25.79px, `A B` 24.91px). In Arabic a CR ends joining. No break comes beside a CR where WebKit's break scan
+  (`nextBreakablePosition`, `BreakablePositions.h:142-255`) takes both pairs the CR is in from its table, which has none
+  beside a control (`:179-187`), as it takes every pair of characters up to U+00FF: none comes in `été`, CR, `cd`. The
+  pair of a CR and a letter above U+00FF after it goes to ICU, which breaks after a CR (`:238-251`): a line can end
+  there whatever is before the CR. The pair of the CR and the character the scan holds as the one before it goes to ICU
+  too where that character is above U+00FF. ICU's break is then one unit ahead, and the scan steps on to an ICU break
+  only while the next unit is above U+00FF or an ASCII letter: before any other unit it stops, and that unit's pair with
+  the CR is the table's again (`:241-249`). So where the character held is above U+00FF a line ends after the CR before
+  an ASCII letter, as in `бв`, CR, `cd`, and not before another character up to U+00FF, a digit, punctuation or a letter
+  such as `ê`: not in `бв`, CR, `12`, in `бв`, CR, `(x` or in `бв`, CR, `êë`. The character held is the one before the
+  CR in the text unless the scan stepped over that one: it reads no new pair on its steps to an ICU break, so where the
+  CR stops them it still holds the second character of the pair it asked ICU about. Where that one is above U+00FF a
+  line ends after the CR between two ASCII letters, as in `ไทยe`, CR, `cd`, where the scan asked about `ไท`, though not
+  in `ไทยe`, CR, `12`; where it is up to U+00FF no line ends after a letter above U+00FF and before an ASCII one, as in
+  `т.е`, CR, `cd` and `б(в`, CR, `cd`, where it asked about `т.` and `б(`, nor between the ASCII letters of `ทab`, CR,
+  `cd`, where it asked about `ทa`. A pair the scan decides without ICU starts no such steps: a Cyrillic and a Latin
+  letter are one, so no line ends in `бвe`, CR, `cd`, and a letter and a quotation mark another, so one does in `б"в`,
+  CR, `cd`. So a line can end after a CR between Cyrillic, Greek, Arabic, Hebrew, Thai, Devanagari, Hangul, kana or Han
+  characters, or between one of them and an ASCII letter. webkit-host lays the twelve texts named here out so, as the
+  scan's port in `src/line-breaks.ts` predicts, and `ab`, CR, `漢。` and `т.е`, CR, `гд` with a break after the CR: each
+  in 16px Arial in a box 1px narrower than the text, where the line ends after the CR if a line may end there and before
+  the text's last character if none may (WebKit 22625.1.29.11.27, 2026-10-09). At the edge of an inline box the break is
+  the one the check between two boxes finds, from the next box's text with the two characters before it
   (`TextUtil::mayBreakInBetween`, `TextUtil.cpp:367-396`): there the pair of a CR and a character up to U+00FF is looked
   up alone, so a line ends after a CR that ends, starts or is a box only where the character right after it is above
   U+00FF. Spans `бв`, CR and `cd ef` in 16px Arial at 28 and 32px are `бв` and `c`, then `d ef`, where their text in one
@@ -4077,16 +4096,16 @@ repin` shows what), and a fact read in source needs reading again.
   `abc` fits and its space doesn't (webkit-host, 2026-10-07; two templates of the rich set's
   `item-edges/separator-before-space` family, whose webkit-host cases at 1px and at 25.80px fail without the rule; on
   the stand-in Canvas the rule changes 117 and 107 of 200,000 random paragraphs in the WebKit profile alone, each by one
-  separator that ends its line where it was painted). Offline on the stand-in Canvas, of 200,000 random texts built to
-  hold separators, lone CRs, CRLFs and white space at the end, 27,383 differ from main in the WebKit profile, every one
-  of that shape and laid out as the same text without those CRs is, and none in the other profiles; in Safari such a
-  plain text stays a line short for the CR's own line (ENGINE_FOLLOWUPS.md, White space and controls), as it was before
-  #455. (webkit-host, WebKit 22625.1.29.11.27, 2026-10-06. Installed Safari 27.0 agreed with webkit-host on the 8,387
-  layouts of two earlier probes of that day, in Arial, Times New Roman and Georgia, on all 2,820 widths of a page of
-  these facts in 30 font settings, the fixed-pitch and web fonts among them, and on the lines and widths of 1,623
-  layouts of a sample in Arial, Menlo and Courier New; the larger probes ran in webkit-host alone. Reopens with a Canvas
-  fact that tells which fonts take the fixed-pitch shortcut or which glyph a font gives U+000D, or with normal white
-  space that keeps two spaces that touch.)
+  separator that ends its line where it was painted). Offline on the stand-in Canvas, in a fuzz that isn't checked in,
+  of 200,000 random texts built to hold separators, lone CRs, CRLFs and white space at the end, 27,383 differ from main
+  before #459 in the WebKit profile, every one of that shape and laid out as the same text without those CRs is, and
+  none in the other profiles; in Safari such a plain text stays a line short for the CR's own line (ENGINE_FOLLOWUPS.md,
+  White space and controls), as it was before #455. (webkit-host, WebKit 22625.1.29.11.27, 2026-10-06. Installed Safari
+  27.0 agreed with webkit-host on the 8,387 layouts of two earlier probes of that day, in Arial, Times New Roman and
+  Georgia, on all 2,820 widths of a page of these facts in 30 font settings, the fixed-pitch and web fonts among them,
+  and on the lines and widths of 1,623 layouts of a sample in Arial, Menlo and Courier New; the larger probes ran in
+  webkit-host alone. Reopens with a Canvas fact that tells which fonts take the fixed-pitch shortcut or which glyph a
+  font gives U+000D, or with normal white space that keeps two spaces that touch.)
 - **Emoji and the segmenter.** DOM emoji equal OffscreenCanvas's at the CSS size, bit for bit at 8-32px (a "size × DPR ÷
   DPR" recipe is up to 3.5 px off), and OffscreenCanvas gives a space before U+FE0F the emoji's width
   (ENGINE_FOLLOWUPS.md). Safari's `Intl.Segmenter` doesn't mark digit strings as words where Bun's does, so Bun is no
@@ -5666,7 +5685,7 @@ decisions for the maintainer.
   fixed-pitch shortcut for it** (#455), the maintainer's decision. A lone CR is a carriage return with no line feed
   after it. No draw of the harness's real-usage sample holds a CR, lone or in a CRLF, so no real-usage number moves with
   this decision: it is about text that does hold one. In normal white space Safari gives a lone CR no room, and ends a
-  line after it only where a character beside it is above U+00FF (Engine Facts, Safari (WebKit), CR and FF). The profile
+  line after it only in text that holds a character above U+00FF (Engine Facts, Safari (WebKit), CR and FF). The profile
   had it as a space that no line ends at, and now takes it out of the text. In one class of fonts that is a loss: where
   the first installed family of a font list is Menlo, Monaco, Courier, Andale Mono, PT Mono or the generic `monospace`,
   WebKit measures text on its simplified path as its character count times a space, the CR counted, so Safari gives the
@@ -5784,6 +5803,29 @@ decisions for the maintainer.
   a second change that needs every width a double. A retry owes two timings this one lacked or had only as a probe:
   Linux and Windows, where Firefox can round every advance to whole pixels, so that every page would be such a page, and
   a page of only whole widths, which the bench has no document of.
+- **2026-10-07: in the WebKit profile a line or paragraph separator ends its line before lone CRs and the white space
+  that ends the text too, though plain text of that shape loses the line counts it had in Safari by two errors that
+  cancelled** (landed on judgement with #459). A U+2028 or U+2029 ends its line in Safari, and in the profile, as a
+  forced break (`handleSegmentBreak`, `InlineItemsBuilder.cpp:954-962`). #455 took lone CRs out of the text, and one
+  such break went with them: that of a separator right before lone CRs and then white space to the end of the text,
+  where the separator was laid out as a control. #459 keeps the break, so the profile lays such a text out as the same
+  text without those CRs, as it did before #455. In Safari that is a trade, since Safari gives a CR right after a
+  separator a line of its own, which the profile doesn't have, with the break or without it (ENGINE_FOLLOWUPS.md, White
+  space and controls). On 672 probe layouts of 150 paragraphs in 16px fonts, which aren't checked in (webkit-host,
+  WebKit 22625.1.29.11.27, 2026-10-07), the line count with the break is Safari's on 54 of the 72 layouts of a rich item
+  of that shape before an item with text, where it was on 10 without it, the control having let the next item follow on
+  the separator's line while each item's text was analysed alone; and on 4 of the 221 layouts of a plain text of that
+  shape, where it was on 40, with 4 passing where 35 did. Over all 672 the count is Safari's on 325, from 317, and 251
+  pass, from 284. The 33 passes lost, 31 of plain text and 2 of a rich item at 18px, were two errors that cancelled:
+  Safari's Canvas gives a separator no width, so the control took a line of its own only where the last line had no room
+  for the space before it, or under letter spacing, and there it stood in for the CR's line. Part 1 accepts a loss of
+  that kind with the evidence written up (Tests And Losses), and the break is the engine's rule, where the control was a
+  side effect of #455; no checked-in case moved, the harness having no plain case of the CR's line. Since rich inline is
+  one paragraph (#460), a rich item of that shape before an item with text keeps the break with the rule or without, as
+  its white space doesn't end the text that is analysed; the rule decides a plain text of the shape, and in a paragraph
+  the break of a separator before the white space that ends the paragraph, where that white space follows lone CRs or
+  starts a later item (Engine Facts, Safari (WebKit), CR and FF). Reopens with a segment kind that takes no room and no
+  break and still holds a line, or with a report of text with a CR right after a separator.
 - **2026-10-08: a function of its own for the line of a one-item rich paragraph, and the line walker's hanging test as
   two statements, stay, each on its direct timing**, the maintainer's decision on two changes in the code that lays rich
   inline out as one paragraph (#460). The line of a rich paragraph of one item is built by `createOnlyItemLine()` and

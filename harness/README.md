@@ -287,14 +287,26 @@ item. Each one's `rich-new` gives every library a batch of its own a round: 1,00
 length of the Latin text caps (The Great Gatsby's opening, which the `new` and `fresh` rows read forward too), and 4,000
 of the demo's paragraphs, which differ more from one batch to the next than prose does. The demo repeats sentences, so
 its batches are paragraphs of words mostly seen, and 6% of `chat`'s new paragraphs repeat an earlier one whole. Each
-one's `rich-seen` prepares its kept paragraphs again, where every item looks its font up and measures nothing. Each
-one's `rich-walk` and `rich-stream` keep every line they are handed, in one variable outside the loop, as an app that
-paints its lines keeps them: both rich demos, the Markdown chat and the rich note, pass each line they walk to
-`materializeRichInlineLineRange()`. A callback that reads only the line's width times less than an app pays, and not the
-same less for every library, since an engine that inlines a library's line builder into the walk then never makes the
-line. So a `rich-walk` or `rich-stream` figure from before #456 isn't comparable with one after it, on the stress
-document either (`RESEARCH.md`, Evaluation Traps, Timing, has the numbers behind the batches and the kept line). The
-`lines` row times the line functions on mixed, Latin and CJK messages, each family in a document of its own.
+one's `rich-seen` prepares its kept paragraphs again, where every item looks its font up and measures nothing.
+`rich-new` and `rich-seen` both time `prepareRichInline()` followed by one `measureRichInlineStats()` of what it
+returns, so a figure for either entry is the cost of both calls. Each one's `rich-walk` and `rich-stream` keep every
+line they are handed, in one variable outside the loop, as an app that paints its lines keeps them: both rich demos, the
+Markdown chat and the rich note, pass each line they walk to `materializeRichInlineLineRange()`. A callback that reads
+only the line's width times less than an app pays, and not the same less for every library, since an engine that inlines
+a library's line builder into the walk then never makes the line. So a `rich-walk` or `rich-stream` figure from before
+#456 isn't comparable with one after it, on the stress document either (`RESEARCH.md`, Evaluation Traps, Timing, has the
+numbers behind the batches and the kept line). The `lines` row times the line functions on mixed, Latin and CJK
+messages, each family in a document of its own. Nearly all of those messages take the simple stepper
+(`stepPreparedSimpleLineGeometry()`, `src/line-break.ts`) and not the full walker (`walkPreparedComplexLines()`), which
+lays out the text the simple one doesn't cover: in every engine profile all 147 Latin and all 134 CJK messages do, and
+133 of the 134 mixed ones, 19,905 of their 20,000 units (prepared on the stand-in Canvas at bf62c76a, 2026-10-09). So
+the row times the simple stepper, not the full walker, and a verdict there on a change that touches only the full walker
+isn't that change's cost: it comes from how the browser runs the changed bundle, or from chance. The `worst` row times
+the full walker, which lays out all of `cjk-letter-spaced` and `pre-wrap-chunks`, 99% of the units of
+`soft-hyphens-marks` and 25% of those of `invisible-tails`, and in the WebKit profile 34% of those of `controls`; in the
+other profiles `layout()`, the one line function the row runs on `controls`, counts those texts with the simple stepper
+and hands the full walker only the lines that end where the text has no break (`countSteppedLines()`). None of the text
+of its other four documents goes to the full walker.
 
 - **A control copy.** Each document runs base, the candidate and a second copy of base, shuffled each round, since only
   same-document ratios survive drift between sessions (`RESEARCH.md`, Evaluation Traps, has the numbers behind this and
@@ -325,12 +337,14 @@ document either (`RESEARCH.md`, Evaluation Traps, Timing, has the numbers behind
   a session reads level when that copy is the control's and as a change when it is the candidate's. Chrome 154 runs one
   copy of main about 12% slower than the other two on the chat documents' `rich-seen` (47.5 or 53.5 µs per 1,000 units
   on `chat`, 58 or 65 on `chat-styled`), a different copy from session to session, and Safari 27 does the same on the
-  stress document's `rich-walk` and `rich-stream`. Main against itself read Safari's stress `rich-stream` 12-15% slower
-  in all three sessions of one run, which called it slower, and Chrome's `chat-styled rich-seen` 10-13% slower in 7
-  sessions of 11 (2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing). Read such an entry over ten sessions, and by
-  each copy's own cost in the saved samples, since the table prints base's and the candidate's medians only: the line a
-  run prints as it starts names their folder, `.artifacts/harness-bench/<time>/`, which holds one file for each browser
-  and session, with each round's `ms` and `units` by `label`.
+  stress document's `rich-walk` and `rich-stream`; on its `rich-seen` the two copies of main can stand as far apart
+  through a session's rounds: 64.6 and 57.0, 64.9 and 54.5, and 57.5 and 60.5 µs per 1,000 units in the three sessions
+  of one run of main at #455 (2026-10-07). Main against itself read Safari's stress `rich-stream` 12-15% slower in all
+  three sessions of one run, which called it slower, and Chrome's `chat-styled rich-seen` 10-13% slower in 7 sessions of
+  11 (2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing). Read such an entry over ten sessions, and by each copy's own
+  cost in the saved samples, since the table prints base's and the candidate's medians only: the line a run prints as it
+  starts names their folder, `.artifacts/harness-bench/<time>/`, which holds one file for each browser and session, with
+  each round's `ms` and `units` by `label`.
 - **Floors**, the noise threshold under which a row's ratio isn't called a change (1-6% by row, `FLOORS` in
   `bench/report.ts`, with the builds and machine they came from), are the largest deviation held in one direction in all
   three sessions of a calibration of HEAD against itself; calibrate again, with `bun harness bench HEAD --sessions=3`,
@@ -351,8 +365,14 @@ document either (`RESEARCH.md`, Evaluation Traps, Timing, has the numbers behind
   every row would give 7%, from the control's copy on Safari's stress `rich-walk` (6.2%, 15.4% and 20.9% over base), an
   entry where a copy keeps a speed: the band covers a control's copy, and no floor short of the distance between two
   speeds covers a candidate's (the bullet above).
-- **The builds.** The first line of the output names base and the candidate with their commits and dates, and says
-  when this tree's `src/` has uncommitted changes, so a pasted table says what it compared.
+- **The builds.** The first line of the output names base and the candidate with their commits and dates, and says when
+  this tree's `src/` has uncommitted changes, so a pasted table says what it compared. A candidate given as a folder
+  outside any checkout (`--lib=<dir>`) is minified with other names than the same source given as a commit: the
+  repository's `package.json` (`"sideEffects": false`) isn't above it, and 241 names of main's bench bundle differ, one
+  for one, at the same length (bf62c76a, 2026-10-09); the `src/` of another checkout, a worktree's too, has that file
+  above it and gets the commit's names. Some rows move with those names (below), so a figure a decision rests on names
+  commits on both sides, and a build that is no commit goes inside a checkout, as under this one's `.artifacts/`, where
+  it gets the names a commit gets.
 - **WebKit's width cache** samples one Canvas call in 21 after a run of misses, so a prepare that submits n strings
   speeds up only after 21 / gcd(n, 21) repeats: compare submitted text and cold first prepares.
 - **Firefox's `resize: latin layout at new widths`** moves about 16% with the names the bench's minifier gives the

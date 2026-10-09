@@ -228,7 +228,8 @@ export function isCollapsibleSpaceCode(code: number): boolean {
 // break goes with its unit: Gecko's cluster start, which only a unit that stays text reads,
 // and WebKit's forced break after a separator, which keeps its mark at the end too, also
 // where the white space that ends the text starts at a break: at an item's edge in a
-// paragraph, or after a lone CR the analysis took out, whose mark it took.
+// paragraph, or after a lone CR the analysis took out, whose mark it took (RESEARCH.md,
+// Decisions Log, 2026-10-07).
 // Fills spaceSources, when given, in normal white space.
 function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBreaks: Uint8Array, whiteSpace: WhiteSpaceMode, spaceSources: Uint16Array | null): Uint8Array {
   const breaks = new Uint8Array(normalizedLength + 1)
@@ -456,11 +457,12 @@ export function analyzeText(
       // a character that advances is spaced (WidthIterator.cpp:508-516). Every Canvas measures
       // it as a space, so the source leaves it out, as the Gecko profile's does below, and white
       // space on its two sides is one space, where Safari keeps two. The scan read it, so the
-      // unit after it keeps its own break, none where the characters on the CR's two sides are
-      // up to U+00FF and ICU's, after the CR, where one is above (BreakablePositions.h:179-187,
-      // 238-251), and takes the CR's, the one after white space. The CR of a CRLF stays, to
-      // collapse into the line feed's space; in a paragraph that is also a CR that ends an item
-      // before a line feed that starts the next, whose space is the line feed's item's
+      // unit after it keeps its own break: ICU's, after the CR, where the scan takes it, as before
+      // a letter above U+00FF, and none elsewhere, its table having none beside a control
+      // (BreakablePositions.h:179-187, 238-251; RESEARCH.md, Engine Facts, Safari (WebKit), CR and
+      // FF, has where). That unit also takes the CR's break, the one after white space. The CR of a
+      // CRLF stays, to collapse into the line feed's space; in a paragraph that is also a CR that
+      // ends an item before a line feed that starts the next, whose space is the line feed's item's
       // (alignToSource). In the installed fonts that take WebKit's fixed-pitch shortcut, Menlo
       // and so the generic monospace among them, text on simplified measuring is as wide as its
       // characters are many, the CR among them (Font::determinePitch, FontCoreText.cpp:753-785;
@@ -649,12 +651,12 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
 // Collapsible white space on either side of a boundary breaks there, as inside a text, but a CR,
 // which is no white space to WebKit: beside one the check decides. It takes the pair of a CR and
 // a character up to U+00FF from its table, which has no break for it, so at a boundary only a
-// character above U+00FF right after the CR brings ICU's break, where inside a text one on
-// either side of the CR does. The analysis then takes a lone CR out with the breaks found
-// around it (analyzeText). The source is the items' texts joined as they are, an atomic item
-// as one U+FFFC, which is never scanned (removeItemsSkippableSegmentBreaks leaves WebKit's text
-// alone), so a scan takes an item's own text and nothing is cut out of the source before the
-// scans.
+// character above U+00FF right after the CR brings ICU's break, where inside a text a letter above
+// U+00FF before the CR can too, before an ASCII letter. The analysis then takes a lone CR out with
+// the breaks found around it (analyzeText). The source is the items' texts joined as they are, an
+// atomic item as one U+FFFC, which is never scanned (removeItemsSkippableSegmentBreaks leaves
+// WebKit's text alone), so a scan takes an item's own text and nothing is cut out of the source
+// before the scans.
 function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, preserve: boolean, keepAll: boolean, language: string | null): Uint8Array {
   const { items, starts, atomic } = paragraph
   const breaks = new Uint8Array(source.length + 1)

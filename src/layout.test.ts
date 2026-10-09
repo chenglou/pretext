@@ -1596,13 +1596,21 @@ describe('boundary rules', () => {
       // none after the hyphen, where the text without the CR has one.
       expect(segments('ab-cd')).toEqual(['ab-', 'cd'])
       expect(segments('ab-\rcd')).toEqual(['ab-cd'])
-      // Beside a character above U+00FF, ICU breaks after the CR, and the line can end there.
+      // ICU breaks after the CR, and the line can end there where the scan takes that break, as
+      // before a letter above U+00FF, or before an ASCII letter after one.
       expect(segments('\u0431\u0432\u0433\u0434')).toEqual(['\u0431\u0432\u0433\u0434'])
       for (const [text, halves] of [['\u0431\u0432\r\u0433\u0434', ['\u0431\u0432', '\u0433\u0434']], ['ab\r\u0433\u0434', ['ab', '\u0433\u0434']], ['\u0431\u0432\rcd', ['\u0431\u0432', 'cd']]] as const) {
         expect(segments(text)).toEqual([...halves])
         expect(lines(text, measureWidth(halves[0], FONT) + 0.5)).toEqual([...halves])
       }
       expect(segments('\u00E9t\u00E9\rcd')).toEqual(['\u00E9t\u00E9cd'])
+      // Not before a digit. And the break goes by the character the scan holds as the one before
+      // the CR, the second of the last pair it took to ICU where it stepped on from there: the full
+      // stop of `т.е`, so no line ends before `cd`, and a Thai letter of `ไทยe`, so one does
+      // (RESEARCH.md, Engine Facts, Safari (WebKit), CR and FF).
+      expect(segments('\u0431\u0432\r12')).toEqual(['\u0431\u043212'])
+      expect(segments('\u0442.\u0435\rcd')).toEqual(['\u0442.\u0435cd'])
+      expect(segments('\u0E44\u0E17\u0E22e\rcd')).toEqual(['\u0E44\u0E17\u0E22e', 'cd'])
       // The break before a CR after white space goes to the unit after it, which has none of
       // its own, so the line ends there (under letter spacing, the test of where a line ends).
       expect(lines('ab \rcd', measureWidth('ab', FONT) + 0.5)).toEqual(['ab ', 'cd'])
