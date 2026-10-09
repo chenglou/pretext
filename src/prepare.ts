@@ -556,9 +556,10 @@ export function measureAnalysis(
   // compiles that push as a call from then on, for every text: on a page of mostly plain text
   // whose first rich paragraphs are short, Chrome 154 prepared plain text again 4-9% slower
   // for the rest of the page's life. A store by index is compiled with the list's change of
-  // form in it and stays compiled. Against a push it costs a text about 1% of a preparing
-  // (text measured before: 0.4-1.2% in Chrome 154, Firefox 156 and Safari 27, under the
-  // bench's floors).
+  // form in it and stays compiled. Against a push it costs a text up to about 1% of a
+  // preparing: text measured before reads 0.5-1.3% slower on Latin, CJK and mixed messages in
+  // Safari 27 and 0.6-0.8% on CJK in Chrome 154, with the builds either way round and under
+  // the bench's floor, and Firefox 156 reads it level to 1%.
   for (let mi = from, at = base; mi < to; mi++, at++) {
     const text = texts[mi]!
     const segment = flags[mi]!
