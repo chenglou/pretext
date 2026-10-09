@@ -6227,8 +6227,9 @@ describe('layout invariants', () => {
       for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
         const width = widths[widthIndex]!
         const counted = countPreparedLines(internals(prepared), width)
-        const walked = measurePreparedLineStats(internals(prepared), width).lineCount
+        const walked = layoutWithLines(prepared, width, LINE_HEIGHT).lineCount
         expect(counted).toBe(walked)
+        expect(measurePreparedLineStats(internals(prepared), width).lineCount).toBe(walked)
       }
     }
   })
@@ -6271,8 +6272,9 @@ describe('layout invariants', () => {
           }
           for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
             const width = widths[widthIndex]!
-            const walked = measurePreparedLineStats(internal, width).lineCount
+            const walked = layoutWithLines(prepared, width, LINE_HEIGHT).lineCount
             expect({ scan, text, width, count: countPreparedLines(internal, width) }).toEqual({ scan, text, width, count: walked })
+            expect(measurePreparedLineStats(internal, width).lineCount).toBe(walked)
             expect(layout(compact, width, LINE_HEIGHT).lineCount).toBe(walked)
           }
         }
