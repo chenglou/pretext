@@ -285,6 +285,16 @@ export function normalizePreparedLineStart(
   }
 }
 
+// Where the next line of a fast-path handle starts, from `segmentIndex`, where the last line ended:
+// past what a line can't start with. The segment count when no line remains.
+// It leaves the cursor to its two loops: moving it too, it walked and counted plain text 8 to 13%
+// slower in Firefox 156 (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
+function getSimpleLineStart(segmentFlags: Uint8Array, segmentIndex: number): number {
+  const atTextStart = segmentIndex === 0
+  while (segmentIndex < segmentFlags.length && consumesAtLineStart(segmentFlags[segmentIndex]! & KIND_BITS, atTextStart)) segmentIndex++
+  return segmentIndex
+}
+
 // Walks every line of the text, visiting each, and returns the line count.
 export function walkPreparedLinesRaw(
   prepared: PreparedLineData,
@@ -306,11 +316,7 @@ export function walkPreparedLinesRaw(
   const segmentCount = segmentFlags.length
   let lineCount = 0
   while (true) {
-    let startSegmentIndex = cursor.segmentIndex
-    const atTextStart = startSegmentIndex === 0
-    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & KIND_BITS, atTextStart)) {
-      startSegmentIndex++
-    }
+    const startSegmentIndex = getSimpleLineStart(segmentFlags, cursor.segmentIndex)
     if (startSegmentIndex >= segmentCount) return lineCount
     const startGraphemeIndex = cursor.graphemeIndex
     cursor.segmentIndex = startSegmentIndex
@@ -323,8 +329,6 @@ export function walkPreparedLinesRaw(
 // The text's line count and its widest line: the walk's lines, with no visitor.
 // Counts run by the walker leave its visitor call unrun, where V8 deoptimizes: Chrome 154 walked
 // one-item CJK paragraphs 9 to 14% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
-// The fast path's loop is the walker's, written again: with its line start in a function both
-// call, Chrome 154 counted 3 to 5% slower and Firefox 156 walked up to 13% slower (the same entry).
 export function measurePreparedLineStats(prepared: PreparedLineData, maxWidth: number): LineStats {
   const stats = { lineCount: 0, maxLineWidth: 0 }
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
@@ -335,11 +339,7 @@ export function measurePreparedLineStats(prepared: PreparedLineData, maxWidth: n
   const { segmentFlags } = prepared
   const segmentCount = segmentFlags.length
   while (true) {
-    let startSegmentIndex = cursor.segmentIndex
-    const atTextStart = startSegmentIndex === 0
-    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & KIND_BITS, atTextStart)) {
-      startSegmentIndex++
-    }
+    const startSegmentIndex = getSimpleLineStart(segmentFlags, cursor.segmentIndex)
     if (startSegmentIndex >= segmentCount) return stats
     cursor.segmentIndex = startSegmentIndex
     const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
