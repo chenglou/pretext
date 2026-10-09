@@ -1134,7 +1134,7 @@ describe('the library through the adapter', () => {
   test('measureLineStats giving another widest line than the walk blocks: a bubble shrink-wrapped to it would be too wide', async () => {
     const c = paragraph('A message long enough to wrap at a few widths', 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('line-stats', 'layout.ts', /(walkPreparedLinesRaw\(getInternalPrepared\(prepared\), normalizeMaxWidth\(maxWidth\), undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
+    const stats = await planted('line-stats', 'layout.ts', /return (measurePreparedLineStats\(getInternalPrepared\(prepared\), normalizeMaxWidth\(maxWidth\)\))/, 'const stats = $1\n  return { lineCount: stats.lineCount, maxLineWidth: stats.maxLineWidth + 1 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureLineStats gives')
   })
 
@@ -1147,7 +1147,7 @@ describe('the library through the adapter', () => {
   test('measureRichInlineStats giving another widest line than the rich walk blocks: a rich bubble shrink-wrapped to it would be too narrow', async () => {
     const c = spans(['A message ', 'long enough ', 'to wrap at a few widths'], 120)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const stats = await planted('rich-stats', 'rich-inline.ts', /(walkPreparedLinesRaw\(flow\.data, safeWidth, undefined, stats\)\n)  return stats/, '$1  return { lineCount: stats.lineCount, maxLineWidth: 0 }')
+    const stats = await planted('rich-stats', 'rich-inline.ts', /return (measurePreparedLineStats\(flow\.data, safeWidth\))/, 'const stats = $1\n  return { lineCount: stats.lineCount, maxLineWidth: 0 }')
     expect(disagreement(stats.predict(c))).toStartWith('measureRichInlineStats gives')
   })
 

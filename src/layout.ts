@@ -27,6 +27,7 @@ import {
 import { measureAnalysis } from './prepare.js'
 import {
   countPreparedLines,
+  measurePreparedLineStats,
   normalizeMaxWidth,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
@@ -266,9 +267,7 @@ export function measureLineStats(
   prepared: PreparedText,
   maxWidth: number,
 ): LineStats {
-  const stats = { lineCount: 0, maxLineWidth: 0 }
-  walkPreparedLinesRaw(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth), undefined, stats)
-  return stats
+  return measurePreparedLineStats(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth))
 }
 
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is

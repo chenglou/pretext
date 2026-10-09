@@ -285,15 +285,15 @@ export function normalizePreparedLineStart(
   }
 }
 
-// Walks every line of the text into `stats`, visiting each, and returns the line count.
+// Walks every line of the text, visiting each, and returns the line count.
 export function walkPreparedLinesRaw(
   prepared: PreparedLineData,
   maxWidth: number,
-  onLine?: InternalLineVisitor,
-  stats: LineStats = { lineCount: 0, maxLineWidth: 0 },
+  onLine: InternalLineVisitor,
 ): number {
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   if (!prepared.simpleLineWalkFastPath) {
+    const stats = { lineCount: 0, maxLineWidth: 0 }
     if (normalizePreparedLineStart(prepared, cursor)) walkPreparedComplexLines(prepared, cursor, maxWidth, onLine, stats)
     return stats.lineCount
   }
@@ -304,19 +304,47 @@ export function walkPreparedLinesRaw(
   // Firefox (RESEARCH.md, Keeping Work Bounded).
   const { segmentFlags } = prepared
   const segmentCount = segmentFlags.length
+  let lineCount = 0
   while (true) {
     let startSegmentIndex = cursor.segmentIndex
     const atTextStart = startSegmentIndex === 0
     while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & KIND_BITS, atTextStart)) {
       startSegmentIndex++
     }
-    if (startSegmentIndex >= segmentCount) return stats.lineCount
+    if (startSegmentIndex >= segmentCount) return lineCount
     const startGraphemeIndex = cursor.graphemeIndex
+    cursor.segmentIndex = startSegmentIndex
+    const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
+    lineCount++
+    onLine(width, startSegmentIndex, startGraphemeIndex, cursor.segmentIndex, cursor.graphemeIndex)
+  }
+}
+
+// The text's line count and its widest line: the walk's lines, with no visitor.
+// Counts run by the walker leave its visitor call unrun, where V8 deoptimizes: Chrome 154 walked
+// one-item CJK paragraphs 9 to 14% slower (RESEARCH.md, Keeping Work Bounded, JavaScript Engines).
+// The fast path's loop is the walker's, written again: with its line start in a function both
+// call, Chrome 154 counted 3 to 5% slower and Firefox 156 walked up to 13% slower (the same entry).
+export function measurePreparedLineStats(prepared: PreparedLineData, maxWidth: number): LineStats {
+  const stats = { lineCount: 0, maxLineWidth: 0 }
+  const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  if (!prepared.simpleLineWalkFastPath) {
+    if (normalizePreparedLineStart(prepared, cursor)) walkPreparedComplexLines(prepared, cursor, maxWidth, undefined, stats)
+    return stats
+  }
+  const { segmentFlags } = prepared
+  const segmentCount = segmentFlags.length
+  while (true) {
+    let startSegmentIndex = cursor.segmentIndex
+    const atTextStart = startSegmentIndex === 0
+    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]! & KIND_BITS, atTextStart)) {
+      startSegmentIndex++
+    }
+    if (startSegmentIndex >= segmentCount) return stats
     cursor.segmentIndex = startSegmentIndex
     const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
     stats.lineCount++
     if (width > stats.maxLineWidth) stats.maxLineWidth = width
-    onLine?.(width, startSegmentIndex, startGraphemeIndex, cursor.segmentIndex, cursor.graphemeIndex)
   }
 }
 
@@ -329,7 +357,7 @@ export function walkPreparedLinesRaw(
 export function countPreparedLines(prepared: PreparedLineData, maxWidth: number): number {
   // The loop takes no overflow trims, which the stepper takes for a line's first segment.
   if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
-    return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
+    return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : measurePreparedLineStats(prepared, maxWidth).lineCount
   }
   const { widths, segmentFlags, breakableFitAdvances, entryGeometry, lineStartProhibitions, breakableLineStartExtras, lineStartExtras, lineEndTrims } = prepared
   const fitLimit = Math.max(0, maxWidth) + getEngineProfile().lineFitEpsilon

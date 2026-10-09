@@ -37,7 +37,7 @@ let walkLineRanges: LayoutModule['walkLineRanges']
 let setLocale: LayoutModule['setLocale']
 let clearCache: LayoutModule['clearCache']
 let countPreparedLines: LineBreakModule['countPreparedLines']
-let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
+let measurePreparedLineStats: LineBreakModule['measurePreparedLineStats']
 let SPACED: AnalysisModule['SPACED']
 let ONE_CLUSTER: AnalysisModule['ONE_CLUSTER']
 let getSegmentFit: MeasurementModule['getSegmentFit']
@@ -313,7 +313,7 @@ beforeAll(async () => {
     setLocale,
     clearCache,
   } = mod)
-  ;({ countPreparedLines, walkPreparedLinesRaw } = lineBreakMod)
+  ;({ countPreparedLines, measurePreparedLineStats } = lineBreakMod)
   ;({ getSegmentFit, getFontMeasurement, getPreparationLanguage, getEngineProfile } = measurementMod)
   ;({ analyzeText, SEGMENT_KINDS, KIND_BITS, SPACED, ONE_CLUSTER } = analysisMod)
   ;({ getBlinkLineBreaks } = lineBreaksMod)
@@ -2434,7 +2434,7 @@ describe('prepare invariants', () => {
 
       // A handle without soft-hyphen contexts keeps the overflowing hyphen.
       const withoutContexts = { ...internals(prepareWithSegments(text, FONT)), discretionaryHyphenContexts: null }
-      expect(walkPreparedLinesRaw(withoutContexts, width)).toBe(2)
+      expect(measurePreparedLineStats(withoutContexts, width).lineCount).toBe(2)
     } finally {
       profile.unfitHyphenRetreat = previous
     }
@@ -4607,7 +4607,7 @@ describe('rich-inline invariants', () => {
     const previous = { lineBreakScan: profile.lineBreakScan, hangTabs: profile.hangTabs }
     // How many times a walk of the paragraph's lines at 40px reads a segment's flags.
     const flagReads = (items: Parameters<typeof prepareRichInline>[0]): number => {
-      const data = (prepareRichInline(items, { whiteSpace: 'pre-wrap' }) as unknown as { data: Parameters<typeof walkPreparedLinesRaw>[0] }).data
+      const data = (prepareRichInline(items, { whiteSpace: 'pre-wrap' }) as unknown as { data: Parameters<typeof measurePreparedLineStats>[0] }).data
       let reads = 0
       const counted = new Proxy(data.segmentFlags, {
         get(target, key) {
@@ -4615,7 +4615,7 @@ describe('rich-inline invariants', () => {
           return Reflect.get(target, key) as unknown
         },
       })
-      walkPreparedLinesRaw({ ...data, segmentFlags: counted }, 40)
+      measurePreparedLineStats({ ...data, segmentFlags: counted }, 40)
       return reads
     }
     // Preserved white space after an object that overflows stays on its line, however many items
@@ -5555,7 +5555,7 @@ describe('rich-inline invariants', () => {
         // read each box's flags only a few times.
         if (e === 2) {
           const run = 2000
-          const { data } = prepareRichInline([text('ab '), ...Array.from({ length: run }, () => zero)]) as unknown as { data: Parameters<typeof walkPreparedLinesRaw>[0] }
+          const { data } = prepareRichInline([text('ab '), ...Array.from({ length: run }, () => zero)]) as unknown as { data: Parameters<typeof measurePreparedLineStats>[0] }
           let reads = 0
           const counted = new Proxy(data.segmentFlags, {
             get(target, key) {
@@ -5563,7 +5563,7 @@ describe('rich-inline invariants', () => {
               return Reflect.get(target, key) as unknown
             },
           })
-          expect(walkPreparedLinesRaw({ ...data, segmentFlags: counted }, measureWidth('ab', FONT) + 1)).toBe(1)
+          expect(measurePreparedLineStats({ ...data, segmentFlags: counted }, measureWidth('ab', FONT) + 1).lineCount).toBe(1)
           expect(reads).toBeGreaterThan(run)
           expect(reads).toBeLessThan(40 * run)
         }
@@ -6227,7 +6227,7 @@ describe('layout invariants', () => {
       for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
         const width = widths[widthIndex]!
         const counted = countPreparedLines(internals(prepared), width)
-        const walked = walkPreparedLinesRaw(internals(prepared), width)
+        const walked = measurePreparedLineStats(internals(prepared), width).lineCount
         expect(counted).toBe(walked)
       }
     }
@@ -6271,7 +6271,7 @@ describe('layout invariants', () => {
           }
           for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
             const width = widths[widthIndex]!
-            const walked = walkPreparedLinesRaw(internal, width)
+            const walked = measurePreparedLineStats(internal, width).lineCount
             expect({ scan, text, width, count: countPreparedLines(internal, width) }).toEqual({ scan, text, width, count: walked })
             expect(layout(compact, width, LINE_HEIGHT).lineCount).toBe(walked)
           }
@@ -6304,7 +6304,7 @@ describe('layout invariants', () => {
           lines.lines.map(({ text, start, end }) => ({ text, start, end })),
         )
         expect(countPreparedLines(internals(prepared), width)).toBe(expected.length)
-        expect(walkPreparedLinesRaw(internals(prepared), width)).toBe(expected.length)
+        expect(measurePreparedLineStats(internals(prepared), width).lineCount).toBe(expected.length)
         expect(layout(compact, width, LINE_HEIGHT)).toEqual({ lineCount: expected.length, height: expected.length * LINE_HEIGHT })
       }
       expect(canvasMeasurementCount).toBe(measured)
@@ -6510,7 +6510,7 @@ describe('layout invariants', () => {
             .toEqual({ text, whiteSpace, width, lines: expected, widths })
           expect(collectStreamedLines(prepared, width)).toEqual(lines.lines)
           expect(countPreparedLines(internals(prepared), width)).toBe(expected.length)
-          expect(walkPreparedLinesRaw(internals(prepared), width)).toBe(expected.length)
+          expect(measurePreparedLineStats(internals(prepared), width).lineCount).toBe(expected.length)
           expect(layout(prepare(text, font, options), width, LINE_HEIGHT).lineCount).toBe(expected.length)
           // The complex walker, for text that leaves the fast path, agrees.
           const complex = { ...prepared, simpleLineWalkFastPath: false } as typeof prepared

@@ -23,6 +23,7 @@ import { getSegmentEntryWidth, type SegmentEntryGeometry } from './entry-geometr
 import { buildLineTextFromRange, buildRangeText, getGraphemeEnds, type PreparedSegments } from './line-text.js'
 import {
   getItemTabAdvance,
+  measurePreparedLineStats,
   normalizeMaxWidth,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
@@ -1232,7 +1233,5 @@ export function measureRichInlineStats(
   const flow = getInternalPreparedRichInline(prepared)
   const safeWidth = Math.max(1, normalizeMaxWidth(maxWidth))
   if (fitsWhole(flow, safeWidth)) return { lineCount: 1, maxLineWidth: Math.max(0, flow.wholeWidth!) }
-  const stats = { lineCount: 0, maxLineWidth: 0 }
-  walkPreparedLinesRaw(flow.data, safeWidth, undefined, stats)
-  return stats
+  return measurePreparedLineStats(flow.data, safeWidth)
 }
