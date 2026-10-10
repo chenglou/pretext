@@ -2911,20 +2911,27 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
 - **A break that depends on where a line starts** (#NNN; Engine Facts, Chrome (Blink), Line breaking): the Blink scan
   marks the break after a hyphen before a digit (`CONTEXT_BREAK`, `src/line-breaks.ts`), which the segment that starts
   there keeps in the one bit of its flags byte a handle had free, and a line has none there only where it starts at the
-  hyphen, which only a word cut between letters gives. So the walkers ask on that path alone: the full walker where a
-  segment with the mark overflows its line, or where the text has what a line returns to a break from, an unbroken
-  boundary or a soft hyphen (`lacksBreakContext()`, `src/line-break.ts`); the simple stepper where a line starts inside
-  a segment, at its last grapheme, before a segment with the mark, where it hands the line to the full walker; and
-  `layout()`'s counter once for each segment it cuts, where it hands a text with such a segment to the stepper. One
-  walker holds the rule, so the three can't disagree on such a line, and a line that starts at a segment's start runs
-  nothing new. A handle holds nothing more, and `prepare()` submits the same strings: offline, 0 of 21,251 inputs
-  measure otherwise, the handles of 142 hold the mark and the lines of 105 differ at one of the replay's 11 widths, in
-  the Blink profile and in an unrecognized engine's, and none in the WebKit or Gecko profile (`bun harness equal main
-  --offline`, 2026-10-10). The full walker's two tests beside the overflow's are each live. Of 300,000 random
-  layouts of ASCII text that is letter-spaced, holds a NEL or a soft hyphen, or is cut into rich items, on the stand-in
-  with a width a character, 15 differ from the text prepared again from each line's start, rich items with a soft
-  hyphen that main lays out the same way; without the test at a break a line returns to 240 more differ, and without
-  the one at a hyphen's return 31 more (the fuzz that isn't checked in, 2026-10-10).
+  hyphen, which only a word cut between letters gives. So the simple walkers ask on that path alone: the stepper where
+  a line starts inside a segment, at its last grapheme, before a segment with the mark, where it hands the line to the
+  full walker; and `layout()`'s counter once for each segment it cuts, where it hands a text with a segment cut before
+  a marked one to the stepper. The full walker holds the rule (`lacksBreakContext()`, `src/line-break.ts`) and tests the
+  mark's bit, in the flags it has read, in three places: where a segment overflows its line, and where a line records a
+  break it could return to, at a text segment in text with an unbroken boundary and at a break between two text
+  segments in text with a soft hyphen. One walker holds the rule, so the three can't disagree on such a line. A handle
+  holds nothing more, and `prepare()` submits the same strings: offline, 0 of 21,251 inputs measure otherwise, the
+  handles of 142 hold the mark and the lines of 105 differ at one of the replay's 11 widths, in the Blink profile and in
+  an unrecognized engine's, and none in the WebKit or Gecko profile (`bun harness equal main --offline`, 2026-10-10).
+  The full walker's two tests beside the overflow's are each live. Of 300,000 random layouts of ASCII text that is
+  letter-spaced, holds a NEL or a soft hyphen, or is cut into rich items, on the stand-in with a width a character, 15
+  differ from the text prepared again from each line's start, rich items with a soft hyphen that main lays out the same
+  way; without the test at a break a line returns to 240 more differ, and without the one at a hyphen's return 31 more
+  (the fuzz that isn't checked in, 2026-10-10). In the browser, on a probe of 1,093 layouts built to hold the shape,
+  which isn't checked in (the texts of #480 at every whole pixel up to 60px, some in pre-wrap, under keep-all, under
+  letter spacing and as spans), main fails 147 in Chrome and the change 30, the other profiles the same layouts with
+  either build. Two of the 30 are lost: a soft hyphen after the digits whose hyphen doesn't fit, which main passed by
+  two errors that cancelled (ENGINE_FOLLOWUPS.md, Line edges); the other 28 fail on main too, by gaps named there
+  (Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). The rule written out in the simple walkers too,
+  in place of the hand-over, reopens if text whose words are cut before such hyphens comes to matter for speed.
 - **A paragraph's segment breaks, in the Gecko profile**: Gecko transforms segment breaks in each text frame's own text,
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
