@@ -3908,7 +3908,10 @@ describe('rich-inline invariants', () => {
   test('rich items in one font lay out as the text walkers lay out their text in one node', () => {
     // A paragraph is one analysis of its items' joined text, cut where an item starts, so in the
     // Blink and Gecko profiles, which break by that text, its lines are the text's: as wide,
-    // and ending at the same places.
+    // and ending at the same places. This test compares each line's width as well as its text;
+    // 'the Chromium profile and the Gecko scan break rich items only where their joined text
+    // breaks' compares the text alone, on rows whose breaks show at widths of their own, as
+    // inside a dictionary word that items split.
     const lineEnds = (text: string, maxWidth: number) => {
       const prepared = prepareWithSegments(text, FONT)
       const lines: Array<[number, string]> = []
@@ -4224,6 +4227,9 @@ describe('rich-inline invariants', () => {
   })
 
   test('the Chromium profile and the Gecko scan break rich items only where their joined text breaks', () => {
+    // The rich lines' text against the joined text's, each row at the widths where its break
+    // shows. The lines' widths are compared in 'rich items in one font lay out as the text
+    // walkers lay out their text in one node', on other rows.
     // Same-font runs from a product page: native text keeps "community," whole,
     // so the comma that starts the third run moves with the word before it.
     // Run extents also come from the joined text: split words, dictionary
