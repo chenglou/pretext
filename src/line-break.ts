@@ -118,7 +118,7 @@ type InternalLineVisitor = (
   endGraphemeIndex: number,
 ) => void
 
-export function breaksAfterKind(kind: number): boolean {
+function breaksAfterKind(kind: number): boolean {
   return (1 << kind & BREAK_AFTER_KINDS) !== 0
 }
 
