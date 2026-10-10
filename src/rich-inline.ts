@@ -1060,9 +1060,9 @@ function createLine(
       // line's last fragment; the line's width and breaks are the walker's either way. The 1e-6px
       // is room for float error: the walker adds the same advances in another order, so where
       // nothing after a mark that wasn't halted takes room, the segments up to it can add up to
-      // more than the line by the sum's last bits, 6e-14px at most on lines of 300px and 6e-11px
-      // on lines of 280,000px, and the mark would read as halted, its halt going to the fragment
-      // after it.
+      // more than the line by a few units in the last place of the line's width (one is 6e-14px on
+      // a line of 300px, 6e-11px on one of 280,000px), and the mark would read as halted, its halt
+      // going to the line's last fragment.
       if (itemEndHalts !== null && itemEndHalts[i]! !== 0 && lineW + w - width > 1e-6) w -= itemEndHalts[i]!
       occupiedWidth += w
       lineW += w
