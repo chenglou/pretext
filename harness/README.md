@@ -183,9 +183,10 @@ six failures at 24 px and wider are accepted (`RESEARCH.md`, Decisions Log, 2026
 paragraph directions it runs in where a browser's lines turn on them (the first of those, both). The facts set has no
 cover, so it keeps the width where a template's words join, which the catalog's cover drops once a narrower change has
 shown that kind of break: a fact that rests on a line's width, such as one space against two, goes there.
-ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again. The oracle set's origins point at
-main before #340 too: each names a mode and a case's label in `src/test-data.ts`'s oracle arrays, gone from today's
-file.
+ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again. The oracle set's origins each name a
+mode and a case's label in `src/test-data.ts`'s oracle arrays, gone from today's file; read them with
+`git show f26640eb:src/test-data.ts`, main at #340's merge, since #340 added two of the 56 labels, the Latin-1 and
+16-bit control cases of Safari's keep-all.
 
 ## Commands
 
