@@ -130,10 +130,10 @@ export type RichInlineStats = {
 }
 
 type InternalPreparedRichInline = PreparedRichInline & {
-  // The paragraph's handle, which the text walkers lay out. A paragraph of one text item with no
-  // extraWidth is that text's own handle, as prepareWithSegments() makes it. Its letterSpacing is
-  // the one its text items share, atomic ones aside; where they differ it is 0, and each segment's
-  // width and advances hold its item's letter spacing after every grapheme.
+  // The paragraph's handle, which the text walkers lay out. A paragraph of one text item that isn't
+  // atomic and has no extraWidth is that text's own handle, as prepareWithSegments() makes it. Its
+  // letterSpacing is the one its text items share, atomic ones aside; where they differ it is 0,
+  // and each segment's width and advances hold its item's letter spacing after every grapheme.
   data: PreparedSegments
   // The only item with segments, where it has no extraWidth, so that every line is one fragment
   // of it, as wide as the line; else -1.
@@ -147,10 +147,10 @@ type InternalPreparedRichInline = PreparedRichInline & {
   // Per item, its first segment in the paragraph, then the segment count: an item's segments are
   // those up to the next item's first.
   itemSegments: number[]
-  // Per segment of a paragraph of several items, its item, and 1 where it is a collapsed space at
-  // its item's start or end, which is the gap before the next fragment on its line, else 0: a
-  // line's fragments are cut by them, with no search (createLine). Null for a paragraph that is one
-  // text's handle.
+  // Per segment of a paragraph that isn't one text's handle, its item, and 1 where it is a
+  // collapsed space at its item's start or end, which is the gap before the next fragment on its
+  // line, else 0: a line's fragments are cut by them, with no search (createLine). Null for a
+  // paragraph that is one text's handle.
   segmentItems: Int32Array | null
   gapSegments: Uint8Array | null
   // Whether each segment of such a paragraph is as wide on a line as its width, but the one a line
@@ -160,8 +160,8 @@ type InternalPreparedRichInline = PreparedRichInline & {
   plainWidths: boolean
   // Per segment, where its text starts and ends in its item's text, and, for a segment whose text
   // isn't one stretch of its item's, as where white space inside it was removed, where each of
-  // its units is there, else null (null too where no segment has any). A paragraph of one text
-  // item finds them when a line is first materialized, from `text`, the item's.
+  // its units is there, else null (null too where no segment has any). A paragraph that is one
+  // text's handle finds them when a line is first materialized, from `text`, its item's.
   sourceStarts: number[] | null
   sourceEnds: number[] | null
   sourceUnits: (number[] | null)[] | null
@@ -191,9 +191,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // so the profile's scan names it.
   const whiteSpaceItemBreaks = profile.lineBreakScan === 'webkit'
 
-  // A paragraph of one styled run is the most common one, and is that run's text: its handle is
-  // the one prepareWithSegments() makes, laid out as layout()'s walkers lay it out. So is a
-  // paragraph whose other items are empty, which are dropped (below).
+  // A paragraph of one styled run that isn't atomic and has no extraWidth is the most common one,
+  // and is that run's text: its handle is the one prepareWithSegments() makes, laid out as
+  // layout()'s walkers lay it out. So is a paragraph whose other items are empty, which are
+  // dropped (below).
   let onlyIndex = -1
   for (let index = 0; index < items.length; index++) {
     if (items[index]!.text === '') continue
@@ -1135,7 +1136,8 @@ function getSourceUnits(offsets: Int32Array, from: number, to: number, itemStart
   return units
 }
 
-// Per segment of a paragraph of one text item, where its text starts and ends in the item's.
+// Per segment of a paragraph that is one text's handle, where its text starts and ends in the
+// item's.
 function findSegmentSources(flow: InternalPreparedRichInline): void {
   const { segments } = flow.data
   const offsets = alignToSource(flow.text, segments.join(''), getEngineProfile().lineBreakScan)
