@@ -1471,13 +1471,14 @@ what it was and what it found). It kept drifting from the text walkers: each rul
 copy at item edges (#332), as the halt of a pair of fullwidth marks did (#425). The item stepper, the walker's mode
 for one item's line, the joined windows, the second handle per item and the halts read across two items are gone, and
 three fields of the engine profile with them (`breaksFromItemText`, `collapsesSpaceAcrossSoftHyphens`,
-`spaceBeforeSoftHyphenHangs`). Against main at #459 (e699e27e, 2026-10-07), `src/` outside tests is 104 lines shorter,
-1,782 added and 1,886 removed, and 103 lines of code shorter, counting neither blank lines nor comment lines:
-`src/rich-inline.ts` goes from 1,101 lines of code to 844, `src/analysis.ts` from 327 to 423, `src/line-break.ts` from
-768 to 812 and `src/prepare.ts` from 500 to 511, as the walker's mode for one item's line makes way for what a
-paragraph's segments carry. The main entry's bundle grows by 3,884 B minified (1,428 B gzipped) to 97,304 B (40,832 B),
-since the walker and the analysis are its own, and `@chenglou/pretext/rich-inline` shrinks by 1,135 B minified to
-108,375 B and grows by 30 B gzipped to 44,902 B (`bun build --minify`, with the bundle piped into `gzip -9`).
+`spaceBeforeSoftHyphenHangs`). As merged (#460, bf62c76a) against main at #459 (e699e27e, 2026-10-07), `src/` outside
+tests is 104 lines shorter, 1,782 added and 1,886 removed by git's patience diff, and 103 lines of code shorter,
+counting neither blank lines nor comment lines: `src/rich-inline.ts` goes from 1,101 lines of code to 844,
+`src/analysis.ts` from 327 to 423, `src/line-break.ts` from 768 to 812 and `src/prepare.ts` from 500 to 511, as the
+walker's mode for one item's line makes way for what a paragraph's segments carry. The main entry's bundle grows by
+3,884 B minified (1,428 B gzipped) to 97,304 B (40,832 B), since the walker and the analysis are its own, and
+`@chenglou/pretext/rich-inline` shrinks by 1,135 B minified to 108,375 B and grows by 30 B gzipped to 44,902 B
+(`bun build --minify`, with the bundle piped into `gzip -9`).
 
 What a caller sees change: a fragment's `start` and `end`, and a line's `end`, count segments of the item's part of the
 paragraph, where they were cursors into `prepareWithSegments(item.text)`. The two differ in most paragraphs of several
