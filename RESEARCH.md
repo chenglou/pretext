@@ -1454,16 +1454,20 @@ pair of marks an item start splits halts as in one text, each mark by its own it
 `src/rich-inline.ts`; and a run of U+3000 inside an item hangs or not by what follows it in the paragraph. A run that
 ends an item hangs whatever the next item starts with, as Chrome and Firefox hang it wherever a line ends: a text's run
 hangs only before a break its scan gives, a narrower rule that a paragraph would lose lines by, since an item's last
-run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges).
+run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges). The hang needs a line that
+ends there, and none does before an item that starts with a character the scan gives no break before, a joiner or a
+combining mark and in the Blink profile a bidi control; and in the Gecko profile a run that only bidi controls follow to
+the paragraph's end gets no hang, as the control is kept with the run's segment (the sweep after #460, below).
 
 What an item carries of its own goes on its segments. Its `extraWidth` is in the width of its first segment that takes
 room, and a line that starts later in the item adds it there (`lineStartExtras`, and `insideExtras` and `fillExtras`
-where the line starts inside a segment); an item that opens with preserved white space, a hard break or a zero-width
-space gets a start edge of its own, an empty segment the line fits by the edges the engine fits there
-(`getOpeningFit()`). The handle's letter spacing is the one the items share, and where they differ each segment's
-width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a tab advances are per segment
-where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one segment of kind `OBJECT`, with a
-break on both sides and none inside.
+where the line starts inside a segment, except where it starts inside a word beside a joiner or a bidi mark, whose
+widths are measured afresh and leave it out, a named gap: the sweep after #460, below); an item that opens with
+preserved white space, a hard break or a zero-width space gets a start edge of its own, an empty segment the line fits
+by the edges the engine fits there (`getOpeningFit()`). The handle's letter spacing is the one the items share, and
+where they differ each segment's width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a
+tab advances are per segment where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one
+segment of kind `OBJECT`, with a break on both sides and none inside.
 
 That replaced a second line walker for rich inline, which analyzed each item's text on its own, patched it toward the
 text the items join and stepped item by item, calling the text walker for one item at a time (Continuing The Line has
@@ -1708,6 +1712,23 @@ and 2,825, and 5,734 and 5,849 of the 6,028, against 5,077 and 5,494; they lose 
 had been recorded in, a ZWSP or a soft hyphen before the spaces that end the text before the padded item, and in Firefox
 a line of only a tab before a padded line feed (ENGINE_FOLLOWUPS.md, Rich-inline item edges). No pinned case holds the
 line-feed shape, so the rule moves no pinned prediction, and a unit test holds it.
+
+After #460 the design was swept against main at #459 (e699e27e), the last build with the item stepper, for losses nobody
+had named, as one had turned up by chance (Firefox's White-Space Run Across Items). Both builds laid out 300,000
+generated paragraphs a profile on a stand-in Canvas, two styled items with one of 55 strings at the edge between them,
+and the kinds of difference no doc settled were recorded in Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host
+(WebKit 22625.1.29.11.27): 21,403 cases, then 30,414 and 7,683 a browser to check them and 12,846 and 4,957 to check
+what the docs say of them (2026-10-09 and 10, none checked in). No real usage moves: no item of the real-usage sample's
+241 rich-inline draws starts with a character any of the shapes needs, or ends with one other than a combining mark,
+which none needs at an item's end; none of its padded items holds a joiner or a bidi mark, and none of its pre-wrap
+draws a tab or a ZWSP after a space; and the 233 of the draws that both builds' harness adapters can state get the same
+lines from both, on a stand-in Canvas and on each browser's. On the first set at 24px and wider this design alone has
+the browser's lines in 1,111, 1,652 and 1,604 cases and the item stepper alone in 503, 1,449 and 322. Eight shapes are
+the stepper's by a rule of its own, each rare text and a named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has
+each with its counts, what 0.0.9 did and what a port takes): each turns on a character of no width, a tab or U+3000,
+most at an item's edge and beside padding or a chip. Three of them are gaps of the text walkers or the scans in one text
+node too, which the stepper covered at an item's start; its other passes are gaps named before or luck. Each reopens
+with real text that holds its shape.
 
 The halt Chrome gives a pair of fullwidth marks comes with the paragraph's analysis, with no code for it in
 `src/rich-inline.ts`: on the probes above the paragraph gives the lines main's halts across items give (CJK At An
@@ -5806,10 +5827,26 @@ decisions for the maintainer.
   before a padded item, and a line of only a tab before a padded line feed. One more went unnamed until 2026-10-09: the
   Gecko profile's line end at the white space before an item that starts with a bidi control and a space, which the
   stepper took at every such control and Firefox takes at some, by where the control's text frame ends; it stays a gap,
-  since putting it back trades (#463; Rich Inline Boundaries, Firefox's White-Space Run Across Items). It reopens if an
-  app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in an app, where
-  the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across
-  sibling spans, which wants the paragraph measured as well as analyzed whole.
+  since putting it back trades (#463; Rich Inline Boundaries, Firefox's White-Space Run Across Items). A sweep against
+  the stepper then named eight more, all rare text and none in the real-usage sample (2026-10-10; Rich Inline
+  Boundaries, Rich Inline As One Paragraph, has the sweep): a line for a ZWSP that is or starts an item after a space;
+  both edges for a padded item of only a ZWSP; a bidi control, ZWNJ or combining mark kept with its word after a chip
+  wider than its line; the `extraWidth` of a line that starts in a padded item's word beside a joiner or a bidi mark,
+  and of a hyphen's line where the item starts with a soft hyphen; in Firefox a padded item of only a bidi control as a
+  box where it stands, the hang that ends at a ZWSP in pre-wrap and a padded item that starts with a tab kept whole; and
+  the line end after a U+3000 run that a bidi control, ZWNJ or a combining mark follows in the next item.
+  ENGINE_FOLLOWUPS.md, Rich-inline item edges, has two more that are not among the eight: a line's width in Safari, a
+  space too wide where the line ends at a line separator after a space across an item's edge, and a trade in Chrome, the
+  halt of a closing mark that ends a padded item, 94 probe layouts lost and 124 gained (2026-10-06). The changelog lists
+  as worse than 0.0.9 only what 0.0.9 had right and an app could hold: the ZWSP's line after a space or after content
+  that overflows, the padded item of only a ZWSP, and Firefox's two around a soft hyphen and a bidi control between
+  spaces (CHANGELOG.md, the entry on rich inline as one paragraph). The rest 0.0.9 had wrong too, or is pre-wrap, which
+  its rich inline lacked, or is left out as text no app is expected to hold, though 0.0.9 had it right: a combining
+  mark, or a ZWNJ in an item of its own, right after a chip wider than its line; a joiner or a bidi mark in a padded
+  item's word, in a box narrower than that word; and in Firefox a padded item of only a bidi control. The decision
+  reopens if an app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in
+  an app, where the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with
+  kerning across sibling spans, which wants the paragraph measured as well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
