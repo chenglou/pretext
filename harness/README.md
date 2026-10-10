@@ -160,7 +160,9 @@ New cases mustn't pile up as the old suite's did, a hand-written repro per bug.
    and its cases are added to the file (`sets/rich.ts`'s header; ENGINE_FOLLOWUPS.md, Harness debt, has the additions to
    the catalog and the facts set that weren't a whole cut either). A template added to an existing family should bring
    its older cases back byte for byte, and a whole-catalog search derives every generated case again, so a browser's
-   drift lands in the PR.
+   drift lands in the PR. The catalog's older cases didn't come back as checked in from a whole search on 2026-10-01,
+   for a reason not traced, so a new catalog template's cases are added beside them, as the rich set's are
+   (ENGINE_FOLLOWUPS.md, Harness debt).
 4. `bun harness record --only-new`, then `bun harness check`; a new failure the change doesn't fix goes on the accepted
    list with `check --accept="<reason>"`.
 
@@ -183,9 +185,10 @@ six failures at 24 px and wider are accepted (`RESEARCH.md`, Decisions Log, 2026
 paragraph directions it runs in where a browser's lines turn on them (the first of those, both). The facts set has no
 cover, so it keeps the width where a template's words join, which the catalog's cover drops once a narrower change has
 shown that kind of break: a fact that rests on a line's width, such as one space against two, goes there.
-ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again. The oracle set's origins point at
-main before #340 too: each names a mode and a case's label in `src/test-data.ts`'s oracle arrays, gone from today's
-file.
+ENGINE_FOLLOWUPS.md, Harness debt, has what to prune when the sets are made again. The oracle set's origins each name a
+mode and a case's label in `src/test-data.ts`'s oracle arrays, gone from today's file; read them with
+`git show f26640eb:src/test-data.ts`, main at #340's merge, since #340 added two of the 56 labels, the Latin-1 and
+16-bit control cases of Safari's keep-all.
 
 ## Commands
 
@@ -399,9 +402,8 @@ of its other four documents goes to the full walker.
 
 A session of every row takes 96 s in Chrome, 117 s in Firefox and 98 s in Safari (six sessions each, 2026-10-07; a
 document that loses focus waits a minute and starts again): a little over ten minutes for the default two, and then the
-confirming sessions, which would have timed 57 of the third sessions' 145 documents in the 19 runs above. Before the
-Latin and CJK `lines` entries and the two chat documents it took 74, 91 and 79 s (the medians of 50-52 sessions each,
-2026-10-01 and 02). Nothing timed is checked in.
+confirming sessions, which would have timed 57 of the third sessions' 145 documents in the 19 runs above. Nothing timed
+is checked in.
 
 ## Browsers and pins
 
