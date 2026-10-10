@@ -126,15 +126,16 @@ function render(): void {
   // The end anchor allows for the browser's own moves: a taller viewport
   // shortens the scroll range, so the browser lowers the position to the range's
   // end, and when the viewport then shrinks, Chrome's scroll anchoring raises it
-  // back. Both leave the position between the last one and the range's end,
-  // which is the last canvas less this viewport. Each end of that stretch is
-  // good to a pixel: clientHeight is a whole number, browsers round scrollTop,
-  // and at a zoom Chrome rounds the position again. Only a position outside
-  // the stretch ends the end anchor.
+  // back. Both leave the position between the last frame's end and the range's
+  // end, which is the last canvas less this viewport. Each end of that stretch
+  // is good to a pixel: clientHeight is a whole number, browsers round
+  // scrollTop, and at a zoom Chrome rounds the position again. Only a position
+  // outside the stretch ends the end anchor. Both ends are computed: a stretch
+  // from the last position read would follow a scroll of a pixel a frame.
   const scrollRangeEnd = st.canvasHeight - viewportHeight
   const staysOnEnd = st.scrollAnchor === 'end'
-    && scrollTop >= Math.min(st.scrollTop, scrollRangeEnd) - 1
-    && scrollTop <= Math.max(st.scrollTop, scrollRangeEnd) + 1
+    && scrollTop >= Math.min(st.endScrollTop, scrollRangeEnd) - 1
+    && scrollTop <= Math.max(st.endScrollTop, scrollRangeEnd) + 1
   const scrollAnchor = scrollTop === st.scrollTop || staysOnEnd
     ? st.scrollAnchor
     : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
