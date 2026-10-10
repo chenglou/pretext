@@ -29,7 +29,7 @@ const domCache = {
   noteBody: getRequiredDiv('note-body'), // cache lifetime: page
   widthSlider: getRequiredInput('width-slider'), // cache lifetime: page
   widthValue: getRequiredSpan('width-value'), // cache lifetime: page
-  writtenBodyWidth: null as number | null, // cache lifetime: until the body width changes. The width the rows were built at
+  writtenBodyWidth: null as number | null, // cache lifetime: until the body width changes. The width the label and the rows were written at
 }
 
 const richInline = prepareRichInlineNote(DEFAULT_RICH_NOTE_SPECS)
@@ -184,16 +184,17 @@ function render(): void {
   domCache.widthSlider.min = String(BODY_MIN_WIDTH)
   domCache.widthSlider.max = String(maxBodyWidth)
   domCache.widthSlider.value = String(bodyWidth)
-  domCache.widthValue.textContent = `${Math.round(bodyWidth)}px`
   domCache.root.style.setProperty('--note-width', `${layout.noteWidth}px`)
   domCache.root.style.setProperty('--note-padding-x', `${notePaddingX}px`)
   domCache.root.style.setProperty('--note-content-width', `${bodyWidth}px`)
   domCache.noteBody.style.height = `${layout.noteBodyHeight}px`
 
-  // Building the rows again, even the same rows, drops a text selection inside
-  // them. The note is prepared once, so its rows follow from the body width
-  // alone, and they are built only when it isn't the width they were built at.
+  // Writing text again, even the same text, drops a selection inside it. The
+  // note is prepared once, so its rows follow from the body width alone, as the
+  // label does, and both are written only when it isn't the width they were
+  // written at.
   if (domCache.writtenBodyWidth !== bodyWidth) {
+    domCache.widthValue.textContent = `${Math.round(bodyWidth)}px`
     renderBody(richInline, layout)
     domCache.writtenBodyWidth = bodyWidth
   }
