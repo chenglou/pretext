@@ -1435,8 +1435,8 @@ line may end; the *handle* is what preparation gives the walkers (`PreparedLineD
 that text once, as `prepare()` analyzes a text, with a segment starting wherever an item does (`ParagraphItems` and
 `ITEM_START` in `src/analysis.ts`). It measures each item's segments in the item's font onto the lists of one handle,
 which `walkPreparedLinesRaw()` and the steppers of `src/line-break.ts` lay out as they lay out a text. A line's
-fragments are its segments cut where the item changes (`createLine()`). A paragraph of one text item without
-`extraWidth`, or whose other items are empty, is that text's own handle.
+fragments are its segments cut where the item changes (`createLine()`). A paragraph of one text item that isn't atomic
+and has no `extraWidth`, alone or among empty items, is that text's own handle.
 
 It is the engines' model, to the extent each has one. Blink builds one string for a paragraph's inline content, with a
 span's open and close tags as zero-length items over it and an atomic inline as one U+FFFC, and runs one break iterator
@@ -1490,23 +1490,23 @@ where its own analysis dropped it, so each of its cursors is one higher; an atom
 York` ends at segment 1, where it ended at 3; an item that starts inside a word is cut otherwise where the scan's breaks
 depend on the whole word, as a Thai word's do in the Blink and Gecko profiles; an item with `extraWidth` that opens with
 a zero-width space, or in pre-wrap with spaces, a tab or a line feed, has its start edge for a first segment; and
-Firefox's white-space run reads through an item's start. Only a paragraph of one text item without `extraWidth`, which
-is that text's own handle, keeps its text's cursors. Over 20,000 generated paragraphs of one to four items on the
-stand-in Canvas, main's cursors against this design's at five widths (2026-10-06): of the 10,090 that hold an atomic
-item or an item that starts with a space after another item, 7,279 differ in the Gecko and WebKit profiles and 7,329 in
-the Blink profile; none of the 248 whose items only end with a space, nor of the 547 that only split an ordinary word.
-Of paragraphs of one item, none of 1,557 of plain words differs; 50 of 100 with `extraWidth` in pre-wrap do; and in the
-Gecko profile 100 of 1,200 with unusual words do, each where a line's start skips a soft hyphen that starts a word: the
-fragment starts after it, and the line before ends after it, one segment later than the item stepper gave. The same
-holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173 differ in the
-Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no mapping keeps the
-old meaning without each item's own analysis, which the design removes. Cursors are for passing back to
-`layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`; a materialized fragment has `sourceStart` and
-`sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as its
-`extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it was
-a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that line; a
-collapsed space at an item's edge is measured with its item, so in the Chromium profile it takes its kerning with the
-word beside it there, and in the WebKit profile a word is measured with the space that ends its item.
+Firefox's white-space run reads through an item's start. A paragraph of one text item that isn't atomic and has no
+`extraWidth`, which is that text's own handle, keeps its text's cursors. Over 20,000 generated paragraphs of one to four
+items on the stand-in Canvas, main's cursors against this design's at five widths (2026-10-06): of the 10,090 that hold
+an atomic item or an item that starts with a space after another item, 7,279 differ in the Gecko and WebKit profiles and
+7,329 in the Blink profile; none of the 248 whose items only end with a space, nor of the 547 that only split an
+ordinary word. Of paragraphs of one item, none of 1,557 of plain words differs; 50 of 100 with `extraWidth` in pre-wrap
+do; and in the Gecko profile 100 of 1,200 with unusual words do, each where a line's start skips a soft hyphen that
+starts a word: the fragment starts after it, and the line before ends after it, one segment later than the item stepper
+gave. The same holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173
+differ in the Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no
+mapping keeps the old meaning without each item's own analysis, which the design removes. Cursors are for passing back
+to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`; a materialized fragment has `sourceStart`
+and `sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as
+its `extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it
+was a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that
+line; a collapsed space at an item's edge is measured with its item, so in the Chromium profile it takes its kerning
+with the word beside it there, and in the WebKit profile a word is measured with the space that ends its item.
 
 A paragraph whose whole width fits is one line, taken without a walk (`findWholeLine()`): most paragraphs of a chat
 are. Every engine tests a line at prefixes of it and lets no content make it narrower (the function cites all three),
