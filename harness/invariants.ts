@@ -54,7 +54,7 @@ import { createRng } from './sets/build.ts'
 import { isRich, type Case } from './types.ts'
 
 // Of a user agent the library reads the engine and whether it is a desktop browser's, never the browser's version
-// (getLayoutEngine() and buildEngineProfile() in src/measurement.ts), so these don't follow the pins.
+// (getLayoutEngine() and buildEngineProfile() in src/measurement.ts), so these don't follow harness/pins.json.
 export const PROFILES = {
   blink: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
   webkit: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',

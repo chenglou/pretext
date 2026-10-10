@@ -13,7 +13,7 @@ const texts = JSON.parse(readFileSync('.artifacts/grapheme-check/page/texts.json
 const engine = process.env['ENGINE'] ?? 'webkit'
 // Of a user agent the library reads the engine and whether it is a desktop browser's, never the
 // browser's version (getLayoutEngine() and buildEngineProfile() in src/measurement.ts), so these
-// don't follow the harness's pins.
+// don't follow harness/pins.json.
 const userAgent = engine === 'gecko' ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0'
   : engine === 'webkit' ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15'
   : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
