@@ -22,7 +22,8 @@ export const LIB = resolve(import.meta.dir, '../src')
 
 // A build is a src/ and the adapter beside it, ../harness/page.ts, which predicts with it, so equal and --lib run whole
 // builds. Either adapter's imports of the library go to that src/. A src/ with none beside it, such as a ref's from
-// before the harness (#341), takes this tree's adapter, whose cursor map (predict.ts) needs src/graphemes.ts (#344).
+// before the harness (#341), takes this tree's adapter (predict.ts), whose cursor map needs src/graphemes.ts (#344) and
+// whose rich lines need a materialized fragment's sourceStart and sourceEnd (#460).
 export async function bundle(lib: string): Promise<string> {
   const own = join(lib, '../harness/page.ts')
   const built = await Bun.build({

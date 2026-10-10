@@ -53,6 +53,8 @@ import { canvasFont, cursorOffsets, fragmentProblem, plainDisagreement, prepareO
 import { createRng } from './sets/build.ts'
 import { isRich, type Case } from './types.ts'
 
+// Of a user agent the library reads the engine and whether it is a desktop browser's, never the browser's version
+// (getLayoutEngine() and buildEngineProfile() in src/measurement.ts), so these don't follow harness/pins.json.
 export const PROFILES = {
   blink: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
   webkit: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
@@ -345,9 +347,10 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
         lines.push(range)
         cursor = { ...range.end }
       }
-      // Each item's fragments cover its text, and each one's text is its item's between sourceStart and sourceEnd.
+      // Each item's fragments cover its text, and each one's text is its item's between sourceStart and sourceEnd. A box
+      // and an atomic item are one fragment each.
       const spans: Array<Array<[number, number]>> = items.map(() => [])
-      const whole = items.map(() => 0)
+      const fragmentCounts = items.map(() => 0)
       for (let i = 0; i < lines.length; i++) {
         let occupied = 0
         let before: RichInlineFragment | null = null
@@ -390,8 +393,8 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
               if (Math.abs(f.gapBefore - space) > 1e-6 && Math.abs(f.gapBefore - (space - kerning)) > 1e-6) fail('rich lines', at, `line ${i}'s gap before item ${f.itemIndex} is ${f.gapBefore}; item ${f.gapItemIndex}'s SPACE is ${space}, and ${space - kerning} with its kerning`)
             }
           }
+          fragmentCounts[f.itemIndex]!++
           if (atomic[f.itemIndex]!) {
-            whole[f.itemIndex]!++
             const text = (items[f.itemIndex] as RichInlineItem).text
             if (text.slice(f.sourceStart, f.sourceEnd) !== text.trim()) fail('rich lines', at, `atomic item ${f.itemIndex} is split at ${f.sourceStart}-${f.sourceEnd}`)
           }
@@ -400,10 +403,10 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
       }
       for (let k = 0; k < items.length; k++) {
         const text = items[k]!.text
+        if ((text === undefined || atomic[k]!) && fragmentCounts[k] !== 1) fail('rich lines', at, `${text === undefined ? 'box' : 'atomic item'} ${k} is in ${fragmentCounts[k]} fragments`)
         if (text === undefined) continue
         const coverage = covers(text, spans[k]!, atomic[k]! ? 'normal' : whiteSpace, 0, true)
         if (coverage !== null) fail('coverage', `${at}, item ${k}`, coverage)
-        if (atomic[k]! && whole[k] !== 1) fail('rich lines', at, `atomic item ${k} is in ${whole[k]} fragments`)
       }
       const visited: RichInlineLineRange[] = []
       api.walkRichInlineLineRanges(prepared, width, range => {

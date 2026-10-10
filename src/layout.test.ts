@@ -402,7 +402,7 @@ describe('shared public contracts', () => {
     }
   })
 
-  test('a line API called once for a paragraph lays a width that is not a number out as an unbounded one', () => {
+  test('a line API called once for a paragraph lays a NaN width out as an unbounded one', () => {
     // layout(), layoutWithLines(), walkLineRanges(), measureLineStats() and the two rich
     // walks pass their width through normalizeMaxWidth() once, so their loops meet no
     // NaN. The first three texts take layout()'s three counts: its own loop, the simple
@@ -410,7 +410,6 @@ describe('shared public contracts', () => {
     // reaches the loops, layout() counts a line per grapheme, and a pre-wrap line that
     // ends in spaces or a tab reports a NaN width. The streams, called once for each
     // line, take their width as given (ENGINE_FOLLOWUPS.md, Small ones).
-    const widths = [NaN, undefined as unknown as number]
     for (const [text, options, walkFastPath, countFastPath] of [
       ['aaaa bbbb 中文字', {}, true, true],
       ['aaaa\u0085bbbb cccc', {}, false, true],
@@ -432,7 +431,7 @@ describe('shared public contracts', () => {
       }
       const unbounded = at(Infinity) as { layout: { lineCount: number } }
       expect(unbounded.layout.lineCount).toBe(text.split('\n').length)
-      for (let i = 0; i < widths.length; i++) expect(at(widths[i]!)).toEqual(unbounded)
+      expect(at(NaN)).toEqual(unbounded)
     }
     for (const [items, options] of [
       [[{ text: 'aaaa bbbb ', font: FONT }, { text: 'cccc 中文字', font: FONT, extraWidth: 4 }], {}],
@@ -450,7 +449,7 @@ describe('shared public contracts', () => {
       }
       const unbounded = at(Infinity) as { measureRichInlineStats: { lineCount: number } }
       expect(unbounded.measureRichInlineStats.lineCount).toBe(items.map(item => item.text).join('').split('\n').length)
-      for (let i = 0; i < widths.length; i++) expect(at(widths[i]!)).toEqual(unbounded)
+      expect(at(NaN)).toEqual(unbounded)
     }
   })
 
@@ -590,7 +589,7 @@ describe('shared public contracts', () => {
     ])
     const shown: { readonly [Field in Exclude<keyof PreparedTextWithSegments, symbol>]: true } = { segments: true, kinds: true, widths: true }
     expect(Object.keys(prepared)).toEqual(expect.arrayContaining(Object.keys(shown)))
-    // A hidden field is still there for code that read it, and no longer type-checks.
+    // A hidden field is there for code that reads it, and doesn't type-check.
     // @ts-expect-error
     expect(prepared.breakableFitAdvances).toBeDefined()
     // Read-only, and `widths` an index and a length, not an array. Each line below runs,
@@ -1625,7 +1624,7 @@ describe('boundary rules', () => {
         expect({ text, ...layout(prepare(text, FONT), 200, LINE_HEIGHT) }).toEqual({ text, lineCount: 0, height: 0 })
         expect(lines(text, 200)).toEqual([])
       }
-      // The CR of a CRLF collapses into the line feed's space, as before.
+      // The CR of a CRLF collapses into the line feed's space.
       expect(segments('ab\r\ncd')).toEqual(['ab', ' ', 'cd'])
       expect(segments('ab\r\n\r\ncd ef\r\n')).toEqual(['ab', ' ', 'cd', ' ', 'ef'])
       expect(segments('ab\r\r\ncd')).toEqual(['ab', ' ', 'cd'])
@@ -2317,7 +2316,7 @@ describe('prepare invariants', () => {
   })
 
   test('a run of no-break spaces is visible text that takes emergency breaks', () => {
-    // There is no `glue` kind any more, on purpose (RESEARCH.md, Decisions Log, 2026-09-24).
+    // There is no `glue` kind, on purpose (RESEARCH.md, Decisions Log, 2026-09-24).
     const prepared = prepareWithSegments('\u00A0', FONT)
     expect(prepared.segments).toEqual(['\u00A0'])
     expect(layout(prepared, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
@@ -3908,7 +3907,10 @@ describe('rich-inline invariants', () => {
   test('rich items in one font lay out as the text walkers lay out their text in one node', () => {
     // A paragraph is one analysis of its items' joined text, cut where an item starts, so in the
     // Blink and Gecko profiles, which break by that text, its lines are the text's: as wide,
-    // and ending at the same places.
+    // and ending at the same places. This test compares each line's width as well as its text;
+    // 'the Chromium profile and the Gecko scan break rich items only where their joined text
+    // breaks' compares the text alone, on rows whose breaks show at widths of their own, as
+    // inside a dictionary word that items split.
     const lineEnds = (text: string, maxWidth: number) => {
       const prepared = prepareWithSegments(text, FONT)
       const lines: Array<[number, string]> = []
@@ -3945,8 +3947,6 @@ describe('rich-inline invariants', () => {
         profile.lineBreakScan = scan
         clearCache()
         for (const parts of rows) {
-          // The Gecko profile's paragraph collapses white space past soft hyphens, which its text doesn't yet (below).
-          if (scan === 'gecko' && /[ ]\u00AD+[ ]/.test(parts.join(''))) continue
           for (const maxWidth of [1, 9, 17, 25, 33, 41, 49, 57, 65, 81, 97, Infinity]) {
             expect({ scan, parts, maxWidth, lines: richLineEnds(parts, maxWidth) }).toEqual({ scan, parts, maxWidth, lines: lineEnds(parts.join(''), maxWidth) })
           }
@@ -4226,6 +4226,9 @@ describe('rich-inline invariants', () => {
   })
 
   test('the Chromium profile and the Gecko scan break rich items only where their joined text breaks', () => {
+    // The rich lines' text against the joined text's, each row at the widths where its break
+    // shows. The lines' widths are compared in 'rich items in one font lay out as the text
+    // walkers lay out their text in one node', on other rows.
     // Same-font runs from a product page: native text keeps "community," whole,
     // so the comma that starts the third run moves with the word before it.
     // Run extents also come from the joined text: split words, dictionary
@@ -6923,7 +6926,7 @@ test('the Safari profile breaks inside rich items from each item alone', () => {
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
       vendor: 'Apple Computer, Inc.',
     } })
     class Context {
@@ -6976,7 +6979,7 @@ test('the Firefox profile breaks rich items only where their joined text breaks'
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0',
       vendor: '',
     } })
     class Context {
@@ -7038,7 +7041,7 @@ test('the Safari profile keeps the kerning between a word and a following space'
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
       vendor: 'Apple Computer, Inc.',
     } })
     const measured = []
@@ -7320,7 +7323,7 @@ test('the Safari profile lets small kana and U+30FC start a line only on Japanes
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
       vendor: 'Apple Computer, Inc.',
     } })
     class Context {
@@ -7364,7 +7367,7 @@ test('the Chromium profile measures a page without a language under Intl\'s defa
   const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
     } })
     const langs = []
     class Context {
