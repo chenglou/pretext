@@ -6045,9 +6045,10 @@ decisions for the maintainer.
   README called them cursors within the item's prepared text: it compiled and read other text there (Rich Inline
   Boundaries, Rich Inline As One Paragraph, has how often the two differ). Off the type, that code fails to compile, and
   `sourceStart` and `sourceEnd` give the place it wanted. The first release settles it either way: a field can't leave a
-  published type before 2.0, where these two can come back later, as optional fields without a break. The change is to
-  the types alone: the built code is byte for byte what it was, `materializeRichInlineLineRange()` building each
-  fragment with its range's cursors under a type the entry point doesn't export (`InternalRichInlineFragment`,
+  published type before 2.0, where these two can come back later, as optional fields without a break, or as required
+  ones, which a materialized line needs to pass as a range again and a fragment built by hand then has to name. The
+  change is to the types alone: the built code is byte for byte what it was, `materializeRichInlineLineRange()` building
+  each fragment with its range's cursors under a type the entry point doesn't export (`InternalRichInlineFragment`,
   `src/rich-inline.ts`), so JavaScript that reads them, or passes a materialized line back, runs as it did. What it
   costs TypeScript: a materialized line no longer type-checks where a range is asked, as it did on 0.0.9, so
   `materializeRichInlineLineRange(prepared, line)` and a materialized line kept in a list of ranges fail to compile, and
