@@ -2908,7 +2908,7 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   and not called, and 0.3% slower in Chrome; the control characters' `layout()`, a third of whose text the full walker
   lays out in the WebKit profile and next to none in the others, within 1.2% in all three. No worst-case entry is called
   slower over the six sessions.
-- **A break that depends on where a line starts** (#NNN; Engine Facts, Chrome (Blink), Line breaking): the Blink scan
+- **A break that depends on where a line starts** (#487; Engine Facts, Chrome (Blink), Line breaking): the Blink scan
   marks the break after a hyphen before a digit (`CONTEXT_BREAK`, `src/line-breaks.ts`), which the segment that starts
   there keeps in the one bit of its flags byte a handle had free, and a line has none there only where it starts at the
   hyphen, which only a word cut between letters gives. So the simple walkers ask on that path alone: the stepper where
@@ -3989,7 +3989,7 @@ repin` shows what), and a fact read in source needs reading again.
   Among the scan's answers for ASCII text that rule alone turns on a line's start: with it followed, 0 of 300,000
   random layouts of ASCII letters, digits, hyphens and punctuation differ from the same text prepared again from each
   line's start, on a stand-in Canvas with a width a character, where 11 to 17 of every 4,000 did (a fuzz that isn't
-  checked in). The walkers follow it since #NNN (`lacksBreakContext()`, `src/line-break.ts`). Firefox has no break
+  checked in). The walkers follow it since #487 (`lacksBreakContext()`, `src/line-break.ts`). Firefox has no break
   between a hyphen and a digit at all (UAX #14 LB25), so its lines there are Chrome's, and WebKit cuts a text into
   items once, with the two characters before each break in reach (`BreakablePositions.h:142-177`), so Safari keeps
   the hyphen alone on its line: 12 paragraphs and the three real-usage cases laid out alone in each (Chromium 153
