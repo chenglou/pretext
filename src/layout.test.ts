@@ -618,6 +618,7 @@ describe('shared public contracts', () => {
     // type lacks `start` and `end` and a fragment range's has them: `bun run check` fails
     // otherwise, where `bun test` doesn't check types.
     const cursor = (_cursor: LayoutCursor): void => {}
+    const read = (_field: unknown): void => {}
     const passBack = (_range: RichInlineLineRange): void => {}
     const paragraphs: Array<Array<RichInlineItem | RichInlineBox>> = [
       [{ text: 'Ship', font: FONT }, { text: ' it now', font: '700 16px Test Sans' }],
@@ -639,12 +640,12 @@ describe('shared public contracts', () => {
             // A materialized fragment's place in its item's text is its two offsets there.
             const fragment = line.fragments[i]!
             expect((items[fragment.itemIndex]!.text ?? '').slice(fragment.sourceStart, fragment.sourceEnd)).toBe(fragment.text)
-            // Its type has no cursors: each line below is a type error, and one that compiles
-            // is the type promising more, which a release can't take back.
+            // Its type has no cursors, not even optional ones: each line below is a type error,
+            // and one that compiles is the type promising more, which a release can't take back.
             // @ts-expect-error
-            cursor(fragment.start)
+            read(fragment.start)
             // @ts-expect-error
-            cursor(fragment.end)
+            read(fragment.end)
           }
           // Nor is a materialized line a range.
           // @ts-expect-error
