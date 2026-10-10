@@ -2891,8 +2891,8 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   spaces comes back as it is. Plain text takes that path too: the bench's `seen` rows of Latin, Arabic and mixed
   messages read 1.5-3.9% faster in every one of three foreground sessions in Chrome 154.0.8037.57, Firefox 156.0.1 and
   Safari 27.0. And the WebKit profile's scan takes each item's own text, which is its part of the paragraph's, in place
-  of a slice of it (`getItemText()` in `src/analysis.ts`): Safari 27.0 read the `rich-new` row 2.1% faster over 25
-  foreground sessions pooled (1.2% to 2.9%, its control copy 0.7%), and no other profile runs that scan. On the
+  of a slice of it (`getWebKitParagraphBreaks()` in `src/analysis.ts`): Safari 27.0 read the `rich-new` row 2.1% faster
+  over 25 foreground sessions pooled (1.2% to 2.9%, its control copy 0.7%), and no other profile runs that scan. On the
   `rich-new` row itself, whose floor is 5%, the two read within noise in every browser.
 - **Graphemes past dropped characters**: the Gecko profile's grapheme table tests only code points in the rules'
   Control category for what the text run drops; testing every code point made Firefox prepare CJK and Arabic 2-3%
