@@ -215,7 +215,7 @@ This is what changes when text measurement becomes free. Not slightly better —
 
 The web has been waiting thirty years for this. A fifteen kilobyte library with zero dependencies delivers it. No browser API changes needed. No specification process. No multi-year standardization timeline. Just math, cached measurements, and the audacity to ask: what if we simply stopped asking the DOM?
 
-Fifteen kilobytes. Zero dependencies. Zero DOM reads. And the text flows.`
+Fifteen kilobytes. Zero dependencies. No DOM text measurement. And the text flows.`
 
 const PULLQUOTE_TEXTS = [
   '“The performance improvement is not incremental — it is categorical. 0.05ms versus 30ms. Zero reflows versus five hundred.”',
