@@ -30,7 +30,6 @@ Held until the current work is done, and all before the first release.
 - License notices: those of the BSD- and Unicode-licensed sources are in `LICENSE`; at the release, check their copyright lines against the engine builds its tables come from.
 - File the collected browser bugs (ENGINE_FOLLOWUPS.md, External actions).
 - The open demo and showcase issues (#94, #99, #150, #151, #152, #167).
-- The bubbles demo stacks its bubbles with CSS flow (`pages/demos/bubbles.html`: `.chat` is a flex column), Pretext giving only each bubble's width: place them from Pretext's heights, as the Markdown chat does, or say so in the demo. Asked by the maintainer in March 2026, never settled.
 
 ## Open design questions
 
