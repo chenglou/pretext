@@ -2889,7 +2889,9 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
   that changed in one piece, SpiderMonkey 156.0.1's shell prepared new rich text 3-6 points faster with the code warm
-  and 8 over a fresh page's first 14,000 units (+22.0% to +14.2% against main, twenty sessions, 2026-10-05).
+  and 8 over a fresh page's first 14,000 units (+22.0% to +14.2% against main, twenty sessions, 2026-10-05). It reopens
+  if a timing reads every item cut out again within about a percent of this, where that form, 11 lines of code shorter,
+  is taken (Part 1, Engineering, JIT tuning).
 - **Two removals from preparing rich text, each of work every engine did** (2026-10-05, timed on the one-paragraph
   design against itself, before main's #435 to #446; neither changes a prediction: with both, 0 of 1,000,000 generated
   paragraphs differ on a stand-in Canvas, in handle, lines or `measureText` calls, 2026-10-06). Collapsing white space
