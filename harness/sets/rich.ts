@@ -175,12 +175,15 @@
 //   letters joined, after one letter so that a width the cut takes inside a layout holds the word joined and not its
 //   letters apart; a chip of only a soft hyphen between two spaces, a box as wide as its padding beside which both
 //   spaces show; a padded item of only a soft hyphen after a space and before a hyphen, where no scan makes the soft
-//   hyphen a break and the item takes its padding; a ZWSP that ends a bold item inside a Korean sentence under
-//   keep-all, at which the line can end (getWebKitBreakBetweenItems in src/line-breaks.ts); in pre-wrap a tab in an
-//   item of its own after an item that ends with a space, which Firefox, with no break inside a run of spaces and tabs,
-//   takes to the next line with the word before the space; and a left-to-right mark in an item of its own that ends the
-//   paragraph after a space, which gets no line in Firefox, which drops it, and the next line in Chrome and Safari
-//   where the space doesn't fit.
+//   hyphen a break and the item takes its padding, though Firefox keeps the item on the line of the word before it
+//   wherever the two fit without the space between them, and the Gecko profile, which counts that space in the line,
+//   moves it down (ENGINE_FOLLOWUPS.md, White space and controls): in 16px Courier New, whose hyphen is as wide as its
+//   space, with 6px of padding, so that the width the cut takes inside that layout of Firefox's is one where only the
+//   space doesn't fit; a ZWSP that ends a bold item inside a Korean sentence under keep-all, at which the line can end
+//   (getWebKitBreakBetweenItems in src/line-breaks.ts); in pre-wrap a tab in an item of its own after an item that ends
+//   with a space, which Firefox, with no break inside a run of spaces and tabs, takes to the next line with the word
+//   before the space; and a left-to-right mark in an item of its own that ends the paragraph after a space, which gets
+//   no line in Firefox, which drops it, and the next line in Chrome and Safari where the space doesn't fit.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -499,7 +502,7 @@ export function richTemplates(): Template[] {
     ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200C}on', JAPANESE)], 'ja'],
     ['item-edges/hyphen-starts-item', ARIAL, [item('e'), item('-\u{643}\u{62A}\u{627}\u{628}')], 'ar'],
     ['item-edges/invisible-chip', HELVETICA, [item('some text ', HELVETICA), chip('\u{AD}'), item(' more text', HELVETICA)]],
-    ['item-edges/padded-soft-hyphen-item', ARIAL, [item('see '), padded('\u{AD}', 4), item('-saw')]],
+    ['item-edges/padded-soft-hyphen-item', COURIER, [item('see ', COURIER), padded('\u{AD}', 6, COURIER), item('-saw', COURIER)]],
     ['keep-all/zwsp-ends-item', KOREAN, [span('안녕하세요\u{200B}', BOLD(KOREAN)), item('세계에서 한국어', KOREAN)], 'ko', 'keep-all'],
     ['pre-wrap/tab-item-after-space', ARIAL, [item('one two '), item('\t'), item('three')], 'en', 'normal', 'pre-wrap'],
     ['item-edges/bidi-control-ends-paragraph', ARIAL, [item('Hello again '), item('\u{200E}')]],

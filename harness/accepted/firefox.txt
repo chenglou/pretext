@@ -57,6 +57,9 @@ rich-940ad57a2e132532 count
 rich-fce9b7c49b1f3020 count
 rich-fe40c99ed527d259 count
 
+## A padded rich item of only a soft hyphen after a space, at 50 px, where the word before the space and the item's two edges fit the line and the space between them doesn't: Firefox places a frame by its end less the trimmable space that ends the text before it (CanPlaceFrame, nsLineLayout.cpp:1251-1252), which a text frame whose characters are all discarded leaves standing (nsTextFrame.cpp:11421-11429), so the item stays on the word's line; the Gecko profile makes the soft hyphen a zero-width break and counts the space before it in the width of a line that ends after it, as the text walker does, so the item goes down with the text after it, which doesn't fit beside its padding, a line too many (ENGINE_FOLLOWUPS.md, White space and controls)
+rich-4f23cc28c4b544d8 count
+
 ## A padded rich item that starts with ZWNJ inside a word, at 44-48 px, where the line is cut right after the ZWNJ: Firefox fits every line of the item with both its edges, so the line that starts after the ZWNJ holds `oper` (not traced); the library leaves the item's extraWidth out of a line that starts inside a word at a default-ignorable character, whose widths it measures afresh from there (insideExtras in src/line-break.ts), so its line holds `opera`, a line short (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-2e549acd829beffa count
 rich-6034dc55f75133cc count
@@ -1536,7 +1539,7 @@ rich-6dbb34be649dfa2b count
 catalog-5e5da93679ee9480 count
 
 ## Narrower than real layouts: width 1, a padded rich item of only a soft hyphen: Firefox gives the item a line of its own, which the recorded height has (8 lines of 20 px), and the recorder, with no text box to list on that line, lists 7, so the library's 8 lines are scored a line too many (harness/README.md, Bounds and blind spots)
-rich-6a7bad6453fbef2a count
+rich-a349bf00db242861 count
 
 ## Narrower than real layouts: width 1, a soft hyphen in a span of its own after a word: Firefox ends the last letter's line after the soft hyphen, where the text walkers end it at the letter and the next line's start consumes the soft hyphen, as in one text (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-fb77b1bfbe1c8a96 breaks
