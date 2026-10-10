@@ -143,8 +143,11 @@ export type EngineProfile = {
   // item against the width minus the hyphen (BreakText, line_breaker.cc:1705-1718,
   // Chromium 153), so the line ends at the latest earlier opportunity that leaves
   // room for it, whatever gives it: a space, a ZWSP, a soft hyphen, or a break
-  // between two text segments, as after `-` or between ideographs. Pretext has no
-  // Blink item boundaries and applies the reduced width to every earlier opportunity.
+  // between two text segments, as after `-` or between ideographs. For a text
+  // Pretext has no Blink item boundaries and applies the reduced width to every
+  // earlier opportunity. A rich-inline paragraph takes each of its items for a
+  // Blink item, so the break before an item's first segment leaves no such room
+  // (getHyphenRooms in src/rich-inline.ts).
   // Gecko records a soft-hyphen break only where its hyphen fits, and any other
   // break where its line fits (gfxTextRun.cpp:1086-1101), so the line returns to
   // the latest opportunity that fits at the full width. WebKit wraps the content
