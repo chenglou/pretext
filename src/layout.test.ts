@@ -6742,6 +6742,18 @@ describe('layout invariants', () => {
         expect({ letterSpacing, widths: line.fragments.map(fragment => Math.round(fragment.occupiedWidth * 100) / 100) }).toEqual({ letterSpacing, widths: [...widths] })
         expect(line.width).toBeCloseTo(widths[0] + widths[1], 9)
       }
+      // A mark that isn't halted keeps its width where a box of no width follows it, and the box
+      // gets none of the mark's halt, also under a letter spacing that isn't a short binary
+      // fraction, where the line's width and its fragments' sum, the same advances added in
+      // another order, differ in their last bits (the 1e-6px in createLine()).
+      for (const letterSpacing of [0.1, 0.3, 0.7, 1.1]) {
+        for (const lead of ['a', 'ab', 'abc', 'x y']) {
+          const whole = prepareRichInline([{ text: lead, font, letterSpacing }, { text: '中」', font, letterSpacing }, { width: 0 }])
+          const line = layoutNextRichInlineLineRange(whole, 1e5)!
+          const widths = line.fragments.map(fragment => Math.round(fragment.occupiedWidth * 1e6) / 1e6)
+          expect({ letterSpacing, lead, mark: widths[1], box: widths[2] }).toEqual({ letterSpacing, lead, mark: Math.round((32 + 2 * letterSpacing) * 1e6) / 1e6, box: 0 })
+        }
+      }
       // An item with extraWidth keeps the halt at a line's end only: Blink fits its text before
       // its end edge.
       expect(richLines([{ text: '中中」', extraWidth: 8 }, { width: 5 }], 54)).toEqual(['中中」:48', ':5'])
