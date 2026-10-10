@@ -993,8 +993,9 @@ function walkPreparedComplexLines(
               lineEndSegmentIndex = i
               lineEndGraphemeIndex = end
               lineW = getSegmentEntryWidth(entry, fillStart, end)! - letterSpacing
-              // Exhausting an emergency fragment consumes the measured segment and
-              // ends this line. Only intact admission above continues into other source.
+              // Where the fresh prefixes reach the segment's end though the whole tail wasn't
+              // admitted, the line ends after the segment and takes nothing after it. Only
+              // an admitted tail lets the line go on with the text after it (below).
               if (end === fitCount) {
                 endSegmentIndex = i + 1
                 endGraphemeIndex = 0
