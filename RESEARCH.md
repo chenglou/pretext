@@ -5577,35 +5577,35 @@ decisions for the maintainer.
   the real-usage sample, the corpora, 455,648 localization strings or a probe of written mixed-direction paragraphs
   (Bidi Levels has the numbers). It reopens with a `direction` option (TODO.md), under which a port is right in both
   directions.
-- **2026-10-02: a `maxWidth` that isn't a number lays out as unbounded in the line APIs called once for a paragraph, and
-  the streams take it as given** (landed on judgement with #401). `NaN`, or the `undefined` of a container not measured
-  yet, fails every comparison, and the line loops ask some whether a segment fits and others whether it overflows. So
-  since #340 `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN`
-  width for a pre-wrap line ending in spaces. `normalizeMaxWidth()` (`src/line-break.ts`) turns such a width into
-  `Infinity` with one comparison, once a call, in `layout()`, `layoutWithLines()`, `walkLineRanges()`,
-  `measureLineStats()`, `walkRichInlineLineRanges()` and `measureRichInlineStats()`, whose loops stay as written for
-  numbers: none of their results at `NaN` or `undefined` differs from the one at `Infinity` (8,000 cases drawn from the
-  sets in each profile, offline). `layoutNextLine()`, `layoutNextLineRange()` and `layoutNextRichInlineLineRange()` are
-  called once for each line and don't check: they return, break as at an unbounded width, and differ from `Infinity` in
-  three places (ENGINE_FOLLOWUPS.md, Small ones). Two wider forms were timed in Chrome 154.0.8037.57 and dropped, as
-  valid input paid in each for an argument no app should pass. With `layout()`'s two fit tests negated into overflow
-  tests, so that its count asked the walkers' question, `layout()` of the bench's Arabic book read 3.4-4.8% slower in
-  each of three sessions (2026-10-01). With the function in the three streams too, those rows read within noise again
-  over three sessions, and the mixed stream row, which then paid the comparison for each line, read 1.7% and 3.4% slower
-  in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
+- **2026-10-02: a `maxWidth` of `NaN` lays out as unbounded in the line APIs called once for a paragraph, and the
+  streams take it as given** (landed on judgement with #401). `NaN`, which a typed caller can pass, fails every
+  comparison, and the line loops ask some whether a segment fits and others whether it overflows. So since #340
+  `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN` width for a
+  pre-wrap line ending in spaces. `normalizeMaxWidth()` (`src/line-break.ts`) turns such a width into `Infinity` with
+  one comparison, once a call, in `layout()`, `layoutWithLines()`, `walkLineRanges()`, `measureLineStats()`,
+  `walkRichInlineLineRanges()` and `measureRichInlineStats()`, whose loops stay as written for numbers: none of their
+  results at `NaN` differs from the one at `Infinity` (8,000 cases drawn from the sets in each profile, offline).
+  `layoutNextLine()`, `layoutNextLineRange()` and `layoutNextRichInlineLineRange()` are called once for each line and
+  don't check: they return, break as at an unbounded width, and differ from `Infinity` in three places
+  (ENGINE_FOLLOWUPS.md, Small ones). Two wider forms were timed in Chrome 154.0.8037.57 and dropped, as valid input paid
+  in each for an argument no app should pass. With `layout()`'s two fit tests negated into overflow tests, so that its
+  count asked the walkers' question, `layout()` of the bench's Arabic book read 3.4-4.8% slower in each of three
+  sessions (2026-10-01). With the function in the three streams too, those rows read within noise again over three
+  sessions, and the mixed stream row, which then paid the comparison for each line, read 1.7% and 3.4% slower in a run
+  of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
   `walkLineRanges()` row, which pays the comparison once for a paragraph, read 1.2-1.4% slower in each session with the
   second copy of the base 0.5-1.1% slower, and in the run of two 2.4% faster and 2.8% slower; a run that reads it slower
-  in every session with the streams as on main would reopen the comparison there. A third form closed the streams'
-  three places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its
-  width, with `Math.max(0, maxWidth)` or, in rich inline then, `Math.max(1, maxWidth)`, and that clamp written as two
+  in every session with the streams as on main would reopen the comparison there. A third form closed the streams' three
+  places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its width,
+  with `Math.max(0, maxWidth)` or, in rich inline then, `Math.max(1, maxWidth)`, and that clamp written as two
   comparisons returns `Infinity` for a width that fails both. It changed no result at a number and left no line API's
-  result at `NaN` or `undefined` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed
-  `measureLineStats()` row 9.3% slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at
-  widths seen before 10.2%, each in all three sessions (2026-10-02; Dead Ends, Simplifications Held Back, has Chrome's
-  reading and the shells'). So `normalizeMaxWidth()` stays and the three places stay documented; a form that Firefox
-  reads level with main on those rows would take its place. Whether such a width should throw, as a `letterSpacing`
-  that isn't finite does (#356), is on the API discussion's list (TODO.md): in the six APIs a throw would go in that
-  one function, and in the streams it would cost the comparison for each line again.
+  result at `NaN` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed `measureLineStats()` row 9.3%
+  slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at widths seen before 10.2%, each in
+  all three sessions (2026-10-02; Dead Ends, Simplifications Held Back, has Chrome's reading and the shells'). So
+  `normalizeMaxWidth()` stays and the three places stay documented; a form that Firefox reads level with main on those
+  rows would take its place. Whether such a width should throw, as a `letterSpacing` that isn't finite does (#356), is
+  on the API discussion's list (TODO.md): in the six APIs a throw would go in that one function, and in the streams it
+  would cost the comparison for each line again.
 - **2026-10-03: the constants the line loops read stay `const`s, not const enums** (#406, closed unmerged), the
   maintainer's decision. Const enums gave Firefox 156.0.1's four slowest worst-case `layout()` and walk rows 7-14%, cost
   its Latin `layout()` at widths seen before 10-12%, and ended one row's dependence on a bundler's names (Keeping Work
