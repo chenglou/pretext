@@ -477,7 +477,8 @@ function textProjectionEqual(a: TextProjection | null, b: TextProjection): boole
 // Writes only the lines that changed. Each node shows the line `written` has at its index: its text is written when
 // the text differs, and its place and font when the line moved or the fonts changed. A moving orb changes a few lines
 // a frame, and writing the others again isn't free: a write of a node's text replaces its text node, the same text
-// too, and a write of its font resets the line height, which the next write sets back.
+// too, which drops a selection inside it, and a write of its font resets the line height, which the next write sets
+// back.
 function projectTextProjection(projection: TextProjection, written: TextProjection | null): void {
   const stylesWritten = written !== null && textStylesEqual(written, projection)
 
