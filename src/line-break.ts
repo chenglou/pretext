@@ -61,12 +61,10 @@ export type PreparedLineBreakData = {
   discretionaryHyphenContexts: number[] | null
   tabStopAdvance: number // Advance between tab stops for pre-wrap tab segments
   minimumTabAdvance: number // The least a tab advances: one nearer its stop takes the stop after
+  // What the segments of a rich-inline paragraph that isn't one text's handle have of their own
+  // (src/rich-inline.ts). A text's handle has none.
+  items?: ParagraphSegmentData
 }
-
-// What the line walkers lay out: a text's handle, or the handle of a rich-inline paragraph that
-// isn't one text's handle (src/rich-inline.ts), which also holds what its segments have of their
-// own. A text's handle has no `items`, so its type, PreparedLineBreakData, doesn't name it.
-export type PreparedLineData = PreparedLineBreakData & { items?: ParagraphSegmentData }
 
 // What a rich-inline paragraph's items give its segments, per segment, each list null where no
 // segment has a value of its own:
@@ -178,7 +176,7 @@ function getTabAdvance(position: number, tabStopAdvance: number, minimumAdvance:
 // (lineStartExtras): the other half is the end edge, which follows the item's text on the line.
 // Where the paragraph's items differ in letter spacing, a tab's width holds the gap after it, as
 // every segment's holds its own (src/rich-inline.ts); else it is 0.
-export function getItemTabAdvance(prepared: PreparedLineData, items: ParagraphSegmentData, index: number, lineWidth: number, appUnits: boolean): number {
+export function getItemTabAdvance(prepared: PreparedLineBreakData, items: ParagraphSegmentData, index: number, lineWidth: number, appUnits: boolean): number {
   const stopAdvance = items.tabStopAdvances === null ? prepared.tabStopAdvance : items.tabStopAdvances[index]!
   const minimumAdvance = items.minimumTabAdvances === null ? prepared.minimumTabAdvance : items.minimumTabAdvances[index]!
   const endEdge = items.insideExtras === null ? 0 : items.insideExtras[index]! / 2
@@ -188,7 +186,7 @@ export function getItemTabAdvance(prepared: PreparedLineData, items: ParagraphSe
 // Where a line that holds only an overflowing grapheme ends: after that grapheme and
 // the graphemes after it that can't start a line, up to `endGraphemeIndex`.
 function getOverflowingFirstGraphemeEnd(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   segmentIndex: number,
   graphemeIndex: number,
   endGraphemeIndex: number,
@@ -200,7 +198,7 @@ function getOverflowingFirstGraphemeEnd(
 }
 
 function getTerminalLetterSpacing(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   openingEdges: number[] | null,
   hangingKinds: number,
   startSegmentIndex: number,
@@ -252,7 +250,7 @@ export function normalizeMaxWidth(maxWidth: number): number {
 // which starts at its hard break. The rest of a chunk after a line that wrapped
 // inside it is no line of its own when a line start consumes all of it.
 export function normalizePreparedLineStart(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   cursor: LayoutCursor,
 ): boolean {
   const { segmentFlags } = prepared
@@ -286,7 +284,7 @@ export function normalizePreparedLineStart(
 
 // Walks every line of the text into `stats`, visiting each, and returns the line count.
 export function walkPreparedLinesRaw(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   maxWidth: number,
   onLine?: InternalLineVisitor,
   stats: LineStats = { lineCount: 0, maxLineWidth: 0 },
@@ -325,7 +323,7 @@ export function walkPreparedLinesRaw(
 // starts the next one. The full walker costs three to five times as much per
 // segment, so one walker for all text was rejected (RESEARCH.md, Decisions Log,
 // 2026-09-24).
-export function countPreparedLines(prepared: PreparedLineData, maxWidth: number): number {
+export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   // The loop takes no overflow trims, which the stepper takes for a line's first segment.
   if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
     return prepared.simpleLineCountFastPath ? countSteppedLines(prepared, maxWidth) : walkPreparedLinesRaw(prepared, maxWidth)
@@ -418,7 +416,7 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
 // Chrome's count of all other text once the check had ever held, and the line APIs
 // keep the full walker for this text, since the stepper's widths can differ from
 // its in the last bits (RESEARCH.md, Keeping Work Bounded).
-function countSteppedLines(prepared: PreparedLineData, maxWidth: number): number {
+function countSteppedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   const { segmentFlags } = prepared
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
   let count = 0
@@ -461,7 +459,7 @@ function staysAfterObject(segmentFlags: Uint8Array, start: number, hangingKinds:
 // widths can show: the soft hyphens on the line may measure narrower joined than apart
 // by less than the overflow.
 function returnsFromUnfitHyphen(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   lineStartSegmentIndex: number,
   breakSegmentIndex: number,
   breakWidth: number,
@@ -485,7 +483,7 @@ function returnsFromUnfitHyphen(
 // limits again for every line, and short lines laid out 7 to 40% slower in all
 // three browsers (RESEARCH.md, Keeping Work Bounded).
 function walkPreparedComplexLines(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   cursor: LayoutCursor,
   maxWidth: number,
   onLine: InternalLineVisitor | undefined,
@@ -1105,7 +1103,7 @@ function walkPreparedComplexLines(
 
 // Steps one line of a fast-path handle from a normalized line start.
 function stepPreparedSimpleLineGeometry(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   cursor: LayoutCursor,
   maxWidth: number,
 ): number {
@@ -1192,7 +1190,7 @@ function stepPreparedSimpleLineGeometry(
 // Steps one line from a normalized line start. A cursor inside a segment needs that segment's
 // breakable fit advances.
 export function stepPreparedLineGeometryFromStart(
-  prepared: PreparedLineData,
+  prepared: PreparedLineBreakData,
   cursor: LayoutCursor,
   maxWidth: number,
 ): number | null {
