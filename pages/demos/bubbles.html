@@ -305,8 +305,8 @@
         There's no CSS property to say “find the narrowest width that still
         produces exactly 3 lines.” That requires
         <strong>measuring the text at multiple widths and comparing line
-        counts</strong>, which is exactly what Pretext's
-        <code>layout()</code> does, without DOM text measurement in the
+        counts</strong>, which the demo does with one call to Pretext's
+        <code>layout()</code> per width, without DOM text measurement in the
         resize path. Pure arithmetic, no reflows, instant results.
       </p>
     </section>

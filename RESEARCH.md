@@ -644,24 +644,27 @@ lazily, which took the layout entry from 56.2 to 53.6 KB gzipped with the same u
 more, so it wasn't taken.
 
 Since #394 (2026-10-01) the module holds what the tables say in place of their bytes, and the layout entry is 40.4 KB
-gzipped and 95.4 KB minified, 13.3 KB less of each than under #392's packing. Every code point's class in the ten maps
-the scans read (the categories of ICU's five line and two character tables, and Firefox's Line_Break, Bidi_Class and
-East_Asian_Width) ships as one list of 4,487 runs of joint classes, the 250 classes the maps together tell apart, with a
-byte per joint class for each map: engines class most code points alike, and so do one engine's tables. From the list
-the library builds a table for each map its engine reads, blocks of 256 code points behind an index, so a class is two
-loads for any code point. Before, ICU's tries took two loads below U+10000 and four above, Firefox's line trie two below
-U+1000 and four above, East_Asian_Width a search through its ranges, and Firefox's Bidi_Class one load below U+10000,
-from a table per code unit: that lookup alone gained a load. Each state table ships as
-its rows' differences from rows it repeats, starting from an earlier table's rows where one has its shape: libicucore's
-line tables differ from Chrome's root table in 8 rows. Chrome's Chinese table has a category and two states more than
-the root table, so it ships alone. The class maps are most of what is saved; the pair tables, Firefox's break states and
-the bytes per joint class keep #392's packing. Taking one string out of the bundle now shrinks its gzipped size by 5.5
-KB for the run list, 2.6 KB and 2.7 KB for the rows of Chrome's root and Chinese line tables, 1.0 KB for the bytes per
-joint class and 0.5 KB or less for each other table. Nothing is derived: the generator, still run by hand, reads the
-same engine files, checks every class of every code point and every state row against them as the library unpacks them,
-and a test checks the shipped module the same way. Since #403 (2026-10-01) Firefox's Bidi_Class isn't among the maps
-(Bidi Levels): nine maps, 4,268 runs of 155 joint classes, and a layout entry of 37.7 KB gzipped and 89.0 KB minified,
-4.4 KB and 10.7 KB less than with the map and the level port that read it.
+gzipped and 95.4 KB minified, 13.3 KB less of each than under #392's packing. Every code point's class in the maps the
+scans read ships as one list of runs of joint classes, the classes the maps together tell apart, with a byte per joint
+class for each map: engines class most code points alike, and so do one engine's tables. With #394 the maps were ten
+(the categories of ICU's five line and two character tables, and Firefox's Line_Break, Bidi_Class and East_Asian_Width)
+and the list 4,487 runs of 250 joint classes. From the list the library builds a table for each map its engine reads,
+blocks of 256 code points behind an index, so a class is two loads for any code point. Before, ICU's tries took two
+loads below U+10000 and four above, Firefox's line trie two below U+1000 and four above, East_Asian_Width a search
+through its ranges, and Firefox's Bidi_Class one load below U+10000, from a table per code unit: that lookup alone
+gained a load. Each state table ships as its rows' differences from rows it repeats, starting from an earlier table's
+rows where one has its shape: libicucore's line tables differ from Chrome's root table in 8 rows. Chrome's Chinese table
+has a category and two states more than the root table, so it ships alone. The class maps are most of what is saved; the
+pair tables, Firefox's break states and the bytes per joint class keep #392's packing. Taking one string out of the
+bundle now shrinks its gzipped size by 5.5 KB for the run list, 2.6 KB and 2.7 KB for the rows of Chrome's root and
+Chinese line tables, 1.0 KB for the bytes per joint class and 0.5 KB or less for each other table. Nothing is derived:
+the generator, still run by hand, reads the same engine files, checks every class of every code point and every state
+row against them as the library unpacks them, and a test checks the shipped module the same way. Since #403 (2026-10-01)
+Firefox's Bidi_Class isn't among the maps (Bidi Levels): nine maps, 4,268 runs of 155 joint classes, and a layout entry
+of 37.7 KB gzipped and 89.0 KB minified, 4.4 KB and 10.7 KB less than with the map and the level port that read it.
+Since #423 (2026-10-03) the script classes that Blink's script runs read are a tenth map, and the generator's check
+prints the counts of the module as it stands (`bun run scripts/generate-engine-break-data.ts --check`): 4,423 runs of
+248 joint classes since #426 (2026-10-05).
 
 What that costs (2026-10-01). The unpacked tables take more memory: on a page in one language, 198 KB of typed arrays
 against 103 in the Blink profile, 199 against 104 in the WebKit profile, and 151 against 40 in the Gecko profile, or 212
@@ -1021,8 +1024,9 @@ table, `gecko/char`, reads Chrome's rules past them, and such a character takes 
 the segment's graphemes for each soft hyphen or bidi control before the cursor (`\u2068Bartholomew\u2069 joined` at 40px
 ends its first line at grapheme 4, after `\u2068Bart`; 2026-09-30). `materializeLineRange()` from the segment's start
 to a cursor inside it gives the text before the cursor in every profile. Counting those characters would take a
-cluster of no width that no line may end before, the zero-width glue #368 rejected (Decisions Log, 2026-09-27); it
-reopens with a public way from cursors to source offsets (#90).
+cluster of no width that no line may end before, the zero-width glue #368 rejected (Decisions Log, 2026-09-27), and
+source offsets don't need it: a materialized rich-inline fragment says where it starts and ends in its item's `text`,
+those characters counted (`sourceStart`, `sourceEnd`; Rich Inline Boundaries, Rich Inline As One Paragraph).
 
 The tables don't follow a browser to another Unicode version: Node 23's ICU 77.1 (Unicode 16) differs on 1,417 code
 points, 689 symbols Unicode 17 took out of Extended_Pictographic (the chess symbols, playing cards), which no longer
@@ -1432,8 +1436,8 @@ line may end; the *handle* is what preparation gives the walkers (`PreparedLineD
 that text once, as `prepare()` analyzes a text, with a segment starting wherever an item does (`ParagraphItems` and
 `ITEM_START` in `src/analysis.ts`). It measures each item's segments in the item's font onto the lists of one handle,
 which `walkPreparedLinesRaw()` and the steppers of `src/line-break.ts` lay out as they lay out a text. A line's
-fragments are its segments cut where the item changes (`createLine()`). A paragraph of one text item without
-`extraWidth`, or whose other items are empty, is that text's own handle.
+fragments are its segments cut where the item changes (`createLine()`). A paragraph of one text item that isn't atomic
+and has no `extraWidth`, alone or among empty items, is that text's own handle.
 
 It is the engines' model, to the extent each has one. Blink builds one string for a paragraph's inline content, with a
 span's open and close tags as zero-length items over it and an atomic inline as one U+FFFC, and runs one break iterator
@@ -1454,16 +1458,20 @@ pair of marks an item start splits halts as in one text, each mark by its own it
 `src/rich-inline.ts`; and a run of U+3000 inside an item hangs or not by what follows it in the paragraph. A run that
 ends an item hangs whatever the next item starts with, as Chrome and Firefox hang it wherever a line ends: a text's run
 hangs only before a break its scan gives, a narrower rule that a paragraph would lose lines by, since an item's last
-run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges).
+run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges). The hang needs a line that
+ends there, and none does before an item that starts with a character the scan gives no break before, a joiner or a
+combining mark and in the Blink profile a bidi control; and in the Gecko profile a run that only bidi controls follow to
+the paragraph's end gets no hang, as the control is kept with the run's segment (the sweep after #460, below).
 
 What an item carries of its own goes on its segments. Its `extraWidth` is in the width of its first segment that takes
 room, and a line that starts later in the item adds it there (`lineStartExtras`, and `insideExtras` and `fillExtras`
-where the line starts inside a segment); an item that opens with preserved white space, a hard break or a zero-width
-space gets a start edge of its own, an empty segment the line fits by the edges the engine fits there
-(`getOpeningFit()`). The handle's letter spacing is the one the items share, and where they differ each segment's
-width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a tab advances are per segment
-where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one segment of kind `OBJECT`, with a
-break on both sides and none inside.
+where the line starts inside a segment, except where it starts inside a word beside a joiner or a bidi mark, whose
+widths are measured afresh and leave it out, a named gap: the sweep after #460, below); an item that opens with
+preserved white space, a hard break or a zero-width space gets a start edge of its own, an empty segment the line fits
+by the edges the engine fits there (`getOpeningFit()`). The handle's letter spacing is the one the items share, and
+where they differ each segment's width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a
+tab advances are per segment where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one
+segment of kind `OBJECT`, with a break on both sides and none inside.
 
 That replaced a second line walker for rich inline, which analyzed each item's text on its own, patched it toward the
 text the items join and stepped item by item, calling the text walker for one item at a time (Continuing The Line has
@@ -1471,13 +1479,14 @@ what it was and what it found). It kept drifting from the text walkers: each rul
 copy at item edges (#332), as the halt of a pair of fullwidth marks did (#425). The item stepper, the walker's mode
 for one item's line, the joined windows, the second handle per item and the halts read across two items are gone, and
 three fields of the engine profile with them (`breaksFromItemText`, `collapsesSpaceAcrossSoftHyphens`,
-`spaceBeforeSoftHyphenHangs`). Against main at #459 (e699e27e, 2026-10-07), `src/` outside tests is 104 lines shorter,
-1,782 added and 1,886 removed, and 103 lines of code shorter, counting neither blank lines nor comment lines:
-`src/rich-inline.ts` goes from 1,101 lines of code to 844, `src/analysis.ts` from 327 to 423, `src/line-break.ts` from
-768 to 812 and `src/prepare.ts` from 500 to 511, as the walker's mode for one item's line makes way for what a
-paragraph's segments carry. The main entry's bundle grows by 3,884 B minified (1,428 B gzipped) to 97,304 B (40,832 B),
-since the walker and the analysis are its own, and `@chenglou/pretext/rich-inline` shrinks by 1,135 B minified to
-108,375 B and grows by 30 B gzipped to 44,902 B (`bun build --minify`, with the bundle piped into `gzip -9`).
+`spaceBeforeSoftHyphenHangs`). As merged (#460, bf62c76a) against main at #459 (e699e27e, 2026-10-07), `src/` outside
+tests is 104 lines shorter, 1,782 added and 1,886 removed by git's patience diff, and 103 lines of code shorter,
+counting neither blank lines nor comment lines: `src/rich-inline.ts` goes from 1,101 lines of code to 844,
+`src/analysis.ts` from 327 to 423, `src/line-break.ts` from 768 to 812 and `src/prepare.ts` from 500 to 511, as the
+walker's mode for one item's line makes way for what a paragraph's segments carry. The main entry's bundle grows by
+3,884 B minified (1,428 B gzipped) to 97,304 B (40,832 B), since the walker and the analysis are its own, and
+`@chenglou/pretext/rich-inline` shrinks by 1,135 B minified to 108,375 B and grows by 30 B gzipped to 44,902 B
+(`bun build --minify`, with the bundle piped into `gzip -9`).
 
 What a caller sees change: a fragment's `start` and `end`, and a line's `end`, count segments of the item's part of the
 paragraph, where they were cursors into `prepareWithSegments(item.text)`. The two differ in most paragraphs of several
@@ -1486,23 +1495,23 @@ where its own analysis dropped it, so each of its cursors is one higher; an atom
 York` ends at segment 1, where it ended at 3; an item that starts inside a word is cut otherwise where the scan's breaks
 depend on the whole word, as a Thai word's do in the Blink and Gecko profiles; an item with `extraWidth` that opens with
 a zero-width space, or in pre-wrap with spaces, a tab or a line feed, has its start edge for a first segment; and
-Firefox's white-space run reads through an item's start. Only a paragraph of one text item without `extraWidth`, which
-is that text's own handle, keeps its text's cursors. Over 20,000 generated paragraphs of one to four items on the
-stand-in Canvas, main's cursors against this design's at five widths (2026-10-06): of the 10,090 that hold an atomic
-item or an item that starts with a space after another item, 7,279 differ in the Gecko and WebKit profiles and 7,329 in
-the Blink profile; none of the 248 whose items only end with a space, nor of the 547 that only split an ordinary word.
-Of paragraphs of one item, none of 1,557 of plain words differs; 50 of 100 with `extraWidth` in pre-wrap do; and in the
-Gecko profile 100 of 1,200 with unusual words do, each where a line's start skips a soft hyphen that starts a word: the
-fragment starts after it, and the line before ends after it, one segment later than the item stepper gave. The same
-holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173 differ in the
-Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no mapping keeps the
-old meaning without each item's own analysis, which the design removes. Cursors are for passing back to
-`layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`; a materialized fragment has `sourceStart` and
-`sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as its
-`extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it was
-a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that line; a
-collapsed space at an item's edge is measured with its item, so in the Chromium profile it takes its kerning with the
-word beside it there, and in the WebKit profile a word is measured with the space that ends its item.
+Firefox's white-space run reads through an item's start. A paragraph of one text item that isn't atomic and has no
+`extraWidth`, which is that text's own handle, keeps its text's cursors. Over 20,000 generated paragraphs of one to four
+items on the stand-in Canvas, main's cursors against this design's at five widths (2026-10-06): of the 10,090 that hold
+an atomic item or an item that starts with a space after another item, 7,279 differ in the Gecko and WebKit profiles and
+7,329 in the Blink profile; none of the 248 whose items only end with a space, nor of the 547 that only split an
+ordinary word. Of paragraphs of one item, none of 1,557 of plain words differs; 50 of 100 with `extraWidth` in pre-wrap
+do; and in the Gecko profile 100 of 1,200 with unusual words do, each where a line's start skips a soft hyphen that
+starts a word: the fragment starts after it, and the line before ends after it, one segment later than the item stepper
+gave. The same holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173
+differ in the Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no
+mapping keeps the old meaning without each item's own analysis, which the design removes. Cursors are for passing back
+to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`; a materialized fragment has `sourceStart`
+and `sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as
+its `extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it
+was a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that
+line; a collapsed space at an item's edge is measured with its item, so in the Chromium profile it takes its kerning
+with the word beside it there, and in the WebKit profile a word is measured with the space that ends its item.
 
 A paragraph whose whole width fits is one line, taken without a walk (`findWholeLine()`): most paragraphs of a chat
 are. Every engine tests a line at prefixes of it and lets no content make it narrower (the function cites all three),
@@ -1631,12 +1640,14 @@ hypothesis):
   and 26% for the two loops: with the general widths' code in the loop every engine ran the bare segments slower, and
   the stress items 4, 8 and 7 points slower. The two loops write the block that opens a fragment or a gap twice, for a
   test that never changes inside the loop taken out of it: every engine walks the stress items faster that way, and
-  Chrome and Safari the styled paragraphs too.
+  Chrome and Safari the styled paragraphs too. It reopens if a timing reads the one loop within about a percent of the
+  two, where the shorter form is taken (Part 1, Engineering, JIT tuning).
 - **A loop of bare widths for each fragment, inside the loop over the line's fragments**, walked `chat-styled` 35%, 15%
   and 28% faster and the stress items 3% slower in Chrome and 9.5% slower in Firefox (5.1 to 5.6 µs per 1,000 units,
   every one of six foreground sessions). SpiderMonkey runs the loop over fragments slower once a loop is compiled inside
   it, about 100 instructions a fragment in its shell whether the inner loop runs or not, and an item of one segment
-  gains nothing back (JavaScript Engines has the first case of this).
+  gains nothing back (JavaScript Engines has the first case of this). It reopens when the pinned Firefox moves, if a
+  loop compiled inside that one then costs its walk of the stress items nothing.
 - **Fragment widths as differences of sums stored per segment** take the pass away: `chat-styled` walked 36%, 24% and
   31% faster (five foreground sessions of a build from a folder outside the repository, as the forms of the split
   above). A fragment's width then differs from its segments' sum in the last bits (by 1.6e-12 at most over 600,000
@@ -1708,6 +1719,23 @@ and 2,825, and 5,734 and 5,849 of the 6,028, against 5,077 and 5,494; they lose 
 had been recorded in, a ZWSP or a soft hyphen before the spaces that end the text before the padded item, and in Firefox
 a line of only a tab before a padded line feed (ENGINE_FOLLOWUPS.md, Rich-inline item edges). No pinned case holds the
 line-feed shape, so the rule moves no pinned prediction, and a unit test holds it.
+
+After #460 the design was swept against main at #459 (e699e27e), the last build with the item stepper, for losses nobody
+had named, as one had turned up by chance (Firefox's White-Space Run Across Items). Both builds laid out 300,000
+generated paragraphs a profile on a stand-in Canvas, two styled items with one of 55 strings at the edge between them,
+and the kinds of difference no doc settled were recorded in Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host
+(WebKit 22625.1.29.11.27): 21,403 cases, then 30,414 and 7,683 a browser to check them and 12,846 and 4,957 to check
+what the docs say of them (2026-10-09 and 10, none checked in). No real usage moves: no item of the real-usage sample's
+241 rich-inline draws starts with a character any of the shapes needs, or ends with one other than a combining mark,
+which none needs at an item's end; none of its padded items holds a joiner or a bidi mark, and none of its pre-wrap
+draws a tab or a ZWSP after a space; and the 233 of the draws that both builds' harness adapters can state get the same
+lines from both, on a stand-in Canvas and on each browser's. On the first set at 24px and wider this design alone has
+the browser's lines in 1,111, 1,652 and 1,604 cases and the item stepper alone in 503, 1,449 and 322. Eight shapes are
+the stepper's by a rule of its own, each rare text and a named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has
+each with its counts, what 0.0.9 did and what a port takes): each turns on a character of no width, a tab or U+3000,
+most at an item's edge and beside padding or a chip. Three of them are gaps of the text walkers or the scans in one text
+node too, which the stepper covered at an item's start; its other passes are gaps named before or luck. Each reopens
+with real text that holds its shape.
 
 The halt Chrome gives a pair of fullwidth marks comes with the paragraph's analysis, with no code for it in
 `src/rich-inline.ts`: on the probes above the paragraph gives the lines main's halts across items give (CJK At An
@@ -2321,31 +2349,31 @@ preparing again on each resize costs them.
   line still breaks at item boundaries on overflow; atomic `break: 'never'` items allow a break on both sides, as
   css-text requires (2026-09-12).
 
-#### A Wider Box Never Needs More Lines
+#### When A Wider Box Needs More Lines
 
-The rule holds for ordinary words and is no invariant across widths: the browsers' own line counts rise with the width
-in some paragraphs. Of the paragraphs the checked-in recordings pin at two or more widths, a wider box takes more lines
-in 23 of 4,507 plain ones and 1 of 238 rich ones in Chrome 154.0.8037.98, 4 of 4,507 plain ones in Firefox 156.0.1, 266
-of 4,500 in webkit-host and 2 of 195 in Safari 27.0 (the recordings on 2026-10-06, with #446's cases). In 243 of those
-295 plain paragraphs the box with fewer lines is narrower than a quarter of the font size: no character fits, and an
-engine keeps with a line's first character what can't start a line (WebKit's rule: ENGINE_FOLLOWUPS.md, Emergency breaks
-inside a word) or what shapes with it. `x ffiffiffiffiffiffi y` in 24px Hoefler Text is 14 lines in Chrome at 8.023px
-and 20 at 8.055px, where an `f` fits alone. Ten of the other 52 hold a soft hyphen, a break that starts to fit and
-leaves more lines after it: `بب ببب`, a soft hyphen, U+0650, `ببب بب` in 24px Geeza Pro is 4 lines in Firefox at
-30.001px and 5 at 30.017px, where `ببب` fits with its hyphen and the word takes three lines for two. The profiles do the
-same on the offline invariants' stand-in Canvas (`harness/invariants.ts`): of 3,000 plain cases drawn from the sets,
-each laid out at 201 widths from a quarter of its own width to twice it, the count rises in 378 under the WebKit
-profile, 375 of them from a box narrower than a glyph, in 5 under Gecko's, a rise Firefox doesn't have
-(ENGINE_FOLLOWUPS.md, Line edges), and in none under Blink's (2026-10-06). The sample moves with the sets: drawn again
-with #446's cases, the count rises in 367, 2 and, under Blink's, 2, both `a`, an emoji and `b word` at letter spacing -6
-from a box narrower than a glyph. That rise is Chrome's own: where `b` and the space after it are narrower than their
-two spacings, as the stand-in font's kerning beside a space makes them under the Blink profile, `b word` is narrower
-than `word`, so it fits a box that `a`, the emoji and `b` don't, and the word is cut in the wider box that they fit.
-`a`, U+1F600, `b mm` in 16px Arial at letter spacing -8 is two lines in Chrome 154.0.8037.98 at 9.75px, the second
-`b mm`, and three at 9.875px, `mm` cut in two, in pre-wrap and in normal white space, and the Blink profile has the
-same lines (2026-10-06); at -6, where Arial's `b` and space are wider than two spacings, neither rises at any of 125
-widths from 0.5 to 16px. So no check sweeps widths for a rise, which would fail on ported rules, and the unit test of
-the rule lays out one sentence of ordinary words (`src/layout.test.ts`).
+That a wider box never needs more lines holds for ordinary words and is no invariant across widths: the browsers' own
+line counts rise with the width in some paragraphs. Of the paragraphs the checked-in recordings pin at two or more
+widths, a wider box takes more lines in 23 of 4,507 plain ones and 1 of 238 rich ones in Chrome 154.0.8037.98, 4 of
+4,507 plain ones in Firefox 156.0.1, 266 of 4,500 in webkit-host and 2 of 195 in Safari 27.0 (the recordings on
+2026-10-06, with #446's cases). In 243 of those 295 plain paragraphs the box with fewer lines is narrower than a quarter
+of the font size: no character fits, and an engine keeps with a line's first character what can't start a line (WebKit's
+rule: ENGINE_FOLLOWUPS.md, Emergency breaks inside a word) or what shapes with it. `x ffiffiffiffiffiffi y` in 24px
+Hoefler Text is 14 lines in Chrome at 8.023px and 20 at 8.055px, where an `f` fits alone. Ten of the other 52 hold a
+soft hyphen, a break that starts to fit and leaves more lines after it: `بب ببب`, a soft hyphen, U+0650, `ببب بب` in
+24px Geeza Pro is 4 lines in Firefox at 30.001px and 5 at 30.017px, where `ببب` fits with its hyphen and the word takes
+three lines for two. The profiles do the same on the offline invariants' stand-in Canvas (`harness/invariants.ts`): of
+3,000 plain cases drawn from the sets, each laid out at 201 widths from a quarter of its own width to twice it, the
+count rises in 378 under the WebKit profile, 375 of them from a box narrower than a glyph, in 5 under Gecko's, a rise
+Firefox doesn't have (ENGINE_FOLLOWUPS.md, Line edges), and in none under Blink's (2026-10-06). The sample moves with
+the sets: drawn again with #446's cases, the count rises in 367, 2 and, under Blink's, 2, both `a`, an emoji and
+`b word` at letter spacing -6 from a box narrower than a glyph. That rise is Chrome's own: where `b` and the space after
+it are narrower than their two spacings, as the stand-in font's kerning beside a space makes them under the Blink
+profile, `b word` is narrower than `word`, so it fits a box that `a`, the emoji and `b` don't, and the word is cut in
+the wider box that they fit. `a`, U+1F600, `b mm` in 16px Arial at letter spacing -8 is two lines in Chrome
+154.0.8037.98 at 9.75px, the second `b mm`, and three at 9.875px, `mm` cut in two, in pre-wrap and in normal white
+space, and the Blink profile has the same lines (2026-10-06); at -6, where Arial's `b` and space are wider than two
+spacings, neither rises at any of 125 widths from 0.5 to 16px. So no check sweeps widths for a rise, which would fail on
+ported rules, and the unit test of the rule lays out one sentence of ordinary words (`src/layout.test.ts`).
 
 A rise the browser doesn't have is a bug: four raw-width fit checks in `src/rich-inline.ts` gave 11 lines at
 115px, 12 at 115.1px (#281, 2026-09-14). An item ending at an unfit soft hyphen with no earlier break wrapped before the
@@ -2883,7 +2911,9 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
   that changed in one piece, SpiderMonkey 156.0.1's shell prepared new rich text 3-6 points faster with the code warm
-  and 8 over a fresh page's first 14,000 units (+22.0% to +14.2% against main, twenty sessions, 2026-10-05).
+  and 8 over a fresh page's first 14,000 units (+22.0% to +14.2% against main, twenty sessions, 2026-10-05). It reopens
+  if a timing reads the form that cuts every item out within about a percent of this one, where that form, 11 lines of
+  code shorter, is taken (Part 1, Engineering, JIT tuning).
 - **Two removals from preparing rich text, each of work every engine did** (2026-10-05, timed on the one-paragraph
   design against itself, before main's #435 to #446; neither changes a prediction: with both, 0 of 1,000,000 generated
   paragraphs differ on a stand-in Canvas, in handle, lines or `measureText` calls, 2026-10-06). Collapsing white space
@@ -2891,8 +2921,8 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   spaces comes back as it is. Plain text takes that path too: the bench's `seen` rows of Latin, Arabic and mixed
   messages read 1.5-3.9% faster in every one of three foreground sessions in Chrome 154.0.8037.57, Firefox 156.0.1 and
   Safari 27.0. And the WebKit profile's scan takes each item's own text, which is its part of the paragraph's, in place
-  of a slice of it (`getItemText()` in `src/analysis.ts`): Safari 27.0 read the `rich-new` row 2.1% faster over 25
-  foreground sessions pooled (1.2% to 2.9%, its control copy 0.7%), and no other profile runs that scan. On the
+  of a slice of it (`getWebKitParagraphBreaks()` in `src/analysis.ts`): Safari 27.0 read the `rich-new` row 2.1% faster
+  over 25 foreground sessions pooled (1.2% to 2.9%, its control copy 0.7%), and no other profile runs that scan. On the
   `rich-new` row itself, whose floor is 5%, the two read within noise in every browser.
 - **Graphemes past dropped characters**: the Gecko profile's grapheme table tests only code points in the rules'
   Control category for what the text run drops; testing every code point made Firefox prepare CJK and Arabic 2-3%
@@ -2968,21 +2998,22 @@ time (the PRs hold the per-row tables):
   where a line's space overflows the walkers' sums differ in the last bits (99 of 96,470 offline Gecko-profile line
   checks; #350, 2026-09-26). A space before a bidi control was such a boundary in Firefox until #368 gave the control to
   the space's segment (Break Opportunities From Engine Data).
-- **The simple stepper continuing a rich-inline line**: the plain line APIs' stats, walks and streams of mixed text at
-  1.39-1.64 in Safari, 1.10-1.13 in Chrome and 1.06-1.07 in Firefox, so items on fast-path handles continue their lines
-  in the full walker (#369, 2026-09-27).
+- **The simple stepper continuing a rich-inline line**, while rich inline stepped item by item (Rich Inline Boundaries,
+  Continuing The Line): the plain line APIs' stats, walks and streams of mixed text at 1.39-1.64 in Safari, 1.10-1.13 in
+  Chrome and 1.06-1.07 in Firefox, so items on fast-path handles continued their lines in the full walker (#369,
+  2026-09-27).
 
 Removing the three pieces #357 kept for Chrome's JIT (#364; Decisions Log, 2026-09-26), namely checks in rich inline's
-stepper that change no result, a redundant `unfitHyphenRetreat` test and the peeled first character of the segmentation
-loop, cost Chrome 154 11% on rich stats, 5% on letter-spaced CJK `layout()` and 8-13% on preparing long breakable runs
-and pre-wrap chunks, in both sessions; Firefox 156 moved 2% at most, and Safari 27 only on resizing Arabic to widths it
-had laid out before (13%, where the bench's control, a second copy of main, moved 5%). All of it was taken as placement
-then. Counting the work each piece skips, with each put back as #364 removed it and no Chrome prediction moving (Chrome
-154 and Node 23's V8, all three back in one bench, 2026-09-29), sorts them:
+item stepper (below) that changed no result, a redundant `unfitHyphenRetreat` test and the peeled first character of the
+segmentation loop, cost Chrome 154 11% on rich stats, 5% on letter-spaced CJK `layout()` and 8-13% on preparing long
+breakable runs and pre-wrap chunks, in both sessions; Firefox 156 moved 2% at most, and Safari 27 only on resizing
+Arabic to widths it had laid out before (13%, where the bench's control, a second copy of main, moved 5%). All of it was
+taken as placement then. Counting the work each piece skips, with each put back as #364 removed it and no Chrome
+prediction moving (Chrome 154 and Node 23's V8, all three back in one bench, 2026-09-29), sorts them:
 - **Skipped work**: the stepper's line-start test spared the read of an item's segment count on almost every item it
-  visits, which #375 took back with that test on the line's first item only (below). Its early return spares the setup
-  of the one call per paragraph that finds nothing left, 147 of a stats pass's 946 calls and about 0.5% of its time;
-  with it back Chrome's rich stats read 0.6% slower, within noise, so it stays out.
+  visited, which #375 took back with that test on the line's first item only (below). Its early return spared the setup
+  of the one call per paragraph that found nothing left, 147 of a stats pass's 946 calls and about 0.5% of its time;
+  with it back Chrome's rich stats read 0.6% slower, within noise, so it stayed out.
 - **Placement**: the `unfitHyphenRetreat` test is never reached on the rows that slowed, whose texts have no soft-hyphen
   contexts, and with it back Chrome laid out letter-spaced CJK 1.6% faster, within noise. The peel spares one compare
   per unit and one regular expression test per text, yet with it back Chrome prepared pre-wrap chunks 11.6% faster and
@@ -3002,26 +3033,27 @@ Boundaries, Rich Inline As One Paragraph), and stay as the record of what its ch
 
 The stepper's skip of a step that doesn't advance was live code from #369, which ended a line there after content.
 
-After content, the rich stepper doesn't walk an item whose first segment doesn't fit: the full walker there only ends
-the line before the item, as the stepper now does itself. `firstSegmentOverflows()` repeats the walker's fit for that
-segment, a copy a comment in the walker points to. That leaves 6 of the 439 walks in a stats pass over the bench's rich
+After content, the item stepper didn't walk an item whose first segment didn't fit: the full walker there only ended the
+line before the item, as the stepper then did itself. Its `firstSegmentOverflows()` repeated the walker's fit for that
+segment, a copy a comment in the walker pointed to. That left 6 of the 439 walks in a stats pass over the bench's rich
 texts: Chrome 154's rich stats read 18% faster and Firefox 156's 23%, their rich walks and streams 11-13% (2026-09-29).
 Testing for a line that starts at an item's end, as after a hard break, only on the line's first item, the one item that
-can, instead of on every item it visits, made Chrome's rich stats 9% faster again, within noise in Firefox: that test's
-reads were what #364's removed check had skipped. Chrome's rich stats now read 18% faster than main before #340, where
+can, instead of on every item it visited, made Chrome's rich stats 9% faster again, within noise in Firefox: that test's
+reads were what #364's removed check had skipped. Chrome's rich stats then read 18% faster than main before #340, where
 main at #372 read 7% slower. Against main, Safari 27's rich stats read 14% faster, and Chrome's mixed stats, whose code
-didn't change (the minified `layout.ts` bundle is the same), 2% slower in two of four runs, accepted as V8's placement
-of the changed bundle (#375). Since #381 a copy of the library runs Chrome's rich stats at one of two speeds 11% apart
+didn't change (the minified `layout.ts` bundle was the same), 2% slower in two of four runs, accepted as V8's placement
+of the changed bundle (#375). From #381 a copy of the library ran Chrome's rich stats at one of two speeds 11% apart
 (Evaluation Traps, Timing), and the figure against main before #340 hasn't been timed since.
 
-A paragraph of one rich item takes the text walkers where the rich stepper would lay it out as they lay out its handle:
-no `extraWidth`, not atomic, no hard break, and nothing a line start consumes at its start (`onlyItem`, chosen once in
-`prepareRichInline()`). Its line functions take the item's whole fit, which the text walkers lack
-(ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces), then walk its handle as `measureLineStats()`,
-`walkLineRanges()` and `layoutNextLineRange()` do. Through the rich stepper, such a paragraph counted its lines at about
-2.5 times `measureLineStats()`'s cost in Chrome 154, and 15,256 of the Markdown chat's 17,688 prose blocks over its
-10,000 messages are one item. The chat's height pass, `layoutConversation()`, reads 25-26% faster in Chrome 154, 23-24%
-in Firefox 156.0.1 and 17-22% in Safari 27 (2026-09-29). The results are the rich stepper's field by field, on the
+From #383 a paragraph of one rich item took the text walkers where the item stepper would have laid it out as they lay
+out its handle: no `extraWidth`, not atomic, no hard break, and nothing a line start consumes at its start (the
+stepper's `onlyItem`, chosen once in `prepareRichInline()`; the one-paragraph design has a field of that name under
+another rule). Its line functions took the item's whole fit, which the text walkers lack (ENGINE_FOLLOWUPS.md, Negative
+letter spacing and hanging spaces), then walked its handle as `measureLineStats()`, `walkLineRanges()` and
+`layoutNextLineRange()` do. Through the item stepper, such a paragraph had counted its lines at about 2.5 times
+`measureLineStats()`'s cost in Chrome 154, and 15,256 of the Markdown chat's 17,688 prose blocks over its 10,000
+messages are one item. The chat's height pass, `layoutConversation()`, read 25-26% faster in Chrome 154, 23-24% in
+Firefox 156.0.1 and 17-22% in Safari 27 (2026-09-29). The results were the item stepper's field by field, on the
 stand-in Canvas over 6,267 inputs at 13 widths in all four profiles, and in Chrome, Firefox and webkit-host with every
 plain case in white-space: normal predicted as one item. The bench's rich rows, whose paragraphs had an item per word
 then, read within noise.
@@ -3115,7 +3147,8 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   ran or not, and Firefox 156.0.1 walked and streamed text of one segment an item 9% slower (5.1 to 5.6 µs per 1,000
   units of the bench's stress items, every one of six foreground sessions), where Safari 27.0 read 8% faster and
   Chrome 154 3% slower. So that pass's two loops each run over the line's segments, with none inside (2026-10-07;
-  Rich Inline As One Paragraph has what that gave up).
+  Rich Inline As One Paragraph has what that gave up). Reopen on a Firefox that runs a loop no slower for a call or a
+  loop compiled inside it.
 - **How a width is stored, in SpiderMonkey**: Firefox's full walker is slower over a handle whose whole widths are
   stored as int32 values than over one whose widths are all doubles, once the page has laid out a width that isn't whole
   (on a page of only whole widths integers are the faster: Every width stored as a double, below), and which one a
@@ -3287,9 +3320,10 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   fields, 6 under the limit, and 463 with a 24th, a boolean at any position and read by nothing. With that one, Chrome
   154's plain line APIs ran 11-18% slower (mixed stats, walk and stream) and two worst-case `layout()` rows 3-7%, in two
   bench sessions of each of three builds. The bytes did it, not the field. Chrome 154.0.8037.57's V8, traced headless
-  (`--js-flags="--trace-turbo-inlining --trace-maglev-inlining"`), inlines the 454-byte function into
-  `countPreparedLines()` and the simple and rich steppers and refuses the 463-byte one ("exceeds bytecode limit"), as
-  Node 23's V8 12.9 does. There, on a stand-in Canvas, the 463-byte build read 11-18% slower on mixed stats, walk and
+  (`--js-flags="--trace-turbo-inlining --trace-maglev-inlining"`), inlined the 454-byte function into
+  `countPreparedLines()`, the simple stepper and the item stepper that laid rich inline out then (The Walkers' Shapes),
+  and refused the 463-byte one ("exceeds bytecode limit"), as Node 23's V8 12.9 did. There, on a stand-in Canvas, the
+  463-byte build read 11-18% slower on mixed stats, walk and
   stream and 7-21% on four `layout()` rows (medians of 10 sessions), a 462-byte one with no new field 7-18%, a 24th
   field of a constant value, which adds no bytecode, as main, and the 463-byte one as main with
   `--max-inlined-bytecode-size=470`. So the accessor is a function apart from `buildEngineProfile()`, 21 bytes whatever
@@ -3463,28 +3497,30 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
 - **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
   full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
   nothing (#350, 2026-09-26).
-- **A block that never runs**: since rich items continue their lines, Firefox 156 measured the bench's rich stats about
-  6% slower, and its rich walk and stream about 2%. It isn't the full walker, as #369 supposed (sending items on
-  fast-path handles back to the simple stepper read +0.2%): without the block at the top of the rich stepper's item loop
-  that records the break before a continued item, whose body never runs on the bench, rich stats read 4.7% faster,
-  faster than before #369 too. None of three plain restructurings took it back (the hang of the spaces before consumed
-  items in a function of its own, or left out, and the line's latest break as one record), so
-  it was accepted as a regression one JIT alone explains in live code (#370, 2026-09-28; Decisions Log, 2026-09-26, no
-  dead code for one JIT). Since the rich stepper stopped walking items whose first segment doesn't fit and tests for a
-  line that starts at an item's end only on its first item (The Walkers' Shapes, 2026-09-29), rich stats read 16% faster
-  than before #369, and without the block 5% faster still, at the rich row's floor.
-- **State a loop keeps for its rare paths**: with pre-wrap (#381), Chrome 154 and Firefox 156 read the bench's rich
-  stats, walks and streams of normal white space 5-9% slower than main, doing the same work: each stats pass visits
-  4,246 items, fits 2,781 whole and walks 13 in both, in every profile. With main's stepper in the branch, both read
-  within noise. The one pre-wrap check that ran on every item, whether the line keeps a padded item's opening, now runs
-  only where the line can't take the item's padding and before a walk, 52 times a pass, which Chrome read within noise
-  of running it on every item. In Chrome, with every pre-wrap statement that runs on normal text left out as well (the
-  hang bookkeeping, the retreat check before continued items, and the hang at the line's start and end), rich stats
-  still read 7-11% slower, and with the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%;
-  main with those three values kept alive read 2% slower. So it's how the JITs allocate the bigger loop's state, not
-  work, and it was accepted as a regression JIT placement alone explains in live code (#381, 2026-09-29). Chrome's 5-9%
-  on rich stats is the faster of two speeds a copy of that build takes, 11% apart (Evaluation Traps, Timing), so these
-  figures, two sessions each, hold both a variant's cost and the speed its copy took.
+- **A block that never runs**: from #369, when rich items began to continue their lines in the item stepper that laid
+  rich inline out until the one-paragraph design (The Walkers' Shapes), Firefox 156 measured the bench's rich stats
+  about 6% slower, and its rich walk and stream about 2%. It wasn't the full walker, as #369 supposed (sending items on
+  fast-path handles back to the simple stepper read +0.2%): without the block at the top of the stepper's item loop that
+  recorded the break before a continued item, whose body never ran on the bench, rich stats read 4.7% faster, faster
+  than before #369 too. None of three plain restructurings took it back (the hang of the spaces before consumed items in
+  a function of its own, or left out, and the line's latest break as one record), so it was accepted as a regression one
+  JIT alone explains in live code (#370, 2026-09-28; Decisions Log, 2026-09-26, no dead code for one JIT). Once the
+  stepper stopped walking items whose first segment didn't fit and tested for a line that starts at an item's end only
+  on its first item (The Walkers' Shapes, 2026-09-29), rich stats read 16% faster than before #369, and without the
+  block 5% faster still, at the rich row's floor.
+- **State a loop keeps for its rare paths**: with pre-wrap added to the item stepper that laid rich inline out then
+  (#381; The Walkers' Shapes), Chrome 154 and Firefox 156 read the bench's rich stats, walks and streams of normal white
+  space 5-9% slower than main, doing the same work: each stats pass visited 4,246 items, fitted 2,781 whole and walked
+  13 in both, in every profile. With main's stepper in the branch, both read within noise. The one pre-wrap check that
+  ran on every item, whether the line kept a padded item's opening, then ran only where the line couldn't take the
+  item's padding and before a walk, 52 times a pass, which Chrome read within noise of running it on every item. In
+  Chrome, with every pre-wrap statement that ran on normal text left out as well (the hang bookkeeping, the retreat
+  check before continued items, and the hang at the line's start and end), rich stats still read 7-11% slower, and with
+  the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%; main with those three values kept
+  alive read 2% slower. So it was how the JITs allocated the bigger loop's state, not work, and it was accepted as a
+  regression JIT placement alone explains in live code (#381, 2026-09-29). Chrome's 5-9% on rich stats was the faster of
+  two speeds a copy of that build took, 11% apart (Evaluation Traps, Timing), so these figures, two sessions each, hold
+  both a variant's cost and the speed its copy took.
 - **The names a minifier picks, in Firefox**: Firefox 156 reads one bench row, `resize: latin layout at new widths`,
   about 16% slower or faster by nothing but the names the bench's minifier gives the bundle's top-level bindings. It is
   the one resize text whose lines hold words longer than the line (two rules of 72 hyphens, each 448px in 16px Helvetica
@@ -3497,7 +3533,7 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   | #405's branch before it took #394 to #403 (b9c9d758) | its own | +15.6%, +17.0%, +16.3% |
   | That main plus only the branch's new profile field, read by nothing | main's, all 410 | -3.5%, -0.5%, -4.3% |
   | The branch without that field | others than the branch's | -3.2%, +3.7%, +3.5% |
-  | That build plus one unused local in the rich stepper | the branch's, all 412 | +13.2%, +12.3%, +17.6% |
+  | That build plus one unused local in the item stepper | the branch's, all 412 | +13.2%, +12.3%, +17.6% |
   | The whole branch, the field read off the profile at its two uses | 14 differ from the branch's | -0.1%, -0.2%, -1.7% |
 
   So neither the field nor the rich code does it, and one local that nothing reads does. Main after #394 to #399 read
@@ -3547,7 +3583,8 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   with its two regular expressions written at their uses in place of two top-level constants, the form that landed,
   +4.3%, -7.5% and +7.1%, each within noise beside a control 0.6-8.6% from base. So that row moves in Safari with what a
   bundle declares, as Firefox's does with its names; why wasn't traced in JavaScriptCore. (Three sessions a build
-  against main at #453, foreground, 2026-10-06.)
+  against main at #453, foreground, 2026-10-06.) Reopen when the pinned Safari moves, or if the row moves between two
+  builds that declare the same top-level bindings.
 - **`%` on numbers that aren't whole** is a call: V8 works a remainder out inline only for two positive whole numbers
   and otherwise calls the C library's `fmod` (`MacroAssembler::Float64Mod`, `macro-assembler-arm64.cc:3028-3081`, V8
   15.3). A tab's advance took one, and it was what a tab's arithmetic cost. With the remainder from a division and a
@@ -4956,8 +4993,8 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
     and the fit depend on the text beside it, so it gains the loop and decides nothing at the edge; and a paragraph
     with k objects takes k+1 handles, a step that can ask the app to redo the run before (the WebKit profile's return
     to the break before an object), and no stats in one call, all worse for virtualized lists. Reopens for text glued
-    to an object, such as `$x$,` kept with its comma, which no width expresses and which needs the rich stepper's
-    pending break.
+    to an object, such as `$x$,` kept with its comma, which no width expresses: the line's latest break would cross the
+    object too, the full walker's pending break (`pendingBreakSegmentIndex` in `src/line-break.ts`).
   - *The app splits the paragraph at its objects and lays each run out with today's API.* A run laid out alone doesn't
     know what its line already holds: `xy `, a 24px object and ` abc def` at 60px are `xy`, the object / `abc def` as
     one paragraph and `xy`, the object, `ab` / `c def` split, a word broken and the gaps beside the object lost.
@@ -5469,7 +5506,7 @@ decisions for the maintainer.
   cost Chrome 154 up to 13%, and removing `countPreparedLines()`'s leading-space skip, a loop that never runs, kept on
   2026-09-24 for Firefox, read 3 and 7% slower in Firefox 156's two sessions on resizing Latin chat messages to new
   widths, within noise (#364). Counted on 2026-09-29, only one of the checks removed skipped work that mattered, the
-  rich stepper's line-start test, whose saving #375 took back plainly; the rest was placement or too small to read
+  item stepper's line-start test, whose saving #375 took back plainly; the rest was placement or too small to read
   (Keeping Work Bounded). A check that changes no result can still skip work, so count the work it skips before calling
   a slowdown one JIT's. Nor is a rule written out twice for one JIT: the Gecko scan's two text-run setups share one
   word-end test, whose call makes Firefox 156 prepare four kinds of row 2 to 5% slower than two copies would (#365; Bidi
@@ -5570,35 +5607,35 @@ decisions for the maintainer.
   the real-usage sample, the corpora, 455,648 localization strings or a probe of written mixed-direction paragraphs
   (Bidi Levels has the numbers). It reopens with a `direction` option (TODO.md), under which a port is right in both
   directions.
-- **2026-10-02: a `maxWidth` that isn't a number lays out as unbounded in the line APIs called once for a paragraph, and
-  the streams take it as given** (landed on judgement with #401). `NaN`, or the `undefined` of a container not measured
-  yet, fails every comparison, and the line loops ask some whether a segment fits and others whether it overflows. So
-  since #340 `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN`
-  width for a pre-wrap line ending in spaces. `normalizeMaxWidth()` (`src/line-break.ts`) turns such a width into
-  `Infinity` with one comparison, once a call, in `layout()`, `layoutWithLines()`, `walkLineRanges()`,
-  `measureLineStats()`, `walkRichInlineLineRanges()` and `measureRichInlineStats()`, whose loops stay as written for
-  numbers: none of their results at `NaN` or `undefined` differs from the one at `Infinity` (8,000 cases drawn from the
-  sets in each profile, offline). `layoutNextLine()`, `layoutNextLineRange()` and `layoutNextRichInlineLineRange()` are
-  called once for each line and don't check: they return, break as at an unbounded width, and differ from `Infinity` in
-  three places (ENGINE_FOLLOWUPS.md, Small ones). Two wider forms were timed in Chrome 154.0.8037.57 and dropped, as
-  valid input paid in each for an argument no app should pass. With `layout()`'s two fit tests negated into overflow
-  tests, so that its count asked the walkers' question, `layout()` of the bench's Arabic book read 3.4-4.8% slower in
-  each of three sessions (2026-10-01). With the function in the three streams too, those rows read within noise again
-  over three sessions, and the mixed stream row, which then paid the comparison for each line, read 1.7% and 3.4% slower
-  in a run of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
+- **2026-10-02: a `maxWidth` of `NaN` lays out as unbounded in the line APIs called once for a paragraph, and the
+  streams take it as given** (landed on judgement with #401). `NaN`, which a typed caller can pass, fails every
+  comparison, and the line loops ask some whether a segment fits and others whether it overflows. So since #340
+  `layout()` counted a line per grapheme where the other line APIs gave one line, and those reported a `NaN` width for a
+  pre-wrap line ending in spaces. `normalizeMaxWidth()` (`src/line-break.ts`) turns such a width into `Infinity` with
+  one comparison, once a call, in `layout()`, `layoutWithLines()`, `walkLineRanges()`, `measureLineStats()`,
+  `walkRichInlineLineRanges()` and `measureRichInlineStats()`, whose loops stay as written for numbers: none of their
+  results at `NaN` differs from the one at `Infinity` (8,000 cases drawn from the sets in each profile, offline).
+  `layoutNextLine()`, `layoutNextLineRange()` and `layoutNextRichInlineLineRange()` are called once for each line and
+  don't check: they return, break as at an unbounded width, and differ from `Infinity` in three places
+  (ENGINE_FOLLOWUPS.md, Small ones). Two wider forms were timed in Chrome 154.0.8037.57 and dropped, as valid input paid
+  in each for an argument no app should pass. With `layout()`'s two fit tests negated into overflow tests, so that its
+  count asked the walkers' question, `layout()` of the bench's Arabic book read 3.4-4.8% slower in each of three
+  sessions (2026-10-01). With the function in the three streams too, those rows read within noise again over three
+  sessions, and the mixed stream row, which then paid the comparison for each line, read 1.7% and 3.4% slower in a run
+  of two sessions and 3.4%, 11.2% and 1.4% in one of three (2026-10-02). In that run of three the mixed
   `walkLineRanges()` row, which pays the comparison once for a paragraph, read 1.2-1.4% slower in each session with the
   second copy of the base 0.5-1.1% slower, and in the run of two 2.4% faster and 2.8% slower; a run that reads it slower
-  in every session with the streams as on main would reopen the comparison there. A third form closed the streams'
-  three places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its
-  width, with `Math.max(0, maxWidth)` or, in rich inline then, `Math.max(1, maxWidth)`, and that clamp written as two
+  in every session with the streams as on main would reopen the comparison there. A third form closed the streams' three
+  places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its width,
+  with `Math.max(0, maxWidth)` or, in rich inline then, `Math.max(1, maxWidth)`, and that clamp written as two
   comparisons returns `Infinity` for a width that fails both. It changed no result at a number and left no line API's
-  result at `NaN` or `undefined` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed
-  `measureLineStats()` row 9.3% slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at
-  widths seen before 10.2%, each in all three sessions (2026-10-02; Dead Ends, Simplifications Held Back, has Chrome's
-  reading and the shells'). So `normalizeMaxWidth()` stays and the three places stay documented; a form that Firefox
-  reads level with main on those rows would take its place. Whether such a width should throw, as a `letterSpacing`
-  that isn't finite does (#356), is on the API discussion's list (TODO.md): in the six APIs a throw would go in that
-  one function, and in the streams it would cost the comparison for each line again.
+  result at `NaN` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed `measureLineStats()` row 9.3%
+  slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at widths seen before 10.2%, each in
+  all three sessions (2026-10-02; Dead Ends, Simplifications Held Back, has Chrome's reading and the shells'). So
+  `normalizeMaxWidth()` stays and the three places stay documented; a form that Firefox reads level with main on those
+  rows would take its place. Whether such a width should throw, as a `letterSpacing` that isn't finite does (#356), is
+  on the API discussion's list (TODO.md): in the six APIs a throw would go in that one function, and in the streams it
+  would cost the comparison for each line again.
 - **2026-10-03: the constants the line loops read stay `const`s, not const enums** (#406, closed unmerged), the
   maintainer's decision. Const enums gave Firefox 156.0.1's four slowest worst-case `layout()` and walk rows 7-14%, cost
   its Latin `layout()` at widths seen before 10-12%, and ended one row's dependence on a bundler's names (Keeping Work
@@ -5806,10 +5843,26 @@ decisions for the maintainer.
   before a padded item, and a line of only a tab before a padded line feed. One more went unnamed until 2026-10-09: the
   Gecko profile's line end at the white space before an item that starts with a bidi control and a space, which the
   stepper took at every such control and Firefox takes at some, by where the control's text frame ends; it stays a gap,
-  since putting it back trades (#463; Rich Inline Boundaries, Firefox's White-Space Run Across Items). It reopens if an
-  app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in an app, where
-  the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across
-  sibling spans, which wants the paragraph measured as well as analyzed whole.
+  since putting it back trades (#463; Rich Inline Boundaries, Firefox's White-Space Run Across Items). A sweep against
+  the stepper then named eight more, all rare text and none in the real-usage sample (2026-10-10; Rich Inline
+  Boundaries, Rich Inline As One Paragraph, has the sweep): a line for a ZWSP that is or starts an item after a space;
+  both edges for a padded item of only a ZWSP; a bidi control, ZWNJ or combining mark kept with its word after a chip
+  wider than its line; the `extraWidth` of a line that starts in a padded item's word beside a joiner or a bidi mark,
+  and of a hyphen's line where the item starts with a soft hyphen; in Firefox a padded item of only a bidi control as a
+  box where it stands, the hang that ends at a ZWSP in pre-wrap and a padded item that starts with a tab kept whole; and
+  the line end after a U+3000 run that a bidi control, ZWNJ or a combining mark follows in the next item.
+  ENGINE_FOLLOWUPS.md, Rich-inline item edges, has two more that are not among the eight: a line's width in Safari, a
+  space too wide where the line ends at a line separator after a space across an item's edge, and a trade in Chrome, the
+  halt of a closing mark that ends a padded item, 94 probe layouts lost and 124 gained (2026-10-06). The changelog lists
+  as worse than 0.0.9 only what 0.0.9 had right and an app could hold: the ZWSP's line after a space or after content
+  that overflows, the padded item of only a ZWSP, and Firefox's two around a soft hyphen and a bidi control between
+  spaces (CHANGELOG.md, the entry on rich inline as one paragraph). The rest 0.0.9 had wrong too, or is pre-wrap, which
+  its rich inline lacked, or is left out as text no app is expected to hold, though 0.0.9 had it right: a combining
+  mark, or a ZWNJ in an item of its own, right after a chip wider than its line; a joiner or a bidi mark in a padded
+  item's word, in a box narrower than that word; and in Firefox a padded item of only a bidi control. The decision
+  reopens if an app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in
+  an app, where the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with
+  kerning across sibling spans, which wants the paragraph measured as well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
@@ -5963,11 +6016,11 @@ decisions for the maintainer.
   negative than the letters are wide, so against a width under 0 as given such a paragraph is one line at 0 and down to
   its own width, and walked under it, into the lines the walkers give its text, where the fit has a gap
   (ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces): a width under 0 would then lay out otherwise
-  than 0. On the stand-in Canvas, 3,109 paragraphs made the same way, at 16 widths from −100 to 1.5px and at `NaN`,
-  `undefined` and `Infinity`, in each of the four profiles, the functions without the clamp give 3 paragraphs other
+  than 0. On the stand-in Canvas, 3,109 paragraphs made the same way, at 16 widths from −100 to 1.5px and at `NaN`
+  and `Infinity`, in each of the four profiles, the functions without the clamp give 3 paragraphs other
   lines at −100 than at 0, and with it none; a unit test holds one. Either form differs from main on 2,068 of the
   paragraphs at 0 (2,000 in the Gecko profile), on 1,693 at 0.5 (1,680 in the WebKit profile, 1,639 in the Gecko one)
-  and on none at 1px or wider or at a width that isn't a number, and none of the harness's invariants fails at these
+  and on none at 1px or wider or at `NaN`, and none of the harness's invariants fails at these
   widths. What differs is content narrower than 1px, several pieces of which the floor put on a line: text of 2px and
   under, boxes and padding of 1px and less, letters under a letter spacing about as negative as they are wide. A
   paragraph of ordinary text and items of no width breaks at 0 where it broke at the floor, and reports a pre-wrap line

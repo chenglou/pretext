@@ -18,8 +18,9 @@
 // fails its case instead of stalling the page, and so does a range that names no place in its text,
 // before its text is built, since builds before #353, which --lib can run, build the text of a range that ends at
 // segment Infinity without end. A cursor's place is found with the library's own graphemes (cursorOffsets), so the
-// adapter needs a build with src/graphemes.ts (from 2026-09-24). The offline invariants (invariants.ts) call the same
-// agreement checks and the same cursor map.
+// adapter needs a build with src/graphemes.ts (from 2026-09-24), and for a rich case one whose materialized fragments
+// have sourceStart and sourceEnd (#460). The offline invariants (invariants.ts) call the same agreement checks and the
+// same cursor map.
 import {
   layout, layoutNextLine, layoutNextLineRange, layoutWithLines, materializeLineRange, measureLineStats, prepare, prepareWithSegments,
   walkLineRanges, type LayoutCursor, type LayoutLineRange, type PrepareOptions, type PreparedTextWithSegments,
