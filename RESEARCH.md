@@ -3296,9 +3296,10 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   fields, 6 under the limit, and 463 with a 24th, a boolean at any position and read by nothing. With that one, Chrome
   154's plain line APIs ran 11-18% slower (mixed stats, walk and stream) and two worst-case `layout()` rows 3-7%, in two
   bench sessions of each of three builds. The bytes did it, not the field. Chrome 154.0.8037.57's V8, traced headless
-  (`--js-flags="--trace-turbo-inlining --trace-maglev-inlining"`), inlines the 454-byte function into
-  `countPreparedLines()` and the simple and rich steppers and refuses the 463-byte one ("exceeds bytecode limit"), as
-  Node 23's V8 12.9 does. There, on a stand-in Canvas, the 463-byte build read 11-18% slower on mixed stats, walk and
+  (`--js-flags="--trace-turbo-inlining --trace-maglev-inlining"`), inlined the 454-byte function into
+  `countPreparedLines()`, the simple stepper and the item stepper that laid rich inline out then (The Walkers' Shapes),
+  and refused the 463-byte one ("exceeds bytecode limit"), as Node 23's V8 12.9 did. There, on a stand-in Canvas, the
+  463-byte build read 11-18% slower on mixed stats, walk and
   stream and 7-21% on four `layout()` rows (medians of 10 sessions), a 462-byte one with no new field 7-18%, a 24th
   field of a constant value, which adds no bytecode, as main, and the 463-byte one as main with
   `--max-inlined-bytecode-size=470`. So the accessor is a function apart from `buildEngineProfile()`, 21 bytes whatever
@@ -3472,28 +3473,30 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
 - **A loop slows once a check in it has held**: a check in the counter's loop that handed unbroken-boundary lines to the
   full walker slowed counting all other text up to 1.6 times in Firefox and 1.3 in Chrome, though the check alone cost
   nothing (#350, 2026-09-26).
-- **A block that never runs**: since rich items continue their lines, Firefox 156 measured the bench's rich stats about
-  6% slower, and its rich walk and stream about 2%. It isn't the full walker, as #369 supposed (sending items on
-  fast-path handles back to the simple stepper read +0.2%): without the block at the top of the rich stepper's item loop
-  that records the break before a continued item, whose body never runs on the bench, rich stats read 4.7% faster,
-  faster than before #369 too. None of three plain restructurings took it back (the hang of the spaces before consumed
-  items in a function of its own, or left out, and the line's latest break as one record), so
-  it was accepted as a regression one JIT alone explains in live code (#370, 2026-09-28; Decisions Log, 2026-09-26, no
-  dead code for one JIT). Since the rich stepper stopped walking items whose first segment doesn't fit and tests for a
-  line that starts at an item's end only on its first item (The Walkers' Shapes, 2026-09-29), rich stats read 16% faster
-  than before #369, and without the block 5% faster still, at the rich row's floor.
-- **State a loop keeps for its rare paths**: with pre-wrap (#381), Chrome 154 and Firefox 156 read the bench's rich
-  stats, walks and streams of normal white space 5-9% slower than main, doing the same work: each stats pass visits
-  4,246 items, fits 2,781 whole and walks 13 in both, in every profile. With main's stepper in the branch, both read
-  within noise. The one pre-wrap check that ran on every item, whether the line keeps a padded item's opening, now runs
-  only where the line can't take the item's padding and before a walk, 52 times a pass, which Chrome read within noise
-  of running it on every item. In Chrome, with every pre-wrap statement that runs on normal text left out as well (the
-  hang bookkeeping, the retreat check before continued items, and the hang at the line's start and end), rich stats
-  still read 7-11% slower, and with the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%;
-  main with those three values kept alive read 2% slower. So it's how the JITs allocate the bigger loop's state, not
-  work, and it was accepted as a regression JIT placement alone explains in live code (#381, 2026-09-29). Chrome's 5-9%
-  on rich stats is the faster of two speeds a copy of that build takes, 11% apart (Evaluation Traps, Timing), so these
-  figures, two sessions each, hold both a variant's cost and the speed its copy took.
+- **A block that never runs**: from #369, when rich items began to continue their lines in the item stepper that laid
+  rich inline out until the one-paragraph design (The Walkers' Shapes), Firefox 156 measured the bench's rich stats
+  about 6% slower, and its rich walk and stream about 2%. It wasn't the full walker, as #369 supposed (sending items on
+  fast-path handles back to the simple stepper read +0.2%): without the block at the top of the stepper's item loop that
+  recorded the break before a continued item, whose body never ran on the bench, rich stats read 4.7% faster, faster
+  than before #369 too. None of three plain restructurings took it back (the hang of the spaces before consumed items in
+  a function of its own, or left out, and the line's latest break as one record), so it was accepted as a regression one
+  JIT alone explains in live code (#370, 2026-09-28; Decisions Log, 2026-09-26, no dead code for one JIT). Once the
+  stepper stopped walking items whose first segment didn't fit and tested for a line that starts at an item's end only
+  on its first item (The Walkers' Shapes, 2026-09-29), rich stats read 16% faster than before #369, and without the
+  block 5% faster still, at the rich row's floor.
+- **State a loop keeps for its rare paths**: with pre-wrap added to the item stepper that laid rich inline out then
+  (#381; The Walkers' Shapes), Chrome 154 and Firefox 156 read the bench's rich stats, walks and streams of normal white
+  space 5-9% slower than main, doing the same work: each stats pass visited 4,246 items, fitted 2,781 whole and walked
+  13 in both, in every profile. With main's stepper in the branch, both read within noise. The one pre-wrap check that
+  ran on every item, whether the line kept a padded item's opening, then ran only where the line couldn't take the
+  item's padding and before a walk, 52 times a pass, which Chrome read within noise of running it on every item. In
+  Chrome, with every pre-wrap statement that ran on normal text left out as well (the hang bookkeeping, the retreat
+  check before continued items, and the hang at the line's start and end), rich stats still read 7-11% slower, and with
+  the line's start, which only the rare pre-wrap paths read, made a constant, 4-5%; main with those three values kept
+  alive read 2% slower. So it was how the JITs allocated the bigger loop's state, not work, and it was accepted as a
+  regression JIT placement alone explains in live code (#381, 2026-09-29). Chrome's 5-9% on rich stats was the faster of
+  two speeds a copy of that build took, 11% apart (Evaluation Traps, Timing), so these figures, two sessions each, hold
+  both a variant's cost and the speed its copy took.
 - **The names a minifier picks, in Firefox**: Firefox 156 reads one bench row, `resize: latin layout at new widths`,
   about 16% slower or faster by nothing but the names the bench's minifier gives the bundle's top-level bindings. It is
   the one resize text whose lines hold words longer than the line (two rules of 72 hyphens, each 448px in 16px Helvetica
@@ -3506,7 +3509,7 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   | #405's branch before it took #394 to #403 (b9c9d758) | its own | +15.6%, +17.0%, +16.3% |
   | That main plus only the branch's new profile field, read by nothing | main's, all 410 | -3.5%, -0.5%, -4.3% |
   | The branch without that field | others than the branch's | -3.2%, +3.7%, +3.5% |
-  | That build plus one unused local in the rich stepper | the branch's, all 412 | +13.2%, +12.3%, +17.6% |
+  | That build plus one unused local in the item stepper | the branch's, all 412 | +13.2%, +12.3%, +17.6% |
   | The whole branch, the field read off the profile at its two uses | 14 differ from the branch's | -0.1%, -0.2%, -1.7% |
 
   So neither the field nor the rich code does it, and one local that nothing reads does. Main after #394 to #399 read
@@ -5479,7 +5482,7 @@ decisions for the maintainer.
   cost Chrome 154 up to 13%, and removing `countPreparedLines()`'s leading-space skip, a loop that never runs, kept on
   2026-09-24 for Firefox, read 3 and 7% slower in Firefox 156's two sessions on resizing Latin chat messages to new
   widths, within noise (#364). Counted on 2026-09-29, only one of the checks removed skipped work that mattered, the
-  rich stepper's line-start test, whose saving #375 took back plainly; the rest was placement or too small to read
+  item stepper's line-start test, whose saving #375 took back plainly; the rest was placement or too small to read
   (Keeping Work Bounded). A check that changes no result can still skip work, so count the work it skips before calling
   a slowdown one JIT's. Nor is a rule written out twice for one JIT: the Gecko scan's two text-run setups share one
   word-end test, whose call makes Firefox 156 prepare four kinds of row 2 to 5% slower than two copies would (#365; Bidi
