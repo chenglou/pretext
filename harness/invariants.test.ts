@@ -103,7 +103,7 @@ const PLANTS: ReadonlyArray<readonly [string, Profile, string, string, ReadonlyA
       'if (geometry !== null && fit.entryGeometry !== null && fit.entryGeometry.geometry !== null) {\n      Object.assign(fit.entryGeometry.geometry, geometry)\n      Object.assign(fit.entryGeometry, { letterSpacing, emojiCorrection })\n      return fit.entryGeometry.geometry\n    }\n    fit.entryGeometry = { letterSpacing, emojiCorrection, geometry }']], 'held handles'],
   ['a chip would be sized with its padding twice', 'unknown', 'extra-width-twice', 'rich-inline.ts',
     [[/width \+= item\.extraWidth \?\? 0/, 'width += 2 * (item.extraWidth ?? 0)']], 'rich lines'],
-  // The plant tells a box as the item of one segment whose sourceEnd is 0.
+  // A box is the only item of one segment whose sourceEnd is 0, which is how the next plant finds it.
   ['an image in a line would be painted twice, the second time over what follows it', 'unknown', 'box-twice', 'rich-inline.ts',
     [[/(end: \{ segmentIndex: to - first, graphemeIndex: 0 \} \}\n\s*fragments\.push\(fragment\))/, '$1\n        if (flow.sourceEnds![i] === 0 && itemSegments[itemIndex + 1] === i + 1) fragments.push({ ...fragment, gapBefore: 0, gapItemIndex: -1 })']], 'rich lines'],
   ['two words in items of their own would touch in Firefox, the space between them given no room', 'gecko', 'gap-joins-every-run', 'gecko-line-breaks.ts',
