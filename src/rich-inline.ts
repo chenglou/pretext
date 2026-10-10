@@ -827,7 +827,12 @@ function narrowsLine(data: PreparedSegments, itemSegments: number[]): boolean {
   return false
 }
 
-// Whether the paragraph's whole line fits `maxWidth`, as the walkers fit a line.
+// Whether the paragraph's whole line fits `maxWidth`, as the walkers fit a line. The line functions
+// hand it their width clamped at 0, as the walkers clamp the one they are handed. The line's width
+// here is signed, and under 0 where letter spacing is more negative than the letters are wide:
+// fitted against a width under 0 as given, such a paragraph would be one line down to its own
+// width and walked under it, where the walkers can end a line that the whole fit takes
+// (findWholeLine; RESEARCH.md, Decisions Log, 2026-10-09, rich inline's width).
 function fitsWhole(flow: InternalPreparedRichInline, maxWidth: number): boolean {
   return flow.wholeWidth !== null && flow.wholeWidth <= maxWidth + getEngineProfile().lineFitEpsilon
 }
@@ -1097,7 +1102,7 @@ export function layoutNextRichInlineLineRange(
   start: RichInlineCursor = RICH_INLINE_START_CURSOR,
 ): RichInlineLineRange | null {
   const flow = getInternalPreparedRichInline(prepared)
-  const safeWidth = Math.max(1, maxWidth)
+  const safeWidth = Math.max(0, maxWidth)
   if (start.itemIndex === 0 && start.segmentIndex === 0 && start.graphemeIndex === 0 && fitsWhole(flow, safeWidth)) {
     return flow.onlyItem >= 0 ? createOnlyItemLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0) : createLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0)
   }
@@ -1205,7 +1210,7 @@ export function walkRichInlineLineRanges(
   onLine: (line: RichInlineLineRange) => void,
 ): number {
   const flow = getInternalPreparedRichInline(prepared)
-  const safeWidth = Math.max(1, normalizeMaxWidth(maxWidth))
+  const safeWidth = Math.max(0, normalizeMaxWidth(maxWidth))
   if (fitsWhole(flow, safeWidth)) {
     onLine(flow.onlyItem >= 0 ? createOnlyItemLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0) : createLine(flow, flow.wholeWidth!, flow.wholeStart, 0, flow.wholeEnd, 0))
     return 1
@@ -1221,7 +1226,7 @@ export function measureRichInlineStats(
   maxWidth: number,
 ): RichInlineStats {
   const flow = getInternalPreparedRichInline(prepared)
-  const safeWidth = Math.max(1, normalizeMaxWidth(maxWidth))
+  const safeWidth = Math.max(0, normalizeMaxWidth(maxWidth))
   if (fitsWhole(flow, safeWidth)) return { lineCount: 1, maxLineWidth: Math.max(0, flow.wholeWidth!) }
   const stats = { lineCount: 0, maxLineWidth: 0 }
   walkPreparedLinesRaw(flow.data, safeWidth, undefined, stats)

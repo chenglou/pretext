@@ -1492,10 +1492,11 @@ are. Every engine tests a line at prefixes of it and lets no content make it nar
 so the premise holds wherever no item's advance is negative; a paragraph with such an item, as a letter under a letter
 spacing more negative than it is wide, is walked, and there a segment of less than no advance doesn't bring a line
 that overflows back. Inside one item the premise's gap is left, as in a paragraph of one item before
-(ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces). Preparation finds the line by one walk of the handle
-with no width limit, through `walkPreparedLinesRaw()` with a visitor of its own. What that visitor costs a later walk in
-Firefox and a later step in Safari, on CJK paragraphs, and the form without it that was measured and left out, are under
-Keeping Work Bounded, JavaScript Engines (The walker's visitor call).
+(ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces). The fit takes the width the walkers lay out at, one
+under 1px as given and one under 0 as 0 (Decisions Log, 2026-10-09, rich inline's width). Preparation finds the line by
+one walk of the handle with no width limit, through `walkPreparedLinesRaw()` with a visitor of its own. What that
+visitor costs a later walk in Firefox and a later step in Safari, on CJK paragraphs, and the form without it that was
+measured and left out, are under Keeping Work Bounded, JavaScript Engines (The walker's visitor call).
 
 Firefox's rules for an atomic item of width 0 (Objects Inside A Line) are stated about text frames. The paragraph's
 walker doesn't know where items start, so preparation finds for each such object what a line reads of the text around
@@ -2072,6 +2073,31 @@ Firefox cases of an 80,512-case probe and lost 220, most of which Firefox lays o
 and moved no Chrome or webkit-host case; since #372 (2026-09-28) an item of only white space and bidi controls between
 words takes one space, as in Firefox. What it still gets wrong, such as two spaces around a control at another level,
 which one gap in one item's font can't hold, is in ENGINE_FOLLOWUPS.md, Rich-inline item edges.
+
+A character the text run drops that starts an item right after an item's white space ends the run, so a space after it
+is a second space, and the scan gives the two one break, after the second. Firefox still ends a line between them where
+a character it keeps follows the second space inside the same text frame: the frame's piece on that line, its controls
+and the space, comes to no width, or on a line with no break yet the controls alone, and such a piece fits wherever it
+starts; where the space ends its frame the piece keeps its width, and a line with an earlier break goes back to it
+(ENGINE_FOLLOWUPS.md, Rich-inline item edges, has Firefox's sources and the widths). A frame ends with its item, and
+inside an item where the bidi level changes (Engine Facts, Firefox, Text frames), so which of the two Firefox does after
+a bidi control turns on levels the profile doesn't resolve. The Gecko analysis gives such a control no break, as the
+scan gives none before a space. The item stepper ended the line at the white space before the control, hung, at every
+such control, and the one-paragraph design lost that line end without naming it: since #460 items `aa see `,
+`\u200E this word` in 16px Arial take a line more than Firefox at 49-52px, and `see `, `\u200E this word` report a first
+line of 30.25px in a 26px box, a space wider than Firefox's and than 0.0.9's. It is rare text: no rich-inline draw of
+the real-usage sample holds a bidi control, and no harness case holds the shape. Putting the break back where a
+character the text run keeps follows the space in the space's own item, which takes an item for a frame, was built and
+not landed, as it trades (#463). On 44,281 layouts of 434 paragraphs built to hold the shape, it has 732 right that main
+at #461 has wrong and 344 wrong that main has right: 284 at a level change after the space, 40 at a padded item and 20
+at a CR. On the 19,977 of those layouts that put U+200E, U+202A, U+2066 or U+200F before Latin text in a left-to-right
+paragraph wherever the line has an earlier break, it is 160 and none (Firefox 156.0.1, 2026-10-09, eight probes that
+aren't checked in). Given only in text with no right-to-left character, where Firefox resolves no levels in a
+left-to-right paragraph, the break has 434 right and 60 wrong, at the padded items and the CRs; that was measured once
+and nobody else has checked it. ENGINE_FOLLOWUPS.md has the other forms measured. Each is a trade or a change to the
+walkers, so it waits for the maintainer (Part 1, Merge Bars And Landing). It reopens with a `direction` option
+(TODO.md), under which the profile can tell where a frame ends, or with a report of real text that has a bidi control at
+the start of a styled run.
 
 #### Atomic Items' Own White Space
 
@@ -4970,7 +4996,7 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
   at narrow widths, 17% slower at wide ones; one counter was kept.
 - **A width that isn't a number handled by the clamp each line loop already makes** (#409, closed unmerged,
   2026-10-02), in place of `normalizeMaxWidth()` at the entry of the six line APIs called once for a paragraph (#401).
-  Every line loop starts with `Math.max(0, maxWidth)`, or `Math.max(1, maxWidth)` in rich inline; written as two
+  Every line loop starts with `Math.max(0, maxWidth)`, or `Math.max(1, maxWidth)` in rich inline then; written as two
   comparisons, `maxWidth > least ? +maxWidth : maxWidth <= least ? least : Infinity`, the clamp gives `Infinity` for
   `NaN`, which fails both. That covered the three per-line streams too, so their three exceptions went
   (ENGINE_FOLLOWUPS.md, Small ones), for 2 library lines fewer and no result changed at a number. Firefox 156.0.1 read
@@ -5547,7 +5573,7 @@ decisions for the maintainer.
   second copy of the base 0.5-1.1% slower, and in the run of two 2.4% faster and 2.8% slower; a run that reads it slower
   in every session with the streams as on main would reopen the comparison there. A third form closed the streams'
   three places with no comparison added, and lost in Firefox (#409, closed unmerged): each line loop already clamps its
-  width, with `Math.max(0, maxWidth)` or, in rich inline, `Math.max(1, maxWidth)`, and that clamp written as two
+  width, with `Math.max(0, maxWidth)` or, in rich inline then, `Math.max(1, maxWidth)`, and that clamp written as two
   comparisons returns `Infinity` for a width that fails both. It changed no result at a number and left no line API's
   result at `NaN` or `undefined` different from the one at `Infinity`, but Firefox 156.0.1 read the mixed
   `measureLineStats()` row 9.3% slower than main, the mixed walk 7.8%, the mixed stream 1.7% and mixed `layout()` at
@@ -5760,10 +5786,13 @@ decisions for the maintainer.
   (ENGINE_FOLLOWUPS.md, Rich-inline item edges): the Gecko profile's hang of a space before a soft hyphen Firefox drops,
   which the stepper had as a profile field and the text walker lacks; a line of its own for a ZWSP after content that
   overflows, which the stepper gave an item of only a ZWSP; and in Firefox the spaces after a ZWSP or a soft hyphen
-  before a padded item, and a line of only a tab before a padded line feed. It reopens if an app needs cursors into each
-  item's own prepared text; if Safari's cost of preparing rich text shows in an app, where the removals that were
-  measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across sibling spans, which
-  wants the paragraph measured as well as analyzed whole.
+  before a padded item, and a line of only a tab before a padded line feed. One more went unnamed until 2026-10-09: the
+  Gecko profile's line end at the white space before an item that starts with a bidi control and a space, which the
+  stepper took at every such control and Firefox takes at some, by where the control's text frame ends; it stays a gap,
+  since putting it back trades (#463; Rich Inline Boundaries, Firefox's White-Space Run Across Items). It reopens if an
+  app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in an app, where
+  the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across
+  sibling spans, which wants the paragraph measured as well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
@@ -5901,3 +5930,38 @@ decisions for the maintainer.
   Reopens when a pinned browser moves, since the cost goes by itself if Firefox inlines a callee at a call with two
   targets or JavaScriptCore keeps a step's calls in its compiled tier; with a form that is plain and costs no engine; or
   with a real page where walking or stepping through one-item CJK rich paragraphs matters at this size.
+- **2026-10-09: rich inline's width is the one the text walkers lay out at, and its line functions clamp it at 0
+  themselves** (landed on judgement with #462, the last open item of #332). `measureRichInlineStats()`,
+  `walkRichInlineLineRanges()` and `layoutNextRichInlineLineRange()` laid every width under 1px out as 1px, as 0.0.9
+  did, where `layout()` and the other text line functions lay a width out as given and one under 0 as 0 (#272). No
+  browser has such a floor. On a probe that isn't checked in, 609 paragraphs were recorded at 0, 0.25, 0.5, 0.75 and
+  1px, 560 of them with content narrower than 1px and 49 of only 16px text, 3px boxes and items of no width. The lines
+  at 0px aren't the lines at 1px in 370 of them in Chrome 154.0.8037.98, 361 in Firefox 156.0.1 and 401 in webkit-host
+  (WebKit 22625.1.29.11.27), and at 0.5px in 326, 315 and 361, none of them among the 49: a span of `iiii` in 1px Arial
+  is 4, 4, 2, 2 and 1 lines at the five widths in all three (2026-10-09). In Firefox 38 more at 0px and 11 at 0.5px are
+  recorded otherwise with the same lines: Firefox clips a space that hangs to the box, and the recorder lists none
+  clipped to nothing. So the floor is 0, one constant in each of the three functions. It isn't dropped, though the
+  walkers clamp the width they are handed, because the whole line's fit reads the width before them (`fitsWhole()`,
+  `src/rich-inline.ts`). That fit is against the line's signed width, which is under 0 where letter spacing is more
+  negative than the letters are wide, so against a width under 0 as given such a paragraph is one line at 0 and down to
+  its own width, and walked under it, into the lines the walkers give its text, where the fit has a gap
+  (ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces): a width under 0 would then lay out otherwise
+  than 0. On the stand-in Canvas, 3,109 paragraphs made the same way, at 16 widths from −100 to 1.5px and at `NaN`,
+  `undefined` and `Infinity`, in each of the four profiles, the functions without the clamp give 3 paragraphs other
+  lines at −100 than at 0, and with it none; a unit test holds one. Either form differs from main on 2,068 of the
+  paragraphs at 0 (2,000 in the Gecko profile), on 1,693 at 0.5 (1,680 in the WebKit profile, 1,639 in the Gecko one)
+  and on none at 1px or wider or at a width that isn't a number, and none of the harness's invariants fails at these
+  widths. What differs is content narrower than 1px, several pieces of which the floor put on a line: text of 2px and
+  under, boxes and padding of 1px and less, letters under a letter spacing about as negative as they are wide. A
+  paragraph of ordinary text and items of no width breaks at 0 where it broke at the floor, and reports a pre-wrap line
+  of only spaces that hang as 0px wide where it reported 1px. A paragraph of one text item now has its text's lines at
+  every width but for the whole fit's gap: 2 of the 75 on the stand-in differ from their text at every width, where 29
+  did at 0 on main (28 in the Gecko profile). The rich set holds five paragraphs narrower than 1px, searched from 0px
+  (`harness/sets/rich.ts`): main fails 13, 15 and 13 of their 28, 30 and 27 cases in Chrome, Firefox and webkit-host,
+  each with a wrong line count, the change passes all, and no other prediction of the 43,394, 44,495 and 44,928 differs
+  from main's. On the probe the width given passes 640, 838 and 820 layouts that the floor failed, and fails 55, 40 and
+  13 that it passed, each of which main fails the same way at 16 times the size or the recorder can't see
+  (ENGINE_FOLLOWUPS.md, Rich-inline item edges, a box narrower than 1px). The clamp could sit in the fit alone, since
+  the walkers clamp for themselves; the functions' entries were timed statement by statement (Dead Ends, Simplifications
+  Held Back), so they keep their form and the constant changes. Reopens with a whole fit that takes the walkers' lines
+  under negative letter spacing, when the clamp can go.

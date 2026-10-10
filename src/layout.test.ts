@@ -3691,7 +3691,7 @@ describe('rich-inline invariants', () => {
       return { count, lines, stream, stats: measureRichInlineStats(prepared, maxWidth) }
     }
     const texts = ['alpha beta gamma delta', 'A B', 'supercalifragilistic word', '​ab cd', 'ab­cd ef', ' lead trail ', '­ab cd', 'ab cd ef', ' ​', '­']
-    const widths = [-1, 0.5, 1, 8, 12, 20, 37.5, 60, 1000, Infinity]
+    const widths = [-1, 0, 0.5, 1, 8, 12, 20, 37.5, 60, 1000, Infinity]
     const expectSame = (text: string, options: Parameters<typeof prepareRichInline>[1], letterSpacings: readonly number[], font = FONT) => {
       for (const letterSpacing of letterSpacings) {
         for (const style of [{}, { break: 'never' as const }, { extraWidth: 3 }]) {
@@ -3703,10 +3703,8 @@ describe('rich-inline invariants', () => {
       }
     }
     for (const text of texts) expectSame(text, undefined, [0, -6, -12, 2])
-    // A width under 1px lays out as 1px, where two words of a 0.5px font fit a line each, and
-    // two items of a 0.25px font fit one line.
+    // So does text that the widths under 1px break, two words of a 0.5px font.
     expectSame('ab cd', undefined, [0], '0.5px Test Sans')
-    expect(measureRichInlineStats(prepareRichInline([{ text: 'ab ', font: '0.25px Test Sans' }, { text: 'cd', font: '0.25px Test Sans' }]), 0.5).lineCount).toBe(1)
     // So do an item holding a hard break or a tab, as every line feed and tab of a pre-wrap
     // paragraph is, and U+2028 in the WebKit profile, and one whose start a line start consumes
     // past its first segment, as the Gecko profile's does where it starts with white space and
@@ -3742,6 +3740,63 @@ describe('rich-inline invariants', () => {
     const whole = prepareRichInline([{ text: 'A B', font: FONT, letterSpacing: -6 }])
     expect(measureRichInlineStats(whole, 8).lineCount).toBe(1)
     expect(measureLineStats(prepareWithSegments('A B', FONT, { letterSpacing: -6 }), 8).lineCount).toBe(2)
+  })
+
+  test('a rich paragraph lays out at the width given under 1px, and at 0 under 0', () => {
+    // A browser lays a paragraph's spans out in a box 0.5px or 0px wide as it lays their text out
+    // there, with no floor at 1px, and the text walkers lay a width under 0 out as 0. The rich
+    // line functions hand them the width so. Each line here is its fragments' text, a space for
+    // a gap, and its width; the three line functions agree.
+    const round = (width: number): number => Math.round(width * 1e6) / 1e6
+    const lineOf = (prepared: ReturnType<typeof prepareRichInline>, range: Parameters<typeof materializeRichInlineLineRange>[1]): [string, number] => [
+      materializeRichInlineLineRange(prepared, range).fragments.map(fragment => `${fragment.gapItemIndex >= 0 ? ' ' : ''}${fragment.text}`).join(''), round(range.width),
+    ]
+    const lay = (prepared: ReturnType<typeof prepareRichInline>, maxWidth: number): Array<[string, number]> => {
+      const lines: Array<[string, number]> = []
+      expect(walkRichInlineLineRanges(prepared, maxWidth, range => { lines.push(lineOf(prepared, range)) })).toBe(lines.length)
+      const stream: Array<[string, number]> = []
+      for (let range = layoutNextRichInlineLineRange(prepared, maxWidth); range !== null && stream.length <= lines.length; range = layoutNextRichInlineLineRange(prepared, maxWidth, range.end)) stream.push(lineOf(prepared, range))
+      expect({ maxWidth, stream }).toEqual({ maxWidth, stream: lines })
+      const stats = measureRichInlineStats(prepared, maxWidth)
+      expect({ maxWidth, lineCount: stats.lineCount, maxLineWidth: round(stats.maxLineWidth) }).toEqual({ maxWidth, lineCount: lines.length, maxLineWidth: Math.max(0, ...lines.map(line => line[1])) })
+      return lines
+    }
+    // A paragraph of one text item has its text's lines at every width. In the 0.5px font a
+    // letter is 0.3px wide and a space 0.165px, so a width of 1px fits a word and one of 0.5px
+    // a letter.
+    const TINY = '0.5px Test Sans'
+    const texts: Array<[string, string, Parameters<typeof prepareRichInline>[1]]> = [
+      ['ab cd', TINY, undefined], ['ab cd', FONT, undefined], ['ab\u00ADcd\u200Bef', TINY, undefined], ['ab  cd \n e', TINY, { whiteSpace: 'pre-wrap' }], ['   ', FONT, { whiteSpace: 'pre-wrap' }],
+    ]
+    for (const [text, font, options] of texts) {
+      const one = prepareRichInline([{ text, font }], options)
+      const plain = prepareWithSegments(text, font, options)
+      for (const maxWidth of [-5, -0.5, 0, 0.2, 0.5, 0.7, 1, 1.4]) {
+        const lines = layoutWithLines(plain, maxWidth, LINE_HEIGHT).lines.map((line): [string, number] => [line.text, round(line.width)])
+        expect({ text, font, maxWidth, lines: lay(one, maxWidth) }).toEqual({ text, font, maxWidth, lines })
+      }
+    }
+    const words = prepareRichInline([{ text: 'ab cd', font: TINY }])
+    expect(lay(words, 1)).toEqual([['ab ', 0.6], ['cd', 0.6]])
+    for (const maxWidth of [0.5, 0.2, 0, -0.5, -5]) expect(lay(words, maxWidth)).toEqual([['a', 0.3], ['b ', 0.3], ['c', 0.3], ['d', 0.3]])
+    // So has a paragraph of several items that is narrower than 1px. Two items of a 0.25px font
+    // are one line from their width, 0.6825px, a word a line at 0.5px and a letter a line at
+    // 0.2px and under.
+    const QUARTER = '0.25px Test Sans'
+    const items = prepareRichInline([{ text: 'ab ', font: QUARTER }, { text: 'cd', font: QUARTER }])
+    expect(lay(items, 1)).toEqual([['ab cd', 0.6825]])
+    expect(lay(items, 0.5)).toEqual([['ab', 0.3], ['cd', 0.3]])
+    for (const maxWidth of [0.2, 0, -0.5, -5]) expect(lay(items, maxWidth)).toEqual([['a', 0.15], ['b', 0.15], ['c', 0.15], ['d', 0.15]])
+    // A pre-wrap line of only spaces, which hang, is as wide as the width that holds them.
+    const spaces = prepareRichInline([{ text: '  ', font: FONT }, { text: ' ', font: '700 16px Test Sans' }], { whiteSpace: 'pre-wrap' })
+    expect([1, 0.5, 0, -5].map(maxWidth => lay(spaces, maxWidth))).toEqual([[['   ', 1]], [['   ', 0.5]], [['   ', 0]], [['   ', 0]]])
+    // A width under 0 is 0 to the whole line's fit too (fitsWhole in rich-inline.ts). At -14px
+    // `A B` is narrower than nothing, and one line at 0, where its text has two. Fitted against
+    // a width under 0 as given, it would be one line down to its own width and two under it.
+    const whole = prepareRichInline([{ text: 'A B', font: FONT, letterSpacing: -14 }])
+    expect(measureRichInlineStats(whole, Infinity).maxLineWidth).toBe(0)
+    expect([0, -1, -5, -100].map(maxWidth => lay(whole, maxWidth).length)).toEqual([1, 1, 1, 1])
+    expect(layoutWithLines(prepareWithSegments('A B', FONT, { letterSpacing: -14 }), 0, LINE_HEIGHT).lineCount).toBe(2)
   })
 
   test('a following negative-advance rich item cannot undo forced overflow', () => {

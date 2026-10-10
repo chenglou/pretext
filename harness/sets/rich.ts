@@ -94,7 +94,18 @@
 //   the first span's (alignToSource in src/analysis.ts; ENGINE_FOLLOWUPS.md, White space and controls); and a line
 //   separator that ends a span before the paragraph's last span, of one space, at which Safari's line ends
 //   (mapSourceLineBreaks in src/analysis.ts), right after a word and after a space: there the cut takes the width at
-//   which the word fits and the space doesn't, where the separator laid out as a control took a line of its own.
+//   which the word fits and the space doesn't, where the separator laid out as a control took a line of its own;
+// - paragraphs narrower than 1px in boxes narrower than 1px, which a browser lays out as it lays out any other, and
+//   which rich inline's line functions laid out as in a 1px box: `ii` in 1px Arial in a span before an empty span, a
+//   paragraph of one item, which the adapter writes with rich-inline for the empty span and whose lines are its
+//   text's; two items with a collapsed space between them; two boxes 0.5px wide; a ZWSP in an item of its own before
+//   a 0.5px box, which holds a line where the box doesn't fit after it; and in pre-wrap a preserved space, which
+//   hangs, before a word that breaks between its letters. Each is searched from 0px, by its own widths, where the
+//   search starts every other template at 1px. The cut pins no case at 0px itself, where each template's lines are
+//   those of its narrowest case. In Firefox the pre-wrap one's cases at 0.001px, which Firefox lays out in a box of no
+//   width, and at 0.032px pin the same three lines: Firefox clips a space that hangs to the box, the recorder lists
+//   none clipped to nothing, and the search took that for a change of lines. None holds a padded span or a chip, whose
+//   edges and width the browsers fit their own ways at every size (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -339,6 +350,19 @@ export function richTemplates(): Template[] {
   for (let i = 0; i < controls.length; i++) {
     const [family, parts, test = 'a carriage return in a rich paragraph is what its text has in one item'] = controls[i]!
     out.push(template(`item-edges/${family}`, `a lone carriage return, or a line separator before white space, at an item's edge in normal white space (src/layout.test.ts, ${test})`, ARIAL, parts))
+  }
+  // Paragraphs narrower than 1px: an `i` of 1px Arial is 0.22px wide. Their own widths start the search at 0px.
+  const tiny = font('Arial', 1)
+  const narrow: ReadonlyArray<readonly [string, readonly TextRun[], Paragraph['whiteSpace']?]> = [
+    ['one-item', [span('ii', tiny), item('')]],
+    ['items', [span('i', tiny), span(' i', ITALIC(tiny))]],
+    ['boxes', [box(0.5, 20, ARIAL), box(0.5, 20, ARIAL)]],
+    ['zero-width', [item('\u{200B}'), box(0.5, 20, ARIAL)]],
+    ['pre-wrap', [span(' ', tiny), span('ii', tiny)], 'pre-wrap'],
+  ]
+  for (let i = 0; i < narrow.length; i++) {
+    const [family, parts, whiteSpace] = narrow[i]!
+    out.push({ ...template(`under-1px/${family}`, 'a paragraph narrower than 1px in a box narrower than 1px (src/layout.test.ts, a rich paragraph lays out at the width given under 1px, and at 0 under 0)', ARIAL, parts, 'en', 'normal', whiteSpace), widths: [0, 0.5] })
   }
   return out
 }
