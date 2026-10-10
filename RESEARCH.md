@@ -2968,21 +2968,22 @@ time (the PRs hold the per-row tables):
   where a line's space overflows the walkers' sums differ in the last bits (99 of 96,470 offline Gecko-profile line
   checks; #350, 2026-09-26). A space before a bidi control was such a boundary in Firefox until #368 gave the control to
   the space's segment (Break Opportunities From Engine Data).
-- **The simple stepper continuing a rich-inline line**: the plain line APIs' stats, walks and streams of mixed text at
-  1.39-1.64 in Safari, 1.10-1.13 in Chrome and 1.06-1.07 in Firefox, so items on fast-path handles continue their lines
-  in the full walker (#369, 2026-09-27).
+- **The simple stepper continuing a rich-inline line**, while rich inline stepped item by item (Rich Inline Boundaries,
+  Continuing The Line): the plain line APIs' stats, walks and streams of mixed text at 1.39-1.64 in Safari, 1.10-1.13 in
+  Chrome and 1.06-1.07 in Firefox, so items on fast-path handles continued their lines in the full walker (#369,
+  2026-09-27).
 
 Removing the three pieces #357 kept for Chrome's JIT (#364; Decisions Log, 2026-09-26), namely checks in rich inline's
-stepper that change no result, a redundant `unfitHyphenRetreat` test and the peeled first character of the segmentation
-loop, cost Chrome 154 11% on rich stats, 5% on letter-spaced CJK `layout()` and 8-13% on preparing long breakable runs
-and pre-wrap chunks, in both sessions; Firefox 156 moved 2% at most, and Safari 27 only on resizing Arabic to widths it
-had laid out before (13%, where the bench's control, a second copy of main, moved 5%). All of it was taken as placement
-then. Counting the work each piece skips, with each put back as #364 removed it and no Chrome prediction moving (Chrome
-154 and Node 23's V8, all three back in one bench, 2026-09-29), sorts them:
+item stepper (below) that changed no result, a redundant `unfitHyphenRetreat` test and the peeled first character of the
+segmentation loop, cost Chrome 154 11% on rich stats, 5% on letter-spaced CJK `layout()` and 8-13% on preparing long
+breakable runs and pre-wrap chunks, in both sessions; Firefox 156 moved 2% at most, and Safari 27 only on resizing
+Arabic to widths it had laid out before (13%, where the bench's control, a second copy of main, moved 5%). All of it was
+taken as placement then. Counting the work each piece skips, with each put back as #364 removed it and no Chrome
+prediction moving (Chrome 154 and Node 23's V8, all three back in one bench, 2026-09-29), sorts them:
 - **Skipped work**: the stepper's line-start test spared the read of an item's segment count on almost every item it
-  visits, which #375 took back with that test on the line's first item only (below). Its early return spares the setup
-  of the one call per paragraph that finds nothing left, 147 of a stats pass's 946 calls and about 0.5% of its time;
-  with it back Chrome's rich stats read 0.6% slower, within noise, so it stays out.
+  visited, which #375 took back with that test on the line's first item only (below). Its early return spared the setup
+  of the one call per paragraph that found nothing left, 147 of a stats pass's 946 calls and about 0.5% of its time;
+  with it back Chrome's rich stats read 0.6% slower, within noise, so it stayed out.
 - **Placement**: the `unfitHyphenRetreat` test is never reached on the rows that slowed, whose texts have no soft-hyphen
   contexts, and with it back Chrome laid out letter-spaced CJK 1.6% faster, within noise. The peel spares one compare
   per unit and one regular expression test per text, yet with it back Chrome prepared pre-wrap chunks 11.6% faster and
@@ -3002,26 +3003,27 @@ Boundaries, Rich Inline As One Paragraph), and stay as the record of what its ch
 
 The stepper's skip of a step that doesn't advance was live code from #369, which ended a line there after content.
 
-After content, the rich stepper doesn't walk an item whose first segment doesn't fit: the full walker there only ends
-the line before the item, as the stepper now does itself. `firstSegmentOverflows()` repeats the walker's fit for that
-segment, a copy a comment in the walker points to. That leaves 6 of the 439 walks in a stats pass over the bench's rich
+After content, the item stepper didn't walk an item whose first segment didn't fit: the full walker there only ended the
+line before the item, as the stepper then did itself. Its `firstSegmentOverflows()` repeated the walker's fit for that
+segment, a copy a comment in the walker pointed to. That left 6 of the 439 walks in a stats pass over the bench's rich
 texts: Chrome 154's rich stats read 18% faster and Firefox 156's 23%, their rich walks and streams 11-13% (2026-09-29).
 Testing for a line that starts at an item's end, as after a hard break, only on the line's first item, the one item that
-can, instead of on every item it visits, made Chrome's rich stats 9% faster again, within noise in Firefox: that test's
-reads were what #364's removed check had skipped. Chrome's rich stats now read 18% faster than main before #340, where
+can, instead of on every item it visited, made Chrome's rich stats 9% faster again, within noise in Firefox: that test's
+reads were what #364's removed check had skipped. Chrome's rich stats then read 18% faster than main before #340, where
 main at #372 read 7% slower. Against main, Safari 27's rich stats read 14% faster, and Chrome's mixed stats, whose code
-didn't change (the minified `layout.ts` bundle is the same), 2% slower in two of four runs, accepted as V8's placement
-of the changed bundle (#375). Since #381 a copy of the library runs Chrome's rich stats at one of two speeds 11% apart
+didn't change (the minified `layout.ts` bundle was the same), 2% slower in two of four runs, accepted as V8's placement
+of the changed bundle (#375). From #381 a copy of the library ran Chrome's rich stats at one of two speeds 11% apart
 (Evaluation Traps, Timing), and the figure against main before #340 hasn't been timed since.
 
-A paragraph of one rich item takes the text walkers where the rich stepper would lay it out as they lay out its handle:
-no `extraWidth`, not atomic, no hard break, and nothing a line start consumes at its start (`onlyItem`, chosen once in
-`prepareRichInline()`). Its line functions take the item's whole fit, which the text walkers lack
-(ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces), then walk its handle as `measureLineStats()`,
-`walkLineRanges()` and `layoutNextLineRange()` do. Through the rich stepper, such a paragraph counted its lines at about
-2.5 times `measureLineStats()`'s cost in Chrome 154, and 15,256 of the Markdown chat's 17,688 prose blocks over its
-10,000 messages are one item. The chat's height pass, `layoutConversation()`, reads 25-26% faster in Chrome 154, 23-24%
-in Firefox 156.0.1 and 17-22% in Safari 27 (2026-09-29). The results are the rich stepper's field by field, on the
+From #383 a paragraph of one rich item took the text walkers where the item stepper would have laid it out as they lay
+out its handle: no `extraWidth`, not atomic, no hard break, and nothing a line start consumes at its start (the
+stepper's `onlyItem`, chosen once in `prepareRichInline()`; the one-paragraph design has a field of that name under
+another rule). Its line functions took the item's whole fit, which the text walkers lack (ENGINE_FOLLOWUPS.md, Negative
+letter spacing and hanging spaces), then walked its handle as `measureLineStats()`, `walkLineRanges()` and
+`layoutNextLineRange()` do. Through the item stepper, such a paragraph had counted its lines at about 2.5 times
+`measureLineStats()`'s cost in Chrome 154, and 15,256 of the Markdown chat's 17,688 prose blocks over its 10,000
+messages are one item. The chat's height pass, `layoutConversation()`, read 25-26% faster in Chrome 154, 23-24% in
+Firefox 156.0.1 and 17-22% in Safari 27 (2026-09-29). The results were the item stepper's field by field, on the
 stand-in Canvas over 6,267 inputs at 13 widths in all four profiles, and in Chrome, Firefox and webkit-host with every
 plain case in white-space: normal predicted as one item. The bench's rich rows, whose paragraphs had an item per word
 then, read within noise.
@@ -4956,8 +4958,8 @@ model below; most are parked for the API discussion (TODO.md), not refuted.
     and the fit depend on the text beside it, so it gains the loop and decides nothing at the edge; and a paragraph
     with k objects takes k+1 handles, a step that can ask the app to redo the run before (the WebKit profile's return
     to the break before an object), and no stats in one call, all worse for virtualized lists. Reopens for text glued
-    to an object, such as `$x$,` kept with its comma, which no width expresses and which needs the rich stepper's
-    pending break.
+    to an object, such as `$x$,` kept with its comma, which no width expresses: the line's latest break would cross the
+    object too, the full walker's pending break (`pendingBreakSegmentIndex` in `src/line-break.ts`).
   - *The app splits the paragraph at its objects and lays each run out with today's API.* A run laid out alone doesn't
     know what its line already holds: `xy `, a 24px object and ` abc def` at 60px are `xy`, the object / `abc def` as
     one paragraph and `xy`, the object, `ab` / `c def` split, a word broken and the gaps beside the object lost.
