@@ -4,7 +4,8 @@ Each case's layout in the browser is recorded once per browser build and kept in
 browser, as an app does, and are scored against it. `harness/cli.ts`'s header lists the commands, and each file's header
 its part. Dated measurements are from an M5 Max under macOS 27.0 (26A428) at device pixel ratio 2, in Chrome 153,
 Firefox 156.0 and Safari 27.0 (WebKit 22625.1.29.11.27); the pins moved to Chrome 154.0.8037.57 and Firefox 156.0.1 on
-2026-09-25 and Chrome's to 154.0.8037.98 on 2026-10-06, and every recording stayed the same.
+2026-09-25, Chrome's to 154.0.8037.98 on 2026-10-06 and Firefox's to 157.0.1 on 2026-10-10, and every recording stayed
+the same but for 15 line widths at the last move, which Firefox 156.0.1 records as 157.0.1 does (Browsers and pins).
 
 ## Setup
 
@@ -416,6 +417,13 @@ pinned, and a macOS update moves all three browsers (system fonts, Core Text, IC
 with the new build into a scratch copy of the recordings and prints the cases laid out otherwise, the new page history,
 and whether the browser still holds the files of `scripts/engine-data/` that its `sources.json` lists: the engines'
 compiled break rules and ICU's character properties, not the two pair tables (DEVELOPMENT.md, Engine Data).
+
+Firefox's pin went from 156.0.1 to 157.0.1 on 2026-10-10, four days after the installed Firefox updated itself. The two
+builds recorded all 44,881 cases alike that day, lines, widths and height, and 157.0.1 holds the same break data.
+Against the recordings kept until then no case starts or ends a line elsewhere, and 15 differ in a line width, in both
+builds alike: each was page history with two recordings a width apart until page history was decided on line ends
+(2026-09-30), so its width moves with what the process laid out before. Those 15 widths are all the repin changed in
+the recordings.
 
 webkit-host lays text out as Safari 27.0 does: the same line geometry on 25,180 cases in both orders (2026-09-17, in
 the per-engine rebuild's harness) and on installed Safari's 2,000-case sample here, where the 1,990 cases pinned in both
