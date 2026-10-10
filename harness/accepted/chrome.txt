@@ -3,7 +3,7 @@ report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
 
-## A U+3000 that ends a rich item before an item that starts with a bidi control, at 48-64 px, where the text before the U+3000 fits its line and the U+3000 doesn't: Chrome hangs the U+3000 and starts the next line with the control, which holds that line where nothing visible follows (not traced); the Blink profile hangs a U+3000 only before a break (addIdeographicSpaceHangs in src/prepare.ts) and the scan gives none between it and the control, so the line goes back to its last break and the last ideograph goes down with the U+3000 (ENGINE_FOLLOWUPS.md, Line edges)
+## A U+3000 that ends a rich item before an item that starts with a bidi control, at 48-64 px, where the text before the U+3000 fits its line and the U+3000 doesn't: Chrome hangs the U+3000 and starts the next line with the control, which holds that line where nothing visible follows (not traced); the Blink profile gives the U+3000 its hang (addIdeographicSpaceHangs in src/prepare.ts), but the scan gives no break between it and the control, so no line ends there: the line goes back to its last break and the last ideograph goes down with the U+3000 (ENGINE_FOLLOWUPS.md, Line edges)
 rich-733f760999ec0f9b breaks
 rich-af8dbf9c285cccf5 breaks
 rich-b9080d784d51b25b breaks
@@ -1948,7 +1948,6 @@ rich-34b0481d2ee26169 count
 rich-40018982415644fb count
 rich-449749f2687176be breaks
 rich-4e7797d2c399aac5 breaks
-rich-52fa7e63fe33acfe count
 rich-5d9782cd7b729d95 count
 rich-76a88e2b5c4011a2 count
 rich-777fd9b2ae6d3d24 count
@@ -1965,7 +1964,6 @@ rich-c26cf717c3859584 count
 rich-c4e4c9df352e98e5 count
 rich-ddca88239fb74e75 breaks
 rich-eb45f8c12b7c6cda count
-rich-fe36b006ae83e09d count
 
 ## Narrower than real layouts: 4-9 px, white space and soft hyphens in items before a ZWSP where a line starts: Chrome keeps the space after the first soft hyphen visible there, where the library consumes both, as it does in one text; these passed only while a line gave an item its start consumes an empty fragment, whose range held that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-f42418c66dcadfef breaks
@@ -3162,6 +3160,7 @@ rich-0fd068ce5f126fef count
 rich-112fa3ba1cca94b2 count
 rich-11c49eccf08f18c8 count
 rich-13fa0b66ebfc4b40 count
+rich-15a6bf021414df3b count
 rich-15e756bb89d49f7a count
 rich-166322a1778d474c count
 rich-1b6c31057b2e7634 count

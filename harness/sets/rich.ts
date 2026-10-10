@@ -138,8 +138,8 @@
 //   - a padded item that starts with ZWNJ inside a word, as a highlight that starts there, where a line cuts the word
 //     right after the ZWNJ: every line of the item carries its padding in Firefox and Chrome, and the line that starts
 //     after the ZWNJ carries none in rich inline (insideExtras in src/line-break.ts), so it holds a letter more; and
-//     the same item without the ZWNJ, whose lines all carry it. In Chrome both also break otherwise where a line ends
-//     inside the padded item, which Chrome fits without the item's end edge;
+//     the same item without the ZWNJ, whose lines all carry it. In Chrome both templates also have other lines than
+//     rich inline's where a line ends inside the padded item, which Chrome fits without the item's end edge;
 //   - in pre-wrap, a padded item of only a bidi control: a box as wide as its padding where it stands in Firefox, where
 //     the Gecko profile, which has no segment for a character Firefox drops, puts the padding on the word after it; and
 //     the control with that word's first letter in the padded item, whose padding is on the letter;
@@ -167,8 +167,9 @@
 //     ends the paragraph, and in the Blink profile where text follows it (addIdeographicSpaceHangs in src/prepare.ts);
 //     and the text right after the U+3000, before which the Blink and Gecko profiles hang it;
 // - shapes at an item's edge where the one analysis of the joined text gives every browser's lines (RESEARCH.md, Rich
-//   Inline As One Paragraph): an item that starts with a bidi isolate right after a dash, and with a left-to-right mark
-//   right after an ideograph, where the line ends after the joined text and the word after it stays whole; an item that
+//   Inline As One Paragraph): an item that starts with a bidi isolate right after a dash, and with ZWNJ right after an
+//   ideograph, where Chrome's and Firefox's line ends after the joined text and the word after it stays whole, and
+//   Safari, which gives no break at such an item's start, goes back to an earlier break or cuts the word; an item that
 //   starts with a hyphen before an Arabic word, right after a letter, whose word is one segment measured with its
 //   letters joined, after one letter so that a width the cut takes inside a layout holds the word joined and not its
 //   letters apart; a chip of only a ZWSP between two spaces, a box as wide as its padding beside which both spaces
@@ -454,7 +455,7 @@ export function richTemplates(): Template[] {
     'pre-wrap/zwsp-ends-hanging-spaces': `white-space: pre-wrap, a space and a ZWSP that end an item before an item that starts with a space ${gap}`,
     'pre-wrap/tab-starts-padded-item': `white-space: pre-wrap, a padded item that starts with a tab ${gap}`,
     'item-edges/ideographic-space-before-control': `a U+3000 that ends an item before an item that starts with a bidi control ${gap}`,
-    'item-edges/control-starts-item': `an item that starts with a bidi control right after another item's text ${design}`,
+    'item-edges/control-starts-item': `an item that starts with a bidi isolate or ZWNJ right after another item's text ${design}`,
     'item-edges/hyphen-starts-item': `an item that starts with a hyphen before an Arabic word, right after another item's letter ${design}`,
     'item-edges/invisible-chip': `a chip of only a ZWSP ${design}`,
     'item-edges/padded-soft-hyphen-item': `a padded item of only a soft hyphen ${design}`,
@@ -494,7 +495,7 @@ export function richTemplates(): Template[] {
     ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('\u{200F}', JAPANESE), item('次', JAPANESE)], 'ja'],
     ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('次', JAPANESE)], 'ja'],
     ['item-edges/control-starts-item', ARIAL, [item('posted\u{2014}'), item('\u{2068}Dana\u{2069} today')]],
-    ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200E}on', JAPANESE)], 'ja'],
+    ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200C}on', JAPANESE)], 'ja'],
     ['item-edges/hyphen-starts-item', ARIAL, [item('e'), item('-\u{643}\u{62A}\u{627}\u{628}')], 'ar'],
     ['item-edges/invisible-chip', HELVETICA, [item('some text ', HELVETICA), chip('\u{200B}'), item(' more text', HELVETICA)]],
     ['item-edges/padded-soft-hyphen-item', ARIAL, [item('see '), padded('\u{AD}', 4), item('-saw')]],
