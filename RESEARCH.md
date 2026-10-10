@@ -1024,8 +1024,9 @@ table, `gecko/char`, reads Chrome's rules past them, and such a character takes 
 the segment's graphemes for each soft hyphen or bidi control before the cursor (`\u2068Bartholomew\u2069 joined` at 40px
 ends its first line at grapheme 4, after `\u2068Bart`; 2026-09-30). `materializeLineRange()` from the segment's start
 to a cursor inside it gives the text before the cursor in every profile. Counting those characters would take a
-cluster of no width that no line may end before, the zero-width glue #368 rejected (Decisions Log, 2026-09-27); it
-reopens with a public way from cursors to source offsets (#90).
+cluster of no width that no line may end before, the zero-width glue #368 rejected (Decisions Log, 2026-09-27), and
+source offsets don't need it: a materialized rich-inline fragment says where it starts and ends in its item's `text`,
+those characters counted (`sourceStart`, `sourceEnd`; Rich Inline Boundaries, Rich Inline As One Paragraph).
 
 The tables don't follow a browser to another Unicode version: Node 23's ICU 77.1 (Unicode 16) differs on 1,417 code
 points, 689 symbols Unicode 17 took out of Extended_Pictographic (the chess symbols, playing cards), which no longer
