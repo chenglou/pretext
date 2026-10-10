@@ -1460,13 +1460,13 @@ control that ends the paragraph is kept with the run's segment (the sweep after 
 
 What an item carries of its own goes on its segments. Its `extraWidth` is in the width of its first segment that takes
 room, and a line that starts later in the item adds it there (`lineStartExtras`, and `insideExtras` and `fillExtras`
-where the line starts inside a segment, but not yet where it starts inside a word at a joiner or a bidi mark, whose
-widths are measured afresh: the sweep after the merge, below); an item that opens with preserved white space, a hard
-break or a zero-width space gets a start edge of its own, an empty segment the line fits by the edges the engine fits
-there (`getOpeningFit()`). The handle's letter spacing is the one the items share, and where they differ each segment's
-width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a tab advances are per segment
-where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one segment of kind `OBJECT`, with a
-break on both sides and none inside.
+where the line starts inside a segment, except where it starts inside a word beside a joiner or a bidi mark, whose
+widths are measured afresh and leave it out, a named gap: the sweep after #460, below); an item that opens with
+preserved white space, a hard break or a zero-width space gets a start edge of its own, an empty segment the line fits
+by the edges the engine fits there (`getOpeningFit()`). The handle's letter spacing is the one the items share, and
+where they differ each segment's width holds its item's; the hyphen a soft hyphen paints, the tab stops and the least a
+tab advances are per segment where two items differ in one (`ParagraphSegmentData`). An atomic item or a box is one
+segment of kind `OBJECT`, with a break on both sides and none inside.
 
 That replaced a second line walker for rich inline, which analyzed each item's text on its own, patched it toward the
 text the items join and stepped item by item, calling the text walker for one item at a time (Continuing The Line has
@@ -5829,12 +5829,13 @@ decisions for the maintainer.
   the stepper then named eight more, all rare text and none in the real-usage sample (2026-10-10; Rich Inline
   Boundaries, Rich Inline As One Paragraph, has the sweep): a line for a ZWSP that is or starts an item after a space;
   both edges for a padded item of only a ZWSP; a bidi control, ZWNJ or combining mark kept with its word after a chip
-  wider than its line; the `extraWidth` of a line that starts in a padded item right after a joiner, and of a hyphen's
-  line where the item starts with a soft hyphen; and in Firefox the hang that ends at a ZWSP in pre-wrap, a padded item
-  that starts with a tab kept whole, and a U+3000 run that hangs before a bidi control. It reopens if an app needs
-  cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in an app, where the
-  removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across
-  sibling spans, which wants the paragraph measured as well as analyzed whole.
+  wider than its line; the `extraWidth` of a line that starts in a padded item's word beside a joiner or a bidi mark,
+  and of a hyphen's line where the item starts with a soft hyphen; and in Firefox a padded item of only a bidi control
+  as a box where it stands, the hang that ends at a ZWSP in pre-wrap, a padded item that starts with a tab kept whole,
+  and a U+3000 run that hangs before a bidi control. It reopens if an app needs cursors into each item's own prepared
+  text; if Safari's cost of preparing rich text shows in an app, where the removals that were measured and left out
+  start (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across sibling spans, which wants the paragraph
+  measured as well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
