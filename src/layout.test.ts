@@ -4128,6 +4128,19 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('an atomic rich item\'s text is its text as painted: its white space collapsed and trimmed, and no soft hyphen', () => {
+    // A chip is laid out whole in normal white space, whatever the paragraph's, so none of its
+    // soft hyphens shows.
+    const chipText = (text: string, whiteSpace: 'normal' | 'pre-wrap'): string => {
+      const prepared = prepareRichInline([{ text: 'ab ', font: FONT }, { text, font: FONT, break: 'never' }], { whiteSpace })
+      return materializeRichInlineLineRange(prepared, layoutNextRichInlineLineRange(prepared, Infinity)!).fragments[1]!.text
+    }
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      expect({ whiteSpace, texts: ['co\u00ADop\u00ADer\u00ADate', '\u00ADab\u00AD', 'a\u00AD b', ' a \n b ', 'a\u200Bb'].map(text => chipText(text, whiteSpace)) })
+        .toEqual({ whiteSpace, texts: ['cooperate', 'ab', 'a b', 'a b', 'a\u200Bb'] })
+    }
+  })
+
   test('an atomic rich item of only white space is an object as wide as its extraWidth, and one of no text is dropped', () => {
     // An inline-block is a box in its line whatever its text: its own white space collapses away inside
     // it, and a line can break on both sides of it. Chrome, Firefox and Safari lay out `ab`, a chip of two
