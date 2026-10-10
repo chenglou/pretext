@@ -469,7 +469,9 @@ function textProjectionEqual(a: TextProjection | null, b: TextProjection): boole
     positionedLinesEqual(a.pullquoteLines, b.pullquoteLines)
 }
 
-function projectTextProjection(projection: TextProjection): void {
+// A line's text is written only when it differs from the text its node holds, which is `written`'s at the same index:
+// a moving orb changes a few lines a frame, and a text written again, even the same text, makes a new text node.
+function projectTextProjection(projection: TextProjection, written: TextProjection | null): void {
   setNodeCount(domCache.headlineLines, projection.headlineLines.length, () => {
     const element = document.createElement('span')
     element.className = 'headline-line'
@@ -478,7 +480,7 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.headlineLines.length; index++) {
     const element = domCache.headlineLines[index]!
     const line = projection.headlineLines[index]!
-    element.textContent = line.text
+    if (written?.headlineLines[index]?.text !== line.text) element.textContent = line.text
     element.style.left = `${projection.headlineLeft + line.x}px`
     element.style.top = `${projection.headlineTop + line.y}px`
     element.style.font = projection.headlineFont
@@ -494,7 +496,7 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.bodyLines.length; index++) {
     const element = domCache.bodyLines[index]!
     const line = projection.bodyLines[index]!
-    element.textContent = line.text
+    if (written?.bodyLines[index]?.text !== line.text) element.textContent = line.text
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.bodyFont
@@ -510,7 +512,7 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.pullquoteLines.length; index++) {
     const element = domCache.pullquoteLines[index]!
     const line = projection.pullquoteLines[index]!
-    element.textContent = line.text
+    if (written?.pullquoteLines[index]?.text !== line.text) element.textContent = line.text
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.pullquoteFont
@@ -851,7 +853,7 @@ function render(now: number): boolean {
   }
 
   if (!textProjectionEqual(committedTextProjection, textProjection)) {
-    projectTextProjection(textProjection)
+    projectTextProjection(textProjection, committedTextProjection)
     committedTextProjection = textProjection
   }
 
