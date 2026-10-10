@@ -614,7 +614,8 @@ where a stand-in Canvas is exact, pin behavior cheaply.
 
 The scans differ from their engines on purpose in three places (ENGINE_FOLLOWUPS.md, Bidi levels, direction and script
 runs, and Small ones): the Blink scan makes one ICU pass per text, not Blink's restart at each line start, which differs
-in 86 of 188,274 verdicts; the WebKit scan resolves no bidi levels, so it misses WebKit's splits where levels change, at
+in 86 of 188,274 verdicts (Blink's own rule for a hyphen before a digit, which a line's start changes too, is followed:
+Engine Facts, Chrome (Blink)); the WebKit scan resolves no bidi levels, so it misses WebKit's splits where levels change, at
 15 positions in right-to-left paragraphs (2026-09-23), such as `ab””tail` under `direction: rtl`; nor does the Gecko
 scan, so it misses Firefox's text-run splits where levels change, which move a break only where the direction changes
 inside a cluster (Bidi Levels).
@@ -2907,6 +2908,38 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   and not called, and 0.3% slower in Chrome; the control characters' `layout()`, a third of whose text the full walker
   lays out in the WebKit profile and next to none in the others, within 1.2% in all three. No worst-case entry is called
   slower over the six sessions.
+- **A break that depends on where a line starts** (#487; Engine Facts, Chrome (Blink), Line breaking): the Blink scan
+  marks the break after a hyphen before a digit (`CONTEXT_BREAK`, `src/line-breaks.ts`), which the segment that starts
+  there keeps in the one bit of its flags byte a handle had free, and a line has none there only where it starts at the
+  hyphen, which only a word cut between letters gives. So the simple walkers ask on that path alone: the stepper where
+  a line starts inside a segment, at its last grapheme, before a segment with the mark, where it hands the line to the
+  full walker; and `layout()`'s counter once for each segment it cuts, where it hands a text with a segment cut before
+  a marked one to the stepper. The full walker holds the rule (`lacksBreakContext()`, `src/line-break.ts`) and tests the
+  mark's bit, in the flags it has read, in three places: where a segment overflows its line, and where a line records a
+  break it could return to, at a text segment in text with an unbroken boundary and at a break between two text
+  segments in text with a soft hyphen. One walker holds the rule, so the three can't disagree on such a line. A handle
+  holds nothing more, and `prepare()` submits the same strings: offline, 0 of 21,251 inputs measure otherwise, the
+  handles of 142 hold the mark and the lines of 105 differ at one of the replay's 11 widths, in the Blink profile and in
+  an unrecognized engine's, and none in the WebKit or Gecko profile (`bun harness equal main --offline`, 2026-10-10).
+  The full walker's two tests beside the overflow's are each live. Of 300,000 random layouts of ASCII text that is
+  letter-spaced, holds a NEL or a soft hyphen, or is cut into rich items, on the stand-in with a width a character, 15
+  differ from the text prepared again from each line's start, rich items with a soft hyphen that main lays out the same
+  way; without the test at a break a line returns to 240 more differ, and without the one at a hyphen's return 31 more
+  (the fuzz that isn't checked in, 2026-10-10). In the browser, on a probe of 1,093 layouts built to hold the shape,
+  which isn't checked in (the texts of #480 at every whole pixel up to 60px, some in pre-wrap, under keep-all, under
+  letter spacing and as spans), main fails 147 in Chrome and the change 30, the other profiles the same layouts with
+  either build. Two of the 30 are lost: a soft hyphen after the digits whose hyphen doesn't fit, which main passed by
+  two errors that cancelled (ENGINE_FOLLOWUPS.md, Line edges); the other 28 fail on main too, by gaps named there
+  (Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). On a second probe, 2,040 layouts of 40 made-up
+  IDs, dates and phone numbers in six system fonts at every whole pixel from 14 to 64px, main fails 273 in Chrome and
+  the change 21, none lost. On three more probes built to break the rule, 24,510 layouts (the hyphen first, last or
+  alone in a segment, two such hyphens, other characters in its place and beside it, pre-wrap, keep-all, letter
+  spacing, rich items cut, padded, atomic and letter-spaced around it, a capital that kerns with the hyphen, and each
+  digit before one in fifteen fonts), main fails 2,695 in Chrome and the change 476: 2,269 fixed and 50 lost, each with
+  a soft hyphen after the digits (12) or under letter spacing (38), where the break main gave such a line had covered
+  another gap (ENGINE_FOLLOWUPS.md, Line edges; Emergency breaks inside a word); none is lost in text with neither
+  (Chrome 154.0.8037.98, 2026-10-10). The rule written out in the simple walkers too, in place of the hand-over,
+  reopens if text whose words are cut before such hyphens comes to matter for speed.
 - **A paragraph's segment breaks, in the Gecko profile**: Gecko transforms segment breaks in each text frame's own text,
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
@@ -3944,7 +3977,23 @@ repin` shows what), and a fact read in source needs reading again.
   profile counts stops so since #395 (`letterSpaceTabStops`, `letterSpaceTabs` and `tabMinimumCharacter`,
   `src/measurement.ts`). (Chrome 153 source, 2026-09-16 to 10-01.)
 - **Line breaking.** ICU restarts at each line start without context, so LB20a applies there (`a‐b`, break-all, loose:
-  `a` / `‐b`); the Blink scan makes one pass per text (Break Opportunities From Engine Data). Blink takes the last
+  `a` / `‐b`); the Blink scan makes one pass per text (Break Opportunities From Engine Data). Blink's own rule for a
+  hyphen before a digit, which breaks after the hyphen where an ASCII letter or digit comes before it, loses its
+  context there too: `LineBreaker` sets the break iterator's start offset to where each line starts
+  (`line_breaker.cc:548-550`), the iterator disregards the text before that offset (`text_break_iterator.h:155-163`),
+  and the rule reads the character before the hyphen only where it is at or after the offset (`Context`,
+  `text_break_iterator.cc:185-199`; `ShouldBreakFast`, `:226-235`). So where a word is cut right before such a hyphen,
+  the next line has no break after the hyphen, and the hyphen and the digits are cut as one word: `111-2222` in 16px
+  Arial at 25px is `111` / `-22` / `22`, and at 24px `11` / `1-` / `22` / `22`, where the hyphen's line holds the digit
+  before it; `aaa-aaaa` at 28px keeps `aaa` / `-` / `aaa` / `a`, as the break before a letter is the pair table's.
+  Among the scan's answers for ASCII text that rule alone turns on a line's start: with it followed, 0 of 300,000
+  random layouts of ASCII letters, digits, hyphens and punctuation differ from the same text prepared again from each
+  line's start, on a stand-in Canvas with a width a character, where 11 to 17 of every 4,000 did (a fuzz that isn't
+  checked in). The walkers follow it since #487 (`lacksBreakContext()`, `src/line-break.ts`). Firefox has no break
+  between a hyphen and a digit at all (UAX #14 LB25), so its lines there are Chrome's, and WebKit cuts a text into
+  items once, with the two characters before each break in reach (`BreakablePositions.h:142-177`), so Safari keeps
+  the hyphen alone on its line: 12 paragraphs and the three real-usage cases laid out alone in each (Chromium 153
+  source; Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). Blink takes the last
   offset that fits from glyph positions, then the break at or before it, so a line ends before a ligature unless its
   first cluster doesn't fit, and reshapes a wrapped line from its first safe offset, moving the space 0 or −1
   LayoutUnits (`shaping_line_breaker.cc:309-324`). A non-start `text-align` or a decoration reshapes a line ending at a

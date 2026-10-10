@@ -48,6 +48,8 @@ let analyzeText: AnalysisModule['analyzeText']
 let SEGMENT_KINDS: AnalysisModule['SEGMENT_KINDS']
 let KIND_BITS: AnalysisModule['KIND_BITS']
 let getBlinkLineBreaks: LineBreaksModule['getBlinkLineBreaks']
+let BREAK: LineBreaksModule['BREAK']
+let CONTEXT_BREAK: LineBreaksModule['CONTEXT_BREAK']
 let getGeckoLineBreaks: GeckoLineBreaksModule['getGeckoLineBreaks']
 let prepareRichInline: RichInlineModule['prepareRichInline']
 let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRange']
@@ -316,7 +318,7 @@ beforeAll(async () => {
   ;({ countPreparedLines, walkPreparedLinesRaw } = lineBreakMod)
   ;({ getSegmentFit, getFontMeasurement, getPreparationLanguage, getEngineProfile } = measurementMod)
   ;({ analyzeText, SEGMENT_KINDS, KIND_BITS, SPACED, ONE_CLUSTER } = analysisMod)
-  ;({ getBlinkLineBreaks } = lineBreaksMod)
+  ;({ getBlinkLineBreaks, BREAK, CONTEXT_BREAK } = lineBreaksMod)
   ;({ getGeckoLineBreaks } = geckoLineBreaksMod)
   ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
 })
@@ -1828,6 +1830,80 @@ describe('boundary rules', () => {
     }
   })
 
+  test('a line that starts at a hyphen has no break after it before a digit, under the Blink scan', () => {
+    // Blink finds a line's breaks from the line's start on (SetStartOffset, line_breaker.cc:548-550),
+    // so its break after a hyphen before a digit, which rests on the letter or digit before the
+    // hyphen, is none on a line that starts at the hyphen: the hyphen and the digits are one word
+    // there, cut where it overflows. A word cut right before the hyphen starts such a line.
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    const lines = (text: string, width: number, options: { whiteSpace?: 'pre-wrap'; letterSpacing?: number } = {}): string[] => {
+      const prepared = prepareWithSegments(text, FONT, options)
+      const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+      // Every line API has the walk's lines.
+      expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+      expect(layout(prepare(text, FONT, options), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+      expect(measureLineStats(prepared, width).lineCount).toBe(result.lineCount)
+      return result.lines.map(line => line.text)
+    }
+    const richLines = (items: string[], width: number): string[] => {
+      const rich = prepareRichInline(items.map(text => ({ text, font: FONT })))
+      const out: string[] = []
+      walkRichInlineLineRanges(rich, width, range => { out.push(materializeRichInlineLineRange(rich, range).fragments.map(fragment => fragment.text).join('')) })
+      expect(measureRichInlineStats(rich, width).lineCount).toBe(out.length)
+      return out
+    }
+    try {
+      for (const [text, prefix, expected] of [
+        ['111-2222', '111', ['111', '-22', '22']],
+        ['aaa-2222', 'aaa', ['aaa', '-22', '22']],
+        ['W-11', '-1', ['W', '-1', '1']],
+        ['2026-10-09', '20', ['20', '26', '-1', '0-', '09']],
+        ['INV-2026-000451', 'INV-', ['INV-', '2026', '-000', '451']],
+        ['a 111-2222 b', '111', ['a ', '111', '-22', '22 ', 'b']],
+        // The break stays where the line holds the character before the hyphen, also where a
+        // digit would fit beside the hyphen, where a letter follows the hyphen, whose break rests
+        // on the hyphen alone, and where no digit fits beside the hyphen.
+        ['111-2222', '11', ['11', '1-', '22', '22']],
+        ['111-2222', '1-2', ['11', '1-', '22', '22']],
+        ['111-2222', '111-', ['111-', '222', '2']],
+        ['111-2222', '111-2', ['111-', '2222']],
+        ['aaa-aaaa', 'aaa', ['aaa', '-', 'aaa', 'a']],
+        ['W-11', 'W', ['W', '-', '1', '1']],
+      ] as const) {
+        const width = measureWidth(prefix, FONT) + 0.1
+        // The simple walkers' text, and the full walker's.
+        expect({ text, prefix, lines: lines(text, width) }).toEqual({ text, prefix, lines: [...expected] })
+        expect({ text, prefix, lines: lines(text, width, { whiteSpace: 'pre-wrap' }) }).toEqual({ text, prefix, lines: [...expected] })
+        expect({ text, prefix, lines: lines(text, width + prefix.length, { letterSpacing: 1 }) }).toEqual({ text, prefix, lines: [...expected] })
+      }
+      const aa = measureWidth('aa', FONT) + 0.1
+      // A break the line could return to from text with no break before it, or from a soft
+      // hyphen whose hyphen doesn't fit, is none either: the lines from the hyphen on are those
+      // of the text from the hyphen on.
+      expect(lines('aa-1\u0085b', aa).slice(1)).toEqual(lines('-1\u0085b', aa))
+      expect(lines('aa-1\u00ADa', aa).slice(1)).toEqual(lines('-1\u00ADa', aa))
+      expect(lines('aa-1\u0085b', aa)[1]).toBe('-1')
+      // Rich items are one paragraph's text: an item that starts with the hyphen, and one that
+      // starts inside the digits, with no break before it.
+      const tkt = measureWidth('TKT', FONT) + 0.1
+      expect(richLines(['TKT', '-84565'], tkt)).toEqual(['TKT', '-84', '565'])
+      expect(richLines(['TKT-8', '4565'], tkt)).toEqual(['TKT', '-84', '565'])
+      expect(richLines(['aa-1', 'b'], aa)).toEqual(['aa', '-1', 'b'])
+      // WebKit finds a text's breaks once, with the character before the hyphen in reach
+      // (BreakablePositions.h:169-177), and Gecko has no break between a hyphen and a digit.
+      profile.lineBreakScan = 'webkit'
+      clearCache()
+      expect(lines('111-2222', measureWidth('111', FONT) + 0.1)).toEqual(['111', '-', '222', '2'])
+      profile.lineBreakScan = 'gecko'
+      clearCache()
+      expect(lines('111-2222', measureWidth('111', FONT) + 0.1)).toEqual(['111', '-22', '22'])
+    } finally {
+      profile.lineBreakScan = previous
+      clearCache()
+    }
+  })
+
   test('CJK hyphens attach left while overlong units retain emergency progress', () => {
     for (const [text, prefix, expected] of [
       ['(试验前-试验后)/试验前', '前-试验', ['(试验', '前-试验', '后)/试', '验前']],
@@ -1972,8 +2048,23 @@ describe('engine break scans', () => {
       ['한국어테스트 테스트입니다', true, [7]],
       ['\u{1F600}\u{1F600}', false, [2]],
     ] as const) {
-      expect({ text, keepAll, breaks: positions(getBlinkLineBreaks(text, keepAll, null), text.length) })
+      expect({ text, keepAll, breaks: positions(getBlinkLineBreaks(text, keepAll, null).map(marks => marks & BREAK), text.length) })
         .toEqual({ text, keepAll, breaks: [...expected] })
+    }
+    // The break after a hyphen before a digit rests on the unit before the hyphen, which Blink
+    // reads only on a line that holds it (Context, text_break_iterator.cc:185-199), so the scan
+    // marks it a CONTEXT_BREAK. No other break is one: the pair table reads two units.
+    for (const [text, keepAll, expected] of [
+      ['ABCD-1234', false, [5]],
+      ['1234-5678', true, [5]],
+      ['a-1-2 b-c', false, [2, 4]],
+      ['x?-b', false, []],
+      ['a -1', false, []],
+      ['é-1', false, []],
+      ['日本語foo-bar', true, []],
+    ] as const) {
+      const breaks = getBlinkLineBreaks(text, keepAll, null)
+      expect({ text, context: Array.from(breaks.keys()).filter(i => (breaks[i]! & CONTEXT_BREAK) !== 0) }).toEqual({ text, context: [...expected] })
     }
   })
 
