@@ -129,7 +129,7 @@ function render(): void {
   // back. Both leave the position between the last one and the range's end,
   // which is the last canvas less this viewport. Each end of that stretch is
   // good to a pixel: clientHeight is a whole number, browsers round scrollTop,
-  // and a zoom makes them round the position again. Only a position outside
+  // and at a zoom Chrome rounds the position again. Only a position outside
   // the stretch ends the end anchor.
   const scrollRangeEnd = st.canvasHeight - viewportHeight
   const staysOnEnd = st.scrollAnchor === 'end'
