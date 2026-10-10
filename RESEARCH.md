@@ -908,7 +908,8 @@ and Hebrew (3%), which are among the costliest, 160-235 µs a label where a Lati
 slower than 0.0.9 on main already. Against main the same batches take 22% more time in German, 17% in Russian, 11% in
 English and 43% in Tamil, 8% over the 35 languages mixed, and read level for Japanese, Chinese, Korean, Thai and Hindi,
 whose labels ask almost no pair (0-1.4% more calls). In Safari no language is slower than 0.0.9, and the fit makes
-main's calls exactly. The script that timed them isn't in the repository.
+main's calls exactly. The script that timed them isn't in the repository. These figures and the Firefox ones that follow
+are that day's: the timing made again on main as of #461 comes after the trace.
 
 In Firefox eight languages' labels are slower than 0.0.9 with the fit, Armenian by 33%, Telugu 27%, Tamil 26%, Georgian
 23%, Finnish 22%, Greek 19%, German 14% and Bulgarian 10%, and Dutch and Russian lean slower (9% and 5%), where English
@@ -958,11 +959,12 @@ Firefox seven of the 36 languages, the bench's 35 and Finnish, read slower than 
 Telugu 24%, Tamil 22%, Finnish 21%, Greek 19% and German 17%. Bulgarian (5%) and Dutch (3%) are inside noise now, as are
 Russian, Ukrainian, Thai, Khmer and Amharic, and 22 read faster. In Chrome four read slower, Tamil by 29%, Armenian 12%,
 Telugu 11% and Hebrew 2%, and the other 32 faster. In Safari none reads slower, 30 read faster and six are inside noise.
-English labels take 41%, 20% and 21% less time than 0.0.9's in the three browsers (over 0.0.9's first copy). The slower
-languages' labels make 62% to 152% more `measureText` calls than 0.0.9's in the batches timed in Firefox and 10% to 52%
-more in Chrome; Dutch's and Bulgarian's make about twice 0.0.9's in Firefox and read inside noise (calls counted in
-background sessions). The changelog's speed entry states these figures without Hebrew's 2%, a slowdown of a few percent.
-The script still isn't in the repository, and a later change to what `prepare()` runs wants the labels timed again.
+English labels take 41% less time than 0.0.9's in Chrome, 20% in Firefox and 21% in Safari (over 0.0.9's first copy).
+The slower languages' labels make 62% to 152% more `measureText` calls than 0.0.9's in the batches timed in Firefox and
+10% to 52% more in Chrome; Dutch's and Bulgarian's make about twice 0.0.9's in Firefox and read inside noise (calls
+counted in background sessions). The changelog's speed entry states these figures without Hebrew's 2%, a slowdown of a
+few percent. The script still isn't in the repository, and a later change to what `prepare()` runs wants the labels
+timed again.
 
 What the labels get for it, on 13,090 probe layouts of one word a paragraph: 390 words of 78px or wider from those
 labels, Latin, Cyrillic and Greek in 13px Helvetica Neue, 13px Inter and 14px Roboto and Tamil in 13px Tamil Sangam MN,
