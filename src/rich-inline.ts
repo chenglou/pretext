@@ -352,16 +352,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         width = item.width
       } else {
         const ownAnalysis = analyzeText(item.text, profile, 'normal', wordBreak, language)
-        const own = measureAnalysis(ownAnalysis, 0, ownAnalysis.flags.length, item.font, false, readLetterSpacing(item.letterSpacing, profile), profile, language, false, null)
+        const own = measureAnalysis(ownAnalysis, 0, ownAnalysis.flags.length, item.font, true, readLetterSpacing(item.letterSpacing, profile), profile, language, false, null) as PreparedSegments
         const start: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
         if (normalizePreparedLineStart(own, start)) width = stepPreparedLineGeometryFromStart(own, start, Number.POSITIVE_INFINITY)!
         width += item.extraWidth ?? 0
-        // The chip's text as a line of it paints it (buildLineTextFromRange).
-        for (let i = 0; i < ownAnalysis.texts.length; i++) {
-          const kind = own.segmentFlags[i]! & KIND_BITS
-          const ownText = ownAnalysis.texts[i]!
-          if (kind !== SOFT_HYPHEN && kind !== HARD_BREAK && !((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && ownText.charCodeAt(0) === 0x00AD)) text += ownText
-        }
+        // The chip's text as its one line paints it: no line ends inside a chip, so no soft hyphen shows.
+        text = buildRangeText(own, 0, 0, own.segments.length, 0)
         while (isCollapsibleSpaceCode(item.text.charCodeAt(textStart))) textStart++
         textEnd = item.text.length
         while (textEnd > textStart && isCollapsibleSpaceCode(item.text.charCodeAt(textEnd - 1))) textEnd--
