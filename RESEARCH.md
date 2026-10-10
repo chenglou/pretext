@@ -2932,8 +2932,14 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   two errors that cancelled (ENGINE_FOLLOWUPS.md, Line edges); the other 28 fail on main too, by gaps named there
   (Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). On a second probe, 2,040 layouts of 40 made-up
   IDs, dates and phone numbers in six system fonts at every whole pixel from 14 to 64px, main fails 273 in Chrome and
-  the change 21, none lost. The rule written out in the simple walkers too, in place of the hand-over, reopens if text
-  whose words are cut before such hyphens comes to matter for speed.
+  the change 21, none lost. On three more probes built to break the rule, 24,510 layouts (the hyphen first, last or
+  alone in a segment, two such hyphens, other characters in its place and beside it, pre-wrap, keep-all, letter
+  spacing, rich items cut, padded, atomic and letter-spaced around it, a capital that kerns with the hyphen, and each
+  digit before one in fifteen fonts), main fails 2,695 in Chrome and the change 476: 2,269 fixed and 50 lost, each with
+  a soft hyphen after the digits (12) or under letter spacing (38), where the break main gave such a line had covered
+  another gap (ENGINE_FOLLOWUPS.md, Line edges; Emergency breaks inside a word); none is lost in text with neither
+  (Chrome 154.0.8037.98, 2026-10-10). The rule written out in the simple walkers too, in place of the hand-over,
+  reopens if text whose words are cut before such hyphens comes to matter for speed.
 - **A paragraph's segment breaks, in the Gecko profile**: Gecko transforms segment breaks in each text frame's own text,
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
