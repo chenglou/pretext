@@ -4,7 +4,7 @@ Each case's layout in the browser is recorded once per browser build and kept in
 browser, as an app does, and are scored against it. `harness/cli.ts`'s header lists the commands, and each file's header
 its part. Dated measurements are from an M5 Max under macOS 27.0 (26A428) at device pixel ratio 2, in Chrome 153,
 Firefox 156.0 and Safari 27.0 (WebKit 22625.1.29.11.27); the pins moved to Chrome 154.0.8037.57 and Firefox 156.0.1 on
-2026-09-25, and every recording stayed the same.
+2026-09-25 and Chrome's to 154.0.8037.98 on 2026-10-06, and every recording stayed the same.
 
 ## Setup
 
@@ -172,7 +172,7 @@ are made again, since they sample behaviour; the filed report, the fix's PR and 
 A case the dedupe can't see calls for a finer dedupe, not a hand-kept repro, since a repro per fix is how the old suite
 grew.
 
-`sets/data/engine-facts.json`'s `layout.test.ts` line numbers, the facts set's case origins and the four accepted-list
+`sets/data/engine-facts.json`'s `layout.test.ts` line numbers, the facts set's case origins and the three accepted-list
 reasons that cite a `layout.test.ts` line point at the files of main before #340 (6d1d2106), not today's; read them with
 `git show 6d1d2106:<path>`. The two facts #396 added (lines 1948 and 2015) point at that pull request's `layout.test.ts`, and
 name the fonts they run in where that isn't 16px Arial. A fact added after them names its test's line as of the commit
