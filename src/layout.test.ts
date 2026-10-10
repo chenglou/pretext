@@ -1624,7 +1624,7 @@ describe('boundary rules', () => {
         expect({ text, ...layout(prepare(text, FONT), 200, LINE_HEIGHT) }).toEqual({ text, lineCount: 0, height: 0 })
         expect(lines(text, 200)).toEqual([])
       }
-      // The CR of a CRLF collapses into the line feed's space, as before.
+      // The CR of a CRLF collapses into the line feed's space.
       expect(segments('ab\r\ncd')).toEqual(['ab', ' ', 'cd'])
       expect(segments('ab\r\n\r\ncd ef\r\n')).toEqual(['ab', ' ', 'cd', ' ', 'ef'])
       expect(segments('ab\r\r\ncd')).toEqual(['ab', ' ', 'cd'])
