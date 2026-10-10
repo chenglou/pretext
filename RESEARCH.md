@@ -5973,11 +5973,11 @@ decisions for the maintainer.
   negative than the letters are wide, so against a width under 0 as given such a paragraph is one line at 0 and down to
   its own width, and walked under it, into the lines the walkers give its text, where the fit has a gap
   (ENGINE_FOLLOWUPS.md, Negative letter spacing and hanging spaces): a width under 0 would then lay out otherwise
-  than 0. On the stand-in Canvas, 3,109 paragraphs made the same way, at 16 widths from −100 to 1.5px and at `NaN`,
-  `undefined` and `Infinity`, in each of the four profiles, the functions without the clamp give 3 paragraphs other
+  than 0. On the stand-in Canvas, 3,109 paragraphs made the same way, at 16 widths from −100 to 1.5px and at `NaN`
+  and `Infinity`, in each of the four profiles, the functions without the clamp give 3 paragraphs other
   lines at −100 than at 0, and with it none; a unit test holds one. Either form differs from main on 2,068 of the
   paragraphs at 0 (2,000 in the Gecko profile), on 1,693 at 0.5 (1,680 in the WebKit profile, 1,639 in the Gecko one)
-  and on none at 1px or wider or at a width that isn't a number, and none of the harness's invariants fails at these
+  and on none at 1px or wider or at `NaN`, and none of the harness's invariants fails at these
   widths. What differs is content narrower than 1px, several pieces of which the floor put on a line: text of 2px and
   under, boxes and padding of 1px and less, letters under a letter spacing about as negative as they are wide. A
   paragraph of ordinary text and items of no width breaks at 0 where it broke at the floor, and reports a pre-wrap line
