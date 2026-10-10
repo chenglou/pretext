@@ -1,4 +1,5 @@
 import {
+  CONTEXT_BREAK,
   CONTROL,
   HARD_BREAK,
   KIND_BITS,
@@ -370,7 +371,10 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
     // An overflowing breakable segment fills lines grapheme by grapheme. A line
     // holding only an overflowing grapheme keeps the graphemes after it that
     // can't start a line. A line that starts inside it where it has fresh-line
-    // geometry takes the tail or its fresh prefixes.
+    // geometry takes the tail or its fresh prefixes. One that starts at its last
+    // grapheme has no break before a segment with a CONTEXT_BREAK (lacksBreakContext):
+    // the stepper counts a text with a segment cut before such a one.
+    if (i + 1 < segmentCount && (segmentFlags[i + 1]! & CONTEXT_BREAK) !== 0) return countSteppedLines(prepared, maxWidth)
     const prohibitions = lineStartProhibitions?.[i] ?? null
     const entry = entryGeometry === null ? null : entryGeometry[i]!
     const startExtras = breakableLineStartExtras?.[i] ?? null
@@ -411,7 +415,8 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
 }
 
 // layout()'s count of text of the simple walkers' kinds where the scan gives no
-// break at some segment boundary, as before NEL: the simple stepper's lines, except
+// break at some segment boundary, as before NEL, or where the counter's loop leaves
+// a line to the stepper (countPreparedLines): the simple stepper's lines, except
 // that the full walker steps a line again where the stepper ended it at such a
 // boundary, before the segment or after the space before it, returning the line to
 // its last break. Checking for that inside the counter's loop slowed Firefox's and
@@ -434,6 +439,22 @@ function countSteppedLines(prepared: PreparedLineData, maxWidth: number): number
     count++
   }
   return count
+}
+
+// Whether a line that starts at grapheme `startGraphemeIndex` of segment `startSegmentIndex` has
+// no break before segment `i`, whose break is a CONTEXT_BREAK: it starts at the last grapheme of
+// the segment before `i`, after the character that break rests on. Blink's break iterator
+// disregards the text before a line's start (SetStartOffset, text_break_iterator.h:155-163, set
+// where LineBreaker starts each line, line_breaker.cc:548-550; Chromium 153), so on a line that
+// starts at a hyphen its rule for a hyphen before a digit reads no character before the hyphen
+// (Context, text_break_iterator.cc:185-199) and gives no break after it (ShouldBreakFast,
+// :226-235). Only a word cut between graphemes starts a line there, and the hyphen and the text
+// up to the next break are then one word, cut where it overflows. ICU's rules lose their context
+// at a line's start as well, which isn't followed (ENGINE_FOLLOWUPS.md, Small ones).
+function lacksBreakContext(prepared: PreparedLineData, i: number, startSegmentIndex: number, startGraphemeIndex: number): boolean {
+  if (i !== startSegmentIndex + 1) return false
+  const advances = prepared.breakableFitAdvances[startSegmentIndex] as number[] | null
+  return startGraphemeIndex === (advances === null ? 0 : advances.length - 1)
 }
 
 // Whether the run of preserved spaces and tabs that hang, which starts at segment `start` right
@@ -832,7 +853,8 @@ function walkPreparedComplexLines(
                 break decided
               }
 
-              const unbroken = (flags & UNBROKEN) !== 0
+              const unbroken = (flags & UNBROKEN) !== 0 ||
+                ((flags & CONTEXT_BREAK) !== 0 && lacksBreakContext(prepared, i, lineStartSegmentIndex, lineStartGraphemeIndex))
               // An object with no break before it is the start edge of a padded rich-inline
               // item's opening (src/rich-inline.ts). Blink's line trails once the preserved
               // spaces it ends with overflow: it takes the white space after them, the tags of
@@ -934,8 +956,10 @@ function walkPreparedComplexLines(
               fillStart = 0
               fillSpacing = leadingSpacing
             } else {
-              // A break the scan gives before text is one the line can return to.
-              if ((flags & RETURNABLE) !== 0 && !breakAfter && pendingBreakSegmentIndex !== i) {
+              // A break the scan gives before text is one the line can return to, where it is one for
+              // this line (lacksBreakContext).
+              if ((flags & RETURNABLE) !== 0 && !breakAfter && pendingBreakSegmentIndex !== i &&
+                !((flags & CONTEXT_BREAK) !== 0 && lacksBreakContext(prepared, i, lineStartSegmentIndex, lineStartGraphemeIndex))) {
                 pendingBreakSegmentIndex = i
                 pendingBreakWidth = lineW
               }
@@ -944,7 +968,8 @@ function walkPreparedComplexLines(
               // to it fit when its last segment was admitted, with the letter-spacing gap after
               // it that lineW leaves out, so only Blink's room for the hyphen is tested here.
               if (retreatsFromUnfitHyphen && !breakAfter && (flags & UNBROKEN) === 0 && i > lineStartSegmentIndex &&
-                !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) && (!reservesHyphenWidth || lineW + (hyphenRooms === null ? discretionaryHyphenWidth : hyphenRooms[i]!) <= fitLimit)) {
+                !breaksAfterKind(segmentFlags[i - 1]! & KIND_BITS) && (!reservesHyphenWidth || lineW + (hyphenRooms === null ? discretionaryHyphenWidth : hyphenRooms[i]!) <= fitLimit) &&
+                !((flags & CONTEXT_BREAK) !== 0 && lacksBreakContext(prepared, i, lineStartSegmentIndex, lineStartGraphemeIndex))) {
                 fitBreakSegmentIndex = i
                 fitBreakPaintWidth = lineW
               }
@@ -1141,6 +1166,11 @@ function stepPreparedSimpleLineGeometry(
     }
   } else if (cursor.graphemeIndex > 0 || (startW - startTrim > fitLimit && startAdvances !== null)) {
     const fitAdvances = startAdvances!
+    // A line that starts at the segment's last grapheme has no break before a segment with a
+    // CONTEXT_BREAK (lacksBreakContext), and is the full walker's to lay out.
+    if (cursor.graphemeIndex === fitAdvances.length - 1 && start + 1 < widths.length && (segmentFlags[start + 1]! & CONTEXT_BREAK) !== 0) {
+      return walkPreparedComplexLines(prepared, cursor, maxWidth, undefined, null, true)!
+    }
     const startExtras = prepared.breakableLineStartExtras?.[start] ?? null
     let g = cursor.graphemeIndex + 1
     lineW = startExtras === null ? fitAdvances[g - 1]! : fitAdvances[g - 1]! + startExtras[g - 1]!

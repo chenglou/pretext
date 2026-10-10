@@ -553,7 +553,6 @@ catalog-05db1b5e37935278 count
 catalog-082285a3bddd7761 breaks
 catalog-0d73d1c8d9c8d826 count
 catalog-0ed3603eedf56987 count
-catalog-2d6494950c9815ed breaks
 catalog-2edb74a633b51256 breaks
 catalog-302577b8071493f1 count
 catalog-30985ca352c518c4 count
@@ -569,7 +568,6 @@ catalog-57c1d27a72bf8d5b breaks
 catalog-61115d8561e46909 breaks
 catalog-619386d96756234e breaks
 catalog-62b08d0dd19c5f8f breaks
-catalog-666071762bec0044 breaks
 catalog-70fcd8b8e6ce6b9f breaks
 catalog-76462f42c065300f breaks
 catalog-77f0a490b7d3fb5f count
@@ -580,7 +578,6 @@ catalog-929c5651c2e05f6d count
 catalog-964816b864267568 breaks
 catalog-9d32e4f11ef187f7 breaks
 catalog-b52594b6c7901050 breaks
-catalog-bc8c9c9bb06eda94 breaks
 catalog-d2656b4aed9e25ed count
 catalog-dd41c33e993865c5 count
 catalog-df0871f2b6d8e074 breaks
@@ -1133,7 +1130,6 @@ catalog-65a5763d8a77e3c7 count
 catalog-6625d3c40e4d88c8 breaks
 catalog-66bdca82e176129f count
 catalog-66c626b0303265d7 count
-catalog-66ee5b3a746a9d47 breaks
 catalog-672655bd22db1834 count
 catalog-6745738d34054b4f count
 catalog-6776ade158799173 count
@@ -1257,7 +1253,6 @@ catalog-81df5b4d27fa6b73 count
 catalog-81ed66922305d3c5 breaks
 catalog-81f5e755148f9ec8 breaks
 catalog-81f6d642ff883f16 count
-catalog-8273975c0020b141 breaks
 catalog-82de98bada1cc196 count
 catalog-82e3b3da9f92c2dc count
 catalog-82e6b1d6fb4a053d breaks
@@ -1435,7 +1430,6 @@ catalog-a6eb53b1d679c3be count
 catalog-a70baa3f58f09266 count
 catalog-a78df6d2618a6cce count
 catalog-a84342a94af539a0 breaks
-catalog-a85efeda7ce33abe breaks
 catalog-a89503fe82b60f2b count
 catalog-a90fb277142aa1c9 breaks
 catalog-a91d8d56ce764b1d breaks
@@ -1736,7 +1730,6 @@ catalog-ea7664d3ab29941b breaks
 catalog-eac7f0ad2d236bfd breaks
 catalog-eb127114a3d85e02 count
 catalog-eb17271a7060e518 count
-catalog-eb24f6011b2f96a6 breaks
 catalog-eb67a7e7e56ddbe6 count
 catalog-eba1d58b1659af16 count
 catalog-eba8f0d076b15c1d count
@@ -3863,11 +3856,6 @@ sample-c11591c08197d852 breaks
 
 ## Real usage: soft hyphens; Chrome breaks before the syllable where the library takes the soft hyphen, or at another one (main before #340 too)
 sample-b440ccf29c8506b7 breaks
-
-## Real usage: table cells 25-125 px wide holding IDs, phone numbers and formulas; Chrome breaks at hyphens, brackets and between digits otherwise than the library (main before #340 too)
-sample-78c75e7e120daf03 count
-sample-aa5df1d0b23661a0 count
-sample-b178e456f685db2e count
 
 ## Soft hyphens alone after the last line feed of a pre-wrap paragraph: Chrome gives them a line of their own, the library none (main before #340 too; ENGINE_FOLLOWUPS.md)
 catalog-6eee548463a90026 count

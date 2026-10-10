@@ -23,7 +23,9 @@
 //   table or dictionary engines. Inside runs of Thai, Lao, Khmer and Myanmar letters,
 //   Intl.Segmenter word boundaries stand in for the dictionaries.
 // - Blink restarts ICU at each line start, which drops the context before the line
-//   (tbi.h:159-163, tbi_icu.cc:771-810). These scans read each text once.
+//   (tbi.h:159-163, tbi_icu.cc:771-810). These scans read each text once. Blink's own rule
+//   for a hyphen before a digit reads the same start: its break is marked (CONTEXT_BREAK),
+//   and the walkers give a line that starts at the hyphen none there (src/line-break.ts).
 // - Chrome opens line_normal_cj.brk for zh content, and for content without a language
 //   under a Chinese UI. The scan takes preparation's language, which on a page without one
 //   is the language V8 shows as its default locale, Chrome's UI language (getBlinkLineBreaks).
@@ -49,12 +51,16 @@ import {
 // scan marks a FORCED_BREAK after a U+2028 or U+2029 that starts an item; the Gecko scan marks a
 // CLUSTER_START where a cluster starts without a break, and a SOFT_HYPHEN_BREAK with the BREAK
 // right after a soft hyphen. A rich-inline paragraph's analysis marks an ITEM_START where one of
-// its items starts, which starts a segment whether or not a line may start there.
+// its items starts, which starts a segment whether or not a line may start there. The Blink scan
+// marks a CONTEXT_BREAK with a BREAK that rests on the unit before the one before it, which
+// Blink doesn't read on a line that starts after that unit (shouldBreakFast); the segment that
+// starts there keeps the mark, in the same bit of its flags byte (src/analysis.ts).
 export const BREAK = 1
 export const CLUSTER_START = 2
 export const FORCED_BREAK = 4
 export const SOFT_HYPHEN_BREAK = 8
 export const ITEM_START = 16
+export const CONTEXT_BREAK = 0x80
 
 // Page languages whose line-break rules differ in some engine. Every other
 // language, an empty or missing one, and no document read as root.
@@ -461,8 +467,10 @@ export function getBlinkDefaultLocale(): string {
   return blinkDefaultLocale ??= new Intl.DateTimeFormat().resolvedOptions().locale
 }
 
+// What ShouldBreakFast answers: no break, a break, as the marks its position takes, or that
+// ICU decides.
 const NO_BREAK = 0
-const CAN_BREAK = 1
+const CAN_BREAK = BREAK
 const UNKNOWN = 2
 
 // tbi.h:203-205
@@ -472,14 +480,16 @@ function isBlinkBreakableSpace(c: number): boolean {
 
 // Context::ShouldBreakFast, tbi.cc:216-260, with soft hyphens enabled (hyphens: manual).
 // The pair table is Chromium's generated kFastLineBreakTable for U+0021..U+00FF
-// (gen.cc:422-551).
+// (gen.cc:422-551). The break after a hyphen before a digit is the one answer that rests on
+// `lastLast`, which Blink reads only on a line that holds it (Context, tbi.cc:185-199, over the
+// start offset LineBreaker sets at each line's start), so it is a CONTEXT_BREAK.
 function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: number): number {
   if (last < 0x21 || ch < 0x21) return NO_BREAK
   if (last === 0x2d) {
     if (ch <= 0x7f) {
       if (ch >= 0x30 && ch <= 0x39) {
         const lower = lastLast | 0x20
-        return (lastLast >= 0x30 && lastLast <= 0x39) || (lower >= 0x61 && lower <= 0x7a) ? CAN_BREAK : NO_BREAK
+        return (lastLast >= 0x30 && lastLast <= 0x39) || (lower >= 0x61 && lower <= 0x7a) ? CAN_BREAK | CONTEXT_BREAK : NO_BREAK
       }
     } else {
       return UNKNOWN
@@ -499,8 +509,9 @@ function shouldKeepAfterKeepAll(rules: BreakRules, lastLast: number, last: numbe
     hasProperty(ch, LETTER_OR_NUMBER) && !isComplexContext(rules, ch)
 }
 
-// Where a line may start in text Blink collapsed as Pretext does: flags[i] = 1 for
-// 0 < i < text.length. NextBreakablePosition (tbi.cc:270-387) for LineBreakType kNormal
+// Where a line may start in text Blink collapsed as Pretext does: a BREAK at i for
+// 0 < i < text.length, a CONTEXT_BREAK with it where it is the hyphen rule's.
+// NextBreakablePosition (tbi.cc:270-387) for LineBreakType kNormal
 // or kKeepAll and BreakSpaceType kAfterSpaceRun, asked at every offset. Each answer
 // depends only on the two units before the offset, the unit at it, and whether ICU has
 // a boundary there.
@@ -532,7 +543,7 @@ export function getBlinkLineBreaks(text: string, keepAll: boolean, language: str
     if (isBlinkBreakableSpace(ch)) continue // tbi.cc:284-291
     if (isBlinkBreakableSpace(last)) { breaks[i] = 1; continue }
     const fast = shouldBreakFast(pairs, lastLast, last, ch)
-    if (fast === CAN_BREAK) { breaks[i] = 1; continue } // tbi.cc:305-309
+    if ((fast & CAN_BREAK) !== 0) { breaks[i] = fast; continue } // tbi.cc:305-309
     if (keepAll && shouldKeepAfterKeepAll(rules, lastLast, last, ch)) continue // tbi.cc:338-344
     if (fast === NO_BREAK) continue // tbi.cc:346-348
     // tbi.cc:350-383: ICU's first boundary after i - 1 is i exactly when i is a boundary,

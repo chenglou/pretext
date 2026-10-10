@@ -1,6 +1,6 @@
 import { getGeckoLineBreaks, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail, isSpaceOrTabOrSegmentBreak } from './gecko-line-breaks.js'
 import { isBidiControl, type GraphemeTable } from './graphemes.js'
-import { BREAK, CLUSTER_START, FORCED_BREAK, ITEM_START, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitBreakBetweenItems, getWebKitLineBreaks } from './line-breaks.js'
+import { BREAK, CLUSTER_START, CONTEXT_BREAK, FORCED_BREAK, ITEM_START, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitBreakBetweenItems, getWebKitLineBreaks } from './line-breaks.js'
 
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
 export type WordBreakMode = 'normal' | 'keep-all'
@@ -45,9 +45,13 @@ export const UNBROKEN = 0x20
 // The scan gives a break before the segment, in text that also has unbroken
 // boundaries, where a line that overflows at one returns to the latest such break.
 export const RETURNABLE = 0x40
+// The scan's break before the segment is a CONTEXT_BREAK (src/line-breaks.ts): none for a line
+// that starts at the last character of the segment before. The mark's own bit, 0x80, which a
+// segment takes as its start is marked.
+export { CONTEXT_BREAK }
 // The engine's clusters don't split the segment, so no emergency break splits it
-// either. Measurement clears it.
-export const ONE_CLUSTER = 0x80
+// either. Above the byte: the analysis's flags hold it and a handle's don't.
+export const ONE_CLUSTER = 0x100
 export type SegmentKindCode = typeof TEXT | typeof SPACE | typeof ZERO_WIDTH_BREAK | typeof SOFT_HYPHEN |
   typeof PRESERVED_SPACE | typeof TAB | typeof ZERO_WIDTH_GLUE | typeof CONTROL | typeof HARD_BREAK
 // Each kind's name by its code, as prepareWithSegments() gives them.
@@ -61,7 +65,8 @@ export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
 // flags byte: its kind, UNBROKEN where the engine's scan gives no break before text, zero-width
 // glue or a control, other than at a line start, and where tabs don't hang before a tab or
 // the spaces after one, RETURNABLE at the other segments of text with such a boundary, which
-// `hasUnbroken` tells, and ONE_CLUSTER where the scan has clusters of its own.
+// `hasUnbroken` tells, CONTEXT_BREAK where the scan marks one, and ONE_CLUSTER where the scan
+// has clusters of its own.
 export type TextAnalysis = {
   normalized: string
   spaceSources: Uint16Array | null
@@ -380,7 +385,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
     markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i]!) &&
       (lastAlone || lastKind === ZERO_WIDTH_BREAK || lastKind === SOFT_HYPHEN || lastKind === CONTROL)
     starts.push(i)
-    flags.push(kind | oneCluster)
+    flags.push(kind | oneCluster | (breaks[i]! & CONTEXT_BREAK))
     lastKind = kind
     lastAlone = alone
   }
