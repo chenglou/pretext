@@ -83,8 +83,10 @@ export type PreparedRichInline = {
 }
 
 // A place in the paragraph: an item, and a segment and grapheme of that item's part of the
-// paragraph's text. What a line or a fragment gives is for passing back; a fragment's place in its
-// item's text is its sourceStart and sourceEnd.
+// paragraph's text, whose segments no app sees. What a line or a fragment range gives is for
+// passing back. A materialized fragment's type has no cursors (RESEARCH.md, Decisions Log,
+// 2026-10-10): its place in its item's text is its sourceStart and sourceEnd, and the line to
+// pass back is the range it was materialized from.
 export type RichInlineCursor = {
   itemIndex: number // Index into the items prepareRichInline() took
   segmentIndex: number
@@ -97,8 +99,6 @@ export type RichInlineFragment = {
   gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
   gapItemIndex: number // Item whose collapsed whitespace made gapBefore, or -1 when no gap precedes this fragment on this line
   occupiedWidth: number // Text width plus the item's extraWidth contribution
-  start: LayoutCursor // Start cursor within the item's part of the paragraph
-  end: LayoutCursor // End cursor within the item's part of the paragraph
   sourceStart: number // Where the fragment starts in its item's `text`, in UTF-16 units
   sourceEnd: number // Where it ends there
 }
@@ -111,6 +111,10 @@ export type RichInlineFragmentRange = {
   start: LayoutCursor // Start cursor within the item's part of the paragraph
   end: LayoutCursor // End cursor within the item's part of the paragraph
 }
+
+// A materialized fragment as materializeRichInlineLineRange() builds it: with its range's
+// cursors, which are off its type only (RESEARCH.md, Decisions Log, 2026-10-10).
+type InternalRichInlineFragment = RichInlineFragment & RichInlineFragmentRange
 
 export type RichInlineLine = {
   fragments: RichInlineFragment[]
@@ -1174,7 +1178,7 @@ export function materializeRichInlineLineRange(
   const sourceStarts = flow.sourceStarts!
   const sourceEnds = flow.sourceEnds!
   const lineEndSegmentIndex = getSegmentIndex(flow, line.end)
-  const fragments: RichInlineFragment[] = []
+  const fragments: InternalRichInlineFragment[] = []
 
   for (let i = 0; i < line.fragments.length; i++) {
     const fragment = line.fragments[i]!

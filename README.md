@@ -120,7 +120,7 @@ const prepared = prepareRichInline([
 
 walkRichInlineLineRanges(prepared, 320, range => {
   const line = materializeRichInlineLineRange(prepared, range)
-  // each fragment keeps its source item index, text slice, where that slice sits in the item's text, gapBefore, gapItemIndex, and cursors
+  // each fragment keeps its source item index, text slice, where that slice sits in the item's text, gapBefore and gapItemIndex
 })
 ```
 
@@ -203,8 +203,6 @@ type RichInlineFragment = {
   gapBefore: number // collapsed space before this fragment, in pixels; 0 when there's none, and negative under letter spacing more negative than the space is wide
   gapItemIndex: number // index of the item whose collapsed space gapBefore measures, or -1 when no space precedes this fragment on this line
   occupiedWidth: number // text width plus extraWidth, or a box's width
-  start: LayoutCursor // Start cursor within the item's part of the paragraph
-  end: LayoutCursor // End cursor within the item's part of the paragraph
   sourceStart: number // where `text` starts in the item's `text`, as a UTF-16 offset
   sourceEnd: number // where it ends there
 }
@@ -240,7 +238,7 @@ setLocale(locale?: string): void // optional (by default we use the page languag
 
 Notes:
 - `LayoutCursor` is a segment/grapheme cursor, not a raw string offset.
-- Rich inline lays its items out as one paragraph, so a rich-inline cursor, a line's `end` or a fragment's `start` and `end`, counts segments of the item's part of that paragraph: pass it back to `layoutNextRichInlineLineRange()` or `materializeRichInlineLineRange()`, and don't read it as a cursor into `prepareWithSegments(item.text)`. The two differ, among other cases, for an item that starts with white space after another item's text, which keeps that space as its first segment; for an atomic item, which is one segment; for an item that starts inside a word whose breaks depend on the whole word, as a Thai word's do; and for an item with `extraWidth` that starts with a zero-width space or, in `pre-wrap`, with spaces, a tab or a newline, whose start edge is its first segment. A paragraph of one text item that isn't atomic and has no `extraWidth` keeps its text's cursors. A materialized fragment's `sourceStart` and `sourceEnd` say where its text sits in its item's `text`.
+- Rich inline lays its items out as one paragraph, so a rich-inline cursor, a line's `end` or a fragment range's `start` and `end`, counts segments of the item's part of that paragraph: pass it back to `layoutNextRichInlineLineRange()` or `materializeRichInlineLineRange()`, and don't read it as a cursor into `prepareWithSegments(item.text)`. The two differ, among other cases, for an item that starts with white space after another item's text, which keeps that space as its first segment; for an atomic item, which is one segment; for an item that starts inside a word whose breaks depend on the whole word, as a Thai word's do; and for an item with `extraWidth` that starts with a zero-width space or, in `pre-wrap`, with spaces, a tab or a newline, whose start edge is its first segment. A paragraph of one text item that isn't atomic and has no `extraWidth` keeps its text's cursors. A materialized fragment's `sourceStart` and `sourceEnd` say where its text sits in its item's `text`.
 - Browsers let the spaces at a line's end run past it without counting toward its width, which CSS calls hanging. A line's `width` leaves out what hangs: all of it where the line wraps, and in `pre-wrap`, before a newline or at the end of the text, only the part that doesn't fit in `maxWidth`. Chrome and Safari hang tabs the same way; Firefox counts them in the width. `measureNaturalWidth()` still counts spaces before a newline, like CSS max-content.
 - `layout()` with an empty string returns `{ lineCount: 0, height: 0 }`, as an empty block is 0 tall, and a newline at the very end of `pre-wrap` text adds no line. A `<textarea>` shows one more line in both cases, so add one to `lineCount` when its value is empty or ends with `\n`.
 - Pretext doesn't give bidi levels or a visual order. If you're drawing mixed bidi text, like English and Arabic, render each paragraph as one DOM element with its direction set, and the browser orders every line. In `pre-wrap` text every newline starts a paragraph: set `unicode-bidi: plaintext` on the element, or prepare and paint each paragraph apart, so that each takes its own direction. An English paragraph inside a right-to-left element can paint a line wider than Pretext measures it, which then wraps. If you draw lines separately, such as with Canvas `fillText()`, each line is ordered as its own paragraph, so numbers or punctuation next to a line break, or bidi controls that span lines (invisible direction characters such as U+202A-U+202E or U+2066-U+2069), can come out in a different order.
