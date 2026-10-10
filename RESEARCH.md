@@ -5833,19 +5833,19 @@ decisions for the maintainer.
   wider than its line; the `extraWidth` of a line that starts in a padded item's word beside a joiner or a bidi mark,
   and of a hyphen's line where the item starts with a soft hyphen; and in Firefox a padded item of only a bidi control
   as a box where it stands, the hang that ends at a ZWSP in pre-wrap, a padded item that starts with a tab kept whole,
-  and a U+3000 run that hangs where only bidi controls follow it. ENGINE_FOLLOWUPS.md's section has two more that are
-  not among the eight: a line's width in Safari, a space too wide where the line ends at a line separator after a space
-  across an item's edge, and a trade in Chrome, the halt of a closing mark that ends a padded item, 94 probe layouts
-  lost and 124 gained (2026-10-06). The changelog lists as worse than 0.0.9 only what 0.0.9 had right and an app could
-  hold: the ZWSP's line after a space or after content that overflows, the padded item of only a ZWSP, and Firefox's two
-  around a soft hyphen and a bidi control between spaces (CHANGELOG.md, the entry on rich inline as one paragraph). The
-  rest 0.0.9 had wrong too, or is pre-wrap, which its rich inline lacked, or is left out as text no app is expected to
-  hold, though 0.0.9 had it right: a combining mark, or a ZWNJ in an item of its own, right after a chip wider than its
-  line; a joiner or a bidi mark in a padded item's word, in a box narrower than that word; and in Firefox a padded item
-  of only a bidi control. The decision reopens if an app needs cursors into each item's own prepared text; if Safari's
-  cost of preparing rich text shows in an app, where the removals that were measured and left out start (Dead Ends,
-  Fitting, Cuts And Fast Paths); or with kerning across sibling spans, which wants the paragraph measured as well as
-  analyzed whole.
+  and a U+3000 run that hangs where only bidi controls follow it. ENGINE_FOLLOWUPS.md, Rich-inline item edges, has two
+  more that are not among the eight: a line's width in Safari, a space too wide where the line ends at a line separator
+  after a space across an item's edge, and a trade in Chrome, the halt of a closing mark that ends a padded item, 94
+  probe layouts lost and 124 gained (2026-10-06). The changelog lists as worse than 0.0.9 only what 0.0.9 had right and
+  an app could hold: the ZWSP's line after a space or after content that overflows, the padded item of only a ZWSP, and
+  Firefox's two around a soft hyphen and a bidi control between spaces (CHANGELOG.md, the entry on rich inline as one
+  paragraph). The rest 0.0.9 had wrong too, or is pre-wrap, which its rich inline lacked, or is left out as text no app
+  is expected to hold, though 0.0.9 had it right: a combining mark, or a ZWNJ in an item of its own, right after a chip
+  wider than its line; a joiner or a bidi mark in a padded item's word, in a box narrower than that word; and in Firefox
+  a padded item of only a bidi control. The decision reopens if an app needs cursors into each item's own prepared text;
+  if Safari's cost of preparing rich text shows in an app, where the removals that were measured and left out start
+  (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across sibling spans, which wants the paragraph measured as
+  well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
