@@ -150,10 +150,10 @@
 //     a longer word, whose one such case is at the edge of the browser's change, and the soft hyphen at the end of the
 //     item before the padded one, where the hyphen's line holds no padding in any browser;
 //   - in pre-wrap, a space and a ZWSP that end an item before an item that starts with a space: Firefox starts the next
-//     line with the ZWSP where the first space hangs, so the second space starts that line, and the paragraph carries
-//     the run of hanging spaces past the ZWSP; and the same without the ZWSP, where both spaces hang. Each starts with
-//     one more word, which gives the line an earlier break, so that the cut takes the width where the word before the
-//     ZWSP comes to fit;
+//     line with the ZWSP where the first space hangs, so the second space starts that line, and rich inline carries the
+//     run of hanging spaces past the ZWSP; and the same without the ZWSP, where both spaces hang. Each starts with one
+//     more word, which gives the line an earlier break, so that the cut takes the width where the word before the ZWSP
+//     comes to fit;
 //   - in pre-wrap, a padded item that starts with a tab, or with a space and a tab: Firefox gives no break inside a run
 //     of spaces and tabs and none between a span's start edge and its first content, so the span stays whole where it
 //     starts a line and takes the word before it down where the tab doesn't fit, and rich inline gives such an item a

@@ -9,7 +9,7 @@ rich-733f760999ec0f9b breaks
 rich-af8dbf9c285cccf5 breaks
 rich-ec215509247b16b8 breaks
 
-## A ZWSP that is a rich item, or starts one, right after a space, at 37-84 px, where the text before the space fits its line and the space doesn't: Chrome ends the line after the space and starts the next with the ZWSP, which holds that line though it shows nothing where nothing follows it or the word after it doesn't fit beside it, in pre-wrap too, as Blink sends text that follows content past the line's end to HandleOverflow (line_breaker.cc:1352-1368, Chromium 153); the text walkers hang the ZWSP with the space, so the library is a line short (ENGINE_FOLLOWUPS.md, Line edges)
+## A ZWSP that is a rich item, or starts one, right after a space, at 37-84 px, where the text before the space fits its line and the space doesn't: Chrome ends the line after the space and starts the next with the ZWSP, which holds that line though it shows nothing where nothing follows it or the word after it doesn't fit beside it, in pre-wrap too, as Blink sends text that follows content past the line's end to HandleOverflow (line_breaker.cc:1355-1372, Chromium 153); the text walkers hang the ZWSP with the space, so the library is a line short (ENGINE_FOLLOWUPS.md, Line edges)
 rich-0a10918c434ee6a1 count
 rich-2c619d55995bf124 count
 rich-3869e33755e87958 count
