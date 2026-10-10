@@ -949,6 +949,21 @@ timed the prefix fit aren't in the repository either. A fit that asks less on a 
 that tells `prepare()` a text is never cut inside a word (TODO.md, the API discussion), or a release whose labels must
 not be slower than 0.0.9's in any language, would reopen this.
 
+The labels were timed again on main as of #461 (59c8ad3c, 2026-10-09), after #453 cut the Canvas calls of words that
+hold an invisible character and #460 changed preparation a little: three foreground sessions in Chrome 154.0.8037.98 and
+in Safari 27.0 and four in Firefox 156.0.1, with the script of 2026-10-05 changed so that every language has two copies
+of each build and the same rounds. A figure is the median over the rounds of the release build's time over the mean of
+0.0.9's two copies, and a language reads slower or faster only where it is outside its noise band in every session. In
+Firefox seven of the 36 languages, the bench's 35 and Finnish, read slower than 0.0.9: Armenian by 36%, Georgian and
+Telugu 24%, Tamil 22%, Finnish 21%, Greek 19% and German 17%. Bulgarian (5%) and Dutch (3%) are inside noise now, as are
+Russian, Ukrainian, Thai, Khmer and Amharic, and 22 read faster. In Chrome four read slower, Tamil by 29%, Armenian 12%,
+Telugu 11% and Hebrew 2%, and the other 32 faster. In Safari none reads slower, 30 read faster and six are inside noise.
+English labels take 41%, 20% and 21% less time than 0.0.9's in the three browsers (over 0.0.9's first copy). The slower
+languages' labels make 62% to 152% more `measureText` calls than 0.0.9's in the batches timed in Firefox and 10% to 52%
+more in Chrome; Dutch's and Bulgarian's make about twice 0.0.9's in Firefox and read inside noise (calls counted in
+background sessions). The changelog's speed entry states these figures without Hebrew's 2%, a slowdown of a few percent.
+The script still isn't in the repository, and a later change to what `prepare()` runs wants the labels timed again.
+
 What the labels get for it, on 13,090 probe layouts of one word a paragraph: 390 words of 78px or wider from those
 labels, Latin, Cyrillic and Greek in 13px Helvetica Neue, 13px Inter and 14px Roboto and Tamil in 13px Tamil Sangam MN,
 in boxes of 50-140px, and 130 Arabic words of seven letters or more in 24px and 32px Geeza Pro, 24px Arial and 24px Noto
