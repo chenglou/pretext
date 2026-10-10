@@ -2131,7 +2131,7 @@ scan gives none before a space. The item stepper ended the line at the white spa
 such control, and the one-paragraph design lost that line end without naming it: since #460 items `aa see `,
 `\u200E this word` in 16px Arial take a line more than Firefox at 49-52px, and `see `, `\u200E this word` report a first
 line of 30.25px in a 26px box, a space wider than Firefox's and than 0.0.9's. It is rare text: no rich-inline draw of
-the real-usage sample holds a bidi control, and no harness case holds the shape. Putting the break back where a
+the real-usage sample holds a bidi control; four rich-set templates hold the shape. Putting the break back where a
 character the text run keeps follows the space in the space's own item, which takes an item for a frame, was built and
 not landed, as it trades (#463). On 44,281 layouts of 434 paragraphs built to hold the shape, it has 732 right that main
 at #461 has wrong and 344 wrong that main has right: 284 at a level change after the space, 40 at a padded item and 20

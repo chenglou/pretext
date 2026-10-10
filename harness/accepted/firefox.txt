@@ -25,11 +25,84 @@ catalog-26d0c58f4b1a737e count
 catalog-3cf193e86082144e count
 catalog-7cf32037f7604eb3 count
 
+## A U+3000 that ends a rich item before an item of only a bidi control that ends the paragraph, at 16-48 px, where the text before the U+3000 fits its line and the U+3000 doesn't: Firefox drops the control and hangs the U+3000 (not traced); the Gecko profile keeps a control that ends the paragraph with the U+3000's segment, whose text then doesn't end with the U+3000, so it gets no hang (addIdeographicSpaceHangs in src/prepare.ts) and the last ideograph goes down with it, or it takes a line alone, a line too many (ENGINE_FOLLOWUPS.md, Line edges)
+rich-00e3145cbb3a0ade count
+rich-1d2bf7bd726ec4a2 count
+rich-83a54edbe0e60f00 count
+
+## A ZWSP that is a rich item, or starts one, right after a space, at 37-84 px, where the text before the space fits its line and the space doesn't: Firefox ends the line after the space and starts the next with the ZWSP, which holds that line though it shows nothing where nothing follows it or the word after it doesn't fit beside it, and in pre-wrap keeps the ZWSP on the space's line, as the library does (not traced); the text walkers hang the ZWSP with the space, so the library is a line short (ENGINE_FOLLOWUPS.md, Line edges)
+rich-3e2560b5cce34ec1 count
+rich-79c1d5284ed57316 count
+rich-a6b04ceca3f5e245 count
+rich-c0b1cc46a7b15229 count
+rich-d0104910d98009fb count
+rich-e16bbdd996294984 count
+rich-f0071ef17f6197c9 count
+
+## A bidi control that starts an item between two spaces, at 28 px, where the word before the first space starts its line and the word after the second doesn't fit beside that space: Firefox leaves the control and both spaces on the first word's line, where they take no room, and starts the next line at the second word; the Gecko profile starts a line with the control and its space, which hold that line alone, a line too many (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-1a756c0429cffa1d count
+rich-9600fb89ae2dc5d4 count
+rich-a2bdbe6aca58bf4b count
+
+## A bidi control that starts an item between two spaces, at 48-50 px, where the word before the first space fits its line and that space doesn't, and text follows the second space in its own item: Firefox fits the control's text frame from the space after it (BreakAndMeasureText, gfxTextRun.cpp:1085-1109, 1175-1188) and, where the word after that space doesn't fit, leaves on the line the frame's piece of no width, its controls with that space, trimmed or in pre-wrap hung (nsTextFrame.cpp:11202-11229), which fits wherever it starts (CanPlaceFrame, nsLineLayout.cpp:1264-1271), so the line keeps its last word; the Gecko profile gives the control no break, as the scan gives none before a space, so the line goes back to its last break, a line too many (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-0d64e069783c4072 count
+rich-36755419cbe7165b count
+rich-4fb0b9dcd5360035 count
+rich-7e88e4ba66dc0c93 count
+rich-c9e307b20bd517dc count
+
+## A padded rich item of a space and a ZWSP after a word, at 17-31 px, where the word fits its line and the item with its space doesn't: Firefox ends the line after the word and gives the item the next line, which it holds though it shows nothing (not traced); the library hangs the item's space and its ZWSP on the word's line, a line short, as it hangs a ZWSP after a space outside a padded item (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-7aba2afda63492e9 count
+rich-940ad57a2e132532 count
+rich-fce9b7c49b1f3020 count
+rich-fe40c99ed527d259 count
+
+## A padded rich item of only a soft hyphen after a space, at 50 px, where the word before the space and the item's two edges fit the line and the space between them doesn't: Firefox places a frame by its end less the trimmable space that ends the text before it (CanPlaceFrame, nsLineLayout.cpp:1251-1252), which a text frame whose characters are all discarded leaves standing (nsTextFrame.cpp:11421-11429), so the item stays on the word's line; the Gecko profile makes the soft hyphen a zero-width break and counts the space before it in the width of a line that ends after it, as the text walker does, so the item goes down with the text after it, which doesn't fit beside its padding, a line too many (ENGINE_FOLLOWUPS.md, White space and controls)
+rich-4f23cc28c4b544d8 count
+
+## A padded rich item that starts with ZWNJ inside a word, at 44-48 px, where the line is cut right after the ZWNJ: Firefox fits every line of the item with both its edges, so the line that starts after the ZWNJ holds `oper` (not traced); the library leaves the item's extraWidth out of a line that starts inside a word at a default-ignorable character, whose widths it measures afresh from there (insideExtras in src/line-break.ts), so its line holds `opera`, a line short (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-2e549acd829beffa count
+rich-6034dc55f75133cc count
+
+## A padded rich item that starts with a soft hyphen, at 31-86 px, where the text before it and the hyphen fit the line and the item's two edges don't fit with them: Firefox fits a line that ends at that soft hyphen with both the item's edges, so its line ends at an earlier break (not traced); the library puts an item's extraWidth on its first segment that takes room, which comes after the soft hyphen, so the hyphen's line holds no padding and ends at the soft hyphen (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-04248179df492169 breaks
+rich-6dba29e0da79a82f count
+rich-e4e1e80d695931c7 breaks
+
+## A padded rich pre-wrap item of only a bidi control, at 58-61 px: Firefox, which drops the control, lays the span out as a box as wide as its padding where it stands, on the line of the space before it (not traced); the Gecko profile has no segment for a character Firefox drops and puts the item's extraWidth on the word after it, which then doesn't fit beside the next word, a line too many (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-0fd49104b7081602 count
+rich-f8b55dcda8886b7e count
+
+## A padded rich pre-wrap item that starts with a tab, or with a space and a tab, at 1-75.2 px, where the tab doesn't fit its line: Firefox gives no break inside a run of spaces and tabs (nsLineBreaker.cpp:318-330) and none between a span's start edge and its first content, so the span stays whole where it starts a line, however far the tab overflows, and after a word the line goes back to the break before that word; the library gives an item that opens with a tab a start edge of its own, a segment a line can end after (getOpeningFit in src/rich-inline.ts), so the edge takes a line alone, a line too many, or the word before the item stays on the line above (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-0ebc7d743a23cd69 breaks
+rich-53c24f127698e10c count
+rich-63eb9c2dc492aef7 count
+rich-6f21e04dc918c108 count
+rich-74a5757b5af64691 count
+rich-b9b18447cf563686 count
+rich-c43c7f290a5f630b count
+rich-cc8a9b5f62189b6a breaks
+rich-ec1dedeb7413c9e3 breaks
+rich-f387fd742bf3fa8d count
+rich-fa460e87cda1ff67 count
+
+## A rich item that starts with ZWNJ right after a chip wider than its line, before a word that doesn't fit the line either, at 8.9-101 px: Firefox ends the line after the chip and starts the next with the ZWNJ and the word's first letters, as its line breaker starts again at an atomic frame (RESEARCH.md, Rich Inline As One Paragraph; not traced for this shape); the Gecko scan reads the joined text once and gives a break after the ZWNJ, which takes a line alone, a line too many (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-28babe2ade6fd628 count
+rich-8a511d98ac97408c count
+rich-adc2e453232aa709 count
+rich-b5600f1ae14d3822 count
+
 ## A soft hyphen whose hyphen doesn't fit, where rich items split its word, at 24 px and wider: Firefox breaks the word between letters, the library at the soft hyphen, as it does for the text in one node (ENGINE_FOLLOWUPS.md)
 rich-4635ddffedd43c84 breaks
 rich-8736e842495c21ea count
 rich-d232a1424826203f count
 rich-d7a1851aecf96951 breaks
+
+## A space and a ZWSP that end a rich pre-wrap item before an item that starts with a space, at 81.8-84 px and at width 1, where the text before the first space fits its line and that space doesn't: Firefox hangs the first space and starts the next line with the ZWSP, so the second space starts that line (not traced); the library carries the run of spaces that hang past the zero-width break that ends the item, as past a soft hyphen there, which Firefox drops, so both spaces hang on the first line (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-039d9b3a25ffcf7a breaks
+rich-8fa53caebce03adf breaks
+rich-95f5d3ebc6bd5aed breaks
+rich-b8d5b8e0ee7ba330 count
 
 ## A space before a CR where the line would end, at 24 px and wider: Firefox's fit trims only the run of spaces that ends the line (gfxTextRun::BreakAndMeasureText, gfxTextRun.cpp:1152-1160), and the CR after the space ends that run, so `aaaa A` with its space, 55.17 px, doesn't fit at 52-55.15 px and `A` starts the next line, where the Gecko analysis takes the CR out of the text, hangs the space and fits `aaaa A`; before #399 the CR was one more space that hung (ENGINE_FOLLOWUPS.md, White space and controls)
 catalog-28710b5f63c26c5b count
@@ -578,16 +651,20 @@ catalog-92d159c42fda8ce1 count
 catalog-db900db766e91e07 count
 
 ## Narrower than real layouts: 1-23 px, a ZWSP alone in a rich item, at the start of one, or in one after only white space, soft hyphens or a combining mark's base, where the text around it doesn't fit its line: Firefox gives the ZWSP a line of its own, as for the text in one node, where the text walkers keep it on the line before it or consume it at a line's start; the item stepper took an item's start as a text's start, where a ZWSP holds a line (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-04a2efb39c723ee6 count
 rich-0cabfc789f6a4358 count
 rich-19e866488d756c8e count
+rich-1c3988ac962ad35a count
 rich-1f6ad9306376b1f5 count
 rich-25f9f1b3f0b0888e count
+rich-290345e4e5dc740e count
 rich-338fdf8cb6af531f count
 rich-3f7623a4b4dd94eb count
 rich-4b7d153ff81b0f68 count
 rich-5727de8063237d68 count
 rich-676951c3e7b42eca count
 rich-7ed410c8998dbb4a count
+rich-b53f94b697f8bf8b count
 rich-d5b65aa2a4d131a5 count
 rich-dcfaf1298b58bfa4 count
 
@@ -1446,16 +1523,23 @@ facts-ffa6b122790dda2f count
 oracle-f1121833e4ed5ed7 count
 rich-0228179eb16f7fed count
 rich-0e00bb1689b366cc count
+rich-1ed6e50673f97cd5 count
+rich-6d0c85fab9825ad9 count
 rich-7b25479467251799 count
 rich-8992da35e9afd564 breaks
 rich-92a3f55de690d221 breaks
 rich-ac88f7d112e69240 count
+rich-c4e4c9df352e98e5 count
+rich-e20d571f5f939093 count
 
 ## Narrower than real layouts: 9.7 px, `A` and a word joiner in an item of its own at -1 px letter spacing: Firefox gives the word joiner no letter spacing and keeps it on the line of `A`, where the library spaces it (ENGINE_FOLLOWUPS.md, Letter spacing) and the text walkers, which fit a character of no advance against the line's width before the negative gap, end the line before it; the item stepper fitted each item whole
 rich-6dbb34be649dfa2b count
 
 ## Narrower than real layouts: a 1 px box, narrower than the "ffi" ligature of 24 px Hoefler Text that starts its line; Firefox cuts inside such a ligature and gives each of its letters an equal share of its advance (ComputeLigatureData, gfxTextRun.cpp:238-322), so each letter takes a line, where the library counts the ligature whole on its first letter and gives the rest no width, so two of them share a line (ENGINE_FOLLOWUPS.md, Emergency breaks inside a word)
 catalog-5e5da93679ee9480 count
+
+## Narrower than real layouts: width 1, a padded rich item of only a soft hyphen: Firefox gives the item a line of its own, which the recorded height has (8 lines of 20 px), and the recorder, with no text box to list on that line, lists 7, so the library's 8 lines are scored a line too many (harness/README.md, Bounds and blind spots)
+rich-a349bf00db242861 count
 
 ## Narrower than real layouts: width 1, a soft hyphen in a span of its own after a word: Firefox ends the last letter's line after the soft hyphen, where the text walkers end it at the letter and the next line's start consumes the soft hyphen, as in one text (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-fb77b1bfbe1c8a96 breaks
@@ -1945,11 +2029,15 @@ facts-cb2d5cc303747edb count
 facts-cc939d224ccd4816 count
 facts-d5a3d937459712e1 count
 facts-fc69084749bc97f4 count
+rich-15a6bf021414df3b count
 rich-26c6030b9304ccd7 count
 rich-2ba96631579775f7 count
 rich-2d09e453d98924b9 count
 rich-34075de5f2f50824 count
 rich-3f6c610251935b3f count
+rich-40b56f25c087f514 count
+rich-42ccbec8ae405ce8 count
+rich-68048ed99559fcfc count
 rich-8acb5b79e29743bd count
 rich-8d3626fe8bbced7a count
 rich-9caad05a8d6ec08d count
@@ -1957,6 +2045,7 @@ rich-a560650dfbeafe72 count
 rich-ab169565a9c0a88b count
 rich-c4a883b30ad5ddaf count
 rich-cd0ee47c06b6cf6d count
+rich-db66be2507e4c7cc count
 rich-eac5e4eee615b1b8 count
 rich-eafa066368d2585d count
 
