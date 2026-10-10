@@ -1632,12 +1632,14 @@ hypothesis):
   and 26% for the two loops: with the general widths' code in the loop every engine ran the bare segments slower, and
   the stress items 4, 8 and 7 points slower. The two loops write the block that opens a fragment or a gap twice, for a
   test that never changes inside the loop taken out of it: every engine walks the stress items faster that way, and
-  Chrome and Safari the styled paragraphs too.
+  Chrome and Safari the styled paragraphs too. It reopens if a timing reads the one loop within about a percent of the
+  two, where the shorter form is taken (Part 1, Engineering, JIT tuning).
 - **A loop of bare widths for each fragment, inside the loop over the line's fragments**, walked `chat-styled` 35%, 15%
   and 28% faster and the stress items 3% slower in Chrome and 9.5% slower in Firefox (5.1 to 5.6 µs per 1,000 units,
   every one of six foreground sessions). SpiderMonkey runs the loop over fragments slower once a loop is compiled inside
   it, about 100 instructions a fragment in its shell whether the inner loop runs or not, and an item of one segment
-  gains nothing back (JavaScript Engines has the first case of this).
+  gains nothing back (JavaScript Engines has the first case of this). It reopens when Firefox's pin moves, if a loop
+  compiled inside that one then costs its walk of the stress items nothing.
 - **Fragment widths as differences of sums stored per segment** take the pass away: `chat-styled` walked 36%, 24% and
   31% faster (five foreground sessions of a build from a folder outside the repository, as the forms of the split
   above). A fragment's width then differs from its segments' sum in the last bits (by 1.6e-12 at most over 600,000
@@ -3118,7 +3120,8 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   ran or not, and Firefox 156.0.1 walked and streamed text of one segment an item 9% slower (5.1 to 5.6 µs per 1,000
   units of the bench's stress items, every one of six foreground sessions), where Safari 27.0 read 8% faster and
   Chrome 154 3% slower. So that pass's two loops each run over the line's segments, with none inside (2026-10-07;
-  Rich Inline As One Paragraph has what that gave up).
+  Rich Inline As One Paragraph has what that gave up). Reopen on a Firefox that runs a loop no slower for a call or a
+  loop compiled inside it.
 - **How a width is stored, in SpiderMonkey**: Firefox's full walker is slower over a handle whose whole widths are
   stored as int32 values than over one whose widths are all doubles, once the page has laid out a width that isn't whole
   (on a page of only whole widths integers are the faster: Every width stored as a double, below), and which one a
@@ -3550,7 +3553,8 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   with its two regular expressions written at their uses in place of two top-level constants, the form that landed,
   +4.3%, -7.5% and +7.1%, each within noise beside a control 0.6-8.6% from base. So that row moves in Safari with what a
   bundle declares, as Firefox's does with its names; why wasn't traced in JavaScriptCore. (Three sessions a build
-  against main at #453, foreground, 2026-10-06.)
+  against main at #453, foreground, 2026-10-06.) Reopen when Safari's pin moves, or if the row moves between two builds
+  that declare the same top-level bindings.
 - **`%` on numbers that aren't whole** is a call: V8 works a remainder out inline only for two positive whole numbers
   and otherwise calls the C library's `fmod` (`MacroAssembler::Float64Mod`, `macro-assembler-arm64.cc:3028-3081`, V8
   15.3). A tab's advance took one, and it was what a tab's arithmetic cost. With the remainder from a division and a
