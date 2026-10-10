@@ -1641,8 +1641,8 @@ hypothesis):
   and 28% faster and the stress items 3% slower in Chrome and 9.5% slower in Firefox (5.1 to 5.6 µs per 1,000 units,
   every one of six foreground sessions). SpiderMonkey runs the loop over fragments slower once a loop is compiled inside
   it, about 100 instructions a fragment in its shell whether the inner loop runs or not, and an item of one segment
-  gains nothing back (JavaScript Engines has the first case of this). It reopens when Firefox's pin moves, if a loop
-  compiled inside that one then costs its walk of the stress items nothing.
+  gains nothing back (JavaScript Engines has the first case of this). It reopens when the pinned Firefox moves, if a
+  loop compiled inside that one then costs its walk of the stress items nothing.
 - **Fragment widths as differences of sums stored per segment** take the pass away: `chat-styled` walked 36%, 24% and
   31% faster (five foreground sessions of a build from a folder outside the repository, as the forms of the split
   above). A fragment's width then differs from its segments' sum in the last bits (by 1.6e-12 at most over 600,000
@@ -3559,8 +3559,8 @@ Part 1, Engineering, says when an engine fact may shape code. These did, or move
   with its two regular expressions written at their uses in place of two top-level constants, the form that landed,
   +4.3%, -7.5% and +7.1%, each within noise beside a control 0.6-8.6% from base. So that row moves in Safari with what a
   bundle declares, as Firefox's does with its names; why wasn't traced in JavaScriptCore. (Three sessions a build
-  against main at #453, foreground, 2026-10-06.) Reopen when Safari's pin moves, or if the row moves between two builds
-  that declare the same top-level bindings.
+  against main at #453, foreground, 2026-10-06.) Reopen when the pinned Safari moves, or if the row moves between two
+  builds that declare the same top-level bindings.
 - **`%` on numbers that aren't whole** is a call: V8 works a remainder out inline only for two positive whole numbers
   and otherwise calls the C library's `fmod` (`MacroAssembler::Float64Mod`, `macro-assembler-arm64.cc:3028-3081`, V8
   15.3). A tab's advance took one, and it was what a tab's arithmetic cost. With the remainder from a division and a
