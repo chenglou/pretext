@@ -953,12 +953,12 @@ not be slower than 0.0.9's in any language, would reopen this.
 The labels were timed again on main as of #461 (59c8ad3c, 2026-10-09), after #453 cut the Canvas calls of words that
 hold an invisible character and #460 changed preparation a little: three foreground sessions in Chrome 154.0.8037.98 and
 in Safari 27.0 and four in Firefox 156.0.1, with the script of 2026-10-05 changed so that every language has two copies
-of each build and the same rounds. A figure is the median over the rounds of the release build's time over the mean of
-0.0.9's two copies, and a language reads slower or faster only where it is outside its noise band in every session. In
-Firefox seven of the 36 languages, the bench's 35 and Finnish, read slower than 0.0.9: Armenian by 36%, Georgian and
-Telugu 24%, Tamil 22%, Finnish 21%, Greek 19% and German 17%. Bulgarian (5%) and Dutch (3%) are inside noise now, as are
-Russian, Ukrainian, Thai, Khmer and Amharic, and 22 read faster. In Chrome four read slower, Tamil by 29%, Armenian 12%,
-Telugu 11% and Hebrew 2%, and the other 32 faster. In Safari none reads slower, 30 read faster and six are inside noise.
+of each build and the same rounds. A figure is the median over the rounds of that main's time over the mean of 0.0.9's
+two copies, and a language reads slower or faster only where it is outside its noise band in every session. In Firefox
+seven of the 36 languages, the bench's 35 and Finnish, read slower than 0.0.9: Armenian by 36%, Georgian and Telugu 24%,
+Tamil 22%, Finnish 21%, Greek 19% and German 17%. Bulgarian (5%) and Dutch (3%) are inside noise now, as are Russian,
+Ukrainian, Thai, Khmer and Amharic, and 22 read faster. In Chrome four read slower, Tamil by 29%, Armenian 12%, Telugu
+11% and Hebrew 2%, and the other 32 faster. In Safari none reads slower, 30 read faster and six are inside noise.
 English labels take 41% less time than 0.0.9's in Chrome, 20% in Firefox and 21% in Safari (over 0.0.9's first copy).
 The slower languages' labels make 62% to 152% more `measureText` calls than 0.0.9's in the batches timed in Firefox and
 10% to 52% more in Chrome; Dutch's and Bulgarian's make about twice 0.0.9's in Firefox and read inside noise (calls
