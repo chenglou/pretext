@@ -1506,8 +1506,8 @@ starts a word: the fragment starts after it, and the line before ends after it, 
 gave. The same holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173
 differ in the Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no
 mapping keeps the old meaning without each item's own analysis, which the design removes. Cursors are for passing back
-to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`, and what passes back is a range, so the
-type of a materialized fragment has no `start` and `end` (Decisions Log, 2026-10-10); it has `sourceStart` and
+to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`, a fragment's only in its line's range, so
+the type of a materialized fragment has no `start` and `end` (Decisions Log, 2026-10-10); it has `sourceStart` and
 `sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as
 its `extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it
 was a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that
