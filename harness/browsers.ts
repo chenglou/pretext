@@ -383,16 +383,24 @@ async function launchChrome(url: string, profile: string, foreground: boolean): 
   return launched
 }
 
+// A job's page loads each next document with location.replace() (page.ts), 16 to 20 a second while recording. Since
+// Firefox 157, once a tab's scripts have started 200 navigations or history calls within 10 seconds of the first, the
+// next does nothing and throws nothing until the 10 seconds are over (by design, Mozilla #1922677; Firefox 156 allowed
+// 1,000 and threw a SecurityError). A full record's 201st navigation comes close to that mark: it fell inside the 10
+// seconds in 2 of 5 passes in Firefox 157.0.1, and the page then sat idle until the watchdog (2026-10-10). So the
+// profile sets the limit's count to 0, which turns the limit off (BrowsingContext::CheckNavigationRateLimit), as
+// Mozilla's own test manifests do (PLATFORM_BUGS.md).
 function launchFirefox(url: string, profile: string, foreground: boolean): Promise<Launched> {
   const app = appPath('firefox')
   mkdirSync(profile, { recursive: true })
-  const prefs: Array<[string, boolean | string]> = [
+  const prefs: Array<[string, boolean | string | number]> = [
     ['browser.shell.checkDefaultBrowser', false], ['browser.aboutwelcome.enabled', false],
     ['browser.startup.homepage_override.mstone', 'ignore'], ['startup.homepage_welcome_url', ''],
     ['datareporting.policy.dataSubmissionPolicyBypassNotification', true], ['toolkit.telemetry.reportingpolicy.firstRun', false],
     ['browser.sessionstore.resume_from_crash', false], ['dom.timeout.enable_budget_timer_throttling', false],
     ['app.update.auto', false], ['app.update.staging.enabled', false],
     ['intl.locale.requested', 'en-US'], ['intl.accept_languages', 'en-US, en'], ['intl.regional_prefs.use_os_locales', false],
+    ['dom.navigation.navigationRateLimit.count', 0],
   ]
   if (setup.scale !== null) prefs.push(['layout.css.devPixelsPerPx', String(setup.scale)])
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))

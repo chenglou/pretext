@@ -113,6 +113,10 @@ Pretext avoids most of these (an OffscreenCanvas, no `wordSpacing`, no width for
 
 Unfiled on purpose: Firefox's `Intl.Segmenter` runs a small model over every character, 24-30 times slower than Chrome's and Safari's dictionaries (0.6 ms per Thai chat message against 0.02 ms) and 90-93% of Thai `prepare()` in Firefox (Firefox 155 and 156, 2026-09-16 and 09-25), a deliberate trade for a small download. The closest report is Mozilla #1744875.
 
+### Firefox: a tab's 201st navigation in 10 seconds does nothing
+
+By design since Firefox 157 ([Mozilla #1922677](https://bugzilla.mozilla.org/show_bug.cgi?id=1922677), fixed for 157; 2026-10-10): once a tab's scripts have started 200 navigations or history calls within 10 seconds of the first, the next does nothing and throws nothing until the 10 seconds are over (`dom.navigation.navigationRateLimit.count`, 200; `nsDocShell::InternalLoad` returns quietly, `nsDocShell.cpp:8732-8735`, Firefox 157.0.1). Firefox 156 allowed 1,000 and threw a `SecurityError`. Pretext navigates nowhere and makes no history call, and no demo's script does, so the limit reaches a page only through its own navigations. It reached the harness, whose page loads each next document with `location.replace()`: a full `record` loads 278 documents, 16 to 20 a second, so its 201st navigation comes close to the 10 seconds, and in 2 of 5 passes in Firefox 157.0.1 it fell inside them, after which the page sat idle until the job's watchdog ended it with "no page activity for 2 minutes" (2026-10-10). [Mozilla #2077709](https://bugzilla.mozilla.org/show_bug.cgi?id=2077709), `NEW` (2026-10-10), reports the same stall in Mozilla's own test runner. The harness's Firefox profile sets the count to 0, which turns the limit off, as Mozilla's test manifests do (`launchFirefox()`, `harness/browsers.ts`).
+
 ### Engine rules Pretext models
 
 - Safari fits a line with 1/64 px to spare, and the Chromium and Gecko profiles with 0.005 px (`RESEARCH.md`, "Measurement Model"; `ENGINE_FOLLOWUPS.md`); the case behind Safari's, `الأحمد, the results`, stayed on one line at about 150.0139 px in a 150 px box (Safari 26.4, June 2026).

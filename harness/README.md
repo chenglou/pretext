@@ -429,7 +429,9 @@ uncovered during a job.
 
 Firefox changes fonts after it starts (see also `PLATFORM_BUGS.md`, the late family names): emoji beside Arial laid out
 otherwise when recorded 11 s after launch than at 12, 15 or 30 s (91 cases, 2026-09-24), so each Firefox job holds its
-first document until 15 s.
+first document until 15 s. Since Firefox 157 a tab's 201st navigation within 10 seconds does nothing and throws nothing
+(`PLATFORM_BUGS.md`, By design, or unfiled), and a full `record` loads its 278 documents 16 to 20 a second, so each
+Firefox job's profile turns that limit off (`browsers.ts`).
 
 Pinned Chrome and Firefox open each job's window on the user's screen, behind the others. Its page is blank and dark
 (`#111` on html and body; a case's paragraph is added, read and removed in one call, so none is ever painted), and its
