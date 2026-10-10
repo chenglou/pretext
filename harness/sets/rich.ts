@@ -141,8 +141,9 @@
 //     the same item without the ZWNJ, whose lines all carry it. In Chrome both templates also have other lines than
 //     rich inline's where a line ends inside the padded item, which Chrome fits without the item's end edge;
 //   - in pre-wrap, a padded item of only a bidi control: a box as wide as its padding where it stands in Firefox, where
-//     the Gecko profile, which has no segment for a character Firefox drops, puts the padding on the word after it; and
-//     the control with that word's first letter in the padded item, whose padding is on the letter;
+//     in the Gecko profile the control's segment holds the padding and no break comes after it, so the padding goes to
+//     the line of the word after it; and the control with that word's first letter in the padded item, whose padding is
+//     on the letter;
 //   - a padded item that starts with a soft hyphen, as a styled run that starts at a syllable of text hyphenated ahead
 //     of time: a line that ends at that soft hyphen holds the item's start edge in Chrome and Safari and both edges in
 //     Firefox, and no padding in rich inline, which puts an item's extraWidth on its first segment that takes room; a
