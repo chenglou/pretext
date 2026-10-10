@@ -1081,12 +1081,8 @@ function createLine(
       const part = Math.min(rest, last.gapBefore)
       last.gapBefore -= part
       rest -= part
-      // A gap taken whole is none, and so is one with under 1e-9px left, which could only be float
-      // error; no line found leaves a gap that little.
-      if (last.gapBefore < 1e-9) {
-        last.gapBefore = 0
-        last.gapItemIndex = -1
-      }
+      // A gap taken whole is none.
+      if (last.gapBefore === 0) last.gapItemIndex = -1
     }
   }
   return { fragments, width: Math.max(0, width), end }
