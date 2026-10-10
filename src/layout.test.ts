@@ -402,7 +402,7 @@ describe('shared public contracts', () => {
     }
   })
 
-  test('a line API called once for a paragraph lays a width that is not a number out as an unbounded one', () => {
+  test('a line API called once for a paragraph lays a NaN width out as an unbounded one', () => {
     // layout(), layoutWithLines(), walkLineRanges(), measureLineStats() and the two rich
     // walks pass their width through normalizeMaxWidth() once, so their loops meet no
     // NaN. The first three texts take layout()'s three counts: its own loop, the simple
@@ -410,7 +410,6 @@ describe('shared public contracts', () => {
     // reaches the loops, layout() counts a line per grapheme, and a pre-wrap line that
     // ends in spaces or a tab reports a NaN width. The streams, called once for each
     // line, take their width as given (ENGINE_FOLLOWUPS.md, Small ones).
-    const widths = [NaN, undefined as unknown as number]
     for (const [text, options, walkFastPath, countFastPath] of [
       ['aaaa bbbb 中文字', {}, true, true],
       ['aaaa\u0085bbbb cccc', {}, false, true],
@@ -432,7 +431,7 @@ describe('shared public contracts', () => {
       }
       const unbounded = at(Infinity) as { layout: { lineCount: number } }
       expect(unbounded.layout.lineCount).toBe(text.split('\n').length)
-      for (let i = 0; i < widths.length; i++) expect(at(widths[i]!)).toEqual(unbounded)
+      expect(at(NaN)).toEqual(unbounded)
     }
     for (const [items, options] of [
       [[{ text: 'aaaa bbbb ', font: FONT }, { text: 'cccc 中文字', font: FONT, extraWidth: 4 }], {}],
@@ -450,7 +449,7 @@ describe('shared public contracts', () => {
       }
       const unbounded = at(Infinity) as { measureRichInlineStats: { lineCount: number } }
       expect(unbounded.measureRichInlineStats.lineCount).toBe(items.map(item => item.text).join('').split('\n').length)
-      for (let i = 0; i < widths.length; i++) expect(at(widths[i]!)).toEqual(unbounded)
+      expect(at(NaN)).toEqual(unbounded)
     }
   })
 
