@@ -589,7 +589,7 @@ describe('shared public contracts', () => {
     ])
     const shown: { readonly [Field in Exclude<keyof PreparedTextWithSegments, symbol>]: true } = { segments: true, kinds: true, widths: true }
     expect(Object.keys(prepared)).toEqual(expect.arrayContaining(Object.keys(shown)))
-    // A hidden field is still there for code that read it, and no longer type-checks.
+    // A hidden field is there for code that reads it, and doesn't type-check.
     // @ts-expect-error
     expect(prepared.breakableFitAdvances).toBeDefined()
     // Read-only, and `widths` an index and a length, not an array. Each line below runs,
@@ -2316,7 +2316,7 @@ describe('prepare invariants', () => {
   })
 
   test('a run of no-break spaces is visible text that takes emergency breaks', () => {
-    // There is no `glue` kind any more, on purpose (RESEARCH.md, Decisions Log, 2026-09-24).
+    // There is no `glue` kind, on purpose (RESEARCH.md, Decisions Log, 2026-09-24).
     const prepared = prepareWithSegments('\u00A0', FONT)
     expect(prepared.segments).toEqual(['\u00A0'])
     expect(layout(prepared, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
