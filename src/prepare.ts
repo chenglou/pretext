@@ -327,8 +327,9 @@ export function measureAnalysis(
   // list by what the `[]` that made it has seen, and with every caller making them, in a loop
   // that pushed, Chrome prepared long texts 5-11% slower and Firefox walked CJK lines 12%
   // slower. A paragraph's lists are its caller's, and the measuring loop below stores by index
-  // for them (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made where
-  // it is filled).
+  // for them. With those stores a text's lists made by its caller weren't timed, so whether
+  // they still have to be made here isn't known (RESEARCH.md, Keeping Work Bounded, JavaScript
+  // Engines, under A list made where it is filled).
   const widths: number[] = paragraph === null ? [] : paragraph.widths
   // An engine's scan makes one prepared segment per analysis segment, whose flags the
   // walkers, layout()'s count and rich-inline layout read where the scan gives no break.
