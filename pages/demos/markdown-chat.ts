@@ -24,6 +24,7 @@ import {
 } from './markdown-chat.model.ts'
 
 type State = {
+  canvasHeight: number // the canvas's height as the last frame wrote it
   conversation: ConversationLayout
   endScrollTop: number // the scroll position that showed the canvas's end in the last frame, computed from its height, not read
   events: {
@@ -47,6 +48,7 @@ const domCache = {
 
 const preparedMessages = createPreparedChatMessages()
 const st: State = {
+  canvasHeight: 0,
   conversation: layoutConversation(preparedMessages, getMaxChatWidth(domCache.viewport.clientWidth)),
   // The empty canvas shows its end at 0, so the first frame's end has moved.
   endScrollTop: 0,
@@ -121,7 +123,18 @@ function render(): void {
   // st.scrollTop is where the last frame left the scroll position, so any other
   // value is the user's scroll: anchor the first message whose top shows below
   // the top banner, in the layout they scrolled. Otherwise keep the anchor.
-  const scrollAnchor = scrollTop === st.scrollTop
+  // The end anchor allows for the browser's own moves: a taller viewport
+  // shortens the scroll range, so the browser lowers the position to the range's
+  // end, and when the viewport then shrinks, Chrome's scroll anchoring raises it
+  // back. Both leave the position between the last one and the range's end,
+  // which is the last canvas less this viewport, give or take a pixel:
+  // clientHeight is a whole number and browsers round scrollTop. Only a
+  // position outside that stretch ends the end anchor.
+  const scrollRangeEnd = st.canvasHeight - viewportHeight
+  const staysOnEnd = st.scrollAnchor === 'end'
+    && scrollTop >= Math.min(st.scrollTop, scrollRangeEnd - 1)
+    && scrollTop <= Math.max(st.scrollTop, scrollRangeEnd + 1)
+  const scrollAnchor = scrollTop === st.scrollTop || staysOnEnd
     ? st.scrollAnchor
     : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
@@ -148,6 +161,7 @@ function render(): void {
     occlusionBannerHeight,
   )
 
+  st.canvasHeight = canvasHeight
   st.conversation = conversation
   st.endScrollTop = endScrollTop
   st.isVisualizationOn = isVisualizationOn
