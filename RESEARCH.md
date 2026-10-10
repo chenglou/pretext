@@ -1717,14 +1717,16 @@ nobody had named, as one had turned up by chance (Firefox's White-Space Run Acro
 generated paragraphs a profile on a stand-in Canvas, two styled items with one of 55 strings at the edge between them,
 and the kinds of difference no doc settled were recorded in Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host
 (WebKit 22625.1.29.11.27): 21,403 cases, then 30,414 and 7,683 a browser to check them (2026-10-09 and 10, none checked
-in). No real usage moves: no item of the real-usage sample's 241 rich-inline draws starts or ends with such a character,
-and the 233 of them that both builds' harness adapters can state get the same lines from both, on the stand-in Canvas
-and on each browser's. On the first set at 24px and wider this design alone has the browser's lines in 1,111, 1,652 and
-1,604 cases and the item stepper alone in 503, 1,449 and 322. Eight shapes are the stepper's by a rule of its own, each
-rare text and now a named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has each with its counts, what 0.0.9 did and
-what a port takes): a character of no width, a tab or U+3000 at an item's edge, mostly beside padding or a chip. Three
-of them are gaps of the text walkers or the scans in one text node too, which the stepper covered at an item's start;
-its other passes are gaps named before or luck. Each reopens with real text that holds its shape.
+in). No real usage moves: no item of the real-usage sample's 241 rich-inline draws starts with a character any of the
+shapes needs, or ends with one other than a combining mark, which none needs at an item's end; none of its padded items
+holds a joiner or a bidi mark, and none of its pre-wrap draws a tab or a ZWSP after a space; and the 233 of the draws
+that both builds' harness adapters can state get the same lines from both, on a stand-in Canvas and on each browser's.
+On the first set at 24px and wider this design alone has the browser's lines in 1,111, 1,652 and 1,604 cases and the
+item stepper alone in 503, 1,449 and 322. Eight shapes are the stepper's by a rule of its own, each rare text and now a
+named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has each with its counts, what 0.0.9 did and what a port takes):
+a character of no width, a tab or U+3000 at an item's edge, mostly beside padding or a chip. Three of them are gaps of
+the text walkers or the scans in one text node too, which the stepper covered at an item's start; its other passes are
+gaps named before or luck. Each reopens with real text that holds its shape.
 
 The halt Chrome gives a pair of fullwidth marks comes with the paragraph's analysis, with no code for it in
 `src/rich-inline.ts`: on the probes above the paragraph gives the lines main's halts across items give (CJK At An
