@@ -400,9 +400,8 @@ of its other four documents goes to the full walker.
 
 A session of every row takes 96 s in Chrome, 117 s in Firefox and 98 s in Safari (six sessions each, 2026-10-07; a
 document that loses focus waits a minute and starts again): a little over ten minutes for the default two, and then the
-confirming sessions, which would have timed 57 of the third sessions' 145 documents in the 19 runs above. Before the
-Latin and CJK `lines` entries and the two chat documents it took 74, 91 and 79 s (the medians of 50-52 sessions each,
-2026-10-01 and 02). Nothing timed is checked in.
+confirming sessions, which would have timed 57 of the third sessions' 145 documents in the 19 runs above. Nothing timed
+is checked in.
 
 ## Browsers and pins
 
