@@ -1,11 +1,11 @@
 import { findGraphemeEnds } from './graphemes.js'
 import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
-import { isDiscretionaryLineEnd, type PreparedLineBreakData } from './line-break.js'
+import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
 import { getEngineProfile } from './measurement.js'
 
 // A handle with each segment's text, which line text is built from: prepareWithSegments()'s, or
 // a rich-inline paragraph's.
-export type PreparedSegments = PreparedLineBreakData & { segments: string[] }
+export type PreparedSegments = PreparedLineData & { segments: string[] }
 
 // Per handle, the grapheme ends of each segment a line has started or ended inside.
 const graphemeEndCaches = new WeakMap<PreparedSegments, Map<number, Int32Array>>()
