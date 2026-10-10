@@ -142,11 +142,14 @@ function render(): void {
   // The scroll position stays whatever it reads, even past an end while it
   // bounces, unless this layout moved the anchor from where the last frame put
   // it. Then the anchored message's top goes back to its distance below the
-  // banner, or the end anchor to the canvas's end. The browser keeps the scroll
-  // inside the canvas.
+  // banner, or the end anchor to the canvas's end. The end also stays put when
+  // the canvas and the viewport grow by the same amount, as when a taller
+  // viewport gets the taller banners, but the browser has lowered the position
+  // by then, so the end anchor goes by the canvas's height too. The browser
+  // keeps the scroll inside the canvas.
   let adjustedScrollTop = scrollTop
   if (scrollAnchor === 'end') {
-    if (endScrollTop !== st.endScrollTop) adjustedScrollTop = endScrollTop
+    if (endScrollTop !== st.endScrollTop || canvasHeight !== st.canvasHeight) adjustedScrollTop = endScrollTop
   } else if (conversation.tops[scrollAnchor.index] !== previousConversation.tops[scrollAnchor.index]) {
     adjustedScrollTop = conversation.tops[scrollAnchor.index]! - scrollAnchor.offset
   }
