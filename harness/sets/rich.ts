@@ -94,9 +94,10 @@
 //   the first span's (alignToSource in src/analysis.ts; ENGINE_FOLLOWUPS.md, White space and controls); and a line
 //   separator that ends a span before the paragraph's last span, of one space, at which Safari's line ends
 //   (mapSourceLineBreaks in src/analysis.ts), right after a word and after a space: there the cut takes the width at
-//   which the word fits and the space doesn't, where the separator laid out as a control took a line of its own;
+//   which the word fits and the space doesn't, where Safari's line, the space hung, still ends at the separator and no
+//   second line follows;
 // - paragraphs narrower than 1px in boxes narrower than 1px, which a browser lays out as it lays out any other, and
-//   which rich inline's line functions laid out as in a 1px box: `ii` in 1px Arial in a span before an empty span, a
+//   rich inline's line functions at the width given: `ii` in 1px Arial in a span before an empty span, a
 //   paragraph of one item, which the adapter writes with rich-inline for the empty span and whose lines are its
 //   text's; two items with a collapsed space between them; two boxes 0.5px wide; a ZWSP in an item of its own before
 //   a 0.5px box, which holds a line where the box doesn't fit after it; and in pre-wrap a preserved space, which
@@ -105,7 +106,79 @@
 //   those of its narrowest case. In Firefox the pre-wrap one's cases at 0.001px, which Firefox lays out in a box of no
 //   width, and at 0.032px pin the same three lines: Firefox clips a space that hangs to the box, the recorder lists
 //   none clipped to nothing, and the search took that for a change of lines. None holds a padded span or a chip, whose
-//   edges and width the browsers fit their own ways at every size (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
+//   edges and width the browsers fit their own ways at every size (ENGINE_FOLLOWUPS.md, Rich-inline item edges);
+// - a bidi control that starts an item between two spaces, the first ending the item before it, after a word that fits
+//   its line where that space doesn't: Firefox keeps the word on that line where text follows the second space in its
+//   own item, the control's or the next one where the control is an item alone, in pre-wrap too, and its line goes back
+//   to its last break, the word going down, where the second space ends its item; the Gecko profile gives the control
+//   no break, so its line goes back at every such control (ENGINE_FOLLOWUPS.md, Rich-inline item edges). Each is one
+//   earlier word and one later, so that two of the three widest changes the cut takes are the widths where the word
+//   before the control comes to fit;
+// - characters of no width, a tab and U+3000 at an item's edge where a browser's lines aren't rich inline's
+//   (ENGINE_FOLLOWUPS.md, Rich-inline item edges), each shape with a neighbour whose lines rich inline has, and each
+//   short, so that the three widest changes the cut takes reach the width where the shape shows:
+//   - a ZWSP in an item of its own right after a space, as an editor's placeholder for the caret: where the text before
+//     the space fits its line and the space doesn't, all three browsers start the next line with the ZWSP, which holds
+//     it though it shows nothing, and the text walkers hang the ZWSP with the space; the same in pre-wrap, where
+//     Firefox keeps the ZWSP on the space's line; a ZWSP that starts a bold item after such a space, which holds the
+//     next line alone where the word after it doesn't fit beside it; and a ZWSP right after a word, which stays on the
+//     word's line;
+//   - a padded item of only a ZWSP, as an empty code span that an editor keeps open: Chrome and Safari keep it on a
+//     line only where both its edges fit, and rich inline wherever its start edge does (getOpeningFit in
+//     src/rich-inline.ts), after a space, and right after a word that follows a one-letter word, so that a width the
+//     cut takes inside a layout is one where only the end edge doesn't fit; a padded item of a space and a ZWSP, which
+//     all three browsers move to the next line where it doesn't fit whole; and a padded item that starts with a ZWSP
+//     and goes on, whose opening stays on the line where its start edge fits in Chrome and Safari and where both edges
+//     do in Firefox, as in each profile (paddedOpeningFit in src/measurement.ts);
+//   - after a mention chip wider than its line, an item that starts with a bidi isolate, as text an app isolates, or
+//     with ZWNJ, before a word wider than the line too: Chrome starts the next line with the character and the word's
+//     first letters, as Firefox does with ZWNJ, and the one scan of the joined text breaks after the character, which
+//     takes a line alone; and the isolate after a chip narrower than the word, which stays on the chip's line wherever
+//     the chip fits;
+//   - a padded item that starts with ZWNJ inside a word, as a highlight that starts there, where a line cuts the word
+//     right after the ZWNJ: every line of the item carries its padding in Firefox and Chrome, and the line that starts
+//     after the ZWNJ carries none in rich inline (insideExtras in src/line-break.ts), so it holds a letter more; and
+//     the same item without the ZWNJ, whose lines all carry it. In Chrome both also break otherwise where a line ends
+//     inside the padded item, which Chrome fits without the item's end edge;
+//   - in pre-wrap, a padded item of only a bidi control: a box as wide as its padding where it stands in Firefox, where
+//     the Gecko profile, which has no segment for a character Firefox drops, puts the padding on the word after it; and
+//     the control with that word's first letter in the padded item, whose padding is on the letter;
+//   - a padded item that starts with a soft hyphen, as a styled run that starts at a syllable of text hyphenated ahead
+//     of time: a line that ends at that soft hyphen holds the item's start edge in Chrome and Safari and both edges in
+//     Firefox, and no padding in rich inline, which puts an item's extraWidth on its first segment that takes room; a
+//     padded `a` after `a a`, short enough that the cut takes a width where the hyphen fits and the start edge doesn't,
+//     a longer word, whose one such case is at the edge of the browser's change, and the soft hyphen at the end of the
+//     item before the padded one, where the hyphen's line holds no padding in any browser;
+//   - in pre-wrap, a space and a ZWSP that end an item before an item that starts with a space: Firefox starts the next
+//     line with the ZWSP where the first space hangs, so the second space starts that line, and the paragraph carries
+//     the run of hanging spaces past the ZWSP; and the same without the ZWSP, where both spaces hang. Each starts with
+//     one more word, which gives the line an earlier break, so that the cut takes the width where the word before the
+//     ZWSP comes to fit;
+//   - in pre-wrap, a padded item that starts with a tab, or with a space and a tab: Firefox gives no break inside a run
+//     of spaces and tabs and none between a span's start edge and its first content, so the span stays whole where it
+//     starts a line and takes the word before it down where the tab doesn't fit, and rich inline gives such an item a
+//     start edge of its own, a segment a line can end after (getOpeningFit); a padded item of a space, a tab and a
+//     letter after three words, inline code of a tab and `end` alone in a paragraph of its own font, whose tab stops
+//     are the paragraph's, and the first without its padding;
+//   - a U+3000 that ends an item before an item that starts with a bidi control, as Japanese that ends with a
+//     full-width space before a mark: where the text before the U+3000 fits its line and the U+3000 doesn't, Firefox,
+//     which drops the control, hangs it, and Chrome hangs it and starts the next line with the control. In rich inline
+//     no line can end between the two, and the last ideograph goes down with them: in both profiles where the control
+//     ends the paragraph, and in the Blink profile where text follows it (addIdeographicSpaceHangs in src/prepare.ts);
+//     and the text right after the U+3000, before which the Blink and Gecko profiles hang it;
+// - shapes at an item's edge where the one analysis of the joined text gives every browser's lines (RESEARCH.md, Rich
+//   Inline As One Paragraph): an item that starts with a bidi isolate right after a dash, and with a left-to-right mark
+//   right after an ideograph, where the line ends after the joined text and the word after it stays whole; an item that
+//   starts with a hyphen before an Arabic word, right after a letter, whose word is one segment measured with its
+//   letters joined, after one letter so that a width the cut takes inside a layout holds the word joined and not its
+//   letters apart; a chip of only a ZWSP between two spaces, a box as wide as its padding beside which both spaces
+//   show; a padded item of only a soft hyphen after a space and before a hyphen, where no scan makes the soft hyphen a
+//   break and the item takes its padding; a ZWSP that ends a bold item inside a Korean sentence under keep-all, at
+//   which the line can end (getWebKitBreakBetweenItems in src/line-breaks.ts); in pre-wrap a tab in an item of its own
+//   after an item that ends with a space, which Firefox, with no break inside a run of spaces and tabs, takes to the
+//   next line with the word before the space; and a left-to-right mark in an item of its own that ends the paragraph
+//   after a space, which gets no line in Firefox, which drops it, and the next line in Chrome and Safari where the
+//   space doesn't fit.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -122,6 +195,7 @@ const CHIP = font('"Helvetica Neue", Helvetica, Arial, sans-serif', 12, 700)
 const KOREAN = font('"Apple SD Gothic Neo", "Malgun Gothic", sans-serif', 15)
 const KOREAN_CHIP = font('"Apple SD Gothic Neo", "Malgun Gothic", sans-serif', 12)
 const JAPANESE = font('"Hiragino Sans"', 16)
+const COURIER = font('"Courier New"', 16)
 
 type Part = string | TextRun
 
@@ -363,6 +437,74 @@ export function richTemplates(): Template[] {
   for (let i = 0; i < narrow.length; i++) {
     const [family, parts, whiteSpace] = narrow[i]!
     out.push({ ...template(`under-1px/${family}`, 'a paragraph narrower than 1px in a box narrower than 1px (src/layout.test.ts, a rich paragraph lays out at the width given under 1px, and at 0 under 0)', ARIAL, parts, 'en', 'normal', whiteSpace), widths: [0, 0.5] })
+  }
+  // The header's last three entries: each family's origin, then its templates.
+  const chip = (text: string): TextRun => span(text, CHIP, { atomic: true, padding: 11 })
+  const padded = (text: string, padding: number, f: CssFont = ARIAL): TextRun => span(text, f, { padding })
+  const gap = '(ENGINE_FOLLOWUPS.md, Rich-inline item edges)'
+  const design = '(RESEARCH.md, Rich Inline As One Paragraph)'
+  const origins: Record<string, string> = {
+    'item-edges/bidi-control-between-spaces': `a bidi control that starts an item between two spaces ${gap}`,
+    'item-edges/zwsp-after-space': `a ZWSP that is an item, or starts one, right after a space ${gap}`,
+    'item-edges/padded-zwsp': `a padded item that holds only a ZWSP, or starts with one ${gap}`,
+    'item-edges/control-after-chip': `an item that starts with a bidi isolate or ZWNJ after a chip ${gap}`,
+    'item-edges/padded-joiner-start': `a padded item that starts with ZWNJ inside a word ${gap}`,
+    'pre-wrap/padded-bidi-control': `white-space: pre-wrap, a padded item of only a bidi control ${gap}`,
+    'item-edges/padded-soft-hyphen-start': `a padded item that starts with a soft hyphen ${gap}`,
+    'pre-wrap/zwsp-ends-hanging-spaces': `white-space: pre-wrap, a space and a ZWSP that end an item before an item that starts with a space ${gap}`,
+    'pre-wrap/tab-starts-padded-item': `white-space: pre-wrap, a padded item that starts with a tab ${gap}`,
+    'item-edges/ideographic-space-before-control': `a U+3000 that ends an item before an item that starts with a bidi control ${gap}`,
+    'item-edges/control-starts-item': `an item that starts with a bidi control right after another item's text ${design}`,
+    'item-edges/hyphen-starts-item': `an item that starts with a hyphen before an Arabic word, right after another item's letter ${design}`,
+    'item-edges/invisible-chip': `a chip of only a ZWSP ${design}`,
+    'item-edges/padded-soft-hyphen-item': `a padded item of only a soft hyphen ${design}`,
+    'keep-all/zwsp-ends-item': `word-break: keep-all, a ZWSP that ends an item ${design}`,
+    'pre-wrap/tab-item-after-space': `white-space: pre-wrap, a tab in an item of its own after an item that ends with a space ${design}`,
+    'item-edges/bidi-control-ends-paragraph': `a paragraph that ends with an item of only a bidi control, after a space ${design}`,
+  }
+  const atEdges: ReadonlyArray<readonly [string, CssFont, readonly TextRun[], string?, Paragraph['wordBreak']?, Paragraph['whiteSpace']?]> = [
+    ['item-edges/bidi-control-between-spaces', ARIAL, [item('aa see '), item('\u{200E} this')]],
+    ['item-edges/bidi-control-between-spaces', ARIAL, [item('aa see '), item('\u{200E}'), item(' this')]],
+    ['item-edges/bidi-control-between-spaces', ARIAL, [item('aa see '), item('\u{200E} '), item('this')]],
+    ['item-edges/bidi-control-between-spaces', ARIAL, [item('aa see '), item('\u{200E} this')], 'en', 'normal', 'pre-wrap'],
+    ['item-edges/zwsp-after-space', ARIAL, [item('Hello world '), item('\u{200B}')]],
+    ['item-edges/zwsp-after-space', ARIAL, [item('Hello world '), item('\u{200B}')], 'en', 'normal', 'pre-wrap'],
+    ['item-edges/zwsp-after-space', ARIAL, [item('Dear '), span('\u{200B}friends', BOLD(ARIAL))]],
+    ['item-edges/zwsp-after-space', ARIAL, [item('Hello world'), item('\u{200B}')]],
+    ['item-edges/padded-zwsp', ARIAL, [item('click here '), padded('\u{200B}', 4)]],
+    ['item-edges/padded-zwsp', HELVETICA, [item('I typed', HELVETICA), padded('\u{200B}', 7, CODE)]],
+    ['item-edges/padded-zwsp', ARIAL, [item('on'), padded(' \u{200B}', 4)]],
+    ['item-edges/padded-zwsp', ARIAL, [item('Tag:'), padded('\u{200B}NEW', 4)]],
+    ['item-edges/control-after-chip', HELVETICA, [chip('@international-team'), item('\u{2068}documentation\u{2069}', HELVETICA)]],
+    ['item-edges/control-after-chip', HELVETICA, [chip('@international-team'), item('\u{200C}documentation', HELVETICA)]],
+    ['item-edges/control-after-chip', HELVETICA, [chip('@bob'), item('\u{2068}documentation\u{2069}', HELVETICA)]],
+    ['item-edges/padded-joiner-start', ARIAL, [item('inter'), padded('\u{200C}operability', 4)]],
+    ['item-edges/padded-joiner-start', ARIAL, [item('inter'), padded('operability', 4)]],
+    ['pre-wrap/padded-bidi-control', ARIAL, [item('a '), padded('\u{200E}', 6), item('bbbb cc')], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap/padded-bidi-control', ARIAL, [item('a '), padded('\u{200E}b', 6), item('bbb cc')], 'en', 'normal', 'pre-wrap'],
+    ['item-edges/padded-soft-hyphen-start', ARIAL, [item('a a'), padded('\u{AD}a', 4)]],
+    ['item-edges/padded-soft-hyphen-start', ARIAL, [item('see photo'), padded('\u{AD}graphy', 5)]],
+    ['item-edges/padded-soft-hyphen-start', ARIAL, [item('a a\u{AD}'), padded('a', 4)]],
+    ['pre-wrap/zwsp-ends-hanging-spaces', ARIAL, [item('Please wait \u{200B}'), item(' now')], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap/zwsp-ends-hanging-spaces', ARIAL, [item('Please wait '), item(' now')], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap/tab-starts-padded-item', ARIAL, [item('a b c'), padded(' \td', 4)], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap/tab-starts-padded-item', COURIER, [padded('\tend', 4, COURIER)], 'en', 'normal', 'pre-wrap'],
+    ['pre-wrap/tab-starts-padded-item', ARIAL, [item('a b c'), item(' \td')], 'en', 'normal', 'pre-wrap'],
+    ['item-edges/ideographic-space-before-control', JAPANESE, [item('東京都\u{3000}', JAPANESE), item('\u{200E}', JAPANESE)], 'ja'],
+    ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('\u{200F}', JAPANESE), item('次', JAPANESE)], 'ja'],
+    ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('次', JAPANESE)], 'ja'],
+    ['item-edges/control-starts-item', ARIAL, [item('posted\u{2014}'), item('\u{2068}Dana\u{2069} today')]],
+    ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200E}on', JAPANESE)], 'ja'],
+    ['item-edges/hyphen-starts-item', ARIAL, [item('e'), item('-\u{643}\u{62A}\u{627}\u{628}')], 'ar'],
+    ['item-edges/invisible-chip', HELVETICA, [item('some text ', HELVETICA), chip('\u{200B}'), item(' more text', HELVETICA)]],
+    ['item-edges/padded-soft-hyphen-item', ARIAL, [item('see '), padded('\u{AD}', 4), item('-saw')]],
+    ['keep-all/zwsp-ends-item', KOREAN, [span('안녕하세요\u{200B}', BOLD(KOREAN)), item('세계에서 한국어', KOREAN)], 'ko', 'keep-all'],
+    ['pre-wrap/tab-item-after-space', ARIAL, [item('one two '), item('\t'), item('three')], 'en', 'normal', 'pre-wrap'],
+    ['item-edges/bidi-control-ends-paragraph', ARIAL, [item('Hello again '), item('\u{200E}')]],
+  ]
+  for (let i = 0; i < atEdges.length; i++) {
+    const [family, base, parts, lang, wordBreak, whiteSpace] = atEdges[i]!
+    out.push(template(family, origins[family]!, base, parts, lang, wordBreak, whiteSpace))
   }
   return out
 }

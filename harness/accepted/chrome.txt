@@ -3,6 +3,53 @@ report-23cd6052bc54f415 breaks
 report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
 
+## A U+3000 that ends a rich item before an item that starts with a bidi control, at 48-64 px, where the text before the U+3000 fits its line and the U+3000 doesn't: Chrome hangs the U+3000 and starts the next line with the control, which holds that line where nothing visible follows (not traced); the Blink profile hangs a U+3000 only before a break (addIdeographicSpaceHangs in src/prepare.ts) and the scan gives none between it and the control, so the line goes back to its last break and the last ideograph goes down with the U+3000 (ENGINE_FOLLOWUPS.md, Line edges)
+rich-733f760999ec0f9b breaks
+rich-af8dbf9c285cccf5 breaks
+rich-b9080d784d51b25b breaks
+rich-ec215509247b16b8 breaks
+
+## A ZWSP that is a rich item, or starts one, right after a space, at 37-84 px, where the text before the space fits its line and the space doesn't: Chrome ends the line after the space and starts the next with the ZWSP, which holds that line though it shows nothing where nothing follows it or the word after it doesn't fit beside it, in pre-wrap too, as Blink sends text that follows content past the line's end to HandleOverflow (line_breaker.cc:1352-1368, Chromium 153); the text walkers hang the ZWSP with the space, so the library is a line short (ENGINE_FOLLOWUPS.md, Line edges)
+rich-0a10918c434ee6a1 count
+rich-2c619d55995bf124 count
+rich-3869e33755e87958 count
+rich-3e2560b5cce34ec1 count
+rich-6eecbb3ad42d722d count
+rich-9e80f7a518168324 count
+rich-c613b39279a41fea count
+rich-d0104910d98009fb count
+rich-dc34c6300b4d3c3f count
+rich-dce9dd9a4c9099e2 count
+rich-e16bbdd996294984 count
+rich-e68d50331ffe9625 count
+
+## A padded rich item of a space and a ZWSP after a word, at 17-31 px, where the word fits its line and the item with its space doesn't: Chrome ends the line after the word and gives the item the next line, which it holds though it shows nothing (not traced); the library hangs the item's space and its ZWSP on the word's line, a line short, as it hangs a ZWSP after a space outside a padded item (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-5ebb6915ce9e079b count
+rich-940ad57a2e132532 count
+rich-e4bfdb55bda7848d count
+rich-f57c1f2899a9cb50 count
+
+## A padded rich item that continues a word, whose line ends inside it, in white-space: normal at 40-44.5 px: Chrome fits that line without the item's end edge, the library with it, as Firefox does, so Chrome's line holds a letter more (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-49af8fd4a74783cd breaks
+rich-6b940ddc81a07369 breaks
+rich-6e9d3bbd8855ad51 count
+rich-88da2998a0806239 breaks
+rich-904347fe9ae969f4 breaks
+rich-c7924acda6fe572f count
+
+## A padded rich item that holds only a ZWSP, at 56-80 px, where its start edge fits the line and its end edge doesn't: Chrome keeps the item on a line only where both its edges fit, and else moves it down, with the word before it where no break comes before the item (not traced); the library fits an item that opens with a ZWSP by its start edge (getOpeningFit in src/rich-inline.ts), so it keeps the item on the line and reports a line wider than the width given (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-88c8ab06f35a51bd count
+rich-98a4a32dab5157bd count
+rich-b55486852dc85b4a count
+
+## A padded rich item that starts with ZWNJ inside a word, at 44 px, where the line is cut right after the ZWNJ: Chrome paints the item's padding on each of its lines and fits the line that starts after the ZWNJ with the item's start edge, so that line holds `oper` (not traced); the library leaves the item's extraWidth out of a line that starts inside a word at a default-ignorable character, whose widths it measures afresh from there (insideExtras in src/line-break.ts), so its line holds `opera`, a line short (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-039c6c739b7d8572 count
+
+## A padded rich item that starts with a soft hyphen, at 29-81 px, where the text before it and the hyphen fit the line and the item's start edge doesn't fit with them: Chrome fits a line that ends at that soft hyphen with the item's start edge, and paints both edges, so its line ends at an earlier break (not traced); the library puts an item's extraWidth on its first segment that takes room, which comes after the soft hyphen, so the hyphen's line holds no padding and ends at the soft hyphen (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-6357b1b6c3b43bcf breaks
+rich-b18d97e217cc36bc count
+rich-ba6d93b9a2197a1f breaks
+
 ## A padded rich pre-wrap span whose line ends inside it, at a line feed or after spaces that hang, at 24 px and wider: Chrome fits that line without the span's end edge, the library with it, as Firefox does (ENGINE_FOLLOWUPS.md)
 rich-75dcc33f88f9804f count
 rich-9b04cbd2a170ff51 count
@@ -21,6 +68,18 @@ rich-ba2534e01206907d breaks
 
 ## A padded rich span that starts with U+2028 after a word, in white-space: normal, at 80 px and wider: Chrome fits the line that ends inside the span, after the word that follows the separator, without the span's end edge, the library with it, as Firefox does (619e8ead too; ENGINE_FOLLOWUPS.md)
 rich-ec4dcfc6130015dc breaks
+
+## A rich item that starts with a bidi control or ZWNJ right after a chip wider than its line, before a word that doesn't fit the line either, at 8.9-101 px: Chrome ends the line right after the chip (CanBreakAfterAtomicInline, line_breaker.cc:1168-1183, Chromium 153) and looks for the next line's breaks from that line's start, without the text before it (break_iterator_.SetStartOffset, line_breaker.cc:550), so the character starts the next line and stays with the letters after it; the Blink scan makes one ICU pass over the joined text, which gives a break after the character, as after any character with marks (UAX #14 LB9), so the character takes a line alone, a line too many (ENGINE_FOLLOWUPS.md, Small ones)
+rich-28babe2ade6fd628 count
+rich-4d5ebc22f72dfd8b count
+rich-82a0d2476ca8bca4 count
+rich-8a511d98ac97408c count
+rich-98cd43105f0024f9 count
+rich-9bc1aa891366121d count
+rich-9c2dba7769971ff6 count
+rich-9de95874829e093b count
+rich-cf99e0f3d5c3c244 count
+rich-e6a519b7a43fb88c count
 
 ## A soft hyphen after a space, before white space in the next span or its own, or white space and a soft hyphen that start the paragraph before a ZWSP, at 24 px and wider: Chrome keeps the space after the soft hyphen visible where a line starts, as it doesn't consume a soft hyphen at a line start, where the library consumes both (main and 0fef0023 too; ENGINE_FOLLOWUPS.md)
 rich-0de3e74d8bc2e919 count
@@ -557,13 +616,17 @@ catalog-b530bfcdd337fb4e breaks
 catalog-d5273aeae7cb64af breaks
 
 ## Narrower than real layouts: 1-23 px, a ZWSP alone in a rich item, at the start of one, or in one after only white space, soft hyphens or a combining mark's base, where the text around it doesn't fit its line: Chrome gives the ZWSP a line of its own, as for the text in one node, where the text walkers keep it on the line before it or consume it at a line's start; the item stepper took an item's start as a text's start, where a ZWSP holds a line (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
+rich-04a2efb39c723ee6 count
 rich-14eba924d604608e count
 rich-19e866488d756c8e count
+rich-1c3988ac962ad35a count
+rich-290345e4e5dc740e count
 rich-4b7d153ff81b0f68 count
 rich-7ed410c8998dbb4a count
 rich-96c42e63c2a158e1 count
 rich-a55f33376400f2f4 count
 rich-a889c7e59cf41cad count
+rich-b53f94b697f8bf8b count
 rich-d5874c9d718554c2 count
 rich-dcfaf1298b58bfa4 count
 rich-e7a3eb32859cfd67 count
@@ -1880,11 +1943,17 @@ facts-fef088c479c829e9 count
 oracle-6ef7f131436695ac count
 oracle-7b318fbe27255616 count
 oracle-f1121833e4ed5ed7 count
+rich-2c92f9353ca73192 count
+rich-34b0481d2ee26169 count
 rich-40018982415644fb count
 rich-449749f2687176be breaks
 rich-4e7797d2c399aac5 breaks
+rich-52fa7e63fe33acfe count
 rich-5d9782cd7b729d95 count
+rich-76a88e2b5c4011a2 count
+rich-777fd9b2ae6d3d24 count
 rich-845b4dcf20f5098f count
+rich-853b1c08358271a3 count
 rich-85e4aa2bcd3972d7 count
 rich-88284e86caadfd99 count
 rich-92a3f55de690d221 breaks
@@ -1893,8 +1962,10 @@ rich-9644a14cf7757871 breaks
 rich-9b6ad49d976868b9 count
 rich-a4c0d3d9594731bf count
 rich-c26cf717c3859584 count
+rich-c4e4c9df352e98e5 count
 rich-ddca88239fb74e75 breaks
 rich-eb45f8c12b7c6cda count
+rich-fe36b006ae83e09d count
 
 ## Narrower than real layouts: 4-9 px, white space and soft hyphens in items before a ZWSP where a line starts: Chrome keeps the space after the first soft hyphen visible there, where the library consumes both, as it does in one text; these passed only while a line gave an item its start consumes an empty fragment, whose range held that space (ENGINE_FOLLOWUPS.md, Rich-inline item edges)
 rich-f42418c66dcadfef breaks
@@ -3086,14 +3157,18 @@ rich-029e71d595e94f0c count
 rich-0a3fec9a06a04eef count
 rich-0a8313779639e9ef count
 rich-0cabfc789f6a4358 count
+rich-0f7c3337a2c63435 count
 rich-0fd068ce5f126fef count
 rich-112fa3ba1cca94b2 count
 rich-11c49eccf08f18c8 count
 rich-13fa0b66ebfc4b40 count
+rich-15e756bb89d49f7a count
 rich-166322a1778d474c count
+rich-1b6c31057b2e7634 count
 rich-1e0d5476b00642c8 count
 rich-1e310e1aa5f44bd6 count
 rich-235e25578c8411f6 count
+rich-241b69c87972e487 count
 rich-26c6030b9304ccd7 count
 rich-26f8627a88fc9819 count
 rich-2967857136330955 count
@@ -3101,6 +3176,7 @@ rich-2adbdb43e67fa87c count
 rich-2ba96631579775f7 count
 rich-2d09e453d98924b9 count
 rich-3055350027afea05 count
+rich-30d9e2f1ba9950cf count
 rich-31ddf4b29ff31fe7 count
 rich-3291c2ea0976e8b1 count
 rich-34075de5f2f50824 count
@@ -3108,17 +3184,24 @@ rich-3d6b0dd007f16ed1 count
 rich-3f6c610251935b3f count
 rich-3f7623a4b4dd94eb count
 rich-406ee1104d5987ce count
+rich-40b56f25c087f514 count
 rich-4138b24c4fe85f75 count
+rich-42ccbec8ae405ce8 count
+rich-43d0d8cf2c63888b count
+rich-479ae9fd8635fb51 count
 rich-49d40a0beea8f837 count
 rich-4ab385df7ef60d77 count
 rich-4fb2c56ec3a40ccb count
 rich-508d2697e5ef0610 count
+rich-51b1cc892081ee6a count
 rich-5591e87036a36b35 count
 rich-5727b8e7e3526aec count
 rich-5a97ab786f3e057e count
 rich-61a0d94181d91eec count
 rich-62a3fc75836c636c count
 rich-668d6722303f2370 count
+rich-6cb7c90d77a6fd3a count
+rich-6f21e04dc918c108 count
 rich-7207dfa4e9dfe793 count
 rich-807cbc79ec3f2948 count
 rich-81926e46654c3d06 count
@@ -3136,18 +3219,23 @@ rich-9caad05a8d6ec08d count
 rich-a09d53bd7aff382c count
 rich-a560650dfbeafe72 count
 rich-a5ad960782eb9128 count
+rich-a9a3122e65b9d3f4 count
 rich-ab169565a9c0a88b count
 rich-af536739c810f600 count
 rich-b24c8a1759a7f9cb count
+rich-b8d5b8e0ee7ba330 count
 rich-c4a883b30ad5ddaf count
 rich-c604ab44311a3b58 count
 rich-c7cfa88d8a212348 count
+rich-c7ee8271cb139e07 count
 rich-cd0ee47c06b6cf6d count
 rich-d2cbcec88b98434b count
+rich-db66be2507e4c7cc count
 rich-e4d9d26e42f80135 count
 rich-e50de10ba2019ea9 count
 rich-ea6501c78957947f count
 rich-eac5e4eee615b1b8 count
+rich-f2211c4cb19b0855 count
 rich-f317f68bc8764b2d count
 rich-f58eb7323359596a count
 rich-f925dd03f35ccc51 count
