@@ -1454,9 +1454,10 @@ pair of marks an item start splits halts as in one text, each mark by its own it
 `src/rich-inline.ts`; and a run of U+3000 inside an item hangs or not by what follows it in the paragraph. A run that
 ends an item hangs whatever the next item starts with, as Chrome and Firefox hang it wherever a line ends: a text's run
 hangs only before a break its scan gives, a narrower rule that a paragraph would lose lines by, since an item's last
-run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges). Before an item that starts
-with a bidi control or a joiner the run still doesn't hang: no line can end between the two, and in the Gecko profile a
-control that ends the paragraph is kept with the run's segment (the sweep after the merge, below).
+run hung before this design (`addIdeographicSpaceHangs()`; ENGINE_FOLLOWUPS.md, Line edges). The hang needs a line that
+ends there, and none does before an item that starts with a character the scan gives no break before, a joiner or a
+combining mark and in the Blink profile a bidi control; and in the Gecko profile a run that only bidi controls follow to
+the paragraph's end gets no hang, as the control is kept with the run's segment (the sweep after #460, below).
 
 What an item carries of its own goes on its segments. Its `extraWidth` is in the width of its first segment that takes
 room, and a line that starts later in the item adds it there (`lineStartExtras`, and `insideExtras` and `fillExtras`
