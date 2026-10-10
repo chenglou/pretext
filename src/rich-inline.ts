@@ -1057,7 +1057,11 @@ function createLine(
       // follows a halted mark fits in less than the halt. Premise: what follows a mark on its line
       // takes no less than no room. Its gap is an item after the mark whose letter spacing is more
       // negative than its letters are wide, where a mark that wasn't halted gives its halt to the
-      // line's last fragment; the line's width and breaks are the walker's either way.
+      // line's last fragment; the line's width and breaks are the walker's either way. The 1e-6px
+      // is room for float error: the walker adds the same advances in another order, so where
+      // nothing after a mark that wasn't halted takes room, the segments up to it can add up to a
+      // few 1e-14px more than the line, and the mark would read as halted, its halt going to the
+      // fragment after it.
       if (itemEndHalts !== null && itemEndHalts[i]! !== 0 && lineW + w - width > 1e-6) w -= itemEndHalts[i]!
       occupiedWidth += w
       lineW += w
@@ -1081,6 +1085,8 @@ function createLine(
       const part = Math.min(rest, last.gapBefore)
       last.gapBefore -= part
       rest -= part
+      // A gap taken whole is none, and so is one with under 1e-9px left, which could only be float
+      // error; no line found leaves a gap that little.
       if (last.gapBefore < 1e-9) {
         last.gapBefore = 0
         last.gapItemIndex = -1
