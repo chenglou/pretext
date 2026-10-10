@@ -3945,8 +3945,6 @@ describe('rich-inline invariants', () => {
         profile.lineBreakScan = scan
         clearCache()
         for (const parts of rows) {
-          // The Gecko profile's paragraph collapses white space past soft hyphens, which its text doesn't yet (below).
-          if (scan === 'gecko' && /[ ]\u00AD+[ ]/.test(parts.join(''))) continue
           for (const maxWidth of [1, 9, 17, 25, 33, 41, 49, 57, 65, 81, 97, Infinity]) {
             expect({ scan, parts, maxWidth, lines: richLineEnds(parts, maxWidth) }).toEqual({ scan, parts, maxWidth, lines: lineEnds(parts.join(''), maxWidth) })
           }
