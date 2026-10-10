@@ -172,14 +172,14 @@
 //   Safari, which gives no break at such an item's start, goes back to an earlier break or cuts the word; an item that
 //   starts with a hyphen before an Arabic word, right after a letter, whose word is one segment measured with its
 //   letters joined, after one letter so that a width the cut takes inside a layout holds the word joined and not its
-//   letters apart; a chip of only a ZWSP between two spaces, a box as wide as its padding beside which both spaces
-//   show; a padded item of only a soft hyphen after a space and before a hyphen, where no scan makes the soft hyphen a
-//   break and the item takes its padding; a ZWSP that ends a bold item inside a Korean sentence under keep-all, at
-//   which the line can end (getWebKitBreakBetweenItems in src/line-breaks.ts); in pre-wrap a tab in an item of its own
-//   after an item that ends with a space, which Firefox, with no break inside a run of spaces and tabs, takes to the
-//   next line with the word before the space; and a left-to-right mark in an item of its own that ends the paragraph
-//   after a space, which gets no line in Firefox, which drops it, and the next line in Chrome and Safari where the
-//   space doesn't fit.
+//   letters apart; a chip of only a soft hyphen between two spaces, a box as wide as its padding beside which both
+//   spaces show; a padded item of only a soft hyphen after a space and before a hyphen, where no scan makes the soft
+//   hyphen a break and the item takes its padding; a ZWSP that ends a bold item inside a Korean sentence under
+//   keep-all, at which the line can end (getWebKitBreakBetweenItems in src/line-breaks.ts); in pre-wrap a tab in an
+//   item of its own after an item that ends with a space, which Firefox, with no break inside a run of spaces and tabs,
+//   takes to the next line with the word before the space; and a left-to-right mark in an item of its own that ends the
+//   paragraph after a space, which gets no line in Firefox, which drops it, and the next line in Chrome and Safari
+//   where the space doesn't fit.
 import { TEXTS } from '../../src/test-data.ts'
 import type { CssFont, Paragraph, TextRun } from '../types.ts'
 import { box, codePoints, createRng, font, paragraph, span } from './build.ts'
@@ -457,7 +457,7 @@ export function richTemplates(): Template[] {
     'item-edges/ideographic-space-before-control': `a U+3000 that ends an item before an item that starts with a bidi control ${gap}`,
     'item-edges/control-starts-item': `an item that starts with a bidi isolate or ZWNJ right after another item's text ${design}`,
     'item-edges/hyphen-starts-item': `an item that starts with a hyphen before an Arabic word, right after another item's letter ${design}`,
-    'item-edges/invisible-chip': `a chip of only a ZWSP ${design}`,
+    'item-edges/invisible-chip': `a chip of only a soft hyphen ${design}`,
     'item-edges/padded-soft-hyphen-item': `a padded item of only a soft hyphen ${design}`,
     'keep-all/zwsp-ends-item': `word-break: keep-all, a ZWSP that ends an item ${design}`,
     'pre-wrap/tab-item-after-space': `white-space: pre-wrap, a tab in an item of its own after an item that ends with a space ${design}`,
@@ -497,7 +497,7 @@ export function richTemplates(): Template[] {
     ['item-edges/control-starts-item', ARIAL, [item('posted\u{2014}'), item('\u{2068}Dana\u{2069} today')]],
     ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200C}on', JAPANESE)], 'ja'],
     ['item-edges/hyphen-starts-item', ARIAL, [item('e'), item('-\u{643}\u{62A}\u{627}\u{628}')], 'ar'],
-    ['item-edges/invisible-chip', HELVETICA, [item('some text ', HELVETICA), chip('\u{200B}'), item(' more text', HELVETICA)]],
+    ['item-edges/invisible-chip', HELVETICA, [item('some text ', HELVETICA), chip('\u{AD}'), item(' more text', HELVETICA)]],
     ['item-edges/padded-soft-hyphen-item', ARIAL, [item('see '), padded('\u{AD}', 4), item('-saw')]],
     ['keep-all/zwsp-ends-item', KOREAN, [span('안녕하세요\u{200B}', BOLD(KOREAN)), item('세계에서 한국어', KOREAN)], 'ko', 'keep-all'],
     ['pre-wrap/tab-item-after-space', ARIAL, [item('one two '), item('\t'), item('three')], 'en', 'normal', 'pre-wrap'],
