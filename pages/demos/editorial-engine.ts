@@ -454,22 +454,34 @@ function clearQueuedPointerEvents(): void {
   st.events.pointerUp = null
 }
 
-function textProjectionEqual(a: TextProjection | null, b: TextProjection): boolean {
-  return a !== null &&
-    a.headlineLeft === b.headlineLeft &&
+// Whether two projections give their lines the same fonts and line heights, and the headline the same origin.
+function textStylesEqual(a: TextProjection, b: TextProjection): boolean {
+  return a.headlineLeft === b.headlineLeft &&
     a.headlineTop === b.headlineTop &&
     a.headlineFont === b.headlineFont &&
     a.headlineLineHeight === b.headlineLineHeight &&
     a.bodyFont === b.bodyFont &&
     a.bodyLineHeight === b.bodyLineHeight &&
     a.pullquoteFont === b.pullquoteFont &&
-    a.pullquoteLineHeight === b.pullquoteLineHeight &&
+    a.pullquoteLineHeight === b.pullquoteLineHeight
+}
+
+function textProjectionEqual(a: TextProjection | null, b: TextProjection): boolean {
+  return a !== null &&
+    textStylesEqual(a, b) &&
     positionedLinesEqual(a.headlineLines, b.headlineLines) &&
     positionedLinesEqual(a.bodyLines, b.bodyLines) &&
     positionedLinesEqual(a.pullquoteLines, b.pullquoteLines)
 }
 
-function projectTextProjection(projection: TextProjection): void {
+// Writes only the lines that changed. Each node shows the line `written` has at its index: its text is written when
+// the text differs, and its place and font when the line moved or the fonts changed. A moving orb changes a few lines
+// a frame, and writing the others again isn't free: a write of a node's text replaces its text node, the same text
+// too, which drops a selection inside it, and a write of its font resets the line height, which the next write sets
+// back.
+function projectTextProjection(projection: TextProjection, written: TextProjection | null): void {
+  const stylesWritten = written !== null && textStylesEqual(written, projection)
+
   setNodeCount(domCache.headlineLines, projection.headlineLines.length, () => {
     const element = document.createElement('span')
     element.className = 'headline-line'
@@ -478,7 +490,9 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.headlineLines.length; index++) {
     const element = domCache.headlineLines[index]!
     const line = projection.headlineLines[index]!
-    element.textContent = line.text
+    const shown = written?.headlineLines[index]
+    if (shown?.text !== line.text) element.textContent = line.text
+    if (stylesWritten && shown !== undefined && shown.x === line.x && shown.y === line.y) continue
     element.style.left = `${projection.headlineLeft + line.x}px`
     element.style.top = `${projection.headlineTop + line.y}px`
     element.style.font = projection.headlineFont
@@ -494,7 +508,9 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.bodyLines.length; index++) {
     const element = domCache.bodyLines[index]!
     const line = projection.bodyLines[index]!
-    element.textContent = line.text
+    const shown = written?.bodyLines[index]
+    if (shown?.text !== line.text) element.textContent = line.text
+    if (stylesWritten && shown !== undefined && shown.x === line.x && shown.y === line.y) continue
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.bodyFont
@@ -510,7 +526,9 @@ function projectTextProjection(projection: TextProjection): void {
   for (let index = 0; index < projection.pullquoteLines.length; index++) {
     const element = domCache.pullquoteLines[index]!
     const line = projection.pullquoteLines[index]!
-    element.textContent = line.text
+    const shown = written?.pullquoteLines[index]
+    if (shown?.text !== line.text) element.textContent = line.text
+    if (stylesWritten && shown !== undefined && shown.x === line.x && shown.y === line.y) continue
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.pullquoteFont
@@ -851,7 +869,7 @@ function render(now: number): boolean {
   }
 
   if (!textProjectionEqual(committedTextProjection, textProjection)) {
-    projectTextProjection(textProjection)
+    projectTextProjection(textProjection, committedTextProjection)
     committedTextProjection = textProjection
   }
 
