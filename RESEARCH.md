@@ -6054,10 +6054,13 @@ decisions for the maintainer.
   an app keeps the range of a line it passes back; and a materialized fragment built by hand, as a test may build one,
   can't name `start` and `end`. The harness's offline invariants passed each materialized rich line back as a range and
   no longer do, the types ruling that call out (the entry of 2026-10-06 on well-typed callers); the check beside it
-  stands, that a JSON copy of the range gives the same line, which is what an app does. A unit test compiles only while
-  a materialized fragment's type lacks the two fields and a fragment range's has them, which `bun run check` enforces
-  and `bun test` doesn't. Leaving the copy out of the built code too was not taken: it is 24 B off the rich-inline entry
-  minified, 8 B gzipped, for a change no typed caller sees, and it would stop the JavaScript above. Whether a fragment
-  range says its offsets in the item's text too stays open (TODO.md, the API discussion). Reopens with an app that holds
-  a line only materialized and has to pass it back, or that needs a materialized fragment's place in the paragraph: the
-  two fields then return to the type, which the built fragments still satisfy.
+  stands, that a JSON copy of the range gives the same line, which is what an app does. Its check that the line
+  functions agree holds a materialized fragment to its range over the fields both types have, so a fault in the cursors
+  a materialized fragment still carries shows in the unit test that holds a materialized line to its range, and not in
+  the harness. Another unit test compiles only while a materialized fragment's type lacks the two fields and a fragment
+  range's has them, which `bun run check` enforces and `bun test` doesn't. Leaving the copy out of the built code too
+  was not taken: it is 24 B off the rich-inline entry minified, 8 B gzipped, for a change no typed caller sees, and it
+  would stop the JavaScript above. Whether a fragment range says its offsets in the item's text too stays open (TODO.md,
+  the API discussion). Reopens with an app that holds a line only materialized and has to pass it back, or that needs a
+  materialized fragment's place in the paragraph: the two fields then return to the type, which the built fragments
+  still satisfy.
