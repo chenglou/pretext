@@ -4,7 +4,7 @@ Each case's layout in the browser is recorded once per browser build and kept in
 browser, as an app does, and are scored against it. `harness/cli.ts`'s header lists the commands, and each file's header
 its part. Dated measurements are from an M5 Max under macOS 27.0 (26A428) at device pixel ratio 2, in Chrome 153,
 Firefox 156.0 and Safari 27.0 (WebKit 22625.1.29.11.27); the pins moved to Chrome 154.0.8037.57 and Firefox 156.0.1 on
-2026-09-25, and every recording stayed the same.
+2026-09-25 and Chrome's to 154.0.8037.98 on 2026-10-06, and every recording stayed the same.
 
 ## Setup
 
