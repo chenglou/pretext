@@ -1087,7 +1087,7 @@ function createLine(
       last.gapBefore -= part
       rest -= part
       // A gap taken whole is none, and so is one with under 1e-9px left, which could only be float
-      // error. It takes a width the line leaves out, such as a mark's halt, that is as wide as the
+      // error. That needs a width the line leaves out, such as a mark's halt, to be as wide as the
       // gap to the last bits, which no rule makes it.
       if (last.gapBefore < 1e-9) {
         last.gapBefore = 0
