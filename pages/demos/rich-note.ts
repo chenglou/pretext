@@ -29,6 +29,7 @@ const domCache = {
   noteBody: getRequiredDiv('note-body'), // cache lifetime: page
   widthSlider: getRequiredInput('width-slider'), // cache lifetime: page
   widthValue: getRequiredSpan('width-value'), // cache lifetime: page
+  writtenBodyWidth: null as number | null, // cache lifetime: until the body width changes. The width the rows were built at
 }
 
 const richInline = prepareRichInlineNote(DEFAULT_RICH_NOTE_SPECS)
@@ -189,5 +190,11 @@ function render(): void {
   domCache.root.style.setProperty('--note-content-width', `${bodyWidth}px`)
   domCache.noteBody.style.height = `${layout.noteBodyHeight}px`
 
-  renderBody(richInline, layout)
+  // Building the rows again, even the same rows, drops a text selection inside
+  // them. The note is prepared once, so its rows follow from the body width
+  // alone, and they are built only when it isn't the width they were built at.
+  if (domCache.writtenBodyWidth !== bodyWidth) {
+    renderBody(richInline, layout)
+    domCache.writtenBodyWidth = bodyWidth
+  }
 }
