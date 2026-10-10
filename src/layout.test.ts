@@ -4128,6 +4128,19 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('an atomic rich item\'s text is its text as painted: its white space collapsed and trimmed, and no soft hyphen', () => {
+    // A chip is laid out whole in normal white space, whatever the paragraph's, so none of its
+    // soft hyphens shows.
+    const chipText = (text: string, whiteSpace: 'normal' | 'pre-wrap'): string => {
+      const prepared = prepareRichInline([{ text: 'ab ', font: FONT }, { text, font: FONT, break: 'never' }], { whiteSpace })
+      return materializeRichInlineLineRange(prepared, layoutNextRichInlineLineRange(prepared, Infinity)!).fragments[1]!.text
+    }
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      expect({ whiteSpace, texts: ['co\u00ADop\u00ADer\u00ADate', '\u00ADab\u00AD', 'a\u00AD b', ' a \n b ', 'a\u200Bb'].map(text => chipText(text, whiteSpace)) })
+        .toEqual({ whiteSpace, texts: ['cooperate', 'ab', 'a b', 'a b', 'a\u200Bb'] })
+    }
+  })
+
   test('an atomic rich item of only white space is an object as wide as its extraWidth, and one of no text is dropped', () => {
     // An inline-block is a box in its line whatever its text: its own white space collapses away inside
     // it, and a line can break on both sides of it. Chrome, Firefox and Safari lay out `ab`, a chip of two
@@ -6741,6 +6754,18 @@ describe('layout invariants', () => {
         const line = layoutNextRichInlineLineRange(spaced, width)!
         expect({ letterSpacing, widths: line.fragments.map(fragment => Math.round(fragment.occupiedWidth * 100) / 100) }).toEqual({ letterSpacing, widths: [...widths] })
         expect(line.width).toBeCloseTo(widths[0] + widths[1], 9)
+      }
+      // A mark that isn't halted keeps its width where a box of no width follows it, and the box
+      // gets none of the mark's halt, also under a letter spacing that isn't a short binary
+      // fraction, where the line's width and its fragments' sum, the same advances added in
+      // another order, differ in their last bits (the 1e-6px in createLine()).
+      for (const letterSpacing of [0.1, 0.3, 0.7, 1.1]) {
+        for (const lead of ['a', 'ab', 'abc', 'x y']) {
+          const whole = prepareRichInline([{ text: lead, font, letterSpacing }, { text: '中」', font, letterSpacing }, { width: 0 }])
+          const line = layoutNextRichInlineLineRange(whole, 1e5)!
+          const widths = line.fragments.map(fragment => Math.round(fragment.occupiedWidth * 1e6) / 1e6)
+          expect({ letterSpacing, lead, mark: widths[1], box: widths[2] }).toEqual({ letterSpacing, lead, mark: Math.round((32 + 2 * letterSpacing) * 1e6) / 1e6, box: 0 })
+        }
       }
       // An item with extraWidth keeps the halt at a line's end only: Blink fits its text before
       // its end edge.
