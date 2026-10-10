@@ -574,12 +574,22 @@ export function readLetterSpacing(letterSpacing: number | undefined, profile: En
   return Math.min(Math.round(Math.abs(units)), MAX_APP_UNITS) * Math.sign(units) / 60
 }
 
-// A zero per segment, where per-segment widths start, pushed in a loop: Array.from over
-// `{ length }` reads every index off the object and calls its map function for each.
+// `count` zeros, where a list of numbers per segment starts: a copy of one list of zeros, which
+// grows to the longest asked for, up to 1024. A copy is one allocation, where zeros pushed one at
+// a time regrow the list as it fills: a list of 127 costs 18 ns copied and 141 pushed in V8's
+// shell, 44 and 293 in SpiderMonkey's, 59 and 204 in JavaScriptCore's (RESEARCH.md, Keeping Work
+// Bounded, JavaScript Engines, under A paragraph's sparse lists made whole). A longer list is
+// pushed in a loop: Array.from over `{ length }` reads every index off the object and calls its
+// map function for each.
+const ZEROS: number[] = []
 export function zeros(count: number): number[] {
-  const out: number[] = []
-  for (let i = 0; i < count; i++) out.push(0)
-  return out
+  if (count > 1024) {
+    const out: number[] = []
+    for (let i = 0; i < count; i++) out.push(0)
+    return out
+  }
+  while (ZEROS.length < count) ZEROS.push(0)
+  return ZEROS.slice(0, count)
 }
 
 // A text's width as Canvas spaces it under a letter spacing, or null where the context

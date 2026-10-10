@@ -438,7 +438,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // keeps the opening it took.
         flags[at] = fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN
         widths.push(extraWidth)
-        ;(openingEdges ??= zeroList(flags.length))[at] = extraWidth
+        ;(openingEdges ??= zeros(flags.length))[at] = extraWidth
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         // Where the engine ends a line inside the preserved spaces before a padded hard break that
         // doesn't fit (hardBreakItemRetreat), those spaces get an advance each, as text a line can
@@ -456,7 +456,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // The edge comes before the item's segments, so before the space or soft hyphens that lead them.
         sourceStarts.push(offset - starts[index]!)
         sourceEnds.push(offset - starts[index]!)
-        if (fit !== 0 && fit !== extraWidth) (lineEndTrims ??= zeroList(flags.length))[at] = extraWidth - fit
+        if (fit !== 0 && fit !== extraWidth) (lineEndTrims ??= zeros(flags.length))[at] = extraWidth - fit
         first = from - 1
       }
     }
@@ -524,10 +524,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (sub.lineStartProhibitions !== null && sub.lineStartProhibitions[s] !== null) (lineStartProhibitions ??= new Array<Uint8Array | null>(flags.length).fill(null))[at] = sub.lineStartProhibitions[s]!
       if (sub.breakableLineStartExtras !== null && sub.breakableLineStartExtras[s] !== null) (breakableLineStartExtras ??= new Array<number[] | null>(flags.length).fill(null))[at] = sub.breakableLineStartExtras[s]!
       const startExtra = (sub.lineStartExtras === null ? 0 : sub.lineStartExtras[s]!) + (i > first ? extraWidth : 0)
-      if (startExtra !== 0) (lineStartExtras ??= zeroList(flags.length))[at] = startExtra
+      if (startExtra !== 0) (lineStartExtras ??= zeros(flags.length))[at] = startExtra
       if (sub.lineEndTrims !== null) {
         const endTrim = sub.lineEndTrims[s]!
-        if (endTrim !== 0) (lineEndTrims ??= zeroList(flags.length))[at] = endTrim
+        if (endTrim !== 0) (lineEndTrims ??= zeros(flags.length))[at] = endTrim
         // A closing mark that ends its item, halted at a line's end, stays halted where the line
         // goes on. Blink breaks an item's text that doesn't fit its line, and where the text fits
         // with its last mark halted, which it tries where a break comes right after the mark, that
@@ -546,13 +546,13 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // (ENGINE_FOLLOWUPS.md, Rich-inline item edges). The walkers that take every boundary for
         // a break end the line after a trimmed segment, so the paragraph isn't theirs.
         if (endTrim !== 0 && i === to - 1 && to < count && extraWidth === 0 && !analysis.texts[i]!.endsWith('\u3000')) {
-          ;(itemEndHalts ??= zeroList(flags.length))[at] = endTrim
+          ;(itemEndHalts ??= zeros(flags.length))[at] = endTrim
           simple = false
         }
       }
       if (sub.overflowLineEndTrims !== null) {
         const retryTrim = sub.overflowLineEndTrims[s]!
-        if (retryTrim !== 0) (overflowLineEndTrims ??= zeroList(flags.length))[at] = retryTrim
+        if (retryTrim !== 0) (overflowLineEndTrims ??= zeros(flags.length))[at] = retryTrim
         // Where no break comes after the mark, as before a period or a no-break space that starts
         // the next item, Blink halts it only on a line it lays out again with a break after every
         // grapheme (HandleOverflow, line_breaker.cc:4259-4264), and there too the halted text is the
@@ -560,13 +560,13 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // `文` / `字」.` / `字` at 28.5-31.75px, where their text in one node ends the second line
         // after the mark.
         if (retryTrim !== 0 && i === to - 1 && to < count && extraWidth === 0) {
-          ;(itemEndHalts ??= zeroList(flags.length))[at] = retryTrim
+          ;(itemEndHalts ??= zeros(flags.length))[at] = retryTrim
           simple = false
         }
       }
-      if (sub.discretionaryHyphenContexts !== null) (discretionaryHyphenContexts ??= zeroList(flags.length))[at] = sub.discretionaryHyphenContexts[s]!
-      if (i >= first && first < to) (insideExtras ??= zeroList(flags.length))[at] = extraWidth
-      if (i > first && first < to) (fillExtras ??= zeroList(flags.length))[at] = extraWidth
+      if (sub.discretionaryHyphenContexts !== null) (discretionaryHyphenContexts ??= zeros(flags.length))[at] = sub.discretionaryHyphenContexts[s]!
+      if (i >= first && first < to) (insideExtras ??= zeros(flags.length))[at] = extraWidth
+      if (i > first && first < to) (fillExtras ??= zeros(flags.length))[at] = extraWidth
     }
     from = to
   }
@@ -831,17 +831,6 @@ function narrowsLine(data: PreparedSegments, itemSegments: number[]): boolean {
 // (findWholeLine; RESEARCH.md, Decisions Log, 2026-10-09, rich inline's width).
 function fitsWhole(flow: InternalPreparedRichInline, maxWidth: number): boolean {
   return flow.wholeWidth !== null && flow.wholeWidth <= maxWidth + getEngineProfile().lineFitEpsilon
-}
-
-// `count` zeros, where a paragraph's list of numbers starts: a copy of one list of zeros, which
-// grows to the longest asked for, up to 1024; a longer list is pushed. A copy is one allocation,
-// where zeros pushed one at a time regrow the list as it fills: a list of 127 costs 18 ns copied
-// and 141 pushed in V8's shell, 44 and 293 in SpiderMonkey's, 59 and 204 in JavaScriptCore's.
-const ZEROS: number[] = []
-function zeroList(count: number): number[] {
-  if (count > 1024) return zeros(count)
-  while (ZEROS.length < count) ZEROS.push(0)
-  return ZEROS.slice(0, count)
 }
 
 // How much of a padded item's extraWidth a line fits where it takes the item's opening, the
