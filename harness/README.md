@@ -160,7 +160,9 @@ New cases mustn't pile up as the old suite's did, a hand-written repro per bug.
    and its cases are added to the file (`sets/rich.ts`'s header; ENGINE_FOLLOWUPS.md, Harness debt, has the additions to
    the catalog and the facts set that weren't a whole cut either). A template added to an existing family should bring
    its older cases back byte for byte, and a whole-catalog search derives every generated case again, so a browser's
-   drift lands in the PR.
+   drift lands in the PR. The catalog's older cases didn't come back as checked in from a whole search on 2026-10-01,
+   for a reason not traced, so a new catalog template's cases are added beside them, as the rich set's are
+   (ENGINE_FOLLOWUPS.md, Harness debt).
 4. `bun harness record --only-new`, then `bun harness check`; a new failure the change doesn't fix goes on the accepted
    list with `check --accept="<reason>"`.
 
