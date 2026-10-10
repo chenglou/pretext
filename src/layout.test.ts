@@ -1861,11 +1861,13 @@ describe('boundary rules', () => {
         ['2026-10-09', '20', ['20', '26', '-1', '0-', '09']],
         ['INV-2026-000451', 'INV-', ['INV-', '2026', '-000', '451']],
         ['a 111-2222 b', '111', ['a ', '111', '-22', '22 ', 'b']],
-        // The break stays where the line holds the character before the hyphen, where a letter
-        // follows the hyphen, whose break rests on the hyphen alone, and where no digit fits
-        // beside the hyphen.
+        // The break stays where the line holds the character before the hyphen, also where a
+        // digit would fit beside the hyphen, where a letter follows the hyphen, whose break rests
+        // on the hyphen alone, and where no digit fits beside the hyphen.
         ['111-2222', '11', ['11', '1-', '22', '22']],
+        ['111-2222', '1-2', ['11', '1-', '22', '22']],
         ['111-2222', '111-', ['111-', '222', '2']],
+        ['111-2222', '111-2', ['111-', '2222']],
         ['aaa-aaaa', 'aaa', ['aaa', '-', 'aaa', 'a']],
         ['W-11', 'W', ['W', '-', '1', '1']],
       ] as const) {
