@@ -1717,17 +1717,18 @@ After #460 the design was swept against main at #459 (e699e27e), the last build 
 had named, as one had turned up by chance (Firefox's White-Space Run Across Items). Both builds laid out 300,000
 generated paragraphs a profile on a stand-in Canvas, two styled items with one of 55 strings at the edge between them,
 and the kinds of difference no doc settled were recorded in Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host
-(WebKit 22625.1.29.11.27): 21,403 cases, then 30,414 and 7,683 a browser to check them (2026-10-09 and 10, none checked
-in). No real usage moves: no item of the real-usage sample's 241 rich-inline draws starts with a character any of the
-shapes needs, or ends with one other than a combining mark, which none needs at an item's end; none of its padded items
-holds a joiner or a bidi mark, and none of its pre-wrap draws a tab or a ZWSP after a space; and the 233 of the draws
-that both builds' harness adapters can state get the same lines from both, on a stand-in Canvas and on each browser's.
-On the first set at 24px and wider this design alone has the browser's lines in 1,111, 1,652 and 1,604 cases and the
-item stepper alone in 503, 1,449 and 322. Eight shapes are the stepper's by a rule of its own, each rare text and a
-named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has each with its counts, what 0.0.9 did and what a port takes):
-each turns on a character of no width, a tab or U+3000, most at an item's edge and beside padding or a chip. Three of
-them are gaps of the text walkers or the scans in one text node too, which the stepper covered at an item's start; its
-other passes are gaps named before or luck. Each reopens with real text that holds its shape.
+(WebKit 22625.1.29.11.27): 21,403 cases, then 30,414 and 7,683 a browser to check them and 12,846 and 4,957 to check
+what the docs say of them (2026-10-09 and 10, none checked in). No real usage moves: no item of the real-usage sample's
+241 rich-inline draws starts with a character any of the shapes needs, or ends with one other than a combining mark,
+which none needs at an item's end; none of its padded items holds a joiner or a bidi mark, and none of its pre-wrap
+draws a tab or a ZWSP after a space; and the 233 of the draws that both builds' harness adapters can state get the same
+lines from both, on a stand-in Canvas and on each browser's. On the first set at 24px and wider this design alone has
+the browser's lines in 1,111, 1,652 and 1,604 cases and the item stepper alone in 503, 1,449 and 322. Eight shapes are
+the stepper's by a rule of its own, each rare text and a named gap (ENGINE_FOLLOWUPS.md, Rich-inline item edges, has
+each with its counts, what 0.0.9 did and what a port takes): each turns on a character of no width, a tab or U+3000,
+most at an item's edge and beside padding or a chip. Three of them are gaps of the text walkers or the scans in one text
+node too, which the stepper covered at an item's start; its other passes are gaps named before or luck. Each reopens
+with real text that holds its shape.
 
 The halt Chrome gives a pair of fullwidth marks comes with the paragraph's analysis, with no code for it in
 `src/rich-inline.ts`: on the probes above the paragraph gives the lines main's halts across items give (CJK At An
@@ -5831,21 +5832,21 @@ decisions for the maintainer.
   Boundaries, Rich Inline As One Paragraph, has the sweep): a line for a ZWSP that is or starts an item after a space;
   both edges for a padded item of only a ZWSP; a bidi control, ZWNJ or combining mark kept with its word after a chip
   wider than its line; the `extraWidth` of a line that starts in a padded item's word beside a joiner or a bidi mark,
-  and of a hyphen's line where the item starts with a soft hyphen; and in Firefox a padded item of only a bidi control
-  as a box where it stands, the hang that ends at a ZWSP in pre-wrap, a padded item that starts with a tab kept whole,
-  and a U+3000 run that hangs where only bidi controls follow it. ENGINE_FOLLOWUPS.md, Rich-inline item edges, has two
-  more that are not among the eight: a line's width in Safari, a space too wide where the line ends at a line separator
-  after a space across an item's edge, and a trade in Chrome, the halt of a closing mark that ends a padded item, 94
-  probe layouts lost and 124 gained (2026-10-06). The changelog lists as worse than 0.0.9 only what 0.0.9 had right and
-  an app could hold: the ZWSP's line after a space or after content that overflows, the padded item of only a ZWSP, and
-  Firefox's two around a soft hyphen and a bidi control between spaces (CHANGELOG.md, the entry on rich inline as one
-  paragraph). The rest 0.0.9 had wrong too, or is pre-wrap, which its rich inline lacked, or is left out as text no app
-  is expected to hold, though 0.0.9 had it right: a combining mark, or a ZWNJ in an item of its own, right after a chip
-  wider than its line; a joiner or a bidi mark in a padded item's word, in a box narrower than that word; and in Firefox
-  a padded item of only a bidi control. The decision reopens if an app needs cursors into each item's own prepared text;
-  if Safari's cost of preparing rich text shows in an app, where the removals that were measured and left out start
-  (Dead Ends, Fitting, Cuts And Fast Paths); or with kerning across sibling spans, which wants the paragraph measured as
-  well as analyzed whole.
+  and of a hyphen's line where the item starts with a soft hyphen; in Firefox a padded item of only a bidi control as a
+  box where it stands, the hang that ends at a ZWSP in pre-wrap and a padded item that starts with a tab kept whole; and
+  the line end after a U+3000 run that a bidi control, ZWNJ or a combining mark follows in the next item.
+  ENGINE_FOLLOWUPS.md, Rich-inline item edges, has two more that are not among the eight: a line's width in Safari, a
+  space too wide where the line ends at a line separator after a space across an item's edge, and a trade in Chrome, the
+  halt of a closing mark that ends a padded item, 94 probe layouts lost and 124 gained (2026-10-06). The changelog lists
+  as worse than 0.0.9 only what 0.0.9 had right and an app could hold: the ZWSP's line after a space or after content
+  that overflows, the padded item of only a ZWSP, and Firefox's two around a soft hyphen and a bidi control between
+  spaces (CHANGELOG.md, the entry on rich inline as one paragraph). The rest 0.0.9 had wrong too, or is pre-wrap, which
+  its rich inline lacked, or is left out as text no app is expected to hold, though 0.0.9 had it right: a combining
+  mark, or a ZWNJ in an item of its own, right after a chip wider than its line; a joiner or a bidi mark in a padded
+  item's word, in a box narrower than that word; and in Firefox a padded item of only a bidi control. The decision
+  reopens if an app needs cursors into each item's own prepared text; if Safari's cost of preparing rich text shows in
+  an app, where the removals that were measured and left out start (Dead Ends, Fitting, Cuts And Fast Paths); or with
+  kerning across sibling spans, which wants the paragraph measured as well as analyzed whole.
 - **2026-10-07: the bench's rich walk and stream keep each line they are handed, and its rich row times the chat
   demo's paragraphs beside the stress items**, the maintainer's decisions (#456). An app that paints its lines keeps
   them, as both rich demos do, and a callback that read only a line's width let Chrome skip making main's one-item
