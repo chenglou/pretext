@@ -4,9 +4,9 @@ report-953b7e9cd05588ed breaks
 report-b980d5159851daba breaks
 
 ## A U+3000 that ends a rich item before an item that starts with a bidi control, at 48-64 px, where the text before the U+3000 fits its line and the U+3000 doesn't: Chrome hangs the U+3000 and starts the next line with the control, which holds that line where nothing visible follows (not traced); the Blink profile gives the U+3000 its hang (addIdeographicSpaceHangs in src/prepare.ts), but the scan gives no break between it and the control, so no line ends there: the line goes back to its last break and the last ideograph goes down with the U+3000 (ENGINE_FOLLOWUPS.md, Line edges)
+rich-5579621743a4db9b breaks
 rich-733f760999ec0f9b breaks
 rich-af8dbf9c285cccf5 breaks
-rich-b9080d784d51b25b breaks
 rich-ec215509247b16b8 breaks
 
 ## A ZWSP that is a rich item, or starts one, right after a space, at 37-84 px, where the text before the space fits its line and the space doesn't: Chrome ends the line after the space and starts the next with the ZWSP, which holds that line though it shows nothing where nothing follows it or the word after it doesn't fit beside it, in pre-wrap too, as Blink sends text that follows content past the line's end to HandleOverflow (line_breaker.cc:1352-1368, Chromium 153); the text walkers hang the ZWSP with the space, so the library is a line short (ENGINE_FOLLOWUPS.md, Line edges)
@@ -1944,11 +1944,11 @@ oracle-6ef7f131436695ac count
 oracle-7b318fbe27255616 count
 oracle-f1121833e4ed5ed7 count
 rich-2c92f9353ca73192 count
-rich-34b0481d2ee26169 count
 rich-40018982415644fb count
 rich-449749f2687176be breaks
 rich-4e7797d2c399aac5 breaks
 rich-5d9782cd7b729d95 count
+rich-65b94a1a78772888 count
 rich-76a88e2b5c4011a2 count
 rich-777fd9b2ae6d3d24 count
 rich-845b4dcf20f5098f count
@@ -3163,7 +3163,6 @@ rich-13fa0b66ebfc4b40 count
 rich-15a6bf021414df3b count
 rich-15e756bb89d49f7a count
 rich-166322a1778d474c count
-rich-1b6c31057b2e7634 count
 rich-1e0d5476b00642c8 count
 rich-1e310e1aa5f44bd6 count
 rich-235e25578c8411f6 count
@@ -3215,6 +3214,7 @@ rich-9576d45cd60f16e5 count
 rich-9b8ab32bccc7a1a6 count
 rich-9becc0db45b762ca count
 rich-9caad05a8d6ec08d count
+rich-9d78130e48f8b4e6 count
 rich-a09d53bd7aff382c count
 rich-a560650dfbeafe72 count
 rich-a5ad960782eb9128 count

@@ -164,8 +164,9 @@
 //     full-width space before a mark: where the text before the U+3000 fits its line and the U+3000 doesn't, Firefox,
 //     which drops the control, hangs it, and Chrome hangs it and starts the next line with the control. In rich inline
 //     no line can end between the two, and the last ideograph goes down with them: in both profiles where the control
-//     ends the paragraph, and in the Blink profile where text follows it (addIdeographicSpaceHangs in src/prepare.ts);
-//     and the text right after the U+3000, before which the Blink and Gecko profiles hang it;
+//     ends the paragraph, and in the Blink profile where text follows it in its item, where the Gecko profile ends the
+//     line before the control, as Firefox does (addIdeographicSpaceHangs in src/prepare.ts); and the text right after
+//     the U+3000, before which the Blink and Gecko profiles hang it;
 // - shapes at an item's edge where the one analysis of the joined text gives every browser's lines (RESEARCH.md, Rich
 //   Inline As One Paragraph): an item that starts with a bidi isolate right after a dash, and with ZWNJ right after an
 //   ideograph, where Chrome's and Firefox's line ends after the joined text and the word after it stays whole, and
@@ -492,7 +493,7 @@ export function richTemplates(): Template[] {
     ['pre-wrap/tab-starts-padded-item', COURIER, [padded('\tend', 4, COURIER)], 'en', 'normal', 'pre-wrap'],
     ['pre-wrap/tab-starts-padded-item', ARIAL, [item('a b c'), item(' \td')], 'en', 'normal', 'pre-wrap'],
     ['item-edges/ideographic-space-before-control', JAPANESE, [item('東京都\u{3000}', JAPANESE), item('\u{200E}', JAPANESE)], 'ja'],
-    ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('\u{200F}', JAPANESE), item('次', JAPANESE)], 'ja'],
+    ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('\u{200F}次', JAPANESE)], 'ja'],
     ['item-edges/ideographic-space-before-control', JAPANESE, [item('大阪市\u{3000}', JAPANESE), item('次', JAPANESE)], 'ja'],
     ['item-edges/control-starts-item', ARIAL, [item('posted\u{2014}'), item('\u{2068}Dana\u{2069} today')]],
     ['item-edges/control-starts-item', JAPANESE, [item('東', JAPANESE), item('\u{200C}on', JAPANESE)], 'ja'],

@@ -1520,7 +1520,6 @@ facts-ffa6b122790dda2f count
 oracle-f1121833e4ed5ed7 count
 rich-0228179eb16f7fed count
 rich-0e00bb1689b366cc count
-rich-1d6bf2894c70df72 count
 rich-1ed6e50673f97cd5 count
 rich-6d0c85fab9825ad9 count
 rich-7b25479467251799 count
@@ -2028,7 +2027,6 @@ facts-cc939d224ccd4816 count
 facts-d5a3d937459712e1 count
 facts-fc69084749bc97f4 count
 rich-15a6bf021414df3b count
-rich-1b6c31057b2e7634 count
 rich-26c6030b9304ccd7 count
 rich-2ba96631579775f7 count
 rich-2d09e453d98924b9 count
