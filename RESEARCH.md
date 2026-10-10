@@ -6037,7 +6037,7 @@ decisions for the maintainer.
   Held Back), so they keep their form and the constant changes. Reopens with a whole fit that takes the walkers' lines
   under negative letter spacing, when the clamp can go.
 - **2026-10-10: the type of a materialized rich-inline fragment has no `start` and `end`, and a fragment range keeps
-  them** (#NNN), the maintainer's decision for the first release: the change is of this date, was put to him as a draft
+  them** (#483), the maintainer's decision for the first release: the change is of this date, was put to him as a draft
   pull request, and he decided by merging it. Since rich inline is one paragraph (the entry of 2026-10-06), the two
   cursors count segments of the item's part of the paragraph, which no app sees: they are only for passing back, and
   what an app passes back is a range, a line as a walk or the stream gives it. On a materialized fragment, the one with
