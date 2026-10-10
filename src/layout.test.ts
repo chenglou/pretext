@@ -5902,7 +5902,7 @@ describe('layout invariants', () => {
 
   // False in general, in the browsers themselves: contextual shaping and discretionary breaks can make a wider box
   // take more lines, and where not even a first character fits, WebKit keeps the characters after it that can't start
-  // a line, so a box narrower than a glyph can take fewer lines than one a glyph wide (RESEARCH.md, A Wider Box Never
+  // a line, so a box narrower than a glyph can take fewer lines than one a glyph wide (RESEARCH.md, When A Wider Box
   // Needs More Lines; ENGINE_FOLLOWUPS.md, Emergency breaks inside a word).
   test('ordinary positive-width words gain lines as the container shrinks', () => {
     const prepared = prepare('The quick brown fox jumps over the lazy dog', FONT)

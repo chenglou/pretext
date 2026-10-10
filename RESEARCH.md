@@ -2322,31 +2322,31 @@ preparing again on each resize costs them.
   line still breaks at item boundaries on overflow; atomic `break: 'never'` items allow a break on both sides, as
   css-text requires (2026-09-12).
 
-#### A Wider Box Never Needs More Lines
+#### When A Wider Box Needs More Lines
 
-The rule holds for ordinary words and is no invariant across widths: the browsers' own line counts rise with the width
-in some paragraphs. Of the paragraphs the checked-in recordings pin at two or more widths, a wider box takes more lines
-in 23 of 4,507 plain ones and 1 of 238 rich ones in Chrome 154.0.8037.98, 4 of 4,507 plain ones in Firefox 156.0.1, 266
-of 4,500 in webkit-host and 2 of 195 in Safari 27.0 (the recordings on 2026-10-06, with #446's cases). In 243 of those
-295 plain paragraphs the box with fewer lines is narrower than a quarter of the font size: no character fits, and an
-engine keeps with a line's first character what can't start a line (WebKit's rule: ENGINE_FOLLOWUPS.md, Emergency breaks
-inside a word) or what shapes with it. `x ffiffiffiffiffiffi y` in 24px Hoefler Text is 14 lines in Chrome at 8.023px
-and 20 at 8.055px, where an `f` fits alone. Ten of the other 52 hold a soft hyphen, a break that starts to fit and
-leaves more lines after it: `بب ببب`, a soft hyphen, U+0650, `ببب بب` in 24px Geeza Pro is 4 lines in Firefox at
-30.001px and 5 at 30.017px, where `ببب` fits with its hyphen and the word takes three lines for two. The profiles do the
-same on the offline invariants' stand-in Canvas (`harness/invariants.ts`): of 3,000 plain cases drawn from the sets,
-each laid out at 201 widths from a quarter of its own width to twice it, the count rises in 378 under the WebKit
-profile, 375 of them from a box narrower than a glyph, in 5 under Gecko's, a rise Firefox doesn't have
-(ENGINE_FOLLOWUPS.md, Line edges), and in none under Blink's (2026-10-06). The sample moves with the sets: drawn again
-with #446's cases, the count rises in 367, 2 and, under Blink's, 2, both `a`, an emoji and `b word` at letter spacing -6
-from a box narrower than a glyph. That rise is Chrome's own: where `b` and the space after it are narrower than their
-two spacings, as the stand-in font's kerning beside a space makes them under the Blink profile, `b word` is narrower
-than `word`, so it fits a box that `a`, the emoji and `b` don't, and the word is cut in the wider box that they fit.
-`a`, U+1F600, `b mm` in 16px Arial at letter spacing -8 is two lines in Chrome 154.0.8037.98 at 9.75px, the second
-`b mm`, and three at 9.875px, `mm` cut in two, in pre-wrap and in normal white space, and the Blink profile has the
-same lines (2026-10-06); at -6, where Arial's `b` and space are wider than two spacings, neither rises at any of 125
-widths from 0.5 to 16px. So no check sweeps widths for a rise, which would fail on ported rules, and the unit test of
-the rule lays out one sentence of ordinary words (`src/layout.test.ts`).
+That a wider box never needs more lines holds for ordinary words and is no invariant across widths: the browsers' own
+line counts rise with the width in some paragraphs. Of the paragraphs the checked-in recordings pin at two or more
+widths, a wider box takes more lines in 23 of 4,507 plain ones and 1 of 238 rich ones in Chrome 154.0.8037.98, 4 of
+4,507 plain ones in Firefox 156.0.1, 266 of 4,500 in webkit-host and 2 of 195 in Safari 27.0 (the recordings on
+2026-10-06, with #446's cases). In 243 of those 295 plain paragraphs the box with fewer lines is narrower than a quarter
+of the font size: no character fits, and an engine keeps with a line's first character what can't start a line (WebKit's
+rule: ENGINE_FOLLOWUPS.md, Emergency breaks inside a word) or what shapes with it. `x ffiffiffiffiffiffi y` in 24px
+Hoefler Text is 14 lines in Chrome at 8.023px and 20 at 8.055px, where an `f` fits alone. Ten of the other 52 hold a
+soft hyphen, a break that starts to fit and leaves more lines after it: `بب ببب`, a soft hyphen, U+0650, `ببب بب` in
+24px Geeza Pro is 4 lines in Firefox at 30.001px and 5 at 30.017px, where `ببب` fits with its hyphen and the word takes
+three lines for two. The profiles do the same on the offline invariants' stand-in Canvas (`harness/invariants.ts`): of
+3,000 plain cases drawn from the sets, each laid out at 201 widths from a quarter of its own width to twice it, the
+count rises in 378 under the WebKit profile, 375 of them from a box narrower than a glyph, in 5 under Gecko's, a rise
+Firefox doesn't have (ENGINE_FOLLOWUPS.md, Line edges), and in none under Blink's (2026-10-06). The sample moves with
+the sets: drawn again with #446's cases, the count rises in 367, 2 and, under Blink's, 2, both `a`, an emoji and
+`b word` at letter spacing -6 from a box narrower than a glyph. That rise is Chrome's own: where `b` and the space after
+it are narrower than their two spacings, as the stand-in font's kerning beside a space makes them under the Blink
+profile, `b word` is narrower than `word`, so it fits a box that `a`, the emoji and `b` don't, and the word is cut in
+the wider box that they fit. `a`, U+1F600, `b mm` in 16px Arial at letter spacing -8 is two lines in Chrome
+154.0.8037.98 at 9.75px, the second `b mm`, and three at 9.875px, `mm` cut in two, in pre-wrap and in normal white
+space, and the Blink profile has the same lines (2026-10-06); at -6, where Arial's `b` and space are wider than two
+spacings, neither rises at any of 125 widths from 0.5 to 16px. So no check sweeps widths for a rise, which would fail on
+ported rules, and the unit test of the rule lays out one sentence of ordinary words (`src/layout.test.ts`).
 
 A rise the browser doesn't have is a bug: four raw-width fit checks in `src/rich-inline.ts` gave 11 lines at
 115px, 12 at 115.1px (#281, 2026-09-14). An item ending at an unfit soft hyphen with no earlier break wrapped before the
