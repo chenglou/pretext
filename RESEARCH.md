@@ -2930,8 +2930,10 @@ runs (Firefox 156.0.1, bench sessions of 2026-09-27 and 28, unless noted):
   letter spacing and as spans), main fails 147 in Chrome and the change 30, the other profiles the same layouts with
   either build. Two of the 30 are lost: a soft hyphen after the digits whose hyphen doesn't fit, which main passed by
   two errors that cancelled (ENGINE_FOLLOWUPS.md, Line edges); the other 28 fail on main too, by gaps named there
-  (Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). The rule written out in the simple walkers too,
-  in place of the hand-over, reopens if text whose words are cut before such hyphens comes to matter for speed.
+  (Chrome 154.0.8037.98, Firefox 156.0.1 and webkit-host, 2026-10-10). On a second probe, 2,040 layouts of 40 made-up
+  IDs, dates and phone numbers in six system fonts at every whole pixel from 14 to 64px, main fails 273 in Chrome and
+  the change 21, none lost. The rule written out in the simple walkers too, in place of the hand-over, reopens if text
+  whose words are cut before such hyphens comes to matter for speed.
 - **A paragraph's segment breaks, in the Gecko profile**: Gecko transforms segment breaks in each text frame's own text,
   so a paragraph with a line feed had every item cut out of the joined text, transformed and joined again: 8,508 of the
   bench's 14,834 rich items, 199 of which hold a line feed. Cutting out only those, and copying the text between two
