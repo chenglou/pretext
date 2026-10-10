@@ -185,7 +185,7 @@ export async function runJob<T extends Recording | Prediction>(job: Job): Promis
   }
 
   const settled = Date.now() + BROWSER[job.browser].settleMs
-  await serveJob(job.browser, id, docUrl(0), { stallMs: 120_000, stalled: () => `${results.size} of ${job.cases.length} cases done` }, async (request, url, finish) => {
+  await serveJob(job.browser, id, docUrl(0), { stallMs: 120_000, stalled: () => `${results.size} of ${job.cases.length} cases done${pending === null ? `; the page was told to load document ${doc + 1} of ${docs.length} and asked for none of its cases` : ''}` }, async (request, url, finish) => {
     switch (url.pathname) {
       case '/doc': {
         const n = Number(url.searchParams.get('n'))

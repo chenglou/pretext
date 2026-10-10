@@ -4,7 +4,9 @@ Each case's layout in the browser is recorded once per browser build and kept in
 browser, as an app does, and are scored against it. `harness/cli.ts`'s header lists the commands, and each file's header
 its part. Dated measurements are from an M5 Max under macOS 27.0 (26A428) at device pixel ratio 2, in Chrome 153,
 Firefox 156.0 and Safari 27.0 (WebKit 22625.1.29.11.27); the pins moved to Chrome 154.0.8037.57 and Firefox 156.0.1 on
-2026-09-25 and Chrome's to 154.0.8037.98 on 2026-10-06, and every recording stayed the same.
+2026-09-25, Chrome's to 154.0.8037.98 on 2026-10-06 and Firefox's to 157.0.1 on 2026-10-10, and every recording stayed
+the same but for line widths in 15 cases at the last move, which Firefox 156.0.1 records as 157.0.1 does (Browsers and
+pins).
 
 ## Setup
 
@@ -417,6 +419,16 @@ with the new build into a scratch copy of the recordings and prints the cases la
 and whether the browser still holds the files of `scripts/engine-data/` that its `sources.json` lists: the engines'
 compiled break rules and ICU's character properties, not the two pair tables (DEVELOPMENT.md, Engine Data).
 
+Firefox's pin went from 156.0.1 to 157.0.1 on 2026-10-10, four days after the installed Firefox updated itself. The two
+builds recorded all 44,881 cases alike that day, lines, widths and height, and 157.0.1 holds the same break data.
+Against the recordings kept until then no case starts or ends a line elsewhere, and 15 differ in line widths, in both
+builds alike: each was page history with two recordings that differ only in widths (2026-09-24), pinned with the first
+when page history was decided on line ends (2026-09-30), and a stored recording is kept while its lines hold (Accepted
+and varying lists). In 9 the new recording is the second of the two, a width that moves with what the process laid out
+before. In the other 6 the width that changed is that of a line ending in a space: the two recordings count the space
+in it, and were made before the recorder left such spaces out, later that day. Those widths are all the repin changed
+in the recordings.
+
 webkit-host lays text out as Safari 27.0 does: the same line geometry on 25,180 cases in both orders (2026-09-17, in
 the per-engine rebuild's harness) and on installed Safari's 2,000-case sample here, where the 1,990 cases pinned in both
 recordings are identical, widths included, and the other 5 are page history in webkit-host (2026-09-24). That
@@ -429,7 +441,9 @@ uncovered during a job.
 
 Firefox changes fonts after it starts (see also `PLATFORM_BUGS.md`, the late family names): emoji beside Arial laid out
 otherwise when recorded 11 s after launch than at 12, 15 or 30 s (91 cases, 2026-09-24), so each Firefox job holds its
-first document until 15 s.
+first document until 15 s. Since Firefox 157 a tab's 201st navigation within 10 seconds does nothing and throws nothing
+(`PLATFORM_BUGS.md`, By design, or unfiled), and a full `record`'s 201st navigation comes 7 to 13 s after its first,
+so each Firefox job's profile turns that limit off (`browsers.ts`).
 
 Pinned Chrome and Firefox open each job's window on the user's screen, behind the others. Its page is blank and dark
 (`#111` on html and body; a case's paragraph is added, read and removed in one call, so none is ever painted), and its
