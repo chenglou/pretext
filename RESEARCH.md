@@ -644,24 +644,27 @@ lazily, which took the layout entry from 56.2 to 53.6 KB gzipped with the same u
 more, so it wasn't taken.
 
 Since #394 (2026-10-01) the module holds what the tables say in place of their bytes, and the layout entry is 40.4 KB
-gzipped and 95.4 KB minified, 13.3 KB less of each than under #392's packing. Every code point's class in the ten maps
-the scans read (the categories of ICU's five line and two character tables, and Firefox's Line_Break, Bidi_Class and
-East_Asian_Width) ships as one list of 4,487 runs of joint classes, the 250 classes the maps together tell apart, with a
-byte per joint class for each map: engines class most code points alike, and so do one engine's tables. From the list
-the library builds a table for each map its engine reads, blocks of 256 code points behind an index, so a class is two
-loads for any code point. Before, ICU's tries took two loads below U+10000 and four above, Firefox's line trie two below
-U+1000 and four above, East_Asian_Width a search through its ranges, and Firefox's Bidi_Class one load below U+10000,
-from a table per code unit: that lookup alone gained a load. Each state table ships as
-its rows' differences from rows it repeats, starting from an earlier table's rows where one has its shape: libicucore's
-line tables differ from Chrome's root table in 8 rows. Chrome's Chinese table has a category and two states more than
-the root table, so it ships alone. The class maps are most of what is saved; the pair tables, Firefox's break states and
-the bytes per joint class keep #392's packing. Taking one string out of the bundle now shrinks its gzipped size by 5.5
-KB for the run list, 2.6 KB and 2.7 KB for the rows of Chrome's root and Chinese line tables, 1.0 KB for the bytes per
-joint class and 0.5 KB or less for each other table. Nothing is derived: the generator, still run by hand, reads the
-same engine files, checks every class of every code point and every state row against them as the library unpacks them,
-and a test checks the shipped module the same way. Since #403 (2026-10-01) Firefox's Bidi_Class isn't among the maps
-(Bidi Levels): nine maps, 4,268 runs of 155 joint classes, and a layout entry of 37.7 KB gzipped and 89.0 KB minified,
-4.4 KB and 10.7 KB less than with the map and the level port that read it.
+gzipped and 95.4 KB minified, 13.3 KB less of each than under #392's packing. Every code point's class in the maps the
+scans read ships as one list of runs of joint classes, the classes the maps together tell apart, with a byte per joint
+class for each map: engines class most code points alike, and so do one engine's tables. With #394 the maps were ten
+(the categories of ICU's five line and two character tables, and Firefox's Line_Break, Bidi_Class and East_Asian_Width)
+and the list 4,487 runs of 250 joint classes. From the list the library builds a table for each map its engine reads,
+blocks of 256 code points behind an index, so a class is two loads for any code point. Before, ICU's tries took two
+loads below U+10000 and four above, Firefox's line trie two below U+1000 and four above, East_Asian_Width a search
+through its ranges, and Firefox's Bidi_Class one load below U+10000, from a table per code unit: that lookup alone
+gained a load. Each state table ships as its rows' differences from rows it repeats, starting from an earlier table's
+rows where one has its shape: libicucore's line tables differ from Chrome's root table in 8 rows. Chrome's Chinese table
+has a category and two states more than the root table, so it ships alone. The class maps are most of what is saved; the
+pair tables, Firefox's break states and the bytes per joint class keep #392's packing. Taking one string out of the
+bundle now shrinks its gzipped size by 5.5 KB for the run list, 2.6 KB and 2.7 KB for the rows of Chrome's root and
+Chinese line tables, 1.0 KB for the bytes per joint class and 0.5 KB or less for each other table. Nothing is derived:
+the generator, still run by hand, reads the same engine files, checks every class of every code point and every state
+row against them as the library unpacks them, and a test checks the shipped module the same way. Since #403 (2026-10-01)
+Firefox's Bidi_Class isn't among the maps (Bidi Levels): nine maps, 4,268 runs of 155 joint classes, and a layout entry
+of 37.7 KB gzipped and 89.0 KB minified, 4.4 KB and 10.7 KB less than with the map and the level port that read it.
+Since #423 (2026-10-03) the script classes that Blink's script runs read are a tenth map, and the generator's check
+prints the counts of the module as it stands (`bun run scripts/generate-engine-break-data.ts --check`): 4,423 runs of
+248 joint classes since #426 (2026-10-05).
 
 What that costs (2026-10-01). The unpacked tables take more memory: on a page in one language, 198 KB of typed arrays
 against 103 in the Blink profile, 199 against 104 in the WebKit profile, and 151 against 40 in the Gecko profile, or 212
