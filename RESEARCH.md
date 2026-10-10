@@ -1506,8 +1506,9 @@ starts a word: the fragment starts after it, and the line before ends after it, 
 gave. The same holds for an item of a paragraph of several: of about 38,700 generated items outside the kinds above, 173
 differ in the Gecko profile and 2 in the Blink profile, each holding a word that starts with a soft hyphen. So no
 mapping keeps the old meaning without each item's own analysis, which the design removes. Cursors are for passing back
-to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`; a materialized fragment has `sourceStart`
-and `sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as
+to `layoutNextRichInlineLineRange()` and `materializeRichInlineLineRange()`, and what passes back is a range, so the
+type of a materialized fragment has no `start` and `end` (Decisions Log, 2026-10-10); it has `sourceStart` and
+`sourceEnd`, UTF-16 offsets in its item's `text`. Also: an atomic item of only white space is an object as wide as
 its `extraWidth`, as every engine lays out an inline-block of only white space (Atomic Items' Own White Space), where it
 was a collapsed space; an item of soft hyphens or a ZWSP that a line's start consumes gets no empty fragment on that
 line; a collapsed space at an item's edge is measured with its item, so in the Chromium profile it takes its kerning
@@ -6035,3 +6036,28 @@ decisions for the maintainer.
   the walkers clamp for themselves; the functions' entries were timed statement by statement (Dead Ends, Simplifications
   Held Back), so they keep their form and the constant changes. Reopens with a whole fit that takes the walkers' lines
   under negative letter spacing, when the clamp can go.
+- **2026-10-10: the type of a materialized rich-inline fragment has no `start` and `end`, and a fragment range keeps
+  them** (#NNN), the maintainer's decision for the first release: the change is of this date, was put to him as a draft
+  pull request, and he decided by merging it. Since rich inline is one paragraph (the entry of 2026-10-06), the two
+  cursors count segments of the item's part of the paragraph, which no app sees: they are only for passing back, and
+  what an app passes back is a range, a line as a walk or the stream gives it. On a materialized fragment, the one with
+  text, their one use was to let its line pass where a range is asked, and they misled code written for 0.0.9, whose
+  README called them cursors within the item's prepared text: it compiled and read other text there (Rich Inline
+  Boundaries, Rich Inline As One Paragraph, has how often the two differ). Off the type, that code fails to compile, and
+  `sourceStart` and `sourceEnd` give the place it wanted. The first release settles it either way: a field can't leave a
+  published type before 2.0, where these two can come back later, as optional fields without a break. The change is to
+  the types alone: the built code is byte for byte what it was, `materializeRichInlineLineRange()` building each
+  fragment with its range's cursors under a type the entry point doesn't export (`InternalRichInlineFragment`,
+  `src/rich-inline.ts`), so JavaScript that reads them, or passes a materialized line back, runs as it did. What it
+  costs TypeScript: a materialized line no longer type-checks where a range is asked, as it did on 0.0.9, so
+  `materializeRichInlineLineRange(prepared, line)` and a materialized line kept in a list of ranges fail to compile, and
+  an app keeps the range of a line it passes back; and a materialized fragment built by hand, as a test may build one,
+  can't name `start` and `end`. The harness's offline invariants passed each materialized rich line back as a range and
+  no longer do, the types ruling that call out (the entry of 2026-10-06 on well-typed callers); the check beside it
+  stands, that a JSON copy of the range gives the same line, which is what an app does. A unit test compiles only while
+  a materialized fragment's type lacks the two fields and a fragment range's has them, which `bun run check` enforces
+  and `bun test` doesn't. Leaving the copy out of the built code too was not taken: it is 24 B off the rich-inline entry
+  minified, 8 B gzipped, for a change no typed caller sees, and it would stop the JavaScript above. Whether a fragment
+  range says its offsets in the item's text too stays open (TODO.md, the API discussion). Reopens with an app that holds
+  a line only materialized and has to pass it back, or that needs a materialized fragment's place in the paragraph: the
+  two fields then return to the type, which the built fragments still satisfy.

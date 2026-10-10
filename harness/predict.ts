@@ -242,14 +242,22 @@ export function plainDisagreement(api: LineApis, prepared: PreparedTextWithSegme
   }
 }
 
-function sameFragments(a: readonly RichInlineFragmentRange[], b: readonly RichInlineFragmentRange[]): boolean {
+// Whether two lines' fragments are the same items with the same gaps and widths: the fields a materialized fragment's
+// type shares with a fragment range's, which has cursors too.
+function sameFragments(a: readonly (RichInlineFragment | RichInlineFragmentRange)[], b: readonly RichInlineFragmentRange[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!
     const y = b[i]!
-    if (x.itemIndex !== y.itemIndex || x.gapItemIndex !== y.gapItemIndex || !sameWidth(x.gapBefore, y.gapBefore) || !sameWidth(x.occupiedWidth, y.occupiedWidth)
-      || !sameCursor(x.start, y.start) || !sameCursor(x.end, y.end)) return false
+    if (x.itemIndex !== y.itemIndex || x.gapItemIndex !== y.gapItemIndex || !sameWidth(x.gapBefore, y.gapBefore) || !sameWidth(x.occupiedWidth, y.occupiedWidth)) return false
   }
+  return true
+}
+
+// And, for two ranges, the same cursors.
+function sameFragmentRanges(a: readonly RichInlineFragmentRange[], b: readonly RichInlineFragmentRange[]): boolean {
+  if (!sameFragments(a, b)) return false
+  for (let i = 0; i < a.length; i++) if (!sameCursor(a[i]!.start, b[i]!.start) || !sameCursor(a[i]!.end, b[i]!.end)) return false
   return true
 }
 
@@ -267,7 +275,7 @@ export function richDisagreement(api: LineApis, prepared: ReturnType<typeof prep
     if (range === null) return i === n ? null : `layoutNextRichInlineLineRange gives ${i} lines; walkRichInlineLineRanges ${n}`
     if (i >= n || i > steps) return `layoutNextRichInlineLineRange gives more than ${Math.min(n, steps)} lines; walkRichInlineLineRanges ${n}`
     const line = walked[i]!
-    if (!sameFragments(range.fragments, line.fragments) || !sameWidth(range.width, line.width) || range.end.itemIndex !== line.end.itemIndex || !sameCursor(range.end, line.end)) return `layoutNextRichInlineLineRange line ${i} differs from walkRichInlineLineRanges'`
+    if (!sameFragmentRanges(range.fragments, line.fragments) || !sameWidth(range.width, line.width) || range.end.itemIndex !== line.end.itemIndex || !sameCursor(range.end, line.end)) return `layoutNextRichInlineLineRange line ${i} differs from walkRichInlineLineRanges'`
     for (let k = 0; k < line.fragments.length; k++) {
       const f = line.fragments[k]!
       if (!isPlace(f.start) || !isPlace(f.end)) return `walkRichInlineLineRanges line ${i} fragment ${k} is item ${f.itemIndex}'s ${showCursor(f.start)}-${showCursor(f.end)}, which names no place`

@@ -1,9 +1,9 @@
 import '../harness/watchdog.ts'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnalysisProfile } from './analysis.ts'
-import type { PreparedText, PreparedTextWithSegments } from './layout.ts'
+import type { LayoutCursor, PreparedText, PreparedTextWithSegments } from './layout.ts'
 import type { PreparedLineBreakData } from './line-break.ts'
-import type { RichInlineBox, RichInlineItem } from './rich-inline.ts'
+import type { RichInlineBox, RichInlineItem, RichInlineLineRange } from './rich-inline.ts'
 
 // Unit checks over a deterministic fake canvas backend: the shipped prepare/layout
 // and rich-inline exports, and the rules behind them (the engines' break scans, the
@@ -609,6 +609,50 @@ describe('shared public contracts', () => {
     prepared.kinds = other.kinds
     // @ts-expect-error
     prepared.widths = other.widths
+  })
+
+  test('the type of a materialized rich-inline fragment has no start and end, which a fragment range\'s has for passing back', () => {
+    // The two cursors count segments of the item's part of the paragraph, which no app sees,
+    // so they are only for passing back, and what an app passes back is a range (RESEARCH.md,
+    // Decisions Log, 2026-10-10). This file compiles only while a materialized fragment's
+    // type lacks `start` and `end` and a fragment range's has them: `bun run check` fails
+    // otherwise, where `bun test` doesn't check types.
+    const cursor = (_cursor: LayoutCursor): void => {}
+    const passBack = (_range: RichInlineLineRange): void => {}
+    const paragraphs: Array<Array<RichInlineItem | RichInlineBox>> = [
+      [{ text: 'Ship', font: FONT }, { text: ' it now', font: '700 16px Test Sans' }],
+      [{ text: 'see ', font: FONT }, { text: '@maya', font: FONT, break: 'never', extraWidth: 6 }, { width: 20 }, { text: ' and go on', font: FONT, extraWidth: 4 }],
+      [{ text: 'one item wraps', font: FONT }],
+    ]
+    for (const items of paragraphs) {
+      const prepared = prepareRichInline(items)
+      for (const width of [Infinity, 60, 1]) {
+        const count = walkRichInlineLineRanges(prepared, width, range => {
+          // The range passes back, as a JSON copy too, an app having kept it.
+          passBack(range)
+          const line = materializeRichInlineLineRange(prepared, range)
+          expect(materializeRichInlineLineRange(prepared, JSON.parse(JSON.stringify(range)) as RichInlineLineRange)).toEqual(line)
+          expect(line.fragments).toHaveLength(range.fragments.length)
+          for (let i = 0; i < range.fragments.length; i++) {
+            cursor(range.fragments[i]!.start)
+            cursor(range.fragments[i]!.end)
+            // A materialized fragment's place in its item's text is its two offsets there.
+            const fragment = line.fragments[i]!
+            expect((items[fragment.itemIndex]!.text ?? '').slice(fragment.sourceStart, fragment.sourceEnd)).toBe(fragment.text)
+            // Its type has no cursors: each line below is a type error, and one that compiles
+            // is the type promising more, which a release can't take back.
+            // @ts-expect-error
+            cursor(fragment.start)
+            // @ts-expect-error
+            cursor(fragment.end)
+          }
+          // Nor is a materialized line a range.
+          // @ts-expect-error
+          passBack(line)
+        })
+        expect(count).toBeGreaterThan(0)
+      }
+    }
   })
 
   test('emergency wrapping preserves complete graphemes inside continuous words', () => {

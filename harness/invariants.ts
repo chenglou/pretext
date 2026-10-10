@@ -25,7 +25,8 @@
 //   leave only collapsed spaces, a soft hyphen or ZWSP that doesn't break, a pre-wrap line feed, in Safari a U+2028 or
 //   U+2029, or in Firefox a bidi control;
 // - stepping leaves its start cursor as it was, the ranges a stream gives stay as they were, JSON copies of cursors and
-//   ranges resume the same, and a materialized line passed back as a range gives the same line;
+//   ranges resume the same, and a text's materialized line passed back as a range gives the same line (a rich one's
+//   type is no range's, its fragments having no cursors: an app passes its range back);
 // - a visitor that edits the range it's given doesn't change the lines after it;
 // - rich lines: a gap is the SPACE advance of the item whose white space made it, sign included, or in the Chromium
 //   profile that less its kerning with the character beside it in that item, and never a box's; white space between
@@ -343,7 +344,6 @@ export async function runInvariants(profile: Profile, lib: string, draws: { dir:
         if (!same(api.layoutNextRichInlineLineRange(prepared, width, json(before)), range)) fail('cursors', at, `a JSON copy of the cursor before rich line ${i} resumes otherwise`)
         const line = api.materializeRichInlineLineRange(prepared, range)
         if (!same(api.materializeRichInlineLineRange(prepared, json(range)), line)) fail('cursors', at, `a JSON copy of rich range ${i} materializes otherwise`)
-        if (!same(api.materializeRichInlineLineRange(prepared, line), line)) fail('round trip', at, `rich line ${i} passed back as a range gives another line`)
         lines.push(range)
         cursor = { ...range.end }
       }
