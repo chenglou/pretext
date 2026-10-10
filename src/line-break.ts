@@ -63,9 +63,9 @@ export type PreparedLineBreakData = {
   minimumTabAdvance: number // The least a tab advances: one nearer its stop takes the stop after
 }
 
-// What the line walkers lay out: a text's handle, or the handle of a rich-inline paragraph of
-// several items (src/rich-inline.ts), which also holds what its segments have of their own. A
-// text's handle has no `items`, so the type prepareWithSegments() returns doesn't name it.
+// What the line walkers lay out: a text's handle, or the handle of a rich-inline paragraph that
+// isn't one text's handle (src/rich-inline.ts), which also holds what its segments have of their
+// own. A text's handle has no `items`, so its type, PreparedLineBreakData, doesn't name it.
 export type PreparedLineData = PreparedLineBreakData & { items?: ParagraphSegmentData }
 
 // What a rich-inline paragraph's items give its segments, per segment, each list null where no
@@ -118,7 +118,7 @@ type InternalLineVisitor = (
   endGraphemeIndex: number,
 ) => void
 
-export function breaksAfterKind(kind: number): boolean {
+function breaksAfterKind(kind: number): boolean {
   return (1 << kind & BREAK_AFTER_KINDS) !== 0
 }
 
@@ -236,12 +236,11 @@ function getTerminalLetterSpacing(
   return 0
 }
 
-// The width a paragraph is laid out at: one that isn't a number, such as the `undefined`
-// of a container not measured yet, is unbounded. Every comparison fails at `NaN`, and the
-// line loops ask some whether a segment fits and others whether it overflows, so the line
-// APIs called once for a paragraph pass their width through here and the loops stay
-// written for numbers. The streams, called once for each line, take their width as given
-// (RESEARCH.md, Decisions Log, 2026-10-02).
+// The width a paragraph is laid out at: `NaN`, which a typed caller can pass, is unbounded.
+// Every comparison fails at `NaN`, and the line loops ask some whether a segment fits and
+// others whether it overflows, so the line APIs called once for a paragraph pass their width
+// through here and the loops stay written for numbers. The streams, called once for each
+// line, take their width as given (RESEARCH.md, Decisions Log, 2026-10-02).
 export function normalizeMaxWidth(maxWidth: number): number {
   return maxWidth <= Infinity ? maxWidth : Infinity
 }
@@ -993,8 +992,9 @@ function walkPreparedComplexLines(
               lineEndSegmentIndex = i
               lineEndGraphemeIndex = end
               lineW = getSegmentEntryWidth(entry, fillStart, end)! - letterSpacing
-              // Exhausting an emergency fragment consumes the measured segment and
-              // ends this line. Only intact admission above continues into other source.
+              // Where the fresh prefixes reach the segment's end though the whole tail wasn't
+              // admitted, the line ends after the segment and takes nothing after it. Only
+              // an admitted tail lets the line go on with the text after it (below).
               if (end === fitCount) {
                 endSegmentIndex = i + 1
                 endGraphemeIndex = 0
