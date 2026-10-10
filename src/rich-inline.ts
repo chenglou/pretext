@@ -357,7 +357,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         const start: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
         if (normalizePreparedLineStart(own, start)) width = stepPreparedLineGeometryFromStart(own, start, Number.POSITIVE_INFINITY)!
         width += item.extraWidth ?? 0
-        // The chip's text as its one line paints it: no line ends inside a chip, so no soft hyphen shows.
+        // The chip's text as painted: a chip is laid out whole, so no soft hyphen shows.
         text = buildRangeText(own, 0, 0, own.segments.length, 0)
         while (isCollapsibleSpaceCode(item.text.charCodeAt(textStart))) textStart++
         textEnd = item.text.length
