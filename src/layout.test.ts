@@ -27,6 +27,7 @@ type SegmentMetrics = ReturnType<MeasurementModule['getSegmentMetrics']>
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
 let layout: LayoutModule['layout']
+let layoutText: LayoutModule['layoutText']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let layoutNextLineRange: LayoutModule['layoutNextLineRange']
@@ -303,6 +304,7 @@ beforeAll(async () => {
     prepare,
     prepareWithSegments,
     layout,
+    layoutText,
     layoutWithLines,
     layoutNextLine,
     layoutNextLineRange,
@@ -672,6 +674,56 @@ describe('shared public contracts', () => {
     expect(layoutWithLines(thai, 50, LINE_HEIGHT)).toEqual(thaiLines)
     expect(layoutWithLines(copy, 50, LINE_HEIGHT)).toEqual(thaiLines)
     setLocale(undefined)
+  })
+
+  test('layoutText() gives what layout(prepare()) gives, with no handle, and asks where a word is cut only for words wider than its width', () => {
+    const texts = [
+      'internationalization of supercalifragilistic layouts',
+      "Just tried the new update and it's so much better, especially on older devices.",
+      'a\tbb trans\u00ADatlantic 中文字 Superlongword of  spaces',
+      '这是一段中文文本，用于测试「文本布局」库。每个字符之间都可以断行。',
+      'مرحبا بالعالم 12,345.67 שלום',
+      'aaaa A \u000BV bbbb cc foo\u0000bar baz',
+      'To Tokyo\u200Bzero\u200Bwidth breaks',
+      'line one\nline two\n',
+      '',
+      '   ',
+    ]
+    const optionSets: (PrepareOptions | undefined)[] = [undefined, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 2 }]
+    for (const text of texts) for (const options of optionSets) {
+      for (const width of [-5, 0, 9, 40, 85.5, 137.5, 160, 320, 1000, Infinity, NaN]) {
+        // Each asks an empty cache, then layoutText() a full one, which makes no Canvas call.
+        clearCache()
+        const expected = layout(prepare(text, FONT, options), width, LINE_HEIGHT)
+        clearCache()
+        expect(layoutText(text, FONT, width, LINE_HEIGHT, options)).toEqual(expected)
+        const before = canvasMeasurementCount
+        expect(layoutText(text, FONT, width, LINE_HEIGHT, options)).toEqual(expected)
+        expect(canvasMeasurementCount).toBe(before)
+        // A handle prepared after it, from the cache it left, lays out at any width as one
+        // prepared from an empty cache does: what layoutText() didn't ask, prepare() asks.
+        const after = prepare(text, FONT, options)
+        clearCache()
+        const cold = prepare(text, FONT, options)
+        for (const other of [0, 9, 40, 160, Infinity]) expect(layout(after, other, LINE_HEIGHT)).toEqual(layout(cold, other, LINE_HEIGHT))
+      }
+    }
+
+    // 160px, 16px, 176px and 56px words: at 400px none can be cut, and at 10px all can.
+    const words = 'internationalization of supercalifragilistic layouts'
+    const callsOf = (run: () => void): number => {
+      clearCache()
+      const before = canvasMeasurementCount
+      run()
+      return canvasMeasurementCount - before
+    }
+    const every = callsOf(() => layout(prepare(words, FONT), 400, LINE_HEIGHT))
+    expect(callsOf(() => layoutText(words, FONT, 400, LINE_HEIGHT))).toBeLessThan(every)
+    expect(callsOf(() => layoutText(words, FONT, Infinity, LINE_HEIGHT))).toBeLessThan(every)
+    expect(callsOf(() => layoutText(words, FONT, 10, LINE_HEIGHT))).toBe(every)
+    expect(callsOf(() => layoutText(words, FONT, 0, LINE_HEIGHT))).toBe(every)
+    // prepare() itself asks what it always asked.
+    expect(callsOf(() => prepare(words, FONT))).toBe(every)
   })
 
   test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {
@@ -7776,7 +7828,7 @@ test('the Chromium profile takes the kerning between two kana', () => {
       }
     }
     globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
-    const { prepare, prepareWithSegments, layout, layoutWithLines } = await import(${JSON.stringify(layoutUrl)})
+    const { prepare, prepareWithSegments, layout, layoutText, layoutWithLines } = await import(${JSON.stringify(layoutUrl)})
     const { prepareRichInline, measureRichInlineStats } = await import(${JSON.stringify(richInlineUrl)})
     const widths = []
     for (const [text, font, options] of [
@@ -7794,6 +7846,7 @@ test('the Chromium profile takes the kerning between two kana', () => {
       const result = layoutWithLines(prepareWithSegments(text, '16px Test', { wordBreak: 'keep-all' }), width, 20)
       cut.push({ lines: result.lines.map(line => [line.text, line.width]), lineCount: layout(prepare(text, '16px Test', { wordBreak: 'keep-all' }), width, 20).lineCount })
     }
+    const oneWidth = [['うえ', 32.5], ['a うえ', 32]].map(([text, width]) => [layoutText(text, '16px Test', width, 20, { wordBreak: 'keep-all' }).lineCount, layout(prepare(text, '16px Test', { wordBreak: 'keep-all' }), width, 20).lineCount])
     const longGroup = layoutWithLines(prepareWithSegments('アーア'.repeat(33), '16px Test', { wordBreak: 'keep-all' }), 46.5, 20)
     const long = { lines: [...new Set(longGroup.lines.map(line => line.text + ' ' + line.width))], lineCount: longGroup.lineCount }
     const rich = [[{ text: 'あい', font: '16px Test' }], [{ text: 'あ', font: '16px Test' }, { text: 'い', font: '16px Test' }], [{ text: 'あ', font: '16px Test' }, { text: 'いあい', font: '16px Test' }]]
@@ -7805,9 +7858,9 @@ test('the Chromium profile takes the kerning between two kana', () => {
       return measured.filter(text => text.startsWith('whole ')).map(text => text.slice(6)).map(text => text.length > 9 ? text.slice(0, text.indexOf(':') + 1) + (text.length - text.indexOf(':') - 1) : text)
     }
     const asked = [asks('あいあいあい', '16px Fresh'), asks('あい いあ', '16px Fresh'), asks('あ い 漢あ', '16px Fresh Two'), asks('あいう', '16px Plain Two'), asks('あいあ', '16px Plain Two')]
-    console.log(JSON.stringify({ widths, lines, cut, long, rich, asked }))
+    console.log(JSON.stringify({ widths, lines, cut, oneWidth, long, rich, asked }))
   `
-  const { widths, lines, cut, long, rich, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'cut' | 'long' | 'rich' | 'asked', unknown>
+  const { widths, lines, cut, oneWidth, long, rich, asked } = JSON.parse(runInChild(script)) as Record<'widths' | 'lines' | 'cut' | 'oneWidth' | 'long' | 'rich' | 'asked', unknown>
   expect(widths).toEqual([
     // A kerning that tightens the pair goes on the second kana's segment.
     [16, 14, 16],
@@ -7851,6 +7904,9 @@ test('the Chromium profile takes the kerning between two kana', () => {
     { lines: [['アー', 31], ['ア', 16], ['アー', 31], ['ア', 16]], lineCount: 4 },
     { lines: [['うえ', 33], ['うえ', 33], ['うえ', 33]], lineCount: 3 },
   ])
+  // layoutText() spares no word of a text with two kana in a row: a group 32px wide as its
+  // pieces are measured and 33px with its pair's kerning is cut at 32.5px, as layout() cuts it.
+  expect(oneWidth).toEqual([[2, 2], [3, 3]])
   // A group of 99 graphemes, past the 96 whose prefixes are measured, takes each advance
   // from its grapheme measured after the one before it alone. Canvas keeps a mark that
   // starts that string with the letter after it, so the advance has their kerning, which

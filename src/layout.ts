@@ -117,7 +117,7 @@ function prepareInternal(
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null) as InternalPreparedText
+  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null, 0) as InternalPreparedText
   // A handle without its segments' text keeps what gives it again (getPreparedSegments).
   if (!includeSegments) prepared.source = { text, whiteSpace: options?.whiteSpace, wordBreak, language }
   return prepared
@@ -185,6 +185,27 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
   // The resize hot path counts the same lines as `layoutWithLines()` without
   // building line ranges or text.
   const lineCount = countPreparedLines(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth))
+  return { lineCount, height: lineCount * lineHeight }
+}
+
+// A text's line count and height at one width, from the text itself, with no handle to keep:
+// what layout(prepare(text, font, options), maxWidth, lineHeight) returns, every call. It
+// keeps nothing of the text and shares the font's width cache with prepare(), so a repeat makes
+// no Canvas call. It prepares on every call, about a hundred layouts' work, so text laid out
+// at more than one width, or thousands of texts a frame, still want prepare() and layout().
+// Knowing its one width, it asks Canvas where a word could be cut only for the words wider
+// than that width (measureAnalysis), so it is also the cheapest first sight of a text. Its
+// own copy of prepareInternal()'s steps: with the width threaded through that function,
+// Chrome 154 prepared text seen before 2% slower for every caller.
+export function layoutText(text: string, font: string, maxWidth: number, lineHeight: number, options?: PrepareOptions): LayoutResult {
+  const width = normalizeMaxWidth(maxWidth)
+  const wordBreak = options?.wordBreak ?? 'normal'
+  const engineProfile = getEngineProfile()
+  const letterSpacing = readLetterSpacing(options?.letterSpacing, engineProfile)
+  const language = getPreparationLanguage(engineProfile)
+  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
+  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, false, letterSpacing, engineProfile, language, true, null, width) as InternalPreparedText
+  const lineCount = countPreparedLines(prepared, width)
   return { lineCount, height: lineCount * lineHeight }
 }
 

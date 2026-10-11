@@ -320,6 +320,8 @@ export function measureAnalysis(
   overflowBreaks: boolean,
   // The paragraph's lists for a rich-inline item, null for a text.
   paragraph: ParagraphLists | null,
+  // The least width the handle is laid out at, 0 for any width (sparesCutAdvances below).
+  uncutWidth: number,
 ): (PreparedText & PreparedLineBreakData) | (PreparedText & PreparedSegments) {
   const { normalized, texts, starts, flags } = analysis
   // The measured text and where it starts in the analysis's: what is asked of the whole text
@@ -505,6 +507,35 @@ export function measureAnalysis(
   // Whether the text may hold graphemes that take no letter spacing in this engine.
   const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && mayHoldCursive(own)
 
+  // A line is cut between a word's graphemes only where the word starts the line and overflows it:
+  // under overflow-wrap: break-word an otherwise unbreakable sequence breaks at an arbitrary point
+  // only if the line has no other break (CSS Text 3 §5.5). Blink retries a line with a break
+  // between any two graphemes only where no break opportunity on it fits
+  // (LineBreaker::HandleOverflow, line_breaker.cc:4100-4264), WebKit gives a word that rule only
+  // where its line has no wrap opportunity before it (InlineContentBreaker::wordBreakBehavior,
+  // InlineContentBreaker.cpp:905-910), and Gecko takes a break before a cluster only while the
+  // line has no normal break (gfxTextRun::BreakAndMeasureText, gfxTextRun.cpp:1068-1074, by the
+  // priority set at :1098-1100). So a handle that is never laid out
+  // narrower than `uncutWidth` never reads the cut advances of a word no wider than it, and such a
+  // word asks Canvas for none: the one question preparation asks that depends on the width. That
+  // holds where a line a word starts is as wide as the word's width here, so only in a text of its
+  // own of the simple walkers' kinds without letter spacing, whose segments take nothing at a
+  // line's start or end: none of Blink's halts and no U+3000 that hangs, and whose widths are
+  // final in the loop below: not two kana in a row where the Chromium profile adds their kerning
+  // after it (addKanaKerning), which can widen a word past the width it was spared at. Any other
+  // text keeps every word's advances; the cost is the saving, never a line. Where the scan gives
+  // no break at some boundary, a line overflows by the whole run between two breaks: the check
+  // below the loop.
+  let sparesCutAdvances = uncutWidth > 0 && paragraph === null && !hasLetterSpacing &&
+    !(engineProfile.hanKerning && textMayHanKern(own)) && !(engineProfile.hangsIdeographicSpace && own.includes('\u3000')) &&
+    !(engineProfile.kernsAcrossCanvasWords && kanaPairRe.test(own))
+  for (let k = from; sparesCutAdvances && k < to; k++) {
+    const kind = flags[k]! & KIND_BITS
+    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) sparesCutAdvances = false
+  }
+  // Whether a segment was spared.
+  let sparedCutAdvances = false
+
   // Text of the simple walkers' kinds without letter spacing. They lay it out where
   // the scan breaks at every segment boundary, and layout() counts it with the
   // simple stepper where it doesn't (countPreparedLines).
@@ -649,6 +680,10 @@ export function measureAnalysis(
         // so every text segment takes emergency grapheme breaks, unless it is one Gecko cluster
         // or an atomic item's.
         if (!overflowBreaks || (segment & ONE_CLUSTER) !== 0 || text.length === 1) break
+        if (sparesCutAdvances && width <= uncutWidth) {
+          sparedCutAdvances = true
+          break
+        }
         const fitMode: BreakableFitMode = letterSpacing !== 0 ? 'segment-prefixes'
           : numericRunRe.test(text) ? 'pair-context'
           : textMetrics.width < engineProfile.prefixFitMinWidth ? 'sum-graphemes'
@@ -723,6 +758,37 @@ export function measureAnalysis(
       discretionaryHyphenContexts[mi - from] = returnFitsEachSideAlone ? 0 : getJoinedNarrowing(mi, previousJoinablePiece, previousJoinableMetrics)
     } else if (discretionaryHyphenContexts !== null) {
       discretionaryHyphenContexts[mi - from] = 0
+    }
+  }
+
+  // Where the scan gives no break before some segment, what overflows a line is the run from one
+  // break to the next: the segments from a text segment the scan breaks before up to the next
+  // such, with the spaces between them, which the line keeps where no break follows them (the
+  // spaces after its last text segment hang or go). A line that such a run starts and overflows
+  // is cut inside one of its segments, a spared one too, so a run wider than the least width
+  // that holds a spared segment has the text measured again with every word's advances. The
+  // widths are summed as a line adds them, from the run's start, and the run is as wide as its
+  // widest so far: a run of marks can measure under 0 after its context.
+  if (sparedCutAdvances && analysis.hasUnbroken) {
+    let runWidth = 0
+    let runPeak = 0
+    let runSpared = false
+    for (let k = from; k < to; k++) {
+      const flag = flags[k]!
+      const isText = (flag & KIND_BITS) === TEXT
+      if (isText && (flag & UNBROKEN) === 0) {
+        runWidth = 0
+        runPeak = 0
+        runSpared = false
+      }
+      runWidth += widths[k - from]!
+      if (runWidth > runPeak) runPeak = runWidth
+      if (!isText) continue
+      // A segment without advances that a text measured for any width would have.
+      if (breakableFitAdvances[k - from] === null && texts[k]!.length > 1 && (flag & ONE_CLUSTER) === 0) runSpared = true
+      if (runSpared && runPeak > uncutWidth) {
+        return measureAnalysis(analysis, from, to, font, includeSegments, letterSpacing, engineProfile, language, overflowBreaks, null, 0)
+      }
     }
   }
 
