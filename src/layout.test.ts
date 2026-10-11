@@ -28,6 +28,8 @@ let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
 let layout: LayoutModule['layout']
 let layoutText: LayoutModule['layoutText']
+let layoutFor: LayoutModule['layoutFor']
+let prepareFor: LayoutModule['prepareFor']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let layoutNextLineRange: LayoutModule['layoutNextLineRange']
@@ -305,6 +307,8 @@ beforeAll(async () => {
     prepareWithSegments,
     layout,
     layoutText,
+    layoutFor,
+    prepareFor,
     layoutWithLines,
     layoutNextLine,
     layoutNextLineRange,
@@ -799,6 +803,81 @@ describe('shared public contracts', () => {
       const least = prepareWithSegments(run, FONT, { minWidth })
       for (const width of [minWidth, minWidth + 0.25, minWidth * 2, Infinity]) expect(linesOf(least, width)).toEqual(linesOf(whole, width))
     }
+  })
+
+  test('layoutFor() gives what layout(prepare()) gives for its key, reusing the preparation while the inputs are the same', () => {
+    const texts = [
+      'internationalization of supercalifragilistic layouts',
+      "Just tried the new update and it's so much better, especially on older devices.",
+      'a\tbb trans\u00ADatlantic 中文字 Superlongword of  spaces',
+      'مرحبا بالعالم 12,345.67 שלום',
+      '',
+    ]
+    const optionSets: (PrepareOptions | undefined)[] = [undefined, {}, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 2 }, { minWidth: 40 }]
+    const widths = [40, 85.5, 160, 160, 1000, Infinity, NaN, 40]
+    // One key through every text, option set and width, in turn: it never answers for the
+    // text or style of an earlier call, at a width it has just answered too.
+    const shared = {}
+    for (const text of texts) for (const options of optionSets) for (const width of widths) {
+      const expected = layout(prepare(text, FONT, options), width, LINE_HEIGHT)
+      expect(layoutFor(shared, text, FONT, width, LINE_HEIGHT, options)).toEqual(expected)
+      expect(layoutFor(shared, text, '18px Test Sans', width, LINE_HEIGHT, options)).toEqual(layout(prepare(text, '18px Test Sans', options), width, LINE_HEIGHT))
+    }
+
+    const message = { id: 1, text: 'hello brave new world of text layout' }
+    const first = prepareFor(message, message.text, FONT)
+    const before = canvasMeasurementCount
+    // The same inputs give the key's handle back with no work: for the same string object,
+    // for an equal text in another one, and for options that say the defaults.
+    expect(prepareFor(message, message.text, FONT)).toBe(first)
+    expect(prepareFor(message, ['hello brave new', 'world of text layout'].join(' '), FONT, {})).toBe(first)
+    expect(prepareFor(message, message.text, FONT, { whiteSpace: 'normal', wordBreak: 'normal', letterSpacing: 0, minWidth: 0 })).toBe(first)
+    expect(layoutFor(message, message.text, FONT, 80, LINE_HEIGHT)).toEqual(layout(first, 80, LINE_HEIGHT))
+    expect(layoutFor(message, message.text, FONT, 80, LINE_HEIGHT)).toEqual(layout(first, 80, LINE_HEIGHT))
+    expect(prepareFor(message, message.text, FONT)).toBe(first)
+    expect(canvasMeasurementCount).toBe(before)
+    // The line functions take the key's handle.
+    expect(layoutWithLines(prepareFor(message, message.text, FONT), 80, LINE_HEIGHT)).toEqual(layoutWithLines(prepareWithSegments(message.text, FONT), 80, LINE_HEIGHT))
+    // Another key has its own entry.
+    const other = { id: 2, text: message.text }
+    expect(prepareFor(other, other.text, FONT)).not.toBe(first)
+    expect(prepareFor(message, message.text, FONT)).toBe(first)
+
+    // An edit in place is seen in the call, at the width just answered.
+    const tall = layoutFor(message, message.text, FONT, 80, LINE_HEIGHT)
+    message.text = 'hi'
+    expect(layoutFor(message, message.text, FONT, 80, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
+    expect(tall.lineCount).toBeGreaterThan(1)
+    const edited = prepareFor(message, message.text, FONT)
+    expect(edited).not.toBe(first)
+    // So is each option, and the font.
+    for (const options of [{ whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 1 }, { minWidth: 100 }] as const) {
+      expect(prepareFor(message, message.text, FONT, options)).not.toBe(edited)
+      expect(prepareFor(message, message.text, FONT)).not.toBe(edited)
+    }
+    expect(prepareFor(message, message.text, '18px Test Sans')).not.toBe(prepareFor(message, message.text, FONT))
+
+    // clearCache() makes every key prepare again at its next call, with Canvas asked again,
+    // and so does setLocale(), which clears.
+    const kept = prepareFor(other, other.text, FONT)
+    expect(prepareFor(other, other.text, FONT)).toBe(kept)
+    clearCache()
+    const calls = canvasMeasurementCount
+    const again = prepareFor(other, other.text, FONT)
+    expect(again).not.toBe(kept)
+    expect(canvasMeasurementCount).toBeGreaterThan(calls)
+    expect(prepareFor(other, other.text, FONT)).toBe(again)
+    expect(layoutFor(other, other.text, FONT, 80, LINE_HEIGHT)).toEqual(layout(prepare(other.text, FONT), 80, LINE_HEIGHT))
+    setLocale('th')
+    const thai = prepareFor(other, other.text, FONT)
+    expect(thai).not.toBe(again)
+    setLocale(undefined)
+    expect(prepareFor(other, other.text, FONT)).not.toBe(thai)
+
+    // A preparation that throws leaves the key's entry as it was.
+    const good = prepareFor(other, other.text, FONT)
+    expect(() => layoutFor(other, other.text, FONT, 80, LINE_HEIGHT, { letterSpacing: NaN })).toThrow(RangeError)
+    expect(prepareFor(other, other.text, FONT)).toBe(good)
   })
 
   test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {

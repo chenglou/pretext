@@ -1274,7 +1274,10 @@ export function getFontMeasurement(font: string, language: string | null, letter
   // Preparation starts here, with the language it resolved. After that language
   // changes, start again with a new context and empty caches; clearing the caches
   // alone would re-measure with fonts resolved under the old language.
-  if (measureState === null || measureState.language !== language) measureState = createMeasureState(language)
+  if (measureState === null || measureState.language !== language) {
+    measureState = createMeasureState(language)
+    cacheGeneration++
+  }
   const state = measureState
   const shaped = letterSpaced && state.shapesLetterSpaced
   const fonts = shaped ? state.letterSpacedFonts : state.fonts
@@ -1334,7 +1337,15 @@ function createMeasureState(language: string | null): MeasureState {
   }
 }
 
+// How many times the caches were emptied, by clearCache(), or started again under another
+// language. What layoutFor() keeps for a key (src/layout.ts) was prepared under one count and
+// is prepared again under another, so clearCache() stays the one call an app makes after a
+// web font loads, and setLocale(), which clears, the one for a language. A page whose
+// `<html lang>` changes is noticed here, at the next text that is prepared.
+export let cacheGeneration = 0
+
 export function clearMeasurementCaches(): void {
+  cacheGeneration++
   measureState?.fonts.clear()
   measureState?.letterSpacedFonts.clear()
 }

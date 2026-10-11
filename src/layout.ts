@@ -18,6 +18,7 @@ import {
   type WordBreakMode as AnalysisWordBreakMode,
 } from './analysis.js'
 import {
+  cacheGeneration,
   clearMeasurementCaches,
   getEngineProfile,
   getPreparationLanguage,
@@ -216,6 +217,92 @@ export function layoutText(text: string, font: string, maxWidth: number, lineHei
   const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, false, letterSpacing, engineProfile, language, true, null, width) as InternalPreparedText
   const lineCount = countPreparedLines(prepared, width)
   return { lineCount, height: lineCount * lineHeight }
+}
+
+// What layoutFor() and prepareFor() keep for one key: the handle, what it was prepared from,
+// and the line count at the width last asked for.
+type KeyedEntry = {
+  text: string
+  font: string
+  whiteSpace: WhiteSpaceMode
+  wordBreak: WordBreakMode
+  letterSpacing: number
+  minWidth: number
+  generation: number // cacheGeneration when prepared
+  prepared: InternalPreparedText
+  maxWidth: number // The width last laid out at, NaN before any
+  lineCount: number // The lines at that width
+}
+
+// Held by the app's own object for the text, so an entry goes when that object does: the
+// library frees nothing and bounds nothing.
+const keyedEntries = new WeakMap<object, KeyedEntry>()
+
+// The entry of `key`, prepared now where the key has none, where its text, font or an option
+// differs from the call's, and after clearCache(). The inputs are compared on every call,
+// seven comparisons, free for a text that is the same string object, so a key can't answer
+// for an earlier text or style: it holds one text in one style at a time, and a key called
+// with two in turn prepares on every call.
+function getKeyedEntry(key: object, text: string, font: string, options: PrepareOptions | undefined): KeyedEntry {
+  let whiteSpace: WhiteSpaceMode = 'normal'
+  let wordBreak: WordBreakMode = 'normal'
+  let letterSpacing = 0
+  let minWidth = 0
+  if (options !== undefined) {
+    whiteSpace = options.whiteSpace ?? 'normal'
+    wordBreak = options.wordBreak ?? 'normal'
+    letterSpacing = options.letterSpacing ?? 0
+    minWidth = options.minWidth ?? 0
+  }
+  let entry = keyedEntries.get(key)
+  if (entry !== undefined && entry.text === text && entry.font === font && entry.generation === cacheGeneration &&
+    entry.whiteSpace === whiteSpace && entry.wordBreak === wordBreak && entry.letterSpacing === letterSpacing && entry.minWidth === minWidth) {
+    return entry
+  }
+  // Prepared before the entry changes, so one that throws leaves the entry as it was. The
+  // count is read after it: a preparation that finds another page language moves it.
+  const prepared = prepareInternal(text, font, false, options)
+  if (entry === undefined) {
+    entry = { text, font, whiteSpace, wordBreak, letterSpacing, minWidth, generation: cacheGeneration, prepared, maxWidth: NaN, lineCount: 0 }
+    keyedEntries.set(key, entry)
+    return entry
+  }
+  entry.text = text
+  entry.font = font
+  entry.whiteSpace = whiteSpace
+  entry.wordBreak = wordBreak
+  entry.letterSpacing = letterSpacing
+  entry.minWidth = minWidth
+  entry.generation = cacheGeneration
+  entry.prepared = prepared
+  entry.maxWidth = NaN
+  return entry
+}
+
+// layout() for an app that keeps no handle: `key` is the app's own object for this text, a
+// message or a row, and the result is what layout(prepare(text, font, options), maxWidth,
+// lineHeight) returns. The preparation is kept for the key and used again while the text,
+// font and options are the last call's, and the line count while the width is too, so a
+// frame in which nothing changed walks no line. Nothing goes stale: a changed input is
+// seen in the call, and clearCache() makes every key prepare again at its next call. One
+// thing a call doesn't read is a page language that changed since: an entry is prepared
+// again once any text is prepared under the new one, or at clearCache() or setLocale().
+// The key must be the same object from call to call; an object made anew for each call
+// finds nothing and prepares every time.
+export function layoutFor(key: object, text: string, font: string, maxWidth: number, lineHeight: number, options?: PrepareOptions): LayoutResult {
+  const entry = getKeyedEntry(key, text, font, options)
+  if (entry.maxWidth !== maxWidth) {
+    entry.lineCount = countPreparedLines(entry.prepared, normalizeMaxWidth(maxWidth))
+    entry.maxWidth = maxWidth
+  }
+  return { lineCount: entry.lineCount, height: entry.lineCount * lineHeight }
+}
+
+// The handle layoutFor() keeps for `key`, for the line functions, which take handles. It is
+// the key's until the key's text, font or options change or the caches are cleared: ask
+// for it where it is used rather than keep it.
+export function prepareFor(key: object, text: string, font: string, options?: PrepareOptions): PreparedText {
+  return getKeyedEntry(key, text, font, options).prepared
 }
 
 // Reported widths are clamped at zero wherever a line is built. A line's
