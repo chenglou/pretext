@@ -31,9 +31,8 @@ import {
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromStart,
   walkPreparedLinesRaw,
-  type PreparedLineBreakData,
 } from './line-break.js'
-import { buildLineTextFromRange, type PreparedSegments } from './line-text.js'
+import { buildLineTextFromRange, type PreparedSegments, type PreparedTextData } from './line-text.js'
 
 // --- Public types ---
 
@@ -45,22 +44,23 @@ export type PreparedText = {
   readonly [preparedTextBrand]: true
 }
 
-// The handle that also keeps each segment's text, which the functions that return
-// line text need (layoutWithLines(), layoutNextLine() and materializeLineRange()),
-// and its kind, for the app's own rendering. Its type shows those two and each
-// segment's width, read-only, and none of the line walkers' other storage, which
-// changes with engine fixes (RESEARCH.md, Decisions Log, 2026-10-06).
+// The handle that also keeps each segment's text, ready for the functions that return
+// line text (layoutWithLines(), layoutNextLine() and materializeLineRange()), and its
+// kind, for the app's own rendering. Those functions take a prepare() handle too, and
+// build its segments' text the first time (getPreparedSegments). Its type shows those
+// two and each segment's width, read-only, and none of the line walkers' other
+// storage, which changes with engine fixes (RESEARCH.md, Decisions Log, 2026-10-06).
 export type PreparedTextWithSegments = PreparedText & {
   readonly segments: readonly string[] // Each segment's text, e.g. ['hello', ' ', 'world']
   readonly kinds: readonly SegmentBreakKind[] // What each segment is, e.g. ['text', 'space', 'text']
   readonly widths: ArrayLike<number> // Each segment's width in px, e.g. [42.5, 4.4, 37.2]
 }
 
-// What the two handles hold: the line walkers' data and, from prepareWithSegments(),
-// the segments' text and kinds. getInternalPrepared() reads a public handle as the
-// first; createLayoutLine() and layoutNextLine(), which pass theirs on to the line
-// text as it came, assert the second in place.
-type InternalPreparedText = PreparedText & PreparedLineBreakData
+// What the two handles hold: the line walkers' data, the segments' text or what gives
+// it again (PreparedTextData) and, from prepareWithSegments(), the segments' kinds.
+// getInternalPrepared() reads a public handle as the first; createLayoutLine() and
+// layoutNextLine() pass theirs on to the line text through getPreparedSegments().
+type InternalPreparedText = PreparedText & PreparedTextData
 type InternalPreparedTextWithSegments = PreparedText & PreparedSegments & { kinds: SegmentBreakKind[] }
 
 export type LayoutCursor = {
@@ -117,7 +117,10 @@ function prepareInternal(
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  return measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null)
+  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null) as InternalPreparedText
+  // A handle without its segments' text keeps what gives it again (getPreparedSegments).
+  if (!includeSegments) prepared.source = { text, whiteSpace: options?.whiteSpace, wordBreak, language }
+  return prepared
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
@@ -146,7 +149,7 @@ export function prepare(text: string, font: string, options?: PrepareOptions): P
 // Rich variant used by callers that need enough information to render the
 // laid-out lines themselves.
 export function prepareWithSegments(text: string, font: string, options?: PrepareOptions): PreparedTextWithSegments {
-  const prepared = prepareInternal(text, font, true, options) as InternalPreparedTextWithSegments
+  const prepared = prepareInternal(text, font, true, options) as unknown as InternalPreparedTextWithSegments
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
   for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS]!)
@@ -156,6 +159,21 @@ export function prepareWithSegments(text: string, font: string, options?: Prepar
 
 function getInternalPrepared(prepared: PreparedText): InternalPreparedText {
   return prepared as InternalPreparedText
+}
+
+// A handle with its segments' text, for the functions that return line text. A prepare()
+// handle keeps none, so that a list holds about half as much per row as with
+// prepareWithSegments(): the first such function given one analyzes its text again, under
+// the options and language it was prepared with, which gives the segments it was measured
+// in, and keeps their text on the handle from then on. That makes no Canvas call, and costs
+// about what the analysis half of preparing the text did, once, for the rows an app paints.
+function getPreparedSegments(prepared: PreparedText): InternalPreparedTextWithSegments {
+  const internal = prepared as InternalPreparedText
+  if (internal.segments === null) {
+    const source = internal.source!
+    internal.segments = analyzeText(source.text, getEngineProfile(), source.whiteSpace, source.wordBreak, source.language).texts
+  }
+  return internal as unknown as InternalPreparedTextWithSegments
 }
 
 // Layout prepared text at a given max width and caller-provided lineHeight.
@@ -176,7 +194,7 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
 // space, and letter spacing can be strongly negative. Line breaking keeps the
 // signed advance.
 function createLayoutLine(
-  prepared: PreparedTextWithSegments,
+  prepared: InternalPreparedTextWithSegments,
   width: number,
   startSegmentIndex: number,
   startGraphemeIndex: number,
@@ -185,7 +203,7 @@ function createLayoutLine(
 ): LayoutLine {
   return {
     text: buildLineTextFromRange(
-      prepared as InternalPreparedTextWithSegments,
+      prepared,
       startSegmentIndex,
       startGraphemeIndex,
       endSegmentIndex,
@@ -224,11 +242,11 @@ function createLayoutLineRange(
 }
 
 export function materializeLineRange(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   line: LayoutLineRange,
 ): LayoutLine {
   return createLayoutLine(
-    prepared,
+    getPreparedSegments(prepared),
     line.width,
     line.start.segmentIndex,
     line.start.graphemeIndex,
@@ -240,8 +258,9 @@ export function materializeLineRange(
 // Batch low-level line-range pass. This is the non-materializing counterpart
 // to layoutWithLines(), useful for shrinkwrap and other aggregate stats work.
 // It, measureLineStats(), measureNaturalWidth() and layoutNextLineRange() return
-// widths and cursors and no text, from the line-break data layout() reads, so they
-// take a prepare() handle as well (RESEARCH.md, Decisions Log, 2026-10-06).
+// widths and cursors and no text, from the line-break data layout() reads, so a
+// prepare() handle given to them stays without its segments' text (RESEARCH.md,
+// Decisions Log, 2026-10-06).
 export function walkLineRanges(
   prepared: PreparedText,
   maxWidth: number,
@@ -306,7 +325,7 @@ function stepNextLine(
 // does, and start at the text's first line without one: pass each line's `end` back
 // for the next.
 export function layoutNextLine(
-  prepared: PreparedTextWithSegments,
+  prepared: PreparedText,
   maxWidth: number,
   start: LayoutCursor = TEXT_START_CURSOR,
 ): LayoutLine | null {
@@ -316,7 +335,7 @@ export function layoutNextLine(
   if (width === null) return null
 
   const text = buildLineTextFromRange(
-    prepared as InternalPreparedTextWithSegments,
+    getPreparedSegments(prepared),
     lineStart.segmentIndex,
     lineStart.graphemeIndex,
     end.segmentIndex,
@@ -340,14 +359,15 @@ export function layoutNextLineRange(
 // Caller still supplies lineHeight at layout time. Mirrors layout()'s break
 // decisions, but keeps extra per-line bookkeeping so it should stay off the
 // resize hot path.
-export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): LayoutLinesResult {
+export function layoutWithLines(prepared: PreparedText, maxWidth: number, lineHeight: number): LayoutLinesResult {
   const lines: LayoutLine[] = []
+  const withSegments = getPreparedSegments(prepared)
   const lineCount = walkPreparedLinesRaw(
     getInternalPrepared(prepared),
     normalizeMaxWidth(maxWidth),
     (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
       lines.push(createLayoutLine(
-        prepared,
+        withSegments,
         width,
         startSegmentIndex,
         startGraphemeIndex,

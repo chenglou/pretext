@@ -1,7 +1,7 @@
 import '../harness/watchdog.ts'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnalysisProfile } from './analysis.ts'
-import type { LayoutCursor, PreparedText, PreparedTextWithSegments } from './layout.ts'
+import type { LayoutCursor, PreparedText, PreparedTextWithSegments, PrepareOptions } from './layout.ts'
 import type { PreparedLineBreakData } from './line-break.ts'
 import type { RichInlineBox, RichInlineItem, RichInlineLineRange, RichInlineOptions } from './rich-inline.ts'
 
@@ -233,7 +233,7 @@ function collectStreamedLines(
   const most = prepared.segments.join('').length + 1
 
   while (true) {
-    const line = layoutNextLine(prepared as Parameters<typeof layoutNextLine>[0], width, cursor)
+    const line = layoutNextLine(prepared as PreparedTextWithSegments, width, cursor)
     if (line === null) break
     if (lines.push(line) > most) throw new Error(`layoutNextLine gives more than ${most} lines`)
     cursor = line.end
@@ -591,9 +591,11 @@ describe('shared public contracts', () => {
         { whiteSpace: 'pre-wrap', wordBreak: 'keep-all', letterSpacing: -1 },
       ]) {
         const light = prepare(text, '16px Test', options)
-        const { segments, kinds, ...data } = prepareWithSegments(text, '16px Test', options)
+        // A prepare() handle keeps what it analyzed in place of its segments' text.
+        const { segments: none, source, ...lightData } = light
+        const { segments, kinds, source: noSource, ...data } = prepareWithSegments(text, '16px Test', options)
         compared++
-        if (JSON.stringify(light) !== JSON.stringify(data)) different.push([text, options, 'handle'])
+        if (JSON.stringify(lightData) !== JSON.stringify(data) || none !== null || noSource !== null || source.text !== text) different.push([text, options, 'handle'])
         for (const width of [0, 9, 28, 40, 85.5, 160, 320, Infinity]) {
           compared++
           if (linesOf(light, text, width) !== linesOf(prepareWithSegments(text, '16px Test', options), text, width)) different.push([text, options, width])
@@ -605,6 +607,71 @@ describe('shared public contracts', () => {
     for (const userAgent of [CHROME_USER_AGENT, FIREFOX_USER_AGENT, SAFARI_USER_AGENT]) {
       expect(rowsOf(userAgent)).toEqual({ compared, different: [] })
     }
+  })
+
+  test('the functions that return line text take a prepare() handle and build its segments once', () => {
+    // layoutWithLines(), layoutNextLine() and materializeLineRange() give the lines of a
+    // prepareWithSegments() handle from a prepare() one: the first of them analyzes the
+    // handle's text again for its segments' text, with no Canvas call, and the handle keeps
+    // them. The calls here are typed, so this file compiles only while all three take the
+    // handle prepare() returns.
+    const texts = [
+      'a\tbb trans\u00ADatlantic 中文字 Superlongword of  spaces',
+      'hello !  « bonjour » \u200Bwor\u200Dld',
+      'مرحبا بالعالم 12,345.67 שלום',
+      'ไทยไทย กขค\nline two\n',
+      '',
+      '   ',
+    ]
+    const optionSets: (PrepareOptions | undefined)[] = [undefined, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 2 }, { whiteSpace: 'pre-wrap', wordBreak: 'keep-all', letterSpacing: -1 }]
+    for (const text of texts) for (const options of optionSets) {
+      const kept = prepareWithSegments(text, FONT, options)
+      const before = canvasMeasurementCount
+      for (const width of [0, 9, 40, 137.5, Infinity]) {
+        // A handle for each function, so that each is the first to ask its handle.
+        const walked: PreparedText = prepare(text, FONT, options)
+        const streamed: PreparedText = prepare(text, FONT, options)
+        const materialized: PreparedText = prepare(text, FONT, options)
+        const calls = canvasMeasurementCount
+        const expected = layoutWithLines(kept, width, LINE_HEIGHT)
+        expect(layoutWithLines(walked, width, LINE_HEIGHT)).toEqual(expected)
+        const stream: unknown[] = []
+        for (let line = layoutNextLine(streamed, width); line !== null; line = layoutNextLine(streamed, width, line.end)) stream.push(line)
+        expect(stream).toEqual(expected.lines)
+        const ranges: unknown[] = []
+        walkLineRanges(materialized, width, range => ranges.push(materializeLineRange(materialized, range)))
+        expect(ranges).toEqual(expected.lines)
+        expect(canvasMeasurementCount).toBe(calls)
+        // The handle still lays out as before, and a second request reads the kept strings.
+        expect(layout(walked, width, LINE_HEIGHT)).toEqual(layout(kept, width, LINE_HEIGHT))
+        expect((walked as unknown as { segments: string[] }).segments).toEqual([...kept.segments])
+        expect(layoutWithLines(walked, width, LINE_HEIGHT)).toEqual(expected)
+      }
+      expect(canvasMeasurementCount).toBeGreaterThanOrEqual(before)
+    }
+    // A prepare() handle holds no segment text until one of the three asks, and the four that
+    // return no text never ask.
+    const light = prepare('hello brave new world', FONT)
+    const data = light as unknown as { segments: string[] | null; source: { text: string } | null }
+    layout(light, 80, LINE_HEIGHT)
+    measureLineStats(light, 80)
+    walkLineRanges(light, 80, () => {})
+    layoutNextLineRange(light, 80)
+    expect(measureNaturalWidth(light)).toBeGreaterThan(0)
+    expect(data.segments).toBeNull()
+    expect(data.source!.text).toBe('hello brave new world')
+    expect(layoutNextLine(light, 80)!.text).toBe('hello ')
+    expect(data.segments).toEqual(['hello', ' ', 'brave', ' ', 'new', ' ', 'world'])
+    // The handle answers for the language it was prepared under, whatever the language is when
+    // its text is first asked for, and a structured clone of it gives the same lines.
+    setLocale('th')
+    const thai = prepare('ภาษาไทยภาษาไทย hello', FONT)
+    const thaiLines = layoutWithLines(prepareWithSegments('ภาษาไทยภาษาไทย hello', FONT), 50, LINE_HEIGHT)
+    const copy = structuredClone(thai)
+    setLocale('en')
+    expect(layoutWithLines(thai, 50, LINE_HEIGHT)).toEqual(thaiLines)
+    expect(layoutWithLines(copy, 50, LINE_HEIGHT)).toEqual(thaiLines)
+    setLocale(undefined)
   })
 
   test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {

@@ -1,11 +1,27 @@
 import { findGraphemeEnds } from './graphemes.js'
-import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
-import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
+import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE, type WhiteSpaceMode, type WordBreakMode } from './analysis.js'
+import { isDiscretionaryLineEnd, type PreparedLineBreakData, type PreparedLineData } from './line-break.js'
 import { getEngineProfile } from './measurement.js'
 
 // A handle with each segment's text, which line text is built from: prepareWithSegments()'s, or
 // a rich-inline paragraph's.
 export type PreparedSegments = PreparedLineData & { segments: string[] }
+
+// What prepare() analyzed, which gives a text's segments again: the text, the two options and
+// the language the analysis read.
+export type PreparedSource = {
+  text: string
+  whiteSpace: WhiteSpaceMode | undefined
+  wordBreak: WordBreakMode
+  language: string | null
+}
+
+// A text's handle: the line walkers' data and two fields of its own, in every text handle so
+// that all have one shape. `segments` is each segment's text, which prepareWithSegments() keeps
+// and prepare() leaves null: a function that returns line text fills it, from `source`, the
+// first time one is given the handle (getPreparedSegments in src/layout.ts). `source` is null
+// where the segments were kept.
+export type PreparedTextData = PreparedLineBreakData & { segments: string[] | null; source: PreparedSource | null }
 
 // Per handle, the grapheme ends of each segment a line has started or ended inside.
 const graphemeEndCaches = new WeakMap<PreparedSegments, Map<number, Int32Array>>()

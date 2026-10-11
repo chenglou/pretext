@@ -51,7 +51,7 @@ import {
 } from './measurement.js'
 import type { PreparedText } from './layout.js'
 import type { PreparedLineBreakData } from './line-break.js'
-import type { PreparedSegments } from './line-text.js'
+import type { PreparedSegments, PreparedTextData } from './line-text.js'
 
 // Text and spaces take letter spacing after each grapheme; a ZWSP takes none.
 function countRenderedSpacingGraphemes(text: string, kind: SegmentKindCode, graphemeTable: GraphemeTable): number {
@@ -768,8 +768,10 @@ export function measureAnalysis(
     overflowLineEndTrims: hanKerning.overflowLineEndTrims,
     tabStopAdvance,
     minimumTabAdvance,
-  } satisfies PreparedLineBreakData as unknown as PreparedText & PreparedSegments
-  if (segments !== null) prepared.segments = segments
+    // A text handle's own two fields (PreparedTextData): prepare() sets `source`.
+    segments,
+    source: null,
+  } satisfies PreparedTextData as unknown as PreparedText & PreparedSegments
   return prepared
 }
 

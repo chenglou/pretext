@@ -1272,7 +1272,7 @@ describe('the library through the adapter', () => {
   test('materializeLineRange giving a walked range another start blocks: a long word broken across lines would paint its start again', async () => {
     const c = paragraph('A Supercalifragilistic word', 60)
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const start = await planted('materialize-start', 'layout.ts', /(prepared,\n\s*line\.width,\n\s*line\.start\.segmentIndex,\n\s*)line\.start\.graphemeIndex,/, '$10,')
+    const start = await planted('materialize-start', 'layout.ts', /(getPreparedSegments\(prepared\),\n\s*line\.width,\n\s*line\.start\.segmentIndex,\n\s*)line\.start\.graphemeIndex,/, '$10,')
     expect(disagreement(start.predict(c))).toMatch(/^materializeLineRange of line \d+ gives/)
   })
 
