@@ -101,6 +101,16 @@ export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
   wordBreak?: WordBreakMode
   letterSpacing?: number
+  // The least width the handle is ever laid out at, in px: a column's CSS min-width. At
+  // that width and wider every line function gives what it gives without the option, and
+  // preparation doesn't ask Canvas where the words narrower than it could be cut between
+  // graphemes (measureAnalysis), most of the calls new text makes in the WebKit profile. Below
+  // it no function checks, since a comparison per call cost the line streams 1.4-11.2% in Chrome
+  // (RESEARCH.md, Decisions Log, 2026-10-02): a word that was spared isn't cut there, and
+  // overflows its line whole, as under overflow-wrap: normal. A cursor inside a spared
+  // word, which only a line cut there gives, names no place in it. Rich inline takes no
+  // such option: its runs cross items, edges and boxes.
+  minWidth?: number
 }
 
 // --- Public API ---
@@ -117,7 +127,7 @@ function prepareInternal(
   // One language read: break rules and measurement both follow it.
   const language = getPreparationLanguage(engineProfile)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null, 0) as InternalPreparedText
+  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null, options?.minWidth ?? 0) as InternalPreparedText
   // A handle without its segments' text keeps what gives it again (getPreparedSegments).
   if (!includeSegments) prepared.source = { text, whiteSpace: options?.whiteSpace, wordBreak, language }
   return prepared
@@ -195,8 +205,7 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
 // at more than one width, or thousands of texts a frame, still want prepare() and layout().
 // Knowing its one width, it asks Canvas where a word could be cut only for the words wider
 // than that width (measureAnalysis), so it is also the cheapest first sight of a text. Its
-// own copy of prepareInternal()'s steps: with the width threaded through that function,
-// Chrome 154 prepared text seen before 2% slower for every caller.
+// own copy of prepareInternal()'s steps, whose width is the call's and not an option's.
 export function layoutText(text: string, font: string, maxWidth: number, lineHeight: number, options?: PrepareOptions): LayoutResult {
   const width = normalizeMaxWidth(maxWidth)
   const wordBreak = options?.wordBreak ?? 'normal'

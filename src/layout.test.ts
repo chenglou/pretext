@@ -726,6 +726,81 @@ describe('shared public contracts', () => {
     expect(callsOf(() => prepare(words, FONT))).toBe(every)
   })
 
+  test('a least layout width spares the cut-word questions of the words narrower than it, and changes no line from that width up', () => {
+    const advancesOf = (prepared: PreparedText): (number[] | null)[] => (prepared as unknown as PreparedLineBreakData).breakableFitAdvances
+    const callsOf = (run: () => void): number => {
+      clearCache()
+      const before = canvasMeasurementCount
+      run()
+      return canvasMeasurementCount - before
+    }
+    const linesOf = (prepared: PreparedTextWithSegments, width: number): unknown => {
+      const walked: unknown[] = []
+      const count = walkLineRanges(prepared, width, line => walked.push(line))
+      const streamed: unknown[] = []
+      for (let line = layoutNextLine(prepared, width); line !== null; line = layoutNextLine(prepared, width, line.end)) streamed.push(line)
+      return [layout(prepared, width, LINE_HEIGHT), count, walked, streamed, measureLineStats(prepared, width), layoutWithLines(prepared, width, LINE_HEIGHT), measureNaturalWidth(prepared)]
+    }
+
+    // Four words, the first and third the widest: none is cut on a line as wide as the widest.
+    const words = 'internationalization of supercalifragilistic layouts'
+    const every = prepareWithSegments(words, FONT)
+    expect(advancesOf(every).map(advances => advances !== null)).toEqual([true, false, true, false, true, false, true])
+    const widest = Math.max(every.widths[0]!, every.widths[4]!)
+    const narrower = Math.min(every.widths[0]!, every.widths[4]!)
+    const floored = prepareWithSegments(words, FONT, { minWidth: widest })
+    expect(advancesOf(floored).every(advances => advances === null)).toBe(true)
+    expect(callsOf(() => prepare(words, FONT, { minWidth: widest }))).toBeLessThan(callsOf(() => prepare(words, FONT)))
+    for (const width of [widest, widest + 0.5, widest * 1.5, 1000, Infinity]) expect(linesOf(floored, width)).toEqual(linesOf(every, width))
+    // A word wider than the least width keeps its advances, and the others don't.
+    const under = prepareWithSegments(words, FONT, { minWidth: narrower - 0.5 })
+    expect(advancesOf(under).map(advances => advances !== null)).toEqual([true, false, false, false, true, false, false])
+    for (const width of [narrower - 0.5, narrower, widest, 1000]) expect(linesOf(under, width)).toEqual(linesOf(every, width))
+    // No least width, or one that isn't above 0, is every width.
+    for (const minWidth of [undefined, 0, -5, NaN]) {
+      const options = minWidth === undefined ? {} : { minWidth }
+      expect(JSON.stringify(prepareWithSegments(words, FONT, options))).toBe(JSON.stringify(every))
+      expect(callsOf(() => prepare(words, FONT, options))).toBe(callsOf(() => prepare(words, FONT)))
+    }
+
+    // Below the least width nothing checks: a spared word isn't cut and overflows its line
+    // whole, as under overflow-wrap: normal, where a handle for any width cuts it.
+    expect(layoutWithLines(floored, narrower / 2, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['internationalization ', 'of ', 'supercalifragilistic ', 'layouts'])
+    expect(layout(every, narrower / 2, LINE_HEIGHT).lineCount).toBeGreaterThan(layout(floored, narrower / 2, LINE_HEIGHT).lineCount)
+
+    // Text the rule doesn't cover keeps every word's advances: a soft hyphen, preserved
+    // spaces, a tab, letter spacing.
+    for (const [text, options] of [
+      ['inter\u00ADnational layouts', {}],
+      ['international  layouts', { whiteSpace: 'pre-wrap' }],
+      ['international\tlayouts', { whiteSpace: 'pre-wrap' }],
+      ['international layouts', { letterSpacing: 1 }],
+    ] as const) {
+      const kept = prepareWithSegments(text, FONT, { ...options, minWidth: 400 })
+      expect(JSON.stringify(kept)).toBe(JSON.stringify(prepareWithSegments(text, FONT, options)))
+      expect(advancesOf(kept).some(advances => advances !== null)).toBe(true)
+    }
+
+    // Where the scan gives no break before a segment, a line overflows by the whole run
+    // between two breaks, here two words around a control the engine hides. At a least
+    // width as wide as the run, the run fits every line it starts and both words are
+    // spared; just under it each word alone would fit, but a line the run starts is cut
+    // inside it, so the text keeps every word's advances.
+    const run = 'aa internat\u000Blayouts bb'
+    const whole = prepareWithSegments(run, FONT)
+    const flags = (whole as unknown as PreparedLineBreakData).segmentFlags
+    expect(whole.segments).toEqual(['aa', ' ', 'internat', '\u000B', 'layouts', ' ', 'bb'])
+    expect(Array.from(flags, flag => (flag & 0x20) !== 0)).toEqual([false, false, false, true, true, false, false])
+    const runWidth = whole.widths[2]! + whole.widths[3]! + whole.widths[4]!
+    expect(runWidth).toBeGreaterThan(Math.max(whole.widths[2]!, whole.widths[4]!) + 1)
+    expect(advancesOf(prepare(run, FONT, { minWidth: runWidth })).every(advances => advances === null)).toBe(true)
+    expect(JSON.stringify(prepareWithSegments(run, FONT, { minWidth: runWidth - 0.5 }))).toBe(JSON.stringify(whole))
+    for (const minWidth of [runWidth - 20, runWidth - 0.5, runWidth, runWidth + 1, 300]) {
+      const least = prepareWithSegments(run, FONT, { minWidth })
+      for (const width of [minWidth, minWidth + 0.25, minWidth * 2, Infinity]) expect(linesOf(least, width)).toEqual(linesOf(whole, width))
+    }
+  })
+
   test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {
     // The other fields are the line walkers' storage, which changes with engine fixes
     // (RESEARCH.md, Decisions Log, 2026-10-06). This file compiles only while the type
