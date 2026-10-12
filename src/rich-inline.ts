@@ -30,7 +30,7 @@ import {
   type ParagraphSegmentData,
   type PreparedLineData,
 } from './line-break.js'
-import { getEngineProfile, getFontMeasurement, getPreparationLanguage, getSpaceWidth, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
+import { cacheGeneration, getEngineProfile, getFontMeasurement, getPreparationLanguage, getSpaceWidth, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
 import { measureAnalysis, type ParagraphLists } from './prepare.js'
 
 // Helper for rich-text inline flow under `white-space: normal` or `pre-wrap`: one paragraph's text
@@ -1245,4 +1245,119 @@ export function measureRichInlineStats(
   const stats = { lineCount: 0, maxLineWidth: 0 }
   walkPreparedLinesRaw(flow.data, safeWidth, undefined, stats)
   return stats
+}
+
+// What prepareRichInlineFor() keeps for one key: the paragraph's handle, what it was prepared
+// from, and its stats at the width last asked for. The items are kept as a copy of their
+// fields, defaults filled in, since an app builds its items anew each frame or changes them in
+// place: neither the array nor its objects say whether the paragraph is the same.
+type KeptItem = {
+  text: string | undefined // undefined for a box
+  font: string
+  letterSpacing: number
+  atomic: boolean
+  extraWidth: number
+  width: number // A box's
+}
+type KeyedParagraph = {
+  items: KeptItem[]
+  whiteSpace: WhiteSpaceMode
+  wordBreak: WordBreakMode
+  generation: number // cacheGeneration when prepared
+  prepared: PreparedRichInline
+  maxWidth: number // The width last measured at, NaN before any
+  lineCount: number // The stats at that width
+  maxLineWidth: number
+}
+
+// Held by the app's own object for the paragraph, as a text's entry is (layoutFor() in
+// src/layout.ts), so an entry goes when that object does. A key's text entry and its
+// paragraph entry are apart.
+const keyedParagraphs = new WeakMap<object, KeyedParagraph>()
+
+// Whether the items are the ones an entry was prepared from: as many, each with the same
+// fields, an option left out being its default. Five comparisons an item, and a text that
+// is the same string object compares at once.
+function sameItems(kept: KeptItem[], items: Array<RichInlineItem | RichInlineBox>): boolean {
+  if (kept.length !== items.length) return false
+  for (let i = 0; i < items.length; i++) {
+    const was = kept[i]!
+    const item = items[i]!
+    if (item.text === undefined) {
+      if (was.text !== undefined || was.width !== item.width) return false
+    } else if (was.text !== item.text || was.font !== item.font || was.letterSpacing !== (item.letterSpacing ?? 0) ||
+      was.atomic !== (item.break === 'never') || was.extraWidth !== (item.extraWidth ?? 0)) {
+      return false
+    }
+  }
+  return true
+}
+
+// The entry of `key`, prepared now where the key has none, where an item or an option differs
+// from the last call's, where items were added or taken away, and after clearCache(). A
+// paragraph is analyzed as one text, so one more item at its end, as a reply that streams in
+// adds them, prepares all of it again: the last item's breaks and widths can depend on what
+// follows it.
+function getKeyedParagraph(key: object, items: Array<RichInlineItem | RichInlineBox>, options: RichInlineOptions | undefined): KeyedParagraph {
+  let whiteSpace: WhiteSpaceMode = 'normal'
+  let wordBreak: WordBreakMode = 'normal'
+  if (options !== undefined) {
+    whiteSpace = options.whiteSpace ?? 'normal'
+    wordBreak = options.wordBreak ?? 'normal'
+  }
+  let entry = keyedParagraphs.get(key)
+  if (entry !== undefined && entry.generation === cacheGeneration && entry.whiteSpace === whiteSpace && entry.wordBreak === wordBreak && sameItems(entry.items, items)) {
+    return entry
+  }
+  // Prepared before the entry changes, so one that throws leaves the entry as it was. The
+  // count is read after it: a preparation that finds another page language moves it.
+  const prepared = prepareRichInline(items, options)
+  const kept: KeptItem[] = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!
+    kept.push(item.text === undefined
+      ? { text: undefined, font: '', letterSpacing: 0, atomic: false, extraWidth: 0, width: item.width }
+      : { text: item.text, font: item.font, letterSpacing: item.letterSpacing ?? 0, atomic: item.break === 'never', extraWidth: item.extraWidth ?? 0, width: 0 })
+  }
+  if (entry === undefined) {
+    entry = { items: kept, whiteSpace, wordBreak, generation: cacheGeneration, prepared, maxWidth: NaN, lineCount: 0, maxLineWidth: 0 }
+    keyedParagraphs.set(key, entry)
+    return entry
+  }
+  entry.items = kept
+  entry.whiteSpace = whiteSpace
+  entry.wordBreak = wordBreak
+  entry.generation = cacheGeneration
+  entry.prepared = prepared
+  entry.maxWidth = NaN
+  return entry
+}
+
+// prepareRichInline() for an app that keeps no handle: `key` is the app's own object for the
+// paragraph, a message or a block, and the handle is the one kept for it while every item's
+// fields and the options are the last call's, compared field by field, so an items array
+// built anew each frame finds it. Every rich line function takes it. It is the key's until
+// an item, an option or the caches change: ask for it where it is used rather than keep it.
+// A line range or a cursor is a place in the paragraph it came from. Its segments come from
+// the items' texts and the options, not from their fonts, so it names the same place after
+// clearCache() or another font, with the widths of before; after a text changed or an item
+// was added it is a place in the old paragraph, as it is with a handle the app prepares
+// again. What a call doesn't read is a page language that changed since, as with layoutFor().
+export function prepareRichInlineFor(key: object, items: Array<RichInlineItem | RichInlineBox>, options?: RichInlineOptions): PreparedRichInline {
+  return getKeyedParagraph(key, items, options).prepared
+}
+
+// measureRichInlineStats() for an app that keeps no handle: what
+// measureRichInlineStats(prepareRichInline(items, options), maxWidth) returns, from the key's
+// handle, and from the stats kept for it while the width is the last call's too, so a frame
+// in which nothing changed walks no line.
+export function measureRichInlineFor(key: object, items: Array<RichInlineItem | RichInlineBox>, maxWidth: number, options?: RichInlineOptions): RichInlineStats {
+  const entry = getKeyedParagraph(key, items, options)
+  if (entry.maxWidth !== maxWidth) {
+    const stats = measureRichInlineStats(entry.prepared, maxWidth)
+    entry.lineCount = stats.lineCount
+    entry.maxLineWidth = stats.maxLineWidth
+    entry.maxWidth = maxWidth
+  }
+  return { lineCount: entry.lineCount, maxLineWidth: entry.maxLineWidth }
 }

@@ -57,6 +57,8 @@ let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRan
 let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
+let prepareRichInlineFor: RichInlineModule['prepareRichInlineFor']
+let measureRichInlineFor: RichInlineModule['measureRichInlineFor']
 let canvasMeasurementCount = 0
 // Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none. A
 // font without U+0323 draws a letter right before it in a wider font, as Amiri does.
@@ -324,7 +326,7 @@ beforeAll(async () => {
   ;({ analyzeText, SEGMENT_KINDS, KIND_BITS, SPACED, ONE_CLUSTER } = analysisMod)
   ;({ getBlinkLineBreaks } = lineBreaksMod)
   ;({ getGeckoLineBreaks } = geckoLineBreaksMod)
-  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
+  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges, prepareRichInlineFor, measureRichInlineFor } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -878,6 +880,155 @@ describe('shared public contracts', () => {
     const good = prepareFor(other, other.text, FONT)
     expect(() => layoutFor(other, other.text, FONT, 80, LINE_HEIGHT, { letterSpacing: NaN })).toThrow(RangeError)
     expect(prepareFor(other, other.text, FONT)).toBe(good)
+  })
+
+  test('prepareRichInlineFor() gives what prepareRichInline() gives for its key, reusing the paragraph while every item and option is the same', () => {
+    type Items = Array<RichInlineItem | RichInlineBox>
+    // Every rich line function's answer from one handle.
+    const everyLine = (prepared: ReturnType<typeof prepareRichInline>, width: number): unknown => {
+      const walked: unknown[] = []
+      const count = walkRichInlineLineRanges(prepared, width, range => walked.push([range, materializeRichInlineLineRange(prepared, range)]))
+      const streamed: unknown[] = []
+      for (let range = layoutNextRichInlineLineRange(prepared, width); range !== null && streamed.length <= count; range = layoutNextRichInlineLineRange(prepared, width, range.end)) streamed.push(range)
+      return [count, walked, streamed, measureRichInlineStats(prepared, width)]
+    }
+    const paragraphs: Items[] = [
+      [{ text: 'Ship ', font: FONT }, { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 14 }, { text: "'s rich note about layouts", font: FONT }],
+      [{ text: 'plain words in one item', font: FONT }],
+      [{ text: 'inter', font: FONT }, { text: 'national', font: '18px Test Sans', letterSpacing: 1 }, { width: 24 }, { text: ' 中文字 tail\tand  more\n', font: FONT, extraWidth: 6 }],
+      [],
+    ]
+    const optionSets: (RichInlineOptions | undefined)[] = [undefined, {}, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }]
+    // One key through every paragraph, option set and width, in turn: it never answers for
+    // the items or options of an earlier call, at a width it has just answered too.
+    const shared = {}
+    for (const items of paragraphs) for (const options of optionSets) {
+      for (const width of [0, 40, 85.5, 160, 160, 1000, Infinity, 40]) {
+        expect(everyLine(prepareRichInlineFor(shared, items, options), width)).toEqual(everyLine(prepareRichInline(items, options), width))
+      }
+      for (const width of [40, 85.5, 160, 160, 1000, Infinity, NaN, -5, 40]) {
+        expect(measureRichInlineFor(shared, items, width, options)).toEqual(measureRichInlineStats(prepareRichInline(items, options), width))
+      }
+    }
+
+    const block = { id: 7 }
+    const make = (): Items => [{ text: 'Hello ', font: FONT }, { text: 'brave', font: '700 16px Test Sans' }, { text: ' new world of rich text', font: FONT }]
+    const first = prepareRichInlineFor(block, make())
+    const before = canvasMeasurementCount
+    // The same items give the key's handle back with no work: in the same array, in an array
+    // and objects built anew, as an app builds them each frame, with the defaults spelled out,
+    // and with a text that is an equal string in another object.
+    const same = make()
+    expect(prepareRichInlineFor(block, same)).toBe(first)
+    expect(prepareRichInlineFor(block, same)).toBe(first)
+    expect(prepareRichInlineFor(block, make(), {})).toBe(first)
+    expect(prepareRichInlineFor(block, make().map(item => ({ ...(item as RichInlineItem), letterSpacing: 0, break: 'normal' as const, extraWidth: 0 })), { whiteSpace: 'normal', wordBreak: 'normal' })).toBe(first)
+    expect(prepareRichInlineFor(block, [{ text: ['Hel', 'lo '].join(''), font: FONT }, ...make().slice(1)])).toBe(first)
+    expect(measureRichInlineFor(block, make(), 80)).toEqual(measureRichInlineStats(first, 80))
+    expect(measureRichInlineFor(block, make(), 80)).toEqual(measureRichInlineStats(first, 80))
+    expect(canvasMeasurementCount).toBe(before)
+    // Another key has its own paragraph, and a key's text entry is apart from its paragraph.
+    const other = { id: 8 }
+    expect(prepareRichInlineFor(other, make())).not.toBe(first)
+    prepareFor(block, 'a text of the same key', FONT)
+    expect(prepareRichInlineFor(block, make())).toBe(first)
+
+    // Each field of an item is seen in the call, and so are an item added, taken away or
+    // replaced by a box, a box's width and each option; the items as they were are prepared
+    // again, in place.
+    const changes: Array<(items: Items) => void> = [
+      items => { (items[1] as RichInlineItem).text = 'bold' },
+      items => { (items[1] as RichInlineItem).font = '700 18px Test Sans' },
+      items => { (items[1] as RichInlineItem).letterSpacing = 1 },
+      items => { (items[1] as RichInlineItem).break = 'never' },
+      items => { (items[1] as RichInlineItem).extraWidth = 8 },
+      items => { items[1] = { width: 20 } },
+      items => { items.push({ text: ' and more', font: FONT }) },
+      items => { items.pop() },
+      items => { items.splice(1, 1) },
+    ]
+    for (const change of changes) {
+      const kept = prepareRichInlineFor(block, make())
+      const changed = make()
+      change(changed)
+      const again = prepareRichInlineFor(block, changed)
+      expect(again).not.toBe(kept)
+      expect(prepareRichInlineFor(block, changed)).toBe(again)
+      for (const width of [40, 80, 300]) {
+        expect(everyLine(again, width)).toEqual(everyLine(prepareRichInline(changed), width))
+        expect(measureRichInlineFor(block, changed, width)).toEqual(measureRichInlineStats(prepareRichInline(changed), width))
+      }
+      const back = prepareRichInlineFor(block, make())
+      expect(back).not.toBe(again)
+      expect(everyLine(back, 80)).toEqual(everyLine(first, 80))
+    }
+    const boxed = prepareRichInlineFor(block, [{ width: 20 }, { text: 'a', font: FONT }])
+    expect(prepareRichInlineFor(block, [{ width: 20 }, { text: 'a', font: FONT }])).toBe(boxed)
+    expect(prepareRichInlineFor(block, [{ width: 21 }, { text: 'a', font: FONT }])).not.toBe(boxed)
+    for (const options of [{ whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }] as const) {
+      const plain = prepareRichInlineFor(block, make())
+      expect(prepareRichInlineFor(block, make(), options)).not.toBe(plain)
+      expect(measureRichInlineFor(block, make(), 80, options)).toEqual(measureRichInlineStats(prepareRichInline(make(), options), 80))
+    }
+
+    // Items changed in place in one array, as a reply that streams into its last item and
+    // then gains an item: the entry keeps a copy of their fields, so each change is seen, at
+    // the width just answered too.
+    const live = make()
+    const started = prepareRichInlineFor(block, live)
+    const short = measureRichInlineFor(block, live, 80)
+    ;(live[2] as RichInlineItem).text += ' that keeps on streaming in, word after word'
+    expect(prepareRichInlineFor(block, live)).not.toBe(started)
+    expect(measureRichInlineFor(block, live, 80)).toEqual(measureRichInlineStats(prepareRichInline(live), 80))
+    expect(measureRichInlineFor(block, live, 80).lineCount).toBeGreaterThan(short.lineCount)
+    live.push({ text: ' and a link', font: '16px Test Sans', extraWidth: 4 })
+    expect(everyLine(prepareRichInlineFor(block, live), 80)).toEqual(everyLine(prepareRichInline(live), 80))
+    // The stats handed out are the caller's own.
+    const stats = measureRichInlineFor(block, live, 80)
+    stats.lineCount = -1
+    expect(measureRichInlineFor(block, live, 80)).toEqual(measureRichInlineStats(prepareRichInline(live), 80))
+
+    // clearCache() makes every key prepare again at its next call, with Canvas asked again,
+    // and so does setLocale(), which clears.
+    const kept = prepareRichInlineFor(other, make())
+    expect(prepareRichInlineFor(other, make())).toBe(kept)
+    clearCache()
+    const calls = canvasMeasurementCount
+    const again = prepareRichInlineFor(other, make())
+    expect(again).not.toBe(kept)
+    expect(canvasMeasurementCount).toBeGreaterThan(calls)
+    expect(prepareRichInlineFor(other, make())).toBe(again)
+    expect(measureRichInlineFor(other, make(), 80)).toEqual(measureRichInlineStats(prepareRichInline(make()), 80))
+    setLocale('th')
+    const thai = prepareRichInlineFor(other, make())
+    expect(thai).not.toBe(again)
+    setLocale(undefined)
+    expect(prepareRichInlineFor(other, make())).not.toBe(thai)
+
+    // A preparation that throws leaves the key's entry as it was.
+    const good = prepareRichInlineFor(other, make())
+    expect(() => prepareRichInlineFor(other, [{ width: -1 }])).toThrow(RangeError)
+    expect(() => measureRichInlineFor(other, [{ text: 'a', font: FONT, letterSpacing: NaN }], 80)).toThrow(RangeError)
+    expect(prepareRichInlineFor(other, make())).toBe(good)
+
+    // A line range is a place in the paragraph it came from. The segments come from the
+    // items' texts and not from their fonts, so a range kept across clearCache() gives its
+    // lines' text from the key's new handle. After an item is added, the ranges of the lines
+    // before the last still name their text, and the old last line's end, which was the
+    // paragraph's end, is where the new item starts: its lines are no longer the paragraph's.
+    const ranges: RichInlineLineRange[] = []
+    walkRichInlineLineRanges(good, 80, range => ranges.push(range))
+    const texts = ranges.map(range => materializeRichInlineLineRange(good, range).fragments.map(fragment => fragment.text))
+    expect(ranges.length).toBeGreaterThan(2)
+    clearCache()
+    const cleared = prepareRichInlineFor(other, make())
+    expect(cleared).not.toBe(good)
+    expect(ranges.map(range => materializeRichInlineLineRange(cleared, range).fragments.map(fragment => fragment.text))).toEqual(texts)
+    const grown = prepareRichInlineFor(other, [...make(), { text: ' with an item more', font: FONT }])
+    expect(ranges.slice(0, -1).map(range => materializeRichInlineLineRange(grown, range).fragments.map(fragment => fragment.text))).toEqual(texts.slice(0, -1))
+    const last = ranges[ranges.length - 1]!
+    expect(last.end).toEqual({ itemIndex: 3, segmentIndex: 0, graphemeIndex: 0 })
+    expect(layoutNextRichInlineLineRange(grown, 80, last.end)!.fragments[0]!.itemIndex).toBe(3)
   })
 
   test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {
