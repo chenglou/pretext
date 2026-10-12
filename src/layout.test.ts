@@ -60,6 +60,7 @@ let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
 let prepareRichInlineFor: RichInlineModule['prepareRichInlineFor']
 let measureRichInlineFor: RichInlineModule['measureRichInlineFor']
+let measureRichInline: RichInlineModule['measureRichInline']
 let canvasMeasurementCount = 0
 // Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none. A
 // font without U+0323 draws a letter right before it in a wider font, as Amiri does.
@@ -328,7 +329,7 @@ beforeAll(async () => {
   ;({ analyzeText, SEGMENT_KINDS, KIND_BITS, SPACED, ONE_CLUSTER } = analysisMod)
   ;({ getBlinkLineBreaks } = lineBreaksMod)
   ;({ getGeckoLineBreaks } = geckoLineBreaksMod)
-  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges, prepareRichInlineFor, measureRichInlineFor } = richInlineMod)
+  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges, prepareRichInlineFor, measureRichInlineFor, measureRichInline } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -931,6 +932,69 @@ describe('shared public contracts', () => {
     const good = prepareFor(other, other.text, FONT)
     expect(() => layoutFor(other, other.text, FONT, 80, LINE_HEIGHT, { letterSpacing: NaN })).toThrow(RangeError)
     expect(prepareFor(other, other.text, FONT)).toBe(good)
+  })
+
+  test('measureRichInline() gives what measureRichInlineStats(prepareRichInline()) gives, with no handle, and asks where a word is cut only for words wider than its width', () => {
+    type Items = Array<RichInlineItem | RichInlineBox>
+    const BOLD = '700 16px Test Sans'
+    const paragraphs: Items[] = [
+      [{ text: 'internationalization of ', font: FONT }, { text: 'supercalifragilistic', font: BOLD }, { text: ' layouts', font: FONT }],
+      [{ text: 'plain words in one item of supercalifragilistic layouts', font: FONT }],
+      // A word that runs across two items, and across three.
+      [{ text: 'an inter', font: FONT }, { text: 'national', font: BOLD }, { text: 'ization of lay', font: FONT }, { text: 'outs', font: '18px Test Sans' }],
+      [{ text: 'Ship ', font: FONT }, { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 14 }, { text: "'s rich note about layouts", font: FONT }],
+      [{ text: 'spaced words ', font: FONT, letterSpacing: 1 }, { width: 24 }, { text: ' 中文字「文本」 tail\tand  more\n', font: FONT, extraWidth: 6 }],
+      [{ text: 'To Tokyo\u200Bzero', font: FONT }, { text: '\u200Bwidth aaaa A \u000BV bbbb', font: BOLD }],
+      [],
+    ]
+    const optionSets: (RichInlineOptions | undefined)[] = [undefined, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }]
+    for (const items of paragraphs) for (const options of optionSets) {
+      for (const width of [-5, 0, 9, 40, 85.5, 137.5, 160, 240, 320, 1000, Infinity, NaN]) {
+        // Each asks an empty cache, then measureRichInline() a full one, which makes no Canvas call.
+        clearCache()
+        const expected = measureRichInlineStats(prepareRichInline(items, options), width)
+        clearCache()
+        expect(measureRichInline(items, width, options)).toEqual(expected)
+        const before = canvasMeasurementCount
+        expect(measureRichInline(items, width, options)).toEqual(expected)
+        expect(canvasMeasurementCount).toBe(before)
+        // A handle prepared after it, from the cache it left, lays out as one prepared from an
+        // empty cache does.
+        const after = prepareRichInline(items, options)
+        clearCache()
+        const cold = prepareRichInline(items, options)
+        for (const other of [0, 9, 40, 160, Infinity]) expect(measureRichInlineStats(after, other)).toEqual(measureRichInlineStats(cold, other))
+      }
+    }
+
+    const callsOf = (run: () => void): number => {
+      clearCache()
+      const before = canvasMeasurementCount
+      run()
+      return canvasMeasurementCount - before
+    }
+    // A paragraph of plain items is spared as a text is: at 400px no word can be cut, and at
+    // 10px all can.
+    const plain = paragraphs[0]!
+    const every = callsOf(() => prepareRichInline(plain))
+    expect(callsOf(() => measureRichInline(plain, 400))).toBeLessThan(every)
+    expect(callsOf(() => measureRichInline(plain, Infinity))).toBeLessThan(every)
+    expect(callsOf(() => measureRichInline(plain, 10))).toBe(every)
+    expect(callsOf(() => measureRichInline(plain, 0))).toBe(every)
+    expect(callsOf(() => prepareRichInline(plain))).toBe(every)
+    // So is a paragraph that is one text.
+    expect(callsOf(() => measureRichInline(paragraphs[1]!, 400))).toBeLessThan(callsOf(() => prepareRichInline(paragraphs[1]!)))
+    // A word in two styles is cut where the run of its pieces overflows a line: at a width
+    // every piece fits and the run doesn't, the paragraph is measured again with every word's
+    // advances, and asks at least what prepareRichInline() asks.
+    const across = paragraphs[2]!
+    const whole = measureRichInlineStats(prepareRichInline(across), Infinity).maxLineWidth
+    expect(callsOf(() => measureRichInline(across, whole))).toBeLessThan(callsOf(() => prepareRichInline(across)))
+    expect(callsOf(() => measureRichInline(across, 150))).toBeGreaterThanOrEqual(callsOf(() => prepareRichInline(across)))
+    expect(measureRichInline(across, 150)).toEqual(measureRichInlineStats(prepareRichInline(across), 150))
+    // A paragraph with an atomic item, a box, extraWidth or letter spacing keeps every word's
+    // advances: a line a word starts there can be wider than the word.
+    for (const items of [paragraphs[3]!, paragraphs[4]!]) expect(callsOf(() => measureRichInline(items, 400))).toBe(callsOf(() => prepareRichInline(items)))
   })
 
   test('every line function takes the handle prepareFor() keeps for a key', () => {

@@ -518,21 +518,18 @@ export function measureAnalysis(
   // priority set at :1098-1100). So a handle that is never laid out
   // narrower than `uncutWidth` never reads the cut advances of a word no wider than it, and such a
   // word asks Canvas for none: the one question preparation asks that depends on the width. That
-  // holds where a line a word starts is as wide as the word's width here, so only in a text of its
-  // own of the simple walkers' kinds without letter spacing, whose segments take nothing at a
-  // line's start or end: none of Blink's halts and no U+3000 that hangs, and whose widths are
-  // final in the loop below: not two kana in a row where the Chromium profile adds their kerning
-  // after it (addKanaKerning), which can widen a word past the width it was spared at. Any other
-  // text keeps every word's advances; the cost is the saving, never a line. Where the scan gives
-  // no break at some boundary, a line overflows by the whole run between two breaks: the check
-  // below the loop.
-  let sparesCutAdvances = uncutWidth > 0 && paragraph === null && !hasLetterSpacing &&
-    !(engineProfile.hanKerning && textMayHanKern(own)) && !(engineProfile.hangsIdeographicSpace && own.includes('\u3000')) &&
-    !(engineProfile.kernsAcrossCanvasWords && kanaPairRe.test(own))
-  for (let k = from; sparesCutAdvances && k < to; k++) {
-    const kind = flags[k]! & KIND_BITS
-    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) sparesCutAdvances = false
-  }
+  // holds where a line a word starts is as wide as the word's width here, so only in text of
+  // the simple walkers' kinds without letter spacing, whose segments take nothing at a line's
+  // start or end: none of Blink's halts and no U+3000 that hangs, and whose widths are final
+  // in the loop below: not two kana in a row where the Chromium profile adds their kerning
+  // after it (addKanaKerning), which can widen a word past the width it was spared at
+  // (sparesCutAdvancesOf). Any other text keeps every word's advances; the cost is the saving,
+  // never a line. Where the scan gives no break at some boundary, a line overflows by the whole
+  // run between two breaks: the check below the loop (cutsSparedWord). An item of a
+  // rich-inline paragraph is spared where its caller found all of this of the whole paragraph,
+  // and the caller looks at the paragraph's runs, which cross items (prepareRichInlineAt in
+  // src/rich-inline.ts).
+  const sparesCutAdvances = uncutWidth > 0 && !hasLetterSpacing && (paragraph !== null || sparesCutAdvancesOf(own, flags, from, to, engineProfile))
   // Whether a segment was spared.
   let sparedCutAdvances = false
 
@@ -761,35 +758,9 @@ export function measureAnalysis(
     }
   }
 
-  // Where the scan gives no break before some segment, what overflows a line is the run from one
-  // break to the next: the segments from a text segment the scan breaks before up to the next
-  // such, with the spaces between them, which the line keeps where no break follows them (the
-  // spaces after its last text segment hang or go). A line that such a run starts and overflows
-  // is cut inside one of its segments, a spared one too, so a run wider than the least width
-  // that holds a spared segment has the text measured again with every word's advances. The
-  // widths are summed as a line adds them, from the run's start, and the run is as wide as its
-  // widest so far: a run of marks can measure under 0 after its context.
-  if (sparedCutAdvances && analysis.hasUnbroken) {
-    let runWidth = 0
-    let runPeak = 0
-    let runSpared = false
-    for (let k = from; k < to; k++) {
-      const flag = flags[k]!
-      const isText = (flag & KIND_BITS) === TEXT
-      if (isText && (flag & UNBROKEN) === 0) {
-        runWidth = 0
-        runPeak = 0
-        runSpared = false
-      }
-      runWidth += widths[k - from]!
-      if (runWidth > runPeak) runPeak = runWidth
-      if (!isText) continue
-      // A segment without advances that a text measured for any width would have.
-      if (breakableFitAdvances[k - from] === null && texts[k]!.length > 1 && (flag & ONE_CLUSTER) === 0) runSpared = true
-      if (runSpared && runPeak > uncutWidth) {
-        return measureAnalysis(analysis, from, to, font, includeSegments, letterSpacing, engineProfile, language, overflowBreaks, null, 0)
-      }
-    }
+  // A text whose line is cut inside a spared word is measured again with every word's advances.
+  if (sparedCutAdvances && paragraph === null && analysis.hasUnbroken && cutsSparedWord(analysis, from, to, widths, breakableFitAdvances, uncutWidth)) {
+    return measureAnalysis(analysis, from, to, font, includeSegments, letterSpacing, engineProfile, language, overflowBreaks, null, 0)
   }
 
   // The hyphen a chosen soft hyphen paints, which only a text that holds one asks for, with
@@ -839,6 +810,54 @@ export function measureAnalysis(
     source: null,
   } satisfies PreparedTextData as unknown as PreparedText & PreparedSegments
   return prepared
+}
+
+// Whether the words of segments [from, to) of a text can go without cut advances where they are
+// no wider than the least width the text is laid out at (measureAnalysis): text of the simple
+// walkers' kinds whose segments take nothing at a line's start or end and whose widths are
+// final as measured. `text` is the text those segments are measured in: a text's own, or a
+// rich-inline paragraph's whole.
+export function sparesCutAdvancesOf(text: string, flags: number[], from: number, to: number, profile: EngineProfile): boolean {
+  if ((profile.hanKerning && textMayHanKern(text)) || (profile.hangsIdeographicSpace && text.includes('\u3000')) ||
+    (profile.kernsAcrossCanvasWords && kanaPairRe.test(text))) return false
+  for (let k = from; k < to; k++) {
+    const kind = flags[k]! & KIND_BITS
+    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) return false
+  }
+  return true
+}
+
+// Whether a line of segments [from, to), whose widths and advances are in the two lists from
+// index 0, is cut inside a word that was spared its advances. Where the scan gives no break
+// before some segment, what overflows a line is the run from one break to the next: the
+// segments from a text segment the scan breaks before up to the next such, with the spaces
+// between them, which the line keeps where no break follows them (the spaces after its last
+// text segment hang or go). A line that such a run starts and overflows is cut inside one of
+// its segments, a spared one too, so a run wider than the least width that holds a spared
+// segment is one. The widths are summed as a line adds them, from the run's start, and the
+// run is as wide as its widest so far: a run of marks can measure under 0 after its context.
+// In a rich-inline paragraph a run goes on across items, as a word in two styles.
+export function cutsSparedWord(analysis: TextAnalysis, from: number, to: number, widths: number[], breakableFitAdvances: (number[] | null)[], uncutWidth: number): boolean {
+  const { texts, flags } = analysis
+  let runWidth = 0
+  let runPeak = 0
+  let runSpared = false
+  for (let k = from; k < to; k++) {
+    const flag = flags[k]!
+    const isText = (flag & KIND_BITS) === TEXT
+    if (isText && (flag & UNBROKEN) === 0) {
+      runWidth = 0
+      runPeak = 0
+      runSpared = false
+    }
+    runWidth += widths[k - from]!
+    if (runWidth > runPeak) runPeak = runWidth
+    if (!isText) continue
+    // A segment without advances that a text measured for any width would have.
+    if (breakableFitAdvances[k - from] === null && texts[k]!.length > 1 && (flag & ONE_CLUSTER) === 0) runSpared = true
+    if (runSpared && runPeak > uncutWidth) return true
+  }
+  return false
 }
 
 // Blink's layout shapes a run of one script in one call and takes katakana for hiragana, so

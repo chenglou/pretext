@@ -31,7 +31,7 @@ import {
   type PreparedLineData,
 } from './line-break.js'
 import { cacheGeneration, getEngineProfile, getFontMeasurement, getPreparationLanguage, getSpaceWidth, readLetterSpacing, zeros, type EngineProfile } from './measurement.js'
-import { measureAnalysis, type ParagraphLists } from './prepare.js'
+import { cutsSparedWord, measureAnalysis, sparesCutAdvancesOf, type ParagraphLists } from './prepare.js'
 
 // Helper for rich-text inline flow under `white-space: normal` or `pre-wrap`: one paragraph's text
 // broken across its items, as a browser lays out the text of an inline formatting context across
@@ -183,6 +183,19 @@ function getInternalPreparedRichInline(prepared: PreparedRichInline): InternalPr
 }
 
 export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, options?: RichInlineOptions): PreparedRichInline {
+  return prepareRichInlineAt(items, options, 0)
+}
+
+// prepareRichInline(), given the least width the handle is laid out at, 0 for any width: a
+// paragraph laid out at one width and dropped (measureRichInline) asks Canvas where a word
+// could be cut only for the words wider than it, as a text does (measureAnalysis). A
+// paragraph that is one text's handle is spared as that text is. One of several items is
+// spared where it is plain: no object, no extraWidth and no letter spacing, so that a line a
+// word starts is as wide as the word, and text of the kinds a text is spared in. Each item's
+// words are then measured without their advances, and the paragraph's runs between two
+// breaks, which cross items, are summed here: where a run wider than the least width holds a
+// spared word, the paragraph is prepared again for any width.
+function prepareRichInlineAt(items: Array<RichInlineItem | RichInlineBox>, options: RichInlineOptions | undefined, uncutWidth: number): PreparedRichInline {
   const whiteSpace = options?.whiteSpace ?? 'normal'
   const wordBreak = options?.wordBreak ?? 'normal'
   const preserve = whiteSpace === 'pre-wrap'
@@ -211,7 +224,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const only = onlyIndex < 0 ? undefined : items[onlyIndex]!
   if (only !== undefined && only.text !== undefined && only.break !== 'never' && (only.extraWidth ?? 0) === 0) {
     const analysis = analyzeText(only.text, profile, whiteSpace, wordBreak, language)
-    const data = measureAnalysis(analysis, 0, analysis.flags.length, only.font, true, readLetterSpacing(only.letterSpacing, profile), profile, language, true, null, 0) as PreparedSegments
+    const data = measureAnalysis(analysis, 0, analysis.flags.length, only.font, true, readLetterSpacing(only.letterSpacing, profile), profile, language, true, null, uncutWidth) as PreparedSegments
     const itemSegments: number[] = []
     for (let index = 0; index <= items.length; index++) itemSegments.push(index <= onlyIndex ? 0 : data.segmentFlags.length)
     return findWholeLine({
@@ -281,6 +294,9 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const analysis = analyzeText(source, profile, whiteSpace, wordBreak, language, paragraph)
   const offsets = paragraph.sourceOffsets!
   const count = analysis.flags.length
+  // The least width the items' words are measured for: the paragraph's, where it is plain.
+  const itemUncutWidth = uncutWidth > 0 && !paddedOrObject && !spacingsDiffer && (sharedSpacing ?? 0) === 0 &&
+    sparesCutAdvancesOf(source, analysis.flags, 0, count, profile) ? uncutWidth : 0
 
   // The paragraph's lists, which each item's measurement adds its segments to (measureAnalysis).
   const widths: number[] = []
@@ -477,7 +493,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
     // what else measurement gives them, from the item's first segment.
     const itemAt = widths.length
-    const sub = measureAnalysis(analysis, from, to, item.font, false, letterSpacing, profile, language, true, lists, 0)
+    const sub = measureAnalysis(analysis, from, to, item.font, false, letterSpacing, profile, language, true, lists, itemUncutWidth)
     simple &&= sub.simpleLineCountFastPath
     if (readsItemFonts) {
       // The gap before the hyphen is the letter spacing after the grapheme before it.
@@ -578,6 +594,10 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       if (i > first && first < to) (fillExtras ??= zeroList(flags.length))[at] = extraWidth
     }
     from = to
+  }
+  // A plain paragraph has a segment for each of the analysis's, so its lists are the runs'.
+  if (itemUncutWidth > 0 && analysis.hasUnbroken && cutsSparedWord(analysis, 0, count, widths, breakableFitAdvances, itemUncutWidth)) {
+    return prepareRichInlineAt(items, options, 0)
   }
   const segmentCount = widths.length
   while (itemSegments.length <= items.length) itemSegments.push(segmentCount)
@@ -1245,6 +1265,17 @@ export function measureRichInlineStats(
   const stats = { lineCount: 0, maxLineWidth: 0 }
   walkPreparedLinesRaw(flow.data, safeWidth, undefined, stats)
   return stats
+}
+
+// A paragraph's line count and widest line at one width, from the items themselves, with no
+// handle to keep: what measureRichInlineStats(prepareRichInline(items, options), maxWidth)
+// returns, every call. It keeps nothing of the items and shares each font's width cache with
+// prepareRichInline(), so a repeat makes no Canvas call. It prepares on every call, so a
+// paragraph laid out at more than one width, or one whose lines are painted, still wants
+// prepareRichInline(). Knowing its one width, it asks Canvas where a word could be cut only
+// for the words wider than that width (prepareRichInlineAt).
+export function measureRichInline(items: Array<RichInlineItem | RichInlineBox>, maxWidth: number, options?: RichInlineOptions): RichInlineStats {
+  return measureRichInlineStats(prepareRichInlineAt(items, options, Math.max(0, normalizeMaxWidth(maxWidth))), maxWidth)
 }
 
 // What prepareRichInlineFor() keeps for one key: the paragraph's handle, what it was prepared
