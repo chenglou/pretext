@@ -46,8 +46,8 @@ import { measureAnalysis, type ParagraphLists } from './prepare.js'
 //   it, under the paragraph's word-break; a run that continues across items wraps together
 // - atomic inline boxes like pills, and boxes the app sizes and paints, such as images, are one
 //   segment each, which a line can break before and after
-// - an item's extra horizontal chrome, such as padding and borders, is part of its width on
-//   every line the item reaches
+// - an item's extraWidth is paid on every line it reaches; startWidth and endWidth are paid
+//   only at its outer content edges
 // A line's fragments are its segments cut where the item changes.
 
 declare const preparedRichInlineBrand: unique symbol
@@ -59,7 +59,9 @@ export type RichInlineItem = {
   font: string // Canvas font shorthand used to prepare and measure this item
   letterSpacing?: number // Extra horizontal spacing between graphemes, in CSS px
   break?: 'normal' | 'never' // `never` keeps the item atomic, like a pill or mention chip
-  extraWidth?: number // Caller-owned horizontal chrome, e.g. padding + border width
+  extraWidth?: number // Caller-owned horizontal chrome on every fragment, e.g. padding + border width
+  startWidth?: number // Extra width on the first content fragment only, in finite nonnegative CSS px
+  endWidth?: number // Extra width on the last content fragment only, in finite nonnegative CSS px
   width?: never // A RichInlineBox's
 }
 
@@ -98,7 +100,7 @@ export type RichInlineFragment = {
   text: string // Text slice for this fragment
   gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
   gapItemIndex: number // Item whose collapsed whitespace made gapBefore, or -1 when no gap precedes this fragment on this line
-  occupiedWidth: number // Text width plus the item's extraWidth contribution
+  occupiedWidth: number // Text width plus the item's chrome on this fragment
   sourceStart: number // Where the fragment starts in its item's `text`, in UTF-16 units
   sourceEnd: number // Where it ends there
 }
@@ -107,7 +109,7 @@ export type RichInlineFragmentRange = {
   itemIndex: number // Index into the items prepareRichInline() took
   gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
   gapItemIndex: number // Item whose collapsed whitespace made gapBefore, or -1 when no gap precedes this fragment on this line
-  occupiedWidth: number // Text width plus the item's extraWidth contribution
+  occupiedWidth: number // Text width plus the item's chrome on this fragment
   start: LayoutCursor // Start cursor within the item's part of the paragraph
   end: LayoutCursor // End cursor within the item's part of the paragraph
 }
@@ -209,7 +211,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     onlyIndex = index
   }
   const only = onlyIndex < 0 ? undefined : items[onlyIndex]!
-  if (only !== undefined && only.text !== undefined && only.break !== 'never' && (only.extraWidth ?? 0) === 0) {
+  if (only !== undefined && only.text !== undefined && only.break !== 'never' && (only.extraWidth ?? 0) === 0 && (only.startWidth ?? 0) === 0 && (only.endWidth ?? 0) === 0) {
     const analysis = analyzeText(only.text, profile, whiteSpace, wordBreak, language)
     const data = measureAnalysis(analysis, 0, analysis.flags.length, only.font, true, readLetterSpacing(only.letterSpacing, profile), profile, language, true, null) as PreparedSegments
     const itemSegments: number[] = []
@@ -260,6 +262,11 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       paddedOrObject = true
       continue
     }
+    const startWidth = item.startWidth ?? 0
+    const endWidth = item.endWidth ?? 0
+    if (!Number.isFinite(startWidth) || startWidth < 0 || !Number.isFinite(endWidth) || endWidth < 0) {
+      throw new RangeError(`Item ${index} startWidth and endWidth must be finite nonnegative numbers of CSS px`)
+    }
     const isAtomic = item.break === 'never' && item.text !== ''
     atomic.push(isAtomic)
     if (isAtomic) {
@@ -273,8 +280,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         if (letterSpacing < 0) mayNarrow = true
       }
     }
-    if (isAtomic || (item.extraWidth ?? 0) !== 0) paddedOrObject = true
-    if (!isAtomic && (item.extraWidth ?? 0) !== 0) padded++
+    if (isAtomic || (item.extraWidth ?? 0) !== 0 || startWidth !== 0 || endWidth !== 0) paddedOrObject = true
+    if (!isAtomic && ((item.extraWidth ?? 0) !== 0 || startWidth !== 0)) padded++
     if ((item.extraWidth ?? 0) < 0) mayNarrow = true
   }
   const paragraph: ParagraphItems = { items, starts, atomic, ownSegmentBreaks: !profile.transformsSegmentBreaksAcrossItems, sourceOffsets: null }
@@ -361,6 +368,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         const start: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
         if (normalizePreparedLineStart(own, start)) width = stepPreparedLineGeometryFromStart(own, start, Number.POSITIVE_INFINITY)!
         width += item.extraWidth ?? 0
+        width += (item.startWidth ?? 0) + (item.endWidth ?? 0)
         // The chip's text as a line of it paints it (buildLineTextFromRange).
         for (let i = 0; i < ownAnalysis.texts.length; i++) {
           const kind = own.segmentFlags[i]! & KIND_BITS
@@ -412,8 +420,18 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // but after an object in Blink and Gecko, and before a zero-width space after an object or
     // white space, where the browsers break.
     const extraWidth = item.extraWidth ?? 0
+    const startWidth = item.startWidth ?? 0
+    const endWidth = item.endWidth ?? 0
+    const openingWidth = extraWidth + startWidth
+    // The end width stays with the last content segment, before white space or a forced
+    // break that ends the item. It is part of that segment's last grapheme, so an emergency
+    // break never leaves the edge alone on a line, and continuation lines never repeat it.
+    let last = to - 1
+    if (endWidth !== 0) {
+      while (last >= from && (1 << (analysis.flags[last]! & KIND_BITS) & (1 << SPACE | PRESERVED_WHITE_SPACE | 1 << HARD_BREAK | 1 << SOFT_HYPHEN | 1 << ZERO_WIDTH_BREAK)) !== 0) last--
+    }
     let first = to
-    if (extraWidth !== 0) {
+    if (openingWidth !== 0 || extraWidth !== 0) {
       first = from
       while (first < to && ((analysis.flags[first]! & KIND_BITS) === SOFT_HYPHEN || (first === from && (analysis.flags[from]! & KIND_BITS) === SPACE))) first++
       const firstKind = first < to ? analysis.flags[first]! & KIND_BITS : TEXT
@@ -434,7 +452,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // spaces after right-to-left text (ENGINE_FOLLOWUPS.md, Rich-inline item edges).
         const afterTextSpaces = at - 1 > previousItemStart && (flags[at - 1]! & KIND_BITS) === PRESERVED_SPACE && (1 << (flags[at - 2]! & KIND_BITS) & (1 << TAB | 1 << HARD_BREAK)) === 0 &&
           (openingEdges === null || openingEdges[at - 2] === 0)
-        const fit = getOpeningFit(analysis.flags, from, to, extraWidth, afterTextSpaces, profile)
+        const fit = getOpeningFit(analysis.flags, from, to, extraWidth, afterTextSpaces, profile) + startWidth
         // In WebKit a break comes before white space that starts an item (whiteSpaceItemBreaks), and
         // none before a hard break, after an object too (nextWrapOpportunity,
         // InlineFormattingUtils.cpp:469-475).
@@ -446,8 +464,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // trim is what the line doesn't fit: the white space after it stays on its line, as the line
         // keeps the opening it took.
         flags[at] = fit === 0 ? PRESERVED_SPACE : breaksBefore ? OBJECT : OBJECT | UNBROKEN
-        widths.push(extraWidth)
-        ;(openingEdges ??= zeroList(flags.length))[at] = extraWidth
+        widths.push(openingWidth)
+        ;(openingEdges ??= zeroList(flags.length))[at] = openingWidth
         if (!breaksBefore && !analysis.hasUnbroken) marksReturnable = true
         // Where the engine ends a line inside the preserved spaces before a padded hard break that
         // doesn't fit (hardBreakItemRetreat), those spaces get an advance each, as text a line can
@@ -465,7 +483,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // The edge comes before the item's segments, so before the space or soft hyphens that lead them.
         sourceStarts.push(offset - starts[index]!)
         sourceEnds.push(offset - starts[index]!)
-        if (fit !== 0 && fit !== extraWidth) (lineEndTrims ??= zeroList(flags.length))[at] = extraWidth - fit
+        if (fit !== 0 && fit !== openingWidth) (lineEndTrims ??= zeroList(flags.length))[at] = openingWidth - fit
         first = from - 1
       }
     }
@@ -492,16 +510,19 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       const at = itemAt + s
       const spaced = spacingsDiffer && (flags[at]! & SPACED) !== 0
       const holdsExtra = i === first
-      if (spaced || holdsExtra) {
+      const holdsEnd = endWidth !== 0 && i === last
+      if (spaced || holdsExtra || holdsEnd) {
         let advances = breakableFitAdvances[at] ?? null
         if (advances !== null) {
           // The cached advances are shared by every occurrence of this text.
           advances = breakableFitAdvances[at] = advances.slice()
           if (spaced) for (let g = 0; g < advances.length; g++) advances[g] = advances[g]! + letterSpacing
-          if (holdsExtra) advances[0] = advances[0]! + extraWidth
+          if (holdsExtra) advances[0] = advances[0]! + openingWidth
+          if (holdsEnd) advances[advances.length - 1] = advances[advances.length - 1]! + endWidth
         }
         if (spaced) widths[at] = widths[at]! + letterSpacing
-        if (holdsExtra) widths[at] = widths[at]! + extraWidth
+        if (holdsExtra) widths[at] = widths[at]! + openingWidth
+        if (holdsEnd) widths[at] = widths[at]! + endWidth
       }
       // No break comes before white space (UAX #14 LB7), so none inside a run of preserved spaces
       // and tabs that goes on from the item before, but in WebKit (whiteSpaceItemBreaks).
@@ -529,7 +550,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
       }
       const units = getSourceUnits(offsets, normalizedStart, textEnd, starts[index]!)
       if (units !== null) (sourceUnits ??= new Array<number[] | null>(flags.length).fill(null))[at] = units
-      if (sub.entryGeometry !== null && sub.entryGeometry[s] !== null) (entryGeometry ??= new Array<SegmentEntryGeometry | null>(flags.length).fill(null))[at] = sub.entryGeometry[s]!
+      if (sub.entryGeometry !== null && sub.entryGeometry[s] !== null) {
+        const geometry = sub.entryGeometry[s]!
+        // Entries start inside the segment, so they have already passed its start width.
+        // Their last prefix and whole-tail fit still pay its end width. Copy the cached facts.
+        ;(entryGeometry ??= new Array<SegmentEntryGeometry | null>(flags.length).fill(null))[at] = holdsEnd ? addEndWidth(geometry, endWidth) : geometry
+      }
       if (sub.lineStartProhibitions !== null && sub.lineStartProhibitions[s] !== null) (lineStartProhibitions ??= new Array<Uint8Array | null>(flags.length).fill(null))[at] = sub.lineStartProhibitions[s]!
       if (sub.breakableLineStartExtras !== null && sub.breakableLineStartExtras[s] !== null) (breakableLineStartExtras ??= new Array<number[] | null>(flags.length).fill(null))[at] = sub.breakableLineStartExtras[s]!
       const startExtra = (sub.lineStartExtras === null ? 0 : sub.lineStartExtras[s]!) + (i > first ? extraWidth : 0)
@@ -554,7 +580,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // narrower than the halt less that edge, which wraps where Chrome keeps it
         // (ENGINE_FOLLOWUPS.md, Rich-inline item edges). The walkers that take every boundary for
         // a break end the line after a trimmed segment, so the paragraph isn't theirs.
-        if (endTrim !== 0 && i === to - 1 && to < count && extraWidth === 0 && !analysis.texts[i]!.endsWith('\u3000')) {
+        if (endTrim !== 0 && i === to - 1 && to < count && extraWidth === 0 && endWidth === 0 && !analysis.texts[i]!.endsWith('\u3000')) {
           ;(itemEndHalts ??= zeroList(flags.length))[at] = endTrim
           simple = false
         }
@@ -568,14 +594,14 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // item's result and the line goes on: Chrome 154 lays out `文字」`, a span `.` and `字` as
         // `文` / `字」.` / `字` at 28.5-31.75px, where their text in one node ends the second line
         // after the mark.
-        if (retryTrim !== 0 && i === to - 1 && to < count && extraWidth === 0) {
+        if (retryTrim !== 0 && i === to - 1 && to < count && extraWidth === 0 && endWidth === 0) {
           ;(itemEndHalts ??= zeroList(flags.length))[at] = retryTrim
           simple = false
         }
       }
       if (sub.discretionaryHyphenContexts !== null) (discretionaryHyphenContexts ??= zeroList(flags.length))[at] = sub.discretionaryHyphenContexts[s]!
-      if (i >= first && first < to) (insideExtras ??= zeroList(flags.length))[at] = extraWidth
-      if (i > first && first < to) (fillExtras ??= zeroList(flags.length))[at] = extraWidth
+      if (extraWidth !== 0 && i >= first && first < to) (insideExtras ??= zeroList(flags.length))[at] = extraWidth
+      if (extraWidth !== 0 && i > first && first < to) (fillExtras ??= zeroList(flags.length))[at] = extraWidth
     }
     from = to
   }
@@ -885,6 +911,20 @@ function getOpeningFit(flags: number[], from: number, to: number, extraWidth: nu
     return onlyOpening ? extraWidth : extraWidth / 2
   }
   return extraWidth
+}
+
+// A one-time end width belongs to the last grapheme even when an entry reshapes the tail.
+function addEndWidth(geometry: SegmentEntryGeometry, width: number): SegmentEntryGeometry {
+  const terminalPrefixes = geometry.terminalPrefixes.slice()
+  const end = terminalPrefixes.length - 1
+  terminalPrefixes[end] = terminalPrefixes[end]! + width
+  const entries = geometry.entries.map((entry, start) => {
+    if (entry === null) return null
+    const head = entry.head.slice()
+    if (start + head.length === end) head[head.length - 1] = head[head.length - 1]! + width
+    return { head, admissionFit: entry.admissionFit + width }
+  })
+  return { terminalPrefixes, entries }
 }
 
 // The width on a line of graphemes [from, to) of segment i, to its end where `to` is -1: a line

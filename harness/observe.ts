@@ -276,6 +276,11 @@ function buildParagraph(c: Case): { element: HTMLDivElement; nodes: Array<Text |
       span.style.setProperty('box-decoration-break', 'clone')
       span.style.setProperty('-webkit-box-decoration-break', 'clone')
     }
+    if (run.outerPadding !== undefined) {
+      span.style.paddingInline = `${run.outerPadding[0]}px ${run.outerPadding[1]}px`
+      span.style.setProperty('box-decoration-break', 'slice')
+      span.style.setProperty('-webkit-box-decoration-break', 'slice')
+    }
     if (run.atomic === true) {
       span.style.display = 'inline-block'
       span.style.whiteSpace = 'nowrap'

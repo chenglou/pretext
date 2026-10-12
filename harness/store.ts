@@ -216,14 +216,16 @@ export function caseProblem(c: Parsed<Case>): string | null {
     const run = p.runs[i]!
     if (typeof run.text !== 'string' || (run.node !== 'span' && run.node !== 'text')) return `run ${i}: bad text or node`
     if (fontProblem(run.font) !== null || typeof run.letterSpacing !== 'number' || typeof run.wordSpacing !== 'number') return `run ${i}: bad font or spacing`
-    if ((run.atomic !== undefined || run.padding !== undefined) && run.node !== 'span') return `run ${i}: only a span can be atomic or padded`
+    if ((run.atomic !== undefined || run.padding !== undefined || run.outerPadding !== undefined) && run.node !== 'span') return `run ${i}: only a span can be atomic or padded`
     // A bare text node takes the paragraph's styles in the browser, and the adapter reads them from the run.
     const f = run.font
     if (run.node === 'text' && (f.family !== p.font.family || f.size !== p.font.size || f.weight !== p.font.weight || f.style !== p.font.style
       || run.letterSpacing !== p.letterSpacing || run.wordSpacing !== p.wordSpacing || run.lang !== null)) return `run ${i}: a bare text run must carry the paragraph's font and spacing, and no lang`
     if (run.atomic !== undefined && run.atomic !== true) return `run ${i}: atomic must be true or absent`
     if (run.padding !== undefined && !(run.padding > 0)) return `run ${i}: padding must be positive or absent`
-    if (run.box !== undefined && (run.node !== 'span' || run.text !== '￼' || run.atomic !== undefined || run.padding !== undefined
+    if (run.outerPadding !== undefined && (run.padding !== undefined
+      || run.outerPadding.some(width => !Number.isFinite(width) || width < 0))) return `run ${i}: outerPadding needs two finite nonnegative widths and no cloned padding`
+    if (run.box !== undefined && (run.node !== 'span' || run.text !== '￼' || run.atomic !== undefined || run.padding !== undefined || run.outerPadding !== undefined
       || !(run.box.width >= 0) || !(run.box.height >= 0))) return `run ${i}: a box must be a span of U+FFFC, neither atomic nor padded, with a width and a height`
   }
   if (c.sample !== undefined && (typeof c.sample.group !== 'string' || !(c.sample.weight > 0) || (c.sample.standIn !== undefined && c.sample.standIn !== true))) return 'sample needs a group, a positive weight and standIn true or absent'

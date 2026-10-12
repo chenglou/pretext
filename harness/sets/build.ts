@@ -78,10 +78,10 @@ export function fixturesOf(runs: readonly TextRun[]): string[] {
   return out.sort()
 }
 
-export type RunOptions = { letterSpacing?: number; atomic?: true; padding?: number }
+export type RunOptions = { letterSpacing?: number; atomic?: true; padding?: number; outerPadding?: readonly [number, number] }
 
 export function span(text: string, runFont: CssFont, options: RunOptions = {}): TextRun {
-  return { text, node: 'span', font: runFont, letterSpacing: options.letterSpacing ?? 0, wordSpacing: 0, lang: null, ...(options.atomic === true ? { atomic: true } : {}), ...(options.padding === undefined ? {} : { padding: options.padding }) }
+  return { text, node: 'span', font: runFont, letterSpacing: options.letterSpacing ?? 0, wordSpacing: 0, lang: null, ...(options.atomic === true ? { atomic: true } : {}), ...(options.padding === undefined ? {} : { padding: options.padding }), ...(options.outerPadding === undefined ? {} : { outerPadding: options.outerPadding }) }
 }
 
 // A box of this width and height (TextRun). No text draws it, so its font, which nothing reads, is the paragraph's.

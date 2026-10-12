@@ -55,6 +55,8 @@ export type TextRun = {
   // on each side, repeated on every line the span reaches (rich-inline's `extraWidth` is twice it).
   atomic?: true
   padding?: number
+  // CSS box-decoration-break: slice, with distinct start/end padding.
+  outerPadding?: readonly [number, number]
   // A span only: a box, rich-inline's RichInlineBox, drawn as an empty inline-block of this width and height with
   // `vertical-align: top`, whose text is one U+FFFC, which stands for it in the paragraph's source offsets.
   box?: { width: number; height: number }
@@ -107,7 +109,7 @@ function sameStyle(a: TextRun, b: TextRun): boolean {
 export function isRich(runs: readonly TextRun[]): boolean {
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]!
-    if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined || run.box !== undefined) return true
+    if ((runs.length > 1 && run.node === 'span') || !sameStyle(run, runs[0]!) || run.atomic === true || run.padding !== undefined || run.outerPadding !== undefined || run.box !== undefined) return true
   }
   return false
 }

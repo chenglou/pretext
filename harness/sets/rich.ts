@@ -512,5 +512,16 @@ export function richTemplates(): Template[] {
     const [family, base, parts, lang, wordBreak, whiteSpace] = atEdges[i]!
     out.push(template(family, origins[family]!, base, parts, lang, wordBreak, whiteSpace))
   }
+  // First/last-fragment chrome: ordinary word wrapping, emergency wrapping, an atomic
+  // span and a forced break. Width search keeps the distinct break behaviours.
+  for (const [text, atomic, whiteSpace] of [
+    ['one two three four', false, 'normal'],
+    ['abcdefghijklmno', false, 'normal'],
+    ['tag', true, 'normal'],
+    ['one\ntwo three', false, 'pre-wrap'],
+  ] as const) {
+    out.push(template('outer-padding', 'issue #454: widths at the two ends of a wrapped item', ARIAL,
+      [item('before '), span(text, ARIAL, { outerPadding: [3, 7], ...(atomic ? { atomic: true } : {}) }), item(' after')], 'en', 'normal', whiteSpace))
+  }
   return out
 }
