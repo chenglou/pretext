@@ -882,6 +882,62 @@ describe('shared public contracts', () => {
     expect(prepareFor(other, other.text, FONT)).toBe(good)
   })
 
+  test('every line function takes the handle prepareFor() keeps for a key', () => {
+    // A key's handle is a prepare() handle, which every line function takes, the three that
+    // return line text too: they build its segments' text the first time. So no line function
+    // needs a form that takes the text. One key through every text, option set and width in
+    // turn, its handle asked for where it is used, against a prepareWithSegments() handle.
+    const texts = [
+      'internationalization of supercalifragilistic layouts',
+      "Just tried the new update and it's so much better, especially on older devices.",
+      'a\tbb trans\u00ADatlantic 中文字 Superlongword of  spaces',
+      'مرحبا بالعالم 12,345.67 שלום',
+      'line one\nline two\n',
+      '',
+    ]
+    const optionSets: (PrepareOptions | undefined)[] = [undefined, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 2 }]
+    const key = {}
+    for (const text of texts) for (const options of optionSets) {
+      const kept = prepareWithSegments(text, FONT, options)
+      expect(measureNaturalWidth(prepareFor(key, text, FONT, options))).toBe(measureNaturalWidth(kept))
+      for (const width of [0, 9, 40, 85.5, 160, Infinity]) {
+        const expected = layoutWithLines(kept, width, LINE_HEIGHT)
+        expect(layoutWithLines(prepareFor(key, text, FONT, options), width, LINE_HEIGHT)).toEqual(expected)
+        expect(measureLineStats(prepareFor(key, text, FONT, options), width)).toEqual(measureLineStats(kept, width))
+        const walked: unknown[] = []
+        const count = walkLineRanges(prepareFor(key, text, FONT, options), width, range => walked.push(materializeLineRange(prepareFor(key, text, FONT, options), range)))
+        expect(count).toBe(expected.lineCount)
+        expect(walked).toEqual(expected.lines)
+        // The streams, the width before the cursor: each line asks for the key's handle again.
+        const lines: unknown[] = []
+        for (let line = layoutNextLine(prepareFor(key, text, FONT, options), width); line !== null && lines.length <= expected.lineCount; line = layoutNextLine(prepareFor(key, text, FONT, options), width, line.end)) lines.push(line)
+        expect(lines).toEqual(expected.lines)
+        const ranges: unknown[] = []
+        for (let range = layoutNextLineRange(prepareFor(key, text, FONT, options), width); range !== null && ranges.length <= expected.lineCount; range = layoutNextLineRange(prepareFor(key, text, FONT, options), width, range.end)) ranges.push(materializeLineRange(prepareFor(key, text, FONT, options), range))
+        expect(ranges).toEqual(expected.lines)
+        expect(layoutFor(key, text, FONT, width, LINE_HEIGHT, options)).toEqual({ lineCount: expected.lineCount, height: expected.height })
+      }
+    }
+
+    // A cursor is a place in the text's segments, which come from the text, the options and
+    // the language and not from the font. So a line's end kept across clearCache(), or
+    // across another font for the same key, is where the next line starts in the key's new
+    // handle; across an edit it is a place in the old text.
+    const message = { text: 'hello brave new world of text layout, line after line' }
+    const firstLine = layoutNextLine(prepareFor(message, message.text, FONT), 80)!
+    const rest = (prepared: PreparedText, cursor: LayoutCursor): string[] => {
+      const lines: string[] = []
+      for (let line = layoutNextLine(prepared, 80, cursor); line !== null && lines.length < 99; line = layoutNextLine(prepared, 80, line.end)) lines.push(line.text)
+      return lines
+    }
+    const before = rest(prepareFor(message, message.text, FONT), firstLine.end)
+    clearCache()
+    expect(rest(prepareFor(message, message.text, FONT), firstLine.end)).toEqual(before)
+    const wider = rest(prepareFor(message, message.text, '18px Test Sans'), firstLine.end)
+    expect(wider).toEqual(rest(prepareWithSegments(message.text, '18px Test Sans'), firstLine.end))
+    expect(wider.join('')).toBe(before.join(''))
+  })
+
   test('prepareRichInlineFor() gives what prepareRichInline() gives for its key, reusing the paragraph while every item and option is the same', () => {
     type Items = Array<RichInlineItem | RichInlineBox>
     // Every rich line function's answer from one handle.
