@@ -28,6 +28,7 @@ let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
 let layout: LayoutModule['layout']
 let layoutText: LayoutModule['layoutText']
+let layoutTextWithLines: LayoutModule['layoutTextWithLines']
 let layoutFor: LayoutModule['layoutFor']
 let prepareFor: LayoutModule['prepareFor']
 let layoutWithLines: LayoutModule['layoutWithLines']
@@ -309,6 +310,7 @@ beforeAll(async () => {
     prepareWithSegments,
     layout,
     layoutText,
+    layoutTextWithLines,
     layoutFor,
     prepareFor,
     layoutWithLines,
@@ -730,6 +732,55 @@ describe('shared public contracts', () => {
     expect(callsOf(() => layoutText(words, FONT, 0, LINE_HEIGHT))).toBe(every)
     // prepare() itself asks what it always asked.
     expect(callsOf(() => prepare(words, FONT))).toBe(every)
+  })
+
+  test('layoutTextWithLines() gives what layoutWithLines(prepareWithSegments()) gives, with no handle, and asks where a word is cut only for words wider than its width', () => {
+    const texts = [
+      'internationalization of supercalifragilistic layouts',
+      "Just tried the new update and it's so much better, especially on older devices.",
+      'a\tbb trans\u00ADatlantic 中文字 Superlongword of  spaces',
+      '这是一段中文文本，用于测试「文本布局」库。每个字符之间都可以断行。',
+      'مرحبا بالعالم 12,345.67 שלום',
+      'aaaa A \u000BV bbbb cc foo\u0000bar baz',
+      'To Tokyo\u200Bzero\u200Bwidth breaks',
+      'line one\nline two\n',
+      '',
+      '   ',
+    ]
+    const optionSets: (PrepareOptions | undefined)[] = [undefined, { whiteSpace: 'pre-wrap' }, { wordBreak: 'keep-all' }, { letterSpacing: 2 }]
+    for (const text of texts) for (const options of optionSets) {
+      for (const width of [-5, 0, 9, 40, 85.5, 137.5, 160, 320, 1000, Infinity, NaN]) {
+        // Each asks an empty cache, then layoutTextWithLines() a full one, which makes no Canvas call.
+        clearCache()
+        const expected = layoutWithLines(prepareWithSegments(text, FONT, options), width, LINE_HEIGHT)
+        clearCache()
+        expect(layoutTextWithLines(text, FONT, width, LINE_HEIGHT, options)).toEqual(expected)
+        const before = canvasMeasurementCount
+        expect(layoutTextWithLines(text, FONT, width, LINE_HEIGHT, options)).toEqual(expected)
+        expect(canvasMeasurementCount).toBe(before)
+        // Its count is layoutText()'s, and a stream over a handle prepared after it goes on
+        // from the end of any of its lines.
+        expect(layoutText(text, FONT, width, LINE_HEIGHT, options)).toEqual({ lineCount: expected.lineCount, height: expected.height })
+        const after = prepare(text, FONT, options)
+        for (let i = 0; i < expected.lines.length && i < 3; i++) {
+          const next = layoutNextLine(after, width, expected.lines[i]!.end)
+          expect(next).toEqual(i + 1 < expected.lines.length ? expected.lines[i + 1]! : null)
+        }
+      }
+    }
+
+    // 160px, 16px, 176px and 56px words: at 400px none can be cut, and at 10px all can.
+    const words = 'internationalization of supercalifragilistic layouts'
+    const callsOf = (run: () => void): number => {
+      clearCache()
+      const before = canvasMeasurementCount
+      run()
+      return canvasMeasurementCount - before
+    }
+    const every = callsOf(() => layoutWithLines(prepareWithSegments(words, FONT), 400, LINE_HEIGHT))
+    expect(callsOf(() => layoutTextWithLines(words, FONT, 400, LINE_HEIGHT))).toBeLessThan(every)
+    expect(callsOf(() => layoutTextWithLines(words, FONT, 400, LINE_HEIGHT))).toBe(callsOf(() => layoutText(words, FONT, 400, LINE_HEIGHT)))
+    expect(callsOf(() => layoutTextWithLines(words, FONT, 10, LINE_HEIGHT))).toBe(every)
   })
 
   test('a least layout width spares the cut-word questions of the words narrower than it, and changes no line from that width up', () => {

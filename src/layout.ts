@@ -199,24 +199,42 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
   return { lineCount, height: lineCount * lineHeight }
 }
 
+// The handle of a text that is laid out at one width and dropped: prepareInternal()'s steps
+// with that width as the least the handle is laid out at, so that preparation asks Canvas
+// where a word could be cut only for the words wider than it (measureAnalysis). A copy of
+// those steps, whose width is the call's and not an option's: with the width threaded through
+// prepareInternal(), Chrome 154 prepared text seen before 2% slower for every caller.
+function prepareAtWidth(text: string, font: string, width: number, includeSegments: boolean, options: PrepareOptions | undefined): InternalPreparedText {
+  const wordBreak = options?.wordBreak ?? 'normal'
+  const engineProfile = getEngineProfile()
+  const letterSpacing = readLetterSpacing(options?.letterSpacing, engineProfile)
+  const language = getPreparationLanguage(engineProfile)
+  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
+  return measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null, width) as InternalPreparedText
+}
+
 // A text's line count and height at one width, from the text itself, with no handle to keep:
 // what layout(prepare(text, font, options), maxWidth, lineHeight) returns, every call. It
 // keeps nothing of the text and shares the font's width cache with prepare(), so a repeat makes
 // no Canvas call. It prepares on every call, about a hundred layouts' work, so text laid out
 // at more than one width, or thousands of texts a frame, still want prepare() and layout().
 // Knowing its one width, it asks Canvas where a word could be cut only for the words wider
-// than that width (measureAnalysis), so it is also the cheapest first sight of a text. Its
-// own copy of prepareInternal()'s steps, whose width is the call's and not an option's.
+// than that width (prepareAtWidth), so it is also the cheapest first sight of a text.
 export function layoutText(text: string, font: string, maxWidth: number, lineHeight: number, options?: PrepareOptions): LayoutResult {
   const width = normalizeMaxWidth(maxWidth)
-  const wordBreak = options?.wordBreak ?? 'normal'
-  const engineProfile = getEngineProfile()
-  const letterSpacing = readLetterSpacing(options?.letterSpacing, engineProfile)
-  const language = getPreparationLanguage(engineProfile)
-  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  const prepared = measureAnalysis(analysis, 0, analysis.flags.length, font, false, letterSpacing, engineProfile, language, true, null, width) as InternalPreparedText
-  const lineCount = countPreparedLines(prepared, width)
+  const lineCount = countPreparedLines(prepareAtWidth(text, font, width, false, options), width)
   return { lineCount, height: lineCount * lineHeight }
+}
+
+// A text's lines at one width, from the text itself: what
+// layoutWithLines(prepareWithSegments(text, font, options), maxWidth, lineHeight) returns,
+// every call, with layoutText()'s saving on a text seen for the first time. For text painted
+// once at one width. The lines' cursors are places in the text's segments, which no handle
+// of the app's holds: a handle prepared later from the same text and options has the same
+// segments, so a line stream can go on from one. A line stream itself has a width per line
+// and takes a handle.
+export function layoutTextWithLines(text: string, font: string, maxWidth: number, lineHeight: number, options?: PrepareOptions): LayoutLinesResult {
+  return layoutWithLines(prepareAtWidth(text, font, normalizeMaxWidth(maxWidth), true, options), maxWidth, lineHeight)
 }
 
 // What layoutFor() and prepareFor() keep for one key: the handle, what it was prepared from,
