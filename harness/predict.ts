@@ -368,6 +368,7 @@ export function richItems(runs: readonly TextRun[]): Array<RichInlineItem | Rich
     }
     items.push({
       text: run.text, font: canvasFont(run.font), ...(run.letterSpacing === 0 ? {} : { letterSpacing: run.letterSpacing }),
+      ...(run.outerPadding === undefined ? {} : { startWidth: run.outerPadding[0], endWidth: run.outerPadding[1] }),
       ...(run.atomic === true ? { break: 'never' as const } : {}), ...(run.padding === undefined ? {} : { extraWidth: 2 * run.padding }),
     })
   }

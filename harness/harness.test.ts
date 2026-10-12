@@ -21,7 +21,7 @@ import {
   acceptedPath, assertSameEnvironment, caseProblem, countedPath, historyPath, parseRecording, readAccepted, readHistory, readRecordings, readVarying, recordingsPath, recordingText,
   splitHistory, varyingPath, writeAccepted, writeHistory, writeRecordings, type Varying,
 } from './store.ts'
-import type { Case, Failure, Prediction, Recording, Rect, TextRun } from './types.ts'
+import { isRich, type Case, type Failure, type Prediction, type Recording, type Rect, type TextRun } from './types.ts'
 
 // A browser stand-in: the text laid out with a line starting at each of `starts`, every code point 8 px wide (a space 4)
 // and 18 px tall in a 20 px line. Returns the recording `record` would make and the rect reader it made it from.
@@ -356,6 +356,25 @@ describe('the stored recordings', () => {
       c.paragraph.runs[1] = run
       expect(caseProblem(c)).toContain('a box must be')
     }
+  })
+
+  test('outer padding routes even one span to rich inline and refuses ambiguous cloned padding', () => {
+    const c = paragraphCase('a highlighted phrase')
+    const run = c.paragraph.runs[0]!
+    run.node = 'span'
+    run.outerPadding = [3, 7]
+    expect(isRich(c.paragraph.runs)).toBe(true)
+    expect(caseProblem(c)).toBeNull()
+    run.padding = 4
+    expect(caseProblem(c)).toContain('no cloned padding')
+    delete run.padding
+    for (const width of [-1, NaN, Infinity]) {
+      run.outerPadding = [width, 7]
+      expect(caseProblem(c)).toContain('finite nonnegative')
+    }
+    run.outerPadding = [0, 0]
+    run.node = 'text'
+    expect(caseProblem(c)).toContain('only a span')
   })
 
   test('a stale environment key refuses to score: a browser update would read as library regressions or fixes', () => {

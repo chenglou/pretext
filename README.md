@@ -189,7 +189,9 @@ type RichInlineItem = {
   font: string // canvas font shorthand for this item
   letterSpacing?: number // extra horizontal spacing between graphemes, in CSS px
   break?: 'normal' | 'never' // `never` makes the item atomic: one box that can't break inside, as CSS `display: inline-block` does. A line can break on either side of it, whatever touches it
-  extraWidth?: number // extra width around the text, e.g. padding and borders
+  extraWidth?: number // extra width around every fragment, e.g. padding and borders
+  startWidth?: number // finite nonnegative CSS px on the first content fragment only
+  endWidth?: number // finite nonnegative CSS px on the last content fragment only
 }
 type RichInlineBox = {
   width: number // the room an object inside the line takes, e.g. an image, in CSS px: its element's margin box. Finite and at least 0
@@ -204,26 +206,26 @@ type RichInlineFragment = {
   text: string // Text slice for this fragment
   gapBefore: number // collapsed space before this fragment, in pixels; 0 when there's none
   gapItemIndex: number // index of the item whose collapsed space gapBefore measures, or -1 when no space precedes this fragment on this line
-  occupiedWidth: number // text width plus extraWidth, or a box's width
+  occupiedWidth: number // text width plus this fragment's extraWidth/startWidth/endWidth, or a box's width
   sourceStart: number // where `text` starts in the item's `text`, as a UTF-16 offset
   sourceEnd: number // where it ends there
 }
 type RichInlineLine = {
   fragments: RichInlineFragment[] // Materialized fragments on this line
-  width: number // Measured width of this line, including gapBefore/extraWidth
+  width: number // Measured width of this line, including gapBefore and the fragment widths
   end: RichInlineCursor // Exclusive end cursor for continuing the next line
 }
 type RichInlineFragmentRange = {
   itemIndex: number // index back into the items prepareRichInline() took
   gapBefore: number // collapsed space before this fragment, in pixels; 0 when there's none
   gapItemIndex: number // index of the item whose collapsed space gapBefore measures, or -1 when no space precedes this fragment on this line
-  occupiedWidth: number // text width plus extraWidth, or a box's width
+  occupiedWidth: number // text width plus this fragment's extraWidth/startWidth/endWidth, or a box's width
   start: LayoutCursor // Start cursor within the item's part of the paragraph
   end: LayoutCursor // End cursor within the item's part of the paragraph
 }
 type RichInlineLineRange = {
   fragments: RichInlineFragmentRange[] // Non-materialized fragment ownership/ranges on this line
-  width: number // Measured width of this line, including gapBefore/extraWidth
+  width: number // Measured width of this line, including gapBefore and the fragment widths
   end: RichInlineCursor // Exclusive end cursor for continuing the next line
 }
 type RichInlineStats = {
@@ -247,7 +249,7 @@ Notes:
 - Paint a `never` item as `display: inline-block; white-space: nowrap`. A span with only `white-space: nowrap` stays in the text's flow, so the browser keeps a `:` or `'s` right after it on its line, where Pretext can break before them.
 - A rich-inline fragment's `gapBefore` is a space in the font and letter spacing of item `gapItemIndex`: the fragment's own item, the previous fragment's item, or an item holding only whitespace, which gets no fragment. Draw the space inside that item's element so it paints at that width. An atomic item's own leading and trailing white space makes no gap, as browsers trim it inside the item's inline-block.
 - In `pre-wrap`, rich-inline fragments have no gaps: a fragment's `text` keeps its spaces, and its `occupiedWidth`, like the line's `width`, leaves out what hangs at the line's end.
-- A rich-inline item that wraps is charged its whole `extraWidth` on every line it reaches, as CSS `box-decoration-break: clone` pads a span, where CSS's default pads only the span's two ends. Paint each fragment as its own element with the padding on both sides, as the demos do: a padded span the browser wraps itself can break elsewhere, with `clone` too. Spans without padding can too: items are measured apart, where Chrome and Firefox kern across neighbouring elements in one font.
+- A rich-inline item's `extraWidth` is charged on every line it reaches. Use `startWidth` and `endWidth` for chrome charged only once at the item's outer content edges, for example `{ text: 'a highlighted phrase', font: '16px Arial', startWidth: 4, endWidth: 4 }`. They default to zero, add to `extraWidth`, and both count on an atomic item. Empty items and non-atomic items of only collapsible whitespace stay empty. The end width stays with the last content before trailing whitespace or a hard break. Paint the corresponding widths on the fragments you render: native CSS `box-decoration-break: slice` can still wrap differently around whitespace and fullwidth punctuation, since Pretext fits the end width together with the last grapheme. Spans without padding can differ too: items are measured apart, where Chrome and Firefox kern across neighbouring elements in one font.
 - Segment widths are browser-canvas widths for line breaking, not enough to position individual characters in Arabic or mixed bidi text. They don't always add up to a line's width either: a tab's is 0, the letter spacing after a segment's last letter isn't in it, and a line broken at a soft hyphen adds its hyphen. For a width, read the line's `width`, or call `measureNaturalWidth()` for the whole text.
 
 ## Caveats

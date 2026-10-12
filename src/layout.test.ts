@@ -3972,6 +3972,123 @@ describe('prepare invariants', () => {
 })
 
 describe('rich-inline invariants', () => {
+  test('outer widths are paid only by the first and last content fragments', () => {
+    const prepared = prepareRichInline([{ text: 'aa bb cc dd', font: FONT, startWidth: 6, endWidth: 10 }])
+    const maxWidth = measureWidth('aa bb', FONT) + 4
+    const ranges: RichInlineLineRange[] = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => ranges.push(range))
+    const lines = ranges.map(range => materializeRichInlineLineRange(prepared, range))
+    expect(lines.map(line => line.fragments[0]!.text)).toEqual(['aa ', 'bb cc ', 'dd'])
+    const expectedWidths = [measureWidth('aa', FONT) + 6, measureWidth('bb cc', FONT), measureWidth('dd', FONT) + 10]
+    for (let i = 0; i < lines.length; i++) {
+      expect(lines[i]!.width).toBeCloseTo(expectedWidths[i]!, 8)
+      expect(lines[i]!.fragments[0]!.occupiedWidth).toBeCloseTo(expectedWidths[i]!, 8)
+      expect(layoutNextRichInlineLineRange(prepared, maxWidth, i === 0 ? undefined : ranges[i - 1]!.end)).toEqual(ranges[i]!)
+    }
+    expect(lines.map(line => [line.fragments[0]!.sourceStart, line.fragments[0]!.sourceEnd])).toEqual([[0, 3], [3, 9], [9, 11]])
+    expect(measureRichInlineStats(prepared, maxWidth)).toEqual({ lineCount: 3, maxLineWidth: Math.max(...expectedWidths) })
+    expect(measureRichInlineStats(prepared, Infinity).maxLineWidth).toBeCloseTo(measureWidth('aa bb cc dd', FONT) + 16, 8)
+    // Once prepared, resize, stream, materialize and structured-clone operations need no Canvas.
+    const measurements = canvasMeasurementCount
+    const copied = structuredClone(prepared)
+    for (const width of [0, 10, maxWidth, 1000]) {
+      expect(measureRichInlineStats(copied, width)).toEqual(measureRichInlineStats(prepared, width))
+      walkRichInlineLineRanges(copied, width, range => materializeRichInlineLineRange(copied, range))
+    }
+    expect(canvasMeasurementCount).toBe(measurements)
+  })
+
+  test('outer widths stay on endpoint graphemes during emergency wrapping and do not alter cached advances', () => {
+    const text = 'aaaaaa'
+    const baseline = prepareRichInline([{ text, font: FONT }])
+    const maxWidth = measureWidth('aa', FONT) + 3
+    const expected = measureRichInlineStats(baseline, maxWidth)
+    const prepared = prepareRichInline([{ text, font: FONT, startWidth: 3, endWidth: 4 }])
+    const lines: Array<[string, number]> = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push([line.fragments[0]!.text, line.width])
+    })
+    expect(lines.map(line => line[0])).toEqual(['aa', 'aa', 'a', 'a'])
+    for (let i = 0; i < lines.length; i++) {
+      expect(lines[i]![1]).toBeCloseTo(measureWidth(lines[i]![0], FONT) + (i === 0 ? 3 : i === lines.length - 1 ? 4 : 0), 8)
+    }
+    expect(measureRichInlineStats(baseline, maxWidth)).toEqual(expected)
+    expect(measureRichInlineStats(prepareRichInline([{ text, font: FONT }]), maxWidth)).toEqual(expected)
+    const one = prepareRichInline([{ text: 'a', font: FONT, startWidth: 30, endWidth: 40 }])
+    expect(measureRichInlineStats(one, 1)).toEqual({ lineCount: 1, maxLineWidth: measureWidth('a', FONT) + 70 })
+  })
+
+  test('outer widths compose with repeated chrome, atomic items, whitespace and neighbouring items', () => {
+    for (const extraWidth of [0, 5]) {
+      const prepared = prepareRichInline([{ text: 'aa bb cc', font: FONT, extraWidth, startWidth: 3, endWidth: 7 }])
+      const lines: number[] = []
+      walkRichInlineLineRanges(prepared, measureWidth('aa', FONT) + 12, range => lines.push(range.width))
+      expect(lines).toEqual([measureWidth('aa', FONT) + extraWidth + 3, measureWidth('bb', FONT) + extraWidth, measureWidth('cc', FONT) + extraWidth + 7])
+      const atomic = prepareRichInline([{ text: ' aa bb ', font: FONT, break: 'never', extraWidth, startWidth: 3, endWidth: 7 }])
+      expect(measureRichInlineStats(atomic, 1)).toEqual({ lineCount: 1, maxLineWidth: measureWidth('aa bb', FONT) + extraWidth + 10 })
+    }
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      const items: RichInlineItem[] = [{ text: 'aa ', font: FONT }, { text: 'bb cc', font: FONT, startWidth: 3, endWidth: 7 }, { text: ' dd', font: FONT }]
+      const prepared = prepareRichInline(items, { whiteSpace })
+      const range = layoutNextRichInlineLineRange(prepared, Infinity)!
+      const line = materializeRichInlineLineRange(prepared, range)
+      expect(line.width).toBeCloseTo(measureWidth('aa bb cc dd', FONT) + 10, 8)
+      expect(line.fragments[1]!.occupiedWidth).toBeCloseTo(measureWidth('bb cc', FONT) + 10, 8)
+    }
+    const forced = prepareRichInline([{ text: 'aa\nbb\ncc', font: FONT, startWidth: 3, endWidth: 7 }], { whiteSpace: 'pre-wrap' })
+    const widths: number[] = []
+    walkRichInlineLineRanges(forced, Infinity, line => widths.push(line.width))
+    expect(widths).toEqual([measureWidth('aa', FONT) + 3, measureWidth('bb', FONT), measureWidth('cc', FONT) + 7])
+    expect(measureRichInlineStats(prepareRichInline([{ text: '', font: FONT, startWidth: 3, endWidth: 7 }]), 100)).toEqual({ lineCount: 0, maxLineWidth: 0 })
+    const trimmed = prepareRichInline([{ text: ' aa bb ', font: FONT, startWidth: 3, endWidth: 7 }])
+    expect(measureRichInlineStats(trimmed, Infinity).maxLineWidth).toBeCloseTo(measureWidth('aa bb', FONT) + 10, 8)
+  })
+
+  test('outer widths keep reshaped continuation geometry consistent without mutating shared measurements', () => {
+    const profile = getEngineProfile()
+    const previous = profile.entryFitBasis
+    try {
+      for (const basis of ['fresh', 'original'] as const) {
+        profile.entryFitBasis = basis
+        clearCache()
+        for (const text of ['a\u2060\u0301bXYZ', 'a\u2060\u0301b']) {
+          const plain = prepareRichInline([{ text, font: FONT }])
+          const before = measureRichInlineStats(plain, 15)
+          const decorated = prepareRichInline([{ text, font: FONT, startWidth: 3, endWidth: 7 }])
+          for (const width of [1, 10, 15, 25, 40, 1000]) {
+            const ranges: RichInlineLineRange[] = []
+            walkRichInlineLineRanges(decorated, width, range => ranges.push(range))
+            for (let i = 0; i < ranges.length; i++) {
+              const range = ranges[i]!
+              expect(layoutNextRichInlineLineRange(decorated, width, i === 0 ? undefined : ranges[i - 1]!.end)).toEqual(range)
+              const line = materializeRichInlineLineRange(decorated, range)
+              expect(line.fragments.reduce((sum, f) => sum + f.gapBefore + f.occupiedWidth, 0)).toBeCloseTo(range.width, 8)
+            }
+            expect(measureRichInlineStats(decorated, width)).toEqual({ lineCount: ranges.length, maxLineWidth: Math.max(...ranges.map(r => r.width)) })
+          }
+          expect(measureRichInlineStats(plain, 15)).toEqual(before)
+          expect(measureRichInlineStats(prepareRichInline([{ text, font: FONT }]), 15)).toEqual(before)
+          expect(measureRichInlineStats(decorated, Infinity).maxLineWidth).toBeCloseTo(measureRichInlineStats(plain, Infinity).maxLineWidth + 10, 8)
+        }
+      }
+    } finally {
+      profile.entryFitBasis = previous
+      clearCache()
+    }
+  })
+
+  test('outer widths reject nonfinite or negative lengths', () => {
+    for (const width of [-1, NaN, Infinity, -Infinity]) {
+      for (const field of ['startWidth', 'endWidth']) {
+        expect(() => prepareRichInline([{ text: 'a', font: FONT, [field]: width }])).toThrow(RangeError)
+      }
+    }
+    const plain = prepareRichInline([{ text: 'aa bb', font: FONT }])
+    const zero = prepareRichInline([{ text: 'aa bb', font: FONT, startWidth: 0, endWidth: 0 }])
+    expect(zero).toEqual(plain)
+  })
+
   test('rich boundary trimming preserves internal spaces and non-collapsible content', () => {
     for (const boundary of [' ', '\t', '\n', '\f', '\r']) {
       const prepared = prepareRichInline([
@@ -4027,7 +4144,7 @@ describe('rich-inline invariants', () => {
     const widths = [-1, 0, 0.5, 1, 8, 12, 20, 37.5, 60, 1000, Infinity]
     const expectSame = (text: string, options: Parameters<typeof prepareRichInline>[1], letterSpacings: readonly number[], font = FONT) => {
       for (const letterSpacing of letterSpacings) {
-        for (const style of [{}, { break: 'never' as const }, { extraWidth: 3 }]) {
+        for (const style of [{}, { break: 'never' as const }, { extraWidth: 3 }, { startWidth: 3, endWidth: 7 }]) {
           const one = prepareRichInline([{ text, font, letterSpacing, ...style }], options)
           const two = prepareRichInline([{ text, font, letterSpacing, ...style }, { text: '', font: FONT }], options)
           const whole = measureRichInlineStats(two, Infinity).maxLineWidth
