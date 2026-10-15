@@ -64,7 +64,9 @@ export type PreparedLineBreakData = {
 // own. A text's handle has no `items`, so its type, PreparedLineBreakData, doesn't name it.
 export type PreparedLineData = PreparedLineBreakData & { items?: ParagraphSegmentData }
 
-// What a rich-inline paragraph's items give its segments, per segment, each list null where no
+// What a rich-inline paragraph's items give its segments, per segment: `segmentItems`, each
+// segment's item, by which a line's fragments are cut (createLine in src/rich-inline.ts) and a
+// walk tells whether two segments are one text frame's, and these lists, each null where no
 // segment has a value of its own:
 // - `hyphenWidths`, `tabStopAdvances`, `minimumTabAdvances`: the hyphen a soft hyphen paints, the
 //   advance between a tab's stops and the least a tab advances, in the item's font, where two
@@ -92,13 +94,9 @@ export type PreparedLineData = PreparedLineBreakData & { items?: ParagraphSegmen
 //   it (setEmptyObjectFacts in src/rich-inline.ts): the width of the white space that ends the
 //   text before it as its last text frame's own, 0 where that text ends in other white space
 //   and -1 where it ends in none, and 1 where a line with a break before the object goes back
-//   to it, as what follows the object would stick out too;
-// - `hangEnds`: where the engine takes the hang out of each text frame's own width (EngineProfile,
-//   hangsSpacesPerTextFrame), 1 at a zero-width space that follows preserved spaces inside its own
-//   item: it ends the run of spaces that hang, which count in full once it follows them in their
-//   frame (BreakAndMeasureText, gfxTextRun.cpp:1152-1160), where one that starts an item is in the
-//   frame after theirs and the run goes on past it.
+//   to it, as what follows the object would stick out too.
 export type ParagraphSegmentData = {
+  segmentItems: Int32Array
   hyphenWidths: number[] | null
   tabStopAdvances: number[] | null
   minimumTabAdvances: number[] | null
@@ -109,7 +107,6 @@ export type ParagraphSegmentData = {
   openingEdges: number[] | null
   emptyObjectSpaces: number[] | null
   emptyObjectReturns: Uint8Array | null
-  hangEnds: Uint8Array | null
 }
 
 type InternalLineVisitor = (
@@ -503,8 +500,9 @@ function walkPreparedComplexLines(
   // after the spaces' own then starts at the line's end, where a zero-width space fits; where
   // that content is past the line's end, as a box wider than the line, the zero-width space
   // starts the next line, as a break comes before it after white space
-  // (nsLineBreaker.cpp:321-330), and so does one inside the spaces' own item, which ends their
-  // run (ParagraphSegmentData, hangEnds).
+  // (nsLineBreaker.cpp:321-330), and so does one right after the spaces in their own item, which
+  // ends their run: they count in full once it follows them in their frame (BreakAndMeasureText,
+  // gfxTextRun.cpp:1152-1160).
   const hangGoesOnPastEmpty = items !== undefined && engineProfile.hangsSpacesPerTextFrame
   const testsHyphenBeforeAtomic = engineProfile.testsHyphenBeforeAtomic
   const zeroWidthGlueTakesLine = engineProfile.zeroWidthGlueTakesLine
@@ -677,7 +675,8 @@ function walkPreparedComplexLines(
           // Bounded, Work Done Only Where A Rule Applies; Decisions Log, 2026-10-08).
           let hangs = (1 << kind & hangingKinds) !== 0
           if (hangGoesOnPastEmpty && kind === ZERO_WIDTH_BREAK && hangEndSegmentIndex === i &&
-            ((flags & DROPPED) !== 0 || (hangStartWidth - hangEdgesWidth <= fitLimit && (items.hangEnds === null || items.hangEnds[i] === 0)))) hangs = true
+            ((flags & DROPPED) !== 0 || (hangStartWidth - hangEdgesWidth <= fitLimit &&
+              !((segmentFlags[i - 1]! & KIND_BITS) === PRESERVED_SPACE && items.segmentItems[i] === items.segmentItems[i - 1])))) hangs = true
           if (hangs) {
             if (hangEndSegmentIndex !== i) {
               hangStartWidth = lineW - lineEndTrimmed + leadingSpacing
