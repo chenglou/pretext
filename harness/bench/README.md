@@ -305,14 +305,16 @@ before the glyph spacings did, costs a tenth as much there.
   Firefox's readings of this loop swing both ways with its form, on the same work or less, and Chrome's on `resize` come
   with V8 inlining the function into `layout()`: it is 474 bytes of bytecode on main, 461 as #525 was first built, 475
   in that last form and 450 with the one test, wherever the kind is read (Node 23.10's V8 12.9), and V8 inlines a
-  function of 460 or fewer (`RESEARCH.md`, JavaScript Engines, the 460-byte budget), so an edit that takes it back over
-  460 gives that gain back. The form is the one the code asks for (`RESEARCH.md`, Decisions Log, 2026-10-14). Against
-  main the change's last src reads this row +3.8% to +12.9% in Firefox over six sessions alone, Thai's +13.7% to +18.9%
-  and `worst: controls layout` +11.9% to +16.5%, both called, and `worst: invisible-tails layout` +6.1% to +15.0%. Three
-  runs of every row read this row +3.6% to +7.4%, called in two, and Thai's -7.0% to +1.8%, where the six sessions alone
-  read it 14% to 19% over; all three called `controls layout`, +11.4% to +20.3%, and `invisible-tails layout`, +5.2% to
-  +17.1%, and two called `worst: long-breakable-runs layout`, +2.5% to +18.2%, which six sessions alone read -10.2% to
-  +8.6% and the one test's commit alone +1.2% to +13.2%.
+  function of 460 or fewer (`RESEARCH.md`, JavaScript Engines, the 460-byte budget): on the bench's own bundles d8
+  15.4.80 refuses the first three and inlines the two of 450. So an edit that takes it back over 460 gives that gain
+  back. The form is the one the code asks for (`RESEARCH.md`, Decisions Log, 2026-10-14). Against main the change's last
+  src reads this row -2.0% to +12.9% in Firefox over six sessions alone, run twice, Thai's +4.9% to +24.2%, Arabic's
+  +2.3% to +9.5%, `worst: controls layout` +11.1% to +16.9% and `worst: invisible-tails layout` +6.1% to +15.0%: both
+  runs called `controls layout`, the first Thai's row and the second Arabic's and `invisible-tails layout`. Four runs of
+  every row read this row +3.6% to +7.4%, called in three, and Thai's -8.5% to +1.8%, where the sessions alone read it
+  5% to 24% over; all four called `controls layout`, +11.4% to +20.3%, and `invisible-tails layout`, +5.2% to +18.1%,
+  and two called `worst: long-breakable-runs layout`, +2.5% to +18.2%, which the sessions alone read -10.2% to +8.6% and
+  the one test's commit alone +1.2% to +13.2%.
 - **Chrome's `lines: mixed stats`** read the candidate's copy about 1% over base's on identical code, in 15 of 16
   sessions of main against itself and with the code the bench wraps a library in (`ENTRY`, `bench/lib.ts`) as it was
   before and after #456 (Chrome 154.0.8037.98, 2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing), and the row's floor
