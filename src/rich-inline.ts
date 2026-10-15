@@ -3,7 +3,6 @@ import {
   alignToSource,
   analyzeText,
   isCollapsibleSpaceCode,
-  DROPPED,
   HARD_BREAK,
   KIND_BITS,
   OBJECT,
@@ -151,11 +150,10 @@ type InternalPreparedRichInline = PreparedRichInline & {
   // Per item, its first segment in the paragraph, then the segment count: an item's segments are
   // those up to the next item's first.
   itemSegments: number[]
-  // Per segment of a paragraph that isn't one text's handle, its item, and 1 where it is a
-  // collapsed space at its item's start or end, which is the gap before the next fragment on its
-  // line, else 0: a line's fragments are cut by them, with no search (createLine). Null for a
-  // paragraph that is one text's handle.
-  segmentItems: Int32Array | null
+  // Per segment of a paragraph that isn't one text's handle, 1 where it is a collapsed space at
+  // its item's start or end, which is the gap before the next fragment on its line, else 0: a
+  // line's fragments are cut by it and by each segment's item (ParagraphSegmentData), with no
+  // search (createLine). Null for a paragraph that is one text's handle.
   gapSegments: Uint8Array | null
   // Whether each segment of such a paragraph is as wide on a line as its width, but the one a line
   // starts with or ends inside (createLine): no letter spacing the handle adds after a segment's
@@ -216,7 +214,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     const itemSegments: number[] = []
     for (let index = 0; index <= items.length; index++) itemSegments.push(index <= onlyIndex ? 0 : data.segmentFlags.length)
     return findWholeLine({
-      data, onlyItem: onlyIndex, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, segmentItems: null, gapSegments: null, plainWidths: false,
+      data, onlyItem: onlyIndex, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, gapSegments: null, plainWidths: false,
       sourceStarts: null, sourceEnds: null, sourceUnits: null, text: only.text,
     } as InternalPreparedRichInline)
   }
@@ -612,11 +610,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     }
   }
   const segmentData: ParagraphSegmentData = {
+    segmentItems,
     hyphenWidths: segmentHyphenWidths, tabStopAdvances: segmentTabStopAdvances, minimumTabAdvances: segmentMinimumTabAdvances,
     itemEndHalts,
     hyphenRooms: discretionaryHyphenContexts !== null && profile.unfitHyphenRetreat === 'reduced-width' ? getHyphenRooms(hyphenWidths, itemSegments, segmentItems) : null,
     insideExtras, fillExtras, openingEdges,
-    emptyObjectSpaces: null, emptyObjectReturns: null, hangEnds: null,
+    emptyObjectSpaces: null, emptyObjectReturns: null,
   }
   // The properties measureAnalysis() gives a text's handle, in its order, then the paragraph's own.
   const data = {
@@ -638,15 +637,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   } satisfies PreparedLineData as PreparedSegments
   data.segments = segments
   if (hasEmptyObject && profile.emptyAtomicAlwaysFits) setEmptyObjectFacts(segmentData, data, items, itemSegments, segmentItems, source, starts)
-  // Each item is a text frame: a zero-width space after preserved spaces of its own item ends
-  // the run of them that hangs (ParagraphSegmentData, hangEnds).
-  if (preserve && profile.hangsSpacesPerTextFrame && source.includes('\u200B')) {
-    for (let i = 1; i < segmentCount; i++) {
-      if ((segmentFlags[i]! & (KIND_BITS | DROPPED)) === ZERO_WIDTH_BREAK && (segmentFlags[i - 1]! & KIND_BITS) === PRESERVED_SPACE && segmentItems[i] === segmentItems[i - 1]) {
-        ;(segmentData.hangEnds ??= new Uint8Array(segmentCount))[i] = 1
-      }
-    }
-  }
 
   let onlyItem = -1
   for (let index = 0; index < items.length && !paddedOrObject; index++) {
@@ -658,7 +648,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     onlyItem = index
   }
   const flow = {
-    data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, segmentItems, gapSegments,
+    data, onlyItem, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, gapSegments,
     plainWidths: data.letterSpacing === 0 && itemEndHalts === null && !(preserve && source.includes('\t')),
     sourceStarts, sourceEnds, sourceUnits, text: '',
   } as InternalPreparedRichInline
@@ -967,7 +957,7 @@ function createLine(
   const { data, itemSegments } = flow
   const { widths, segmentFlags, lineStartExtras, letterSpacing } = data
   const items = data.items!
-  const segmentItems = flow.segmentItems!
+  const segmentItems = items.segmentItems
   const gapSegments = flow.gapSegments!
   const itemCount = itemSegments.length - 1
   const endItemIndex = endSegmentIndex >= widths.length ? itemCount : segmentItems[endSegmentIndex]!

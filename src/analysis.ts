@@ -45,15 +45,14 @@ export const UNBROKEN = 0x20
 // The scan gives a break before the segment, in text that also has unbroken
 // boundaries, where a line that overflows at one returns to the latest such break.
 export const RETURNABLE = 0x40
-// The engine's clusters don't split the segment, so no emergency break splits it
-// either. Measurement clears it.
-export const ONE_CLUSTER = 0x80
-// In its place on a prepared handle: the zero-width break is a soft hyphen, which the Gecko scan
-// makes one where its break draws no hyphen (classifySegmentUnit). Firefox's text run drops it,
-// so it is a break with nothing there: it stays with the line that ends at it and no line starts
-// with it, where a zero-width space is content (walkPreparedComplexLines in src/line-break.ts).
-// Measurement sets it.
+// The zero-width break is a soft hyphen, which the Gecko scan makes one where its break draws no
+// hyphen (classifySegmentUnit). Firefox's text run drops it, so it is a break with nothing there:
+// it stays with the line that ends at it and no line starts with it, where a zero-width space is
+// content (walkPreparedComplexLines in src/line-break.ts).
 export const DROPPED = 0x80
+// The engine's clusters don't split the segment, so no emergency break splits it either. Above
+// the byte: an analysis's flags hold it for measurement, and a prepared handle's can't.
+export const ONE_CLUSTER = 0x100
 export type SegmentKindCode = typeof TEXT | typeof SPACE | typeof ZERO_WIDTH_BREAK | typeof SOFT_HYPHEN |
   typeof PRESERVED_SPACE | typeof TAB | typeof ZERO_WIDTH_GLUE | typeof CONTROL | typeof HARD_BREAK
 // Each kind's name by its code, as prepareWithSegments() gives them.
@@ -64,11 +63,12 @@ export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
 // `spaceSources` holds, in the WebKit profile where normal white space collapsed, the source
 // unit each normalized unit starts from, such as the TAB or LF a space came from. Null otherwise.
 // `texts` holds each segment's text, `starts` where it starts in `normalized`, and `flags` its
-// flags byte: its kind, UNBROKEN where the engine's scan gives no break before text, zero-width
-// glue or a control, other than at a line start, and where tabs don't hang before a tab or
-// the spaces after one, RETURNABLE at the other segments of text with such a boundary, which
-// `hasUnbroken` tells, and ONE_CLUSTER where the scan has clusters of its own. A zero-width
-// space right after another is UNBROKEN too, which `hasUnbroken` leaves out.
+// flags byte: its kind, DROPPED, UNBROKEN where the engine's scan gives no break before text,
+// zero-width glue or a control, other than at a line start, and where tabs don't hang before a
+// tab or the spaces after one, and RETURNABLE at the other segments of text with such a
+// boundary, which `hasUnbroken` tells; and above the byte ONE_CLUSTER, where the scan has
+// clusters of its own. A zero-width space right after another, where the scan gives no break
+// between them, is UNBROKEN too, which `hasUnbroken` leaves out.
 export type TextAnalysis = {
   normalized: string
   spaceSources: Uint16Array | null
@@ -388,7 +388,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
     markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i]!) &&
       (lastAlone || lastKind === ZERO_WIDTH_BREAK || lastKind === SOFT_HYPHEN || lastKind === CONTROL)
     starts.push(i)
-    flags.push(kind | oneCluster)
+    flags.push(kind | (kind === ZERO_WIDTH_BREAK && code === 0x00AD ? DROPPED : 0) | oneCluster)
     lastKind = kind
     lastAlone = alone
   }
@@ -402,14 +402,15 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // 318-330). A soft hyphen before the tab keeps its break (GetHyphenationBreaks,
   // nsTextFrame.cpp:4409-4457).
   //
-  // No break comes between two zero-width spaces either (UAX #14 LB7), so the second is
-  // marked too: a line that goes back to its last break, as Gecko's does from a tab that
-  // doesn't fit, goes back past both, where the second would hold a line of its own (`M`,
-  // two of them, a tab and `is` in pre-wrap at 24px are three lines in Firefox 157, the
-  // tab on the second). It isn't counted in `hasUnbroken`, which takes a text off the
+  // Where the scan gives no break between two zero-width spaces, as UAX #14 LB7 gives none,
+  // the second is marked too: a line that goes back to its last break, as Gecko's does from
+  // a tab that doesn't fit, goes back past both, where the second would hold a line of its
+  // own (`M`, two of them, a tab and `is` in pre-wrap at 24px are three lines in Firefox 157,
+  // the tab on the second). It isn't counted in `hasUnbroken`, which takes a text off the
   // simple walkers: the second fits wherever the first does, so no line of theirs ends
   // between the two, and none goes back to a break from it. A soft hyphen that is a
-  // zero-width break (classifySegmentUnit) is left as it was.
+  // zero-width break (DROPPED) isn't marked: nothing is there, so a line that ends before it
+  // ends at the break the scan gives after it.
   let hasUnbroken = false
   const count = flags.length
   for (let j = count - 2; j >= 0; j--) {
@@ -419,9 +420,9 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
     if (!hangTabs && (next === TAB || (next === PRESERVED_SPACE && kind === TAB))) {
       if (kind === SOFT_HYPHEN) continue
     } else if (next === TEXT || next === ZERO_WIDTH_GLUE || next === CONTROL) {
-      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~KIND_BITS | ZERO_WIDTH_GLUE
+      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~(KIND_BITS | DROPPED) | ZERO_WIDTH_GLUE
     } else {
-      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && normalized.charCodeAt(starts[j + 1]!) === 0x200B) flags[j + 1] = flags[j + 1]! | UNBROKEN
+      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && (flags[j + 1]! & DROPPED) === 0) flags[j + 1] = flags[j + 1]! | UNBROKEN
       continue
     }
     flags[j + 1] = flags[j + 1]! | UNBROKEN

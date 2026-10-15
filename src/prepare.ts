@@ -423,8 +423,9 @@ export function measureAnalysis(
   const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && mayHoldCursive(own)
 
   // Text of the simple walkers' kinds without letter spacing. They lay it out where
-  // the scan breaks at every segment boundary, and layout() counts it with the
-  // simple stepper where it doesn't (countPreparedLines).
+  // the scan breaks at every segment boundary but between two zero-width spaces
+  // (`hasUnbroken`), and layout() counts it with the simple stepper where it doesn't
+  // (countPreparedLines).
   let simpleKinds = !hasLetterSpacing
   let breakableLineStartExtras: (number[] | null)[] | null = null
   let discretionaryHyphenContexts: number[] | null = null
@@ -572,7 +573,9 @@ export function measureAnalysis(
       case HARD_BREAK:
         break
     }
-    if (kind !== TEXT && kind !== SPACE && kind !== ZERO_WIDTH_BREAK) simpleKinds = false
+    // The simple walkers take every zero-width break for a zero-width space, so a soft hyphen
+    // that is one (DROPPED) is the full walker's.
+    if (kind !== TEXT && kind !== SPACE && (segment & (KIND_BITS | DROPPED)) !== ZERO_WIDTH_BREAK) simpleKinds = false
     if (kind !== TEXT && kind !== SOFT_HYPHEN) previousJoinablePiece = null
     segmentFlags[at] = (segment & ~ONE_CLUSTER) | (hasLetterSpacing && spacingGraphemeCount > 0 ? SPACED : 0)
     widths[at] = addInternalLetterSpacing(width, spacingGraphemeCount, letterSpacing)
@@ -580,14 +583,8 @@ export function measureAnalysis(
     if (segments !== null) segments[mi - from] = text
     // Contexts for every segment of soft hyphens, whatever its kind here, one that is glue
     // too, where the scan gives no break after it: a handle with contexts is one whose lines
-    // return from an unfit hyphen, measured below. One that is a zero-width break is marked
-    // (DROPPED), which tells it from a zero-width space, and its text is the full walker's: the
-    // simple walkers take every zero-width break for a zero-width space.
+    // return from an unfit hyphen, measured below.
     if (kind !== TEXT && text.charCodeAt(0) === 0xAD) {
-      if (kind === ZERO_WIDTH_BREAK) {
-        segmentFlags[at] = segmentFlags[at]! | DROPPED
-        simpleKinds = false
-      }
       discretionaryHyphenContexts ??= zeros(mi - from)
       discretionaryHyphenContexts[mi - from] = returnFitsEachSideAlone ? 0 : getJoinedNarrowing(analysis, mi, to, previousJoinablePiece, previousJoinableMetrics, fontMeasurement, emojiCorrection, engineProfile.lineFitEpsilon)
     } else if (discretionaryHyphenContexts !== null) {
