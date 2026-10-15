@@ -423,8 +423,9 @@ export function measureAnalysis(
   const cursiveSpacing = hasLetterSpacing && engineProfile.unspacedCursive !== 'none' && mayHoldCursive(own)
 
   // Text of the simple walkers' kinds without letter spacing. They lay it out where
-  // the scan breaks at every segment boundary, and layout() counts it with the
-  // simple stepper where it doesn't (countPreparedLines).
+  // the scan breaks at every segment boundary but between two zero-width spaces
+  // (`hasUnbroken`), and layout() counts it with the simple stepper where it doesn't
+  // (countPreparedLines).
   let simpleKinds = !hasLetterSpacing
   let breakableLineStartExtras: (number[] | null)[] | null = null
   let discretionaryHyphenContexts: number[] | null = null

@@ -138,15 +138,16 @@ export function isDiscretionaryLineEnd(
 // What a line's start leaves out, by a segment's flags: a collapsible space, a soft hyphen, and a
 // soft hyphen that is a zero-width break (DROPPED). A zero-width space stays, at a chunk's start
 // and after a wrap alike: every engine lays it out as text of no width, never as white space.
-// Blink trails only U+0020 and U+0009 past a line's end and skips only a collapsible space at its
-// start (IsBreakableSpace, line_breaker.cc:186-188; HandleTrailingSpaces, :2426-2534; HandleText,
-// :1336-1353, Chromium 153); WebKit's white-space items are spaces, tabs and line feeds, and a
-// text run of any length is content (InlineItemsBuilder.cpp:54-73; Line::Run::isContentful,
-// InlineLine.h:129); Gecko trims and skips the characters of IsTrimmableSpace alone
-// (nsTextFrame.cpp:904-942, 10935-10951). So the line a zero-width space starts is a line, a line
-// tall, though nothing else is on it: where nothing follows it, where a hard break does, and
-// where the word after it doesn't fit beside it and goes down whole, as from any line that has a
-// break (walkPreparedComplexLines has where a line ends before one).
+// Blink trails only U+0020 and U+0009 past a line's end, up to the first character that is
+// neither, and skips only a collapsible space at its start (IsBreakableSpace,
+// line_breaker.cc:186-188; HandleTrailingSpaces, :2426-2534, at :2447-2456 and 2518-2523;
+// HandleText, :1336-1353, Chromium 153); WebKit's white-space items are spaces, tabs and line
+// feeds, and a text run of any length is content (InlineItemsBuilder.cpp:54-73;
+// Line::Run::isContentful, InlineLine.h:129); Gecko trims and skips the characters of
+// IsTrimmableSpace alone (nsTextFrame.cpp:904-942, 10935-10951). So the line a zero-width space
+// starts is a line, a line tall, though nothing else is on it: where nothing follows it, where a
+// hard break does, and where the word after it doesn't fit beside it and goes down whole, as
+// from any line that has a break (walkPreparedComplexLines has where a line ends before one).
 function consumesAtLineStart(flags: number): boolean {
   const kind = flags & KIND_BITS
   return kind === SPACE || kind === SOFT_HYPHEN || (flags & DROPPED) !== 0
@@ -316,10 +317,12 @@ export function walkPreparedLinesRaw(
 
 // layout()'s count: the simple stepper's lines as one numeric loop, with no
 // cursor and no per-line call. Every segment boundary of a fast-path handle is
-// a break, so an overflowing space ends its line, which it hangs on, and any other
-// segment starts the next one, a zero-width space too (stepPreparedSimpleLineGeometry).
-// The full walker costs three to five times as much per segment, so one walker for
-// all text was rejected (RESEARCH.md, Decisions Log, 2026-09-24).
+// a break, but between two zero-width spaces, where no line ends (segmentAtLineBreaks
+// in src/analysis.ts), so an overflowing space ends its line, which it hangs on, and
+// any other segment starts the next one, a zero-width space too
+// (stepPreparedSimpleLineGeometry). The full walker costs three to five times as
+// much per segment, so one walker for all text was rejected (RESEARCH.md, Decisions
+// Log, 2026-09-24).
 export function countPreparedLines(prepared: PreparedLineData, maxWidth: number): number {
   // The loop takes no overflow trims, which the stepper takes for a line's first segment.
   if (!prepared.simpleLineWalkFastPath || prepared.overflowLineEndTrims !== null) {
@@ -786,50 +789,41 @@ function walkPreparedComplexLines(
               }
             }
             if (overflows) {
-              // A break segment hangs with the gap before it, after the content before
-              // it, which fits without its line-end trim. A collapsible space hangs even
-              // after overflowing content that started the line, as the simple stepper
-              // does, and so does the zero-width break Firefox drops (DROPPED), there and
-              // after the start edge of its item's opening; a preserved space there starts
-              // the next line. A tab that doesn't hang goes to the next line, as text does.
+              // White space and the zero-width break Firefox drops (DROPPED) hang with the
+              // gap before them, after the content before them, which fits without its
+              // line-end trim. A collapsible space and that break hang even after overflowing
+              // content that started the line, as the simple stepper's space does, and that
+              // break right after an object too; a preserved space there starts the next
+              // line. A tab that doesn't hang goes to the next line, as text does.
               //
-              // A zero-width space is content of no width, so it stays where the content
-              // before it fits, with the white space between them, which then ends no line,
-              // and with the gap after its last letter. Else the line ends before it and
-              // it starts the next (consumesAtLineStart). Blink sends text that follows
-              // content past the line's end to HandleOverflow, which ends the line at a
-              // break before that text (HandleText, line_breaker.cc:1355-1372; :4079-4305),
-              // and a line that trails spaces ends at the first character that is neither
-              // U+0020 nor U+0009 (HandleTrailingSpaces, :2447-2456, 2518-2523). WebKit fits
-              // it against what is left of the line, which isn't clamped at 0 (availableWidth,
+              // A zero-width space is content (consumesAtLineStart), so it stays where the
+              // content before it fits, with the white space between them, which then ends
+              // no line, and with the gap after its last letter. Else the line ends before
+              // it: Blink sends text that follows content past the line's end to
+              // HandleOverflow, which ends the line at a break before that text (HandleText,
+              // line_breaker.cc:1355-1372; :4079-4305). WebKit fits it against what is left
+              // of the line, which isn't clamped at 0 (availableWidth,
               // InlineLineBuilder.cpp:1172-1183, 1466), and keeps overflowing content only
               // where it trims, hangs or is span tags alone (processOverflowingContent,
               // InlineContentBreaker.cpp:160-199, 275-295). Gecko ends a line at its last
               // break whose content fits, else at its first (BreakAndMeasureText,
               // gfxTextRun.cpp:1091-1109), and a break comes before a zero-width space after
               // white space (nsLineBreaker.cpp:321-330) and, by overflow-wrap, before any
-              // cluster on a line with no break yet (gfxTextRun.cpp:1068-1074). The break
-              // before it is the one the engine has there: after the white space, after an
-              // object, or, after a grapheme wider than its line, the one between graphemes
-              // that a line with no other break takes. A line-end trim doesn't keep it: a
-              // mark is halted and a U+3000 run hangs where the line ends after them, and
-              // with a zero-width space after them on the line they count whole (`字」` and
-              // one in 40px Hiragino Sans at 70px are two lines in Chrome 155, the second
-              // empty). Two places keep it past the line's end: after the start edge
-              // of its own item's opening, which the line took by the part it fits, as the
-              // engines keep a span's start with its first text; and right after an object
-              // in Gecko (EngineProfile, zeroWidthSpaceStaysAfterAtomic). The zero-width
+              // cluster on a line with no break yet (gfxTextRun.cpp:1068-1074). A line-end
+              // trim doesn't keep it: a mark is halted and a U+3000 run hangs where the line
+              // ends after them, and with a zero-width space after them on the line they
+              // count whole (`字」` and one in 40px Hiragino Sans at 70px are two lines in
+              // Chrome 155, the second empty). Two places keep it past the line's end: after
+              // the start edge of its own item's opening, which the line took by the part it
+              // fits, as the engines keep a span's start with its first text; and right
+              // after an object in Gecko (EngineProfile, zeroWidthSpaceStaysAfterAtomic, read
+              // here so that a walk reads nothing for the rule at its start: RESEARCH.md,
+              // Keeping Work Bounded, Work Done Only Where A Rule Applies). The zero-width
               // spaces after one that stays stay with it, as no break comes between two
               // (UAX #14 LB7). Premise: widths measured apart. Blink kerns the letters on
               // the two sides of a zero-width space, so a letter wider than its line by
               // less than that kerning fits there, and Chrome keeps the zero-width space
               // on its line (ENGINE_FOLLOWUPS.md, Line edges).
-              //
-              // Only a break segment can stay, so all of this is under that one test, and
-              // the profile's field is read where a zero-width space overflows right after
-              // an object: a line that ends at a segment that is no break pays nothing for
-              // the rule, and a walk reads nothing for it at its start (RESEARCH.md, Keeping
-              // Work Bounded, Work Done Only Where A Rule Applies).
               const contentW = lineW - lineEndTrimmed
               if (breakAfter) {
                 const stays = kind !== ZERO_WIDTH_BREAK ? (hangs || kind !== TAB) && (contentW <= fitLimit || (pendingBreakSegmentIndex < 0 && kind === SPACE))
@@ -1130,12 +1124,13 @@ function stepPreparedSimpleLineGeometry(
     if (startW > fitLimit) endTrimmed = startTrim
   }
 
-  // Every boundary of a fast-path handle is a break, so the line takes whole
-  // segments until one overflows. An overflowing space hangs and ends the line. A
-  // zero-width space, which is content of no width, overflows where the content
-  // before it does, and then starts the next line, but right after an object where
-  // the engine keeps it there (walkPreparedComplexLines has the rule). Before
-  // other text, the line leaves out a space it ends with.
+  // Every boundary of a fast-path handle that a line ends at is a break
+  // (countPreparedLines), so the line takes whole segments until one overflows. An
+  // overflowing space hangs and ends the line. A zero-width space, which is content
+  // of no width, overflows where the content before it does, and then starts the
+  // next line, but right after an object where the engine keeps it there
+  // (walkPreparedComplexLines has the rule). Before other text, the line leaves out
+  // a space it ends with.
   for (let i = start + 1; i < widths.length; i++) {
     const w = widths[i]!
     const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
