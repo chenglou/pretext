@@ -6442,7 +6442,7 @@ decisions for the maintainer.
   and 6 accepted ones pass; of the counted cases 297, 307 and 285 pass that failed and 17, 9 and 14 fail that passed,
   all under 24 px, each by a second gap the hang had hidden; no prediction of the real-usage sample changes. The cost
   in speed is on text with no ZWSP, where the walkers make the tests they made but for one more in the simple stepper
-  where a line ends at a segment that is no space, and two in the full walker where one ends at a break segment.
+  where a line ends at a segment that is no space, and two in the full walker where a break segment overflows and stays.
   Firefox 157.0.1 reads `resize: cjk layout at new widths` 5 to 12% slower over six sessions alone and
   `lines: cjk walk` 6 to 12%, by how it compiles the changed bundle and not by the rule's tests, since each stays with
   main's own loop put back and neither shows with the changed loop in main's bundle (harness/bench/README.md, Entries

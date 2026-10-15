@@ -832,10 +832,9 @@ function walkPreparedComplexLines(
               // Work Bounded, Work Done Only Where A Rule Applies).
               const contentW = lineW - lineEndTrimmed
               if (breakAfter) {
-                const afterObject = kind === ZERO_WIDTH_BREAK && (segmentFlags[i - 1]! & KIND_BITS) === OBJECT
-                const stays = kind === ZERO_WIDTH_BREAK && (flags & DROPPED) === 0
-                  ? afterObject && (engineProfile.zeroWidthSpaceStaysAfterAtomic || (openingEdges !== null && openingEdges[i - 1]! !== 0))
-                  : (hangs || kind !== TAB) && (contentW <= fitLimit || (pendingBreakSegmentIndex < 0 && (kind === SPACE || kind === ZERO_WIDTH_BREAK)) || afterObject)
+                const stays = kind !== ZERO_WIDTH_BREAK ? (hangs || kind !== TAB) && (contentW <= fitLimit || (pendingBreakSegmentIndex < 0 && kind === SPACE))
+                  : (flags & DROPPED) !== 0 ? contentW <= fitLimit || pendingBreakSegmentIndex < 0 || (segmentFlags[i - 1]! & KIND_BITS) === OBJECT
+                  : (segmentFlags[i - 1]! & KIND_BITS) === OBJECT && (engineProfile.zeroWidthSpaceStaysAfterAtomic || (openingEdges !== null && openingEdges[i - 1]! !== 0))
                 if (stays) {
                   endWidth = hangs ? hangStartWidth : contentW
                   lineW += advance
