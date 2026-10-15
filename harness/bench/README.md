@@ -269,8 +269,13 @@ before the glyph spacings did, costs a tenth as much there.
   the change's files each place the first: main with the change's lines in `measureAnalysis()` (`src/prepare.ts`), which
   no text of that row runs, read it 5.8% to 9.5% slower over six sessions and 3.8% to 8.6% over six more, where main
   with the changed analysis read level in three runs of six (medians of +0.2% to +2.4%) and main with the changed
-  analysis and line walkers level too (+1.5%). On the change's last src the two rows read +5.4% to +9.5% and +7.8% to
-  +11.6% (Firefox 157.0.1, 2026-10-14; `RESEARCH.md`, Decisions Log, 2026-10-14).
+  analysis and line walkers level too (+1.5%). On that src the two rows read +5.4% to +9.5% and +7.8% to +11.6% (Firefox
+  157.0.1, 2026-10-14). The change then took those lines out again: the analysis marks the soft hyphen that is a
+  zero-width break where it classifies it, and `measureAnalysis()` is main's but for one test (3102bd1c). Against the
+  commit before it, six sessions read the first row -4.0% to -9.8% and `lines: cjk walk` -0.7% to -9.6%, medians of
+  -7.8% and -6.1%, and against main the change's last src reads them -0.2% to -4.4% and -0.7% to +1.9% over six sessions
+  (2026-10-15; `RESEARCH.md`, Decisions Log, 2026-10-14). What Firefox reads with the loop's one test is under the next
+  entry.
 - **Firefox's `resize: latin layout at widths seen before`** reads 12% to 23% slower since #515, and that is no
   misreading: the change runs that code. Removing entry geometry (2ece40cb), the widths the library measured afresh for
   a line that starts inside a word at an invisible character, takes one test out of the loop in which
@@ -283,7 +288,31 @@ before the glyph spacings did, costs a tenth as much there.
   as it is at new widths (above): with one, two and three do-nothing top-level variables, in builds from a folder
   outside any checkout, the row read +14.6%, +11.7% and +14.8%, medians of six sessions again, not called. So it is how
   Firefox 157 compiles the shorter loop, a cost that is recorded and not coded around (`RESEARCH.md`, Decisions Log,
-  2026-10-12). A reading of that size on this row against a base from before #515 is this.
+  2026-10-12). A reading of that size on this row against a base from before #515 is this. #525 moved it again, and
+  three more entries with it. Its last form of that function's main loop asks once whether a segment is a space, after
+  the block that ends a line, where main asked in each of two branches, and reads a segment's kind only there. By that
+  commit alone (9f004030 against its parent, six sessions of each browser's `resize` and `worst` rows; Chrome
+  155.0.8059.80, Firefox 157.0.1 and webkit-host, 2026-10-15) Chrome read all ten `resize` entries 6% to 31% faster and
+  `layout()` of four `worst` documents 6% to 35% faster, each called; webkit-host read the ten 6% to 17% faster by the
+  median and `layout()` of five `worst` documents 5% to 15%, four entries called; and Firefox read this row +11.7%,
+  Thai's +15.0% and Arabic's +6.3% by the median, and `worst: controls layout` and `worst: invisible-tails layout`
+  +13.6% to +15.4% and +10.3% to +16.9%, called, with every entry at new widths within 3%. It comes with the one test,
+  wherever the kind is read: with the kind read at every segment, as main reads it, Firefox read the three rows +10.7%,
+  +15.5% and +7.0% and `controls layout` +11.3% to +15.4%, and Chrome and webkit-host kept most of their gain (Chrome's
+  `resize` entries 6% to 20% faster by the median, webkit-host's 3% to 15%). With main's two tests and the kind read
+  only at them, Firefox read this row 7.8% to 18.3% faster and `resize: latin layout at new widths` 22.7% to 36.7%
+  slower, and Chrome read every `resize` entry within 1% and `layout()` of three `worst` documents 7% to 13% faster. So
+  Firefox's readings of this loop swing both ways with its form, on the same work or less, and Chrome's on `resize` come
+  with V8 inlining the function into `layout()`: it is 474 bytes of bytecode on main, 461 as #525 was first built, 475
+  in that last form and 450 with the one test, wherever the kind is read (Node 23.10's V8 12.9), and V8 inlines a
+  function of 460 or fewer (`RESEARCH.md`, JavaScript Engines, the 460-byte budget), so an edit that takes it back over
+  460 gives that gain back. The form is the one the code asks for (`RESEARCH.md`, Decisions Log, 2026-10-14). Against
+  main the change's last src reads this row +3.8% to +12.9% in Firefox over six sessions alone, Thai's +13.7% to +18.9%
+  and `worst: controls layout` +11.9% to +16.5%, both called, and `worst: invisible-tails layout` +6.1% to +15.0%. Two
+  runs of every row read this row +3.6% to +6.9%, called in one, and Thai's -6.8% to +1.8%, where the six sessions alone
+  read it 14% to 19% over; both called `controls layout`, +15.8% to +20.3%, and `invisible-tails layout`, +5.2% to
+  +17.1%, and one called `worst: long-breakable-runs layout`, +18.2%, +17.2% and +2.5%, which six sessions alone read
+  -10.2% to +8.6%.
 - **Chrome's `lines: mixed stats`** read the candidate's copy about 1% over base's on identical code, in 15 of 16
   sessions of main against itself and with the code the bench wraps a library in (`ENTRY`, `bench/lib.ts`) as it was
   before and after #456 (Chrome 154.0.8037.98, 2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing), and the row's floor

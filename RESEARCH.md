@@ -6440,24 +6440,31 @@ decisions for the maintainer.
   (`zeroWidthSpaceStaysAfterAtomic`). The reason: it is each engine's rule, and an editor's caret anchor after an image
   needs its line. In Chrome 155.0.8059.80, Firefox 157.0.1 and webkit-host no blocking case fails that passed and 6, 5
   and 6 accepted ones pass; of the counted cases 297, 307 and 285 pass that failed and 17, 9 and 14 fail that passed,
-  all under 24 px, each by a second gap the hang had hidden; no prediction of the real-usage sample changes. The cost
-  in speed is on text with no ZWSP, where the walkers make the tests they made but for one more in the simple stepper
-  where a line ends at a segment that is no space, and two in the full walker where a break segment overflows and stays.
-  Firefox 157.0.1 reads `resize: cjk layout at new widths` 5 to 12% slower over six sessions alone and
-  `lines: cjk walk` 6 to 12%, by how it compiles the changed bundle and not by the rule's tests, since each stays with
-  main's own loop put back and neither shows with the changed loop in main's bundle (harness/bench/README.md, Entries
-  that misread), and reads its `lines` entries on Latin and mixed messages 3 to 12% faster; webkit-host reads
-  `layout()` of three `worst` documents on the full walker (`controls`, `soft-hyphens-marks`, `pre-wrap-chunks`) 2 to
-  4% slower by the median of six sessions; and two runs of every row call one entry, Chrome's
-  `worst: cjk-letter-spaced layout`, 2.5 to 7% slower, which six sessions alone read at 1.3% and at 2.8%. A third run
-  of every row, on the last src, calls three: Firefox's `lines: cjk stats`, 4 to 5% slower, on the messages of
-  `lines: cjk walk`; webkit-host's `worst: pre-wrap-chunks layout`, one of the three above; and Firefox's
-  `worst: pre-wrap-chunks prepare`, which six sessions alone read level. A narrower form, the rule after an object
-  alone, was built for comparison (#525 has its numbers): it fixes #521's own layouts and no other shape, and reads
-  13 of Firefox's entries 4 to 13% slower in a run of every row, its line functions among them. It takes up the dead
-  end of a ZWSP after a forced break (Dead Ends, Invisible Characters, Controls And Soft Hyphens) without the two
-  changes that entry waited on, and closes three gaps of 2026-10-06's entry on rich inline as one paragraph: the
-  ZWSP's line after a space and after content that overflows, and in Firefox the hang that ends at one in pre-wrap.
-  What it leaves is under Line edges in ENGINE_FOLLOWUPS.md: Chrome's kerning across a ZWSP, a fit within a layout
-  unit that now shows as a line, and a soft hyphen beside one. Reopens with real text that turns on one of those, or
-  if a later bench shows the walkers' tests for one on `layout()`.
+  all under 24 px, each by a second gap the hang had hidden; no prediction of the real-usage sample changes. The cost in
+  speed is on text with no ZWSP, where the walkers make the tests they made but for one more in the simple stepper where
+  a line ends at a segment that is no space and two in the full walker where a break segment overflows and stays, and
+  `layout()`'s counting loop asks once whether a segment is a space, where a line starts, where main asked in two
+  branches. With that one test Chrome 155 and webkit-host read every `resize` entry faster than main, 5 to 21% and 8 to
+  17% in a run of every row, and `layout()` of the `worst` documents that loop counts; Chrome's `resize` gain comes with
+  V8 inlining the counter into `layout()`, at 450 bytes of bytecode where main's 474 is over its limit of 460, so an
+  edit that takes the function back over gives it back; Firefox 157.0.1 reads it slower at widths it has laid out
+  before, Latin 4 to 13% over six sessions alone and 4 to 7% in two runs of every row, Thai 14 to 19% over the six and
+  level in the two runs, and on `worst: controls layout` and `worst: invisible-tails layout`, 5 to 20% in each, and
+  level at new widths. That is how Firefox compiles the loop, as on 2026-10-12: it reads the same with the kind read at
+  every segment, and with main's two tests and less work it reads one Latin row 12% faster and the other 33% slower
+  (harness/bench/README.md, Entries that misread). The one test stays: no rule is written out twice for one JIT (Part 1,
+  Engineering). Firefox reads its `lines` entries on Latin and mixed messages 3 to 10% faster; the full walker's
+  `layout()` reads 2 to 3% slower on Chrome's `worst: cjk-letter-spaced` and webkit-host's `worst: pre-wrap-chunks` by
+  the median of six sessions, the second called in one run of every row of two; and Chrome prepares
+  `worst: invisible-tails` again 2 to 4% slower since the analysis marks the soft hyphen Firefox drops, where
+  measurement did. As first built the change read Firefox's `resize: cjk layout at new widths` and `lines: cjk walk` 5
+  to 12% slower, by lines it added to `measureAnalysis()` that no text of those rows runs; with the mark set in the
+  analysis they are gone, and the two rows read level. A narrower form, the rule after an object alone, was built for
+  comparison (#525 has its numbers): it fixes #521's own layouts and no other shape, and reads 13 of Firefox's entries 4
+  to 13% slower in a run of every row, its line functions among them. It takes up the dead end of a ZWSP after a forced
+  break (Dead Ends, Invisible Characters, Controls And Soft Hyphens) without the two changes that entry waited on, and
+  closes three gaps of 2026-10-06's entry on rich inline as one paragraph: the ZWSP's line after a space and after
+  content that overflows, and in Firefox the hang that ends at one in pre-wrap. What it leaves is under Line edges in
+  ENGINE_FOLLOWUPS.md: Chrome's kerning across a ZWSP, a fit within a layout unit that now shows as a line, and a soft
+  hyphen beside one. Reopens with real text that turns on one of those, or if a later bench shows the walkers' tests for
+  one on `layout()`.
