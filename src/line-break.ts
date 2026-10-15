@@ -339,7 +339,6 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
   let hasContent = false
 
   for (let i = 0; i < segmentCount; i++) {
-    const kind = segmentFlags[i]! & KIND_BITS
     const w = widths[i]!
     const endTrim = lineEndTrims === null ? 0 : lineEndTrims[i]!
     if (hasContent) {
@@ -352,10 +351,9 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
       count++
       lineW = 0
       hasContent = false
-      if (kind === SPACE) continue
-    } else if (kind === SPACE) {
-      continue
     }
+    // A space starts no line: one that overflows hangs on the line it ends.
+    if ((segmentFlags[i]! & KIND_BITS) === SPACE) continue
 
     const startW = lineStartExtras === null ? w : w + lineStartExtras[i]!
     const advances = breakableFitAdvances[i] as number[] | null

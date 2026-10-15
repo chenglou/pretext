@@ -250,18 +250,19 @@ before the glyph spacings did, costs a tenth as much there.
   bindings #513 adds. So it comes with the 42 lines #513 changes in `measureAnalysis()`, of which the Gecko profile runs
   two tests a segment and no allocation, or with those bindings: one variable more needn't move the names that matter. A
   reading of 6% to 13% there with no change to code `layout()` runs wants a second change's table before being blamed on
-  one. A third change moved it and does change that code: #525, which lays a zero-width space out as content, takes a
-  test out of `countPreparedLines()`'s loop where a line starts and swaps one where it ends. With it the row read 5.4%
-  to 8.4% slower over six sessions and 8% to 15% in three runs of every row, on messages that hold no zero-width space
-  and all take that loop; as much with main's two tests put back (5.8% to 11.3% in five sessions, 51.6% in a sixth) and
-  with one do-nothing top-level variable more (4.7% to 10.3%); and level under a narrower form of the same change that
-  leaves the loop as it was (medians of +0.4% to +1.1% in three runs of every row). `lines: cjk walk` read 5.5% to 7.7%
-  slower with it over six sessions, and 5.9% to 10.0% with main's stepper and line start put back, where the Latin
-  messages' entries then read level. Moving the full walker's tests for a zero-width space under its test for a break
-  segment, code neither row runs, left the two as they were over six sessions, +4.5% to +12.1% and +6.4% to +8.4%, while
-  two runs of every row called neither: in each, one session of three read 10% to 13% slower and the other two -2% to
-  +5%, so Firefox keeps a copy at one of two speeds on these rows. The converse builds read level over six sessions
-  each: main with the change's two tests in the loop, -1.3% to +2.9% on the first row, main with one do-nothing
+  one. A third change moved it and does change that code: #525, which lays a zero-width space out as content, as first
+  built took a test out of `countPreparedLines()`'s loop where a line starts and swapped one where it ends, and now
+  makes one test of the two, where a line starts, and reads a segment's kind only there. As first built the row read
+  5.4% to 8.4% slower over six sessions and 8% to 15% in three runs of every row, on messages that hold no zero-width
+  space and all take that loop; as much with main's two tests put back (5.8% to 11.3% in five sessions, 51.6% in a
+  sixth) and with one do-nothing top-level variable more (4.7% to 10.3%); and level under a narrower form of the same
+  change that leaves the loop as it was (medians of +0.4% to +1.1% in three runs of every row). `lines: cjk walk` read
+  5.5% to 7.7% slower with it over six sessions, and 5.9% to 10.0% with main's stepper and line start put back, where
+  the Latin messages' entries then read level. Moving the full walker's tests for a zero-width space under its test for
+  a break segment, code neither row runs, left the two as they were over six sessions, +4.5% to +12.1% and +6.4% to
+  +8.4%, while two runs of every row called neither: in each, one session of three read 10% to 13% slower and the other
+  two -2% to +5%, so Firefox keeps a copy at one of two speeds on these rows. The converse builds read level over six
+  sessions each: main with the change's two tests in the loop, -1.3% to +2.9% on the first row, main with one do-nothing
   top-level variable more, -1.4% to +1.1%, and main with the change's stepper and line start, -1.8% to +1.6% on
   `lines: cjk walk`, where the Latin messages' entries read 3% to 9% faster. So both readings come with the rest of the
   change's bundle and not with the loops they run, and one variable more doesn't make them. Builds of main with one of
