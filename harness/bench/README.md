@@ -308,11 +308,11 @@ before the glyph spacings did, costs a tenth as much there.
   function of 460 or fewer (`RESEARCH.md`, JavaScript Engines, the 460-byte budget), so an edit that takes it back over
   460 gives that gain back. The form is the one the code asks for (`RESEARCH.md`, Decisions Log, 2026-10-14). Against
   main the change's last src reads this row +3.8% to +12.9% in Firefox over six sessions alone, Thai's +13.7% to +18.9%
-  and `worst: controls layout` +11.9% to +16.5%, both called, and `worst: invisible-tails layout` +6.1% to +15.0%. Two
-  runs of every row read this row +3.6% to +6.9%, called in one, and Thai's -6.8% to +1.8%, where the six sessions alone
-  read it 14% to 19% over; both called `controls layout`, +15.8% to +20.3%, and `invisible-tails layout`, +5.2% to
-  +17.1%, and one called `worst: long-breakable-runs layout`, +18.2%, +17.2% and +2.5%, which six sessions alone read
-  -10.2% to +8.6%.
+  and `worst: controls layout` +11.9% to +16.5%, both called, and `worst: invisible-tails layout` +6.1% to +15.0%. Three
+  runs of every row read this row +3.6% to +7.4%, called in two, and Thai's -7.0% to +1.8%, where the six sessions alone
+  read it 14% to 19% over; all three called `controls layout`, +11.4% to +20.3%, and `invisible-tails layout`, +5.2% to
+  +17.1%, and two called `worst: long-breakable-runs layout`, +2.5% to +18.2%, which six sessions alone read -10.2% to
+  +8.6% and the one test's commit alone +1.2% to +13.2%.
 - **Chrome's `lines: mixed stats`** read the candidate's copy about 1% over base's on identical code, in 15 of 16
   sessions of main against itself and with the code the bench wraps a library in (`ENTRY`, `bench/lib.ts`) as it was
   before and after #456 (Chrome 154.0.8037.98, 2026-10-07; `RESEARCH.md`, Evaluation Traps, Timing), and the row's floor

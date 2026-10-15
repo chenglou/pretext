@@ -6448,15 +6448,15 @@ decisions for the maintainer.
   17% in a run of every row, and `layout()` of the `worst` documents that loop counts; Chrome's `resize` gain comes with
   V8 inlining the counter into `layout()`, at 450 bytes of bytecode where main's 474 is over its limit of 460, so an
   edit that takes the function back over gives it back; Firefox 157.0.1 reads it slower at widths it has laid out
-  before, Latin 4 to 13% over six sessions alone and 4 to 7% in two runs of every row, Thai 14 to 19% over the six and
-  level in the two runs, and on `worst: controls layout` and `worst: invisible-tails layout`, 5 to 20% in each, and
+  before, Latin 4 to 13% over six sessions alone and 4 to 7% in three runs of every row, Thai 14 to 19% over the six and
+  level in the three runs, and on `worst: controls layout` and `worst: invisible-tails layout`, 5 to 20% in each, and
   level at new widths. That is how Firefox compiles the loop, as on 2026-10-12: it reads the same with the kind read at
   every segment, and with main's two tests and less work it reads one Latin row 12% faster and the other 33% slower
   (harness/bench/README.md, Entries that misread). The one test stays: no rule is written out twice for one JIT (Part 1,
   Engineering). Firefox reads its `lines` entries on Latin and mixed messages 3 to 10% faster; the full walker's
   `layout()` reads 2 to 3% slower on Chrome's `worst: cjk-letter-spaced` and webkit-host's `worst: pre-wrap-chunks` by
-  the median of six sessions, the second called in one run of every row of two; and Chrome prepares
-  `worst: invisible-tails` again 2 to 4% slower since the analysis marks the soft hyphen Firefox drops, where
+  the median of six sessions, the second called in one run of every row of three; and Chrome prepares
+  `worst: invisible-tails` again 2 to 5% slower since the analysis marks the soft hyphen Firefox drops, where
   measurement did. As first built the change read Firefox's `resize: cjk layout at new widths` and `lines: cjk walk` 5
   to 12% slower, by lines it added to `measureAnalysis()` that no text of those rows runs; with the mark set in the
   analysis they are gone, and the two rows read level. A narrower form, the rule after an object alone, was built for
