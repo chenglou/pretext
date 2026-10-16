@@ -3838,6 +3838,22 @@ app-facing patterns. Unless stated: macOS 26, Chrome 153, Safari 26.5.2 and Fire
 - On macOS a trackpad fling reaches the page as wheel events, so a `scrollTo()` after content loads above moves only its
   start; on iOS the fling is the system's, and a `scrollTo()` may stop or jump it (unchecked on a device). Safari's
   wheel scrolling after `scrollTo()` is in PLATFORM_BUGS.md.
+- On its end the chat sees the browser move `scrollTop` by itself (headless Chrome 154.0.8037.98, Firefox 156.0.1 and
+  webkit-host with Safari 27.0's WebKit, 2026-10-10). All three lower it to the range's end in the frame whose
+  `clientHeight` reads taller. Chrome's scroll anchoring raises it back when the viewport then shrinks: it keeps where
+  its anchor node sat when chosen and drops the node only on an explicit scroll that changes the offset
+  (`scroll_anchor.cc:401`, `paint_layer_scrollable_area.cc:431`, `:533-536`, Chromium 153); Firefox and webkit-host
+  leave it. At a zoom Chrome scales the position and rounds it again (`layout_box.cc:666-683`). Growth of under a pixel
+  lowers `scrollTop` and leaves `clientHeight` alone (19 to 62 of 99 steps of 0.37 px in Chrome at device pixel ratios
+  1.5, 2, 2.625 and 3, 18 and 19 in Firefox at 1.5 and 2), so "the viewport read taller" misses it, and at rest the end
+  reads from 0.69 px short of scroll height less `clientHeight` to 1 px past it (Chrome at 21 ratios from 0.5 to 5; 0.88
+  px short to 1 px past in Firefox at 18 from 0.8 to 4; on it in webkit-host), so an equality misses it too. The end
+  anchor takes a position within a pixel of the stretch between the last frame's computed end and the range's end for
+  the browser's (#489). Both ends are computed: measured from the last position read, the stretch follows a scroll of a
+  pixel a frame, which is then never counted. After a zoom step the position can sit more than a pixel inside the
+  computed end (1.06 px in Firefox from 125% to 90% at a ratio of 2; 1.13 to 1.69 px in Chrome at zoom steps to or from
+  ratios of 0.56 and less), and the chat then anchors a message as it did before. Reopen with a browser whose end at
+  rest reads more than a pixel off, or with a zoom in Safari, which wasn't run.
 
 #### Scroll Height
 
