@@ -1,3 +1,4 @@
+import { defined } from './checked.js'
 import { findGraphemeEnds } from './graphemes.js'
 import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
 import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
@@ -19,7 +20,7 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
   }
   let ends = cache.get(segmentIndex)
   if (ends === undefined) {
-    const segment = prepared.segments[segmentIndex]!
+    const segment = defined(prepared.segments[segmentIndex])
     ends = new Int32Array(segment.length)
     findGraphemeEnds(getEngineProfile().graphemeTable, segment, 0, segment.length, ends)
     cache.set(segmentIndex, ends)
@@ -29,7 +30,7 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
 
 // Where grapheme `graphemeIndex` of a segment starts in its text.
 function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
-  return graphemeIndex === 0 ? 0 : getGraphemeEnds(prepared, segmentIndex)[graphemeIndex - 1]!
+  return graphemeIndex === 0 ? 0 : defined(getGraphemeEnds(prepared, segmentIndex)[graphemeIndex - 1])
 }
 
 // The text of a range of `prepared`'s segments, with no hyphen: that of a rich-inline fragment its
@@ -50,20 +51,20 @@ export function buildRangeText(
   for (let i = startSegmentIndex; i < segmentEnd; i++) {
     // A soft hyphen shows only as the hyphen of a line that ends at it, and one the
     // Gecko scan takes as a zero-width break never does.
-    const kind = segmentFlags[i]! & KIND_BITS
+    const kind = defined(segmentFlags[i]) & KIND_BITS
     if (
       kind === SOFT_HYPHEN || kind === HARD_BREAK ||
-      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
+      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && defined(prepared.segments[i]).charCodeAt(0) === 0x00AD)
     ) continue
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
-      text += prepared.segments[i]!.slice(getGraphemeStart(prepared, i, startGraphemeIndex))
+      text += defined(prepared.segments[i]).slice(getGraphemeStart(prepared, i, startGraphemeIndex))
     } else {
-      text += prepared.segments[i]!
+      text += defined(prepared.segments[i])
     }
   }
 
   if (endGraphemeIndex > 0 && endSegmentIndex < segmentCount) {
-    text += prepared.segments[endSegmentIndex]!.slice(
+    text += defined(prepared.segments[endSegmentIndex]).slice(
       getGraphemeStart(prepared, endSegmentIndex, startSegmentIndex === endSegmentIndex ? startGraphemeIndex : 0),
       getGraphemeStart(prepared, endSegmentIndex, endGraphemeIndex),
     )

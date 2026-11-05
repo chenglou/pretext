@@ -2,6 +2,7 @@
 // the facts the line walkers read at a line's edges. layout.ts and rich-inline.ts prepare
 // through it, as they walk through line-break.ts.
 
+import { defined } from './checked.js'
 import { getHanKerningTrims, textMayHanKern, type HanKerningTrims } from './han-kerning.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
 import { scriptClassFacts } from './generated/engine-break-data.js'
@@ -140,7 +141,7 @@ export const OPENING_BRACKET_SHIFT = 14
 // Every code point's class, unpacked when a text first asks for a script.
 let scriptClasses: ClassTable | null = null
 function getScriptFacts(c: number): number {
-  return scriptClassFacts[getClass(scriptClasses ??= unpackClasses('chromium/script'), c)]!
+  return defined(scriptClassFacts[getClass(scriptClasses ??= unpackClasses('chromium/script'), c)])
 }
 
 // The facts of the character at text[i], with the scripts it has there, as Blink reads them
@@ -299,12 +300,12 @@ export type ParagraphLists = {
 function getFollowingSpaceTail(analysis: TextAnalysis, analysisIndex: number, to: number): string | null {
   const { normalized, spaceSources, starts, flags } = analysis
   let next = analysisIndex + 1
-  while (next < to && (flags[next]! & KIND_BITS) === ZERO_WIDTH_BREAK) next++
+  while (next < to && (defined(flags[next]) & KIND_BITS) === ZERO_WIDTH_BREAK) next++
   if (next >= to) return null
-  const nextKind = flags[next]! & KIND_BITS
+  const nextKind = defined(flags[next]) & KIND_BITS
   // A collapsed space's first source character: WebKit looks at the source after a text item.
-  const spaceStart = starts[next]!
-  if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || (spaceSources === null ? normalized.charCodeAt(spaceStart) : spaceSources[spaceStart]!) !== 0x20) return null
+  const spaceStart = defined(starts[next])
+  if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || (spaceSources === null ? normalized.charCodeAt(spaceStart) : defined(spaceSources[spaceStart])) !== 0x20) return null
   return normalized.slice(starts[analysisIndex + 1], spaceStart)
 }
 

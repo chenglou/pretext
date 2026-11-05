@@ -1,3 +1,4 @@
+import { defined } from './checked.js'
 import { getGeckoLineBreaks, isDiscardable, isEastAsianSegmentBreak, isJapaneseOrChinese, isSpaceCombiningSequenceTail, isSpaceOrTabOrSegmentBreak } from './gecko-line-breaks.js'
 import { isBidiControl, type GraphemeTable } from './graphemes.js'
 import { BREAK, CLUSTER_START, FORCED_BREAK, ITEM_START, SOFT_HYPHEN_BREAK, getBlinkLineBreaks, getWebKitBreakBetweenItems, getWebKitLineBreaks } from './line-breaks.js'
@@ -243,13 +244,13 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
   let normalizedIndex = 0
   if (whiteSpace === 'pre-wrap') {
     for (let i = 0; i < source.length; i++, normalizedIndex++) {
-      breaks[normalizedIndex] = sourceBreaks[i]!
+      breaks[normalizedIndex] = defined(sourceBreaks[i])
       if (source.charCodeAt(i) === 0x0D && source.charCodeAt(i + 1) === 0x0A) {
         i++
-        if ((sourceBreaks[i]! & BREAK) !== 0) breaks[normalizedIndex] = sourceBreaks[i]!
+        if ((defined(sourceBreaks[i]) & BREAK) !== 0) breaks[normalizedIndex] = defined(sourceBreaks[i])
       }
     }
-    breaks[normalizedLength] = sourceBreaks[source.length]!
+    breaks[normalizedLength] = defined(sourceBreaks[source.length])
     return breaks
   }
   let i = 0
@@ -260,15 +261,15 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
       while (end < source.length && isCollapsibleSpaceCode(source.charCodeAt(end))) end++
       if (end === source.length) break
     }
-    if ((sourceBreaks[i]! & BREAK) === 0 && breaks[normalizedIndex] === 0) breaks[normalizedIndex] = sourceBreaks[i]!
+    if ((defined(sourceBreaks[i]) & BREAK) === 0 && breaks[normalizedIndex] === 0) breaks[normalizedIndex] = defined(sourceBreaks[i])
     if (spaceSources !== null) spaceSources[normalizedIndex] = source.charCodeAt(i)
     const start = i
     for (; i < end; i++) {
-      if ((sourceBreaks[i]! & BREAK) !== 0) breaks[i === start ? normalizedIndex : normalizedIndex + 1] = sourceBreaks[i]!
+      if ((defined(sourceBreaks[i]) & BREAK) !== 0) breaks[i === start ? normalizedIndex : normalizedIndex + 1] = defined(sourceBreaks[i])
     }
     normalizedIndex++
   }
-  breaks[normalizedLength] = (sourceBreaks[i]! & BREAK) === 0 ? sourceBreaks[i]! : sourceBreaks[i]! & FORCED_BREAK
+  breaks[normalizedLength] = (defined(sourceBreaks[i]) & BREAK) === 0 ? defined(sourceBreaks[i]) : defined(sourceBreaks[i]) & FORCED_BREAK
   return breaks
 }
 
@@ -278,8 +279,8 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // (DROPPED). One with only soft hyphens before it on its chunk stays a soft hyphen: no line ends
 // at a chunk's start, and a line's start leaves either out.
 function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
-  if ((code === 0x2028 || code === 0x2029) && (breaks[i + 1]! & FORCED_BREAK) !== 0) return HARD_BREAK
-  if (code === 0x00AD && (breaks[i + 1]! & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
+  if ((code === 0x2028 || code === 0x2029) && (defined(breaks[i + 1]) & FORCED_BREAK) !== 0) return HARD_BREAK
+  if (code === 0x00AD && (defined(breaks[i + 1]) & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
   return classifySegmentBreakCode(code, whiteSpace, scan)
 }
 
@@ -589,8 +590,8 @@ function removeItemsSkippableSegmentBreaks(text: string, starts: number[], profi
   let copied = 0
   let newline = text.indexOf('\n')
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]!
-    const end = k + 1 < starts.length ? starts[k + 1]! : text.length
+    const start = defined(starts[k])
+    const end = k + 1 < starts.length ? defined(starts[k + 1]) : text.length
     resultStarts.push(result.length + start - copied)
     if (newline < 0 || newline >= end) continue
     const item = text.slice(start, end)
@@ -652,12 +653,12 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
   const offsets = paragraph.sourceOffsets = alignToSource(text, normalized, scan)
   const { starts, atomic } = paragraph
   for (let k = 0, j = 0; k < starts.length; k++) {
-    while (j < normalized.length && offsets[j]! < starts[k]!) j++
+    while (j < normalized.length && defined(offsets[j]) < defined(starts[k])) j++
     if (j === normalized.length) break
-    breaks[j] = breaks[j]! | ITEM_START
+    breaks[j] = defined(breaks[j]) | ITEM_START
     if (atomic[k] && offsets[j] === starts[k]) {
-      breaks[j] = breaks[j]! | BREAK
-      breaks[j + 1] = breaks[j + 1]! | BREAK | ITEM_START
+      breaks[j] = defined(breaks[j]) | BREAK
+      breaks[j + 1] = defined(breaks[j + 1]) | BREAK | ITEM_START
     }
   }
 }
@@ -680,21 +681,21 @@ function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, pre
   const breaks = new Uint8Array(source.length + 1)
   let previous = -1
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]!
-    const end = k + 1 < starts.length ? starts[k + 1]! : source.length
+    const start = defined(starts[k])
+    const end = k + 1 < starts.length ? defined(starts[k + 1]) : source.length
     if (start === end) continue
     // An item of one unit, as a space between two styled words or an atomic item's U+FFFC, has
     // no break inside, and its scan marks its end only after a line or paragraph separator
     // (getWebKitLineBreaks), so only those are scanned.
     const first = source.charCodeAt(start)
     if (end - start > 1 || first === 0x2028 || first === 0x2029) {
-      const itemBreaks = getWebKitLineBreaks(items[k]!.text!, preserve, keepAll, language)
-      for (let i = 1; i <= end - start; i++) breaks[start + i] = itemBreaks[i]!
+      const itemBreaks = getWebKitLineBreaks(defined(items[k]).text!, preserve, keepAll, language)
+      for (let i = 1; i <= end - start; i++) breaks[start + i] = defined(itemBreaks[i])
     }
     if (previous >= 0 && !atomic[k] && !atomic[previous]) {
       const last = source.charCodeAt(start - 1)
       const collapses = !preserve && ((first !== 0x0D && isCollapsibleSpaceCode(first)) || (last !== 0x0D && isCollapsibleSpaceCode(last)))
-      if (collapses || getWebKitBreakBetweenItems(items[previous]!.text!, items[k]!.text!, keepAll, language)) breaks[start] = breaks[start]! | BREAK
+      if (collapses || getWebKitBreakBetweenItems(defined(items[previous]).text!, defined(items[k]).text!, keepAll, language)) breaks[start] = defined(breaks[start]) | BREAK
     }
     previous = k
   }

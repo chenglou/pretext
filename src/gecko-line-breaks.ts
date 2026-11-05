@@ -29,6 +29,7 @@
 //   normal or keep-all under Strict line breaking, which line-break: auto selects
 //   (intl/lwbrk/LineBreaker.cpp:26-31).
 
+import { defined } from './checked.js'
 import {
   geckoLineBreakStatesPacked,
   geckoLineEotProperty,
@@ -348,7 +349,7 @@ function setupClusterBoundaries(g: Glyphs, text: string, from: number, to: numbe
     const ch = text.charCodeAt(pos)
     if (ch === 0x20 || ch === 0x3000) g.isSpace[pos] = 1
     else if (ch === 0x09af && pos > from && text.charCodeAt(pos - 1) === 0x09cd) extendCluster(g, pos) // BENGALI_YA after BENGALI_VIRAMA
-    const end = count === 0 ? pos + 1 : ends[k]!
+    const end = count === 0 ? pos + 1 : defined(ends[k])
     for (pos++; pos < end; pos++) extendCluster(g, pos)
   }
 }
@@ -408,9 +409,9 @@ function getComplexLanguage(u: number): number {
 function segmentComplex(units: number[]): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
-    const language = getComplexLanguage(units[i]!)
+    const language = getComplexLanguage(defined(units[i]))
     let j = i + 1
-    while (j < units.length && getComplexLanguage(units[j]!) === language) j++
+    while (j < units.length && getComplexLanguage(defined(units[j])) === language) j++
     if (language !== 0) {
       let slice = ''
       for (let k = i; k < j; k += 4096) slice += String.fromCharCode(...units.slice(k, Math.min(j, k + 4096)))
@@ -674,7 +675,7 @@ export function getGeckoLineBreaks(
   const line = lineData ??= { classes: unpackClasses('gecko/line'), states: unpackTable(geckoLineBreakStatesPacked) }
   const state = getBreakStates(line, tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
-    const rawPos = tr.orig[t]!
+    const rawPos = defined(tr.orig[t])
     const normal = state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)
     const afterSoftHyphen = tr.skipped[rawPos - 1] === 1 && source.charCodeAt(rawPos - 1) === CH_SHY
     if (normal || afterSoftHyphen) {

@@ -1,3 +1,4 @@
+import { defined } from './checked.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
 import { DEFAULT_IGNORABLE, getBlinkDefaultLocale, hasProperty, MARK } from './line-breaks.js'
 import { webkitGenericFamilies, webkitGenericFamilyNames, webkitScriptLanguages, webkitScriptSubtags } from './generated/webkit-generic-families.js'
@@ -474,8 +475,6 @@ const emojiGraphemeRe = /\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{Emo
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
 
 const genericKeywords = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
-// A quoted family name, or an unquoted generic keyword with what precedes it.
-const familyListItemRe = /("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi
 // A font string's size, with its line height, after which its family list starts.
 const fontSizeRe = /\dpx(?:\s*\/\s*\S+)?\s+/
 // One family of a family list, with the white space around it.
@@ -546,10 +545,15 @@ function getCanvasFont(font: string, families: readonly string[]): string {
   const size = fontSizeRe.exec(font)
   if (size === null) return font
   const start = size.index + size[0].length
-  return font.slice(0, start) + font.slice(start).replace(familyListItemRe, (item: string, quoted: string | undefined, separator: string, space: string, keyword: string) => {
-    const named = quoted === undefined ? families[genericKeywords.indexOf(keyword.toLowerCase())]! : ''
-    return named === '' ? item : separator + space + named
-  })
+  // A quoted family name, or an unquoted generic keyword with what precedes it. Where the
+  // quoted alternative matches, the other three captures are undefined.
+  return font.slice(0, start) + font.slice(start).replace(
+    /("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi,
+    (item: string, quoted: string | undefined, separator: string | undefined, space: string | undefined, keyword: string | undefined) => {
+      if (quoted !== undefined || separator === undefined || space === undefined || keyword === undefined) return item
+      const named = defined(families[genericKeywords.indexOf(keyword.toLowerCase())])
+      return named === '' ? item : separator + space + named
+    })
 }
 
 // The string a chosen soft hyphen paints in the font where the engine takes it from the
@@ -582,9 +586,9 @@ export function getHyphenText(measurement: FontMeasurement): string {
     const monospace = prefix + 'monospace'
     const serif = prefix + 'serif'
     if (measureIn(context, monospace, ' ') !== measureIn(context, serif, ' ') && measureIn(context, monospace, '\u2010') !== measureIn(context, serif, '\u2010')) {
-      for (let i = 0; i < families.length; i++) {
-        const beforeMonospace = `${prefix}${families[i]}, monospace`
-        const beforeSerif = `${prefix}${families[i]}, serif`
+      for (const family of families) {
+        const beforeMonospace = `${prefix}${family}, monospace`
+        const beforeSerif = `${prefix}${family}, serif`
         if (measureIn(context, beforeMonospace, ' ') !== measureIn(context, beforeSerif, ' ')) continue
         if (measureIn(context, beforeMonospace, '\u2010') === measureIn(context, beforeSerif, '\u2010')) hyphenText = '\u2010'
         break
@@ -685,7 +689,7 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
   let extras = noExtraSpacings
   try {
     let before = 0
-    for (let i = 0, start = 0; i < count; start = ends[i++]!) {
+    for (let i = 0, start = 0; i < count; start = defined(ends[i++])) {
       const text = seg.slice(prefixes ? 0 : start, ends[i])
       let glyphs = counts.get(text)
       if (glyphs === undefined) {
@@ -700,7 +704,7 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
       before = glyphs
       if (extra === 0 && extras.length === 0) continue
       if (extras.length === 0) extras = zeros(count)
-      extras[i] = extra
+      extras.splice(i, 1, extra)
     }
   } finally {
     if (context !== null) context.letterSpacing = measurement.letterSpacing
@@ -735,7 +739,7 @@ function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: strin
 // A character of the Hiragana and Katakana blocks, U+3041 to U+30FF, two of them in a row, and
 // how many the blocks hold.
 const kanaRe = /[\u3041-\u30FF]/
-export const kanaPairRe = /[\u3041-\u30FF]{2}/
+export const kanaPairRe: RegExp = /[\u3041-\u30FF]{2}/
 const KANA_COUNT = 0x30ff - 0x3041 + 1
 
 // The kerning of every segment that takes none.
@@ -943,7 +947,7 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
     if (code >= 0x2e80 && !isCanvasWordLetter(code)) return 0
   }
   const index = (first - 0x3041) * KANA_COUNT + second - 0x3041
-  const kerning = kernings[index]!
+  const kerning = defined(kernings[index])
   return Number.isNaN(kerning) ? kernings[index] = measureKanaKerning(text.slice(at - 1, at + 1), measurement) : kerning
 }
 
@@ -1175,11 +1179,11 @@ function countEmojiGlyphs(text: string, measurement: FontMeasurement): number {
   const ends = new Int32Array(text.length)
   const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
   let count = 0
-  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++]!) {
+  for (let i = 0, start = 0; i < graphemeCount; start = defined(ends[i++])) {
     const grapheme = text.slice(start, ends[i])
     if (!emojiGraphemeRe.test(grapheme)) continue
     const stretches = grapheme.match(emojiStretchRe)!
-    for (let s = 0; s < stretches.length; s++) count += getEmojiGlyphs(stretches[s]!, measurement)
+    for (const stretch of stretches) count += getEmojiGlyphs(stretch, measurement)
   }
   return count
 }
@@ -1227,7 +1231,7 @@ export function getSegmentFit(
       pairs = count > MAX_PREFIX_FIT_GRAPHEMES || addUpTo(advances, width)
       if (!pairs) advances = measureFitAdvances(seg, ends, count, 'segment-prefixes', metrics, measurement, emojiCorrection, followingSpaceWidth)
       lineStartExtras = [0]
-      for (let i = 1; i < count; i++) lineStartExtras.push(alone[i]! - advances[i]!)
+      for (let i = 1; i < count; i++) lineStartExtras.push(defined(alone[i]) - defined(advances[i]))
     }
   } else {
     // Past MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
@@ -1248,13 +1252,13 @@ export function getSegmentFit(
     const kernings = getFontKanaKerning(measurement)
     if (kernings !== null) {
       for (let g = 1; g < count; g++) {
-        const kerning = getKanaKerning(seg, pairs && g > 1 ? ends[g - 2]! : 0, ends[g - 1]!, measurement, kernings)
+        const kerning = getKanaKerning(seg, pairs && g > 1 ? defined(ends[g - 2]) : 0, defined(ends[g - 1]), measurement, kernings)
         if (kerning > 0) {
-          advances[g - 1] = advances[g - 1]! + kerning
+          advances.splice(g - 1, 1, defined(advances[g - 1]) + kerning)
         } else if (kerning < 0) {
-          advances[g] = advances[g]! + kerning
+          advances.splice(g, 1, defined(advances[g]) + kerning)
           lineStartExtras ??= zeros(count)
-          lineStartExtras[g] = lineStartExtras[g]! - kerning
+          lineStartExtras.splice(g, 1, defined(lineStartExtras[g]) - kerning)
         }
       }
     }
@@ -1278,11 +1282,11 @@ function countLigaturesOnFirstLetter(seg: string, ends: Int32Array, advances: nu
   // The grapheme the ligature that holds the grapheme before this one starts with, or that grapheme.
   let first = 0
   for (let i = 1; i < advances.length; i++) {
-    const start = ends[i - 1]!
+    const start = defined(ends[i - 1])
     const alone = getTextWidth(seg.slice(start, ends[i]), measurement, emojiCorrection)
-    if (Math.round((advances[i]! - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : ends[i - 2]!, ends[i]), measurement)) {
-      advances[first] = advances[first]! + advances[i]!
-      advances[i] = 0
+    if (Math.round((defined(advances[i]) - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : defined(ends[i - 2]), ends[i]), measurement)) {
+      advances.splice(first, 1, defined(advances[first]) + defined(advances[i]))
+      advances.splice(i, 1, 0)
     } else {
       first = i
     }
@@ -1309,7 +1313,7 @@ function isLigature(pair: string, measurement: FontMeasurement): boolean {
 // Whether a segment's advances add up to its width, within the rounding of Canvas's widths.
 function addUpTo(advances: readonly number[], width: number): boolean {
   let sum = 0
-  for (let i = 0; i < advances.length; i++) sum += advances[i]!
+  for (let i = 0; i < advances.length; i++) sum += defined(advances[i])
   return Math.abs(sum - width) <= width * WORD_SUM_ROUNDING
 }
 
@@ -1330,8 +1334,8 @@ function measureFitAdvances(
   const advances: number[] = []
   let previousStart = 0
   let previousWidth = 0
-  for (let i = 0, start = 0; i < count; start = ends[i++]!) {
-    const end = ends[i]!
+  for (let i = 0, start = 0; i < count; start = defined(ends[i++])) {
+    const end = defined(ends[i])
     if (prefixes) {
       // The whole segment is the last prefix; with a following space it was
       // measured together with that space.
@@ -1350,7 +1354,7 @@ function measureFitAdvances(
   // Advances that do not end in the whole segment's width take the kerning as a
   // difference, which needs the segment measured alone too.
   if (followingSpaceWidth !== null && !prefixes) {
-    advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+    advances.splice(count - 1, 1, defined(advances[count - 1]) + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth)
   }
   return advances
 }

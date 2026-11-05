@@ -32,6 +32,7 @@
 //   locale for the user's first Chinese language (FontDescription.cpp:74-83, 107-113).
 //   Pretext resolves no bidi levels here and takes preparation's language as it is.
 
+import { defined } from './checked.js'
 import {
   appleQuoteRemaps,
   blinkLinePairsPacked,
@@ -134,7 +135,7 @@ export type ClassTable = { readonly index: Uint16Array, readonly values: Uint8Ar
 // entry above that, where the engines' tries give their error value (unicode/ucptrie.h:615-620;
 // getLineBreakClass in src/gecko-line-breaks.ts gives ICU4X's itself).
 export function getClass(table: ClassTable, c: number): number {
-  return table.values[(table.index[c >> 8]! << 8) | (c & 0xff)]!
+  return defined(table.values[(defined(table.index[c >> 8]) << 8) | (c & 0xff)])
 }
 
 // The maps ship as one list of runs over U+0000..U+10FFFF, each run a length - 1 and a joint class:
@@ -154,29 +155,29 @@ export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: num
   for (let r = 0; r <= runs.length; r += 2) {
     // Runs of joint classes that are one class in this map make one run, [c, end), written once
     // the next run's class differs or no run is left.
-    const following = r < runs.length ? remap[runs[r + 1]!]! : -1
+    const following = r < runs.length ? defined(remap[defined(runs[r + 1])]) : -1
     if (following !== value) {
       while (c < end) {
         const block = c >> 8
         if ((c & 0xff) === 0 && end - c >= 0x100) {
-          if (whole[value]! < 0) {
+          if (defined(whole[value]) < 0) {
             whole[value] = count
             values.fill(value, count << 8, ++count << 8)
           }
-          index.fill(whole[value]!, block, end >> 8)
+          index.fill(defined(whole[value]), block, end >> 8)
           c = end & ~0xff
         } else {
           // A block that several runs share is its own: the first of them starts it.
           if ((c & 0xff) === 0) index[block] = count++
           const stop = Math.min(end, (block + 1) << 8)
-          const shift = (index[block]! - block) << 8
+          const shift = (defined(index[block]) - block) << 8
           values.fill(value, c + shift, stop + shift)
           c = stop
         }
       }
       value = following
     }
-    if (r < runs.length) end += runs[r]! + 1
+    if (r < runs.length) end += defined(runs[r]) + 1
   }
   if (end !== 0x110000) throw new Error('The class runs don\'t cover U+0000..U+10FFFF')
   return { index, values }
@@ -279,13 +280,13 @@ export function unpackStateRows(width: number, states: number, base: Uint16Array
   const rows = new Uint16Array(states * width)
   if (base !== null) rows.set(base)
   for (let i = 0, row = -width; i < differences.length;) {
-    row += (differences[i++]! + 1) * width
-    const back = differences[i++]! * width
+    row += (defined(differences[i++]) + 1) * width
+    const back = defined(differences[i++]) * width
     if (back > 0) rows.copyWithin(row, row - back, row - back + width)
     let at = row - 1
-    for (let n = differences[i++]!; n > 0; n--) {
-      at += 1 + differences[i++]!
-      rows[at] = differences[i++]!
+    for (let n = defined(differences[i++]); n > 0; n--) {
+      at += 1 + defined(differences[i++])
+      rows[at] = defined(differences[i++])
     }
   }
   return rows
@@ -357,25 +358,25 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
       } else { // rbbi.cpp:850-855, with Apple's overrides (apple-rbbi.cpp:1061-1084)
         let overridden = false
         for (let i = 0; i < overrideCount; i++) {
-          if (c === overrideChars[i]) { category = overrides.categories[i]!; overridden = true; break }
+          if (c === overrideChars[i]) { category = defined(overrides.categories[i]); overridden = true; break }
         }
         if (!overridden) {
           category = getClass(r.classes, c)
           if (category >= dictionaryStart) dictionaryCharCount++
         }
       }
-      const state = rows[row + 3 + category]! // rbbi.cpp:874-877
+      const state = defined(rows[row + 3 + category]) // rbbi.cpp:874-877
       row = state * width
 
-      const accepting = rows[row]! // rbbi.cpp:880-896
+      const accepting = defined(rows[row]) // rbbi.cpp:880-896
       if (accepting === ACCEPTING_UNCONDITIONAL) {
         result = pos
-      } else if (accepting > ACCEPTING_UNCONDITIONAL && matches[accepting]! >= 0) {
-        boundary = matches[accepting]!
+      } else if (accepting > ACCEPTING_UNCONDITIONAL && defined(matches[accepting]) >= 0) {
+        boundary = defined(matches[accepting])
         break
       }
 
-      const rule = rows[row + 1]! // rbbi.cpp:904-910
+      const rule = defined(rows[row + 1]) // rbbi.cpp:904-910
       if (rule > ACCEPTING_UNCONDITIONAL) matches[rule] = pos
 
       if (state === STOP_STATE) break // rbbi.cpp:912-917
@@ -487,7 +488,7 @@ function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: 
   }
   if (last <= 0xff && ch <= 0xff) {
     const x = ch - 0x21
-    return (pairs[(last - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
+    return (defined(pairs[(last - 0x21) * 28 + (x >> 3)]) & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
   }
   return UNKNOWN
 }
@@ -680,12 +681,12 @@ function following(f: Factory, location: number): number {
     markRuleBoundaries(f.line.rules, text, flags, f.line.overrides)
     next = new Int32Array(text.length + 2)
     next[text.length + 1] = -1
-    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : next[p + 1]!
+    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : defined(next[p + 1])
     f.nextBoundary = next
   }
   const o = location + f.priorLength + 1
   if (o >= next.length) return -1
-  const b = next[o]!
+  const b = defined(next[o])
   return b < 0 ? -1 : b - f.priorLength
 }
 
@@ -717,7 +718,7 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
     if (before <= 0xff && after <= 0xff) {
       if (before >= 0x21 && after >= 0x21) {
         const x = after - 0x21
-        if ((pairs[(before - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0) return i
+        if ((defined(pairs[(before - 0x21) * 28 + (x >> 3)]) & (1 << (x & 7))) !== 0) return i
       }
       continue
     }

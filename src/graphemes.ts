@@ -10,6 +10,7 @@
 // Chrome's rules past them: one goes with the cluster before it, or at the start with the one
 // after it, and text of only such characters holds no cluster.
 
+import { defined } from './checked.js'
 import type { CharTable } from './generated/engine-break-data.js'
 import { getBreakRules, getClass, START_STATE, type BreakRules } from './line-breaks.js'
 
@@ -41,9 +42,9 @@ function parseGraphemeRules(table: GraphemeTable): GraphemeRules {
   const transitions = new Uint8Array(states * rules.catCount)
   for (let state = 0; state < states; state++) {
     for (let category = 0; category < rules.catCount; category++) {
-      const next = rows[state * width + 3 + category]!
-      transitions[state * rules.catCount + category] = next === 0 || rows[next * width]! > 1
-        ? CLUSTER_END | rows[START_STATE * width + 3 + category]!
+      const next = defined(rows[state * width + 3 + category])
+      transitions[state * rules.catCount + category] = next === 0 || defined(rows[next * width]) > 1
+        ? CLUSTER_END | defined(rows[START_STATE * width + 3 + category])
         : next
     }
   }
