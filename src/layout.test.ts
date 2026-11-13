@@ -35,6 +35,8 @@ let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let setLocale: LayoutModule['setLocale']
 let clearCache: LayoutModule['clearCache']
+let getEmojiCorrection: LayoutModule['getEmojiCorrection']
+let setEmojiCorrection: LayoutModule['setEmojiCorrection']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
 let getSegmentFit: MeasurementModule['getSegmentFit']
@@ -291,6 +293,8 @@ beforeAll(async () => {
     walkLineRanges,
     setLocale,
     clearCache,
+    getEmojiCorrection,
+    setEmojiCorrection,
   } = mod)
   ;({ countPreparedLines, walkPreparedLinesRaw } = lineBreakMod)
   ;({ getSegmentFit, getFontMeasurement, getEngineProfile } = measurementMod)
@@ -1751,6 +1755,35 @@ describe('measurement invariants', () => {
     withEmojiPage(() => {
       Reflect.deleteProperty(globalThis, 'document')
       expect(emojiWidth('16px Emoji Worker Test')).toBe(20)
+    })
+  })
+
+  test('a page can hand its emoji correction to a document-less worker', () => {
+    withEmojiPage(() => {
+      const font = '16px Emoji Worker Handoff Test'
+      const correction = getEmojiCorrection(font)
+      expect(correction).toBe(4)
+      const pageWidth = emojiWidth(font)
+      expect(pageWidth).toBe(16)
+
+      // Match the page's language before handing the per-font value to the worker.
+      Reflect.deleteProperty(globalThis, 'document')
+      setLocale('en')
+      setEmojiCorrection(font, correction)
+      expect(emojiWidth(font)).toBe(pageWidth)
+
+      // A worker may have prepared text before the handoff. The next prepare
+      // must use the correction for both ordinary and letter-spaced caches.
+      clearCache()
+      const uncorrectedRegular = emojiWidth(font)
+      const spacedWidth = () => measureNaturalWidth(prepareWithSegments('\u{1F600}', font, { letterSpacing: 1 }))
+      const uncorrectedSpaced = spacedWidth()
+      setEmojiCorrection(font, correction)
+      expect(emojiWidth(font)).toBe(uncorrectedRegular - correction)
+      expect(spacedWidth()).toBe(uncorrectedSpaced - correction)
+
+      expect(() => setEmojiCorrection(font, -1)).toThrow(RangeError)
+      expect(() => setEmojiCorrection(font, Number.NaN)).toThrow(RangeError)
     })
   })
 })
