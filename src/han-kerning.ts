@@ -24,7 +24,7 @@
 // bounds under the page's Han script (han_kerning.cc:47-168, 400-535).
 import { KIND_BITS, TEXT, UNBROKEN, type TextAnalysis } from './analysis.js'
 import { hasProperty, PUNCTUATION } from './line-breaks.js'
-import { getContext, getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
+import { getContext, getSegmentMetrics, zeros, type FontMeasurement, type MeasurementContext } from './measurement.js'
 
 const OTHER = 0
 const OPEN = 1
@@ -91,7 +91,7 @@ export type HanKerningFontData = {
 // centered. Canvas shapes a CJK symbol next to 中 as Han, so its right edge comes from `中c`
 // and its left edge from `c中`, where 中's ink covers neither. Curly quotes and U+FF1B are
 // words of their own in Canvas (NextWordEndIndex) and are measured alone.
-function getTypeFromBounds(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, c: number, hanWidth: number): { advance: number; type: number } {
+function getTypeFromBounds(ctx: MeasurementContext, c: number, hanWidth: number): { advance: number; type: number } {
   const s = String.fromCharCode(c)
   let advance: number
   let left: number

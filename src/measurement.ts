@@ -375,20 +375,71 @@ export type EngineProfile = {
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context' | 'reshaped-lines'
 
+
+/** The Canvas text state used by preparation; providers need no drawing surface. */
+export type MeasurementMetrics = {
+  width: number
+  actualBoundingBoxLeft: number
+  actualBoundingBoxRight: number
+}
+
+export type MeasurementContext = {
+  font: string
+  letterSpacing?: string
+  fontKerning?: 'auto' | 'normal' | 'none'
+  textRendering?: 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision'
+  lang?: string
+  measureText(text: string): MeasurementMetrics
+}
+
+export type MeasurementContextFactory = (language: string | null) => MeasurementContext
+
+declare const measurementSessionBrand: unique symbol
+
+/** An independent provider and its bounded per-font measurement caches. */
+export type MeasurementSession = { readonly [measurementSessionBrand]: true }
+
+type InternalMeasurementSession = {
+  factory: MeasurementContextFactory
+  language: string | null | undefined
+  state: MeasureState | null
+}
+
+const defaultMeasurementSession: InternalMeasurementSession = {
+  factory: createContext, language: undefined, state: null,
+}
+
+export function createMeasurementSession(
+  factory: MeasurementContextFactory,
+  options?: { language?: string | null },
+): MeasurementSession {
+  return { factory, language: options?.language, state: null } as unknown as MeasurementSession
+}
+
+function sessionOwner(session: MeasurementSession | undefined): InternalMeasurementSession {
+  return session === undefined ? defaultMeasurementSession : session as unknown as InternalMeasurementSession
+}
+
+export function clearMeasurementSession(session: MeasurementSession): void {
+  clearMeasurementCaches(session)
+}
+
 // The measurement context and what preparation measured through it. Canvas resolves
 // fonts under the context's language, the page's unless the context has a `lang` to
 // give it preparation's. Chrome keeps a resolved font while its font string is
 // unchanged, so the context, and every width measured through it, belong to the
 // language it was created under: all of it is replaced when that language changes.
 type MeasureState = {
+  factory: MeasurementContextFactory
+  correctsDomEmoji: boolean
   language: string | null
-  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D // Once made, read through getContext() alone
+  context: MeasurementContext // Once made, read through getContext() alone
   font: string // The font getContext() set the context to since a font was last looked up, or ''
   letterSpacing: string // The letterSpacing getContext() last set the context to
   // A second context, under text-rendering: optimizeLegibility, where Canvas shapes a string
   // whole, and the Canvas font it is set to: made for the first font asked about its kana
   // (getFontKanaKerning).
-  wholeRunContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+  wholeRunContext: MeasurementContext | null
   wholeRunFont: string
   genericFamilies: string[] | null // The families the language gives the generic keywords, or null
   takesLetterSpacing: boolean // As Chrome's and Firefox's contexts do, as a string of CSS px
@@ -402,7 +453,6 @@ type MeasureState = {
   letterSpacedFonts: Map<string, FontMeasurement>
   segments: number // The segments the fonts' caches hold between them (MAX_CACHED_SEGMENTS)
 }
-let measureState: MeasureState | null = null
 // What preparation keeps per font. It all goes together, when the caches clear or the
 // language changes.
 export type FontMeasurement = {
@@ -491,7 +541,7 @@ const familyRe = /(?:"[^"]*"|'[^']*'|[^,])+/g
 // and iOS's families (scripts/generate-webkit-generic-families.ts): where they differ,
 // the context takes macOS's if it has it. Listing both instead would send characters
 // macOS's family lacks to iOS's, where the page falls back by language.
-function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): string[] | null {
+function getWebKitGenericFamilies(language: string, ctx: MeasurementContext): string[] | null {
   let tag = language.toLowerCase().replaceAll('_', '-')
   let han: boolean | null = null
   for (let at = tag; han === null;) {
@@ -530,7 +580,7 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
 const familyProbeText = 'Hamburg 한中 नम សួ ನಮ ສະ നമ မင ନମ ආය བཀ'
 
 // Whether the context has a family: the probe text measures differently with it first.
-function hasFamily(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, family: string): boolean {
+function hasFamily(ctx: MeasurementContext, family: string): boolean {
   for (const fallback of ['monospace', 'serif']) {
     ctx.font = `16px ${fallback}`
     const width = ctx.measureText(familyProbeText).width
@@ -596,7 +646,7 @@ export function getHyphenText(measurement: FontMeasurement): string {
   return hyphenText
 }
 
-function measureIn(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, font: string, text: string): number {
+function measureIn(context: MeasurementContext, font: string, text: string): number {
   context.font = font
   return context.measureText(text).width
 }
@@ -612,14 +662,16 @@ export function setLocaleLanguage(locale: string | undefined): void {
 // The language one preparation breaks and measures under, read once: setLocale()'s, or
 // else the page's, or null without a document. The Chromium profile lays out a page
 // without one under Blink's default locale (laysOutUnderDefaultLocale).
-export function getPreparationLanguage(profile: EngineProfile): string | null {
+export function getPreparationLanguage(profile: EngineProfile, session?: MeasurementSession): string | null {
+  const owner = sessionOwner(session)
+  const measureState = owner.state
   // A preparation starts with this read, so the fonts' caches are bounded here, between two
   // preparations (MAX_CACHED_SEGMENTS), and not where a font is looked up: a rich-inline
   // paragraph looks one up for each of its items, and caches dropped between two of them would
   // have one paragraph measured partly from the caches and partly anew.
-  if (measureState !== null && measureState.segments > MAX_CACHED_SEGMENTS) clearMeasurementCaches()
-  let language = localeLanguage ?? null
-  if (localeLanguage === undefined && typeof document !== 'undefined') {
+  if (measureState !== null && measureState.segments > MAX_CACHED_SEGMENTS) clearMeasurementCaches(session)
+  let language = owner.language === undefined ? localeLanguage ?? null : owner.language
+  if (owner.language === undefined && localeLanguage === undefined && typeof document !== 'undefined') {
     const lang = (document.documentElement as HTMLElement | null | undefined)?.lang
     if (typeof lang === 'string') language = lang
   }
@@ -681,7 +733,7 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
   const counts = measurement.glyphCounts
   // The font's context once Canvas is asked, under the counting spacing from then on, so
   // it changes its spacing once, and not at all for a segment whose prefixes are counted.
-  let context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
+  let context: MeasurementContext | null = null
   let extras = noExtraSpacings
   try {
     let before = 0
@@ -838,10 +890,10 @@ const KANA_PROBE = '\u30D7\u30C0\u30B0\u30BF\u30CE\u30E0\u30D6\u30A4\u30E1\u3048
 // took, and where a shorter one is no font string, as a list cut inside a calc() size, the
 // context keeps the list before it and reads what it read under that one, so the search goes
 // on to the next list or ends on the font's own.
-function getWholeRunContext(measurement: FontMeasurement): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+function getWholeRunContext(measurement: FontMeasurement): MeasurementContext {
   const state = measurement.state
   if (state.wholeRunContext === null) {
-    state.wholeRunContext = createContext(state.language)
+    state.wholeRunContext = state.factory(state.language)
     state.wholeRunContext.textRendering = 'optimizeLegibility'
   }
   if (state.wholeRunFont !== measurement.kanaFont) state.wholeRunContext.font = state.wholeRunFont = measurement.kanaFont
@@ -850,7 +902,7 @@ function getWholeRunContext(measurement: FontMeasurement): CanvasRenderingContex
 
 // Whether two measurements of one string are of the same glyphs at the same places: as wide,
 // with the same ink edges, to float32 rounding (getKanaKerning has the bound).
-function sameInk(a: TextMetrics, b: TextMetrics): boolean {
+function sameInk(a: MeasurementMetrics, b: MeasurementMetrics): boolean {
   const bound = a.width / 0x400000
   return Math.abs(a.width - b.width) <= bound && Math.abs(a.actualBoundingBoxLeft - b.actualBoundingBoxLeft) <= bound &&
     Math.abs(a.actualBoundingBoxRight - b.actualBoundingBoxRight) <= bound
@@ -882,7 +934,7 @@ export function getFontKanaKerning(measurement: FontMeasurement): Float64Array |
     const start = size === null ? 0 : size.index + size[0].length
     const families = size === null ? null : font.slice(start).match(familyRe)
     const lists = families === null ? 1 : families.length
-    let own: TextMetrics | null = null
+    let own: MeasurementMetrics | null = null
     for (let i = 0; i < lists; i++) {
       const list = i === 0 ? font : font.slice(0, start) + families!.slice(i).join(',')
       measurement.kanaFont = list
@@ -1054,7 +1106,7 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
   const askedBefore = measurement.emojiWidth !== 0
   const canvasW = measurement.emojiWidth = getContext(measurement).measureText('\u{1F600}').width
   correction = 0
-  if (canvasW > fontSize + 0.5 && typeof document !== 'undefined') {
+  if (measurement.state.correctsDomEmoji && canvasW > fontSize + 0.5 && typeof document !== 'undefined') {
     const domW = readEmojiWidth(font)
     // A document with no box for the span, as in an iframe that is display: none, has no
     // width to read. The text goes uncorrected, as in a worker, and nothing is kept: the next
@@ -1359,13 +1411,14 @@ function measureFitAdvances(
 // measurement of its own where the context shapes it as the page does: its widths,
 // prefixes and line-edge facts all come from that shaping. The context isn't touched
 // here: text that is all in the font's caches measures nothing (getContext).
-export function getFontMeasurement(font: string, language: string | null, letterSpaced: boolean): FontMeasurement {
+export function getFontMeasurement(font: string, language: string | null, letterSpaced: boolean, session?: MeasurementSession): FontMeasurement {
+  const owner = sessionOwner(session)
   // Measuring starts here, for a text and for each item of a rich-inline paragraph, with the
   // language the preparation resolved. After that language changes, start again with a new
   // context and empty caches; clearing the caches alone would re-measure with fonts resolved
   // under the old language.
-  if (measureState === null || measureState.language !== language) measureState = createMeasureState(language)
-  const state = measureState
+  if (owner.state === null || owner.state.language !== language) owner.state = createMeasureState(language, owner.factory, session === undefined)
+  const state = owner.state
   const shaped = letterSpaced && state.shapesLetterSpaced
   const fonts = shaped ? state.letterSpacedFonts : state.fonts
   // The first measurement after a lookup sets the font again, the same string too: Firefox's
@@ -1397,7 +1450,7 @@ export function getFontMeasurement(font: string, language: string | null, letter
 // another. A context that doesn't read the question's font back as written refuses nothing.
 // Only the context's `font` is written and read, no element and no style, and nothing is
 // measured. Asked once for each font measurement, never for a text.
-function contextTakesFont(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, font: string): boolean {
+function contextTakesFont(context: MeasurementContext, font: string): boolean {
   context.font = '1px serif'
   context.font = font
   if (context.font !== '1px serif') return true
@@ -1411,7 +1464,7 @@ function contextTakesFont(context: CanvasRenderingContext2D | OffscreenCanvasRen
 // setting, whatever was looked up or prepared in between, and text that is all cached,
 // which measures nothing, sets nothing. What changes the context after that puts it back
 // before it returns (getHyphenText, getExtraSpacings, getFontSpaceKerning, isLigature).
-export function getContext(measurement: FontMeasurement): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+export function getContext(measurement: FontMeasurement): MeasurementContext {
   const state = measurement.state
   if (state.font !== measurement.canvasFont) state.context.font = state.font = measurement.canvasFont
   if (state.letterSpacing !== measurement.letterSpacing) state.context.letterSpacing = state.letterSpacing = measurement.letterSpacing
@@ -1420,9 +1473,9 @@ export function getContext(measurement: FontMeasurement): CanvasRenderingContext
 
 // A context's `lang` follows the page's, and preparation's can be setLocale()'s or Blink's
 // default locale instead.
-function createContext(language: string | null): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+function createContext(language: string | null): MeasurementContext {
   // jsdom and happy-dom have a document whose canvas gives no 2D context: getContext() returns null there.
-  let context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
+  let context: MeasurementContext | null = null
   if (typeof OffscreenCanvas !== 'undefined') context = new OffscreenCanvas(1, 1).getContext('2d')
   else if (typeof document !== 'undefined') context = document.createElement('canvas').getContext('2d')
   if (context === null) throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
@@ -1430,11 +1483,13 @@ function createContext(language: string | null): CanvasRenderingContext2D | Offs
   return context
 }
 
-function createMeasureState(language: string | null): MeasureState {
-  const context = createContext(language)
+function createMeasureState(language: string | null, factory: MeasurementContextFactory, correctsDomEmoji: boolean): MeasureState {
+  const context = factory(language)
   const profile = getEngineProfile()
   const takesLetterSpacing = typeof context.letterSpacing === 'string'
   return {
+    factory,
+    correctsDomEmoji,
     language,
     context,
     font: '',
@@ -1450,7 +1505,8 @@ function createMeasureState(language: string | null): MeasureState {
   }
 }
 
-export function clearMeasurementCaches(): void {
+export function clearMeasurementCaches(session?: MeasurementSession): void {
+  const measureState = sessionOwner(session).state
   if (measureState === null) return
   measureState.fonts.clear()
   measureState.letterSpacedFonts.clear()

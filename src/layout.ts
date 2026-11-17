@@ -19,6 +19,7 @@ import {
 } from './analysis.js'
 import {
   clearMeasurementCaches,
+  type MeasurementSession,
   getEngineProfile,
   getPreparationLanguage,
   readLetterSpacing,
@@ -98,6 +99,7 @@ export type LayoutLinesResult = LayoutResult & {
 export type WordBreakMode = AnalysisWordBreakMode
 
 export type PrepareOptions = {
+  measurement?: MeasurementSession
   whiteSpace?: WhiteSpaceMode
   wordBreak?: WordBreakMode
   letterSpacing?: number
@@ -115,9 +117,9 @@ function prepareInternal(
   const engineProfile = getEngineProfile()
   const letterSpacing = readLetterSpacing(options?.letterSpacing, engineProfile)
   // One language read: break rules and measurement both follow it.
-  const language = getPreparationLanguage(engineProfile)
+  const language = getPreparationLanguage(engineProfile, options?.measurement)
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, language)
-  return measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null)
+  return measureAnalysis(analysis, 0, analysis.flags.length, font, includeSegments, letterSpacing, engineProfile, language, true, null, options?.measurement)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
@@ -370,3 +372,6 @@ export function setLocale(locale?: string): void {
   setLocaleLanguage(locale)
   clearCache()
 }
+
+export { createMeasurementSession, clearMeasurementSession } from './measurement.js'
+export type { MeasurementContext, MeasurementContextFactory, MeasurementMetrics, MeasurementSession } from './measurement.js'

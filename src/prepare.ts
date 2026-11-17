@@ -28,6 +28,7 @@ import {
   type BreakableFitMode,
   type EngineProfile,
   type FontMeasurement,
+  type MeasurementSession,
   getCorrectedSegmentWidth,
   getEmojiCorrection,
   getExtraSpacings,
@@ -363,6 +364,7 @@ export function measureAnalysis(
   overflowBreaks: boolean,
   // The paragraph's lists for a rich-inline item, null for a text.
   paragraph: ParagraphLists | null,
+  session?: MeasurementSession,
 ): (PreparedText & PreparedLineBreakData) | (PreparedText & PreparedSegments) {
   const { normalized, texts, starts, flags } = analysis
   // The measured text and where it starts in the analysis's: what is asked of the whole text
@@ -385,7 +387,7 @@ export function measureAnalysis(
   // Where the first measured segment goes in the lists.
   const base = widths.length
   const hasLetterSpacing = letterSpacing !== 0
-  const fontMeasurement = getFontMeasurement(font, language, hasLetterSpacing)
+  const fontMeasurement = getFontMeasurement(font, language, hasLetterSpacing, session)
   const emojiCorrection = textMayContainEmoji(own) ? getEmojiCorrection(font, fontMeasurement) : 0
   // Whether the text holds a U+0020. Only then can a space follow one of its text segments
   // (getFollowingSpaceTail), so a text of none, as most CJK paragraphs are, doesn't look for

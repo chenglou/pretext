@@ -281,3 +281,29 @@ See [DEVELOPMENT.md](https://github.com/chenglou/pretext/blob/main/DEVELOPMENT.m
 ## Credits
 
 Sebastian Markbage first planted the seed with [text-layout](https://github.com/chenglou/text-layout) last decade. His design — canvas `measureText` for shaping, bidi from pdf.js, streaming line breaking — informed the architecture we kept pushing forward here.
+
+### Isolated measurement providers (draft)
+
+A renderer that cannot replace a page's `OffscreenCanvas` can supply its own Canvas
+text contexts through an opt-in measurement session. The factory must return a new
+context when called, including when the engine requests a second shaping context.
+It needs `font` and `measureText` with width and left/right ink bounds; optional
+Canvas text-state properties advertise the shaping features the backend implements.
+
+```ts
+import { createMeasurementSession, prepareWithSegments } from '@chenglou/pretext'
+
+const measurement = createMeasurementSession(createBackendTextContext, { language: 'en' })
+const prepared = prepareWithSegments('Hello world', '20px Example', { measurement })
+```
+
+`prepare`, `prepareWithSegments` and `prepareRichInline` accept the same session.
+Its font and segment caches belong to that provider and keep the existing segment
+bound; interleaving another provider does not change them. Use
+`clearMeasurementSession(measurement)` to discard its measured widths, or create a
+new session when its font environment changes. A fixed `language` avoids reading
+the page locale; `null` selects no locale. Leaving the option out follows the
+existing ambient locale policy. Caller-provided measurements do not apply the
+page's DOM emoji-width correction. These are layouts over the backend's Canvas
+measurements with the selected engine's breaks, not a promise to match a browser's
+or native text view's typography. Calls with no session retain the ambient backend.
