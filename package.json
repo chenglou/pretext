@@ -9,8 +9,13 @@
     "typography",
     "canvas",
     "svg",
-    "unicode"
+    "unicode",
+    "measure-text",
+    "text-wrapping",
+    "virtualization",
+    "reflow"
   ],
+  "homepage": "https://chenglou.me/pretext/",
   "license": "MIT",
   "repository": {
     "type": "git",

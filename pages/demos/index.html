@@ -2,151 +2,143 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pretext Demos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pretext: TypeScript library for multiline text measurement &amp; layout</title>
+<meta name="description" content="Pure TypeScript library for multiline text measurement &amp; layout, with no DOM measurement or reflow. Fast, accurate &amp; works in every language. Renders to DOM, Canvas &amp; SVG.">
+<link rel="canonical" href="https://chenglou.me/pretext/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Pretext">
+<meta property="og:title" content="Pretext">
+<meta property="og:description" content="Pure TypeScript library for multiline text measurement &amp; layout. Fast, accurate &amp; supports all the languages you didn't even know about.">
+<meta property="og:url" content="https://chenglou.me/pretext/">
+<meta property="og:image" content="https://chenglou.me/pretext/og-image.png">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:image:alt" content="Pretext: Pure TypeScript library for multiline text measurement &amp; layout.">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareSourceCode", "name": "Pretext", "description": "Pure TypeScript library for multiline text measurement & layout.", "url": "https://chenglou.me/pretext/", "codeRepository": "https://github.com/chenglou/pretext", "programmingLanguage": "TypeScript", "license": "https://opensource.org/licenses/MIT", "author": {"@type": "Person", "name": "Cheng Lou"}}</script>
 <style>
   * { box-sizing: border-box; }
   :root {
-    color-scheme: light;
-    --page: #f5f1ea;
-    --panel: #fffdf8;
-    --ink: #201b18;
-    --muted: #6d645d;
-    --rule: #d8cec3;
-    --accent: #955f3b;
+    color-scheme: light dark;
+    --page: #fbf9f5;
+    --ink: #1d1a17;
+    --muted: #6f675f;
+    --faint: #a8a097;
+    --rule: #e6dfd5;
+    --accent: #9a5a2e;
+    --wash: #f3eee6;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #161412;
+      --ink: #ece6dd;
+      --muted: #a39a8f;
+      --faint: #6c645b;
+      --rule: #2d2925;
+      --accent: #d99c6b;
+      --wash: #201d1a;
+    }
+  }
+  html { scrollbar-gutter: stable; }
   body {
     margin: 0;
-    min-height: 100vh;
-    background: linear-gradient(180deg, #fbf7f0 0%, var(--page) 100%);
+    background: var(--page);
     color: var(--ink);
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font: 18px/1.55 Charter, "Bitstream Charter", "Charis SIL", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
   }
+
   .page {
-    width: min(940px, calc(100vw - 32px));
+    width: min(1120px, calc(100% - 32px));
     margin: 0 auto;
-    padding: 32px 0 48px;
+    padding: 24px 0 112px;
   }
-  .eyebrow {
-    margin: 0 0 8px;
-    font: 12px/1.2 "SF Mono", ui-monospace, monospace;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
+  header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    gap: 24px 56px;
+    align-items: end;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--rule);
   }
+  /* The wordmark is about 2.83 of its size wide in Charter: 34cqi keeps it inside its column */
+  .mark { container-type: inline-size; }
   h1 {
     margin: 0;
-    font: 700 34px/1.08 Georgia, "Times New Roman", serif;
+    font: 400 min(168px, max(72px, 14vw), 34cqi)/0.85 Charter, "Bitstream Charter", "Charis SIL", Georgia, serif;
+    letter-spacing: -0.035em;
   }
-  .intro {
-    margin: 10px 0 0;
-    max-width: 62ch;
-    line-height: 1.5;
-    color: var(--muted);
+  h1 i { letter-spacing: -0.02em; }
+  .headline { margin: 0; font-size: 26px; line-height: 1.25; letter-spacing: -0.005em; }
+  .aside { margin: 10px 0 0; font-size: 17px; line-height: 1.45; font-style: italic; color: var(--muted); }
+  .install {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    background: var(--wash);
+    font: 14px/1.4 "SF Mono", ui-monospace, Menlo, monospace;
+    user-select: all;
   }
-  .grid {
+  .links { display: flex; justify-content: flex-end; gap: 20px; margin-bottom: 24px; }
+  .links a { color: var(--muted); font-size: 16px; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  .links a:hover { color: var(--accent); text-decoration-color: currentColor; }
+
+  h2 { margin: 32px 0 16px; font: italic 400 20px/1.3 Charter, "Bitstream Charter", "Charis SIL", Georgia, serif; }
+  .demos {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    margin-top: 28px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 16px;
+    margin: 0 -16px;
   }
-  .card {
+  .demo {
     display: block;
-    padding: 18px;
-    border: 1px solid var(--rule);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--panel) 94%, white 6%);
+    padding: 16px 16px 20px;
+    border-radius: 8px;
     color: inherit;
     text-decoration: none;
-    box-shadow: 0 18px 40px rgb(54 40 23 / 0.08);
-    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    transition: background-color 180ms ease;
   }
-  .card:hover {
-    transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--accent) 35%, var(--rule) 65%);
-    box-shadow: 0 22px 44px rgb(54 40 23 / 0.12);
+  .demo:hover { background: var(--wash); transition: none; }
+  .demo:hover .name { color: var(--accent); transition: none; }
+  .name { display: block; font-size: 23px; line-height: 1.2; transition: color 180ms ease; }
+  .desc { display: block; margin-top: 6px; font-size: 16.5px; line-height: 1.5; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .demos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  .card h2 {
-    margin: 0;
-    font: 600 20px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
-  }
-  .card p {
-    margin: 10px 0 0;
-    line-height: 1.5;
-    color: var(--muted);
-  }
-  @media (max-width: 760px) {
-    .page {
-      width: min(100vw - 20px, 940px);
-      padding-top: 22px;
-    }
-    .grid {
-      grid-template-columns: 1fr;
-    }
+  @media (max-width: 720px) {
+    header { grid-template-columns: 1fr; }
+    .demos { grid-template-columns: 1fr; gap: 0; }
   }
 </style>
 </head>
 <body>
   <main class="page">
-    <p class="eyebrow">Pretext</p>
-    <h1>Demos</h1>
-    <p class="intro">
-      Small browser demos for the kinds of layout work Pretext unlocks: text
-      height without DOM measurement in the hot path, manual line routing, and
-      width-tight multiline UI.
-    </p>
+    <nav class="links"><a href="https://github.com/chenglou/pretext">GitHub</a><a href="https://www.npmjs.com/package/@chenglou/pretext">npm</a></nav>
+    <header>
+      <div class="mark"><h1><i>Pre</i>text</h1></div>
+      <div>
+        <p class="headline">Pure TypeScript library for multiline text measurement &amp; layout.</p>
+        <p class="aside">Fast, accurate &amp; supports all the languages you didn't even know about.</p>
+        <code class="install">npm install @chenglou/pretext</code>
+      </div>
+    </header>
 
-    <section class="grid" aria-label="Demo list">
-      <a class="card" href="/demos/accordion">
-        <h2>Accordion</h2>
-        <p>Expand and collapse sections whose text heights are calculated from Pretext.</p>
-      </a>
-
-      <a class="card" href="/demos/bubbles">
-        <h2>Bubbles</h2>
-        <p>Tight multiline message bubbles that keep the same line count with less wasted area.</p>
-      </a>
-
-      <a class="card" href="/demos/dynamic-layout">
-        <h2>Dynamic Layout</h2>
-        <p>A fixed-height editorial spread with obstacle-aware title routing and continuous flow.</p>
-      </a>
-
-      <a class="card" href="/demos/variable-typographic-ascii">
-        <h2>Variable Typographic ASCII</h2>
-        <p>Particle-driven ASCII art comparing proportional measured glyphs against a monospace version.</p>
-      </a>
-
-      <a class="card" href="/demos/editorial-engine">
-        <h2>Editorial Engine</h2>
-        <p>Animated orbs, live text reflow, pull quotes, and multi-column flow with no DOM text measurement.</p>
-      </a>
-
-      <a class="card" href="/demos/justification-comparison">
-        <h2>Justification Comparison</h2>
-        <p>CSS justification, greedy hyphenation, and Knuth-Plass paragraph layout shown side by side to reveal rivers and spacing tradeoffs.</p>
-      </a>
-
-      <a class="card" href="/demos/rich-note">
-        <h2>Rich Text</h2>
-        <p>Rich inline text, code spans, links, chips, a custom emoji and an image laid out together, with pills and images staying whole while text keeps wrapping naturally.</p>
-      </a>
-
-      <a class="card" href="/demos/markdown-chat">
-        <h2>Markdown Chat</h2>
-        <p>A virtualized chat demo using marked for parsing, the rich-text inline flow helper for paragraph content, and pre-wrap for fenced code.</p>
-      </a>
-
-      <a class="card" href="/demos/ellipsis">
-        <h2>Ellipsis</h2>
-        <p>Text clamped to a number of lines, an ellipsis in the middle of a path, and a “… more” link, all cut before anything is painted.</p>
-      </a>
-
-      <a class="card" href="/demos/masonry">
-        <h2>Masonry</h2>
-        <p>A text-card occlusion demo where height prediction comes from Pretext instead of DOM reads.</p>
-      </a>
-    </section>
+    <h2>Demos</h2>
+    <nav class="demos">
+      <a class="demo" href="/demos/accordion"><span class="name">Accordion</span><span class="desc">Classic expand &amp; collapse of sections, animated, with no FLIP technique, DOM measurement or reflow.</span></a>
+      <a class="demo" href="/demos/bubbles"><span class="name">Bubbles</span><span class="desc">Multiline bubbles shrinkwrapped to their text, keeping the same line count while wasting less width.</span></a>
+      <a class="demo" href="/demos/dynamic-layout"><span class="name">Dynamic Layout</span><span class="desc">A fixed-height editorial spread with obstacle-aware title routing and continuous flow.</span></a>
+      <a class="demo" href="/demos/variable-typographic-ascii"><span class="name">Variable Typographic ASCII</span><span class="desc">Particle-driven ASCII art comparing proportional measured glyphs against a monospace version.</span></a>
+      <a class="demo" href="/demos/editorial-engine"><span class="name">Editorial Engine</span><span class="desc">Animated orbs, live text reflow, pull quotes, and multi-column flow with no DOM text measurement.</span></a>
+      <a class="demo" href="/demos/justification-comparison"><span class="name">Justification Comparison</span><span class="desc">CSS vs. greedy vs. TeX’s famous Knuth-Plass layout, side by side, to reveal rivers and other spacing tradeoffs.</span></a>
+      <a class="demo" href="/demos/rich-note"><span class="name">Rich Text</span><span class="desc">Rich inline text, code spans, links, chips, a custom emoji and an image laid out together, with pills and images staying whole while text keeps wrapping naturally.</span></a>
+      <a class="demo" href="/demos/markdown-chat"><span class="name">Markdown Chat</span><span class="desc">Giant stress test: a virtualized rich-text chat of 10,000 Markdown messages, scrolling &amp; resizing at 120fps.</span></a>
+      <a class="demo" href="/demos/ellipsis"><span class="name">Ellipsis</span><span class="desc">Text clamped to a number of lines, an ellipsis in the middle of a path, and a “… more” link, all cut before anything is painted.</span></a>
+      <a class="demo" href="/demos/masonry"><span class="name">Masonry</span><span class="desc">Pure JS masonry layout with occlusion aka virtualization, unlocked simply by Pretext’s height measurement.</span></a>
+    </nav>
   </main>
 </body>
 </html>
