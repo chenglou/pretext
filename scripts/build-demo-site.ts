@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = process.cwd()
@@ -38,6 +38,8 @@ for (let index = 0; index < entrypoints.length; index++) {
 }
 
 await rm(path.join(outdir, 'pages'), { recursive: true, force: true })
+// The link preview image, which only a meta tag names, so the bundler doesn't copy it.
+await copyFile(path.join(root, 'pages/demos/og-image.png'), path.join(outdir, 'og-image.png'))
 
 async function resolveBuiltHtmlPath(relativePath: string): Promise<string> {
   const candidates = [
