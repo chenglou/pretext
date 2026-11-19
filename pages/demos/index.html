@@ -83,7 +83,9 @@
   }
   .links { display: flex; justify-content: flex-end; gap: 20px; margin-bottom: 24px; }
   .links a { color: var(--muted); font-size: 16px; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-  .links a:hover { color: var(--accent); text-decoration-color: currentColor; }
+  .links a:hover, .more a:hover { color: var(--accent); text-decoration-color: currentColor; }
+  .more { margin: 32px 0 0; font-size: 17px; font-style: italic; color: var(--muted); }
+  .more a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
 
   h2 { margin: 32px 0 16px; font: italic 400 20px/1.3 Charter, "Bitstream Charter", "Charis SIL", Georgia, serif; }
   .demos {
@@ -139,6 +141,7 @@
       <a class="demo" href="/demos/ellipsis"><span class="name">Ellipsis</span><span class="desc">Text clamped to a number of lines, an ellipsis in the middle of a path, and a “… more” link, all cut before anything is painted.</span></a>
       <a class="demo" href="/demos/masonry"><span class="name">Masonry</span><span class="desc">Pure JS masonry layout with occlusion aka virtualization, unlocked simply by Pretext’s height measurement.</span></a>
     </nav>
+    <p class="more">More demos by Maxwell Ingham at <a href="https://somnai-dreams.github.io/pretext-demos/">somnai-dreams.github.io/pretext-demos</a>.</p>
   </main>
 </body>
 </html>
