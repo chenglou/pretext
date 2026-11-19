@@ -1249,8 +1249,8 @@ describe('the library through the adapter', () => {
     if (!('lines' in right)) throw new Error('unreachable')
     expect(right.disagreement).toBeNull()
     expect(right.lines.length).toBe(3)
-    // Drop the counter's `continue` after an overflow ends a line, so the overflowing space opens the next one.
-    const d1 = await planted('d1-counter', 'line-break.ts', /(export function countPreparedLines\([\s\S]*?hasContent = false\n(?:\s*\/\/[^\n]*\n)*)\s*if \([^\n]*\) continue\n/, '$1')
+    // Drop the counter's `continue` at a space where a line starts, so the overflowing space opens the next one.
+    const d1 = await planted('d1-counter', 'line-break.ts', /(export function countPreparedLines\([\s\S]*?hasContent = false\n\s*\}\n(?:\s*\/\/[^\n]*\n)*)\s*if \([^\n]*\) continue\n/, '$1')
     const wrong = d1.predict(c)
     if (!('lines' in wrong)) throw new Error('unreachable')
     expect(wrong.lines).toEqual(right.lines)
