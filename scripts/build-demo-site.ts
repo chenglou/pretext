@@ -41,6 +41,16 @@ await rm(path.join(outdir, 'pages'), { recursive: true, force: true })
 // The link preview image, which only a meta tag names, so the bundler doesn't copy it.
 await copyFile(path.join(root, 'pages/demos/og-image.png'), path.join(outdir, 'og-image.png'))
 
+// A sitemap of the published pages, for search engines.
+const siteUrl = 'https://chenglou.me/pretext/'
+let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+for (let index = 0; index < entrypoints.length; index++) {
+  const source = path.relative('pages/demos', entrypoints[index]!)
+  const slug = path.basename(source) === 'index.html' ? path.dirname(source) : path.basename(source, '.html')
+  sitemap += `  <url><loc>${slug === '.' ? siteUrl : `${siteUrl}${slug}/`}</loc></url>\n`
+}
+await writeFile(path.join(outdir, 'sitemap.xml'), `${sitemap}</urlset>\n`)
+
 async function resolveBuiltHtmlPath(relativePath: string): Promise<string> {
   const candidates = [
     path.join(outdir, relativePath),
