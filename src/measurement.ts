@@ -1073,6 +1073,40 @@ export function getEmojiCorrection(font: string, measurement: FontMeasurement): 
   return correction
 }
 
+// Read the page's per-font probe for an explicit handoff to a worker. Keep it
+// under the language that preparation uses so a later set in the worker primes
+// the measurement cache that its preparation will read.
+export function readEmojiCorrection(font: string): number {
+  const language = getPreparationLanguage(getEngineProfile())
+  const measurement = getFontMeasurement(font, language, false)
+  return getEmojiCorrection(font, measurement)
+}
+
+// Prime both shaping caches: a later letter-spaced preparation has its own
+// FontMeasurement on engines that shape it separately. Set emojiWidth too,
+// because counting the corrected glyphs needs the worker's Canvas advance.
+export function writeEmojiCorrection(font: string, correction: number): void {
+  if (!Number.isFinite(correction) || correction < 0) {
+    throw new RangeError('emoji correction must be a finite, non-negative number of pixels')
+  }
+  const language = getPreparationLanguage(getEngineProfile())
+  const regular = getFontMeasurement(font, language, false)
+  const letterSpaced = getFontMeasurement(font, language, true)
+  writeEmojiCorrectionToMeasurement(regular, correction)
+  if (letterSpaced !== regular) writeEmojiCorrectionToMeasurement(letterSpaced, correction)
+}
+
+function writeEmojiCorrectionToMeasurement(measurement: FontMeasurement, correction: number): void {
+  const hadEmojiWidth = measurement.emojiWidth !== 0
+  const previousCorrection = measurement.emojiCorrection
+  measurement.emojiWidth = getContext(measurement).measureText('\u{1F600}').width
+  if (hadEmojiWidth && previousCorrection !== correction) {
+    for (const metrics of measurement.metrics.values()) metrics.fit = null
+    for (const metrics of measurement.followingSpaceMetrics.values()) metrics.fit = null
+  }
+  measurement.emojiCorrection = correction
+}
+
 // The page's width of one emoji in the font, or NaN where the page has no box for it. The
 // span takes two things from the page, the font asked for and the page's language, which
 // picks fonts as it does for Canvas (-webkit-locale is where Blink and WebKit keep it, and
