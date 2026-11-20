@@ -7925,7 +7925,7 @@ test("a font string Canvas doesn't take throws, and the question leaves later me
     kana,
     taken: [40, 2.5, 5, 20],
     again: 0,
-    cleared: ['1px serif', '16px Test', '16px Test'],
+    cleared: ['1px serif', '16px Test'],
     late: [64, 64, 32],
     ignored: [...bad, ...cutLists, ...thrown],
   })
@@ -7944,7 +7944,8 @@ test('a width is measured under its own font, shaping and language, whatever was
   // wide and the page an em; U+2010 is three quarters of an em; a font named Kern kerns `b`
   // with the space after it by 1px; and one named Halt halts fullwidth marks as Chrome's
   // Canvas does, its dots closing ones. Like Firefox's, the context takes a face the page
-  // adds only when its font is assigned: a family named Late measures twice as wide before.
+  // adds only when its font is assigned: a family named Late measures twice as wide before,
+  // and the page's fonts hold one face more once it is added.
   const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const rowsOf = (userAgent: string): unknown => JSON.parse(runInChild(`
@@ -7984,6 +7985,7 @@ test('a width is measured under its own font, shaping and language, whatever was
     globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
     globalThis.document = {
       documentElement: root,
+      fonts: { get size() { return added ? 1 : 0 } },
       body: { appendChild() {}, removeChild() {} },
       createElement() {
         const style = { setProperty(name, value) { this[name] = value } }
@@ -8005,6 +8007,10 @@ test('a width is measured under its own font, shaping and language, whatever was
     const assigned = assignments
     rich([{ text: 'aa', font: a }, { text: 'bb', font: b }, { text: 'cc', font: a }])
     rows.again = assignments - assigned
+    // New text in the two fonts by turns assigns neither font again: each has a context of its own.
+    const turned = assignments
+    rich([{ text: 'ee', font: a }, { text: 'ff', font: b }, { text: 'gg', font: a }])
+    rows.turns = assignments - turned
 
     // One font, with and without letter spacing: new text each time, then new text after a cached item of the other kind.
     const spaced = '16px Spaced'
@@ -8014,7 +8020,7 @@ test('a width is measured under its own font, shaping and language, whatever was
       rich([{ text: 'fin', font: spaced, letterSpacing: 2 }, { text: 'fir', font: spaced }]),
     ]
 
-    // Another language makes another context, which starts with neither the font nor the shaping.
+    // Another language makes other contexts, which start with neither the font nor the shaping.
     const made = contexts
     rows.language = [width('fig', '16px Language', 1)]
     root.lang = 'ja'
@@ -8022,7 +8028,7 @@ test('a width is measured under its own font, shaping and language, whatever was
     root.lang = 'en'
     rows.language.push(width('fig', '16px Language'), contexts - made)
 
-    // clearCache() keeps the context, with the font and the shaping it was left on.
+    // clearCache() keeps each font's context, with its font and shaping: only a font not measured before makes one.
     const kept = contexts
     rows.cleared = [width('fin', '16px Cleared', 2)]
     clearCache()
@@ -8067,17 +8073,19 @@ test('a width is measured under its own font, shaping and language, whatever was
     console.log(JSON.stringify(rows))
   `))
   // `fin` under letter spacing is 24px and its three spacings where the context drops the
-  // ligature, and 21px and them in the WebKit profile, which measures with it. Two contexts
-  // are made for the two language changes and none for the four clearCache() calls. Only the
+  // ligature, and 21px and them in the WebKit profile, which measures with it. A context is
+  // made for each language and for each font in it, one for the font's letter-spaced text
+  // where the profile shapes it apart, and one for each font first measured after clearCache(). Only the
   // Chromium profile asks for kerning with the space and for halts. Only the Gecko profile
   // asks for ligatures: a line that cuts \`fi\` has the ligature's 97px on its \`f\`, and the
   // others the letter's 50px.
-  const rows = (fin: number, kerned: number, halted: number, cutLigature: number): unknown => ({
+  const rows = (fin: number, kerned: number, halted: number, cutLigature: number, languageContexts: number, clearedContexts: number): unknown => ({
     fonts: [52, 56],
     again: 0,
+    turns: 0,
     spacing: [21 + fin + 21, 21 + fin, fin + 21],
-    language: [fin - 3, (fin - 6) * 0.75 + 3, 15.75, 21, 2],
-    cleared: [fin, 21, fin, 20, 16, 0],
+    language: [fin - 3, (fin - 6) * 0.75 + 3, 15.75, 21, languageContexts],
+    cleared: [fin, 21, fin, 20, 16, clearedContexts],
     added: [32, 16, 32, 16],
     emoji: 40,
     kerning: [kerned, kerned],
@@ -8085,9 +8093,9 @@ test('a width is measured under its own font, shaping and language, whatever was
     hyphen: halted === 92 ? 72 : 80,
     ligature: [cutLigature, 21, fin],
   })
-  expect(rowsOf(CHROME_USER_AGENT)).toEqual(rows(30, 39, 92, 50))
-  expect(rowsOf(FIREFOX_USER_AGENT)).toEqual(rows(30, 40, 104, 97))
-  expect(rowsOf(SAFARI_USER_AGENT)).toEqual(rows(27, 40, 104, 50))
+  expect(rowsOf(CHROME_USER_AGENT)).toEqual(rows(30, 39, 92, 50, 6, 3))
+  expect(rowsOf(FIREFOX_USER_AGENT)).toEqual(rows(30, 40, 104, 97, 6, 3))
+  expect(rowsOf(SAFARI_USER_AGENT)).toEqual(rows(27, 40, 104, 50, 5, 2))
 })
 
 test("a host with no document gets layouts from a font and measureText alone, under no navigator, React Native's and Bun's own", () => {

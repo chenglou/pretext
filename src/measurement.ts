@@ -375,16 +375,13 @@ export type EngineProfile = {
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context' | 'reshaped-lines'
 
-// The measurement context and what preparation measured through it. Canvas resolves
+// The measurement contexts and what preparation measured through them. Canvas resolves
 // fonts under the context's language, the page's unless the context has a `lang` to
 // give it preparation's. Chrome keeps a resolved font while its font string is
-// unchanged, so the context, and every width measured through it, belong to the
-// language it was created under: all of it is replaced when that language changes.
+// unchanged, so the contexts, and every width measured through them, belong to the
+// language they were created under: all of it is replaced when that language changes.
 type MeasureState = {
   language: string | null
-  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D // Once made, read through getContext() alone
-  font: string // The font getContext() set the context to since a font was last looked up, or ''
-  letterSpacing: string // The letterSpacing getContext() last set the context to
   // A second context, under text-rendering: optimizeLegibility, where Canvas shapes a string
   // whole, and the Canvas font it is set to: made for the first font asked about its kana
   // (getFontKanaKerning).
@@ -400,13 +397,21 @@ type MeasureState = {
   // What letter-spaced text measures in each font where shapesLetterSpaced: the same text
   // shaped without its optional ligatures.
   letterSpacedFonts: Map<string, FontMeasurement>
+  // Each font's context, by its letter spacing and Canvas font. clearCache() keeps them: a
+  // new context makes Chrome resolve the font and shape its text again from nothing.
+  contexts: Map<string, CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D>
   segments: number // The segments the fonts' caches hold between them (MAX_CACHED_SEGMENTS)
 }
 let measureState: MeasureState | null = null
 // What preparation keeps per font. It all goes together, when the caches clear or the
 // language changes.
 export type FontMeasurement = {
-  state: MeasureState // Its context, which getContext() sets to the font and its shaping
+  state: MeasureState // The language's, which its context was made under
+  // Its own context, set to the font and its shaping when made (getContext). In a Firefox
+  // Worker each measurement after an assignment of a context's font, the same string too,
+  // makes later measurements slower, without bound; a context left on its font keeps its pace.
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+  fontFaces: number // How many faces the page's fonts held when the font was last assigned (getContext)
   // The font Canvas is given: the declared font, with the generic keywords the context's
   // language names replaced by their families.
   canvasFont: string
@@ -1368,15 +1373,22 @@ export function getFontMeasurement(font: string, language: string | null, letter
   const state = measureState
   const shaped = letterSpaced && state.shapesLetterSpaced
   const fonts = shaped ? state.letterSpacedFonts : state.fonts
-  // The first measurement after a lookup sets the font again, the same string too: Firefox's
-  // context takes a face added to document.fonts only when its font is assigned, and the
-  // question below leaves the context on a font of its own, whether it throws or not.
-  state.font = ''
   let measurement = fonts.get(font)
   if (measurement === undefined) {
     const canvasFont = state.genericFamilies === null ? font : getCanvasFont(font, state.genericFamilies)
-    if (!contextTakesFont(state.context, canvasFont)) throw new RangeError(`font must be a font string Canvas takes, a size in px then a family, such as 16px Inter, not "${font}"`)
-    measurement = { state, canvasFont, letterSpacing: shaped ? LETTER_SPACED_SHAPING : '0px', metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, measuredKana: false, kanaKerning: undefined, kanaFont: canvasFont, emojiCorrection: null, emojiWidth: 0, hyphenText: null, spaceWidth: null, hanKerning: undefined, ligaturePairs: new Map(), glyphCounts: new Map() }
+    const letterSpacing = shaped ? LETTER_SPACED_SHAPING : '0px'
+    const key = `${letterSpacing} ${canvasFont}`
+    const kept = state.contexts.get(key)
+    const context = kept ?? createContext(state.language)
+    // Asked of a context kept from before clearCache() too: the question changes its font
+    // string and back, so a face added to the page's fonts since reaches it in Safari, whose
+    // context takes one only when its font string changes, and in Firefox.
+    if (!contextTakesFont(context, canvasFont)) throw new RangeError(`font must be a font string Canvas takes, a size in px then a family, such as 16px Inter, not "${font}"`)
+    if (kept === undefined) {
+      if (shaped) context.letterSpacing = letterSpacing
+      state.contexts.set(key, context)
+    }
+    measurement = { state, context, fontFaces: countFontFaces(), canvasFont, letterSpacing, metrics: new Map(), followingSpaceMetrics: new Map(), spaceKerning: undefined, measuredKana: false, kanaKerning: undefined, kanaFont: canvasFont, emojiCorrection: null, emojiWidth: 0, hyphenText: null, spaceWidth: null, hanKerning: undefined, ligaturePairs: new Map(), glyphCounts: new Map() }
     fonts.set(font, measurement)
   }
   return measurement
@@ -1407,15 +1419,25 @@ function contextTakesFont(context: CanvasRenderingContext2D | OffscreenCanvasRen
 }
 
 // The font's context, set to the font and its shaping. Every measurement in a font takes
-// its context from here as it measures, so none reads a width under another font's
-// setting, whatever was looked up or prepared in between, and text that is all cached,
-// which measures nothing, sets nothing. What changes the context after that puts it back
-// before it returns (getHyphenText, getExtraSpacings, getFontSpaceKerning, isLigature).
+// its context from here, and no other font's measurement uses it, so none reads a width
+// under another font's setting, whatever was looked up or prepared in between. What changes
+// the context puts it back before it returns (getHyphenText, getExtraSpacings,
+// getFontSpaceKerning, isLigature). The font is assigned again, the same string, only where
+// the page's fonts gained or lost a face since: Firefox's context takes a face added to them
+// only when its font is assigned.
 export function getContext(measurement: FontMeasurement): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
-  const state = measurement.state
-  if (state.font !== measurement.canvasFont) state.context.font = state.font = measurement.canvasFont
-  if (state.letterSpacing !== measurement.letterSpacing) state.context.letterSpacing = state.letterSpacing = measurement.letterSpacing
-  return state.context
+  const faces = countFontFaces()
+  if (measurement.fontFaces !== faces) {
+    measurement.context.font = measurement.canvasFont
+    measurement.fontFaces = faces
+  }
+  return measurement.context
+}
+
+// The faces in the page's fonts, or a worker's, and 0 where there are none to count.
+function countFontFaces(): number {
+  const fonts = typeof document !== 'undefined' ? document.fonts : (globalThis as { fonts?: FontFaceSet }).fonts
+  return fonts?.size ?? 0
 }
 
 // A context's `lang` follows the page's, and preparation's can be setLocale()'s or Blink's
@@ -1436,9 +1458,6 @@ function createMeasureState(language: string | null): MeasureState {
   const takesLetterSpacing = typeof context.letterSpacing === 'string'
   return {
     language,
-    context,
-    font: '',
-    letterSpacing: '0px',
     wholeRunContext: null,
     wholeRunFont: '',
     genericFamilies: language !== null && profile.namesGenericFamiliesByLanguage ? getWebKitGenericFamilies(language, context) : null,
@@ -1446,6 +1465,7 @@ function createMeasureState(language: string | null): MeasureState {
     shapesLetterSpaced: takesLetterSpacing && profile.canvasLetterSpacingDropsLigatures,
     fonts: new Map(),
     letterSpacedFonts: new Map(),
+    contexts: new Map(),
     segments: 0,
   }
 }
