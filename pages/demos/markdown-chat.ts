@@ -24,6 +24,7 @@ import {
 } from './markdown-chat.model.ts'
 
 type State = {
+  canvasHeight: number // the canvas's height as the last frame wrote it
   conversation: ConversationLayout
   endScrollTop: number // the scroll position that showed the canvas's end in the last frame, computed from its height, not read
   events: {
@@ -47,6 +48,7 @@ const domCache = {
 
 const preparedMessages = createPreparedChatMessages()
 const st: State = {
+  canvasHeight: 0,
   conversation: layoutConversation(preparedMessages, getMaxChatWidth(domCache.viewport.clientWidth)),
   // The empty canvas shows its end at 0, so the first frame's end has moved.
   endScrollTop: 0,
@@ -121,7 +123,20 @@ function render(): void {
   // st.scrollTop is where the last frame left the scroll position, so any other
   // value is the user's scroll: anchor the first message whose top shows below
   // the top banner, in the layout they scrolled. Otherwise keep the anchor.
-  const scrollAnchor = scrollTop === st.scrollTop
+  // The end anchor allows for the browser's own moves: a taller viewport
+  // shortens the scroll range, so the browser lowers the position to the range's
+  // end, and when the viewport then shrinks, Chrome's scroll anchoring raises it
+  // back. Both leave the position between the last frame's end and the range's
+  // end, which is the last canvas less this viewport. Each end of that stretch
+  // is good to a pixel: clientHeight is a whole number, browsers round
+  // scrollTop, and at a zoom Chrome rounds the position again. Only a position
+  // outside the stretch ends the end anchor. Both ends are computed: a stretch
+  // from the last position read would follow a scroll of a pixel a frame.
+  const scrollRangeEnd = st.canvasHeight - viewportHeight
+  const staysOnEnd = st.scrollAnchor === 'end'
+    && scrollTop >= Math.min(st.endScrollTop, scrollRangeEnd) - 1
+    && scrollTop <= Math.max(st.endScrollTop, scrollRangeEnd) + 1
+  const scrollAnchor = scrollTop === st.scrollTop || staysOnEnd
     ? st.scrollAnchor
     : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
@@ -129,11 +144,14 @@ function render(): void {
   // The scroll position stays whatever it reads, even past an end while it
   // bounces, unless this layout moved the anchor from where the last frame put
   // it. Then the anchored message's top goes back to its distance below the
-  // banner, or the end anchor to the canvas's end. The browser keeps the scroll
-  // inside the canvas.
+  // banner, or the end anchor to the canvas's end. The end also stays put when
+  // the canvas and the viewport grow by the same amount, as when a taller
+  // viewport gets the taller banners, but the browser has lowered the position
+  // by then, so the end anchor goes by the canvas's height too. The browser
+  // keeps the scroll inside the canvas.
   let adjustedScrollTop = scrollTop
   if (scrollAnchor === 'end') {
-    if (endScrollTop !== st.endScrollTop) adjustedScrollTop = endScrollTop
+    if (endScrollTop !== st.endScrollTop || canvasHeight !== st.canvasHeight) adjustedScrollTop = endScrollTop
   } else if (conversation.tops[scrollAnchor.index] !== previousConversation.tops[scrollAnchor.index]) {
     adjustedScrollTop = conversation.tops[scrollAnchor.index]! - scrollAnchor.offset
   }
@@ -148,6 +166,7 @@ function render(): void {
     occlusionBannerHeight,
   )
 
+  st.canvasHeight = canvasHeight
   st.conversation = conversation
   st.endScrollTop = endScrollTop
   st.isVisualizationOn = isVisualizationOn
