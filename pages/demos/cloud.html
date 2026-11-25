@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud · Pretext demo (prototype)</title>
+  <meta name="description" content="One plain paragraph whose word spaces line up into the stroke of a cloud, with no space stretched.">
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body { background: #f4f0e6; color: #1f1d1a; min-height: 100%; }
+    body { display: flex; flex-direction: column; align-items: center; padding: 28px 20px 48px; }
+    h1 { font: 400 22px/1.3 Georgia, serif; margin-bottom: 4px; }
+    .subtitle { font: italic 400 13px/1.5 Georgia, serif; color: rgba(31,29,26,0.55); margin-bottom: 22px; max-width: 640px; text-align: center; }
+    #scene { position: relative; }
+    #text { position: absolute; left: 0; top: 0; text-align: left; transform-origin: 0 0; }
+    #seams { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+    #seams path { fill: none; stroke: #c9651c; stroke-opacity: 0.55; stroke-linecap: round; stroke-linejoin: round; }
+    .bar { display: flex; gap: 14px; align-items: center; margin-top: 18px; font: 400 12px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: rgba(31,29,26,0.6); flex-wrap: wrap; justify-content: center; max-width: 900px; }
+    .bar button {
+      font: inherit; color: #1f1d1a; background: transparent; border: 0; border-radius: 4px; padding: 6px 10px; cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(31,29,26,0.25);
+    }
+  </style>
+</head>
+<body>
+  <h1>Cloud</h1>
+  <p class="subtitle">One plain paragraph, wrapped by the browser. No space is stretched: the words were chosen so the gaps fall along a cloud.</p>
+  <div id="scene">
+    <p id="text"></p>
+    <svg id="seams"><path id="seam-path"></path></svg>
+  </div>
+  <div class="bar">
+    <button data-action="shape" id="shape-button"></button>
+    <button data-action="dense" id="dense-button"></button>
+    <button data-action="fill" id="fill-button"></button>
+    <button data-action="side" id="side-button"></button>
+    <button data-action="seams" id="seams-button"></button>
+    <span id="stats"></span>
+  </div>
+  <script type="module" src="./cloud.ts"></script>
+</body>
+</html>

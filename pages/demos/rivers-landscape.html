@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rivers · Pretext demo (prototype)</title>
+  <meta name="description" content="A landscape drawn with typographic faults: rays of light as rivers of word space, hill summits as one-word lines.">
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body { background: #f3ede2; color: #2b2a26; min-height: 100%; }
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 20px 48px;
+    }
+    h1 { font: 400 22px/1.3 Georgia, serif; margin-bottom: 4px; }
+    .subtitle { font: italic 400 13px/1.5 Georgia, serif; color: rgba(43,42,38,0.55); margin-bottom: 20px; max-width: 640px; text-align: center; }
+    #scene { display: block; }
+    .bar { display: flex; gap: 14px; align-items: center; margin-top: 16px; font: 400 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: rgba(43,42,38,0.55); flex-wrap: wrap; justify-content: center; }
+    .bar button {
+      font: inherit; color: #2b2a26; background: transparent; border: 0; border-radius: 4px; padding: 6px 10px; cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(43,42,38,0.25);
+    }
+    .bar button[aria-pressed="true"] { background: rgba(43,42,38,0.1); }
+    #stats { font-variant-numeric: tabular-nums; min-width: 230px; }
+  </style>
+</head>
+<body>
+  <h1>Rivers</h1>
+  <p class="subtitle">Light is the paper. The rays are rivers of word space; each hill ends in a line of one word.</p>
+  <canvas id="scene"></canvas>
+  <div class="bar">
+    <button data-action="play" id="play"></button>
+    <button data-action="flow" id="flow"></button>
+    <button data-action="gap" id="gap"></button>
+    <button data-action="tint" id="tint"></button>
+    <button data-action="glide" id="glide"></button>
+    <span id="stats"></span>
+  </div>
+  <script type="module" src="./rivers-landscape.ts"></script>
+</body>
+</html>
